@@ -68,6 +68,8 @@ _FOLDER_UNUSABLE = {"description": "The restore folder of the data directory is 
 _UPLOAD_FAILED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the archive could not be written (code `backup_upload_failed`)"}
 _STAGE_NOT_STARTED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the check could not start: its folders or its state could not be written (code `stage_failed`)"}
 _STAGE_NOT_FOUND = {"description": "No check has this id (code `restore_stage_not_found`)"}
+_CONFIRM_FAILED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the confirmation could not be written (code `restore_confirm_failed`): nothing confirmed"}
+_CANCEL_FAILED = {"description": "The restore could not be dropped (code `restore_cancel_failed`): it still waits for the next start"}
 _OUTCOME_NOT_FOUND = {"description": "No restore outcome for this ticket: none, malformed, unknown, expired, replaced or removed, or of another restore, all alike (code `restore_outcome_not_found`)"}
 _RESTART_NOT_PREPARED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the ticket of the outcome could not be written (code `restore_restart_failed`): no restart"}
 
@@ -321,12 +323,15 @@ def _status_view(state: RestoreState | None) -> RestoreStatus:
             "description": "The check still runs (code `restore_stage_running`); it refused the archive, or found what forbids a restore (code `restore_not_restorable`); LibreFolio was updated since the check (code `restore_stage_outdated`); or another restore waits (code `restore_already_pending`)"
         },
         410: {"description": "The check expired: check the archive again (code `restore_stage_expired`)"},
-        500: _FOLDER_UNUSABLE,
+        500: _CONFIRM_FAILED,
+        507: {"description": "Not enough free space to confirm the restore (code `backup_no_space`): nothing confirmed"},
     },
 )
 def confirm_restore_check(stage_id: str, admin: User = Depends(require_admin)) -> RestoreStatus:
     """Confirm the restore of a checked archive. Nothing changes yet: the next start of the server applies it, and ends
-    every session; ``POST /backup/restore/restart`` stops the server for that start."""
+    every session; ``POST /backup/restore/restart`` stops the server for that start. A full disk answers 507
+    ``backup_no_space``, any other failure to write the confirmation 500 ``restore_confirm_failed``: either way nothing
+    is confirmed, since the state is written last and atomically (B-31)."""
     try:
         return _status_view(restore_jobs.confirm_check(stage_id, confirmed_by=admin.username, data_dir=get_data_dir()))
     except restore_jobs.CheckNotFoundError:
@@ -337,6 +342,12 @@ def confirm_restore_check(stage_id: str, admin: User = Depends(require_admin)) -
         raise backup_error(_CONFIRM_STATUS.get(exc.code, status.HTTP_409_CONFLICT), exc.code, str(exc)) from None
     except BackupPathError:
         raise _folder_unusable() from None
+    except OSError as exc:
+        if out_of_space(exc):
+            logger.warning("A restore could not be confirmed: not enough free space")
+            raise backup_error(status.HTTP_507_INSUFFICIENT_STORAGE, "backup_no_space", "Not enough free space to confirm the restore") from None
+        logger.error("A restore could not be confirmed", error=f"{type(exc).__name__}: {exc.strerror or exc}")
+        raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_confirm_failed", "The restore could not be confirmed: the server's log has the cause") from None
 
 
 @restore_router.get("/restore/status", response_model=RestoreStatus)
@@ -346,14 +357,18 @@ def get_restore_status(_admin: User = Depends(require_admin)) -> RestoreStatus:
     return _status_view(read_restore(get_data_dir()))
 
 
-@restore_router.delete("/restore/pending", status_code=status.HTTP_204_NO_CONTENT, responses={404: {"description": f"{_NOT_PENDING} (code `restore_not_pending`)"}})
+@restore_router.delete("/restore/pending", status_code=status.HTTP_204_NO_CONTENT, responses={404: {"description": f"{_NOT_PENDING} (code `restore_not_pending`)"}, 500: _CANCEL_FAILED})
 def cancel_pending_restore(_admin: User = Depends(require_admin)) -> Response:
     """Drop the restore waiting for the next start, with its checked copy, as ``backup pending --cancel`` does: the data
-    stays as it is."""
+    stays as it is. A failure before the restore is dropped answers 500 ``restore_cancel_failed`` and leaves it waiting;
+    a copy that cannot be removed afterwards is only logged (B-31)."""
     try:
         cancel_restore(data_dir=get_data_dir(), drop_copy=True)
     except RestoreNotPendingError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_not_pending", _NOT_PENDING) from None
+    except OSError as exc:
+        logger.error("A pending restore could not be cancelled", error=f"{type(exc).__name__}: {exc.strerror or exc}")
+        raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_cancel_failed", "The restore could not be cancelled: the server's log has the cause") from None
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

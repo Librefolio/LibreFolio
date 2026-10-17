@@ -83,6 +83,11 @@
                 fallback: $_('settings.passwordChangeFailed'),
                 onError: (err: unknown) => {
                     const raw: unknown = (err as any)?.response?.data?.detail;
+                    // The server's limit on failed passwords (A8a): wait, in the user's language
+                    if ((err as any)?.response?.status === 429 && raw && typeof raw === 'object' && (raw as {error_code?: unknown}).error_code === 'TOO_MANY_ATTEMPTS') {
+                        error = $_('settings.tooManyPasswordAttempts');
+                        return true;
+                    }
                     if (raw && typeof raw === 'object' && (raw as {error_code?: unknown}).error_code === 'PASSWORD_TOO_WEAK') {
                         error = $_('auth.validation.passwordTooWeak');
                         return true;

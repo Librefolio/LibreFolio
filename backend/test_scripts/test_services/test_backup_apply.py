@@ -6,7 +6,8 @@ steps of ``app_lifespan.py``. Selector: ``services backup-apply``.
 Written RED, before B3. ``apply.py``, ``restart.py`` and the new names of ``paths.py`` are looked up by the test that
 needs them (``apply_module``, ``restart_module``, ``new_path_name``), never imported at the top: the file collects
 without them, and each test fails on its own, saying what is missing ("[new] …"). The tests of (m) were written red the
-same way, before P7 (§11), and those of (n) before B5c (``instance_backup/outcome.py``, ``outcome_module``).
+same way, before P7 (§11), and those of (n) before B5c (``instance_backup/outcome.py``, ``outcome_module``); the B-31
+case of (f), a copy that cannot be removed, before B-31.
 
 (a) §1 The layout: ``.restore/restore.json`` (the state), ``.restore/apply.lock``, ``.restore/previous/`` (the data a
     restore replaced), ``.restore/failed/`` (the restored data a rollback set aside); ``SWAPPED_FOLDERS``, the database's
@@ -30,7 +31,10 @@ same way, before P7 (§11), and those of (n) before B5c (``instance_backup/outco
     directory resolved, 0600, atomically (no ``.part`` left), never through a link. A finished restore's ``previous/``
     and ``failed/`` removed. ``.restore`` a link or a file: ``BackupPathError``.
 (f) §2 ``cancel_restore``: a ``pending`` restore only, its state returned; the checked copy kept unless ``drop_copy``;
-    anything else ``RestoreNotPendingError``, nothing changed.
+    anything else ``RestoreNotPendingError``, nothing changed. B-31: with ``drop_copy``, an ``OSError`` while the copy is
+    removed (``_remove_leftovers``) comes once the restore is dropped: one warning with the stage and the error, never
+    raised, the restore cancelled and its state returned, the info line «Pending restore cancelled» with
+    ``copy_dropped`` False; without ``drop_copy``, ``_remove_leftovers`` is never called, ``copy_dropped`` False too.
 (g) §2 ``apply_pending_restore``, the step ``pending-restore``. A pending restore swaps the four folders, in every
     combination of a live folder and a restored one: the restored data live (each folder with the mode of the one it
     replaces), the replaced data in ``previous/``, the journal (``swap``) on disk before the first rename, ``applied``
@@ -170,7 +174,7 @@ from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
-from errno import ENOLCK, EWOULDBLOCK, EXDEV
+from errno import EACCES, EIO, ENOLCK, EWOULDBLOCK, EXDEV
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, get_args
@@ -295,6 +299,11 @@ WAITING_FOR_THE_MOVES = "A restore is moving the folders of the data directory: 
 #: environment at each call; and what an operator reads when a pending restore waits for the block to end.
 BLOCKED_VARIABLE = "LIBREFOLIO_BLOCKED"
 INSTANCE_BLOCKED_WAITS = "The hosting provider blocked the instance: the restore waits until it is unblocked"
+#: (B-31) What an operator reads when the copy of a cancelled restore could not be removed: the restore is cancelled all
+#: the same, and its copy goes with its check, when that expires.
+COPY_NOT_REMOVED = "The copy of a cancelled restore could not be removed: it goes when its check expires"
+#: The line every cancel logs, at INFO: its ``copy_dropped`` is ``True`` only when the copy was removed (B-31).
+RESTORE_CANCELLED = "Pending restore cancelled"
 
 #: Each folder's (live, restored), every combination for each archived folder across the four layouts; the database's
 #: folder is restored always (a copy without a database is not usable), replacing a live one or none.
@@ -1384,6 +1393,67 @@ def test_cancel_of_anything_but_a_pending_restore_is_refused_and_changes_nothing
     assert raised.value.code == "restore_not_pending", raised.value.code
     assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), f"{phase}: nothing changed, the copy kept"
     print_success(f"{phase}: restore_not_pending")
+
+
+@pytest.mark.parametrize("code", [EACCES, EIO], ids=["EACCES", "EIO"])
+def test_a_copy_that_cannot_be_removed_leaves_the_restore_cancelled_with_a_warning(tmp_path, databases, checked, monkeypatch, code):
+    """(f) B-31, ``drop_copy``: the copy goes once the restore is dropped (``_remove_leftovers``, inside the lock). An
+    ``OSError`` there comes too late to keep the restore, cancelled already: ``cancel_restore`` returns its state, the
+    state file gone, and one warning says that the copy goes when its check expires, with the stage and the error (its
+    type and the system's words); the one info line of the cancel says ``copy_dropped`` False. It never raises. Red
+    before B-31: the ``OSError`` gets out, once the state is gone."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    pending = confirm(apply, instance)
+    failure = OSError(code, os.strerror(code), str(stage_dir(instance.root, instance.stage_id)))
+    calls: list[tuple[Path, str | None]] = []
+
+    def failing_removal(data_dir: Path, stage_id: str | None) -> None:
+        calls.append((Path(data_dir), stage_id))
+        raise failure
+
+    monkeypatch.setattr(apply, "_remove_leftovers", failing_removal)
+    with logs() as events:
+        try:
+            returned = apply.cancel_restore(data_dir=instance.root, drop_copy=True)
+        except OSError as exc:
+            pytest.fail(f"cancel_restore let the OSError of the copy's removal out, once the restore was dropped: {exc!r}")
+    assert calls == [(instance.root, instance.stage_id)], f"precondition: the copy's removal was tried once, for its stage: {calls}"
+    assert returned == pending, f"the state the restore had: {returned}"
+    assert (lexists(state_file(instance.root)), apply.read_restore(instance.root)) == (False, None), "the restore is cancelled: its state is gone"
+    warned = [(level, message) for level, message in logged(events) if level in ("warning", "error", "critical")]
+    assert warned == [("warning", COPY_NOT_REMOVED)], f"one warning, and only that one: {logged(events)}"
+    event = next(event for event in events if event.get("event") == COPY_NOT_REMOVED)
+    error = str(event.get("error"))
+    assert event.get("stage_id") == instance.stage_id and type(failure).__name__ in error and str(failure.strerror) in error, f"the warning gives the stage and the error, its type and the system's words ({type(failure).__name__}, {failure.strerror}): {event}"
+    cancelled = [(event.get("log_level"), event.get("copy_dropped")) for event in events if event.get("event") == RESTORE_CANCELLED]
+    assert cancelled == [("info", False)], f"one info line says the restore is cancelled, its copy not dropped: {cancelled}"
+    print_success(f"{type(failure).__name__}: cancelled, one warning, nothing raised, copy_dropped=False")
+
+
+def test_a_cancel_that_keeps_the_copy_never_tries_to_remove_it(tmp_path, databases, checked, monkeypatch):
+    """(f) B-31, a guard (unchanged behaviour, green before B-31 too): without ``drop_copy`` the copy is not touched, so
+    no failure to remove it can come: ``_remove_leftovers`` is never called, the restore cancelled, its copy kept, and
+    the info line says ``copy_dropped`` False."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    pending = confirm(apply, instance)
+    copy_before = tree(stage_dir(instance.root, instance.stage_id))
+    calls: list[tuple[Any, ...]] = []
+
+    def no_removal(*args: Any) -> None:
+        calls.append(args)
+        raise AssertionError("_remove_leftovers ran for a cancel that keeps the copy")
+
+    monkeypatch.setattr(apply, "_remove_leftovers", no_removal)
+    with logs() as events:
+        returned = apply.cancel_restore(data_dir=instance.root, drop_copy=False)
+    assert returned == pending, "the state the restore had"
+    assert calls == [], f"no removal tried: {calls}"
+    assert (lexists(state_file(instance.root)), tree(stage_dir(instance.root, instance.stage_id))) == (False, copy_before), "the restore cancelled, its copy kept as it was"
+    cancelled = [(event.get("log_level"), event.get("copy_dropped")) for event in events if event.get("event") == RESTORE_CANCELLED]
+    assert cancelled == [("info", False)], f"one info line says the restore is cancelled, its copy not dropped: {cancelled}"
+    print_success("drop_copy=False: _remove_leftovers never called, copy_dropped=False")
 
 
 # =============================================================================

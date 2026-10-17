@@ -47,10 +47,11 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
  * in 47-1's batch shape). `dispatchAction` records every action (`dispatchedActions`), with how many `setOption` calls
  * came before it. `convertToPixel` maps a `[category, value]` point through the window on screen (`gridPixel`): the
  * categories of the first x-axis that the held `dataZoom[0]` leaves visible — all of them without a window — spread
- * over the plot's 800 px, and y 400 − value; so an arrow marker's rotation depends on the window, and is computed and
- * written back as on a screen. `resize` counts its calls (`resizeCount`): the first-render stability pass resizes.
+ * over the plot's width (`plot.width`, 800 px unless a case resizes it; `getWidth()` reports it), and y 400 − value; so
+ * an arrow marker's rotation depends on the window and on the plot's width, and is computed and written back as on a
+ * screen. `resize` counts its calls (`resizeCount`): the first-render stability pass resizes.
  */
-const {chartInstances, echartsModule, gridPixel} = vi.hoisted(() => {
+const {chartInstances, echartsModule, gridPixel, plot} = vi.hoisted(() => {
     type Handler = (params?: unknown) => void;
     type ChartOption = Record<string, unknown>;
 
@@ -96,8 +97,8 @@ const {chartInstances, echartsModule, gridPixel} = vi.hoisted(() => {
 
     /** ECharts' component types: `getOption()` answers each as a list, and a merge matches them by index. */
     const COMPONENTS = new Set(['grid', 'xAxis', 'yAxis', 'dataZoom', 'series', 'tooltip', 'legend', 'title', 'visualMap', 'toolbox', 'graphic', 'dataset', 'axisPointer', 'polar', 'radiusAxis', 'angleAxis', 'singleAxis', 'parallel', 'parallelAxis', 'geo', 'calendar', 'brush', 'timeline', 'aria']);
-    /** The plot `convertToPixel` maps onto: its width (`getWidth()`) and height (`getHeight()`), y growing downwards. */
-    const PLOT_WIDTH = 800;
+    /** The plot `convertToPixel` maps onto: its width, as `getWidth()` reports it — a case that resizes the chart sets it (Y-25), `beforeEach` puts it back to 800 — and its height (`getHeight()`), y growing downwards. */
+    const plot = {width: 800};
     const PLOT_HEIGHT = 400;
 
     const isPlain = (value: unknown): value is ChartOption => value !== null && typeof value === 'object' && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -127,7 +128,7 @@ const {chartInstances, echartsModule, gridPixel} = vi.hoisted(() => {
         const index = typeof category === 'number' ? category : categories.indexOf(category);
         if (index < 0 || typeof amount !== 'number') return null;
         const {first, count} = visibleCategories(categories.length, zoom);
-        return [(index - first) * (PLOT_WIDTH / count), PLOT_HEIGHT - amount];
+        return [(index - first) * (plot.width / count), PLOT_HEIGHT - amount];
     }
 
     /** A deep copy of the plain objects and arrays in `value`; anything else — a function, a gradient — is shared, as ECharts' clone shares a function. */
@@ -190,7 +191,7 @@ const {chartInstances, echartsModule, gridPixel} = vi.hoisted(() => {
             },
             getOptionCount: 0,
             resizeCount: 0,
-            getWidth: () => PLOT_WIDTH,
+            getWidth: () => plot.width,
             getHeight: () => PLOT_HEIGHT,
             getDom: () => dom,
             getZr: () => ({on: () => {}, off: () => {}}),
@@ -247,7 +248,7 @@ const {chartInstances, echartsModule, gridPixel} = vi.hoisted(() => {
         }
     }
 
-    return {chartInstances, gridPixel, echartsModule: {init: (dom: unknown) => createFakeChart(dom), graphic: {LinearGradient}}};
+    return {chartInstances, gridPixel, plot, echartsModule: {init: (dom: unknown) => createFakeChart(dom), graphic: {LinearGradient}}};
 });
 
 vi.mock('echarts', () => echartsModule);
@@ -358,6 +359,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
     chartInstances.length = 0;
+    plot.width = 800;
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 400, width: 800, height: 400, toJSON: () => ({})} as DOMRect);
 });
 
@@ -514,8 +516,21 @@ const TREND: RenderedSignal = {
 /** The days TREND's arrows sit on: its first and its last. */
 const TREND_ENDS = [TREND.data[0].date, TREND.data[TREND.data.length - 1].date];
 
-/** One zoom gesture as ECharts reports it, in 47-1's shape: five ticks closing in on the year's middle. */
-const GESTURE = [10, 20, 30, 40, 45].map((inset) => ({batch: [{start: inset, end: 100 - inset}]}));
+/** A dataZoom window: its start and end, in percent of the x-axis. */
+interface ZoomWindow {
+    start: number;
+    end: number;
+}
+
+/** The window of a chart nobody zoomed: the whole x-axis. */
+const WHOLE_AXIS: ZoomWindow = {start: 0, end: 100};
+
+/**
+ * One zoom gesture: the five windows its ticks close in on, around the year's middle. Each is played as a user's zoom
+ * (`userZoom`): the held window moves, then `dataZoom` is emitted in 47-1's shape — so the window the gesture settles
+ * on is the one the chart reads, and the arrows' angles change with it (Y-25).
+ */
+const GESTURE: ZoomWindow[] = [10, 20, 30, 40, 45].map((inset) => ({start: inset, end: 100 - inset}));
 
 /** The series a `setOption` payload carries, as a list. */
 function seriesIn(option: ChartOption): ChartOption[] {
@@ -602,10 +617,13 @@ async function mountTrend(props: Partial<ComponentProps<typeof LineChart>> = {})
  * Red today: each of the five ticks reads `getOption()` and writes the series back, and the settle re-aims nothing.
  *
  * How it is tested: through the recorder, which holds the option as ECharts does and maps a point to pixels (`gridPixel`),
- * so a re-aim is computed and written back as on a screen (`mountTrend` proves it). The case emits five `dataZoom`
- * events back to back, as one gesture does, with no time between them, counts what they read and wrote, then advances
- * fake timers past any debounce and counts again. Fake timers go in after the first draw and its stability pass, which
- * the barriers await on real ones. The counts of the ticks and of the settle are soft: one red run reports all three.
+ * so a re-aim is computed and written back as on a screen (`mountTrend` proves it). The case plays five ticks back to
+ * back, as one gesture does, with no time between them, counts what they read and wrote, then advances fake timers past
+ * any debounce and counts again. The ticks are real zooms (`userZoom`, Y-25): each moves the held window, so the window
+ * the gesture settles on gives the arrows new angles — since Y-25 a re-aim that turns no arrow writes nothing back, and
+ * a settle on a window that never moved would leave the «one write-back» below vacuous, or red for the wrong reason.
+ * Green before Y-25's cure and after it. Fake timers go in after the first draw and its stability pass, which the
+ * barriers await on real ones. The counts of the ticks and of the settle are soft: one red run reports all three.
  */
 describe('LineChart — a zoom re-aims the arrows once the gesture settles, not on every tick (Y-8)', () => {
     afterEach(() => {
@@ -618,7 +636,7 @@ describe('LineChart — a zoom re-aims the arrows once the gesture settles, not 
         vi.useFakeTimers();
         chart.getOptionCount = 0;
         const since = chart.setOptionCalls.length;
-        for (const event of GESTURE) chart.emit('dataZoom', event);
+        for (const window of GESTURE) chart.userZoom(window);
 
         expect
             .soft({getOptionReads: chart.getOptionCount, seriesWriteBacks: seriesPayloadsSince(chart, since).length}, 'Y-8: a zoom tick read getOption(), which deep-clones the whole option, and wrote every series back to re-aim the arrows — on each tick of one gesture')
@@ -632,15 +650,6 @@ describe('LineChart — a zoom re-aims the arrows once the gesture settles, not 
         expect(chart.getOptionCount, 'Y-8: one gesture — its five ticks and its settle — read getOption() more than once: the arrows need one read, once it settles').toBeLessThanOrEqual(1);
     });
 });
-
-/** A dataZoom window: its start and end, in percent of the x-axis. */
-interface ZoomWindow {
-    start: number;
-    end: number;
-}
-
-/** The window of a chart nobody zoomed: the whole x-axis. */
-const WHOLE_AXIS: ZoomWindow = {start: 0, end: 100};
 
 /** TREND on YEAR_2025's axis, as the chart lines an overlay up: its value on each of its days, null on the others. */
 const TREND_ON_AXIS: Array<number | null> = YEAR_2025.map((point) => TREND.data.find((trendPoint) => trendPoint.date === point.date)?.value ?? null);
@@ -757,11 +766,15 @@ function stalePaints(writeBacks: ChartOption[], pick: (series: ChartOption) => b
     return writeBacks.map((option, index) => ({writeBack: index + 1, carriesBefore: carries(option, repaint.before), picked: paintOf(option, pick, repaint)})).filter(({carriesBefore, picked}) => carriesBefore || (picked !== 'absent' && picked !== 'after'));
 }
 
-/** One zoom step, its settle included — fake timers from here on — and the series write-backs it brought. */
+/**
+ * One zoom step, its settle included — fake timers from here on — and the series write-backs it brought. A real zoom
+ * (`userZoom`): the held window moves to 40–60 %, so the settle's re-aim turns the arrows and writes them back — since
+ * Y-25 a re-aim that turns no arrow writes nothing, and a step that moved nothing would leave the guard nothing to read.
+ */
 async function zoomOneStep(chart: FakeChart): Promise<ChartOption[]> {
     vi.useFakeTimers();
     const since = chart.setOptionCalls.length;
-    chart.emit('dataZoom', {batch: [{start: 40, end: 60}]});
+    chart.userZoom({start: 40, end: 60});
     await vi.advanceTimersByTimeAsync(1_000);
     return seriesPayloadsSince(chart, since);
 }
@@ -781,9 +794,11 @@ async function zoomOneStep(chart: FakeChart): Promise<ChartOption[]> {
  *
  * How it is tested: built, then rebuilt — in dark (the `dark` class on `<html>`, as the theme store writes it), or on
  * `notifyChartColorsChange()` with one role colour changed (`setRoleReader`: the dashed baseline's role) — then one zoom
- * step, its settle included (fake timers, after the barriers). A colour is found in any notation the chart writes it:
- * the hex, or `toRgba`'s `rgba(r,g,b,a)` at any alpha, a gradient stop included. At least one write-back must come, or
- * the guard reads nothing. The `dark` class and the role reader are reset after each case.
+ * step, its settle included (fake timers, after the barriers). The step is a real zoom (`zoomOneStep`): it moves the
+ * window, so its settle turns the arrows and writes every series back, which a step that moved nothing would no longer
+ * do once Y-25 writes back only a turned arrow. Green before Y-25's cure and after it. A colour is found in any notation
+ * the chart writes it: the hex, or `toRgba`'s `rgba(r,g,b,a)` at any alpha, a gradient stop included. At least one
+ * write-back must come, or the guard reads nothing. The `dark` class and the role reader are reset after each case.
  */
 describe('LineChart — after a rebuild, the arrows’ write-back carries the rebuild’s colours (Y-8, colour guard)', () => {
     /** The price line, light and dark (`lineColor`, `darkLineColor`): colours the chart would never pick by itself. */
@@ -832,5 +847,154 @@ describe('LineChart — after a rebuild, the arrows’ write-back carries the re
 
         expect(writeBacks.length, 'the zoom step brought no series write-back: the guard has nothing to read').toBeGreaterThan(0);
         expect(stalePaints(writeBacks, baseline, BASELINE), 'Y-8 guard: a series write-back after the zoom brought the baseline’s old colour back over the rebuild — an option kept from before notifyChartColorsChange()').toEqual([]);
+    });
+});
+
+// =========================================================================
+// Y-25 — what is left of the arrows' cost: a chart without arrows, and a resize
+// =========================================================================
+
+/** TREND without its arrows (`markerStart`/`markerEnd: null`): an overlay like most, with no marker to aim. */
+const FLAT: RenderedSignal = {...TREND, id: 'flat', label: 'Flat', markerStart: null, markerEnd: null};
+
+/**
+ * A full-size LineChart over YEAR_2025 with FLAT on an 800 px panel, once its first draw and the stability pass after it
+ * are in. Checks what the case stands on: the draw carries the overlay, and no arrow; the chart listens to `dataZoom`.
+ */
+async function mountFlat(): Promise<FakeChart> {
+    vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(800);
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(800);
+    render(LineChart, {props: {data: YEAR_2025, currency: 'EUR', overlaySignals: [FLAT]}});
+    await drawnOver(YEAR_2025.map((point) => point.date));
+    const chart = chartInstances.at(-1);
+    if (!chart) throw new Error('LineChart never created its chart');
+    expect({overlay: seriesIn(lastDraw()).some((series) => series.name === FLAT.label), arrows: arrowsIn(lastDraw())}, 'precondition: the draw carries the overlay, and no arrow').toEqual({overlay: true, arrows: []});
+    expect(chart.handlerCount('dataZoom'), 'precondition: the chart registered a dataZoom handler').toBeGreaterThan(0);
+    await stabilityPassOver(chart);
+    return chart;
+}
+
+/**
+ * Y-25 (d) — a chart without arrow markers reads nothing for them when a zoom settles.
+ *
+ * What it protects: the cost of the arrows on a chart that has none — most of them. Every re-aim reads `getOption()`, a
+ * deep copy of the whole option, before it finds out there is nothing to aim: after each draw, twice in the stability
+ * pass that follows the first, and at the settle of every zoom (Y-8). The contract, after the cure: the chart notes,
+ * right after its full render, that its option has no arrow (`noteArrowMarkers(chartInstance, option)`), and
+ * `updateArrowRotations` skips it before `getOption()` — so a zoom gesture and its settle read nothing.
+ *
+ * Red today: the settle's re-aim reads `getOption()` once, for nothing.
+ *
+ * How it is tested: as Y-8's gesture — five real zooms back to back (`userZoom`), then fake timers past the settle — on
+ * a chart whose overlay has no marker. Only the gesture is counted: the first draw's three reads (the draw and the two
+ * stability resizes) come before it, and are out of the count by construction (`getOptionCount` is reset after them).
+ * Fake timers go in after the first draw and its stability pass, which the barriers await on real ones.
+ */
+describe('LineChart — a chart without arrow markers reads no getOption() for them when a zoom settles (Y-25)', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('one zoom gesture and its settle read no getOption() on a chart without arrows', async () => {
+        const chart = await mountFlat();
+
+        vi.useFakeTimers();
+        chart.getOptionCount = 0;
+        const since = chart.setOptionCalls.length;
+        for (const window of GESTURE) chart.userZoom(window);
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(labelPatchesSince(chart, since).length, 'barrier: the gesture settled — the 47-1 timer re-spaced the x labels on its window').toBeGreaterThan(0);
+
+        expect(chart.getOptionCount, 'Y-25: a chart without arrow markers read getOption() — a deep copy of the whole option — to re-aim arrows it does not have, once its zoom settled').toBe(0);
+    });
+});
+
+/** The ResizeObservers created while `captureResizeObservers()` is in force: the element each observes, and how to fire its callback. */
+const observers: Array<{target: Element; fire: () => void}> = [];
+
+/** A ResizeObserver that keeps its callback, so a case can fire it as a browser does after a resize. */
+class CapturingResizeObserver {
+    readonly #callback: ResizeObserverCallback;
+
+    constructor(callback: ResizeObserverCallback) {
+        this.#callback = callback;
+    }
+
+    observe(target: Element): void {
+        observers.push({target, fire: () => this.#callback([], this as unknown as ResizeObserver)});
+    }
+
+    unobserve(): void {}
+
+    disconnect(): void {}
+}
+
+/**
+ * Puts `CapturingResizeObserver` in place of the harness's ResizeObserver, inert on purpose (`src/__tests__/component.ts`:
+ * jsdom has no layout, and a stub must never invent a size). Before the chart mounts; `vi.unstubAllGlobals()` undoes it.
+ */
+function captureResizeObservers(): void {
+    vi.stubGlobal('ResizeObserver', CapturingResizeObserver);
+}
+
+/** Fires the ResizeObserver callbacks watching `chart`'s element, as a browser does once the box has changed. */
+function resized(chart: FakeChart): void {
+    const watching = observers.filter(({target}) => target === chart.getDom());
+    expect(watching.length, 'barrier: the chart watches its element with a ResizeObserver').toBeGreaterThan(0);
+    for (const {fire} of watching) fire();
+}
+
+/**
+ * Y-25 (b) — a resize re-aims the arrows once it settles, not on each callback.
+ *
+ * What it protects: the cost of a resize — Y-8's, on the other path that re-aims. A resize changes the plot's aspect, so
+ * the arrows are re-aimed; `resizeChartOnly()`, the ResizeObserver's work on a full-size chart (and on a compact one that
+ * keeps its resolution), re-aims them at once on every callback: a `getOption()` deep copy and every series written back,
+ * as often as the browser reports the box changing while a window is dragged or a panel slides. The contract, after the
+ * cure: a callback reads no `getOption()` and writes no series; it re-arms the settle
+ * (`scheduleZoomedAxisLabels(lastZoomEvent)`), whose timer re-aims the arrows once the resize pauses — one read, one
+ * write-back.
+ *
+ * Red today: each of the five callbacks reads `getOption()` and writes the series back, and nothing re-aims once the
+ * resize settles.
+ *
+ * How it is tested: the harness's ResizeObserver is inert on purpose, so this case puts one in that keeps its callback
+ * (`captureResizeObservers`) and fires the chart's as a browser would (`resized`). The plot narrows first (`plot.width`,
+ * 800 → 600 px), so the arrows' angles really change and their re-aim shows as a write-back. Five callbacks back to back,
+ * counted, then fake timers past any debounce, counted again. Fake timers go in after the first draw and its stability
+ * pass. The counts of the burst and of the settle are soft: one red run reports all three.
+ */
+describe('LineChart — a resize re-aims the arrows once it settles, not on each callback (Y-25)', () => {
+    beforeEach(() => {
+        captureResizeObservers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        // Global state the cases of the file share: the ResizeObserver, and the observers this one kept.
+        vi.unstubAllGlobals();
+        observers.length = 0;
+    });
+
+    it('five resize callbacks read no getOption() and write no series back; once the resize settles, the arrows are re-aimed once', async () => {
+        const {chart} = await mountTrend();
+
+        vi.useFakeTimers();
+        chart.getOptionCount = 0;
+        const since = chart.setOptionCalls.length;
+        const resizesBefore = chart.resizeCount;
+        plot.width = 600;
+        for (let callback = 0; callback < 5; callback++) resized(chart);
+        expect(chart.resizeCount - resizesBefore, 'barrier: each callback reached the chart — it resized it').toBe(5);
+
+        expect
+            .soft({getOptionReads: chart.getOptionCount, seriesWriteBacks: seriesPayloadsSince(chart, since).length}, 'Y-25: a resize callback re-aimed the arrows at once — getOption(), a deep copy of the whole option, and every series written back — on each callback of one resize')
+            .toEqual({getOptionReads: 0, seriesWriteBacks: 0});
+
+        const afterBurst = chart.setOptionCalls.length;
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        expect.soft(aimOf(seriesPayloadsSince(chart, afterBurst)), 'Y-25: once the resize settled, the arrows were not re-aimed exactly once — one series write-back, carrying both arrows, aimed').toEqual([TREND_ENDS.map((day) => ({day, aimed: true}))]);
+        expect(chart.getOptionCount, 'Y-25: one resize — its five callbacks and its settle — read getOption() more than once: the arrows need one read, once it settles').toBeLessThanOrEqual(1);
     });
 });

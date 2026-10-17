@@ -87,7 +87,11 @@ The `RegisterCard` handles new user registration with client-side validation.
 ### ⚡ Features
 
 - **Validation**: on blur of each field, and all together on submit:
-    - Username (at least 3 characters, after trimming)
+    - Username (at least 3 characters, after trimming, and no `@`: `auth.validation.usernameNoAt`,
+      lot A-21a). The sign-in reads a name with `@` as an email address, so the server refuses it too
+      ([Which Account an Identifier Names](../../../architecture/security.md#sign-in-identifier)): the
+      card keeps it off the wire, on blur and on submit. Spaces, accents, `.`, `_`, `-` and `+` go out
+      as typed
     - Email (format)
     - Password: the [password rules](#passwordstrength), read from `PasswordStrength`'s `valid`
       (`bind:valid={passwordRulesMet}`): the card keeps no copy of them
@@ -349,10 +353,11 @@ its `detail` as below. Otherwise:
 | `{error_code: "USER_LIMIT_REACHED"}` | `auth.userLimitReached`: the server is full, with no count, as the caller is not signed in |
 | `{error_code: "PASSWORD_TOO_WEAK"}` | `auth.validation.passwordTooWeak`: the password misses a [rule of the server](../../../architecture/security.md#password-rules), and the checklist under the field says which |
 | `{error_code: "EMAIL_VERIFICATION_UNAVAILABLE"}` | `email.verification.signUpUnavailable`: email verification is required and no email with a link can go out now |
+| `{error_code: "USERNAME_INVALID"}` | `auth.validation.usernameNoAt`: a username holding `@` (lot A-21a), the key of the card's own check — one rule, the same words, from the client or from the server |
 | Any other object | `auth.registrationFailed` |
 | A Pydantic error list | Its first error: on `email`, `auth.validation.invalidEmailDomain` for a special-use or reserved domain, `auth.validation.invalidEmail` otherwise; on `username`, `auth.validation.usernameMinLength`; on `password`, `auth.validation.passwordTooWeak`; anything else, `auth.registrationFailed` |
 | A string that mentions `username` (case-folded) | `auth.validation.usernameTaken` |
-| A string that mentions `email` | `auth.validation.emailTaken` |
+| A string that mentions `email` | `auth.validation.emailTaken`: *Email already registered*, for an address another account has, or since lot A-21a one that is another account's username |
 | Any other string | The string itself |
 | No `detail` | `auth.registrationFailed` |
 
@@ -554,7 +559,12 @@ Warning» in [Global Settings](../../../../admin/settings.md); why it is only ad
 | `id` | `accounts.openRegistration` (`OPEN_REGISTRATION_NOTICE_ID`) | The same |
 | `severity`, `dismissible` | `warning`, `true`: closed until the next page load | The same |
 | `messageKey` | `auth.notices.openRegistration`: *Registration is open and this instance is reachable from outside your local network: anyone who finds it can create an account.* | `auth.notices.openRegistrationLocked`, which names `LIBREFOLIO_REGISTRATION` |
-| `action` | `{labelKey: 'auth.notices.openRegistrationAction', href: '/settings?tab=admin'}`: *Change who can sign up*, the Admin tab of Settings | None: nothing in the app can change a pinned mode |
+| `action` | `{labelKey: 'auth.notices.openRegistrationAction', href: '/settings?tab=admin'}`: *Change who can sign up*, the Global Settings tab of Settings › Administration | None: nothing in the app can change a pinned mode |
+
+The «Security» tab of Settings › Administration calls `openRegistrationNoticeFor()` too, with
+`isAdmin: true`, and lists its notice as one of its findings, a `warning` with the same `id`,
+`messageKey` and `action`, whether or not the notice was closed
+([SecurityTab](settings.md#securitytab)).
 
 **The local hosts.** `isLocalHost(hostname)` (`lib/features/auth/localHost.ts`, pure) is true for:
 
@@ -595,7 +605,7 @@ function. The dependencies, each replaceable in tests:
 Only the first start watches: a second call returns a function that does nothing, and its
 dependencies are ignored. `appBootstrap.load()` starts it as soon as a user is known
 ([From login to the first guide](../../onboarding.md#layout-gate)), and the watcher then follows
-the account through sign-outs and sign-ins. Saving `registration_mode` in the Admin tab forces
+the account through sign-outs and sign-ins. Saving `registration_mode` in the Global Settings tab forces
 `instanceConfig.load({force: true})` ([GlobalSettingsTab](settings.md#globalsettingstab-admin-only)),
 so the warning follows the new mode on the same page load.
 

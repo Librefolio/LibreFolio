@@ -76,6 +76,44 @@ def _drop_root_privileges(data_dir: Path) -> str | None:
     return None
 
 
+def _decrypt_as_owner(args) -> bool:
+    """``decrypt`` writes a zip of every user's data: started as root where a data directory is (``docker compose exec``
+    without a user), it runs as that directory's owner, as the other commands do, so the zip belongs to the server's
+    user (B-19). Not root, or without a data directory (decrypting on another computer), it stays who it is, and never
+    reads the data directory's setting. ``False`` after printing why the switch failed."""
+    from backend.app.config import get_data_dir, set_test_mode  # noqa: PLC0415 — keep dev.py's start light
+
+    if not hasattr(os, "geteuid") or os.geteuid() != 0:
+        return True
+    try:
+        if args.test_db:
+            set_test_mode(True)
+        data_dir = get_data_dir()
+    except ValueError as exc:
+        print(f"❌ {exc}")
+        return False
+    if not data_dir.is_dir():
+        return True
+    problem = _drop_root_privileges(data_dir)
+    if problem:
+        print(f"❌ {problem}")
+        return False
+    return True
+
+
+def _password_file_first(args) -> tuple[bool, str | None]:
+    """``--password-file``, read before any switch of user, as ``create``, ``inspect`` and ``restore`` read it: a secret
+    only root can read (a Docker secret) works for every command. ``(False, None)`` after printing why it gives no
+    password; ``(True, None)`` without the option (the terminal and ``--password-stdin`` come later)."""
+    if not getattr(args, "password_file", None):
+        return True, None
+    try:
+        return True, _password(args, twice=False)
+    except _PasswordProblem as exc:
+        print(f"❌ {exc} ({exc.code})")
+        return False, None
+
+
 class _PasswordProblem(Exception):
     """No password could be read: ``code`` says why, in a stable word."""
 
@@ -135,15 +173,17 @@ def _archive_password(args) -> str | None:
     return password
 
 
-def _unlock(args, path: Path):
-    """The key of the secure backup at ``path``, from its password; ``None`` after saying why not."""
+def _unlock(args, path: Path, password: str | None = None):
+    """The key of the secure backup at ``path``, from its password (``password``, when already read); ``None`` after
+    saying why not."""
     from backend.app.services.platform.instance_backup.envelope import EnvelopeError, unlock  # noqa: PLC0415
 
-    try:
-        password = _password(args, twice=False)
-    except _PasswordProblem as exc:
-        print(f"❌ {exc} ({exc.code})")
-        return None
+    if password is None:
+        try:
+            password = _password(args, twice=False)
+        except _PasswordProblem as exc:
+            print(f"❌ {exc} ({exc.code})")
+            return None
     try:
         return unlock(path, password)
     except EnvelopeError as exc:
@@ -719,20 +759,19 @@ def _print_restore_state(state) -> None:
 
 def cmd_decrypt(args) -> int:
     """Write the archive inside a secure backup as a plain ``.zip``: to move an instance by hand («Porta a casa»)."""
-    from backend.app.services.platform.instance_backup.envelope import EnvelopeError, decrypt_file, is_envelope  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.envelope import EnvelopeError, decrypt_file  # noqa: PLC0415
 
-    path = Path(args.archive).expanduser()
-    if not path.is_file():
-        print(f"❌ No file at {path}")
+    has_password, password = _password_file_first(args)
+    if not has_password or not _decrypt_as_owner(args):
         return 1
-    if not is_envelope(path):
-        print(f"❌ {path} is not a secure backup: a plain .zip needs no decrypting (not_an_envelope)")
+    path = Path(args.archive).expanduser()
+    if not _readable_envelope(path):
         return 1
     target = _requested(args.output)
     if target.exists() or target.is_symlink():
         print(f"❌ {target} already exists: choose another name")
         return 1
-    key = _unlock(args, path)
+    key = _unlock(args, path, password)
     if key is None:
         return 1
     try:
@@ -751,6 +790,26 @@ def cmd_decrypt(args) -> int:
     if _carries_instance_key(target):
         print("🔑 It also holds the instance key: with it, every saved provider key can be read.")
     return 0
+
+
+def _readable_envelope(path: Path) -> bool:
+    """Whether ``path`` is a secure backup this command can read; ``False`` after printing why not."""
+    from backend.app.services.platform.instance_backup.envelope import is_envelope  # noqa: PLC0415 — keep dev.py's start light
+
+    if not path.is_file():
+        print(f"❌ No file at {path}")
+        return False
+    # is_envelope() answers False for a file it cannot read: say why instead, before a password is asked.
+    try:
+        with path.open("rb"):
+            pass
+    except OSError as exc:
+        print(f"❌ Cannot read {path}: {exc.strerror or exc} (archive_unreadable)")
+        return False
+    if not is_envelope(path):
+        print(f"❌ {path} is not a secure backup: a plain .zip needs no decrypting (not_an_envelope)")
+        return False
+    return True
 
 
 def _carries_instance_key(path: Path) -> bool:

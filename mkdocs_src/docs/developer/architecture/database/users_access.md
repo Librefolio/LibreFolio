@@ -107,7 +107,7 @@ erDiagram
 
 ### 👤 `USER` {: #user }
 
-The core identity table. Each user has a unique `username`, compared exactly, and a unique `email`, compared regardless of A–Z case (migration `009_email_unique_ignoring_case`, below). The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)). With `LIBREFOLIO_ADMIN_EMAIL`, the startup creates the first row itself: a superuser with `is_active` false, whose `hashed_password` is the hash of a random secret nobody knows, until its setup link is spent ([The Initial Administrator](../access_control.md#initial-admin)).
+The core identity table. Each user has a unique `username`, compared exactly, and a unique `email`, compared regardless of A–Z case (migration `009_email_unique_ignoring_case`, below). Since lot A-21a a new username holds no `@`, and a new email address cannot be another account's username, A–Z case aside (`user_service.address_is_a_username()`, a comparison of `lower(username)` that no index serves: an instance has few accounts). Both are checks of the service, not constraints of the table: the usernames written before keep their `@`, with no migration (see [Which Account an Identifier Names](../security.md#sign-in-identifier)). The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode: registration accepts it while `users` is empty, an inactive account counting as a row (`first_account_open()`); a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)). With `LIBREFOLIO_ADMIN_EMAIL`, the startup creates the first row itself: a superuser with `is_active` false, whose `hashed_password` is the hash of a random secret nobody knows, until its setup link is spent ([The Initial Administrator](../access_control.md#initial-admin)).
 
 Migration `005_accounts_invites` added three columns:
 
@@ -147,7 +147,8 @@ declares it after the `User` class (`backend/app/db/models.py`), so `create_all`
 `lower()` folds A–Z and nothing else, so letters outside ASCII compare as written: `Émile@example.com` and
 `émile@example.com` are two different addresses, a documented limit. `user_service.email_fold()` is the same fold in
 Python, and `same_email()` compares two addresses with it. `get_user_by_email()` and the email half of
-`get_user_by_username_or_email()` compare `lower(email)`, so sign-in, «forgot password» and the duplicate checks of
+`get_user_by_username_or_email()` — tried first, and only for an identifier holding `@` (lot A-21a) — compare
+`lower(email)`, so sign-in, «forgot password» and the duplicate checks of
 `create_user()` and `update_profile()` find an address whatever its case; the username half stays exact. The stored
 email keeps the form last written: its owner changing its case alone is no email change
 ([Changing the Email](../security.md#email-change)).

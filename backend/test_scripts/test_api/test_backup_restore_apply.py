@@ -27,7 +27,11 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     not this LibreFolio's; ``apply.alembic_head_revision`` moved; not judged when it is ``None``); never a path in the
     answer. Once the check ended, ``.restore`` a link or a file: 500 ``restore_folder_unusable`` (``confirm_check`` checks
     it first: it writes there); a link in place of ``checks/`` or ``stage/``: the check or its copy is not found, 404
-    ``restore_stage_not_found``. Nothing written through any of them, nor anywhere in the data directory.
+    ``restore_stage_not_found``. Nothing written through any of them, nor anywhere in the data directory. B-31, a
+    confirmation that fails on the way (its lock, the write of its state): a full disk or a quota, itself or as a cause,
+    is 507 ``backup_no_space`` and one warning; any other ``OSError`` 500 ``restore_confirm_failed`` and one error naming
+    its type and the system's words, which stay out of the answer. Nothing is confirmed (the state is written last,
+    atomically), and the same confirmation, the failure gone, is 202.
 (c) ``GET /backup/restore/status``: ``none`` without a restore, and nothing created to say so; each phase on disk as
     its state (applying, applied and rolling back are ``in_progress``), its fields as recorded; a pending restore says
     why a start left it waiting, for each of the four reasons (§11, P7: ``instance_blocked``, on an instance not blocked
@@ -38,11 +42,16 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     ``restore_stage_not_found``; another check is not the restore's, and stays. The ticket of a restart goes too (i).
     Without a state file, 404 ``restore_not_pending`` and nothing created, not even ``.restore/apply.lock`` (the lock is
     taken only once a state file is found); a restore being applied or finished, 404 too, its state unchanged, and the
-    ticket of its restart kept for its outcome.
+    ticket of its restart kept for its outcome. B-31: an ``OSError`` before the restore is dropped (its lock, the removal
+    of its state file) is 500 ``restore_cancel_failed`` and one error, the restore still pending, and the cancel, the
+    failure gone, is 204; an ``OSError`` while its copy is removed, once the restore is dropped, is a 204 all the same,
+    with one warning naming the stage: the copy goes when its check expires.
 (e) ``POST /backup/restore/restart``: 202 ``RestoreRestartAccepted``: the ``RestoreStatus`` (pending) and, since lot B5c,
     the ticket of its outcome (i); after the answer is sent, a SIGTERM to the server's process (``restart.server_pid()``),
     through ``restart.send_signal`` and nothing else; the state unchanged. 409 ``restore_not_pending`` otherwise, no
-    signal, and no ticket written.
+    signal, and no ticket written. B-31 pins its failure: ``prepare_restart`` raising an ``OSError`` (a full disk
+    included) is 500 ``restore_restart_failed`` and one error, no restart scheduled, no signal, no ticket, the restore
+    still pending.
 (f) The copy of an ACTIVE restore: ``DELETE /backup/restore/stage/{id}`` is 409 ``restore_pending`` and keeps it;
     another check is dropped as before, and so is the copy of a finished restore. ``prune``, however old everything
     looks, keeps the ACTIVE restore's check and copy, the command line's copy that no check records included; a
@@ -51,7 +60,9 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     is allowed on a blocked instance. OpenAPI: the four operations carry ``Backup & Export``, their success and model
     (the restart's ``RestoreRestartAccepted`` since lot B5c), and document their refusals with their codes; the drop
     documents ``restore_pending``; ``RestoreStatus.waiting`` lists exactly the four reasons, ``instance_blocked``
-    included (§11).
+    included (§11). B-31: the confirmation documents 507 ``backup_no_space`` and its 500 names ``restore_confirm_failed``
+    beside ``restore_folder_unusable``; the cancel documents a 500 ``restore_cancel_failed``; the restart's 500 names
+    ``restore_restart_failed``.
 (h) ``upload_limit_mb`` (§6), in every ``RestoreStatus`` answer, ``none`` included: the largest archive the upload
     accepts now, in MB, read by ``backup_max_upload_mb()`` when the answer is built: 0 unset and self-hosted, 500 unset
     and managed, the variable's value when set (over the profile), ``null`` when it cannot be read, with one error
@@ -94,6 +105,8 @@ for the test by a stand-in that signs in whoever carries a session cookie and le
 
 from __future__ import annotations
 
+import contextlib
+import errno
 import hashlib
 import importlib
 import json
@@ -103,7 +116,7 @@ import re
 import secrets
 import signal
 import stat
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -750,6 +763,181 @@ async def test_a_confirmation_never_writes_through_a_restore_folder_that_is_not_
     print_success(f"{name} a {replaced_by}: {status_code} {error}")
 
 
+#: B-31: what a confirmation and a cancel that fail answer and log.
+NO_SPACE_TO_CONFIRM = "Not enough free space to confirm the restore"
+CONFIRM_FAILED = "The restore could not be confirmed: the server's log has the cause"
+CONFIRM_NO_SPACE_WARNING = "A restore could not be confirmed: not enough free space"
+CONFIRM_ERROR = "A restore could not be confirmed"
+CANCEL_FAILED = "The restore could not be cancelled: the server's log has the cause"
+CANCEL_ERROR = "A pending restore could not be cancelled"
+COPY_LEFT_WARNING = "The copy of a cancelled restore could not be removed: it goes when its check expires"
+#: B-31: the steps of ``apply`` a failure is put in. A confirmation: its lock (``apply._apply_lock``, refused as it is
+#: taken) and the write of its state (``apply._write_state``, its first call: the confirmation's own). A cancel: its lock,
+#: and the removal of its state file (``apply.restore_state_path``'s ``unlink``), both before the restore is dropped.
+CONFIRM_STEPS = ["its-lock", "its-state"]
+CANCEL_STEPS = ["its-lock", "its-state-file"]
+#: B-31: failures that are not a lack of space.
+OTHER_FAILURES = [pytest.param(errno.EACCES, id="EACCES"), pytest.param(errno.EIO, id="EIO")]
+
+
+def caused_by_a_full_disk() -> OSError:
+    """Another error of the file system whose cause is a full disk, as a failure wrapped on its way up leaves it."""
+    error = OSError(errno.EIO, os.strerror(errno.EIO))
+    error.__cause__ = OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
+    return error
+
+
+#: B-31: a full disk or a quota, the failure itself or the cause of another (``out_of_space`` walks the chain).
+NO_SPACE_FAILURES = [
+    pytest.param(lambda: OSError(errno.ENOSPC, os.strerror(errno.ENOSPC)), id="ENOSPC"),
+    pytest.param(lambda: OSError(api.EDQUOT, os.strerror(api.EDQUOT)), id="EDQUOT", marks=api.needs_edquot),
+    pytest.param(caused_by_a_full_disk, id="EIO-caused-by-ENOSPC"),
+]
+#: The system's words of every failure above: never in an answer.
+SYSTEM_WORDS = tuple(os.strerror(code) for code in (errno.ENOSPC, api.EDQUOT, errno.EIO, errno.EACCES) if code is not None)
+
+
+class Failure:
+    """A failure put in one step of ``apply``: ``error()`` raised the first time the step is reached, once, unless
+    ``cured``; what it raised in ``raised``."""
+
+    def __init__(self, error: Callable[[], OSError]) -> None:
+        self.error = error
+        self.raised: list[OSError] = []
+        self.cured = False
+
+    def due(self) -> bool:
+        """Whether the step fails if it is reached now: not cured, and nothing raised yet."""
+        return not self.cured and not self.raised
+
+    def fail(self) -> None:
+        raised = self.error()
+        self.raised.append(raised)
+        raise raised
+
+
+def _lock_refused(apply: ModuleType, failure: Failure) -> Callable[[Path], Any]:
+    """``apply._apply_lock``, refused as it is taken while the failure is due; otherwise the real lock."""
+    real_lock = apply._apply_lock
+
+    @contextlib.contextmanager
+    def apply_lock(data_dir: Path) -> Iterator[None]:
+        if failure.due():
+            failure.fail()
+        with real_lock(data_dir):
+            yield
+
+    return apply_lock
+
+
+def _state_not_written(apply: ModuleType, failure: Failure) -> Callable[[Path, Any], None]:
+    """``apply._write_state``, failing while the failure is due (the confirmation's own write: its first); otherwise the
+    real write."""
+    real_write = apply._write_state
+
+    def write_state(data_dir: Path, state: Any) -> None:
+        if failure.due():
+            failure.fail()
+        real_write(data_dir, state)
+
+    return write_state
+
+
+def _state_file_that_stays(apply: ModuleType, failure: Failure) -> Callable[[Path], Path]:
+    """``apply.restore_state_path``, while the failure is due a path whose removal fails, everything else of it the real
+    path's; otherwise the real path."""
+    real_path = apply.restore_state_path
+
+    class StateFileThatStays(type(Path())):
+        def unlink(self, missing_ok: bool = False) -> None:
+            failure.fail()
+
+    def restore_state_path(data_dir: Path) -> Path:
+        path = real_path(data_dir)
+        return StateFileThatStays(path) if failure.due() else path
+
+    return restore_state_path
+
+
+#: Each step a failure is put in: the name of ``apply`` replaced, and what replaces it.
+FAILING = {"its-lock": ("_apply_lock", _lock_refused), "its-state": ("_write_state", _state_not_written), "its-state-file": ("restore_state_path", _state_file_that_stays)}
+
+
+def fail_at(monkeypatch: pytest.MonkeyPatch, step: str, error: Callable[[], OSError]) -> Failure:
+    """``step`` of ``apply`` raises ``error()`` the next time it is reached, once, unless ``cured``; everything else is the
+    module's own: its lock refused as it is taken, the first write of its state, or the removal of its state file."""
+    apply = apply_module()
+    failure = Failure(error)
+    name, failing = FAILING[step]
+    monkeypatch.setattr(apply, name, failing(apply, failure))
+    return failure
+
+
+def nothing_shown(response: httpx.Response, root: Path) -> None:
+    """Neither a path nor the system's words in the answer."""
+    no_path_in(response, root)
+    shown = [words for words in SYSTEM_WORDS if words in response.text]
+    assert shown == [], f"the system's words stay in the server: {shown} in {response.text}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("step", CONFIRM_STEPS)
+@pytest.mark.parametrize("error", NO_SPACE_FAILURES)
+async def test_a_confirmation_on_a_full_disk_is_507_and_confirms_nothing(instance, head_archive, monkeypatch, step, error):
+    """(b) B-31: a full disk or a quota while the confirmation takes its lock or writes its state, itself or as the cause
+    of another error: 507 ``backup_no_space``, «Not enough free space to confirm the restore», never the plain 500 of an
+    error escaping the route; one WARNING, «A restore could not be confirmed: not enough free space». Nothing confirmed:
+    the status as before, no state file; the check and its copy kept, so the same confirmation, the failure gone, is
+    202. Barrier: the confirmation failed at that step, once."""
+    root = instance.root
+    stage_id = await checked(head_archive)
+    before = (await restore_status()).json()
+    failure = fail_at(monkeypatch, step, error)
+
+    with capture_logs() as events:
+        response = await confirm(stage_id)
+
+    assert len(failure.raised) == 1, f"barrier: the confirmation failed at {step}, once: {failure.raised}"
+    assert api.refusal(response) == (507, "backup_no_space", NO_SPACE_TO_CONFIRM), f"a full disk at {step}: 507 backup_no_space, not {api.shown(response)}"
+    assert [(event.get("log_level"), event.get("event")) for event in api.loud(events)] == [("warning", CONFIRM_NO_SPACE_WARNING)], f"one warning: {api.loud(events)}"
+    assert ((await restore_status()).json(), os.path.lexists(state_path(root))) == (before, False), "nothing confirmed: the status as before, no state file"
+    nothing_shown(response, root)
+    failure.cured = True
+    again = await confirm(stage_id)
+    assert again.status_code == 202, f"room again: the same confirmation is 202 (the check and its copy kept), not {api.shown(again)}"
+    print_success(f"{step}: 507 backup_no_space, nothing confirmed, then 202")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("step", CONFIRM_STEPS)
+@pytest.mark.parametrize("error_number", OTHER_FAILURES)
+async def test_a_confirmation_that_fails_otherwise_is_500_restore_confirm_failed_and_confirms_nothing(instance, head_archive, monkeypatch, step, error_number):
+    """(b) B-31: any other ``OSError`` while the confirmation takes its lock or writes its state (EACCES, EIO): 500
+    ``restore_confirm_failed``, «The restore could not be confirmed: the server's log has the cause»; one ERROR, «A
+    restore could not be confirmed», whose ``error`` is the exception's type and its system's words, which stay out of
+    the answer with any path. Nothing confirmed, and the same confirmation, the failure gone, is 202. Barrier: the
+    confirmation failed at that step, once."""
+    root = instance.root
+    stage_id = await checked(head_archive)
+    before = (await restore_status()).json()
+    failure = fail_at(monkeypatch, step, lambda: OSError(error_number, os.strerror(error_number)))
+
+    with capture_logs() as events:
+        response = await confirm(stage_id)
+
+    assert len(failure.raised) == 1, f"barrier: the confirmation failed at {step}, once: {failure.raised}"
+    raised = failure.raised[0]
+    assert api.refusal(response) == (500, "restore_confirm_failed", CONFIRM_FAILED), f"{errno.errorcode[error_number]} at {step}: 500 restore_confirm_failed, not {api.shown(response)}"
+    logged = [(event.get("log_level"), event.get("event"), event.get("error")) for event in api.loud(events)]
+    assert logged == [("error", CONFIRM_ERROR, f"{type(raised).__name__}: {raised.strerror}")], f"one error, with the type and the system's words: {api.loud(events)}"
+    assert ((await restore_status()).json(), os.path.lexists(state_path(root))) == (before, False), "nothing confirmed: the status as before, no state file"
+    nothing_shown(response, root)
+    failure.cured = True
+    again = await confirm(stage_id)
+    assert again.status_code == 202, f"the failure gone: the same confirmation is 202, not {api.shown(again)}"
+    print_success(f"{errno.errorcode[error_number]} at {step}: 500 restore_confirm_failed, nothing confirmed, then 202")
+
+
 # =============================================================================
 # (c) GET /status
 # =============================================================================
@@ -946,6 +1134,75 @@ async def test_only_a_pending_restore_can_be_cancelled(instance, phase):
     print_success(f"{phase}: 404")
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("step", CANCEL_STEPS)
+@pytest.mark.parametrize("error_number", OTHER_FAILURES)
+async def test_a_cancel_that_fails_before_the_restore_is_dropped_is_500_and_the_restore_still_waits(instance, head_archive, monkeypatch, step, error_number):
+    """(d) B-31: an ``OSError`` before the restore is dropped, its lock refused as it is taken or its state file that
+    cannot be removed (EACCES, EIO): 500 ``restore_cancel_failed``, «The restore could not be cancelled: the server's log
+    has the cause», never the plain 500 of an error escaping the route; one ERROR, «A pending restore could not be
+    cancelled», whose ``error`` is the exception's type and its system's words, which stay out of the answer with any
+    path. The restore still waits: the status ``pending`` for its stage, its state file as it was, its copy and its check
+    kept; and the cancel, the failure gone, is 204. Barrier: the cancel failed at that step, once."""
+    root = instance.root
+    stage_id = await confirmed(head_archive)
+    before = (state_path(root).read_bytes(), api.tree(stage_dir(root, stage_id)), check_state_path(root, stage_id).read_bytes())
+    failure = fail_at(monkeypatch, step, lambda: OSError(error_number, os.strerror(error_number)))
+
+    with capture_logs() as events:
+        response = await cancel()
+
+    assert len(failure.raised) == 1, f"barrier: the cancel failed at {step}, once: {failure.raised}"
+    raised = failure.raised[0]
+    assert api.refusal(response) == (500, "restore_cancel_failed", CANCEL_FAILED), f"{errno.errorcode[error_number]} at {step}: 500 restore_cancel_failed, not {api.shown(response)}"
+    logged = [(event.get("log_level"), event.get("event"), event.get("error")) for event in api.loud(events)]
+    assert logged == [("error", CANCEL_ERROR, f"{type(raised).__name__}: {raised.strerror}")], f"one error, with the type and the system's words: {api.loud(events)}"
+    after = (await restore_status()).json()
+    assert (after["state"], after["stage_id"]) == ("pending", stage_id), f"the restore still waits: {after}"
+    assert (state_path(root).read_bytes(), api.tree(stage_dir(root, stage_id)), check_state_path(root, stage_id).read_bytes()) == before, "its state file, its copy and its check as they were"
+    nothing_shown(response, root)
+    failure.cured = True
+    again = await cancel()
+    assert (again.status_code, again.content) == (204, b""), f"the failure gone: the cancel is 204, not {api.shown(again)}"
+    print_success(f"{errno.errorcode[error_number]} at {step}: 500 restore_cancel_failed, still pending, then 204")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_number", OTHER_FAILURES)
+async def test_a_copy_that_cannot_be_removed_does_not_fail_the_cancel(instance, head_archive, monkeypatch, error_number):
+    """(d) B-31: the restore dropped (its state file removed), an ``OSError`` while its checked copy is removed
+    (``apply._remove_leftovers``, EACCES, EIO): 204 all the same, never the plain 500 of a cancel that did happen; one
+    WARNING, «The copy of a cancelled restore could not be removed: it goes when its check expires», naming the stage and
+    the error (its system's words). The restore is cancelled: no state file, the status ``none``. The copy and its check
+    are left for ``prune``, which removes them once they are old, as the warning says. Barrier: the removal of that
+    stage's copy was asked once, its state file already gone."""
+    root = instance.root
+    stage_id = await confirmed(head_archive)
+    apply = apply_module()
+    asked: list[tuple[str | None, bool]] = []
+
+    def remove_leftovers(data_dir: Path, stage: str | None) -> None:
+        asked.append((stage, os.path.lexists(state_path(root))))
+        raise OSError(error_number, os.strerror(error_number))
+
+    monkeypatch.setattr(apply, "_remove_leftovers", remove_leftovers)
+    with capture_logs() as events:
+        response = await cancel()
+
+    assert asked == [(stage_id, False)], f"barrier: the copy of {stage_id} was to be removed, once, the restore already dropped: {asked}"
+    assert (response.status_code, response.content) == (204, b""), f"{errno.errorcode[error_number]} removing the copy: the restore is cancelled, 204, not {api.shown(response)}"
+    loud = api.loud(events)
+    assert [(event.get("log_level"), event.get("event"), event.get("stage_id")) for event in loud] == [("warning", COPY_LEFT_WARNING, stage_id)], f"one warning naming the stage: {loud}"
+    assert os.strerror(error_number) in str(loud[0].get("error")), f"the warning names the error: {loud[0]}"
+    assert (os.path.lexists(state_path(root)), (await restore_status()).json()["state"]) == (False, "none"), "the restore is cancelled"
+    left = (stage_dir(root, stage_id).is_dir(), check_state_path(root, stage_id).is_file())
+    assert left == (True, True), f"the copy and its check are left for prune: {left}"
+    prune_far_ahead(root)
+    gone = (os.path.lexists(stage_dir(root, stage_id)), os.path.lexists(check_state_path(root, stage_id)))
+    assert gone == (False, False), f"prune removes them once they are old: {gone}"
+    print_success(f"{errno.errorcode[error_number]} removing the copy: 204, one warning, the copy left for prune")
+
+
 # =============================================================================
 # (e) POST /restart
 # =============================================================================
@@ -980,6 +1237,48 @@ async def test_no_restart_without_a_pending_restore(instance, signals, phase):
     assert api.code(response) == (409, "restore_not_pending"), f"{phase or 'no restore'}: 409 restore_not_pending: {api.shown(response)}"
     assert (signals.sent, signals.around) == ([], []), f"{phase or 'no restore'}: no signal: {signals.sent} {signals.around}"
     print_success(f"{phase or 'no restore'}: 409, no signal")
+
+
+#: B-31: what a restart that cannot be prepared answers and logs, as the route does before B-31 (pinned, unchanged).
+RESTART_FAILED = "The restart could not be prepared: the server's log has the cause"
+RESTART_ERROR = "The ticket of the restore's outcome could not be written: no restart"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_number", [pytest.param(errno.EACCES, id="EACCES"), pytest.param(errno.ENOSPC, id="ENOSPC")])
+async def test_a_restart_that_cannot_be_prepared_is_500_and_restarts_nothing(instance, signals, monkeypatch, error_number):
+    """(e) B-31, a GUARD: green before the code, the route already catches it; B-31 pins it. ``prepare_restart``, as
+    ``restore.py`` imported it, raising an ``OSError`` (EACCES; ENOSPC too: a full disk is no 507 here): 500
+    ``restore_restart_failed``, «The restart could not be prepared: the server's log has the cause»; one ERROR, «The
+    ticket of the restore's outcome could not be written: no restart», whose ``error`` is the exception's type and its
+    system's words, which stay out of the answer with any path. No restart scheduled (``restore._restart`` never
+    called), no signal; the restore still pending, its state file as it was; no ticket. Barrier: ``prepare_restart`` was
+    asked once."""
+    root = instance.root
+    before = write_state(root, "pending", api.UNKNOWN_ID)
+    raised: list[OSError] = []
+    restarts: list[str] = []
+
+    def prepare_restart(*, data_dir: Path) -> Any:
+        error = OSError(error_number, os.strerror(error_number))
+        raised.append(error)
+        raise error
+
+    monkeypatch.setattr(restore, "prepare_restart", prepare_restart)
+    monkeypatch.setattr(restore, "_restart", lambda: restarts.append("restart"))
+    with capture_logs() as events:
+        response = await restart(answered=signals)
+
+    assert len(raised) == 1, f"barrier: prepare_restart was asked once: {raised}"
+    assert api.refusal(response) == (500, "restore_restart_failed", RESTART_FAILED), f"{errno.errorcode[error_number]}: 500 restore_restart_failed, not {api.shown(response)}"
+    logged = [(event.get("log_level"), event.get("event"), event.get("error")) for event in api.loud(events)]
+    assert logged == [("error", RESTART_ERROR, f"{type(raised[0]).__name__}: {raised[0].strerror}")], f"one error, with the type and the system's words: {api.loud(events)}"
+    assert (restarts, signals.sent, signals.around) == ([], [], []), f"no restart scheduled, no signal: {restarts} {signals.sent} {signals.around}"
+    after = (await restore_status()).json()
+    assert (after["state"], after["stage_id"], state_path(root).read_bytes()) == ("pending", api.UNKNOWN_ID, before), f"the restore still waits, its state file as it was: {after}"
+    assert not os.path.lexists(ticket_path(root)), "no ticket written"
+    nothing_shown(response, root)
+    print_success(f"{errno.errorcode[error_number]}: 500 restore_restart_failed, no restart, still pending")
 
 
 # =============================================================================
@@ -1115,7 +1414,10 @@ def test_no_new_restore_route_is_allowed_on_a_blocked_instance():
 def test_openapi_documents_the_four_routes_their_answers_and_codes():
     """(g) Each operation under ``Backup & Export``, its success and model, its refusals documented with their codes;
     the drop of a check documents ``restore_pending``. The restart answers ``RestoreRestartAccepted`` since lot B5c: the
-    status and the ticket of its outcome."""
+    status and the ticket of its outcome. B-31: the confirmation documents its 507 ``backup_no_space`` (as every 507 of
+    the backup names its code) and its 500 names ``restore_confirm_failed`` beside ``restore_folder_unusable``; the
+    cancel documents a 500 naming ``restore_cancel_failed``; the restart's 500 names ``restore_restart_failed``
+    (already true: that row is a guard)."""
     document = api.restore_app().openapi()
     paths = {("POST", CONFIRM): "post", ("GET", STATUS): "get", ("DELETE", PENDING): "delete", ("POST", RESTART): "post"}
     missing = sorted(f"{method} {path}" for (method, path), verb in paths.items() if verb not in document["paths"].get(path, {}))
@@ -1130,9 +1432,15 @@ def test_openapi_documents_the_four_routes_their_answers_and_codes():
     restart_model = {"$ref": "#/components/schemas/RestoreRestartAccepted"}
     assert models == {("POST", CONFIRM): status_model, ("GET", STATUS): status_model, ("DELETE", PENDING): None, ("POST", RESTART): restart_model}, f"the model of each success: {models}"
     codes = {
-        ("POST", CONFIRM): {"404": ["restore_stage_not_found"], "409": ["restore_stage_running", "restore_not_restorable", "restore_stage_outdated", "restore_already_pending"], "410": ["restore_stage_expired"], "500": ["restore_folder_unusable"]},
-        ("DELETE", PENDING): {"404": ["restore_not_pending"]},
-        ("POST", RESTART): {"409": ["restore_not_pending"]},
+        ("POST", CONFIRM): {
+            "404": ["restore_stage_not_found"],
+            "409": ["restore_stage_running", "restore_not_restorable", "restore_stage_outdated", "restore_already_pending"],
+            "410": ["restore_stage_expired"],
+            "500": ["restore_folder_unusable", "restore_confirm_failed"],
+            "507": ["backup_no_space"],
+        },
+        ("DELETE", PENDING): {"404": ["restore_not_pending"], "500": ["restore_cancel_failed"]},
+        ("POST", RESTART): {"409": ["restore_not_pending"], "500": ["restore_restart_failed"]},
     }
     undocumented: dict[str, list[str]] = {}
     for key, statuses in codes.items():
