@@ -6194,3 +6194,46 @@ frontend il percorso di modifica (`AssetModal.saveEdit`) non ha un `catch` suo i
   > **⚠️ Fuori pista (12:25)** — il docs-writer ha trovato due vuoti vecchi fuori lotto (`provider_policy.py` assente dalla
   > tabella dei moduli; Maturity Settlement assente dalla pagina utente del piano): **X-R63** nel backlog.
 - ✅ **X-R49 chiuso il 17/10 (12:30)**, in attesa del commit del coordinatore.
+
+### Revisione di MF X-R59 (`a8de6b584`), sola lettura — 17/10 12:30–12:50
+
+Richiesta dal coordinatore (blocca l'ingresso di MF): rotte, `POST /prices/current?range_start=`, contratto `range_change`.
+Letti il diff di rotte, schemi, servizi (asset e FX), `financial_math.returns.range_change`, i nomi dei test e la
+documentazione. **Esito: OK**, con queste note:
+
+1. **Basso** — nessun test forza il fallimento di `live_range_changes`: il `try` proprio della rotta (le quotazioni
+   restano, `range_change` tutto nullo) è promesso e non provato.
+2. **Info** — un prezzo sceso a 0 (un prestito di crowdfunding svalutato a 0, un titolo radiato): oggi la card e la pagina
+   dell'asset mostrano −100 % (`computeDerivedPriceState`: basta il primo prezzo diverso da 0); `range_change` non dà
+   nulla con un estremo ≤ 0. È la regola della casa di X-R53 (le colonne 1D…5Y già nulle): la tengo e la scrivo nella
+   riga 🔄 del mio lotto frontend. FX invariato (`displayFxDelta` vuole già entrambi > 0).
+3. **Info** — oltre 100 anni di dati la serie FX parte da `range_span_floor(end)` (`currencies.py:445`), il riferimento da
+   `range_start`: oggi irraggiungibile.
+4. **Info** — un `range_start` prima del 1900 in un item fa fallire tutta la richiesta (422 dello schema); i prezzi prima
+   del 1900 si possono salvare, quindi «Tutto» può risolvere `dateStart` prima del 1900: il mio lotto frontend lo limita
+   al 1900-01-01. Per `/prices/current` il 422 è testo semplice (forse `Query(None, ge=…)` darebbe la forma standard).
+5. **Coordinamento** — la documentazione di MF (`assets/architecture.md` ~374, `fx/architecture.md` ~238) assegna a Z-27
+   la divisione in lotti di period-changes; il coordinatore l'ha data a me. Proposta: la faccio dopo Z-27, con il suo
+   limite e il suo aiuto, dentro `fetchAssetPeriodChanges`/`fetchFxPeriodChanges` (il registro di X-R60 vede una sola
+   risposta), e aggiorno quei due passi.
+6. **Nit** — la descrizione di `FARangeChange.change_ratio` raggruppa male: «(Price on as_of, or the live price ÷
+   reference price) − 1».
+- Il limite sui `range_start` è separato (5 `as_of` + 5 `range_start`), non condiviso come diceva la decisione: va bene
+  (un `range_start` costa una query, non dieci), solo da sapere.
+- Verificato: le catene FX sono salvate come righe della coppia (`fx/sync.py` `_storable_chain_rates`), quindi la query del
+  primo tasso dentro l'intervallo legge le stesse righe di `convert_bulk`, che non triangola.
+
+### TS2769 in `asset-list.spec.ts:1046` (da Y-28) ✅ — 17/10 12:31–12:40
+
+Segnalato dal coordinatore: `tsc -p tsconfig.e2e.json` rosso sul mio `c18517e31`.
+- `tsc` prima: **tre** TS2769, tutti miei: `e2e/assets/asset-list.spec.ts:1046` (Y-28) e `e2e/fixtures/sync-overwrite.ts:89`
+  e `:125` (la fixture di C-66, `32c64bbd9`). Stessa causa: `points.filter(isStoredPoint)`, e il parametro di
+  `isStoredPoint` accetta solo un oggetto, mentre il tipo TypeScript generato per `backward_fill_info` è
+  `(Info | null) | Array<Info | null>`. L'OpenAPI e lo zod dicono oggetto o null: la lista è un artefatto del generatore
+  dei tipi.
+- Cura in `sync-overwrite.ts`: il parametro diventa `{backward_fill_info?: unknown}` e la regola legge `days_back` come
+  `extractDaysBack` della pagina (solo il `days_back` numerico di un oggetto, altrimenti 0). Comportamento identico
+  (scratch su 9 casi: assente, null, oggetto vuoto, 0, 3, `days_back` null, lista vuota, lista piena).
+- `tsc` dopo: i tre TS2769 spariti. Restano due errori non miei: `e2e/onboarding-tour.spec.ts:863` TS2322 (`580bd504f`,
+  onboarding) e `src/lib/types/files.ts:9` TS2307 `$lib/api/generated` (`ff38088b9`, Files; `tsconfig.e2e.json` non
+  mappa `$lib`). Prettier pulito. Nessun E2E rilanciato: cambia solo il tipo, la regola è la stessa.
