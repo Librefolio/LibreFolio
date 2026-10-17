@@ -502,8 +502,11 @@ The facade:
    `asset_leg=False`;
 8. returns `wac=None`, no qualifying rows and the missing pairs with their dates
    when a report-leg conversion is missing — that result is not cached;
-9. otherwise returns the WAC (`unit_cost_report`, in the target currency) and one
-   `WACQualifyingTX` per step, and caches the result.
+9. otherwise returns the WAC (`unit_cost_report`, in the target currency, rounded to what
+   `Transaction.cost_basis_override` keeps with `round_computed_value()` — C-97 decision D6, MF-W56: the
+   preview is frozen into a manual cost and the auto cost is written on the row, so a periodic quotient must
+   fit the column; the average itself stays exact in `average_cost`) and one `WACQualifyingTX` per step, and
+   caches the result.
 
 Each step becomes a qualifying row:
 
