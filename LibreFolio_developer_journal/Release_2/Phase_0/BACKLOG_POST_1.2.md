@@ -4002,8 +4002,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     quando non esiste; un rosso in-process come PROF-017. Da fare subito dopo A7c o in A8, che riscrive quel percorso.
     Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7c».
   - Fatta così (16/10): LOGIN-027…033 in `test_auth_api.py`; dettagli nel piano, «A-22».
-- **A-23 · L'avvio della verifica dell'indirizzo risponde 500 quando la chiave d'istanza non si può usare** — basso; da
-  H (H-19, tramite il coordinatore, 16/10).
+- ✅ **A-23 · L'avvio della verifica dell'indirizzo risponde 500 quando la chiave d'istanza non si può usare** — basso; da
+  H (H-19, tramite il coordinatore, 16/10). **Chiusa** (17/10): fatta da H come H-19 (dev `9b23bdbfe`: `48aa7a3ed` +
+  `139ca6129`; revisione di A: OK). Il seguito sulle parole dei due dialoghi è **A-49**.
   - `POST /api/v1/users/address-probe` (`address_probe.issue_probe_nonce()`, firma il nonce con una chiave derivata dalla
     chiave d'istanza) risponde 500 se la chiave non si può usare, mentre `GET /auth/address-probe`
     (`verify_probe_nonce()`) lo tollera.
@@ -4183,6 +4184,17 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   `error == USERNAME_RESERVED_MESSAGE`: un cambio di parole lo romperebbe in silenzio. Meglio un codice restituito da
   `user_service.create_user`/`update_profile`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
   «A-21a — Revisione di E».
+- **A-48 · La pagina offline mostra il caffè anche su un'istanza gestita** — basso; dal `docs-writer` di A9 (17/10).
+  `frontend/static/offline.html` (statica, senza l'app) disegna sempre il link «Buy Me a Coffee»: non può sapere il
+  profilo. Rimedio possibile: l'app salva il profilo confermato dal server (per esempio in `localStorage`) e la pagina
+  offline nasconde il link se è `managed`; il file è della squadra dei colori (copie statiche dei ruoli). Dettagli:
+  [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A9.5».
+- **A-49 · Un messaggio suo per il 503 `INSTANCE_KEY_UNAVAILABLE` della verifica dell'indirizzo (con E)** — basso,
+  dopo la 1.3 salvo che venga facile; dalla revisione di H-19 (A, 17/10; coordinatore). Il dialogo d'invito della scheda
+  Utenti (`LinkShare` → `checkAddress()`) lo dice «non verificabile» e il controllo dei link della scheda Email
+  (`emailLinks.ts`, di E) «irraggiungibile»: col codice nuovo i due posti possono dire «questa istanza non può
+  verificare gli indirizzi: vedi i controlli di configurazione». Condivisa con E. Dettagli:
+  [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Revisione di H-19».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
