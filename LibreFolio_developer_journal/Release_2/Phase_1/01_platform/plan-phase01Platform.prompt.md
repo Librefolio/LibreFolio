@@ -4776,3 +4776,81 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
   secco; ruff e black puliti. L'insieme delle righe lunghe è invariato.
 - ✅ Controllo d'import (02:32): il modulo si importa, `ALLOWED_WHEN_BLOCKED` ha 23 voci, `resend` è nella docstring.
   `api instance-block` non l'ho eseguito: è un passo pesante, vietato fino alle 03:30, e per una docstring non serve.
+
+### Lotto «H-29 e H-30: i dotfile di `/_app` e `/mkdocs`; la fotografia del DB anche quando il corpo fallisce» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (02:45): «Next: H-29 and H-30 (small), then the reviews of A8a and Z-20». H-27 è entrato
+> (`51dd43926` … `c1c7cea39`, dev `bfdc1f72c`); base fast-forward a `bfdc1f72c`, verificata pulita. **H-31** (E-11,
+> `blocked` in `/system/instance`): il coordinatore (02:50) dice di non farlo ora, perché E risolve E-11 nei suoi file
+> (un 401 `INVALID_CREDENTIALS` sulla sola `resend`); resta nel backlog come voce bassa e facoltativa.
+
+1. ✅ **Analisi** (02:45–02:55, sola lettura).
+   - **H-29**:
+     - `install_static_site()` monta `/_app` con `ImmutableStaticFiles(directory=FRONTEND_BUILD_DIR / "_app")`. Starlette
+       (`StaticFiles.get_response`) serve qualunque file che trova, nomi nascosti compresi;
+     - `mkdocs_static()` serve il file che `confined_path` trova sotto `SITE_DIR`, senza filtro.
+     - **Cura**: in `ImmutableStaticFiles` un `get_response` che, per un percorso con una parte nascosta (già
+       normalizzato da `get_path`, quindi senza `..`), alza il 404 di Starlette, come per un file che manca. In
+       `mkdocs_static()` lo stesso controllo dopo `confined_path`, con il 404 della documentazione.
+     - Il controllo si generalizza in `_hidden_below(root, target)`. `_hidden_in_build()` resta, perché doc e test lo
+       citano.
+     - Test: il mount di `/_app` fissa la sua cartella quando gira `install_static_site()`, quindi
+       `test_static_route_confinement.py` non lo copre. I casi nuovi usano un'app fresca su una build finta, come fa
+       già `test_nosniff_content_types.py` (~318).
+     - Il campionatore del test nosniff toglie l'eccezione `_app/` della riparazione di H-28: nessun file nascosto
+       è servito, in nessuno dei due alberi.
+   - **H-30**: nel ramo `--log-file` di `main()` va lo stesso `try/finally` di `_dispatch_test_command`, intorno a
+     `_timed_run(...)`. Il test riusa la fixture `entry_steps` di H-26 con un corpo che alza.
+2. ✅ **Rossi, doc e cure a secco** (02:55–03:00, in parallelo).
+   - **Rossi H-29** (test-author, `test_static_route_confinement.py` e `test_nosniff_content_types.py`):
+     - 15 casi nuovi:
+       - `/mkdocs`: 5 nascosti, `.DS_Store`, `assets/.hidden.css`, `.hidden-dir/page.html`, `.hidden-dir/` e
+         `assets/../.DS_Store`, più 3 guardie;
+       - `/_app`, su un'app fresca con `install_static_site()` sopra una build finta: 4 nascosti più 3 guardie.
+     - Il rifiuto si confronta con la risposta a un file mancante sulla stessa rotta: stato, tipo e corpo uguali,
+       nessun testo scritto nel test.
+     - Nel test nosniff via `APP_MOUNT_FOLDER`: nessun file nascosto si campiona, in nessuno dei due alberi.
+   - **Rossi H-30** (test-author, `test_test_runner_cli.py`): 6 casi, cioè `main()` e `dev.py test`, ciascuno con
+     `--log-file` e corpo che alza, `--log-file` e corpo che restituisce 0, senza `--log-file` e corpo che alza.
+     Rosso solo il primo su `main()`. La traccia chiede la fotografia **dentro** il `with` di `tee_output`, come in
+     `_dispatch_test_command`.
+   - **Doc** (docs-writer):
+     - `architecture/overview.md:94`: `/_app` e `/mkdocs` rifiutano anche loro un nome nascosto, ciascuno con il suo
+       404. La prima stesura diceva che anche il mount usa `_hidden_below()`; corretta, perché il mount guarda da sé
+       le parti del percorso che Starlette gli passa.
+     - `architecture/security.md:1579`, il riassunto del test nosniff: nessun file nascosto si campiona.
+     - **In più, dal coordinatore (02:58, da E, E-11)**: `security.md:801`, la riga «Public routes outside the list»
+       nomina ora `POST /email/verification/confirm` e `POST /email/verification/resend`, con i link alle ancore di
+       `backend/email.md`, senza codici d'errore.
+       - E-11 (`bca4bd6d3`) non è nella mia base, ma non tocca `security.md`.
+   - **Cure a secco** (`files/h29/apply_cure.py`):
+     - `static_site.py`: `_hidden_below(root, target)`, usata da `_hidden_in_build()` e da `mkdocs_static()`; più
+       `ImmutableStaticFiles.get_response()` con il 404 di Starlette e la docstring del modulo;
+     - `_cli.py`: il `try/finally` dentro il `with`.
+3. ✅ **Rossi → cure → verdi** (03:00–03:08, ogni passo a carico < 50; `files/runs/h29-*.sh`, log in
+   `files/runs/h29/`).
+   - **Rossi**:
+     - `utils test-runner-cli` **1 failed / 676 passed**: la fotografia non viene presa, `assert 0 == 1`;
+     - `utils static-route-confinement` **9 failed / 42 passed**: ogni file nascosto torna indietro con 200;
+     - `utils nosniff-content-types` 30/30, verde prima e dopo.
+   - **Cure** applicate, uguali byte per byte alle prove a secco.
+   - **Verdi**:
+
+     | Selettore | Risultato |
+     |---|---|
+     | `utils static-route-confinement` | 51/51 |
+     | `utils nosniff-content-types` | 30/30 |
+     | `utils test-runner-cli` | 677/677 |
+     | `services static-cache-policy` | 26 |
+     | `services security-headers` | 15 |
+     | `services app-lifecycle` | 51 |
+
+   - **Statici**: ruff e black 0 → 0 sui 5 file Python; `mkdocs build` exit 0, senza avvisi oltre al banner;
+     `check-links` 97; `git diff --check` pulito.
+   - Non eseguita: la prova con un server vero e i `curl`, come per H-28. Avviare il server della corsia farebbe
+     ricostruire il frontend, stantio dopo il fast-forward: un passo pesante. Le prove ASGI usano già il mount vero
+     di Starlette e le rotte vere, su un'app fresca.
+- **Backlog**:
+  - nuova **H-31** (bassa, facoltativa): `blocked` nel pubblico `/system/instance`;
+  - nuova **H-32** (bassa, da A, A-35): i `float` dei corpi accettano `1E+400`.
+  - nuova **H-33** (bassa, da E, R13-SEC4): un gestore di `ResponseValidationError` che registra senza il valore.
