@@ -53,7 +53,7 @@
         type CalendarReturnPointContext,
         type LogicalVisibleRange,
     } from './priceChartHelpers';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {chartNeutrals} from '$lib/theme/chartTheme';
@@ -817,10 +817,10 @@
             if (marker.value !== undefined) {
                 const isConverted = marker.originalValue !== undefined && marker.originalCurrency !== undefined;
                 const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${escapeHtml(marker.currencyFlag ?? '')} ${escapeHtml(marker.currency)})${isConverted ? ' 💱' : ''}</span>` : '';
-                html += `<br/>💰 ${formatFixed(marker.value, 4)}${currBadge}`;
+                html += `<br/>💰 ${formatPrice(marker.value, {minDecimals: 4})}${currBadge}`;
                 if (isConverted) {
                     const origBadge = ` <span style="font-size:10px;opacity:0.7">(${escapeHtml(marker.originalCurrencyFlag ?? '')} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
-                    html += `<br/><span style="font-size:10px;opacity:0.7">${$t('chart.tooltip.originalValue', {values: {value: formatFixed(marker.originalValue!, 4)}})}${origBadge}</span>`;
+                    html += `<br/><span style="font-size:10px;opacity:0.7">${$t('chart.tooltip.originalValue', {values: {value: formatPrice(marker.originalValue!, {minDecimals: 4})}})}${origBadge}</span>`;
                     if (marker.fxRateDate) {
                         const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` ${$t('chart.tooltip.fxDaysBack', {values: {days: formatFixed(marker.fxDaysBack, 0)}})}` : '';
                         html += `<br/><span style="font-size:10px;opacity:0.6">${$t('chart.tooltip.fxRateDate', {values: {date: formatDay(marker.fxRateDate)}})}${backfillHint}</span>`;
@@ -885,7 +885,7 @@
                             let html = buildTooltipHeader(bucketDate, activeResolution, bucketInfo);
 
                             if (params.data?.bucketValue !== undefined) {
-                                html += `<br/>💰 ${formatFixed(Number(params.data.bucketValue), 4)}`;
+                                html += `<br/>💰 ${formatPrice(Number(params.data.bucketValue), {minDecimals: 4})}`;
                             }
 
                             if (activeResolution === 'daily' && marker) {
@@ -1048,7 +1048,7 @@
                                 labelHtml = `${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}`;
                             }
                         }
-                        let rowHtml = buildFittedTooltipRow(labelHtml, `${currencyHtml}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`);
+                        let rowHtml = buildFittedTooltipRow(labelHtml, `${currencyHtml}: ${formatPrice(Number(value), {minDecimals: 4})}${valueSuffix}${axisNoteHtml}`);
                         if (p.seriesName === mainSeriesName) {
                             const context = mainPointContext?.get(date);
                             if (context) {

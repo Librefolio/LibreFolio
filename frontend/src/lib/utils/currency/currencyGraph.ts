@@ -15,7 +15,9 @@
  * @module utils/currencyGraph
  */
 
-import MultiDirectedGraph from 'graphology';
+// The named export (X-R75): graphology's default export is the simple Graph, which refuses a second edge between two
+// currencies in the same direction, so two providers covering it made the whole route picker fail.
+import {MultiDirectedGraph} from 'graphology';
 
 // ============================================================================
 // TYPES

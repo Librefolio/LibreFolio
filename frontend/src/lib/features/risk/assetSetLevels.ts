@@ -381,7 +381,7 @@ function utcDay(isoDay: string): number {
  * The engine reports an asset set's `analyzed_range` from its first to its last RETURN, and
  * `calendar_days` from the BASELINE PRICE to that last return. The baseline is the last day
  * BEFORE the toolbar's period whenever every asset has a price there (`risk/service.py` loads
- * from the day before; `series_preparation.py` takes the latest such day), and the first price
+ * from the day before; `market_series.py` takes the latest such day), and the first price
  * inside it otherwise. So the period opens the day after the baseline — `end − calendar_days + 1`,
  * the first day whose movement the figures capture — which is the toolbar's own first day in the
  * common case, quoted or not. Not `analyzed_range.start`: that is the first QUOTED day, a Monday

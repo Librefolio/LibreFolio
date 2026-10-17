@@ -18,6 +18,8 @@ in the downgrade. The contract pinned here:
 3. Models and migration agree on ``users`` and ``account_tokens``: ``SQLModel.metadata.create_all`` builds the same
    columns and nullability, primary key, foreign keys (target and ON DELETE), indexes, unique and check constraints.
    Three service suites build their databases that way: a drift would test them against a schema production lacks.
+   The comparison itself is pinned too (MIG005-A26-01 to -03, lot A-26): it sees an index on an expression, unique or
+   not, by its name.
 4. A populated 1.2 install upgraded keeps, right after 005, every row of every table, ids included (each table read on
    the columns it had); every existing user gets 0 / NULL / NULL — no backfill, ``email_verified_at`` included, by
    decision of the developer —; no foreign-key violation; ``account_tokens`` exists and is empty; taken on to head, the
@@ -456,11 +458,13 @@ def _shape(db: Path, table: str) -> Optional[dict[str, Any]]:
     """What ``table`` is, read back from SQLite: what contract 3 compares. ``None`` when the table does not exist.
 
     A primary-key column counts as NOT NULL whatever its declaration says: SQLite gives a NULL ``INTEGER PRIMARY KEY``
-    a rowid, and ``001_initial`` declares ``users.id`` without NOT NULL where ``create_all`` writes it. Uniqueness is the
-    set of column tuples that are unique, whether by a constraint or by an index, read from ``PRAGMA index_list``; a key
-    that is an expression counts by its text (``_index_list``). That is where a unique expression index such as
-    ``ux_users_email_lower`` is compared: SQLAlchemy's inspector leaves it out of ``indexes``, on both sides alike, with
-    the warning "Skipped unsupported reflection of expression-based index".
+    a rowid, and ``001_initial`` declares ``users.id`` without NOT NULL where ``create_all`` writes it. Indexes and
+    uniqueness are read from ``PRAGMA index_list`` (``_index_list``), where a key that is an expression counts by its
+    text: the indexes are those written with ``CREATE INDEX`` (origin ``c``), by name, keys and uniqueness; uniqueness is
+    the set of column tuples that are unique, whether by a constraint or by an index. SQLAlchemy's inspector would leave an
+    expression index such as ``ux_users_email_lower`` out of ``get_indexes``, on both sides alike, with the warning
+    "Skipped unsupported reflection of expression-based index": a non-unique one on one side only, or under another name,
+    would pass unseen (A-26).
     """
     engine = create_engine(f"sqlite:///{db}", poolclass=NullPool)
     try:
@@ -472,12 +476,13 @@ def _shape(db: Path, table: str) -> Optional[dict[str, Any]]:
             "columns (name: nullable)": {column["name"]: bool(column["nullable"]) and column["name"] not in primary_key for column in inspector.get_columns(table)},
             "primary key": primary_key,
             "foreign keys": sorted((tuple(fk["constrained_columns"]), fk["referred_table"], tuple(fk["referred_columns"]), ((fk.get("options") or {}).get("ondelete") or "NO ACTION").upper()) for fk in inspector.get_foreign_keys(table)),
-            "indexes (name, columns, unique)": sorted((index["name"], tuple(index["column_names"]), bool(index["unique"])) for index in inspector.get_indexes(table)),
             "check constraints": sorted(check["name"] or "<unnamed>" for check in inspector.get_check_constraints(table)),
         }
     finally:
         engine.dispose()
-    shape["unique column sets"] = sorted({columns for unique, origin, columns in _index_list(db, table).values() if unique and origin != "pk"})
+    indexes = _index_list(db, table)
+    shape["indexes (name, columns, unique)"] = sorted((name, columns, unique) for name, (unique, origin, columns) in indexes.items() if origin == "c")
+    shape["unique column sets"] = sorted({columns for unique, origin, columns in indexes.values() if unique and origin != "pk"})
     return shape
 
 
@@ -829,6 +834,102 @@ def test_the_models_and_the_migration_build_the_same_table(fresh_head: Path, cre
     differences = {key: {"migration": migrated[key], "models": modelled[key]} for key in migrated if migrated[key] != modelled[key]}
     assert not differences, f"{table}: the migration and the models disagree on {differences}"
     print_success(f"{table}: the migration and the models build the same table")
+
+
+# Contract 3 is only as good as ``_shape``. Its "indexes (name, columns, unique)" come from SQLAlchemy's inspector, which
+# skips an index on an expression, on both sides alike: a unique one is still compared, by its columns, through "unique
+# column sets" (``_index_list`` reads it by its text), but a NON-unique index on an expression present on one side only,
+# or the same index under two names, passes unseen. The meta-tests below (lot A-26) put such an index on one of two
+# copies of ``fresh_head`` and ask ``_shape`` to see it, under "indexes (name, columns, unique)". Red until ``_shape``
+# reads that key from ``_index_list`` (its CREATE INDEX indexes, origin 'c'). The copies are written, never
+# ``fresh_head``.
+
+A26_INDEXES_KEY = "indexes (name, columns, unique)"
+#: An index on an expression of users, as SQLite reports its key: ``_index_list`` names it by its text.
+A26_EXPRESSION = "lower(username)"
+A26_PROBE_INDEX = "ix_a26_probe"
+
+
+def _a26_copy(fresh_head: Path, target: Path, statement: Optional[str] = None) -> Path:
+    """A copy of ``fresh_head`` at ``target``, with ``statement`` run on it and committed when given."""
+    db = _copy(fresh_head, target)
+    if statement is not None:
+        with _connect(db) as conn:
+            with conn:
+                conn.execute(statement)
+    return db
+
+
+def _a26_differences(with_index: Path, without: Path) -> dict[str, dict[str, Any]]:
+    """The keys of ``_shape(…, "users")`` that differ between the two copies, with both values."""
+    shape_with, shape_without = _shape(with_index, "users"), _shape(without, "users")
+    assert shape_with is not None and shape_without is not None, "barrier: both copies have a users table"
+    return {key: {"with": shape_with[key], "without": shape_without[key]} for key in shape_with if shape_with[key] != shape_without.get(key)}
+
+
+def test_shape_sees_an_index_on_an_expression_present_on_one_side_only(fresh_head: Path, tmp_path: Path) -> None:
+    """MIG005-A26-01 — NEW, red until A-26: a NON-unique index on an expression, on one copy only, makes ``_shape`` differ under "indexes (name, columns, unique)".
+
+    Two copies of ``fresh_head``; on one, ``CREATE INDEX ix_a26_probe ON users (lower(username))``. Barrier first: SQLite
+    holds the index on that copy only (``_index_list``: non-unique, origin 'c', key ``lower(username)``). Then ``_shape``
+    of users must differ between the copies, under "indexes (name, columns, unique)" alone, the probe named there on the
+    copy that has it. Today the inspector skips it, "unique column sets" counts only unique indexes: the shapes are equal.
+    """
+    print_section("MIG005-A26-01: _shape sees a non-unique index on an expression present on one side only")
+    _assert_includes_005(fresh_head)
+    with_index = _a26_copy(fresh_head, tmp_path / "with" / "app.db", f"CREATE INDEX {A26_PROBE_INDEX} ON users ({A26_EXPRESSION})")
+    without = _a26_copy(fresh_head, tmp_path / "without" / "app.db")
+    assert _index_list(with_index, "users").get(A26_PROBE_INDEX) == (False, "c", (A26_EXPRESSION,)), f"barrier: the probe index must be on the copy: {_index_list(with_index, 'users')}"
+    assert A26_PROBE_INDEX not in _index_list(without, "users"), "barrier: the other copy has no probe index"
+
+    differences = _a26_differences(with_index, without)
+
+    assert differences, f"red until A-26: _shape must see {A26_PROBE_INDEX} on {A26_EXPRESSION}, present on one copy only — today the inspector skips an index on an expression and 'unique column sets' counts only unique ones, so the two shapes are equal"
+    assert set(differences) == {A26_INDEXES_KEY}, f"the probe must differ under {A26_INDEXES_KEY!r} alone: {differences}"
+    entries = differences[A26_INDEXES_KEY]
+    assert A26_PROBE_INDEX in repr(entries["with"]) and A26_PROBE_INDEX not in repr(entries["without"]), f"{A26_INDEXES_KEY!r} must name {A26_PROBE_INDEX} on the copy that has it, and only there: {entries}"
+    print_success(f"_shape sees {A26_PROBE_INDEX} under {A26_INDEXES_KEY!r}")
+
+
+@pytest.mark.parametrize("create", ["CREATE INDEX", "CREATE UNIQUE INDEX"], ids=["non-unique", "unique"])
+def test_shape_sees_an_index_on_an_expression_under_another_name(fresh_head: Path, tmp_path: Path, create: str) -> None:
+    """MIG005-A26-02 — NEW, red until A-26: the same index on an expression, under a name of its own on each copy, makes ``_shape`` differ under "indexes (name, columns, unique)".
+
+    ``… ix_a26_probe_a ON users (lower(username))`` on one copy, ``… ix_a26_probe_b`` on the other, the same key. A model
+    and a migration that named an index differently would build that. Non-unique: invisible to the inspector and to
+    "unique column sets" alike. Unique: "unique column sets" holds the key on both sides, and has no names — the drift
+    ``ux_users_email_lower`` could take today unseen. Barrier first: each copy holds its own name, the same key. Today the
+    two shapes are equal.
+    """
+    print_section(f"MIG005-A26-02 ({create}): _shape sees an index on an expression under another name")
+    _assert_includes_005(fresh_head)
+    names = {"a": f"{A26_PROBE_INDEX}_a", "b": f"{A26_PROBE_INDEX}_b"}
+    copies = {side: _a26_copy(fresh_head, tmp_path / side / "app.db", f"{create} {name} ON users ({A26_EXPRESSION})") for side, name in names.items()}
+    unique = create == "CREATE UNIQUE INDEX"
+    for side, name in names.items():
+        other = names["b" if side == "a" else "a"]
+        indexes = _index_list(copies[side], "users")
+        assert indexes.get(name) == (unique, "c", (A26_EXPRESSION,)) and other not in indexes, f"barrier: copy {side} must hold {name} on {A26_EXPRESSION}, unique={unique}, and not {other}: {indexes}"
+
+    differences = _a26_differences(copies["a"], copies["b"])
+
+    assert differences, f"red until A-26: _shape must see that the index on {A26_EXPRESSION} is {names['a']} on one copy and {names['b']} on the other — today the two shapes are equal"
+    assert set(differences) == {A26_INDEXES_KEY}, f"the names must differ under {A26_INDEXES_KEY!r} alone: {differences}"
+    entries = differences[A26_INDEXES_KEY]
+    assert names["a"] in repr(entries["with"]) and names["b"] in repr(entries["without"]), f"{A26_INDEXES_KEY!r} must name each copy's index: {entries}"
+    print_success(f"_shape sees {names['a']} and {names['b']} under {A26_INDEXES_KEY!r}")
+
+
+def test_shape_of_two_untouched_copies_is_the_same(fresh_head: Path, tmp_path: Path) -> None:
+    """MIG005-A26-03 — GUARD, green today and after: two untouched copies of ``fresh_head`` have the same ``_shape`` of users, so a difference above is the index's, not the copy's."""
+    print_section("MIG005-A26-03: two untouched copies, the same _shape")
+    _assert_includes_005(fresh_head)
+    first, second = _a26_copy(fresh_head, tmp_path / "first" / "app.db"), _a26_copy(fresh_head, tmp_path / "second" / "app.db")
+
+    differences = _a26_differences(first, second)
+
+    assert differences == {}, f"two copies of one database must have the same shape: {differences}"
+    print_success("same _shape")
 
 
 # =============================================================================

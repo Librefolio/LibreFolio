@@ -166,6 +166,39 @@ export function normalizeDecimalInput(value: string): string {
     return CANONICAL.test(candidate) ? candidate : trimmed;
 }
 
+/** The digits of a decimal as the backend counts them (W-B64). */
+export interface DecimalDigitCounts {
+    /** Digits before the point, leading zeros not counted: `0.5` → 0, `007` → 1, `1000` → 4. */
+    integerDigits: number;
+    /** Digits after the point, trailing zeros not counted: `0.10000000000` → 1, `5.0` → 0. */
+    fractionDigits: number;
+    /** The same number without those zeros, its sign kept unless it is zero: `-0012.5000` → `-12.5`, `-0.0` → `0`. */
+    stripped: string;
+}
+
+/**
+ * The digits of a canonical decimal (the form `normalizeDecimalInput` returns) as the backend counts them
+ * (`backend/app/db/precision.py`, `_digit_counts`): leading integer zeros and trailing fraction zeros are no digits of the
+ * value, so `0.10000000000` keeps one decimal and `5.0` none (W-B64). Null for any other text. Linear: two loops, never
+ * `/0+$/`, which is quadratic on a long run of zeros that does not end the text (W-B66).
+ */
+export function decimalDigitCounts(value: string): DecimalDigitCounts | null {
+    if (!CANONICAL.test(value)) return null;
+    const negative = value.startsWith('-');
+    const unsigned = negative ? value.slice(1) : value;
+    const dot = unsigned.indexOf('.');
+    const integer = dot < 0 ? unsigned : unsigned.slice(0, dot);
+    const fraction = dot < 0 ? '' : unsigned.slice(dot + 1);
+    let start = 0;
+    while (start < integer.length && integer[start] === '0') start++;
+    let end = fraction.length;
+    while (end > 0 && fraction[end - 1] === '0') end--;
+    const integerDigits = integer.length - start;
+    const magnitude = `${integerDigits > 0 ? integer.slice(start) : '0'}${end > 0 ? `.${fraction.slice(0, end)}` : ''}`;
+    const zero = integerDigits === 0 && end === 0;
+    return {integerDigits, fractionDigits: end, stripped: negative && !zero ? `-${magnitude}` : magnitude};
+}
+
 /** Number of digits after the decimal point in a canonical string. */
 function decimalPlaces(value: string): number {
     const dot = value.indexOf('.');

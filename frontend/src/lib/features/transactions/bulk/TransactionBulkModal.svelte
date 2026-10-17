@@ -53,7 +53,7 @@
     import PromoteAllModal, {type PromoteAllStrategy} from './PromoteAllModal.svelte';
     import {createValidateScheduler} from '$lib/features/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/features/transactions/txCommitApi';
-    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySign, applySignRules, exactDecimalSign, upgradeAutoToDetail, type TxFields, type TxOriginal, type ImportTodo} from '$lib/features/transactions/txPayloadHelpers';
+    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySign, applySignRules, exactDecimalSign, magnitudeForRule, upgradeAutoToDetail, type TxFields, type TxOriginal, type ImportTodo} from '$lib/features/transactions/txPayloadHelpers';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {
         buildBulkOperationIndex,
@@ -70,7 +70,7 @@
         type IdentifiedBulkOp,
     } from '$lib/features/transactions/bulk/bulkDisplay';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {cashAmountsCancel, mergeStrings, mergeTagSets} from '$lib/features/transactions/bulk/promoteHelpers';
+    import {cashAmountsCancel, resolvePromoteAllFields, TX_DESCRIPTION_MAX_LENGTH} from '$lib/features/transactions/bulk/promoteHelpers';
     import {assetQuantitiesCancel, importableSuggestions as importableFromResults, mixedPromotePairs, newRowSuggestId} from '$lib/features/transactions/bulk/promoteSuggest';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
@@ -191,12 +191,10 @@
     /** Extract display-ready DraftFields from a TXReadItem (auto-sign applied). */
     function fieldsFromTx(tx: TXReadItem): DraftFields {
         const rule = getTypeRule(tx.type);
-        let qty = tx.quantity;
-        if (rule.quantityRule === 'negative' && exactDecimalSign(qty) === -1) qty = quantityText(applySign(String(qty), 'positive'));
-        let cash = tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null;
-        if (cash && rule.cashSign === 'negative' && Number(cash.amount) < 0) {
-            cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
-        }
+        // The editor's convention (W-B65): a value whose rule demands a negative is held as its magnitude, exactly; never
+        // through Number, which turned a satoshi into `1e-8` (C-97b) and an amount read back with noise into another one.
+        const qty = magnitudeForRule(tx.quantity, rule.quantityRule);
+        const cash = tx.cash ? {code: tx.cash.code, amount: magnitudeForRule(tx.cash.amount, rule.cashSign)} : null;
         const cbo = tx.cost_basis_override
             ? typeof tx.cost_basis_override === 'object' && tx.cost_basis_override !== null
                 ? {code: String((tx.cost_basis_override as any).code ?? ''), amount: String((tx.cost_basis_override as any).amount ?? '')}
@@ -775,7 +773,9 @@
             if (typeof payload._wac_currency_hint === 'string') {
                 merged.wacCurrencyHint = payload._wac_currency_hint;
             } else if (payload._wac_currency_hint === null) {
-                merged.wacCurrencyHint = null;
+                // Null and absent both mean «the backend decides»; absent, as a row starts, so the close guard's key
+                // (`serializeOps`, which keeps a null key and drops an absent one) reads no change (W-B65).
+                delete merged.wacCurrencyHint;
             }
             // Auto-clear todos whose field has now been filled
             if (merged.todos?.length) {
@@ -826,6 +826,13 @@
             }
         }
         // else: target already has 'auto' or 'manual' and no explicit override → preserve
+
+        // Back to the editor's convention, last, so the derivation above reads the Form's payload as it always has
+        // (W-B65): the Form pushes signed values, the editor holds a negative-rule value as its magnitude (`fieldsFromTx`),
+        // and an untouched «Apply» must land where the row started — its cell, its status and the close guard's key.
+        const heldRule = getTypeRule(target.type);
+        target.quantity = magnitudeForRule(target.quantity, heldRule.quantityRule);
+        if (target.cash) target.cash = {code: target.cash.code, amount: magnitudeForRule(target.cash.amount, heldRule.cashSign)};
     }
 
     // =========================================================================
@@ -2474,7 +2481,7 @@
                 if (sharedUuid) merged.link_uuid = sharedUuid;
                 // Persist WAC currency hint on receiver
                 if (typeof payload._wac_currency_hint === 'string') merged.wacCurrencyHint = payload._wac_currency_hint;
-                else if (payload._wac_currency_hint === null) merged.wacCurrencyHint = null;
+                else if (payload._wac_currency_hint === null) delete merged.wacCurrencyHint; // absent, as a row starts (W-B65)
                 return merged;
             });
         } else {
@@ -3064,10 +3071,12 @@
     /**
      * «Merge all» of the banner: every suggested pair at once. Where the two rows of a pair differ in
      * description or tags, one answer settles all of them: the left row's (the one the banner lists
-     * first), the right row's, or both combined — PromoteMergeModal's default.
+     * first), the right row's, or both combined — PromoteMergeModal's default. A pair whose combined notes would pass
+     * the description's limit is left unpromoted, for the merge dialog, and a notice counts them (W-B70).
      */
     function mergeAllSuggestions(strategy: PromoteAllStrategy) {
         promoteAllOpen = false;
+        let leftForManualMerge = 0;
         for (const sug of [...mergeAllPairs]) {
             const rawA = ops.find((o) => o.tempId === sug.tempIdA);
             if (!rawA || isPaired(rawA)) continue;
@@ -3080,16 +3089,19 @@
             const {opA, opB} = pair;
             if (!findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB))) continue;
             const [left, right] = swapped ? [opB, opA] : [opA, opB];
-            const leftTags = left.fields.tags ?? [];
-            const rightTags = right.fields.tags ?? [];
-            const diverges = left.fields.description !== right.fields.description || JSON.stringify(leftTags) !== JSON.stringify(rightTags);
-            let resolved: Record<string, unknown> = {};
-            if (diverges) {
-                if (strategy === 'left') resolved = {description: left.fields.description, tags: [...leftTags]};
-                else if (strategy === 'right') resolved = {description: right.fields.description, tags: [...rightTags]};
-                else resolved = {description: mergeStrings(left.fields.description ?? '', right.fields.description ?? ''), tags: mergeTagSets(leftTags, rightTags)};
+            const resolved = resolvePromoteAllFields(strategy, left.fields, right.fields);
+            if (resolved === null) {
+                leftForManualMerge += 1;
+                continue;
             }
             executePromote(opA, opB, resolved);
+        }
+        if (leftForManualMerge > 0) {
+            notify({
+                name: 'tx.bulk.promote-all.left-for-manual-merge',
+                detail: {pairs: leftForManualMerge},
+                toast: {variant: 'warning', message: $t('transactions.promote.mergeAllLeftTooLong', {values: {count: leftForManualMerge, max: TX_DESCRIPTION_MAX_LENGTH}})},
+            });
         }
     }
 

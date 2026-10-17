@@ -31,7 +31,7 @@
     import {truncateName} from '$lib/utils/text';
     import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom, ZOOM_LABEL_SETTLE_MS} from './responsiveXAxis';
     import {clearTimer} from '$lib/utils/core/clearTimer';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
@@ -823,7 +823,7 @@
                               const valueSuffix = axisIdx === 0 ? suffix : '';
                               const axisLabel = signalAxisLabelMap.get(axisIdx);
                               const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">[${escapeHtml(axisLabel)}]</span>` : '';
-                              html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`;
+                              html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${formatPrice(Number(value), {minDecimals: 4})}${valueSuffix}${axisNoteHtml}`;
                               const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                               if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
                                   html += ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
@@ -834,7 +834,7 @@
                               if (bandSignal?.bandData) {
                                   const dataIdx = bandSignal.data.findIndex((d) => d.date === date);
                                   if (dataIdx >= 0) {
-                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:${neutrals.tooltip.aside}">${$t('chart.tooltip.upper')}: ${formatFixed(bandSignal.bandData.upper[dataIdx], 4)}${suffix} · ${$t('chart.tooltip.lower')}: ${formatFixed(bandSignal.bandData.lower[dataIdx], 4)}${suffix}</span>`;
+                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:${neutrals.tooltip.aside}">${$t('chart.tooltip.upper')}: ${formatPrice(bandSignal.bandData.upper[dataIdx], {minDecimals: 4})}${suffix} · ${$t('chart.tooltip.lower')}: ${formatPrice(bandSignal.bandData.lower[dataIdx], {minDecimals: 4})}${suffix}</span>`;
                                   }
                               }
                           }

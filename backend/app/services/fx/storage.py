@@ -81,6 +81,11 @@ def fx_rate_refusal(base: str, quote: str, rate_date: date) -> str:
     return f"The rate of {min(base, quote)}/{max(base, quote)} on {rate_date.isoformat()} cannot be stored: {fx_rate_limits_text()}"
 
 
+class FXRateNotStorableError(ValueError):
+    """A manual rate ``fx_rates.rate`` cannot keep once normalized (X-R38), told apart from the other refusals: the
+    data editor names it as such (X-R46). Its text is ``fx_rate_refusal``'s."""
+
+
 # ============================================================================
 # RATE STORAGE (bulk upsert and delete)
 # ============================================================================
@@ -127,7 +132,7 @@ async def upsert_rates_bulk(
         # 1E-1000000 overflowed
         normalized = normalize_storable_rate(base, quote, rate_value)
         if normalized is None or storable_fx_rate(normalized[2]) is None:
-            raise ValueError(fx_rate_refusal(base, quote, rate_date))
+            raise FXRateNotStorableError(fx_rate_refusal(base, quote, rate_date))
         base, quote, rate_value = normalized
 
         normalized_rates.append((rate_date, base, quote, rate_value, source))

@@ -132,6 +132,13 @@ interface StyledLineSegment {
     lineWidth: number;
     color: string;
     opacity: number;
+    run: number;
+    startIndex: number;
+    endIndex: number;
+}
+
+/** A stretch of one output between two points the backend sent without a value, as indices into its data. */
+interface LineRun {
     startIndex: number;
     endIndex: number;
 }
@@ -140,31 +147,42 @@ function segmentLength(segment: StyledLineSegment): number {
     return segment.endIndex - segment.startIndex + 1;
 }
 
+/**
+ * Caps the slices of one output, merging the shortest into a neighbour of its own run. A merge never crosses a
+ * gap the backend declared, so an output with more runs than `maximum` keeps one slice per run.
+ */
 function limitStyledSegments(segments: StyledLineSegment[], maximum = 100): StyledLineSegment[] {
     const limited = segments.map((segment) => ({...segment}));
+    const sameRun = (index: number, neighbour: number) => limited[neighbour]?.run === limited[index].run;
     while (limited.length > maximum) {
-        let shortestIndex = 0;
-        for (let index = 1; index < limited.length; index++) {
-            if (segmentLength(limited[index]) < segmentLength(limited[shortestIndex])) shortestIndex = index;
+        let shortestIndex = -1;
+        for (let index = 0; index < limited.length; index++) {
+            if (!sameRun(index, index - 1) && !sameRun(index, index + 1)) continue;
+            if (shortestIndex < 0 || segmentLength(limited[index]) < segmentLength(limited[shortestIndex])) shortestIndex = index;
         }
+        if (shortestIndex < 0) break;
 
-        if (shortestIndex === 0) {
-            limited[1].startIndex = limited[0].startIndex;
-        } else if (shortestIndex === limited.length - 1) {
-            limited[shortestIndex - 1].endIndex = limited[shortestIndex].endIndex;
-        } else if (segmentLength(limited[shortestIndex - 1]) >= segmentLength(limited[shortestIndex + 1])) {
-            limited[shortestIndex - 1].endIndex = limited[shortestIndex].endIndex;
-        } else {
-            limited[shortestIndex + 1].startIndex = limited[shortestIndex].startIndex;
+        const previous = sameRun(shortestIndex, shortestIndex - 1) ? limited[shortestIndex - 1] : undefined;
+        const next = sameRun(shortestIndex, shortestIndex + 1) ? limited[shortestIndex + 1] : undefined;
+        if (previous && (!next || segmentLength(previous) >= segmentLength(next))) {
+            previous.endIndex = limited[shortestIndex].endIndex;
+        } else if (next) {
+            next.startIndex = limited[shortestIndex].startIndex;
         }
         limited.splice(shortestIndex, 1);
     }
     return limited;
 }
 
-function applyValueRegionLineStyles(signal: RenderedSignal): RenderedSignal[] {
-    const styledRegions = (signal.valueRegions ?? []).filter((region) => region.lineStyle);
-    if (signal.seriesType !== 'line' || styledRegions.length === 0 || signal.data.length === 0) return [signal];
+/**
+ * Splits one line or area output into the series the chart draws: one per run between the points the backend
+ * sent without a value, so the gap stays a gap, and for a line with styled value regions one per stretch of
+ * constant style inside each run. A date absent from the output is no gap: the chart bridges it, as it bridges
+ * the days without a quote on which an indicator has no point.
+ */
+function splitLineSignal(signal: RenderedSignal, runs: LineRun[]): RenderedSignal[] {
+    const styledRegions = signal.seriesType === 'line' ? (signal.valueRegions ?? []).filter((region) => region.lineStyle) : [];
+    if (signal.data.length === 0 || (styledRegions.length === 0 && runs.length <= 1)) return [signal];
 
     const styleForValue = (value: number) => {
         const region = styledRegions.find((candidate) => regionContains(candidate, value));
@@ -179,22 +197,28 @@ function applyValueRegionLineStyles(signal: RenderedSignal): RenderedSignal[] {
     const sameStyle = (left: ReturnType<typeof styleForValue>, right: ReturnType<typeof styleForValue>) => left.key === right.key && left.lineType === right.lineType && left.lineWidth === right.lineWidth && left.color === right.color && left.opacity === right.opacity;
 
     const segments: StyledLineSegment[] = [];
-    let currentStyle = styleForValue(signal.data[0].value);
-    let startIndex = 0;
-    for (let index = 1; index <= signal.data.length; index++) {
-        const nextStyle = index < signal.data.length ? styleForValue(signal.data[index].value) : null;
-        if (nextStyle && sameStyle(currentStyle, nextStyle)) continue;
-        segments.push({
-            ...currentStyle,
-            startIndex,
-            endIndex: index - 1,
-        });
-        if (nextStyle) {
-            currentStyle = nextStyle;
-            startIndex = index - 1;
+    runs.forEach((run, runIndex) => {
+        let currentStyle = styleForValue(signal.data[run.startIndex].value);
+        let startIndex = run.startIndex;
+        for (let index = run.startIndex + 1; index <= run.endIndex + 1; index++) {
+            const nextStyle = index <= run.endIndex ? styleForValue(signal.data[index].value) : null;
+            if (nextStyle && sameStyle(currentStyle, nextStyle)) continue;
+            segments.push({
+                ...currentStyle,
+                run: runIndex,
+                startIndex,
+                endIndex: index - 1,
+            });
+            if (nextStyle) {
+                currentStyle = nextStyle;
+                startIndex = index - 1;
+            }
         }
-    }
+    });
 
+    // Styled slices draw no level or region, as before; plain runs keep them on the first run only, since each
+    // series would draw its own copy.
+    const keepsReferences = styledRegions.length === 0;
     return limitStyledSegments(segments).map((segment, index, allSegments) => ({
         ...signal,
         id: `${signal.id}:${segment.key}:${segment.startIndex}`,
@@ -205,18 +229,26 @@ function applyValueRegionLineStyles(signal: RenderedSignal): RenderedSignal[] {
         opacity: segment.opacity,
         markerStart: index === 0 ? signal.markerStart : null,
         markerEnd: index === allSegments.length - 1 ? signal.markerEnd : null,
-        referenceLevels: undefined,
-        valueRegions: undefined,
+        referenceLevels: keepsReferences && index === 0 ? signal.referenceLevels : undefined,
+        valueRegions: keepsReferences && index === 0 ? signal.valueRegions : undefined,
     }));
 }
 
 function renderScalarSeries(series: RenderLineSeries | RenderAreaSeries | RenderBarSeries, component: SignalVisualComponent, config: SignalConfig, seriesIndex: number, baseValue: number | null, shouldTransform: boolean, translate?: (key: string) => string): RenderedSignal[] {
-    const data = (series.points ?? [])
-        .filter((point): point is typeof point & {value: number} => typeof point.value === 'number')
-        .map((point) => ({
-            date: point.date,
-            value: transformValue(point.value, baseValue, shouldTransform),
-        }));
+    // A point without a value is never drawn as a 0: it ends a run, and the next value starts another.
+    const data: Array<{date: string; value: number}> = [];
+    const runs: LineRun[] = [];
+    let gapSinceLastValue = false;
+    for (const point of series.points ?? []) {
+        if (typeof point.value !== 'number') {
+            gapSinceLastValue = data.length > 0;
+            continue;
+        }
+        if (runs.length === 0 || gapSinceLastValue) runs.push({startIndex: data.length, endIndex: data.length});
+        runs[runs.length - 1].endIndex = data.length;
+        gapSinceLastValue = false;
+        data.push({date: point.date, value: transformValue(point.value, baseValue, shouldTransform)});
+    }
 
     const visualStyle = normalizedOutputStyle(series.style);
     const fallbackStyle: SignalStyle =
@@ -258,7 +290,7 @@ function renderScalarSeries(series: RenderLineSeries | RenderAreaSeries | Render
         })),
         valueRegions: mapValueRegions(series, baseValue, componentStyle, config, shouldTransform, translate),
     };
-    return series.kind === 'line' ? applyValueRegionLineStyles(rendered) : [rendered];
+    return series.kind === 'bar' ? [rendered] : splitLineSignal(rendered, runs);
 }
 
 function renderBandSeries(series: RenderBandSeries, component: SignalVisualComponent, config: SignalConfig, baseValue: number | null, shouldTransform: boolean, translate?: (key: string) => string): RenderedSignal {
@@ -322,4 +354,14 @@ export function renderBackendSignalResult(result: BackendSignalResult, config: S
         warnings: (result.warnings ?? []).map((warning) => warning.message),
         error: resultErrorMessage(result.error),
     };
+}
+
+/**
+ * How many points one signal instance shows across the series it rendered into: the «📈N» badge of the signals
+ * panel. It counts dates, because neither the longest series nor the sum is the count: the slices of a styled
+ * line share their join points, the runs of a line with gaps split it, and the components of one output share
+ * their dates.
+ */
+export function renderedSignalPointCount(signals: RenderedSignal[]): number {
+    return new Set(signals.flatMap((signal) => signal.data.map((point) => point.date))).size;
 }

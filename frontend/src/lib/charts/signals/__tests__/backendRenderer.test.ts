@@ -613,7 +613,7 @@ describe('calendar Rolling Return as a backend overlay', () => {
         expect(createSignalConfig(calendarDefinition, 0).params).toEqual({window_days: 30});
     });
 
-    it('draws only the computed returns: a null point is a gap, never a 0, and an exact 0 stays drawn', () => {
+    it('breaks the line at each point the backend sent without a value: a gap, never a 0, and an exact 0 stays a value', () => {
         const calendarDefinition = mapBackendSignalDefinition(calendarCatalogEntry());
         const calendarConfig = createSignalConfig(calendarDefinition, 0);
         const result = calendarResult(calendarConfig.id);
@@ -626,16 +626,21 @@ describe('calendar Rolling Return as a backend overlay', () => {
         // Percentage view: the calendar return is already a percentage (`view_transform: none`), so nothing is rebased.
         const outcome = renderBackendSignalResultRaw(result, calendarConfig, {baseData, viewMode: 'percentage', definition: calendarDefinition});
 
-        expect(outcome.signals).toHaveLength(1);
-        const [rendered] = outcome.signals;
-        expect(rendered.data).toEqual([
-            {date: '2026-07-20', value: 4.25},
-            {date: '2026-07-22', value: 0},
-            {date: '2026-07-24', value: -1.5},
-        ]);
-        expect(rendered.data.map((point) => point.date)).not.toContain('2026-07-21');
-        expect(rendered.data.map((point) => point.date)).not.toContain('2026-07-23');
-        expect(rendered).toMatchObject({id: `${calendarConfig.id}:${CALENDAR_OUTPUT_KEY}`, seriesType: 'line', unit: 'percentage', aggregationProfile: 'last_with_range'});
+        // One run per stretch between two gaps, in date order (J-21). The exact 0 between the two gaps is a
+        // one-point run: a value in the data and the tooltip, joined to neither neighbour, as the page's own
+        // calendar comparison lines draw it (`connectNulls: false`).
+        expect(outcome.signals.map((rendered) => rendered.data)).toEqual([[{date: '2026-07-20', value: 4.25}], [{date: '2026-07-22', value: 0}], [{date: '2026-07-24', value: -1.5}]]);
+        const drawnDates = outcome.signals.flatMap((rendered) => rendered.data.map((point) => point.date));
+        expect(drawnDates).not.toContain('2026-07-21');
+        expect(drawnDates).not.toContain('2026-07-23');
+        const ids = outcome.signals.map((rendered) => rendered.id);
+        expect(ids.filter((id) => !id.startsWith(`${calendarConfig.id}:${CALENDAR_OUTPUT_KEY}:`))).toEqual([]);
+        expect(new Set(ids).size).toBe(ids.length);
+        for (const rendered of outcome.signals) {
+            expect(rendered).toMatchObject({seriesType: 'line', unit: 'percentage', aggregationProfile: 'last_with_range'});
+        }
+        // The zero line is drawn once: the first run carries the reference level, the others do not.
+        expect(outcome.signals.map((rendered) => rendered.referenceLevels?.map((level) => [level.key, level.value]))).toEqual([[['zero', 0]], undefined, undefined]);
     });
 
     it('puts the line on the independent calendar_return axis, the key its saved scale is stored under', () => {
@@ -663,6 +668,7 @@ describe('calendar Rolling Return as a backend overlay', () => {
         expect(outcome.warnings).toEqual([CALENDAR_WARNING_MESSAGE]);
         expect(outcome.status).toBe('partial');
         expect(outcome.error).toBeNull();
-        expect(outcome.signals).toHaveLength(1);
+        // One run per stretch between the two unavailable days (J-21).
+        expect(outcome.signals).toHaveLength(3);
     });
 });

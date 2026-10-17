@@ -254,6 +254,15 @@ def api_utilities(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Utilities API tests", verbose=verbose)
 
 
+def api_utilities_currency_suggest(verbose: bool = False, test_names: list = None) -> bool:
+    """E-19b1: GET /utilities/currencies/suggest, what a stored currency value stands for."""
+    print_section("Utilities API: Currency Suggestion (E-19b1)")
+    print_info("Tests: GET /utilities/currencies/suggest?value= -> {canonical, suggestion, candidates}; public; value of 1 to 200 characters")
+    print_info("Note: Server will be automatically started and stopped by test")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_currency_suggest_api.py", test_names)
+    return run_command(cmd, "Currency suggestion API tests", verbose=verbose)
+
+
 def api_system(verbose: bool = False, test_names: list = None) -> bool:
     """Test system API."""
     print_section("System API Tests")
@@ -1012,7 +1021,13 @@ Tests for REST API endpoints (server auto-started):
         # below, each with the run that proved it.
         default_isolation="write-scoped",
     )
-    add_test(api, "fx", api_fx, name="FX API", desc="Conversion, providers, pair sources; X-R65 422 date_out_of_range on manual rates")
+    add_test(
+        api,
+        "fx",
+        api_fx,
+        name="FX API",
+        desc="Conversion, providers, pair sources; X-R65 422 date_out_of_range on manual rates; X-R75: POST /fx/providers/routes?replace=true keeps exactly the posted routes of each pair named (the MANUAL item alone leaves the pair manual), a refused replace (400, 422) changes nothing, without replace the upsert as before",
+    )
     add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="_compress_convert_errors utility")
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
@@ -1043,6 +1058,13 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "assets-crud", api_assets_crud, name="Assets CRUD API", desc="Create, list, filter, delete assets, and held-now flags in the list")
     add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
+    add_test(
+        api,
+        "utilities-currency-suggest",
+        api_utilities_currency_suggest,
+        name="Utilities API: Currency Suggestion (E-19b1)",
+        desc="GET /utilities/currencies/suggest: canonical, the one ISO code a stored value stands for (978, EURO -> EUR), the candidates of an ambiguous one (VED, VES), none for a subunit; public; value of 1 to 200 characters, else 422",
+    )
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
     # Read-only on the lane (one anonymous GET); every case with a variable runs in-process on a private database.
     add_test(api, "instance-legal", api_instance_config_legal, name="Instance Configuration: Legal Links (A9)", desc="GET /system/instance legal {terms_url, privacy_url}: valid, unset, invalid (null, still 200), no secret; the schema and the OpenAPI document; live on the lane: both null")

@@ -17,7 +17,7 @@ The contract (developer decision via the coordinator, agreed with J):
    result, keeps every other metric verbatim and carries the warning in ``warnings``.
 2. ``PortfolioAssetDrawdownRow``: the same rule.
 3. The return path: ``_observed_price_points`` keeps the Decimal closes and ``_asset_drawdown_row`` computes each return
-   with ``financial_math.returns.float_price_return``, the function ``series_preparation.prepare_asset_series_set``
+   with ``financial_math.returns.float_price_return``, the function ``market_series.prepare_asset_series_set``
    uses, so the row's drawdown is ``drawdown_episodes`` over exactly the returns the Risk series carries. Before MF-D2
    the closes became floats first and the return was ``float(end) / float(start) - 1``: another number on
    high-precision closes.
@@ -523,7 +523,7 @@ class TestAssetDrawdownRowReturnPath:
 
         Through ``_observed_price_points`` and ``_asset_drawdown_row`` as ``_build_portfolio_asset_drawdown_snapshot``
         composes them: the row must equal ``drawdown_episodes`` over ``float_price_return`` of the same closes, the
-        returns ``series_preparation`` gives the Risk ``drawdown_summary``. Exact equality, no tolerance.
+        returns ``market_series`` gives the Risk ``drawdown_summary``. Exact equality, no tolerance.
         """
         scope = _portfolio_scope()
         points = _observed_price_points(_price_result(HIGH_PRECISION_CLOSES), start=scope.period_start, end=scope.period_end)

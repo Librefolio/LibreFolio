@@ -37,6 +37,11 @@
  * The provider's removal is a planned route too (workstream X, X-R62, written
  * by H): «No provider» saved, `DELETE /assets/provider` is answered — or
  * refused through `planRejection` — like any other planned request.
+ *
+ * «Ask provider» refused for too many probes (workstream X, X-R66) — red until
+ * X-R66: the metadata probe refused with 429 PROBE_RATE_LIMITED is toasted as
+ * the catalogue's PROBE_RATE_LIMITED, with the time the pause ends, instead of
+ * the generic «an error occurred»; any other failure keeps that generic toast.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
 import {flushSync, tick, type Component, type ComponentProps} from 'svelte';
@@ -54,6 +59,7 @@ import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 import {formatDay} from '$lib/utils/core/formatAxisDate';
 import AssetModal from './AssetModal.svelte';
 import type AssetSearchAutocomplete from './AssetSearchAutocomplete.svelte';
+import {formatResumeTime, resumesToday} from './resolveProviderError';
 
 type ProbeRequest = z.infer<typeof schemas.FAProviderProbeRequest>;
 type ProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
@@ -2444,6 +2450,111 @@ describe('AssetModal: a provider removal refused for the transactions linked to 
         expect(mocks.toasts.warning).not.toHaveBeenCalled();
         expect(mocks.refusals.wipeRefusalMessage, 'nothing refused, nothing to word').not.toHaveBeenCalled();
         expect(mocks.api.sync_prices_bulk_api_v1_assets_prices_sync_post, 'no provider left to sync').not.toHaveBeenCalled();
+        assertTraffic();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// X-R66 — «Ask provider» refused for too many probes.
+//
+// The probe endpoint allows LIBREFOLIO_PROBE_RATE_LIMIT probes a minute per
+// user. Past it, it answers 429, `detail.error_code` = PROBE_RATE_LIMITED with
+// `retry_after` (whole seconds) and the server's English, and the same seconds
+// in `Retry-After`. «Ask provider» is a probe of ['metadata']
+// (fetchAndCompareMetadata), and today any failure of it is the generic toast
+// «an error occurred»: the user is told neither that the probes are paused nor
+// until when. The cure: the error toast is `probeRateLimitMessage(e, $t)` — the
+// catalogue's PROBE_RATE_LIMITED, «until HH:MM» in local time — and, for any
+// other failure, «an error occurred» as today.
+//
+// The clock is pinned from the click (Date only), so the moment the pause ends
+// is the same for the modal and for the expectation; the sentence is read
+// through the catalogue (`$_`), never as a literal.
+//
+// Red before the cure: the toast is «an error occurred». The guards are green
+// before and after it: a failure that is not the probe's refusal keeps it.
+// ---------------------------------------------------------------------------
+
+/** «Now» when the refusal lands: 10 June 2026, 14:30:20 local time — a month with no daylight-saving change. */
+const RATE_LIMIT_NOW = new Date(2026, 5, 10, 14, 30, 20);
+/** The refusal's wait, in whole seconds as the server counts them: the pause ends at 14:31:02, written 14:32. */
+const RATE_LIMIT_WAIT = 42;
+const PROBE_RATE_LIMITED_KEY = 'providerErrors.PROBE_RATE_LIMITED';
+
+/** The probe's X-R66 refusal as the generated client rejects with it: 429, the structured detail with the server's English, and `Retry-After` with the same seconds. */
+function probeRateLimited() {
+    const refusal = apiError(429, {error_code: 'PROBE_RATE_LIMITED', retry_after: RATE_LIMIT_WAIT, message: 'Too many provider probes: try again later'});
+    return Object.assign(refusal, {response: {...refusal.response, headers: {'retry-after': String(RATE_LIMIT_WAIT)}}});
+}
+
+/** A 429 the probe's limiter did not send: another code, its own English. */
+function otherTooManyRequests() {
+    return apiError(429, {error_code: 'SYNTHETIC_OTHER_LIMIT', message: 'Synthetic limit of another kind', params: {}});
+}
+
+/**
+ * A manual «Ask provider» on the Atlas asset of `editFixture`, its metadata probe refused with `failure`, the clock
+ * pinned at RATE_LIMIT_NOW from the click. Ends with that failure handled — the form free again, nothing to compare —
+ * and every request answered.
+ */
+async function askProviderRefused(failure: unknown) {
+    await renderEdit();
+    const metadata = planRejection('refused Ask provider', routes.metadata, [probeRequest(['metadata'])], failure);
+    vi.useFakeTimers({toFake: ['Date']});
+    vi.setSystemTime(RATE_LIMIT_NOW);
+    expect(screen.getByTestId('asset-modal-ask-provider')).toBeEnabled();
+    await fireEvent.click(screen.getByTestId('asset-modal-ask-provider'));
+    expectBusy(true);
+    await metadata.finish();
+    expectBusy(false);
+    expect(screen.getByTestId('asset-modal-ask-provider'), 'free again, for a later try').toBeEnabled();
+    expect(screen.queryByTestId('comparison-modal'), 'nothing to compare').toBeNull();
+}
+
+describe('AssetModal: «Ask provider» refused for too many probes (X-R66)', () => {
+    let consoleError: MockInstance<typeof console.error>;
+
+    beforeEach(() => {
+        // fetchAndCompareMetadata logs the failure it catches: the guards read that log, the other case only silences it.
+        consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('the error toast is the catalogue’s PROBE_RATE_LIMITED, with the time the pause ends — not «an error occurred»', async () => {
+        await askProviderRefused(probeRateLimited());
+
+        expect(resumesToday(RATE_LIMIT_WAIT, RATE_LIMIT_NOW), 'premise: the pause ends today').toBe(true);
+        const time = formatResumeTime(RATE_LIMIT_WAIT, RATE_LIMIT_NOW);
+        const sentence = get(_)(PROBE_RATE_LIMITED_KEY, {values: {time}});
+        expect(mocks.toasts.error, 'one error toast').toHaveBeenCalledTimes(1);
+        const [shown] = mocks.toasts.error.mock.calls[0];
+        expect(shown, 'not the generic «an error occurred»: the probes are paused, and the toast says until when').not.toBe(get(_)('common.errorOccurred'));
+        expect(shown, 'the catalogue’s PROBE_RATE_LIMITED, with the time the pause ends').toBe(sentence);
+        expect(shown, 'the time the pause ends, rounded up to the minute').toContain(time);
+        expect(get(_)(PROBE_RATE_LIMITED_KEY), `premise: the catalogue has ${PROBE_RATE_LIMITED_KEY}`).not.toBe(PROBE_RATE_LIMITED_KEY);
+        expect(mocks.toasts.success).not.toHaveBeenCalled();
+        expect(mocks.toasts.info).not.toHaveBeenCalled();
+        expect(mocks.toasts.warning).not.toHaveBeenCalled();
+        assertTraffic();
+    });
+
+    it.each<[string, () => unknown]>([
+        ['a 429 the probe’s limiter did not send, another code', otherTooManyRequests],
+        ['a request that got no answer', () => new Error('Network Error')],
+    ])('guard — %s: as today, the generic «an error occurred», the very error logged', async (_label, failure) => {
+        const error = failure();
+        await askProviderRefused(error);
+
+        const generic = get(_)('common.errorOccurred');
+        expect(generic, 'premise: the catalogue has common.errorOccurred').not.toBe('common.errorOccurred');
+        expect(mocks.toasts.error, 'one error toast').toHaveBeenCalledTimes(1);
+        expect(mocks.toasts.error, 'the generic sentence, as today').toHaveBeenCalledWith(generic);
+        expect(consoleError, 'the catch still receives the very error').toHaveBeenCalledWith(expect.any(String), error);
+        expect(mocks.toasts.success).not.toHaveBeenCalled();
+        expect(mocks.toasts.info).not.toHaveBeenCalled();
         assertTraffic();
     });
 });

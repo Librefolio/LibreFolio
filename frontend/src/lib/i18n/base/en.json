@@ -124,6 +124,28 @@
     "bulkRefusal": {
       "tooManyItems": "Some values could not be loaded: the server takes at most {max, number} items in one request, and this one held {count, number}.",
       "tooManyDays": "Some values could not be loaded: the server builds at most {max, number} daily values in one request, and this one needed more. Choose a shorter period."
+    },
+    "nonIsoCurrency": {
+      "suggestion": "{value} is not an ISO code: it stands for {suggestion}",
+      "candidates": "{value} is not an ISO code: it may stand for {candidates}",
+      "unknown": "{value} is not an ISO currency code"
+    },
+    "writeRefusal": {
+      "dateOutOfRange": "{count, plural, one {# date lies} other {# dates lie}} outside {min} – {max}: {dates}. Nothing was saved.",
+      "currencyMismatch": "{count, plural, one {# price is} other {# prices are}} in {found}, not in the asset's currency {expected}: {dates}. Nothing was saved.",
+      "notSaved": "{count, plural, one {# value was not saved} other {# values were not saved}}: {items}",
+      "more": "and {n} more",
+      "reason": {
+        "ohlc_inconsistent": "close outside low–high",
+        "date_out_of_range": "date out of range",
+        "value_not_storable": "value too large or too small to store",
+        "rate_not_storable": "rate too large or too small to store",
+        "same_currency": "same currency on both sides",
+        "invalid_rate": "invalid rate",
+        "internal_error": "server error",
+        "other": "refused by the server"
+      },
+      "tooManyItems": "Nothing was saved: the server takes at most {max, number} values in one save, and this one held {count, number}. Save them in smaller parts."
     }
   },
   "csvImport": {

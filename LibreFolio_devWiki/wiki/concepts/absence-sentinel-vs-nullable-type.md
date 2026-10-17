@@ -91,6 +91,35 @@ opt-in, requested only by `FxPairSignal`, with a test pinning that a series
 containing no `missing` points renders byte-for-byte as before. See
 [[problems/shared-component-option-changed-globally]].
 
+### Backend signals: a day without a point is not a point without a value (J-21, 2026-10-17)
+
+The same two states reach the chart from the signal plugins, and they need opposite
+renderings.
+
+- **No point for a date.** An indicator computed on quote days (EMA, RSI, MACD…,
+  `computes_on_quote_days`) sends nothing for a carried day of the daily axis: a weekend,
+  a holiday. The line must keep **joining** across it.
+- **A point without a value** (`value: null`). The calendar Rolling Return sends one when
+  its reference price is missing; Rolling Sharpe and Beta send one for a window with zero
+  variance. The line must **break** there.
+
+The renderer used to drop the null points, so the chart's `connectNulls: true` joined them
+like absent days. The first fix proposed, `connectNulls: false` on backend signals, would
+have broken every quote-day indicator on every weekend: the same near-miss as above.
+
+The fix keeps the two apart where the difference is still visible. `renderScalarSeries`
+cuts a line or area output into **runs** at each point without a value, and each run is
+its own series with the same label. `connectNulls` stays `true`, so absent days are
+bridged inside a run, and no stroke crosses a declared gap.
+
+- Runs carry markers only at the two ends of the whole line.
+- Reference levels and regions stay on the first run only, otherwise each series would
+  stack its own copy.
+- The 100-slice cap never merges across a gap.
+- A count over the rendered series must count dates, not `max(data.length)`: the signals
+  panel badge did that, and was already wrong for value-styled lines
+  (`renderedSignalPointCount`).
+
 ## Source files
 
 | Role | Path |
@@ -98,6 +127,8 @@ containing no `missing` points renders byte-for-byte as before. See
 | The sentinel's origin | `frontend/src/lib/stores/fxStoreRegistry.ts` — `apiResultToFxDataPoint` |
 | The half-guard | `frontend/src/lib/utils/currency/fxConversionHelper.ts` |
 | Chart gap | `frontend/src/lib/components/charts/LineChart.svelte`, `lineChartHelpers.ts` |
+| Backend signal runs (J-21) | `frontend/src/lib/charts/signals/backendRenderer.ts` — `renderScalarSeries`, `splitLineSignal`, `renderedSignalPointCount` |
+| Quote-day filter | `backend/app/services/signals/execution.py` — `quote_day_points` |
 | Backend contract | `backend/app/schemas/fx.py:157` |
 
 ## See also
