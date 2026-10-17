@@ -94,8 +94,8 @@ $$
 The sum is over the transfers from another broker of the scope the position received in the period, each counted as in
 [Positions Closed in the Period](#closed-in-period): what their units gained before they arrived, value on arrival less
 the historical cost moved (MF-A9). The position's result counts those units from their value on arrival, its end cost at
-their historical cost, so the base adds the same amount. It applies only while the position still holds every unit it
-received: once units left it in the period, a transfer carries no quantity to tell which part of the sum left with
+their historical cost, so the base adds the same amount. It applies only while no unit has left the position in the
+period, before the arrival or after it: once units left it, a transfer carries no quantity to tell which part of the sum left with
 them, and the sum is dropped — the end cost alone is the base, as for any position opened mid-period that sold part of
 what it bought.
 
@@ -105,7 +105,7 @@ $$
 t_{\mathrm{start}}=\max(t_{\mathrm{from}},\ t_{\mathrm{oldest\ open\ lot}})
 $$
 
-Lots are counted at each broker: a transfer opens a lot dated at its arrival at the receiving broker. A stock split rescales the open lots and keeps their dates, so it never shortens the window. The oldest lots that together hold $10^{-5}$ units or fewer — the residual a sale leaves — are set aside, as a closed position counts such a residual as closed: a residual left years ago does not pull the window start back to its date, and a position holding nothing more than that residual has no open lot (MF-A7).
+Lots are counted at each broker: a transfer opens a lot dated at its arrival at the receiving broker. A stock split rescales the open lots and keeps their dates, so it never shortens the window. The oldest lots that together hold $10^{-5}$ units or fewer — the residual a sale leaves — are set aside, as a closed position counts such a residual as closed: a residual left years ago does not pull the window start back to its date, and a position holding nothing more than that residual has no open lot (MF-A7). The quantities are the engine's, at the owner's share of the broker: on a broker held at 50 %, a residual of $0.000012$ units is $0.000006$ for the owner, dust for the window as for the row (MF-A10).
 
 Then:
 
@@ -116,7 +116,7 @@ $$
 
 ### 🔚 Positions Closed in the Period {: #closed-in-period }
 
-A position is closed when its quantity at $t_{\mathrm{end}}$ is at or below the dust threshold of $10^{-5}$ units, so a residual left by redemptions in tranches counts as closed. It has no end cost, and a start value says nothing about a holding sold a few weeks in. Its annualized return uses the capital it deployed and the time it was held inside the period:
+A position is closed when its quantity at $t_{\mathrm{end}}$, at the owner's share of the broker, is at or below the dust threshold of $10^{-5}$ units, so a residual left by redemptions in tranches counts as closed. It has no end cost, and a start value says nothing about a holding sold a few weeks in. Its annualized return uses the capital it deployed and the time it was held inside the period:
 
 $$
 \mathrm{CostOut} = \sum_{s\,\in\,(t_{\mathrm{from}},\ t_{\mathrm{end}}]} C_s \;+\; \sum_{m\,\in\,(t_{\mathrm{from}},\ t_{\mathrm{end}}]} C_m \;+\; \sum_{a\,\in\,(t_{\mathrm{from}},\ t_{\mathrm{end}}]} \left(V_a - C_a\right)
