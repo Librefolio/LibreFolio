@@ -2,8 +2,8 @@
 Returns: Simple ROI, TWRR, MWRR (XIRR) and annualization — pure math, no I/O.
 
 Also: rebasing to a period's start, net holding return, G/L ratio (of one holding or a group), a change as a fraction
-of its base, the timing effect (MWRR − TWRR), realized gain, price return, and the gain that recovers a drawdown
-(``required_recovery_return``).
+of its base, the timing effect (MWRR − TWRR), realized gain, price return (also as a float for a return series), the
+observed annualization factor of a return series, and the gain that recovers a drawdown (``required_recovery_return``).
 
 Provides TWRR, MWRR (XIRR), and Simple ROI calculations.
 
@@ -275,6 +275,35 @@ def price_return(start: Decimal | None, end: Decimal | None) -> Decimal | None:
     if start is None or end is None or start == 0:
         return None
     return end / start - 1
+
+
+def float_price_return(start: Decimal, end: Decimal) -> float:
+    """``price_return`` as a float, for the return series that the risk and signal statistics read.
+
+    A series never carries an unavailable return: a price that is missing or 0 is the caller's error, ValueError.
+    """
+    change = price_return(start, end)
+    if change is None:
+        raise ValueError("a price return needs two prices and a non-zero start")
+    return float(change)
+
+
+def observed_annualization(n_observations: int, baseline_date: date | None, final_date: date | None) -> tuple[int, float | None]:
+    """The calendar span of a return series and its observed annualization factor: observations × 365 / days.
+
+    ``(0, None)`` for an empty series. A non-empty series needs both dates and a final date after the baseline;
+    otherwise ValueError — callers that can meet a zero-day span decide their own fallback before calling.
+    """
+    if n_observations < 0:
+        raise ValueError("n_observations cannot be negative")
+    if n_observations == 0:
+        return 0, None
+    if baseline_date is None or final_date is None:
+        raise ValueError("non-empty observations require baseline and final dates")
+    calendar_days = (final_date - baseline_date).days
+    if calendar_days <= 0:
+        raise ValueError("final_date must follow baseline_date")
+    return calendar_days, n_observations * 365 / calendar_days
 
 
 def required_recovery_return(drawdown: float) -> float | None:
