@@ -33,9 +33,10 @@ from backend.app.schemas.auth import (
     TokenInspectResponse,
     UpdateProfileRequest,
     UpdateProfileResponse,
+    WhatsNewRead,
 )
 from backend.app.schemas.users import AccountDeletionPreviewRead, BrokerAccessItemRead, BrokerDeletionItemRead
-from backend.app.services.accounts import address_probe, bootstrap_admin_service, login_throttle, password_policy, registration_service, settings_service, token_service, user_service
+from backend.app.services.accounts import address_probe, bootstrap_admin_service, login_throttle, password_policy, registration_service, settings_service, token_service, user_service, whats_new_service
 from backend.app.services.accounts.auth_service import (
     create_jwt_token,
     decode_jwt_token,
@@ -53,6 +54,14 @@ from backend.app.services.platform.client_address import rate_limit_address
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+def _auth_user(user: User) -> AuthUserResponse:
+    """The user as the app reads it, with what is new for it since the release it saw last (C-54)."""
+    pending = whats_new_service.pending_for(user)
+    whats_new = WhatsNewRead(since=pending.since, release=pending.release) if pending is not None else None
+    return AuthUserResponse.model_validate(user).model_copy(update={"whats_new": whats_new})
+
 
 # Session cookie configuration
 SESSION_COOKIE_NAME = "session"
@@ -196,7 +205,7 @@ async def login(
     user_settings = await settings_service.get_user_settings(user.id, session)
 
     return AuthLoginResponse(
-        user=AuthUserResponse.model_validate(user),
+        user=_auth_user(user),
         user_settings=user_settings,
         message="Login successful",
         show_donation_popup=show_donation_popup,
@@ -229,7 +238,18 @@ async def get_me(current_user: User = Depends(get_current_user)):
     """
     Get current authenticated user info.
     """
-    return AuthMeResponse(user=AuthUserResponse.model_validate(current_user))
+    return AuthMeResponse(user=_auth_user(current_user))
+
+
+@router.post("/whats-new/seen", status_code=204, summary="Mark the changelog of the running release as seen")
+async def mark_whats_new_seen(current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session_generator)) -> Response:
+    """The user closed the «What's new» modal (C-54): the running release becomes the last one it saw, so the modal does
+    not come back until the next update. The server writes its own release, never one from the client. 204, idempotent.
+    """
+    user = await user_service.get_user_by_id(session, current_user.id)
+    if user is not None:
+        await whats_new_service.mark_seen(session, user)
+    return Response(status_code=204)
 
 
 # The answer of POST /auth/register to each refusal of the registration rule. An account that already exists keeps the
@@ -306,7 +326,7 @@ async def register(request: AuthRegisterRequest, background: BackgroundTasks, ht
             # Too many registration emails from this client address: the account waits without its email (workstream E).
             logger.info("Verification email held: too many registrations from this address", user_id=user.id)
     return AuthRegisterResponse(
-        user=AuthUserResponse.model_validate(user),
+        user=_auth_user(user),
         message="Registration successful" + (": check your email to activate the account" if verification_required else "") + (" (Admin)" if user.is_superuser else ""),
         verification_required=verification_required,
     )
@@ -414,7 +434,7 @@ async def update_profile(
     """
     # Nothing to update
     if request.username is None and request.email is None:
-        return UpdateProfileResponse(user=AuthUserResponse.model_validate(current_user), message="No changes requested")
+        return UpdateProfileResponse(user=_auth_user(current_user), message="No changes requested")
 
     # The same address in another case is no change (decision P18): no password, no session ended.
     email_changes = request.email is not None and not user_service.same_email(request.email, current_user.email)
@@ -457,7 +477,7 @@ async def update_profile(
     # Never the address in the log (workstream E's rule): whether it changed is enough.
     logger.info("Profile updated", user_id=updated_user.id, username=updated_user.username, email_changed=email_changes)
 
-    return UpdateProfileResponse(user=AuthUserResponse.model_validate(updated_user), message="Profile updated successfully")
+    return UpdateProfileResponse(user=_auth_user(updated_user), message="Profile updated successfully")
 
 
 def deletion_preview_read(preview: user_service.AccountDeletionPreview) -> AccountDeletionPreviewRead:
@@ -571,7 +591,7 @@ async def setup_admin(
 
     user_settings = await settings_service.get_user_settings(user.id, session)
     return AuthLoginResponse(
-        user=AuthUserResponse.model_validate(user),
+        user=_auth_user(user),
         user_settings=user_settings,
         message="Setup complete",
         show_donation_popup=show_donation_popup,

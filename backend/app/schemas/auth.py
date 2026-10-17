@@ -67,6 +67,13 @@ class UpdateProfileRequest(BaseModel):
 # =============================================================================
 
 
+class WhatsNewRead(BaseModel):
+    """What is new for the user since the release whose changelog it saw last (C-54)."""
+
+    since: Optional[str] = Field(None, description="The release whose changelog the user saw last; null for an account from before this feature, which sees the release chapter only")
+    release: str = Field(..., description="The release the instance runs")
+
+
 class AuthUserResponse(BaseModel):
     """User info returned after login or from /me endpoint."""
 
@@ -76,6 +83,7 @@ class AuthUserResponse(BaseModel):
     is_active: bool
     is_superuser: bool
     created_at: UTCDateTime
+    whats_new: Optional[WhatsNewRead] = Field(None, description="The changelog chapters to show once, after an update; null when there is nothing new")
 
     model_config = {"from_attributes": True}
 

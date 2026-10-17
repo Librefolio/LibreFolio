@@ -327,6 +327,8 @@ def cmd_server(args):
         # Frontend E2E tests (Playwright) log in repeatedly against shared test users —
         # never let the donation popup signal fire and interfere with test assertions.
         env["LIBREFOLIO_DISABLE_DONATION_POPUP"] = "1"
+        # Nor the «What's new» modal (C-54): the lanes' accounts predate it, and a modal on every first load would stop the suites.
+        env["LIBREFOLIO_DISABLE_WHATS_NEW"] = "1"
         # The suites sign in wrongly on purpose, from one address: the limit on failed sign-ins (F15) would refuse their
         # later attempts. Off on every lane (configure_test_runtime has dropped any LIBREFOLIO_* of .env and the shell);
         # its own tests turn it on in-process.
