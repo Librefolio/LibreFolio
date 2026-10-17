@@ -5634,7 +5634,7 @@ sulla base `23f6578f3`.
   scritto quando era ancora rosso, e knip non lo conta come uso. Correzione: il test lo importa per nome. Non è un
   gate: `lint --dead-code` era già rosso prima, per voci di altri. Dettagli: piano 07, «B4 — analisi sulla base nuova»
   e seguenti.
-- **B-21 · Le due rotte del ripristino non prendono `ProfileDefaultError`** — minimo; H tramite il coordinatore, 17/10
+- ✅ **B-21 · Le due rotte del ripristino non prendono `ProfileDefaultError`** — minimo; H tramite il coordinatore, 17/10
   (H-27, dev `bfdc1f72c`). `profile_default()` ora solleva `ProfileDefaultError`, un `TypeError`, quando la tabella dei
   profili dà un valore del tipo sbagliato. `backup_max_upload_mb()` la chiama, e le sue due sole chiamate, in
   `api/v1/backup/restore.py`, prendono solo `BackupConfigError`:
@@ -5645,7 +5645,11 @@ sulla base `23f6578f3`.
   Correzione: prendere anche `ProfileDefaultError` nei due punti, con un caso per rotta. Si fa dopo l'ingresso di
   H-27 nel ramo di B. Il test di guardia H-17 mette `123`, un intero: resta compatibile. Dettagli: piano 07, «B4
   committato; validazione combinata…».
-- **B-22 · `totals.py` ripete la regola degli importi «testo decimale semplice» di J** — minimo; J tramite il
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): le due rotte prendono anche `ProfileDefaultError`: l'upload
+  risponde 503 `backup_upload_unavailable`, lo stato 200 con `upload_limit_mb: null`. 8 casi in
+  `test_backup_restore.py`, rossi e poi verdi nello slot delle 04:44.
+- ✅ **B-22 · `totals.py` ripete la regola degli importi «testo decimale semplice» di J** — minimo; J tramite il
   coordinatore, 17/10 (J-27). J-27 è già nella base di B: `7336722ad`, entrato con `e221a0544`.
   `ledger_totals._as_amount` (la casa) rifiuta ogni testo che non sia decimale semplice prima di `Decimal()`, con la
   stessa regola (precisione 60). Così `_plain` e `_PLAIN_AMOUNT` in `instance_backup/totals.py` sono un doppione, e anche
@@ -5654,7 +5658,11 @@ sulla base `23f6578f3`.
   caso. Da adattare: i casi di `test_backup_totals.py` che fissano «deciso prima che `from_json` veda il documento»
   diventano «rifiutato da J»; il fixture `j_reads` resta la difesa contro l'espansione nel test. Nel lotto B4b, dopo
   l'ingresso di B4. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
-- **B-23 · Dopo un crash restano file in chiaro, e nessuno li toglie all'avvio** — piccolo; E (R13-SEC4, piano 08 in
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): via `_plain` e `_PLAIN_AMOUNT` da `totals.py`: decide
+  `ControlTotals.from_json` di J. Il test capovolto è
+  `test_what_is_not_plain_text_in_lines_of_objects_is_refused_by_j_and_absent`.
+- ✅ **B-23 · Dopo un crash restano file in chiaro, e nessuno li toglie all'avvio** — piccolo; E (R13-SEC4, piano 08 in
   dev `110125350`), 17/10, più il punto (c) di B. Oggi la pulizia gira solo quando parte un nuovo controllo
   (`restore_jobs.prune` in `start_check`) o un nuovo backup (`remove_expired_jobs` in `_prepare`):
   - (a) `.restore/stage/<id>/archive.zip`, l'archivio decifrato con la chiave di origine, se il server muore fra la
@@ -5668,20 +5676,33 @@ sulla base `23f6578f3`.
   per `.decrypt-*` la regola dell'ora, perché un `inspect` può girare mentre il server parte; lo stato del job resta.
   Tocca la lista condivisa `STARTUP_STEPS` (`app_lifespan.py`, e i passi in `overview.md`): un passo nuovo dopo
   `restore-commit`, o dentro il suo. Lotto B4b. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
-- **B-24 · Il messaggio di `backup decrypt` non dice che lo zip apre anche le chiavi salvate** — minimo; E (R13-SEC4),
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): il passo `backup-leftovers` (N66) e il modulo
+  `instance_backup/leftovers.py`. La revisione delle 03:58 aggiunge `archive.zip.part`, i link su due livelli e
+  `checks_interrupted`; `get_job()` toglie anche i file di lavoro. 44 casi in `test_backup_leftovers.py`.
+- ✅ **B-24 · Il messaggio di `backup decrypt` non dice che lo zip apre anche le chiavi salvate** — minimo; E (R13-SEC4),
   17/10. Oggi dice: «It holds every user's data in clear». Uno zip decifrato di un backup che portava la chiave
   d'istanza contiene anche quella chiave, che apre ogni chiave dei fornitori salvata. Da aggiungere al messaggio e alla
   guida (`admin/backup_restore.en.md`, sezione `backup decrypt`). Lotto B4b.
-- **B-25 · `--password-stdin` su un terminale mostra la password; i campi della creazione hanno `autocomplete="off"`** —
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): dopo `decrypt` c'è la riga 🔑 quando il manifesto annuncia la
+  chiave.
+- ✅ **B-25 · `--password-stdin` su un terminale mostra la password; i campi della creazione hanno `autocomplete="off"`** —
   minimo; E (R13-SEC4), 17/10. `--password-stdin` legge con `sys.stdin.readline()` (`scripts/backup_cli.py:100`) anche
   quando lo standard input è un terminale, e lì la password si vede mentre la si scrive: con `isatty()` va letta con
   `getpass`. Da decidere nell'analisi: alla creazione una o due volte. Nella scheda, i due campi della password di un
   backup sicuro passano a `autocomplete="new-password"`: i gestori delle password ignorano spesso `off` e proporrebbero
   quella dell'account. Lotto B4b.
-- **B-26 · Un file della chiave oltre 4096 byte si esporta, poi ogni ripristino lo rifiuta** — minimo; E (R13-SEC4),
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): `--password-stdin` a un terminale prende la strada di
+  `getpass` (due volte per `create`), e i due campi del backup sicuro sono `new-password`.
+- ✅ **B-26 · Un file della chiave oltre 4096 byte si esporta, poi ogni ripristino lo rifiuta** — minimo; E (R13-SEC4),
   17/10. La creazione legge `secrets/instance.key` con `read_secret_file` (fino a 64 KiB); la lettura dall'archivio si
   ferma a `INSTANCE_KEY_MAX_BYTES` (4096, `archive.py`). Va rifiutato già all'esportazione: chiave non inclusa e avviso
   `instance_key_unusable`, come per le altre chiavi inutilizzabili. Lotto B4b.
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): `exportable_instance_key()` e `generated_key_unusable()` usano
+  il limite di 4096 byte in UTF-8 (`INSTANCE_KEY_MAX_BYTES`).
 - **B-27 · Dopo un ripristino riuscito la scheda Backup non dice nulla** — piccolo; G (G-20) tramite il coordinatore,
   17/10, decisione notturna N67 (la rivede il developer). Dopo un ripristino `committed` la pagina va al login senza
   dire niente (FBKP-107), e al rientro la scheda tace: `restore-last-result` c'è solo per `rolled_back`
