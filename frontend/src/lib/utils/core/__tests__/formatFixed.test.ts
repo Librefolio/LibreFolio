@@ -45,6 +45,24 @@
  * since a plain decimal carries no locale, and each is checked against `formatDecimalForDisplay` first. The function
  * does not exist before CP3a, so it is read through the module namespace at call time: absent, the first case says
  * so and every other one fails on its assertion, never on a TypeError at import.
+ *
+ * priceFractionDigits and formatPrice (C-97c-1, decision D-C97c-1 of the coordinator, 17/10; the last two blocks). A
+ * price was written with a fixed 2–4 decimals, so a tiny one read `0.00`. A price now carries the decimals its first four
+ * significant digits need, between a floor and a cap of twelve:
+ *
+ *     priceFractionDigits(value, {minDecimals = 2, floorDecimals = minDecimals}) → {min, max}
+ *         min = minDecimals
+ *         max = min(12, max(floorDecimals, 3 − ⌊log10 |value|⌋)), and for 0: min(12, max(floorDecimals, minDecimals))
+ *     formatPrice(value, {minDecimals, floorDecimals, signed = false, locale = uiLocale()})
+ *
+ *   - Intl writes the value with those fraction digits: a string as the exact decimal it writes (an Intl string
+ *     literal, half-expand on its own digits), a number as a number; trailing zeros drop down to `min`;
+ *   - `signed` puts a `+` before a positive value; `-0` prints as `0`;
+ *   - `null`, `undefined`, `''`, a non-numeric or a non-finite input give `''`: it never echoes its input.
+ * The cases are the contract's table, in English through the `locale` option, and its one Italian case — by the option
+ * and by the interface language. The few rows derived from the definition rather than copied from the table say so.
+ * Both functions are read through the module namespace, as formatExactDecimal was: absent, each case fails on its
+ * assertion and names the absence.
  */
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
@@ -407,5 +425,178 @@ describe('formatExactDecimal — an exact decimal string, written in the interfa
 
         expect(exactDecimal('12345.678', {locale: 'fr'})).toBe(intlExact('fr', '12345.678'));
         expect(exactDecimal('12345.678', {locale: 'en-US'})).toBe(intlExact('en-US', '12345.678'));
+    });
+});
+
+// ---------------------------------------------------------------------------
+// priceFractionDigits and formatPrice — a price with the digits it needs (C-97c-1, D-C97c-1)
+// ---------------------------------------------------------------------------
+
+/** The decimals of a price (D-C97c-1). */
+interface PriceDecimalsOptions {
+    minDecimals?: number;
+    floorDecimals?: number;
+}
+
+/** What `formatPrice` takes besides the decimals. */
+interface FormatPriceOptions extends PriceDecimalsOptions {
+    signed?: boolean;
+    locale?: string;
+}
+
+/** The signatures C-97c-1 gives the two functions. */
+type PriceFractionDigits = (value: number | string, options?: PriceDecimalsOptions) => {min: number; max: number};
+type FormatPrice = (value: number | string | null | undefined, options?: FormatPriceOptions) => string;
+
+/** What formatFixed.ts exports under `name`, read when asked: nothing before C-97c-1. */
+function exportedPriceHelper(name: 'priceFractionDigits' | 'formatPrice'): unknown {
+    return (formatFixedModule as unknown as Record<string, unknown>)[name];
+}
+
+/** `priceFractionDigits(value, options)`; while it is not exported, a marker no expectation equals, naming the absence. */
+function fractionDigitsOf(value: number | string, options?: PriceDecimalsOptions): unknown {
+    const exported = exportedPriceHelper('priceFractionDigits');
+    return typeof exported === 'function' ? (exported as PriceFractionDigits)(value, options) : '‹priceFractionDigits is not exported by formatFixed.ts›';
+}
+
+/** `formatPrice(value, options)`; while it is not exported, a marker no expectation equals, naming the absence. */
+function price(value: number | string | null | undefined, options?: FormatPriceOptions): string {
+    const exported = exportedPriceHelper('formatPrice');
+    return typeof exported === 'function' ? (exported as FormatPrice)(value, options) : '‹formatPrice is not exported by formatFixed.ts›';
+}
+
+/** The three sites of D-C97c-1 that pass options of their own. */
+const FX_RATE: PriceDecimalsOptions = {minDecimals: 4};
+const DATA_EDITOR: PriceDecimalsOptions = {minDecimals: 0, floorDecimals: 4};
+const RUNNING_WAC: PriceDecimalsOptions = {minDecimals: 2, floorDecimals: 4};
+
+interface DigitsCase {
+    value: number | string;
+    options?: PriceDecimalsOptions;
+    expected: {min: number; max: number};
+    why: string;
+}
+
+interface PriceCase {
+    value: number | string;
+    en: string;
+    why: string;
+}
+
+describe('priceFractionDigits — the fraction digits of a price: its first four significant ones, between a floor and 12 (C-97c-1)', () => {
+    it('is exported by formatFixed.ts, as a function', () => {
+        expect(typeof exportedPriceHelper('priceFractionDigits'), 'formatFixed.ts exports priceFractionDigits').toBe('function');
+    });
+
+    it.each<DigitsCase>([
+        {value: 0.0000034573, expected: {min: 2, max: 9}, why: 'a tiny price: 3 − ⌊log10⌋ = 3 + 6'},
+        {value: 123.45, expected: {min: 2, max: 2}, why: 'a price that needs fewer keeps the floor'},
+        {value: 0.5, expected: {min: 2, max: 4}, why: 'below one: 3 + 1'},
+        {value: 123.4567, options: RUNNING_WAC, expected: {min: 2, max: 4}, why: 'the running WAC’s floor of four'},
+        // Derived from the definition, not rows of the contract's table.
+        {value: 0, expected: {min: 2, max: 2}, why: 'zero needs just minDecimals (derived)'},
+        {value: 1e-13, expected: {min: 2, max: 12}, why: 'sixteen needed, capped at twelve (derived)'},
+        {value: '0.000000123456789012', expected: {min: 2, max: 10}, why: 'a string, read as the decimal it writes (derived)'},
+    ])('priceFractionDigits($value, $options) is $expected — $why', ({value, options, expected}) => {
+        expect(fractionDigitsOf(value, options)).toEqual(expected);
+    });
+});
+
+describe('formatPrice — a price written with the digits it needs, in the interface language (C-97c-1)', () => {
+    it('is exported by formatFixed.ts, as a function', () => {
+        expect(typeof exportedPriceHelper('formatPrice'), 'formatFixed.ts exports formatPrice').toBe('function');
+    });
+
+    it.each<PriceCase>([
+        {value: 0.0000034573, en: '0.000003457', why: 'a tiny price keeps four significant digits, where 2–4 decimals read 0.00'},
+        {value: 1.23456, en: '1.235', why: 'four significant digits, rounded'},
+        {value: 123.45, en: '123.45', why: 'the floor of two'},
+        {value: 65000.123, en: '65,000.12', why: 'grouped, at the floor of two'},
+        {value: 0.5, en: '0.50', why: 'padded to minDecimals'},
+        {value: 0, en: '0.00', why: 'zero: minDecimals'},
+        {value: -0.000123, en: '-0.000123', why: 'a negative keeps its minus, the trailing zero drops'},
+        {value: '1.2345', en: '1.235', why: 'a string: half-expand on the exact decimal'},
+        {value: '0.000000123456789012', en: '0.0000001235', why: 'a string with more digits than a double holds'},
+        {value: 1e-13, en: '0.00', why: 'capped at twelve decimals, the zeros beyond two dropped'},
+    ])('default options: $value is $en — $why', ({value, en}) => {
+        expect(price(value, {locale: 'en'})).toBe(en);
+    });
+
+    it.each<PriceCase>([
+        {value: 1.5, en: '+1.50', why: 'a positive value gains a +'},
+        {value: -1.5, en: '-1.50', why: 'a negative keeps its own minus'},
+        {value: 0, en: '0.00', why: 'zero gains no sign'},
+    ])('signed: $value is $en — $why', ({value, en}) => {
+        expect(price(value, {signed: true, locale: 'en'})).toBe(en);
+    });
+
+    it.each<PriceCase>([
+        {value: 1.0834, en: '1.0834', why: 'four decimals, as a rate always had'},
+        {value: 1.08345678, en: '1.0835', why: 'rounded at the fourth'},
+        {value: 0.000123456, en: '0.0001235', why: 'a tiny rate keeps four significant digits, where four decimals read 0.0001'},
+    ])('an FX rate, {minDecimals: 4}: $value is $en — $why', ({value, en}) => {
+        expect(price(value, {...FX_RATE, locale: 'en'})).toBe(en);
+    });
+
+    it.each<PriceCase>([
+        {value: 1.5, en: '1.5', why: 'no padding'},
+        {value: 1.23456, en: '1.2346', why: 'the floor of four, rounded'},
+        {value: 0.000003457312, en: '0.000003457', why: 'four significant digits, where four decimals read 0'},
+        {value: 1234567, en: '1,234,567', why: 'an integer stays one'},
+    ])('the data editor, {minDecimals: 0, floorDecimals: 4}: $value is $en — $why', ({value, en}) => {
+        expect(price(value, {...DATA_EDITOR, locale: 'en'})).toBe(en);
+    });
+
+    it.each<PriceCase>([
+        {value: 123.4567, en: '123.4567', why: 'the floor of four'},
+        {value: 123.5, en: '123.50', why: 'padded to two, the trailing zeros beyond dropped'},
+    ])('a running WAC, {minDecimals: 2, floorDecimals: 4}: $value is $en — $why', ({value, en}) => {
+        expect(price(value, {...RUNNING_WAC, locale: 'en'})).toBe(en);
+    });
+
+    it('-0 prints as 0, signed or not — never -0.00', () => {
+        // Intl alone keeps the minus of -0: the guard has to act before the value reaches it.
+        expect(new Intl.NumberFormat('en', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(-0), 'control: Intl prints a minus on -0').toBe('-0.00');
+
+        expect({unsigned: price(-0, {locale: 'en'}), signed: price(-0, {signed: true, locale: 'en'})}).toEqual({unsigned: '0.00', signed: '0.00'});
+    });
+
+    it('a string is written as the exact decimal it is, a number as a number: 0.12344999999999999999 is 0.1234, its double 0.1235', () => {
+        const text = '0.12344999999999999999';
+        expect(Number(text), 'control: as a double the string reads 0.12345').toBe(0.12345);
+        const fourDecimals = new Intl.NumberFormat('en', {minimumFractionDigits: 2, maximumFractionDigits: 4});
+        expect({string: fourDecimals.format(text as Intl.StringNumericLiteral), number: fourDecimals.format(Number(text))}, 'control: at four decimals Intl tells the decimal from its double').toEqual({string: '0.1234', number: '0.1235'});
+
+        expect({string: price(text, {locale: 'en'}), number: price(Number(text), {locale: 'en'})}).toEqual({string: '0.1234', number: '0.1235'});
+    });
+
+    it.each([
+        {value: null, label: 'null'},
+        {value: undefined, label: 'undefined'},
+        {value: '', label: "''"},
+        {value: 'abc', label: "'abc'"},
+        {value: NaN, label: 'NaN'},
+        {value: Infinity, label: 'Infinity'},
+        {value: -Infinity, label: '-Infinity'},
+        {value: 'Infinity', label: "'Infinity'"},
+    ])('$label gives "" — nothing to write, and the input is never echoed', ({value}) => {
+        expect(price(value, {locale: 'en'})).toBe('');
+    });
+
+    it('Italian: 65000.123 is 65.000,12 — by the locale option, and by the interface language without one', async () => {
+        const italian = intlFixed('it', 2, 65000.12);
+        expect(italian, 'control: this runtime writes the contract’s Italian').toBe('65.000,12');
+
+        expect(price(65000.123, {locale: 'it'}), 'the locale option').toBe(italian);
+        await uiLanguage('it');
+        expect(uiLocale(), 'control: an Italian UI on the en-US browser is written it').toBe('it');
+        expect(price(65000.123), 'no locale: the interface language').toBe(italian);
+    });
+
+    it('without a locale, an English UI on the en-US browser writes en-US', async () => {
+        await uiLanguage('en');
+        expect(uiLocale(), 'control: an English UI on the en-US browser is written en-US').toBe('en-US');
+
+        expect({grouped: price(65000.123), tiny: price(0.0000034573)}).toEqual({grouped: '65,000.12', tiny: '0.000003457'});
     });
 });

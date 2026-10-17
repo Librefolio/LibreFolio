@@ -30,6 +30,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ErasableNumberCell from './ErasableNumberCell.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
 
     // =========================================================================
     // Props
@@ -209,7 +210,8 @@
                         cell: (r) => {
                             if (r.readonly) {
                                 const val = r.values[col.key];
-                                const display = val != null ? Number(val).toLocaleString(uiLocale(), {maximumFractionDigits: 4}) : '—';
+                                // C-97c: up to 4 decimals as before, more for a value under 1 (4 significant digits), at most 12
+                                const display = val != null ? formatPrice(Number(val), {minDecimals: 0, floorDecimals: 4}) || '—' : '—';
                                 return {
                                     type: 'html',
                                     html: `<span class="text-xs font-mono text-lf-secondary">${display}</span>`,
