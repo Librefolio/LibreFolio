@@ -140,7 +140,7 @@
     let lastRenderedResolution: ChartResolution | null = null;
     let lastRenderedDates: string[] = [];
     let responsiveXAxisCompact = false;
-    /** The last zoom window, and the timer that re-spaces the x labels on it once the gesture settles (47-1). Plain variables: the teardown reads them. */
+    /** The last zoom window, and the timer that, once the gesture settles, re-spaces the x labels on it (47-1) and re-aims the arrow markers (Y-8). Plain variables: the teardown reads them. */
     let lastZoomEvent: unknown = null;
     let zoomLabelTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -155,6 +155,8 @@
         zoomLabelTimer = setTimeout(() => {
             zoomLabelTimer = null;
             applyZoomedAxisLabels();
+            // Once per gesture, never per tick: it reads getOption(), a deep copy of the whole option, and writes every series back (Y-8).
+            if (chartInstance) updateArrowRotations(chartInstance);
         }, ZOOM_LABEL_SETTLE_MS);
     }
 
@@ -289,8 +291,9 @@
             attachChartReady(chartInstance, chartContainer, 'candlestick');
             needsInitialLayoutStabilityPass = true;
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
+            // A zoom changes the pixel aspect: the x labels are re-spaced on the window, and the arrow markers re-aimed, once the
+            // gesture settles, never on each tick (47-1, Y-8)
             chartInstance.on('dataZoom', (event: unknown) => {
-                if (chartInstance) updateArrowRotations(chartInstance);
                 scheduleZoomedAxisLabels(event);
             });
 

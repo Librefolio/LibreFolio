@@ -154,7 +154,7 @@
     let needsInitialLayoutStabilityPass = false;
     let currentRenderedData: LineDataPoint[] = [];
     let responsiveXAxisCompact = false;
-    /** The last zoom window, and the timer that re-spaces the x labels on it once the gesture settles (47-1). Plain variables: the teardown reads them. */
+    /** The last zoom window, and the timer that, once the gesture settles, re-spaces the x labels on it (47-1) and re-aims the arrow markers (Y-8). Plain variables: the teardown reads them. */
     let lastZoomEvent: unknown = null;
     let zoomLabelTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -169,6 +169,8 @@
         zoomLabelTimer = setTimeout(() => {
             zoomLabelTimer = null;
             applyZoomedAxisLabels();
+            // Once per gesture, never per tick: it reads getOption(), a deep copy of the whole option, and writes every series back (Y-8).
+            if (chartInstance) updateArrowRotations(chartInstance);
         }, ZOOM_LABEL_SETTLE_MS);
     }
 
@@ -397,9 +399,9 @@
                 });
             }
 
-            // Recompute arrow rotations when zoom changes (aspect ratio shifts), and re-space the x labels on the window
+            // A zoom changes the pixel aspect: the x labels are re-spaced on the window, and the arrow markers re-aimed, once the
+            // gesture settles, never on each tick (47-1, Y-8)
             chartInstance.on('dataZoom', (event: unknown) => {
-                if (chartInstance) updateArrowRotations(chartInstance);
                 scheduleZoomedAxisLabels(event);
             });
         }
@@ -855,13 +857,6 @@
         chartInstance.setOption(option, true);
         chartOptionSet = true;
 
-        // Compute pixel-accurate arrow rotations after layout is established
-        updateArrowRotations(chartInstance);
-        if (needsInitialLayoutStabilityPass) {
-            needsInitialLayoutStabilityPass = false;
-            scheduleFirstRenderStabilityFix(chartInstance, chartContainer, updateArrowRotations);
-        }
-
         // Restore zoom position if the user had zoomed/panned
         if (savedZoom && !compact) {
             chartInstance.dispatchAction({
@@ -869,6 +864,14 @@
                 start: savedZoom.start,
                 end: savedZoom.end,
             });
+        }
+
+        // Compute pixel-accurate arrow rotations after layout is established, on the zoom just restored: the restore's
+        // dataZoom event only schedules the settle, so aiming them before it left them on the whole axis until then (Y-8)
+        updateArrowRotations(chartInstance);
+        if (needsInitialLayoutStabilityPass) {
+            needsInitialLayoutStabilityPass = false;
+            scheduleFirstRenderStabilityFix(chartInstance, chartContainer, updateArrowRotations);
         }
     }
 </script>
