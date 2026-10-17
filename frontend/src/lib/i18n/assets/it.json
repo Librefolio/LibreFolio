@@ -389,10 +389,17 @@
     "typeSelect": {
       "searchPlaceholder": "Cerca un tipo",
       "noMatches": "Nessun tipo corrispondente"
+    },
+    "dataEditor": {
+      "saved": "Dati dell'asset: {details}",
+      "pricesSaved": "{count, plural, one {# prezzo salvato} other {# prezzi salvati}}",
+      "pricesDeleted": "{count, plural, one {# prezzo eliminato} other {# prezzi eliminati}}",
+      "pricesSkipped": "{count, plural, one {# riga scartata (non valida)} other {# righe scartate (non valide)}}",
+      "eventsSaved": "{count, plural, one {# evento salvato} other {# eventi salvati}}"
     }
   },
   "events": {
-    "deleteSuccess": "{n} evento/i eliminato/i",
+    "deleteSuccess": "{n, plural, one {# evento eliminato} other {# eventi eliminati}}",
     "fxBannerContext": "per eventi dividendi/cassa",
     "exists": {
       "title": "Questo evento esiste già",
