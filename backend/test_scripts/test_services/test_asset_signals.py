@@ -1737,7 +1737,11 @@ async def test_a_full_history_plan_still_loads_from_the_first_price(
     asset_signal_data,
     served_market_holidays,
 ):
-    """T6 — guard: a full-history plan (drawdown) keeps loading the whole history."""
+    """T6 — guard: a full-history plan (drawdown) keeps loading the whole history.
+
+    Since Z-30 a full history starts at 1900-01-01 (``EARLIEST_RANGE_START``), not ``date.min``: a row stored before it
+    only seeds the fill. Nothing precedes the fixture's first row, never before 1900-01-01, so all 500 points still load.
+    """
     starts = spy_load_starts(monkeypatch)
 
     result = await signals_on_primary(
@@ -1748,7 +1752,7 @@ async def test_a_full_history_plan_still_loads_from_the_first_price(
         ],
     )
 
-    assert starts == [date.min]
+    assert starts == [date(1900, 1, 1)]
     sma = next(signal for signal in result.signals if signal.instance_id == "sma")
     assert sma.warmup.loaded_points == 500  # the whole fixture: nothing precedes its first row
 
