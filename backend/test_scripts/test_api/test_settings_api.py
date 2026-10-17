@@ -5,6 +5,7 @@ Tests for user settings and global settings endpoints.
 
 Test IDs:
 - SET-001 to SET-004: User Settings
+- SET-A11-01 to SET-A11-07: a stored theme the app does not know (lot A-11), in-process on a private database
 - GSET-001 to GSET-010: Global Settings (GSET-001, 002, 002b, 002c, 003: who reads them, A6d — any signed-in user,
   nobody without a valid session)
 """
@@ -1942,3 +1943,423 @@ class TestGlobalSettingsBulkValidation:
                 await _restore_global_values(client, originals)
 
         print_success(f"✓ {key} stays off, {other} still {originals[other]!r}")
+
+
+# ============================================================================
+# A STORED THEME THE APP DOES NOT KNOW — lot A-11 (SET-A11-01 to SET-A11-07), in-process on a private database
+# ============================================================================
+# user_settings.theme is a VARCHAR(20) without a CHECK, UserSettingsRead.theme a Literal: a value outside it — a
+# hand-edited row, a hand-edited global default_theme copied into a new row, a downgrade after a theme of a later
+# release — cannot be built into the answer, and that ValidationError is a 500 on POST /auth/login (after the session
+# cookie is set: the user cannot sign in), on GET /settings/user and on PUT /settings/user (after its commit). Such a row
+# exists on no lane, whose rows the app itself wrote, and its warning is logged in a process no test can capture: so
+# these cases run in-process, as TestSignInLogsNoTypedIdentifier (test_auth_api.py, lot A-22) runs its own, on a private
+# instance — the real auth and settings routers, mounted under the API prefix as api/v1/router.py mounts them, in an app
+# of this test whose get_session_generator opens sessions on a private SQLite file under tmp_path, seeded as a new
+# install; get_async_engine, the lane's database, is a tripwire. What a hand edit leaves is written by SQL on that file.
+# bcrypt runs at cost 4, the dummy hash in a cache of the test's own; the login limiters are fresh ones of the shipped
+# size. In-process the app's exception reaches the client call (httpx.ASGITransport raises what the app raises): today's
+# red is that ValidationError, which a server answers with a 500. Nothing waits.
+
+import contextlib
+import functools
+from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, get_args
+
+import structlog
+from fastapi import FastAPI
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.pool import NullPool
+from structlog.testing import capture_logs
+
+from backend.app.api.v1 import auth as auth_api
+from backend.app.api.v1 import settings as settings_routes
+from backend.app.config import API_V1_PREFIX
+from backend.app.db import session as db_session
+from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
+from backend.app.db.models import User, UserSettings
+from backend.app.db.session import get_session_generator
+from backend.app.schemas.settings import SETTINGS_REGISTRY, UserSettingsRead
+from backend.app.services.accounts import auth_service, login_throttle
+from backend.app.services.accounts.settings_service import initialize_global_settings
+from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
+
+#: The logger that warns of an unknown stored theme (contract 7): the settings service's structlog.get_logger(__name__).
+_SETTINGS_SERVICE_LOGGER = "backend.app.services.accounts.settings_service"
+#: The canary logged through _SETTINGS_SERVICE_LOGGER inside every capture.
+_THEME_LOG_CANARY = f"canary: the capture sees the events of {_SETTINGS_SERVICE_LOGGER}"
+#: The themes the app knows: the values of UserSettingsRead.theme's Literal (contract 1).
+_KNOWN_THEMES: tuple[str, ...] = get_args(UserSettingsRead.model_fields["theme"].annotation)
+#: A stored theme no release knows, as a hand edit leaves it.
+_UNKNOWN_THEME = "sepia"
+#: An unknown stored theme longer than the column's 20 characters, which SQLite does not enforce: the warning carries its first 20.
+_LONG_UNKNOWN_THEME = "solarized-high-contrast-v2"
+#: A global default_theme no release knows either, written as the setting's row.
+_UNKNOWN_DEFAULT_THEME = "neon"
+_DEFAULT_THEME_KEY = SETTINGS_REGISTRY.global_.DEFAULT_THEME.key
+#: The settings every account of the private instance is written with, its theme aside; and its password.
+_THEME_ACCOUNT_LANGUAGE = "en"
+_THEME_ACCOUNT_CURRENCY = "EUR"
+_THEME_PASSWORD = "Stored-Theme-Pass-2026"
+#: (global default_theme, the theme an unknown stored one is shown as): the default when the app knows it, else auto (contract 2).
+_SHOWN_FOR_AN_UNKNOWN_THEME = [
+    pytest.param("dark", "dark", id="default-dark-shown-dark"),
+    pytest.param(_UNKNOWN_DEFAULT_THEME, "auto", id="default-unknown-shown-auto"),
+]
+#: (stored theme, global default_theme): every known theme, with another known theme as the default, so «shown as stored» is never the default's.
+_KNOWN_STORED_THEMES = [pytest.param(theme, _KNOWN_THEMES[(index + 1) % len(_KNOWN_THEMES)], id=f"stored-{theme}") for index, theme in enumerate(_KNOWN_THEMES)]
+
+
+@dataclass(frozen=True)
+class _ThemeInstance:
+    """An instance of one test: the auth and settings routers, every session on ``engine``."""
+
+    engine: AsyncEngine
+    app: FastAPI
+
+
+@dataclass(frozen=True)
+class _ThemeAccount:
+    """An active account of the private instance."""
+
+    user_id: int
+    username: str
+
+
+def _theme_app(engine: AsyncEngine) -> FastAPI:
+    """The real auth and settings routers, mounted under the API prefix as ``api/v1/router.py`` mounts them; ``get_session_generator`` opens sessions on ``engine``."""
+    app = FastAPI()
+    app.include_router(auth_api.router, prefix=API_V1_PREFIX)
+    app.include_router(settings_routes.router, prefix=API_V1_PREFIX)
+
+    async def private_session() -> AsyncIterator[AsyncSession]:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            yield session
+
+    app.dependency_overrides[get_session_generator] = private_session
+    return app
+
+
+def _lane_database_tripwire(*_arguments: object, **_keywords: object) -> AsyncEngine:
+    raise AssertionError("get_async_engine() was called: that is the lane's database, not this test's private one")
+
+
+@pytest_asyncio.fixture
+async def theme_instance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_ThemeInstance]:
+    """A private SQLite file under tmp_path, schema and default settings as a new install starts with, no account. Disposed at teardown.
+
+    bcrypt at cost 4, with a dummy-hash cache of the test's own (as private_sign_in in test_auth_api.py); login limiters
+    of the shipped size holding no count, so no sign-in of another in-process test counts against these; get_async_engine
+    a tripwire where these routes could reach it.
+    """
+    monkeypatch.setattr(auth_service, "BCRYPT_ROUNDS", 4)
+    monkeypatch.setattr(auth_service, "_dummy_password_hash", functools.cache(auth_service._dummy_password_hash.__wrapped__))
+    for name in ("LOGIN_BY_IDENTIFIER", "LOGIN_BY_ADDRESS"):
+        shipped = getattr(login_throttle, name)
+        monkeypatch.setattr(login_throttle, name, SlidingWindowLimiter(shipped.limit, shipped.window_seconds))
+    for module in (db_session, settings_routes):
+        monkeypatch.setattr(module, "get_async_engine", _lane_database_tripwire)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'stored-theme.db'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine) as session:
+            await initialize_global_settings(session)
+        yield _ThemeInstance(engine=engine, app=_theme_app(engine))
+    finally:
+        await engine.dispose()
+
+
+async def _theme_account(instance: _ThemeInstance, theme: str) -> _ThemeAccount:
+    """An active account written as rows: a real bcrypt hash of _THEME_PASSWORD (cost 4), and its user_settings row — language, currency, ``theme``, no avatar."""
+    username = f"theme_{uuid.uuid4().hex[:12]}"
+    async with AsyncSession(instance.engine, expire_on_commit=False) as session:
+        user = User(username=username, email=f"{username}@example.com", hashed_password=auth_service.hash_password(_THEME_PASSWORD), is_active=True)
+        session.add(user)
+        await session.flush()
+        session.add(UserSettings(user_id=user.id, language=_THEME_ACCOUNT_LANGUAGE, base_currency=_THEME_ACCOUNT_CURRENCY, theme=theme))
+        await session.commit()
+    assert user.id is not None, f"Setup: {username} must be written"
+    return _ThemeAccount(user_id=user.id, username=username)
+
+
+async def _theme_write(instance: _ThemeInstance, statement: str, **parameters: Any) -> None:
+    """One UPDATE by SQL on the private file, as a hand edit makes it, committed; it must change exactly one row."""
+    async with instance.engine.begin() as connection:
+        changed = (await connection.execute(text(statement), parameters)).rowcount
+    assert changed == 1, f"Setup: {statement} with {parameters} must change one row, it changed {changed}"
+
+
+async def _hand_edit_theme(instance: _ThemeInstance, user_id: int, theme: str) -> None:
+    """The account's stored theme is ``theme``: user_settings.theme written by SQL."""
+    await _theme_write(instance, "UPDATE user_settings SET theme = :theme WHERE user_id = :user_id", theme=theme, user_id=user_id)
+
+
+async def _hand_edit_default_theme(instance: _ThemeInstance, value: str) -> None:
+    """The global default_theme is ``value``: the setting's row written by SQL."""
+    await _theme_write(instance, "UPDATE global_settings SET value = :value WHERE key = :key", value=value, key=_DEFAULT_THEME_KEY)
+
+
+async def _theme_stored(instance: _ThemeInstance, user_id: int) -> dict[str, Any]:
+    """What is committed: the account's user_settings row, every column but its ids, and the global default_theme."""
+    async with instance.engine.connect() as connection:
+        row = (await connection.execute(text("SELECT language, base_currency, theme, avatar_url, created_at, updated_at FROM user_settings WHERE user_id = :user_id"), {"user_id": user_id})).mappings().one()
+        default_theme = (await connection.execute(text("SELECT value FROM global_settings WHERE key = :key"), {"key": _DEFAULT_THEME_KEY})).scalar_one()
+    return {**dict(row), "default_theme": default_theme}
+
+
+async def _theme_request(instance: _ThemeInstance, method: str, path: str, *, cookie: Optional[str] = None, json: Optional[dict[str, Any]] = None) -> httpx.Response:
+    """One request to the private instance from a client of its own: no cookie jar, the session cookie, if any, sent explicitly."""
+    headers = {"Cookie": f"{SESSION_COOKIE_NAME}={cookie}"} if cookie else {}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=instance.app), base_url="http://test", timeout=TIMEOUT) as client:
+        return await client.request(method, f"{API_V1_PREFIX}{path}", json=json, headers=headers)
+
+
+async def _theme_login(instance: _ThemeInstance, account: _ThemeAccount) -> httpx.Response:
+    return await _theme_request(instance, "POST", "/auth/login", json={"username": account.username, "password": _THEME_PASSWORD})
+
+
+def _session_cookie_values(response: httpx.Response) -> list[str]:
+    """The values the answer's ``Set-Cookie`` headers give the session cookie, found by name."""
+    values = []
+    for header in response.headers.get_list("set-cookie"):
+        name, _, value = header.split(";", 1)[0].partition("=")
+        if name.strip() == SESSION_COOKIE_NAME:
+            values.append(value.strip())
+    return values
+
+
+async def _theme_signed_in(instance: _ThemeInstance, account: _ThemeAccount) -> str:
+    """The session cookie of ``account``, signed in through POST /auth/login while its stored theme is a known one. It ends on its promise: a 200, one cookie."""
+    login = await _theme_login(instance, account)
+    cookies = _session_cookie_values(login)
+    assert login.status_code == 200 and len(cookies) == 1 and cookies[0], f"Setup: {account.username} signs in: {login.status_code} {login.text}"
+    return cookies[0]
+
+
+@contextlib.contextmanager
+def _settings_service_log() -> Iterator[list[dict[str, Any]]]:
+    """Every structlog event logged inside the block, each with its logger's name, after a canary of the settings service's logger."""
+    with capture_logs(processors=[structlog.stdlib.add_logger_name]) as events:
+        structlog.get_logger(_SETTINGS_SERVICE_LOGGER).debug(_THEME_LOG_CANARY)
+        yield events
+
+
+def _theme_warnings(events: list[dict[str, Any]], request: str) -> list[dict[str, Any]]:
+    """The WARNING events of the settings service's logger among ``events``.
+
+    Barrier first: the canary reached the capture with that logger's name, or a capture that sees nothing would pass for
+    a request that warns of nothing.
+    """
+    assert any(event.get("event") == _THEME_LOG_CANARY and event.get("logger") == _SETTINGS_SERVICE_LOGGER for event in events), f"barrier ({request}): the events of {_SETTINGS_SERVICE_LOGGER} do not reach capture_logs with their logger's name: {events}"
+    return [event for event in events if event.get("logger") == _SETTINGS_SERVICE_LOGGER and event.get("log_level") == "warning"]
+
+
+def _assert_one_theme_warning(events: list[dict[str, Any]], expected: dict[str, Any], request: str) -> None:
+    """Exactly one WARNING of the settings service's logger among ``events``, carrying ``expected`` (its text is the implementer's)."""
+    warnings = _theme_warnings(events, request)
+    assert len(warnings) == 1, f"{request}: a read of an unknown stored theme must log exactly one WARNING through {_SETTINGS_SERVICE_LOGGER}: {warnings}"
+    carried = {field: warnings[0].get(field) for field in expected}
+    assert carried == expected, f"{request}: the warning must carry {expected}: {warnings[0]}"
+
+
+class TestStoredThemeUnknownToTheApp:
+    """Lot A-11 (release 1.3, workstream A): a stored theme the app does not know is shown as a known one, never fatal.
+
+    The contract:
+
+    1. The known themes are exactly the values of ``UserSettingsRead.theme``'s Literal: light, dark, auto (SET-A11-01).
+    2. A stored theme outside them is shown as the instance's global ``default_theme`` when that is a known theme,
+       otherwise as ``auto``.
+    3. Reading never writes: the stored value stays in the row after the login, ``GET /settings/user`` and a
+       ``PUT /settings/user`` without ``theme`` — a later version that knows it shows it again.
+    4. ``PUT /settings/user`` without ``theme`` answers 200 with the theme shown, saves the rest and keeps the stored
+       theme (SET-A11-04); with ``theme`` it replaces the stored value, stored and shown (SET-A11-05).
+    5. ``POST /auth/login`` answers 200, ``user_settings.theme`` the theme shown, and the session works: ``GET
+       /settings/user`` with its cookie answers 200 (SET-A11-02). ``GET /settings/user`` alone too (SET-A11-03).
+    6. A known stored theme is shown as stored (SET-A11-06).
+    7. Each read of an unknown stored theme logs one structlog WARNING through ``backend.app.services.accounts.settings_service``
+       carrying ``user_id``, ``stored`` — the stored value cut to its first 20 characters — and ``shown`` (SET-A11-07); the
+       read of a known one logs none (SET-A11-05, SET-A11-06). The event's text is the implementer's: only the level, the
+       logger and those three fields are pinned, read through ``capture_logs`` behind a canary of that logger.
+
+    Red until A-11: SET-A11-02, -03, -04 and -07 — today ``UserSettingsRead(theme=<stored>)`` raises a ValidationError
+    on every read of an unknown theme. SET-A11-01, -05 and -06 are guards, green today and after.
+
+    Write-safe: every account and setting lives in the test's own tmp_path (theme_instance); no request reaches the lane.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_known_themes_are_those_of_the_schema(self):
+        """SET-A11-01 — GUARD, green today and after: the themes the app knows are exactly the values of
+        ``UserSettingsRead.theme``'s Literal — light, dark, auto —, and the values these cases hand-edit are none of them."""
+        print_section("SET-A11-01: the known themes are UserSettingsRead.theme's Literal")
+        assert set(_KNOWN_THEMES) == {"light", "dark", "auto"}, f"UserSettingsRead.theme must be Literal['light', 'dark', 'auto']: its values are {_KNOWN_THEMES}"
+        hand_edited = {_UNKNOWN_THEME, _LONG_UNKNOWN_THEME, _UNKNOWN_DEFAULT_THEME}
+        assert not hand_edited & set(_KNOWN_THEMES), f"Premise: {sorted(hand_edited)} must be themes the app does not know: {_KNOWN_THEMES}"
+        assert len(_LONG_UNKNOWN_THEME) > 20, f"Premise: {_LONG_UNKNOWN_THEME!r} must be longer than the column's 20 characters"
+        print_success(f"✓ Known themes {_KNOWN_THEMES}; {sorted(hand_edited)} unknown")
+
+    @pytest.mark.parametrize(("default_theme", "shown"), _SHOWN_FOR_AN_UNKNOWN_THEME)
+    @pytest.mark.asyncio
+    async def test_sign_in_shows_an_unknown_stored_theme_and_writes_nothing(self, theme_instance: _ThemeInstance, default_theme: str, shown: str):
+        """SET-A11-02 — NEW, red until A-11 (today the login raises the ValidationError — a 500 — after setting its cookie:
+        the user cannot sign in at all). An account whose stored theme is unknown signs in: ``POST /auth/login`` answers
+        200, ``user_settings.theme`` = ``shown`` — the global default_theme when the app knows it, otherwise auto —, with
+        one session cookie, and the session works: ``GET /settings/user`` with it answers 200, the same theme shown.
+        Neither wrote anything: the account's user_settings row and the global default_theme are as the hand edit left them."""
+        print_section(f"SET-A11-02: sign-in with the stored theme {_UNKNOWN_THEME!r}, default_theme {default_theme!r}: shown {shown!r}")
+        account = await _theme_account(theme_instance, "light")
+        await _hand_edit_default_theme(theme_instance, default_theme)
+        await _hand_edit_theme(theme_instance, account.user_id, _UNKNOWN_THEME)
+        before = await _theme_stored(theme_instance, account.user_id)
+
+        login = await _theme_login(theme_instance, account)
+
+        assert login.status_code == 200, f"An unknown stored theme must not stop the sign-in: POST /auth/login answered {login.status_code} {login.text}"
+        user_settings = login.json().get("user_settings") or {}
+        assert user_settings.get("theme") == shown, f"The login must show the stored theme {_UNKNOWN_THEME!r} as {shown!r} (default_theme {default_theme!r}): user_settings {user_settings}"
+        cookies = _session_cookie_values(login)
+        assert len(cookies) == 1 and cookies[0], f"The login must set one session cookie: {login.headers.get_list('set-cookie')}"
+        reread = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookies[0])
+        assert reread.status_code == 200 and reread.json().get("theme") == shown, f"The session must work: GET /settings/user with its cookie must answer 200 with the theme {shown!r}: {reread.status_code} {reread.text}"
+        after = await _theme_stored(theme_instance, account.user_id)
+        assert after == before, f"Reading never writes: the row and the default must stay as the hand edit left them: before {before}, after {after}"
+        print_success(f"✓ Signed in, {shown!r} shown; {_UNKNOWN_THEME!r} still stored")
+
+    @pytest.mark.parametrize(("default_theme", "shown"), _SHOWN_FOR_AN_UNKNOWN_THEME)
+    @pytest.mark.asyncio
+    async def test_get_settings_shows_an_unknown_stored_theme_and_writes_nothing(self, theme_instance: _ThemeInstance, default_theme: str, shown: str):
+        """SET-A11-03 — NEW, red until A-11 (today ``GET /settings/user`` raises the ValidationError, a 500). A signed-in
+        account whose stored theme became unknown — a hand edit after its sign-in — reads its settings: 200, the stored
+        language, currency and avatar, the theme shown as ``shown``; the row and the global default_theme unchanged."""
+        print_section(f"SET-A11-03: GET /settings/user with the stored theme {_UNKNOWN_THEME!r}, default_theme {default_theme!r}: shown {shown!r}")
+        account = await _theme_account(theme_instance, "light")
+        cookie = await _theme_signed_in(theme_instance, account)
+        await _hand_edit_default_theme(theme_instance, default_theme)
+        await _hand_edit_theme(theme_instance, account.user_id, _UNKNOWN_THEME)
+        before = await _theme_stored(theme_instance, account.user_id)
+
+        answer = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookie)
+
+        assert answer.status_code == 200, f"An unknown stored theme must not break GET /settings/user: {answer.status_code} {answer.text}"
+        expected = {"language": _THEME_ACCOUNT_LANGUAGE, "base_currency": _THEME_ACCOUNT_CURRENCY, "theme": shown, "avatar_url": None}
+        assert answer.json() == expected, f"The stored settings, the theme {_UNKNOWN_THEME!r} shown as {shown!r}: expected {expected}, got {answer.json()}"
+        after = await _theme_stored(theme_instance, account.user_id)
+        assert after == before, f"Reading never writes: before {before}, after {after}"
+        print_success(f"✓ 200, {shown!r} shown; {_UNKNOWN_THEME!r} still stored")
+
+    @pytest.mark.parametrize(("default_theme", "shown"), _SHOWN_FOR_AN_UNKNOWN_THEME)
+    @pytest.mark.asyncio
+    async def test_put_without_a_theme_saves_the_rest_and_keeps_the_stored_theme(self, theme_instance: _ThemeInstance, default_theme: str, shown: str):
+        """SET-A11-04 — NEW, red until A-11 (today ``PUT /settings/user`` raises the ValidationError, a 500, after
+        committing the change). A signed-in account whose stored theme is unknown saves ``{"language": "it"}``: 200, the
+        language saved and answered, the theme shown as ``shown``; the stored theme stays, and nothing else of the row
+        or of the global default_theme changes (``updated_at`` aside: the row was written)."""
+        print_section(f"SET-A11-04: PUT /settings/user without theme, stored {_UNKNOWN_THEME!r}, default_theme {default_theme!r}: shown {shown!r}")
+        account = await _theme_account(theme_instance, "light")
+        cookie = await _theme_signed_in(theme_instance, account)
+        await _hand_edit_default_theme(theme_instance, default_theme)
+        await _hand_edit_theme(theme_instance, account.user_id, _UNKNOWN_THEME)
+        before = await _theme_stored(theme_instance, account.user_id)
+
+        answer = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"language": "it"})
+
+        after = await _theme_stored(theme_instance, account.user_id)
+        assert answer.status_code == 200, f"An unknown stored theme must not break PUT /settings/user: {answer.status_code} {answer.text}; the row afterwards {after}"
+        expected = {"language": "it", "base_currency": _THEME_ACCOUNT_CURRENCY, "theme": shown, "avatar_url": None}
+        assert answer.json() == expected, f"The language saved, the theme {_UNKNOWN_THEME!r} shown as {shown!r}: expected {expected}, got {answer.json()}"
+        assert (after["language"], after["theme"]) == ("it", _UNKNOWN_THEME), f"The language must be saved and the stored theme kept: {after}"
+        untouched = ("base_currency", "avatar_url", "created_at", "default_theme")
+        assert {key: after[key] for key in untouched} == {key: before[key] for key in untouched}, f"Nothing else may change: before {before}, after {after}"
+        print_success(f"✓ 200, language saved, {shown!r} shown; {_UNKNOWN_THEME!r} still stored")
+
+    @pytest.mark.asyncio
+    async def test_put_with_a_theme_replaces_an_unknown_stored_one(self, theme_instance: _ThemeInstance):
+        """SET-A11-05 — GUARD, green today and after: a signed-in account whose stored theme is unknown saves
+        ``{"theme": "dark"}``: 200, dark shown and stored, and the next ``GET /settings/user`` shows dark; neither
+        request logs a warning of the settings service, the theme read being a known one. The global default_theme is
+        auto, so the dark shown is the one stored, not the default."""
+        print_section(f"SET-A11-05: PUT /settings/user with theme dark over the stored {_UNKNOWN_THEME!r}")
+        account = await _theme_account(theme_instance, "light")
+        cookie = await _theme_signed_in(theme_instance, account)
+        await _hand_edit_default_theme(theme_instance, "auto")
+        await _hand_edit_theme(theme_instance, account.user_id, _UNKNOWN_THEME)
+
+        with _settings_service_log() as put_events:
+            answer = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookie, json={"theme": "dark"})
+        with _settings_service_log() as read_events:
+            reread = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookie)
+
+        stored = await _theme_stored(theme_instance, account.user_id)
+        assert answer.status_code == 200 and answer.json().get("theme") == "dark", f"PUT with theme dark must answer 200 with dark: {answer.status_code} {answer.text}"
+        assert stored["theme"] == "dark", f"The theme sent must replace the stored {_UNKNOWN_THEME!r}: {stored}"
+        assert reread.status_code == 200 and reread.json().get("theme") == "dark", f"The next read must show dark: {reread.status_code} {reread.text}"
+        assert _theme_warnings(put_events, "PUT /settings/user with theme") == [], "The PUT reads the theme it stored, a known one: no warning"
+        assert _theme_warnings(read_events, "GET /settings/user") == [], "A known stored theme is read without a warning"
+        print_success("✓ dark stored and shown, no warning")
+
+    @pytest.mark.parametrize(("stored", "default_theme"), _KNOWN_STORED_THEMES)
+    @pytest.mark.asyncio
+    async def test_a_known_stored_theme_is_shown_as_stored(self, theme_instance: _ThemeInstance, stored: str, default_theme: str):
+        """SET-A11-06 — GUARD, green today and after: an account whose stored theme is a known one, the global default
+        another known one. The login, ``GET /settings/user`` and ``PUT /settings/user`` without theme each answer 200
+        with ``stored`` — never the default —, none logs a warning of the settings service, and the row keeps ``stored``."""
+        print_section(f"SET-A11-06: the stored theme {stored!r} is shown as stored (default_theme {default_theme!r})")
+        account = await _theme_account(theme_instance, stored)
+        await _hand_edit_default_theme(theme_instance, default_theme)
+
+        with _settings_service_log() as login_events:
+            login = await _theme_login(theme_instance, account)
+        assert login.status_code == 200, f"Setup: {account.username} signs in: {login.status_code} {login.text}"
+        cookies = _session_cookie_values(login)
+        assert len(cookies) == 1 and cookies[0], f"The login must set one session cookie: {login.headers.get_list('set-cookie')}"
+        with _settings_service_log() as read_events:
+            reread = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookies[0])
+        with _settings_service_log() as put_events:
+            saved = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookies[0], json={"language": "it"})
+
+        shown = {
+            "POST /auth/login": (login.status_code, (login.json().get("user_settings") or {}).get("theme")),
+            "GET /settings/user": (reread.status_code, reread.json().get("theme")),
+            "PUT /settings/user without theme": (saved.status_code, saved.json().get("theme")),
+        }
+        assert shown == dict.fromkeys(shown, (200, stored)), f"A known stored theme is shown as stored, {stored!r}, never as the default {default_theme!r}: {shown}"
+        for request, events in (("POST /auth/login", login_events), ("GET /settings/user", read_events), ("PUT /settings/user without theme", put_events)):
+            assert _theme_warnings(events, request) == [], f"{request}: a known stored theme is read without a warning"
+        assert (await _theme_stored(theme_instance, account.user_id))["theme"] == stored, f"The stored theme must stay {stored!r}"
+        print_success(f"✓ {stored!r} shown three times, no warning")
+
+    @pytest.mark.asyncio
+    async def test_each_read_of_an_unknown_stored_theme_logs_one_warning(self, theme_instance: _ThemeInstance):
+        """SET-A11-07 — NEW, red until A-11 (today the first read raises the ValidationError, a 500, and nothing warns).
+        A stored theme longer than the column's 20 characters, which SQLite does not enforce; default_theme dark. The
+        login, ``GET /settings/user`` and ``PUT /settings/user`` without theme each log exactly one WARNING through
+        ``backend.app.services.accounts.settings_service``, carrying the account's ``user_id``, ``stored`` = the stored
+        value's first 20 characters, and ``shown`` = dark."""
+        print_section(f"SET-A11-07: one warning per read of the stored theme {_LONG_UNKNOWN_THEME!r}")
+        account = await _theme_account(theme_instance, "light")
+        await _hand_edit_default_theme(theme_instance, "dark")
+        await _hand_edit_theme(theme_instance, account.user_id, _LONG_UNKNOWN_THEME)
+        expected = {"user_id": account.user_id, "stored": _LONG_UNKNOWN_THEME[:20], "shown": "dark"}
+
+        with _settings_service_log() as login_events:
+            login = await _theme_login(theme_instance, account)
+        assert login.status_code == 200, f"An unknown stored theme must not stop the sign-in: {login.status_code} {login.text}"
+        _assert_one_theme_warning(login_events, expected, "POST /auth/login")
+        cookies = _session_cookie_values(login)
+        assert len(cookies) == 1 and cookies[0], f"The login must set one session cookie: {login.headers.get_list('set-cookie')}"
+
+        with _settings_service_log() as read_events:
+            reread = await _theme_request(theme_instance, "GET", "/settings/user", cookie=cookies[0])
+        assert reread.status_code == 200, f"GET /settings/user must answer 200: {reread.status_code} {reread.text}"
+        _assert_one_theme_warning(read_events, expected, "GET /settings/user")
+
+        with _settings_service_log() as put_events:
+            saved = await _theme_request(theme_instance, "PUT", "/settings/user", cookie=cookies[0], json={"language": "it"})
+        assert saved.status_code == 200, f"PUT /settings/user without theme must answer 200: {saved.status_code} {saved.text}"
+        _assert_one_theme_warning(put_events, expected, "PUT /settings/user without theme")
+        print_success(f"✓ Three reads, three warnings carrying {expected}")
