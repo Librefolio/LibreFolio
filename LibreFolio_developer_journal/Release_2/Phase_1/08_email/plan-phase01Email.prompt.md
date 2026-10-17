@@ -6688,14 +6688,97 @@ non sposti il registro.
 >   Frontend: banner e selettore, i18n nelle 4 lingue. Test: services, api, Vitest.
 > - **La correzione** (A o C) e quella degli asset: un lotto medio.
 
-#### E-19b1.3 — `staging.py` sopra B-43 ⏳
-> - `_report(..., non_iso_currencies=False)`, il codice dopo tutti gli altri;
-> - in `_stage`, dopo i totali, sulla copia aggiornata: una connessione propria di staging (`mode=ro`,
->   `trusted_schema=OFF` per primo, così il registratore di B-37 la vede), `find_stored_currency_findings`; un
->   `sqlite3.Error` → avviso nel log (id dello stage e classe dell'errore), nessun codice, il controllo va avanti;
-> - la docstring a :158-162;
-> - poi `api sync` (dev porta altre modifiche all'OpenAPI), RNW, services `backup-staging`, `restoreText` e la parità
->   del client; poi il checkpoint E-19b1 e b2 (Z-32 (c) è in dev).
+#### E-19b1.3 — `staging.py` sopra B-43 ✅ (2026-10-17, 18:4x–19:5x; HEAD `3464da946`)
+> Il coordinatore ha fatto il commit della parte 1 (`6e539da02`) e il merge di dev `5726486bc`: HEAD `3464da946`, con
+> B-43, Z-32 (c), CP-10d e il resto.
+>
+> **Il codice** (`staging.py`):
+> - il `try` di B-43 si chiude ora dopo `_administrators(database)`, l'ultima lettura della copia che decide un rifiuto;
+> - dopo i suoi `except`: `non_iso_currencies = _holds_non_iso_currencies(database, stage_id)`, poi
+>   `report = _report(..., non_iso_currencies=...)` e `_write_report`. `_report` è puro (nessun SQLite): spostarlo fuori
+>   dal `try` non cambia nulla per B-43, e l'ordine degli avvisi resta in un posto solo, dove lo fissano i 17 casi puri
+>   di RNW;
+> - `_holds_non_iso_currencies`: una connessione aperta da staging come `_administrators` (`mode=ro`,
+>   `trusted_schema=OFF` per primo, così la vede il registratore di B-37), poi `find_stored_currency_findings(conn)`;
+> - le docstring: il modulo (passo 7), `StagingReport` (il codice) e `stage_archive` (l'unica lettura che non rifiuta).
+>
+> **Le prove finora** (corsia 6188):
+> - `api sync` (e19b13): il client rigenerato ha l'operazione e il codice;
+> - services `restore-non-iso-warning` **39 verdi**: i 25 rossi sono diventati verdi;
+> - services `backup-staging` **181**, `backup-apply` 255, `backup-leftovers` 44, `backup-secure` 77;
+> - utils `backup-cli` 102, `backup-cli-restore` 109, `backup-cli-secure` 106;
+> - api `backup-restore-apply` 215, `backup-secure` 24;
+> - api `backup-restore`: **1 rosso**, sotto.
+>
+> **⚠️ Fuori pista — un ottavo posto, mancato nella parte 1.** `test_backup_restore.py::test_openapi_documents_the_totals_of_the_report`
+> confronta il suo `STAGE_WARNINGS` con l'enum dell'OpenAPI, quindi è rosso sul mio ramo da `6e539da02` (dev non
+> c'entra). I sette posti di B non lo nominavano, e nella parte 1 non avevo fatto girare le suite api del router del
+> backup.
+> - **La lezione**: un `Literal` nuovo in uno schema dell'API vuol dire far girare le suite api del suo router, e cercare
+>   ogni file che nomina i codici vicini (`grep -rln control_totals_unreadable`), non solo i posti elencati.
+> - La riparazione va al `test-author`, insieme ai rossi di B.
+> - Anche `backup-roundtrip` lanciato nella categoria sbagliata (è `e2e`, non `api`): da rifare.
+>
+> **Le tre condizioni di B** (via coordinatore, 18:5x):
+> 1. **La lettura dopo gli `except` di B-43, prima di `_write_report`**: rispettata. La forma è diversa da
+>    `report = <passo>(database, report, stage_id)`: io calcolo il segnale e poi costruisco il rapporto. Spiegato nel
+>    checkpoint; se B vuole la forma alla lettera, sono cinque righe.
+> 2. **La connessione aperta in staging**, come `_administrators`: già così.
+> 3. **«Mai un blocco» vuole più di `sqlite3.Error`.** Un BLOB in una delle 14 colonne arriva a `_as_text`, e
+>    `json.dumps(bytes)` alza `TypeError`: il controllo finisce (`stage_failed`), l'audit d'avvio perde tutti i reperti,
+>    `db currencies` va in traceback. La cura:
+>    - `_as_text`: un `bytes` diventa la forma di `quote()` di SQLite, `X'455552'`: mai canonico, quindi sempre un
+>      reperto, senza suggerimento;
+>    - il log d'errore dell'audit d'avvio: classe e `sqlite_errorname`, mai `str(error)`. Un UTF-8 non valido alza un
+>      `OperationalError` che porta il testo salvato;
+>    - la guardia di staging prende ogni `Exception`, come `ledger_totals_of` (B-29: «never raises»).
+>
+>    Rossi al `test-author` (in corso): BLOB nell'audit, nel log e nella CLI; RNW-108 (archivio con un BLOB: completo,
+>    ripristinabile, avvisato); RNW-109 (UTF-8 non valido: completo, senza avviso, log pulito); RNW-107 esteso a
+>    `TypeError` e `ValueError`.
+>
+> **I rossi delle condizioni** (`test-author` `4e61aa48`, 19:0x–19:3x):
+> - `test_stored_currency_audit.py`: **5 rossi nuovi, 24 verdi**.
+>   - SCA-015: i BLOB `X'455552'` ×2 e `X'00FF'` ×1, senza suggerimento, accanto ai reperti `978`;
+>   - SCA-035: l'avvio restituisce quei reperti;
+>   - SCA-036: un UTF-8 non valido dà None e un avviso con `OperationalError`, nessun testo salvato nel log;
+>   - SCA-044 e 045: `main` in processo e `python -m` escono con 1, senza traceback.
+> - RNW: **3 rossi nuovi, 43 verdi**.
+>   - RNW-107 diventa parametrico su `OperationalError`, `TypeError` e `ValueError`;
+>   - RNW-108: un BLOB nella copia, il controllo completo e avvisato;
+>   - RNW-109, verde come guardia: l'UTF-8 non valido in quattro posti; nessuno finisce in `database_damaged`.
+> - La riparazione: `STAGE_WARNINGS` di `test_backup_restore.py` riceve `non_iso_currencies`; `test_backup_roundtrip.py`
+>   non ne ha bisogno (usa un sottoinsieme).
+> - Il `test-author` ha provato la cura in memoria: 74 su 75; l'unico rosso è SCA-045, che gira in un processo figlio.
+>   Ha anche sistemato un suo aiuto: `mode=ro` lasciava `-wal`/`-shm`.
+>
+> **La cura** (applicata):
+> - `stored_currencies._as_text`: un `bytes` diventa `X'…'` (maiuscolo, la forma di `quote()` di SQLite);
+> - il log d'errore di `log_stored_currency_audit`: `error=type(error).__name__` e `sqlite_error`, mai il testo;
+> - `staging._holds_non_iso_currencies`: prende ogni `Exception`, come `ledger_totals_of` (B-29);
+> - le docstring; e `admin/cli_tools.en.md` riceve una riga sul `X'…'` di `db currencies`.
+>
+> **I dubbi 1 e 2 del `test-author`, rinviati a E-20** (backlog). Un testo non UTF-8 fa cadere l'audit intero, e il
+> ramo «no such table» confronta un messaggio che può citare i dati. La cura (leggere `typeof` e `hex`) cambia ciò che
+> fissano SCA-036 e RNW-109: è un lotto suo, non una condizione di B. Il caso più ampio (dati non UTF-8 in un backup)
+> è di B, ed è segnalato al coordinatore. Il dubbio 3 (la CLI stampa il testo dell'errore sul terminale dell'admin) è
+> accettabile: la CLI esiste per mostrare i valori salvati.
+>
+> **Le prove dopo la cura** (corsia 6188, carico sotto 50; il carico era salito a 132 per un'altra corsia, e il cancello
+> ha atteso):
+> - runner `e19b13c`: services `stored-currencies` **29**, `restore-non-iso-warning` **46**, `backup-staging`
+>   **181**; api `backup-restore` **161** (riparato); e2e `backup-roundtrip` **3**; porta libera;
+> - prima della cura, sullo stesso `staging.py` (solo l'`except` è cambiato poi), `e19b13b`: `backup-apply` 255,
+>   `backup-leftovers` 44, `backup-secure` 77, utils `backup-cli` 102, `backup-cli-restore` 109, `backup-cli-secure`
+>   106, api `backup-restore-apply` 215, `backup-secure` 24;
+> - Vitest sul tree unito: `restoreI18n`, RTN, `RestoreReportModal`, CNI, `CurrencySearchSelect`, CSS: **6 file,
+>   212 verdi** (la parità del client generato compresa);
+> - statici `e19b1_static.sh s3`: ruff e black puliti (16 file), `i18n check`, `theme-roles --check`, 6 porte (165),
+>   svelte-check 0 errori, `mkdocs build` stretto con 0 avvisi, `check-links` 97, `git diff --check` pulito;
+> - OpenAPI contro HEAD (`oas_delta.sh`): **nessuna differenza** oltre la versione. Questo passo non tocca l'API.
+>
+> **A-51**: la revisione (sola lettura) l'ho fatta mentre il `test-author` scriveva. Esito OK, con tre note informative,
+> mandate al coordinatore.
 
 #### E-19b1.2 — Il codice, senza `staging.py` ✅ (2026-10-17, 17:3x–18:4x; HEAD `f2cd04e9a`)
 > **Il backend**:
