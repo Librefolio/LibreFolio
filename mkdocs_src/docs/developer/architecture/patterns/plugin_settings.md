@@ -639,6 +639,14 @@ does not set the flag (every real provider, every plugin of the other families) 
 `./dev.py test services test-only-providers` covers the registries, the family runtimes and the
 validation of an assignment and of a probe, in both modes.
 
+**Asset and FX plugins only (X-R44c).** Only their bases inherit `PluginSettingsMixin`, and their
+registries serve plugins only through the lookups and lists above. Elsewhere, methods that never ask
+`_withheld()` would still serve a flagged plugin in production: signal and risk `list_definitions()`,
+BRIM's `auto_detect_plugin()`, `get_compatible_plugins()` and `list_plugin_info()`, the tool snapshot
+(`get_snapshot()`, `get_definition()`, `get_plugin_instance()`). A guard in the same suite reads every
+`services/*/registry.py` in test mode, a new family too, and fails on such a plugin, naming registry,
+code, class and methods: make them ask `_withheld()`, then add the registry to `TEST_ONLY_FAMILIES`.
+
 ---
 
 ## 🔎 Shipped Plugins with Settings {: #shipped-plugins }

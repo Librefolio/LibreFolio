@@ -6237,3 +6237,47 @@ Segnalato dal coordinatore: `tsc -p tsconfig.e2e.json` rosso sul mio `c18517e31`
 - `tsc` dopo: i tre TS2769 spariti. Restano due errori non miei: `e2e/onboarding-tour.spec.ts:863` TS2322 (`580bd504f`,
   onboarding) e `src/lib/types/files.ts:9` TS2307 `$lib/api/generated` (`ff38088b9`, Files; `tsconfig.e2e.json` non
   mappa `$lib`). Prettier pulito. Nessun E2E rilanciato: cambia solo il tipo, la regola è la stessa.
+
+### X-R44c ✅ — solo asset e cambi possono dichiarare `test_only` (12:45–13:10)
+
+Ordine del coordinatore (17/10): TS2769 → X-R44c → X-R60.
+- **Analisi** (sola lettura, HEAD `9e8f6e8dc`): il filtro di X-R44 è nella base, `AbstractPluginRegistry._withheld()`, e
+  copre `get_plugin`, `get_plugin_instance`, `list_plugin_codes` e `list_providers`. Ma altre famiglie hanno porte che
+  leggono l'archivio direttamente: `SignalPluginRegistry.list_definitions()` e `RiskAnalyticRegistry.list_definitions()`
+  (`cls._plugins.items()`), `BRIMProviderRegistry.auto_detect_plugin`/`get_compatible_plugins`/`list_plugin_info`
+  (`cls._providers.items()`), e l'istantanea di `ToolPluginRegistry` (`get_snapshot`, `get_definition`). Un
+  `test_only = True` lì sarebbe servito in produzione. Oggi lo dichiarano solo `mockprov`, `MOCKFX` e `MOCKFX_FAIL`.
+- **Scelta**: una guardia, non la copertura delle altre porte (fuori dal perimetro chiesto). Il test sta nella suite di
+  X-R44 (`test_test_only_providers.py`, PURE): nessuna azione nuova nel runner, solo la sua descrizione.
+- Test affidati a un test-author (12:47): la regola su ogni registro di prima parte (trovati risalendo le sottoclassi,
+  almeno i sei noti) e la prova che il controllo sa fallire (un registro sonda con una classe segnata).
+  > **⚠️ Fuori pista (12:52)** — il test-author corregge il mio brief: `PluginSettingsMixin` (che dichiara `test_only`) è
+  > ereditato solo dalle basi asset e FX, non da tutte. Su BRIM, segnali, rischio e tools il flag non è dichiarato, ma
+  > un attributo di classe sarebbe comunque letto da `_withheld()` (`getattr(..., False)`): è proprio il caso che la
+  > guardia ferma. Trovata anche `shutdown_all_providers()` (asset, FX, BRIM), che scorre `_providers`: solo allo
+  > spegnimento, non serve nulla a un utente (la nota di E su X-R44).
+- **Test** (12:52): `test_guard_only_asset_and_fx_plugins_are_flagged_test_only` (i registri dai `services/*/registry.py`
+  e dalle sottoclassi, barriere: i sei noti, ognuno serve almeno una classe, i tre doppi trovati segnati) e
+  `test_guard_the_test_only_rule_reports_a_flagged_class_outside_the_asset_and_fx_registries` (il registro sonda del
+  file). **`services test-only-providers` 31 passed** (29 + 2).
+- **Mutazione** (12:54): `test_only = True` messo per un attimo su `AdxSignalPlugin` → **2 failed, 29 passed**, il
+  messaggio nomina `SignalPluginRegistry`, `ADX`, la classe e le porte; il file ripristinato identico (`git diff --quiet`).
+- **Runner**: la descrizione di `services test-only-providers` cita X-R44c (black e ruff puliti). Nessuna riga nel
+  CHANGELOG: niente di visibile all'utente. Documentazione (docs-writer, 12:57): `plugin_settings.md` («Test-Only
+  Plugins») e `registry_pattern.md`.
+  `mkdocs build` strict pulito, `check-links` 97 validi; pagine solo inglesi, nessun debito di traduzione. Il
+  docs-writer nomina anche il `get_plugin_instance()` proprio di `ToolPluginRegistry`, che legge l'istantanea.
+- ✅ **X-R44c chiuso il 17/10 (13:10)**, in attesa del commit del coordinatore.
+
+### X-R60 ⏳ — le colonne Δ: tre note di Y su X-R53 (preparato; rossi dalle 12:50)
+
+- **Disegno** (da `files/drafts/xr60/design.md`): un registro puro `PeriodChangesLedger<K>` in `periodChanges.ts` (ticket
+  `{id, asOf, full}`, `begin`/`end`/`busy`/`settle`/`fail`), usato da entrambe le liste. La richiesta di una sola coppia
+  delle liste FX diventa un ticket: la pagina resta occupata e una risposta piena più vecchia non la sovrascrive (nota 1).
+  Il nuovo tentativo dei segnali, il salvataggio delle impostazioni e l'inversione chiedono solo le serie (nota 2). Un
+  fallimento pieno tiene le Δ dello stesso `dateEnd` (nota 3).
+- **Codice pronto**: `xr60_code.py`, 16 sostituzioni in 3 file. A secco pulito su `9e8f6e8dc`, prettier pulito; 17
+  scenari scratch del registro coerenti col disegno. Le righe di Z-27 (`assets/+page.svelte` ~742-760,
+  `fxStoreRegistry.ts`) non sono toccate.
+- **Rossi** affidati a un test-author (12:50): unità del registro in `periodChanges.test.ts`; E2E nelle due liste,
+  accanto ai describe di X-R53 (la corsa FX, l'indicatore, nessuna richiesta inutile, un errore che tiene le Δ).
