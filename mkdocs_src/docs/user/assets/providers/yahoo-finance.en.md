@@ -34,6 +34,10 @@ Amsterdam.
   the ticker.
 - Yahoo may throttle frequent requests: LibreFolio then pauses it for a while and keeps showing the
   last saved prices. Some tickers have missing days.
+- Yahoo quotes many London shares in pence (GBp). The Dashboard's
+  [Data Quality Banner](../../dashboard/index.md#data-quality-banner) names each one you hold: set
+  its **Units per single price** to 100. Do not change a London share the banner does not name:
+  some are quoted in pounds.
 
 ## 🔗 Related
 

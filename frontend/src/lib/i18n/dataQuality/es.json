@@ -39,6 +39,7 @@
     "valuedAtCost": "{count} activo(s) valorado(s) al coste — sin precio disponible desde hace más de 2 semanas (a fecha {as_of_date})",
     "transferShareMismatch": "{count} transferencia(s) entre brókers en los que tu participación es distinta — la diferencia cuenta como ganancia o pérdida",
     "invalidSplitRatio": "{count} activo(s) con un desdoblamiento de proporción no válida — ignorado hasta que lo corrijas en los eventos del activo",
-    "transactionsBeforeFloor": "{count} transacción(es) con fecha anterior a 1900 (la más antigua el {earliest}) — el historial empieza el 1 de enero de 1900: corrige sus fechas"
+    "transactionsBeforeFloor": "{count} transacción(es) con fecha anterior a 1900 (la más antigua el {earliest}) — el historial empieza el 1 de enero de 1900: corrige sus fechas",
+    "quoteInMinorUnit": "{count} activo(s) cotizado(s) en peniques (GBp) por su proveedor y valorado(s) en libras — establece «Unidades por precio unitario» en 100 en cada uno"
   }
 }

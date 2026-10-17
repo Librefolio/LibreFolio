@@ -28,6 +28,7 @@ import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {maskableQuantity, PRIVACY_PLACEHOLDER, shouldMaskAmount} from '$lib/utils/privacy/maskable';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {LOT_QUANTITY_FRACTION_DIGITS} from './lotChartShared';
 
 /** Every state a FIFO lot can carry. */
 export type LotState = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED' | 'DISTRIBUTED' | 'IN_TRANSIT' | 'DEGRADED';
@@ -61,12 +62,14 @@ export function filterStates(stateList: readonly string[]): LotState[] {
 }
 
 /**
- * Format a quantity with up to six fraction digits, or an em dash when absent.
+ * Format a quantity with up to ten fraction digits, the ten a quantity keeps (C-97a, C-97c), or an em dash when absent.
+ * Through Intl on the number, so a 10-satoshi lot reads `0.0000001`, never `1e-7`: every lot view writes its
+ * quantities here (the table, the WAC chart, the custody modal).
  * `locale` is exposed for deterministic tests; it defaults to the interface locale
  * (`uiLocale()`, M-18), so the table, which passes none, follows the interface.
  */
 export function formatLotQuantity(value: number | null, locale: string = uiLocale()): string {
-    return value == null ? '—' : value.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6});
+    return value == null ? '—' : value.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: LOT_QUANTITY_FRACTION_DIGITS});
 }
 
 /**

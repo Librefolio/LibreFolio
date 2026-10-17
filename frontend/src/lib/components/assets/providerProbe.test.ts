@@ -9,9 +9,9 @@
  * The currency store is mocked so `formatCurrencyForTooltip` is deterministic and
  * every flag/symbol branch is reachable without loading real currency metadata.
  *
- * The tooltip's days and its history header are the last describe's (T-ISO): the
+ * The tooltip's days and its history header are the T-ISO describe's: the
  * structural cases above it compare a day with its notation set aside (`sansDay`,
- * ISO or the house notation), so they hold before and after that cure. The last
+ * ISO or the house notation), so they hold before and after that cure. The T-ISO
  * describe boots svelte-i18n to word the caller's labels from the catalogue, and
  * switches the interface language as the selector does (`currentLanguage`).
  *
@@ -20,8 +20,19 @@
  * on a failure and on the success fall-through, while the tables keep their markup
  * (security review of CP10–CP11). The escaped oracles are written by hand, never
  * computed with `escapeHtml`.
+ *
+ * C-97c-3 (the last describe): the table's prices keep their significant digits. Its
+ * digits are typed, under an English UI on an en-US browser: Node's `navigator.language`
+ * follows the host's ICU locale, so the browser is pinned to en-US before any import, as
+ * the chart helpers' tests pin it (the interface locale takes its region from it, M-18).
  */
-import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+
+// The browser, pinned before any import: the interface locale takes its region from it.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
 import {get} from 'svelte/store';
 import {waitLocale} from 'svelte-i18n';
 
@@ -72,6 +83,10 @@ function rowsOf(html: string): string[][] {
 }
 
 beforeEach(() => vi.clearAllMocks());
+
+afterAll(() => {
+    vi.unstubAllGlobals();
+});
 
 describe('providerProbe — isSoftProbeFailure', () => {
     it('treats each SOFT_FAIL_CODE (case-insensitive) as a soft failure', () => {
@@ -397,5 +412,75 @@ describe('providerProbe — buildProbeTooltipHtml: its days and its price column
         const rows = rowsOf(buildProbeTooltipHtml({success: true, priceValue: 1, priceCurrency: 'USD'}, callerLabels()));
 
         expect(rows[1]?.[0], 'the missing day is no longer the em dash').toBe('—');
+    });
+});
+
+/**
+ * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits.
+ *
+ * The probe's hover table writes the current price and each history sample's close with two fixed decimals,
+ * `formatFixed(Number(…), 2)`: a provider quoting an asset at 0.0000034573 USD shows `0.00`, one at 1.234 shows
+ * `1.23`. The contract: `formatPrice(Number(…))` — two decimals at least, as many as the first four significant
+ * digits need (`priceFractionDigits`, formatFixed.ts).
+ *
+ * Reds: a current price of 0.0000034573 (today `0.00`) and of 1.234 (today `1.23`); a history whose closes are
+ * 0.0000034573 and 0.0000035 (today `0.00` both). Guards, green today and after: 12.5 → `12.50`, 123.45, a close of 11
+ * → `11.00`. Each figure is read in its cell (`rowsOf`) and matched as a whole number token, never as the cell — which
+ * also holds the currency. English UI on the en-US browser this file pins, checked before each case: the digits are
+ * typed.
+ */
+describe('providerProbe — buildProbeTooltipHtml: a price keeps its significant digits (C-97c-3, D-C97c-1)', () => {
+    /** The labels a caller passes: what they say is not under test here. */
+    const labels: CallerLabels = {date: 'Date', currentPrice: 'Current Price', close: 'Close'};
+
+    /** `digits` as a whole number in a text: no digit, decimal mark, group separator or sign glued to either side. */
+    function numberToken(digits: string): RegExp {
+        return new RegExp(`(?<![\\d.,+\\-\\u2212])${digits.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![.,]?\\d)`);
+    }
+
+    /** The current price's cell: the second cell of the table's second row. */
+    function currentPriceCell(priceValue: number): string {
+        const rows = rowsOf(buildProbeTooltipHtml({success: true, priceValue, priceCurrency: 'USD', priceDate: '2024-01-02'}, labels));
+        expect(
+            rows.map((cells) => cells.length),
+            'barrier: a header row and one price row, two cells each',
+        ).toEqual([2, 2]);
+        return rows[1][1];
+    }
+
+    /** The close cell of each sample, in the order given. */
+    function closeCells(closes: number[]): string[] {
+        const rows = rowsOf(buildProbeTooltipHtml({success: true, priceCurrency: 'EUR', samplePrices: closes.map((close, index) => ({date: `2024-01-0${index + 1}`, close}))}, labels));
+        expect(
+            rows.map((cells) => cells.length),
+            'barrier: a header row and a row per sample, two cells each',
+        ).toEqual([2, ...closes.map(() => 2)]);
+        return rows.slice(1).map(([, close]) => close);
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the table is written en-US, checked.
+        expect(uiLocale(), 'control: an English UI on the en-US browser this file pins is written en-US').toBe('en-US');
+    });
+
+    it('a current price of 0.0000034573 USD reads 0.000003457, not 0.00', () => {
+        expect(currentPriceCell(0.0000034573), 'the current price (today 0.00)').toMatch(numberToken('0.000003457'));
+    });
+
+    it('a current price of 1.234 USD reads 1.234 — four significant digits — not 1.23', () => {
+        expect(currentPriceCell(1.234), 'the current price (today 1.23)').toMatch(numberToken('1.234'));
+    });
+
+    it('a history sample’s close of 0.0000034573 reads 0.000003457, and one of 0.0000035 reads 0.0000035, not 0.00', () => {
+        const [first, second] = closeCells([0.0000034573, 0.0000035]);
+
+        expect.soft(first, 'the first close (today 0.00)').toMatch(numberToken('0.000003457'));
+        expect.soft(second, 'the second close (today 0.00)').toMatch(numberToken('0.0000035'));
+    });
+
+    it('guard: 12.5 still reads 12.50 and 123.45 123.45 in the current price, a close of 11 still 11.00', () => {
+        expect.soft(currentPriceCell(12.5), 'the current price 12.5').toMatch(numberToken('12.50'));
+        expect.soft(currentPriceCell(123.45), 'the current price 123.45').toMatch(numberToken('123.45'));
+        expect.soft(closeCells([11])[0], 'the close 11').toMatch(numberToken('11.00'));
     });
 });

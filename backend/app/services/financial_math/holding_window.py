@@ -98,3 +98,9 @@ def closed_position_window(moves: Sequence[QuantityMove], dust: Decimal = QUANTI
         if move.quantity < 0 and previous > dust and running <= dust:
             last_close = move.date
     return open_date, last_close
+
+
+def exits_in(moves: Sequence[QuantityMove], date_from: date_type | None, end: date_type) -> int:
+    """How many times units left the position in ``(date_from, end]``: its outgoing quantity moves, a split's aside
+    (MF-A5: a closed position's base must cover every one of them)."""
+    return sum(1 for move in moves if move.quantity < 0 and not move.split and (date_from is None or move.date > date_from) and move.date <= end)
