@@ -2253,6 +2253,18 @@ No gate sees a raw `innerHTML` assignment that involves no template: do not writ
 creates an asset whose name and icon URL carry markup, through the API, and checks in a real
 browser that the table and card views of `/assets` show it as text and run nothing.
 
+A file opened in a spreadsheet is an output too. The CSV series exports of `/api/v1/backup`
+(`GET /backup/asset/{asset_id}/prices` and `…/events`, `GET /backup/fx/{base}/{quote}/rates`),
+written by `series_export.stream_rows_as_csv`, put one more leading apostrophe (`'`) in front of a
+text cell that starts, after any apostrophes, with `=`, `+`, `-`, `@`, a tab or a carriage return,
+so that Excel, LibreOffice or Google Sheets show it as text and never run it as a formula (OWASP
+«CSV injection», lot B-39). A plain number (`-1.5`, `+2`, `-1E+2`) is never touched, and the JSON
+exports are unchanged. Counting the apostrophes already there keeps the round trip exact: the
+events import drops exactly one from `notes` (`unescapeFormulaText`,
+[Data Editor](../frontend/components/core-ui/data-editor.md)), so a note `=SUM(A1)` exports as
+`'=SUM(A1)` and imports back as `=SUM(A1)`. Tests:
+`backend/test_scripts/test_services/test_series_export_csv.py`.
+
 !!! warning "Fixed in 1.2: a stored XSS present since v1.1.0"
 
     In v1.1.0 the Name column of the Assets table interpolated the asset name raw into an
