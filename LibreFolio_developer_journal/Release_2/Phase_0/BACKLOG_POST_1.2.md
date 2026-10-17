@@ -5080,6 +5080,15 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     known price, a carried quote or a trade price»; «no price on or before the opening day — the relative return uses
     the lot's own price, when it has one»), e il prezzo convertito con la sua valuta; quattro lingue.
   - Dettagli: piano J, §10 «CP-7b — codice».
+- **J-38 · La guida dei plugin dei segnali descrive male l'ordine del taglio e il piano** — minimo, documentazione; J,
+  17/10 (docs-writer di CP-10c). Pagina `developer/architecture/patterns/signal_plugin_guide.md`, solo inglese.
+  - Il diagramma di sequenza del grafico disegna «Slice to visible range and assign status» dopo le annotazioni. Nel
+    codice, prima e dopo CP-10c, taglio e stato avvengono per ogni calcolo dentro `execute_planned_signal`; le
+    annotazioni si attaccano dopo, sulle serie intere tenute da parte. Il testo «3. Annotations» («before output is
+    sliced») è impreciso allo stesso modo.
+  - La sezione del piano non dice che un lotto incoerente solleva `SignalRequestValidationError` e ferma tutto il lotto,
+    a differenza dei fallimenti preliminari, che restano per istanza.
+  - Preesistenti, non legati al taglio. Dettagli: piano J, §10 «CP-10c».
 
 ## Z · Sospensione e risveglio (fase 01)
 
