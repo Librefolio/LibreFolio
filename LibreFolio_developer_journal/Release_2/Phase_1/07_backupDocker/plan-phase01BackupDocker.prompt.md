@@ -5366,6 +5366,153 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-34 — la causa giusta quando l'istanza non ha ancora una chiave, e le frasi della doc (2026-10-17, 14:00-14:10) — ✅ 🧊 FROZEN (checkpoint delle 14:10)
+
+> **B-38 entrato** (coordinatore, 14:00): `1ed071c2f` → dev `c2a09b960`, CHANGELOG 🔒 `9b02120a7`; HEAD portata in
+> avanti. La correzione di `security.md` l.706-708 e il residuo H-47 vanno ad H. Via a B-34.
+>
+> - **LOW-1 di H**:
+>   - Su un'istanza senza chiave, dove la verifica non può crearla, `instance_key_status()` dice `not_created` e
+>     `problem=None`, e la riga D2 accusa la chiave data.
+>   - Cura: il ramo dell'eccezione prende anche `not_created`, e la riga dice «`<path>`: there is no instance key yet,
+>     and it could not be created».
+>   - Patch: `b34-wip/apply_b34.py`, 1 operazione; ruff e black puliti.
+> - **Doc**:
+>   - in `cli_tools`, un vecchio `LIBREFOLIO_INSTANCE_KEY` va nel file così com'è, spazi compresi;
+>   - la riga dell'eccezione copre anche il caso nuovo;
+>   - il `chmod 600` non serve più: B-38 ha spostato la chiave in `/root`. Da controllare che nessuna pagina la metta
+>     ancora in `backups/`.
+> - **Rossi in scrittura** (TA-E, accanto a c7); doc (docs-writer).
+> - ✅ **Rosso scritto** (TA-E): in `test_backup_cli_restore.py`, dopo c7,
+>   `test_when_this_instance_has_no_key_yet_and_none_can_be_created_it_is_said_instead_of_blaming_the_key_given`.
+>   - Un'istanza senza chiave, con `secrets/` a 0o500 (un aiuto rimette i permessi nel `finally`), e una chiave data.
+>   - Atteso: la riga «This instance's own key cannot be used…», con `there is no instance key yet, and it could not be
+>     created`; mai la riga che accusa la chiave data.
+>   - Desc del runner (`_backend_utils.py`, `backup-cli-restore`) allungata, in aggiunta.
+> - ✅ **Rosso** (corsia 6187): `utils backup-cli-restore` **1 fallito** e 107 passati, esattamente il caso nuovo
+>   (`files/logs/b34_red.log`).
+> - ✅ **Patch applicata** (14:03:03): 1 operazione in `_print_given_key` di `scripts/backup_cli.py`; ruff e black
+>   puliti.
+> - ✅ **Verdi**: `backup-cli-restore` **108**, `backup-cli-secure` **106**; porta 6187 libera.
+> - ✅ **Doc** (docs-writer, più una frase mia):
+>   - `cli_tools.en.md` l.563: il valore di un vecchio `LIBREFOLIO_INSTANCE_KEY` va nel file «as written in the
+>     variable, spaces included»; il file di `LIBREFOLIO_INSTANCE_KEY_FILE` «as it is»;
+>   - `cli_tools.en.md` l.568: la riga dell'eccezione copre anche un'istanza senza chiave, con il testo del problema;
+>   - il secondo appunto di H (`chmod 600` sulla chiave vecchia in `backups/`) non vale più alla lettera: dopo B-38 la
+>     chiave non passa più dai dati, e nessuna pagina la mette in `backups/` o in `LibreFolio-data/` (grep). Il senso
+>     vale ancora sull'host: in `backup_restore.en.md` l.320 il file `old-instance.key` accanto a `docker-compose.yml`
+>     è «kept private (`chmod 600 old-instance.key`)», come il file della password a l.96. Pagina solo inglese.
+>   - Traduzioni di `cli_tools`: debito vero (due frasi cambiate di senso), nessun `translate-stamp`, come in B-38.
+> - ✅ **Controlli** (14:05-14:10, ripetuti dopo la frase di l.320): `mkdocs build` strict, `check-links`, gate 63; ruff e black puliti sui 3 file
+>   Python; `git diff --check` pulito; porta 6187 libera.
+> - **Backlog**: B-34 ✅. CHANGELOG: nessuna voce (un messaggio della CLI più preciso, dentro B-18 della stessa
+>   release).
+
+### B-38 — i file dei segreti letti da root: regolari, mai attraverso un link nella cartella dei dati (2026-10-17, 13:36-13:58) — ✅ 🧊 FROZEN (checkpoint delle 13:58)
+
+> **B-36/B-37 entrati** (coordinatore, 13:39): `2eff9e623` più il merge `05d1dc76a` → dev `d1976bca8`. Un conflitto
+> nella desc del runner `post-migration` (Z-28), risolto dal coordinatore tenendo entrambe le frasi. HEAD portata in
+> avanti.
+>
+> - **⚠️ Fuori pista — Kubernetes (13:36)**: rifiutare ogni link con `O_NOFOLLOW`, come concordato, romperebbe
+>   Kubernetes, che monta ogni segreto attraverso un symlink (`/etc/secret/pw` → `..data/pw`). Proposta di rifinitura,
+>   **approvata dal coordinatore (13:40, opzione a)**:
+>   - ovunque, un file regolare aperto con `O_NONBLOCK`: una FIFO non blocca più il comando, e una cartella o un
+>     dispositivo non vengono letti;
+>   - i link sono rifiutati solo da root e solo dentro la cartella dei dati;
+>   - la guida sposta la chiave fuori dalla cartella dei dati;
+>   - la corsa residua va nella riga H-47 di H.
+> - **Altri due punti miei** (13:42):
+>   - il controllo percorre **ogni componente**, dalla cartella dei dati in giù: un `backups` sostituito da un link verso
+>     `/root` sarebbe sfuggito controllando solo l'ultimo componente;
+>   - la guida usa **`/root`** del container, non `/tmp`: in `/tmp` l'utente del server può creare il nome per primo
+>     come link, e `docker compose cp` ci scriverebbe attraverso.
+> - **Contratto**: `b38-contract.md`. Il codice: `_secret_path(args, path, label)` prima di ogni `read_secret_file`
+>   della CLI, con `_data_dir_setting` (come `_decrypt_as_owner`) e `_link_inside`. Le eccezioni sono
+>   `SecretFileError`, quindi i ❌ restano quelli di oggi (`password_unreadable`, `instance_key_unreadable`).
+> - **Codice pronto** in `b38-wip/apply_b38.py`: 4 operazioni, ruff e black puliti. Prova a mano sulla copia emessa:
+>   - una FIFO e una cartella sono rifiutate subito;
+>   - un file normale passa, e uno mancante è lasciato a `read_secret_file`;
+>   - il link di una cartella madre dentro i dati viene preso, fuori no.
+> - **Rossi in scrittura** (TA-E, sezione (n) di `test_backup_cli_secure.py`); doc (docs-writer): la guida, `cli_tools`
+>   e `security.md`.
+> - ✅ **Rossi scritti** (TA-E, 13:42-13:50): sezione (n), 3 funzioni e 40 casi sui 4 comandi che leggono un segreto
+>   (`decrypt` compreso).
+>   - Una FIFO o una cartella, da root finto e non: 16 casi rossi. Un watchdog di 10 s apre la FIFO, così il run non
+>     resta appeso.
+>   - Un link dentro i dati, su `backups/key` o su `backups/` stesso: 8 rossi. Il bersaglio non viene mai aperto.
+>   - 16 guardie.
+>   - Due vincoli fissati: il controllo dei link viene **prima** di ogni apertura, e lavora sul percorso **come è
+>     dato**, non risolto.
+>   - Trovato da TA-E: oggi `create` e `inspect` rifiutano un `backups/` che è un link solo **dopo** che root ha già
+>     letto il segreto attraverso quel link.
+> - ✅ **Doc scritta** (docs-writer, 13:44):
+>   - `backup_restore.en.md` l.308 e l.320-328: la chiave passa da `/root` del container;
+>   - `cli_tools.en.md` l.363-364, 378, 564, 569: la regola detta una volta sola (debito di traduzione);
+>   - `security.md` l.856-870: il punto «Secret files read as root», con il residuo H-47.
+>   - Da passare ad H: «The Instance Key» in `security.md` l.706-708 dice ancora che B-18 è nel backlog.
+> - ✅ **Rosso** (corsia 6187, 13:50-13:52): `utils backup-cli-secure` **24 falliti** e 82 passati, come previsto.
+> - ✅ **Patch applicata** (13:52:44): 4 operazioni in `scripts/backup_cli.py`; ruff e black puliti.
+> - ✅ **Verdi** (13:52-13:54): `backup-cli-secure` **106** (37 s: nessuna attesa su una FIFO), `backup-cli-restore`
+>   107, `backup-cli` 102.
+> - ✅ **Doc** (13:55-13:57): `mkdocs build` strict (54 s), `check-links`, gate 63. Controlli statici puliti, porta
+>   6187 libera.
+> - **Backlog**: B-38 ✅. Il residuo (due aperture) è nella riga H-47 di H.
+
+### B-36 + B-37 — nomi quotati e `trusted_schema` spento anche nelle correzioni e nell'upgrade (2026-10-17, 13:09-13:33) — ✅ 🧊 FROZEN (checkpoint delle 13:33)
+
+> **B-39 entrato** (coordinatore, 13:09): `c8fc32bfa` → dev `25d00f192`, CHANGELOG 🔒 `bbfb76e38`; HEAD portata in
+> avanti. Via a B-36 + B-37; rivede H.
+> - Permesso di scrittura (11:59) su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette e
+>   per `trusted_schema=OFF`.
+>
+> **Stato reale** (13:00-13:10):
+> - Solo `_row_counts` costruisce SQL con nomi che vengono dall'archivio. `autoincrement.py` usa la tupla costante
+>   `AUTOINCREMENT_TABLES`; la connessione di `_backup` scrive un file `.bak` nuovo.
+> - Il test di B-28 «every connection … trusted_schema off first» lascia fuori apposta le correzioni e l'upgrade (§2):
+>   «not recorded».
+> - `security.md` l.1821-1827 lo dice.
+>
+> **Contratto** (`b36-37-contract.md`):
+> 1. **B-36**: un `_quoted()` locale, che raddoppia `"`, in `_row_counts`.
+> 2. **B-37**: `PRAGMA trusted_schema=OFF` subito dopo la connessione di `run_post_migration_fixes`, dentro il `try`,
+>    anche sul database vivo: lo schema di LibreFolio contiene solo tabelle e indici, e le funzioni predefinite di
+>    SQLite sono innocue.
+> 3. **B-37**: un listener `connect` (`_schema_untrusted`) in `env.py`, registrato prima di `connectable.connect()`, per
+>    ogni URL.
+>
+> - **Codice pronto** in `b36-wip/apply_b36.py`: 5 operazioni in 2 file; ruff e black puliti sulla copia emessa.
+> - **Rossi in scrittura** (TA-S):
+>   - `test_post_migration.py` (`db post-migration`);
+>   - il registratore di (l) esteso a `post_migration` (`services backup-staging`);
+>   - un controllo statico di `env.py` (`utils dev-cli-db-path`).
+>   Doc: `security.md` l.1821-1827 (docs-writer).
+> - ✅ **Rossi scritti** (TA-S, 13:10-13:15):
+>   - `test_post_migration.py` §17: un 1.1 portato all'ultima migrazione (correzione autoincrement pendente), più le
+>     tabelle `x"y` e `a" WHERE 1 --`, che oggi diventa `FROM "a" WHERE 1 --"` («no such table: a»). Una spia su
+>     `_row_counts`;
+>   - il registratore (l) di `test_backup_staging.py` registra anche `post_migration`; la copia `.bak` resta fuori per il
+>     filtro del percorso;
+>   - DBP-j in `test_dev_cli_db_path.py`: un controllo AST di `env.py`. Un'esecuzione vera di Alembic non può mostrare
+>     il pragma: è uno stato della connessione, dentro un processo che finisce.
+> - ✅ **Rossi** (corsia 6187, 13:15-13:19): `db post-migration` **1 fallito** (44 passati), `services backup-staging`
+>   **1 fallito** (167), `utils dev-cli-db-path` **2 falliti** (15). Sono esattamente i 4 attesi.
+> - ✅ **Patch applicata** (13:19:19): 5 operazioni in 2 file; ruff e black puliti.
+> - ✅ **Verdi** (13:19-13:23):
+>   - `db`: `post-migration` 45, `post-migration-event-types` 36, `post-migration-orphan-pairs` 47,
+>     `autoincrement-schema` 4, `migration-008` 23, `migration-009` 11;
+>   - `services backup-staging` 168, che comprende l'upgrade vero in un processo a parte;
+>   - utils: `dev-cli-db-path` 17, `backup-cli-restore` 107.
+>   Porta libera.
+> - ✅ **Doc** (13:30-13:32): `security.md` l.1821-1832 e il paragrafo dei test l.1838-1841 (docs-writer); `mkdocs
+>   build` strict (61 s), `check-links`, gate 63.
+> - ✅ **Controlli statici**: ruff e black sui 7 file Python, tranne `_backend_db.py`, che era già sporco prima di B (tre
+>   `PLC0415`, e black che lo riformatterebbe), con una sola riga di desc aggiunta. `git diff --check` pulito.
+> - **Per H**:
+>   - le due modifiche nei suoi file (`post_migration/__init__.py`, `env.py`);
+>   - `database/index.md` l.203-204, che potrebbe dire «with `trusted_schema` off first» (nota del docs-writer).
+> - **Backlog**: B-36 ✅, B-37 ✅.
+
 ### B-39 — formule nei CSV esportati, con un ritorno esatto (2026-10-17, 12:43-13:09) — ✅ 🧊 FROZEN (checkpoint delle 13:09)
 
 > **B-35 entrato** (coordinatore, 12:43): merge `d7efb5805` → dev `9fafc79b5`, CHANGELOG 🔒; HEAD portata in avanti

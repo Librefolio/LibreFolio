@@ -512,16 +512,13 @@ class FXDeleteRoutesResponse(BaseBulkDeleteResponse[FXDeleteRouteResult]):
 # ============================================================================
 
 
-#: The most pairs one fixed-period changes request may list (MF-P2b): the FX table sends every pair it lists.
-PERIOD_CHANGES_MAX_PAIRS = 1_000
-
-
 class FXPeriodChangesRequest(StrictModel):
     """One pair of a fixed-period changes request: the FX table's Δ columns (1D … 5Y), up to ``as_of``."""
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217): the rate is quote per 1 base")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
     as_of: PeriodChangesAsOf = Field(..., description="Anchor day: the end of the range the table shows (1900-01-01 or later)")
+    range_start: Optional[PeriodChangesAsOf] = Field(None, description="First day of the range the page shows: asks its whole-range change (X-R59); on or before as_of")
 
     @field_validator("base", "quote", mode="before")
     @classmethod
@@ -532,6 +529,8 @@ class FXPeriodChangesRequest(StrictModel):
     def validate_distinct(self) -> FXPeriodChangesRequest:
         if self.base == self.quote:
             raise ValueError("base and quote must differ")
+        if self.range_start is not None and self.range_start > self.as_of:
+            raise ValueError(f"range_start ({self.range_start}) must be on or before as_of ({self.as_of})")
         return self
 
 
@@ -544,6 +543,17 @@ class FXPeriodChange(StrictModel):
     inverse_change_ratio: Optional[SafeDecimal] = Field(None, description="The same change with the pair inverted (base per quote): (rate on as_of − days ÷ rate on as_of) − 1")
 
 
+class FXRangeChange(StrictModel):
+    """The change of a rate over the whole range the page shows (X-R59), in both orientations: the first and last point
+    of its series."""
+
+    reference_date: Optional[date_type] = Field(None, description="The day of the reference rate: range_start, or the first rate inside the range when none is on or before it; null without any")
+    change_abs: Optional[SafeDecimal] = Field(None, description="Rate on as_of − reference rate (quote per base); null without a usable rate")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="(Rate on as_of ÷ reference rate) − 1; null without a usable rate")
+    inverse_change_abs: Optional[SafeDecimal] = Field(None, description="The same change with the pair inverted (base per quote): 1 ÷ rate on as_of − 1 ÷ reference rate")
+    inverse_change_ratio: Optional[SafeDecimal] = Field(None, description="The same change with the pair inverted: (reference rate ÷ rate on as_of) − 1")
+
+
 class FXPeriodChangesResult(StrictModel):
     """The fixed-period changes of one pair. The rate on a day is the conversion of 1 base on that day, with the
     conversion's unlimited backward fill — the rates the FX page shows."""
@@ -552,6 +562,7 @@ class FXPeriodChangesResult(StrictModel):
     quote: str = Field(..., description="Quote currency")
     as_of: date_type = Field(..., description="Anchor day")
     periods: List[FXPeriodChange] = Field(default_factory=list, description="One entry per fixed period, in display order")
+    range_change: Optional[FXRangeChange] = Field(None, description="The whole-range change, when range_start was asked")
     errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. no rate on a day)")
 
 

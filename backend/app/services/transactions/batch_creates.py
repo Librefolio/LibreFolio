@@ -58,6 +58,7 @@ async def apply_creates(
             await service.session.flush()
             previous = context.earliest_date_by_broker.get(transaction.broker_id)
             context.earliest_date_by_broker[transaction.broker_id] = transaction.date if previous is None else min(previous, transaction.date)
+            context.created_by_index[original_index] = transaction
             if item.link_uuid:
                 context.link_uuid_map[item.link_uuid].append((original_index, transaction))
             context.results.append(

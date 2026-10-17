@@ -5688,8 +5688,263 @@ righe già salvate restano. Solo TRANSFER e ADJUSTMENT a quantità > 0 prendono 
    (HEAD `e908f0d4f` antenato): 0 conflitti; ruff e black sui 9 `.py` uniti e `json.load` sui 4 cataloghi puliti; `mkdocs build`
    stretto e `check-links` con uscita 0 sull'albero simulato. Il `wac.md` di dev (J-12/N81, il paragrafo dei due wipe) si unisce da
    solo, venti righe sotto il nostro. `git diff --check` pulito; porta 6184 libera. Handoff FROZEN inviato al coordinatore.
+8. ✅ **Dopo l'ingresso: un rosso di dev** (17/10, trovato da X; ingresso `e71b68d50` + `19c2f596e` → `7bc66c7ca`). `front-utility
+   core-unit` → `src/htmlInterpolation.gate.test.ts`, «finds no markup in any translation outside the reviewed sanitized keys».
+   Le due chiavi nuove portavano `<b>…</b>` in tutte e 4 le lingue, sul modello di `costBasisRequired`. Il cancello ammette markup
+   solo nelle tre chiavi riviste di `SANITIZED_MARKUP_KEYS` (tutte `transactions.errors.*`, rese da `resolveIssueMessage` con
+   `{@html sanitizeHtml(…)}`).
+   - **Cura**: testo semplice, la scelta preferita dal coordinatore: le stesse parole senza `<b>`, nessuna eccezione nuova nel
+     cancello. Script `files/scripts/wb72_plain_i18n.sh`, con `dev.py i18n update`.
+   - **Prove** (carico < 50): il cancello da solo con Vitest, 26 verdi; `dev.py i18n check` stretto, 5 048 chiavi;
+     `front-utility core-unit` 207 file, 8 378 verdi.
+
+   > **⚠️ Fuori pista**: io non avevo fatto girare `core-unit`. Le mie prove i18n erano `gate-i18n-catalog`, `gate-i18n-usage`,
+   > `i18n check` e il Vitest ICU, ma il cancello dell'HTML sta in `core-unit`. Regola per i lotti con chiavi i18n nuove: girare
+   > anche il cancello dell'HTML (`src/htmlInterpolation.gate.test.ts`) o `core-unit`.
 
 > **Nota, nuova voce W-B75** (fuori perimetro, non toccata): `BRIMProvider._create_transaction` mette in `params` il contesto di ogni
 > errore solo così com'è. Quello di un `value_error` porta l'oggetto eccezione, e la risposta non si serializza (verificato:
 > `PydanticSerializationError` su `BRIMValidationIssue.model_dump(mode="json")`). Oggi non è raggiungibile: i plugin passano istanze di
 > `Currency` (non rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici.
+
+### W-B67 — il costo Auto sulla riga sbagliata: analisi (2026-10-17, sola lettura, HEAD `f731d462e`)
+
+**Base**: HEAD `f731d462e` = dev con W-B72 (`e71b68d50` + `19c2f596e` → `7bc66c7ca`, CHANGELOG `f731d462e`). Via del coordinatore:
+«W-B67, reds first».
+
+**Difetto 1, la riga** (la voce del backlog, confermato nel codice). `_compute_wac_for_auto_items` (`auto_cost.py:47`) trova la
+riga di una create in Auto con `_find_created_tx_for_wac` (`:207-231`). Con un `link_uuid` la prende da `link_uuid_map` per indice
+(giusto: le coppie TRANSFER non hanno il difetto). Senza, cerca **l'ultima riga** con lo stesso broker, asset, data e tipo
+(`order_by(id.desc()).limit(1)`). Quindi:
+
+- due ADJUSTMENT Auto non collegati, stessa chiave: il secondo riceve il costo due volte, il primo mai. Si salva senza costo, perché
+  il controllo `costBasisRequired` salta le create in Auto (`batch_costs.py:182`);
+- un Auto seguito da un Manuale con la stessa chiave: il costo Manuale è sovrascritto con la media, l'Auto resta senza;
+- un Manuale seguito da un Auto: la riga trovata è quella giusta (id più alto), nessun difetto.
+
+La creazione conosce già la riga di ogni indice (`apply_creates`, `batch_creates.py:41-62`), ma la tiene solo in `link_uuid_map`
+per le righe collegate.
+
+**Difetto 2, l'ordine e la diluizione** (trovato nell'analisi, non nel backlog). Il gruppo di una riga Auto è il suo broker fino
+alla sua data, senza sé stessa (`_auto_cost_source`). Ci entrano le altre righe Auto **dello stesso batch non ancora costate**.
+Un'acquisizione senza costo vi entra a zero (`ADD_UNKNOWN_COST`, `average_cost.py:463`; `portfolio_service.py`, «enters at
+zero»), e la media si diluisce in base all'ordine degli indici.
+
+Esempio: un BUY di 10 a 100 EUR il giorno D−1, poi due ADJUSTMENT +5 in Auto il giorno D.
+
+| | A (indice 0) | B (indice 1) |
+|---|---|---|
+| oggi | nessun costo | 66,666667 |
+| solo la mappa | 66,666667 (B a zero) | 88,888889 |
+| P1 | 100 | 100 |
+
+Due Auto in date diverse in ordine d'indice inverso (D+1 prima di D) danno, oggi e con la sola mappa, 66,666667 a quello di D+1.
+
+**Proposta D-W67-1 (P1)**:
+- (a) la mappa indice → riga dalla creazione (`context.created_by_index`), senza ricerca per campi; `_find_created_tx_for_wac` va via;
+- (b) le righe Auto calcolate nell'ordine della data del loro gruppo (`as_of` di `_auto_cost_source`), poi nell'ordine originale;
+- (c) le righe Auto del batch non ancora costate, salvo quelle legate a uno split (che restano movimenti di riscalatura), fuori dai
+  gruppi delle altre.
+
+Risultato: i costi che le righe avrebbero salvate una alla volta in ordine di data. Nell'esempio, 100 e 100. L'ordine di
+`wac_results` nella risposta non cambia. Alternativa **P2**: solo (a); toglie il difetto 1 e lascia il 2 (66,67 / 88,89).
+
+**Rossi proposti** (servizio, `execute_batch` come `POST /transactions/commit`; il `world` di
+`test_transaction_cost_basis_rule.py` ha già 10 unità a 100 EUR):
+
+1. due Auto +5 stesso giorno: entrambe salvate con 100 (oggi A senza costo, B 66,666667);
+2. Auto e poi Manuale a 50, stesso giorno: il Manuale tiene 50, l'Auto 83,333333 (il Manuale è nel gruppo; lo stesso giorno conta,
+   come documentato). Oggi il Manuale diventa 66,666667 e l'Auto resta senza. Non dipende dalla decisione;
+3. (P1) due Auto in D e D+1, indici in ordine inverso: entrambe 100;
+4. `wac_results` per indice col valore della propria riga.
+
+Guardie: un Auto solo; Manuale e poi Auto; una coppia TRANSFER in Auto; un ADJUSTMENT legato a uno split in Auto e un Auto +q lo
+stesso giorno (lo split resta nel gruppo).
+
+**Superfici**: `auto_cost.py`, `batch_creates.py`, `transaction_batch_context.py`, `batch_costs.py`; doc `wac.md` («Inline WAC»),
+`service.md` (contesto condiviso, se elenca i campi). Nessun i18n, nessuna API. **Ordine**: decisione → rossi → cura → verdi →
+doc → handoff.
+
+### W-B67 — cura ✅ (2026-10-17) — 🧊 FROZEN
+
+1. ✅ **Decisione D-W67-1 → P1** (coordinatore, 17/10, registrata come **N84**): ogni create sulla propria riga; le righe Auto
+   calcolate nell'ordine della data del loro gruppo, poi per indice; le righe Auto del batch non ancora costate (salvo quelle legate
+   a uno split) fuori dai gruppi delle altre. La regola: lo stesso costo che avrebbero salvate una alla volta in ordine di data.
+2. ✅ **Rossi** (test-author `181447ad`, solo `test_transaction_cost_basis_rule.py`, +315 righe). Le classi:
+   - `TestWB67EachAutoCreateCostsItsOwnRow`, 3 rossi:
+     - Auto e poi Manuale: il Manuale tiene 50, l'Auto 1250/15;
+     - due Auto con la stessa chiave: 100 e 100;
+     - Auto legato a uno split e Auto +q: `wac_results` per indice;
+   - `TestWB67AutoRowsAreCostedInDateOrder`, 1 rosso: D+2 e D con indici inversi e un BUY in D+1, 175 e 100;
+   - `TestWB67GuardsWhereTodaysSearchFindsTheRow`, 3 guardie:
+     - un Auto solo;
+     - Manuale e poi Auto;
+     - **nuova**: la riga legata a uno split calcolata per ultima resta nel gruppo di una gamba TRANSFER Auto dello stesso giorno.
+       Il rosso 3 da solo non fissava l'eccezione di (c).
+
+   La guardia TRANSFER è citata, non duplicata (`TestAutoCost[transfer_in]`, `TestWB69Guards…`).
+
+   Prove (carico < 50): `… transaction-cost-basis-rule WB67` 4 rossi / 3 verdi; l'azione intera 4 / 167. Oggi:
+
+   | Rosso | Esito oggi |
+   |---|---|
+   | 1 | Auto senza costo, Manuale 66,666666666667 |
+   | 2 | riga 0 senza costo, riga 1 66,666666666667 |
+   | 3 | `wac_results` [0: 50, 1: 50] |
+   | 4 | la riga di D+2 a 150, cioè «oggi» |
+
+   > **⚠️ Fuori pista**: le note del test-author.
+   > - (1) Il mio conto «solo la mappa» per il rosso 2 era sbagliato: è 1000/15 e 88,888888888889, non 1500/15.
+   > - (3) Il pareggio fra una create e un update con la stessa data: la cura usa la posizione (le create per indice, poi gli
+   >   update), ora scritto nella docstring.
+   > - (4) Un update in Auto conta come non ancora costato (lettura di N84): il suo costo salvato è quello che sostituisce, e le
+   >   righe dello stesso giorno arrivano alla media coerente con sé stessa (scritto nella docstring).
+   > - (5) La cache: già vista, ogni riga calcola con esclusi diversi.
+3. ✅ **Cura applicata** (17/10, prima dei verdi delle 13:36), `files/scripts/wb67_cure.py --apply` su 4 file (+56/−68), più la docstring sul pareggio e
+   sugli update. `ruff check` e `black --check` puliti.
+   - `transaction_batch_context.py`: il campo `created_by_index`;
+   - `batch_creates.apply_creates`: lo riempie dopo il flush;
+   - `batch_costs.compute_wac_and_fx_issues`: lo passa;
+   - `auto_cost._compute_wac_for_auto_items`: la riga dalla mappa; `split_linked_ids` una volta per tutte; le fonti calcolate
+     prima; l'ordine `(as_of, posizione)`; `pending` escluso dal gruppo (`excluded + others`) e tolto solo quando il costo è
+     scritto, così una riga che fallisce (gruppo illeggibile, cambio mancante) resta fuori dai gruppi delle altre e non vi entra
+     a zero; i risultati nell'ordine degli elementi. Via `_find_created_tx_for_wac`.
+
+   La cache di `compute_wac_iterative` (chiave con gli id esclusi e l'impronta id + `updated_at`, cieca ai costi scritti nella
+   sessione) non dà un risultato stantio: ogni riga Auto calcola con un insieme di esclusi diverso.
+   Caso limite noto: una gamba TRANSFER ricevuta prima della sua partner è ordinata con la data della partner (la data del suo
+   gruppo), come vuole N84.
+4. ✅ **Verdi** (17/10, 13:36–13:42, `files/scripts/wb67_light.sh`, una prova alla volta col carico < 50; log
+   `files/logs/wb67_*.log`):
+
+   | Prova | Esito |
+   |---|---|
+   | `services transaction-cost-basis-rule` | 171 verdi (i 4 rossi inclusi) |
+   | `services transaction` | 125 verdi |
+   | `services transaction-decimal-places` | 201 verdi |
+   | `services auto-cost-unreadable-pool` (di MF) | 17 verdi |
+   | `services lone-transfer-legs` | 20 verdi |
+   | `services orphan-transfer-numbers` | 21 verdi |
+   | `services roi-fifo-utils` (con `test_wac_rounded_to_column.py`) | 1 312 verdi |
+   | `services broker` | 81 verdi |
+
+   **Slot del coordinatore prima dell'ingresso** (17/10, 13:50–14:00, `files/scripts/wb67_slot.sh`; il via con 5 minuti di carico
+   < 50, ogni passo con il carico a 1 minuto < 70; log `files/logs/wb67_slot_*.log`):
+
+   | Prova | Esito |
+   |---|---|
+   | `test db populate --force` | uscita 0 |
+   | `api transactions-wac` (`test_wac_inline.py`, con la ricostruzione del frontend) | 20 verdi |
+   | `api portfolio-wac` | 12 verdi |
+   | `api batch-split-promote` | 38 verdi |
+   | E2E `tx-wac-bulk` | 11 verdi |
+   | E2E `tx-wac-formmodal` | 10 verdi |
+   | E2E `tx-transfer-auto-cost` | 2 verdi |
+
+   Esito: SLOT GREEN, nessun flaky, porta 6184 libera dopo.
+5. ✅ **Doc** (docs-writer `ca763408`; solo EN, pagine per sviluppatori senza traduzioni):
+   - `wac.md`: la riga «Batch auto modes» della tabella; «Inline Batch Auto Modes» con la riga di ogni elemento, l'ordine, la
+     voce sugli esclusi, la regola N84 coi tre casi, `wac_results` e la cache, «prima di W-B67» con l'esempio e i test;
+   - `service.md`: `created_by_index` nel contesto condiviso, e il passo 1 di «Linked Pairs».
+
+   Più una frase mia in `developer/frontend/components/features/transaction-form.md`. La pagina dava la data della riga anche
+   per la gamba TRANSFER ricevuta, che invece usa quella della partner; ora c'è anche l'esclusione di W-B67, con un collegamento.
+   `mkdocs build` stretto con uscita 0, `check-links` con 97 validi.
+   > **⚠️ Fuori pista**: la correzione del docs-writer al mio testo. Una create in Auto con il suggerimento di valuta del frontend
+   > (`{code, amount: '0'}`) è salvata con quello 0 prima del passo WAC (`apply_creates`, e `_apply_update_values` per un update).
+   > Prima di W-B67 entrava quindi nei gruppi delle altre righe come `ADD_ZERO_COST`, non `ADD_UNKNOWN_COST`. La cura copre
+   > entrambi i casi: la riga resta fuori finché il suo costo non è scritto.
+6. ✅ **Simulazione** (17/10, 13:46–13:49): `sim_cherry_pick.sh dev_release2 --docs` sui 10 file, dev `04955c498` (HEAD
+   `f731d462e` antenato; dev ha portato SEC8-2a/2b, SEC9-1 e altro di MF, ma nulla sul percorso del WAC: solo
+   `rows_before_floor` nei DTO di `portfolio_service`). 0 conflitti, ruff e black puliti, `mkdocs build` stretto e `check-links`
+   con uscita 0 sull'albero unito. `git diff --check` pulito; porta 6184 libera. Handoff FROZEN.
+
+### W-B66 — il campo decimale: un esponente incollato, un incolla enorme: analisi (2026-10-17, sola lettura, HEAD `f731d462e`)
+
+Via del coordinatore (17/10 13:49): «W-B66 → W-B68», dopo l'ingresso di W-B67. Voce del backlog da E (R13-SEC5, revisione di
+C-97b). Il punto (3), il toast di «+ New event», resta in C-97c.
+
+**(1) Un esponente incollato cambia il numero.** `ExactDecimalInput.handleInput` (`components/ui/input/ExactDecimalInput.svelte:210-221`)
+passa ogni input da `filterDecimalInput` (`utils/core/parseDecimalInput.ts:30-34`), che toglie tutto ciò che non è cifra, punto,
+virgola o il meno iniziale. Un `1e-8` incollato diventa `18`, un `1,5E+3` diventa `1,53`, senza avviso. Digitando, la `e` non entra
+mai: solo un incolla arriva intero.
+
+**(2) Un incolla enorme blocca la scheda di chi incolla** (solo il proprio browser). Tre punti:
+- **regex quadratiche** su un testo lungo che non combacia: `formatDecimalForDisplay` (`utils/core/formatDecimal.ts:41`,
+  `^-?\d*\.?\d*$`), chiamata dalla cella del Bulk (`quantityText`, `TransactionBulkModal.svelte:187`) e da `ExactQuantityInput`. Lo
+  stesso schema c'è in `CANONICAL` (`parseDecimalInput.ts:21`, `\d+\.?\d*`), che `normalizeDecimalInput` prova a **ogni** battuta,
+  in tutti i campi decimali (form, Bulk, import, data editor, planner PAC, tabelle). Le forme lineari equivalenti sono
+  `^-?\d*(?:\.\d*)?$` e `^-?(?:\d+(?:\.\d*)?|\.\d+)$`: stesso linguaggio, la seconda `\d*` raggiungibile solo dopo il punto;
+- **`compareExact` coi limiti** `min`/`max` (`ExactDecimalInput.svelte:104-112`, `normalizedParts:154-155`): un `BigInt` delle cifre
+  incollate per `10n ** places`. Con un milione di decimali, un numero di un milione di cifre a ogni battuta. Si calcola anche
+  quando le cifre sono già oltre il budget (`digitsValid` falso), cioè quando il confronto non serve;
+- **le frecce** (`stepValue` → `acceleratedArrowStep:250-288`): lo stesso `BigInt` sul valore enorme.
+
+`ExactQuantityInput` avvolge `ExactDecimalInput`: una cura copre entrambi.
+
+**Proposta di cura** (D-W66-1 per il punto 1):
+- (a) un testo **interamente** in notazione scientifica (`-?` cifre con `.` o `,` decimale, `e`/`E`, esponente con segno) è
+  espanso **esatto** in decimale semplice in `filterDecimalInput`, se `|esponente| ≤ 100`, il limite del backend (R13-SEC7-3).
+  Il testo espanso passa poi dai controlli di sempre: le cifre oltre il budget danno il messaggio di C-97b. Oltre ±100 il testo
+  resta com'è, il campo è rosso, e un messaggio sotto il campo dice che l'esponente è fuori portata (chiave nuova
+  `common.decimalExponentOutOfRange`, 4 lingue, in `base`: serve l'ok come per D-W12). Alternativa: rifiutare ogni esponente
+  col messaggio;
+- (b) le due regex lineari; in `normalizedParts`, `compareExact` solo con `digitsValid`; in `stepValue`, niente passo su un
+  valore oltre il budget.
+
+**Superfici**: `utils/core/parseDecimalInput.ts` e `utils/core/formatDecimal.ts` (nucleo condiviso: serve l'assegnazione come
+scrittore; i chiamanti non cambiano comportamento, salvo l'esponente che oggi è un numero sbagliato),
+`components/ui/input/ExactDecimalInput.svelte` (mio, C-97b; il lotto colori T vi ha toccato le classi), i18n `base` per la chiave
+nuova.
+
+**Rossi** (Vitest):
+- `parseDecimalInput.test.ts`: l'esponente letto esatto (`1e-8`, `1,5E+3`, `-2.5e2`); fuori portata lasciato com'è; testi senza
+  esponente invariati;
+- `formatDecimal.test.ts`: la regex lineare con lo stesso linguaggio (una tabella di casi), e un testo di 200 000 caratteri che
+  finisce entro un tetto generoso, dove la forma quadratica impiega secondi;
+- `ExactDecimalInput.test.ts`: l'incolla di `1e-8` dà `0.00000001`; quello di `1e-200` dà il campo rosso col messaggio; un
+  incolla di 200 000 decimali con `min`/`max` resta reattivo, e `compareExact` non gira.
+
+Nessun backend, nessuna API.
+
+### W-B66 — cura (2026-10-17, in corso)
+
+**Base**: HEAD `f078b766c` = dev con W-B67 (`279b3d5bd` + `581757965` → `ac92e6fae`, CHANGELOG `f078b766c`).
+
+1. ✅ **Decisioni del coordinatore** (17/10, 14:00):
+   - **scrittore** di `utils/core/parseDecimalInput.ts` e `utils/core/formatDecimal.ts` (nessun worktree li ha aperti), oltre al
+     mio `ExactDecimalInput.svelte`;
+   - **D-W66-1 = (a)**: un esponente incollato è espanso esatto entro ±100; oltre, il testo resta, il campo è rosso e c'è il
+     messaggio;
+   - la chiave `common.decimalExponentOutOfRange` in `base`, 4 lingue: ok;
+   - cancello in più prima del checkpoint: `front-utility core-unit` e `component-unit` nella corsia.
+
+   Verificato in sola lettura: `canShowSignColor` di `ExactQuantityInput` chiede anche `digitsValid`, quindi il confronto saltato
+   oltre il budget non cambia nulla per i genitori. I test esistono già e sono registrati:
+   `src/lib/utils/__tests__/parseDecimalInput.test.ts` e `src/lib/utils/core/__tests__/formatDecimal.test.ts` (`core-unit`),
+   `src/lib/components/ui/input/ExactDecimalInput.test.ts` (`component-unit`).
+2. ⏳ **Rossi** (test-author `539999df`, Vitest).
+
+   > **⚠️ Fuori pista**, cose trovate mentre scrivevo la cura.
+   > - **Una terza regex quadratica**: `formatDecimalForDisplay` toglie gli zeri finali con `frac.replace(/0+$/, '')`, quadratica su
+   >   una lunga fila di zeri che non chiude il testo. La cella del Bulk passa `maxFrac: value.length`, quindi nulla la tronca prima.
+   >   Misurato con node (V8), a 10 000 / 20 000 / 40 000 caratteri:
+   >
+   >   | Caso | 10 000 | 20 000 | 40 000 |
+   >   |---|---|---|---|
+   >   | `/0+$/` | 170 ms | 711 ms | 3 632 ms |
+   >   | vecchia regex di visualizzazione | 164 ms | 692 ms | 3 332 ms |
+   >   | vecchio `CANONICAL` | 179 ms | 730 ms | 2 684 ms |
+   >
+   >   Le forme lineari, e `SCIENTIFIC`, stanno a 0,1 ms. I rossi di tempo sono dimensionati a 40 000 caratteri: un'espressione
+   >   regolare sincrona non si interrompe, e a 200 000 bloccherebbe Vitest per circa 90 s a test.
+   > - **`normalizeDecimalInput` toglie la `e` allo stesso modo** (`1e-8` → `18`). Lo chiamano molti campi senza
+   >   `filterDecimalInput`: data editor, tabelle, planner, import, mini-modale degli eventi, `CompactCashCell` all'uscita dal
+   >   campo. La stessa espansione esatta vale anche lì; fuori portata il testo torna intatto. Dentro l'approvazione: cambiano solo
+   >   i testi con un esponente.
+   > - **Le frecce**: su un `1e-200` tenuto, `normalizeDecimalInput` leggeva 1200, e una freccia lo faceva 1201. Né un valore
+   >   fuori budget né un esponente rifiutato si spostano con le frecce.
+   > - `ExactDecimalInput` accetta un esponente in portata anche dal `value` del genitore (un `Number` che stampa `1e-8`).
+3. ⏳ **Cura** pronta (`files/scripts/wb66_cure.py`, dry run pulito su 3 file) e i18n (`files/scripts/wb66_i18n.sh`: `{max}`
+   semplice, niente plurale, niente formato numerico; spagnolo col tu, come la maggior parte di `base`). Poi verdi (`core-unit`,
+   `component-unit`), doc, handoff.

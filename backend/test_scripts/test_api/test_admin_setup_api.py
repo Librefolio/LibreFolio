@@ -31,8 +31,15 @@ in. The public endpoints of that, pinned here:
    its own password) —, its setup links are retired, revoked and consumed in the same transaction. The old link then
    inspects ``revoked``, and ``POST /auth/setup`` with it is 400 ``TOKEN_INVALID`` and changes nothing, the account
    inactive again too: whoever holds the link — it was in the log as well — no longer takes the account over. A
-   deactivation, a demotion, a reset link issued and not spent, or refused, retire nothing: the account still waits,
-   and its link works.
+   reset link issued and not spent, or refused, retires nothing: the account still waits, and its link works.
+8. Lot A-42 + A-43 (the setup link's lifecycle; contract approved by the coordinator, 17/10). Spending (A-42): the setup
+   link of an account another setup link of which is already consumed — set up before, or its links retired — is
+   refused, 400 ``TOKEN_INVALID``: nothing changes (the password, the active flag, the session version), and the
+   account's never-consumed setup links are retired. Deactivation (A-43): ``./dev.py user deactivate`` on the pending
+   administrator revokes its live setup links — its link inspects ``revoked``, ``POST /auth/setup`` with it is 400
+   ``TOKEN_INVALID`` — and the account still waits: ``./dev.py user setup-link`` gives it a new link, which works.
+   Demotion (A-43): ``./dev.py user demote`` refuses the pending administrator — falsy, a line starting with ❌,
+   nothing changed —: its link still works, and sets up an administrator.
 
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/password-reset`` gives ``TOKEN_INVALID``; a
 refusal sets no session cookie. Not here: ``/auth/setup`` on a blocked instance. It stays off the routes allowed while
@@ -54,7 +61,10 @@ only refusals that write nothing and the inspection of a token never issued: the
 database. Lot A7b-2's cases run in-process too: the commands (``./dev.py user …``) as the calls they make
 (``user_service``), and a reset link as ``POST /users/{id}/password-reset-link`` issues it
 (``user_service.create_password_reset``) — the users router is not mounted here; ``test_users_admin_api.py`` issues it
-through the route.
+through the route. Lot A-42/A-43's commands run as the commands themselves: ``scripts/user_cli.py``'s ``cmd_set_admin``,
+``cmd_set_user_active`` and ``cmd_setup_link``, in-process, their ``get_async_engine`` the private file's (the
+``commands`` fixture). Their contract is what the command answers and prints — a refused ``user demote`` is falsy and
+prints a line starting with ❌ —, whichever layer holds the refusal, so the call it makes would not be enough.
 
 bcrypt runs at its lowest cost in this process (``auth_service.BCRYPT_ROUNDS = 4``); the lane's server keeps its own.
 
@@ -70,19 +80,29 @@ parameters of INSPECT-012 are guards once the bootstrap exists: a setup link ask
 
 Red until A7b-2: SETUP-014 and SETUP-015, on the takeover itself — nothing retires the setup link today, and ``POST
 /auth/setup`` with it answers 200 —. SETUP-016 is their guard, green today: what must retire nothing.
+
+Red until A-42/A-43 (label ``# red until A-42/A-43``): SETUP-017 — ``./dev.py user deactivate`` leaves the pending
+administrator's link valid today —, SETUP-018 — the stray link of an account set up before answers 200 today and
+re-activates it —, and SETUP-016's ``user-demote-refused`` variant — the command demotes today. SETUP-016 changed by
+construction: its ``user-deactivate`` variant left it for SETUP-017 (the link is now revoked), and its ``user-demote``
+variant now expects the refusal, the account still an administrator once set up; its two other variants stay guards.
 """
 
 from __future__ import annotations
 
 import contextlib
+import importlib
 import os
+import re
 import secrets
 import threading
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Optional
+from urllib.parse import parse_qs
 
 import bcrypt
 import httpx
@@ -99,9 +119,9 @@ from backend.app.db.base import SQLModel  # imports every model: SQLModel.metada
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AuthLoginResponse, AuthUserResponse
-from backend.app.services.accounts import auth_service, user_service
+from backend.app.services.accounts import auth_service, registration_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
-from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, inspect_token, issue_token, revoke_tokens
+from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, inspect_token, issue_token, retire_tokens, revoke_tokens
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -786,10 +806,12 @@ class TestOnTheLane:
 
 #: How the pending administrator is set up without its link (A-32), ending inactive as it began (``_set_up_another_way``).
 SET_UP_ANOTHER_WAY = ("a-reset-link-spent", "user-reset", "user-activate-then-user-deactivate")
-#: What is neither an activation nor a password (``_leave_it_waiting``), with whether the account is an administrator afterwards.
+#: What is neither an activation nor a password (``_leave_it_waiting``), with whether the account is an administrator
+#: afterwards. Updated in A-42/A-43, by construction: ``./dev.py user demote`` of the pending administrator is refused now
+#: — it stays an administrator —, and ``./dev.py user deactivate`` of the account already inactive revokes its link: that
+#: variant left this guard for SETUP-017.
 NEITHER_ACTIVATION_NOR_PASSWORD = [
-    pytest.param("user-deactivate", True, id="user-deactivate-the-account-already-inactive"),
-    pytest.param("user-demote", False, id="user-demote"),
+    pytest.param("user-demote-refused", True, id="user-demote-refused"),
     pytest.param("reset-link-issued", True, id="a-reset-link-issued-not-spent"),
     pytest.param("expired-reset-link-refused", True, id="an-expired-reset-link-refused"),
 ]
@@ -811,12 +833,32 @@ async def _cli_reset_password(engine: AsyncEngine, username: str, password: str)
     assert done == (True, None) and auth_service.verify_password(password, hashed), f"setup: user_service.reset_password({username!r}) must succeed and set the password: answered {done}"
 
 
-async def _cli_demote(engine: AsyncEngine, username: str) -> None:
-    """``./dev.py user demote``: the call the command makes, ``user_service.set_user_admin(…, False)``. It ends on its promise: done, the account no longer an administrator."""
-    async with AsyncSession(engine) as session:
-        done = await user_service.set_user_admin(session, username, False)
-        superuser = (await session.execute(select(User.is_superuser).where(User.username == username))).scalar_one()
-    assert (done, bool(superuser)) == ((True, None), False), f"setup: user_service.set_user_admin({username!r}, False) must succeed and demote the account: answered {done}, is_superuser {superuser}"
+@dataclass(frozen=True)
+class _Commands:
+    """``scripts/user_cli.py`` in-process, its ``get_async_engine`` the private file's: what ``./dev.py user …`` runs (lot A-42/A-43)."""
+
+    module: ModuleType
+    capsys: pytest.CaptureFixture[str]
+
+    async def run(self, command: str, *arguments: Any) -> tuple[Any, str]:
+        """The command function ``command`` — ``cmd_set_admin``, ``cmd_set_user_active``, ``cmd_setup_link`` — called with ``arguments``: what it answered, and what it printed."""
+        self.capsys.readouterr()
+        answer = await getattr(self.module, command)(*arguments)
+        return answer, self.capsys.readouterr().out
+
+
+@pytest.fixture
+def commands(private: _Private, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> _Commands:
+    """``./dev.py user …`` on the private instance: ``scripts/user_cli.py`` imported in-process, its ``get_async_engine`` the private engine — never the lane's database."""
+    module = importlib.import_module("scripts.user_cli")
+    monkeypatch.setattr(module, "get_async_engine", lambda: private.engine)
+    return _Commands(module=module, capsys=capsys)
+
+
+def _printed_setup_token(out: str) -> Optional[str]:
+    """The token of the setup link a command printed — ``/setup#token=…``, the bare path without ``LIBREFOLIO_PUBLIC_URL`` —; None when it printed none."""
+    printed = re.search(r"/setup#(\S+)", out)
+    return parse_qs(printed.group(1)).get("token", [None])[0] if printed else None
 
 
 async def _reset_link(engine: AsyncEngine, user_id: int, *, expired: bool = False) -> str:
@@ -862,17 +904,19 @@ async def _set_up_another_way(private: _Private, pending: _Pending, way: str) ->
     return password
 
 
-async def _leave_it_waiting(private: _Private, pending: _Pending, action: str) -> None:
+async def _leave_it_waiting(private: _Private, pending: _Pending, action: str, commands: _Commands) -> None:
     """``action`` on the pending administrator, neither an activation nor a password (NEITHER_ACTIVATION_NOR_PASSWORD). It ends on its promise: the account still inactive.
 
-    ``user-deactivate``: ``./dev.py user deactivate`` on the account already inactive. ``user-demote``: ``./dev.py user
-    demote``. ``reset-link-issued``: a reset link issued, not spent. ``expired-reset-link-refused``: an expired reset
-    link refused by ``POST /auth/password-reset`` (400 ``TOKEN_INVALID``): no password set.
+    ``user-demote-refused``: ``./dev.py user demote``, the command itself — refused since A-43: falsy, a line starting
+    with ❌, the account as it was. ``reset-link-issued``: a reset link issued, not spent. ``expired-reset-link-refused``:
+    an expired reset link refused by ``POST /auth/password-reset`` (400 ``TOKEN_INVALID``): no password set.
     """
-    if action == "user-deactivate":
-        await _cli_set_active(private.engine, ADMIN_USERNAME, False)
-    elif action == "user-demote":
-        await _cli_demote(private.engine, ADMIN_USERNAME)
+    if action == "user-demote-refused":
+        before = await _account_state(private.engine, pending.user_id)
+        answer, out = await commands.run("cmd_set_admin", ADMIN_USERNAME, False)
+        after = await _account_state(private.engine, pending.user_id)
+        assert not answer and any(line.startswith("❌") for line in out.splitlines()), f"red until A-43: ./dev.py user demote must refuse the pending administrator — falsy, a line starting with ❌ —: it answered {answer!r}: {out!r}"
+        assert after == before, f"a refused demotion must change nothing: before {before}, after {after}"
     elif action == "reset-link-issued":
         await _reset_link(private.engine, pending.user_id)
     else:
@@ -939,13 +983,18 @@ class TestSetUpAnotherWay:
         assert (with_its_password.status_code, _error_code(with_its_password)) == (403, "ACCOUNT_DISABLED"), f"the changed password must still be the account's, answered as for any inactive account: {with_its_password.status_code} {with_its_password.text}"
         print_success("retired by the change of password: revoked, refused once inactive")
 
-    # guard
+    # red until A-42/A-43 — its user-demote-refused variant, changed by construction; its two other variants stay guards
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("action", "superuser_after"), NEITHER_ACTIVATION_NOR_PASSWORD)
-    async def test_what_is_neither_an_activation_nor_a_password_leaves_the_link_working(self, private: _Private, pending: _Pending, action: str, superuser_after: bool) -> None:
-        """SETUP-016, guard of SETUP-014 (green today): what is neither an activation nor a password leaves the pending administrator waiting, and its link working — ``./dev.py user deactivate`` on the account already inactive, ``./dev.py user demote``, a reset link issued and not spent, an expired reset link refused by POST /auth/password-reset (400 ``TOKEN_INVALID``, no password set): inspected, still ``valid`` for the account; POST /auth/setup with it → 200, the account active, an administrator or not as the action left it. The retirement is an activation's and a new password's only."""
+    async def test_what_is_neither_an_activation_nor_a_password_leaves_the_link_working(self, private: _Private, pending: _Pending, commands: _Commands, action: str, superuser_after: bool) -> None:
+        """SETUP-016, guard of SETUP-014: what is neither an activation nor a password leaves the pending administrator waiting, and its link working — ``./dev.py user demote``, refused (lot A-43: falsy, a line starting with ❌, nothing changed), a reset link issued and not spent, an expired reset link refused by POST /auth/password-reset (400 ``TOKEN_INVALID``, no password set): inspected, still ``valid`` for the account; POST /auth/setup with it → 200, the account active and still an administrator. The retirement is an activation's and a new password's only.
+
+        Changed in A-42/A-43, by construction: ``./dev.py user demote`` demoted the pending administrator until A-43, and
+        its setup made an ordinary account; it is refused now, red until A-43. ``./dev.py user deactivate`` of the account
+        already inactive left the link working until A-43; it revokes it now, and left this guard for SETUP-017.
+        """
         print_section(f"SETUP-016: {action}, and the setup link still works")
-        await _leave_it_waiting(private, pending, action)
+        await _leave_it_waiting(private, pending, action, commands)
 
         inspected = await _inspect(private, pending.token, "admin_setup")
         response = await _setup(private, pending.token, NEW_PASSWORD)
@@ -958,3 +1007,105 @@ class TestSetUpAnotherWay:
         assert (user.get("id"), user.get("is_active"), user.get("is_superuser")) == (pending.user_id, True, superuser_after), f"the setup activates the account, an administrator or not as {action} left it: {user}"
         assert (state.active, state.superuser) == (True, superuser_after), f"in the database: active {state.active}, superuser {state.superuser}"
         print_success("the link still valid, and it sets the account up")
+
+
+# ============================================================================
+# 6. THE SETUP LINK'S LIFECYCLE (lot A-42 + A-43) — IN-PROCESS
+# ============================================================================
+
+
+#: How the other setup link of the account was spent before a stray one was left live (SETUP-018): through the account's
+#: setup, or retired when the account was set up another way (A-32).
+SPENT_BEFORE = [pytest.param("set-up-through-it", id="set-up-through-another-link"), pytest.param("retired", id="its-links-retired")]
+
+
+async def _is_pending(engine: AsyncEngine, user_id: int) -> bool:
+    """Whether the account waits for its setup, as ``registration_service.is_pending_admin`` says — the notion behind the Users tab's ``pending_setup``."""
+    async with AsyncSession(engine) as session:
+        user = await session.get(User, user_id)
+        assert user is not None, f"no account {user_id} in the private database"
+        return await registration_service.is_pending_admin(session, user)
+
+
+async def _set_up_before_with_a_stray_link(engine: AsyncEngine, spent: str) -> tuple[int, str, str]:
+    """The initial administrator of SETUP-018, as rows: ``veteran``, OLD_PASSWORD its own, set up through its setup link L1 — consumed by the account (``set-up-through-it``), or retired, the account set up another way (``retired``) —, a stray setup link L2 issued afterwards and left live, as the race of A-42 or an earlier 1.3 build leaves it, the account then deactivated by root. ``(its id, L1, L2)``.
+
+    It ends on its promise: the account inactive, L1 spent, L2 valid.
+    """
+    user_id = await _add_user(engine, "veteran", password=OLD_PASSWORD, admin=True)
+    first = await _issue(engine, ADMIN_SETUP, user_id=user_id, now=utcnow() - timedelta(hours=3))
+    async with AsyncSession(engine) as session:
+        if spent == "set-up-through-it":
+            assert await consume_token(session, first.token, ADMIN_SETUP, consumed_by_user_id=user_id, now=utcnow() - timedelta(hours=2)) is not None, "setup: the account's setup spends L1"
+        else:
+            assert await retire_tokens(session, user_id=user_id, purpose=ADMIN_SETUP, now=utcnow() - timedelta(hours=2)) == 1, "setup: L1 is retired"
+        await session.commit()
+    stray = await _issue(engine, ADMIN_SETUP, user_id=user_id, now=utcnow() - timedelta(hours=1))
+    async with AsyncSession(engine) as session:
+        await session.execute(update(User).where(User.id == user_id).values(is_active=False))
+        await session.commit()
+    statuses = (await _status(engine, first.token, ADMIN_SETUP), await _status(engine, stray.token, ADMIN_SETUP))
+    spent_status = TokenStatus.CONSUMED if spent == "set-up-through-it" else TokenStatus.REVOKED
+    assert statuses == (spent_status, TokenStatus.VALID) and (await _account_state(engine, user_id)).active is False, f"setup: the account inactive, L1 {spent_status.value} and L2 valid: {statuses}"
+    return user_id, first.token, stray.token
+
+
+class TestTheSetupLinkLifecycle:
+    """Lot A-42 + A-43: a stray setup link of an account set up before is refused and retired; ``./dev.py user deactivate`` revokes the pending administrator's link, and ``./dev.py user setup-link`` gives it a new one. In-process, the commands included."""
+
+    # red until A-42/A-43
+    @pytest.mark.asyncio
+    async def test_user_deactivate_revokes_the_link_and_setup_link_gives_a_new_one(self, private: _Private, pending: _Pending, commands: _Commands) -> None:
+        """SETUP-017 (A-43; SETUP-016's ``user-deactivate`` variant until A-43, when the link kept working): ``./dev.py user deactivate`` on the pending administrator, already inactive, answers truthy and revokes its live setup link — inspected, ``revoked`` and nothing more —; POST /auth/setup with it and a password that meets the rules → 400 ``TOKEN_INVALID``, and nothing changes: the account inactive, its password and session version as they were, and that password signs nothing in (401). The account still waits for its setup — revoked, not retired —: ``./dev.py user setup-link`` prints a new link, and POST /auth/setup with it → 200, the account active and an administrator."""
+        print_section("SETUP-017: user deactivate on the pending administrator, then user setup-link")
+        deactivated, out = await commands.run("cmd_set_user_active", ADMIN_USERNAME, False)
+        assert deactivated, f"setup: ./dev.py user deactivate must succeed on the pending administrator: it answered {deactivated!r}: {out!r}"
+        links = [(pending.token, ADMIN_SETUP)]
+
+        inspected = await _inspect(private, pending.token, "admin_setup")
+        before = await _footprint(private.engine, pending.user_id, links)
+        refused = await _setup(private, pending.token, NEW_PASSWORD)
+        after = await _footprint(private.engine, pending.user_id, links)
+        with_refused_password = await _sign_in(private, ADMIN_USERNAME, NEW_PASSWORD)
+        waits = await _is_pending(private.engine, pending.user_id)
+        issued, printed = await commands.run("cmd_setup_link")
+        token = _printed_setup_token(printed)
+        response = await _setup(private, token, ANOTHER_PASSWORD) if token else None
+        state = await _account_state(private.engine, pending.user_id)
+
+        body = inspected.json() if inspected.status_code == 200 else {}
+        assert (inspected.status_code, body.get("status"), body.get("purpose"), _details_shown(body)) == (200, "revoked", "admin_setup", {}), f"red until A-43: ./dev.py user deactivate must revoke the pending administrator's live setup link: inspected {inspected.status_code} {inspected.text}"
+        _assert_token_invalid(refused, "POST /auth/setup with the link ./dev.py user deactivate revoked")
+        assert after == before and after[0].active is False, f"the refused setup must change nothing, the account still inactive: before {before}, after {after}"
+        assert with_refused_password.status_code == 401, f"the refused setup's password must sign nothing in: {with_refused_password.status_code} {with_refused_password.text}"
+        assert waits, "revoked, not retired: the account must still wait for its setup"
+        assert issued and token, f"./dev.py user setup-link must print a new link for the account still waiting: it answered {issued!r}: {printed!r}"
+        assert response is not None and response.status_code == 200, f"the new link must set the account up: {response.status_code if response is not None else None} {response.text if response is not None else ''}"
+        assert (state.active, state.superuser) == (True, True), f"set up through the new link: active {state.active}, superuser {state.superuser}"
+        print_success("revoked by user deactivate; a new link of user setup-link sets it up")
+
+    # red until A-42/A-43
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("spent", SPENT_BEFORE)
+    async def test_a_stray_setup_link_of_an_account_set_up_before_is_refused_and_retired(self, private: _Private, spent: str) -> None:
+        """SETUP-018 (A-42): rows written directly, as the race of A-42 or an earlier 1.3 build leaves them — the initial administrator set up through its setup link L1 (consumed by the account; or its links retired, set up another way), OLD_PASSWORD its own, a stray setup link L2 left live, the account then deactivated by root (``_set_up_before_with_a_stray_link``). POST /auth/setup with L2 and a password that meets the rules → 400 ``TOKEN_INVALID``, and nothing changes: the account inactive, its password hash and session version as they were — its old password still its own (403 ``ACCOUNT_DISABLED``), the setup's signs nothing in (401) —, L1 as it was; and L2 is retired: inspected, ``revoked`` and nothing more, its row consumed and revoked, without a consumer. Today: 200, the account re-activated with the password of whoever held L2."""
+        print_section(f"SETUP-018: the stray setup link of an account set up before ({spent})")
+        user_id, first, stray = await _set_up_before_with_a_stray_link(private.engine, spent)
+        before = await _footprint(private.engine, user_id, [(first, ADMIN_SETUP)])
+
+        response = await _setup(private, stray, NEW_PASSWORD)
+
+        after = await _footprint(private.engine, user_id, [(first, ADMIN_SETUP)])
+        inspected = await _inspect(private, stray, "admin_setup")
+        record = await _token_record(private.engine, stray, ADMIN_SETUP)
+        with_setup_password, with_its_password = await _sign_in(private, "veteran", NEW_PASSWORD), await _sign_in(private, "veteran", OLD_PASSWORD)
+
+        _assert_token_invalid(response, f"red until A-42: POST /auth/setup with a stray setup link of an account set up before ({spent})")
+        assert after == before and after[0].active is False, f"the refused setup must change nothing — the account inactive, its password hash and session version, L1 —: before {before}, after {after}"
+        body = inspected.json() if inspected.status_code == 200 else {}
+        assert (inspected.status_code, body.get("status"), body.get("purpose"), _details_shown(body)) == (200, "revoked", "admin_setup", {}), f"the refused stray link must be retired: inspected, revoked and nothing more: {inspected.status_code} {inspected.text}"
+        retired = (record.consumed_at is not None, record.revoked_at is not None, record.consumed_by_user_id)
+        assert retired == (True, True, None), f"retired: consumed and revoked at once, without a consumer — (consumed, revoked, consumed_by_user_id) {retired}"
+        assert with_setup_password.status_code == 401, f"the refused setup's password must sign nothing in: {with_setup_password.status_code} {with_setup_password.text}"
+        assert (with_its_password.status_code, _error_code(with_its_password)) == (403, "ACCOUNT_DISABLED"), f"the old password must still be the account's, answered as for any inactive account: {with_its_password.status_code} {with_its_password.text}"
+        print_success("TOKEN_INVALID; nothing changed; the stray link retired")
