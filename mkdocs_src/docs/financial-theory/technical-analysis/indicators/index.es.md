@@ -82,7 +82,7 @@ Los indicadores de riesgo convierten la propia serie de precios en una lectura d
 
 | Indicador | Pregunta principal | Datos | Detalles |
 |---|---|---|---|
-| **Caída desde el máximo** | ¿Cuánto está el precio por debajo del máximo acumulado? | Cierre | [📖](../risk-metrics/max-drawdown.md) |
+| **Caída desde el máximo** | ¿Cuánto está el precio por debajo del máximo acumulado? | Cierre | [📖](../risk-metrics/current-drawdown.md) |
 | **Rendimiento móvil** | ¿Qué rentabilidad compuesta ha generado la última ventana? | Cierre | [📖](../../fundamentals/returns.md) |
 | **Volatilidad móvil** | ¿Cuán dispersas están las rentabilidades recientes? | Cierre | [📖](../risk-metrics/volatility.md) |
 | **Ratio de Sharpe móvil** | ¿Está el exceso de rentabilidad compensando su riesgo? | Cierre | [📖](../risk-metrics/sharpe-ratio.md) |
