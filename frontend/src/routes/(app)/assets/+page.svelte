@@ -1023,9 +1023,27 @@
         await fetchAllPriceData();
     }
 
+    /** The confirmation's row for an asset its transactions keep, with the link to them (X-R18). */
+    function blockedDeleteResult(asset: {id: number; display_name: string}, count: number, label?: string) {
+        return {
+            label: label || asset.display_name,
+            success: false,
+            detail: `${$t('assets.delete.resultHasTransactions')} (${count})`,
+            action: {
+                href: buildTransactionsFiltersUrl({asset_id: asset.id}),
+                label: $t('transactions.title'),
+                testId: 'asset-delete-transactions-link',
+            },
+        };
+    }
+
     function handleDeleteAsset(asset: any) {
         deletingAsset = asset;
-        singleDeleteResults = [];
+        // X-R18: the list row already counts the asset's transactions (every broker), and any refuses the delete:
+        // the confirmation opens already blocked, with the link, instead of asking for what cannot happen. A card
+        // hands over a slimmer object, so the row is found by id. At 0 it asks, and the backend still decides.
+        const txCount = assets.find((row) => row.id === asset.id)?.tx_count ?? 0;
+        singleDeleteResults = txCount > 0 ? [blockedDeleteResult(asset, txCount)] : [];
         deleteDialogOpen = true;
     }
 
@@ -1051,19 +1069,7 @@
                 deleteDialogOpen = false;
                 deletingAsset = null;
             } else if (r?.error_code === 'HAS_TRANSACTIONS') {
-                const count = Number(r.transaction_count ?? 0);
-                singleDeleteResults = [
-                    {
-                        label: r.display_name || deletingAsset.display_name,
-                        success: false,
-                        detail: `${$t('assets.delete.resultHasTransactions')} (${count})`,
-                        action: {
-                            href: buildTransactionsFiltersUrl({asset_id: deletingAsset.id}),
-                            label: $t('transactions.title'),
-                            testId: 'asset-delete-transactions-link',
-                        },
-                    },
-                ];
+                singleDeleteResults = [blockedDeleteResult(deletingAsset, Number(r.transaction_count ?? 0), r.display_name)];
                 toasts.error($t('assets.delete.hasTransactions', {values: {name: deletingAsset!.display_name}}));
             } else {
                 toasts.error(r?.message || $t('assets.delete.toastFailed', {values: {name: deletingAsset!.display_name}}));
@@ -1925,6 +1931,7 @@
     onConfirm={confirmDeleteAsset}
     open={deleteDialogOpen}
     results={singleDeleteResults}
+    testId="asset-delete-confirm"
     title={$t('common.confirmDelete')}
 />
 
@@ -1933,12 +1940,13 @@
     confirmText={$t('common.delete')}
     danger={true}
     items={deletingAssets.map((a) => a.display_name)}
-    itemsLabel={`${deletingAssets.length} assets`}
+    itemsLabel={$t('assets.delete.itemsLabel', {values: {count: deletingAssets.length}})}
     message={$t('assets.delete.bulkConfirmMessage', {values: {n: deletingAssets.length}})}
     onCancel={closeBulkDeleteDialog}
     onConfirm={confirmBulkDeleteAssets}
     open={bulkDeleteDialogOpen}
     results={bulkDeleteResults}
+    testId="asset-bulk-delete-confirm"
     title={$t('common.confirmDelete')}
 />
 

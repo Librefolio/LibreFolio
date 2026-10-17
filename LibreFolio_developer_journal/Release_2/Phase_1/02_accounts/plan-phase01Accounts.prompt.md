@@ -7112,3 +7112,154 @@ toccata —, `resolveProviderError.ts`, la sorgente i18n `assets`); X rivede. **
 - **Indice, sezione A** (pulizia, 17/10): chiuse con ✅ due righe già fatte ma mai registrate, A-3 (A4, `3ac4114d5`) e la
   «Nota per A8» (A8, `66873b0c9`), verificate nel codice. Fusione simulata con dev `870d519bd` (8 commit sull'indice):
   pulita.
+
+## X-R66 — Entrato; lotto A-11 + A-16 + A-40 + A-26 (17/10, 18:37–; base `c5b9cca75`)
+- **Entrato**: dev `e50c23919` (`ed5ad328a`); CHANGELOG 🐛 e X-R66 chiusa (`c5b9cca75`), la riga di `admin/configuration`
+  tenuta. Revisione di X dopo l'ingresso. Worktree portato avanti: HEAD `c5b9cca75` = dev, albero pulito.
+- Dal coordinatore: «A-11 + A-16 + A-40 + A-26 as one lot: GO, reds first, with one API slot. A-11 … first: it's an
+  availability bug on the login path. CHANGELOG 🐛 lines for A-11 and A-16.»
+
+### Lotto A-11/A-16/A-40/A-26 — stato reale e disegno (18:40, sola lettura)
+**A-11 · Un tema salvato che l'app non conosce blocca l'accesso**
+- Verificato nel codice: `settings_service.get_user_settings()` e `update_user_settings()` costruiscono
+  `UserSettingsRead(theme=<valore salvato>)`, e `theme` è un `Literal["light", "dark", "auto"]`: un altro valore solleva
+  `ValidationError` → 500. Chiamanti: `POST /auth/login` (dopo il commit del login e il cookie: l'utente non entra),
+  `POST /auth/setup`, `GET /settings/user` (`get_or_create_user_settings`), `PUT /settings/user` (500 **dopo** il commit).
+- Da dove viene un valore così: la colonna `VARCHAR(20)` senza CHECK; una riga scritta a mano; un `default_theme` globale
+  scritto a mano, che `get_or_create_user_settings`, `update_user_settings` e il benvenuto di `onboarding_service` copiano
+  nelle righe nuove; un ritorno a una versione vecchia dopo un tema nuovo. E lo sa già: `email/flows.py:96`
+  («a settings row that no longer validates (an old theme, say) never stops an email»).
+- **Cura** (un punto solo, in `settings_service`): un aiuto che dà il tema da mostrare. Il valore salvato se lo schema lo
+  conosce (l'insieme letto da `UserSettingsRead`, una fonte sola); altrimenti il `default_theme` dell'istanza se è un tema
+  noto, altrimenti `auto`; un avviso nel log (`user_id`, il valore salvato tagliato a 20 caratteri, quello mostrato).
+  La lettura non scrive: la riga tiene il suo valore (una versione che lo conosce lo mostra di nuovo); un `PUT` senza
+  `theme` lo lascia, uno con `theme` lo sostituisce. Le scritture dei semi restano come sono (la lettura le copre).
+- Test (`test-author`): una classe nuova in `test_settings_api.py`, **in-process** (il router di auth e quello delle
+  impostazioni su un motore privato sotto `tmp_path`, come `private_sign_in` di `test_auth_api.py`): login 200, `GET` e
+  `PUT /settings/user` 200, il tema mostrato secondo la regola (anche con un `default_theme` sconosciuto), la riga intatta,
+  l'avviso nel log. Rossi osservabili senza server.
+
+**A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`**
+- Verificato: `DELETE /auth/users/me` → `400 "Cannot delete account: you are the only administrator"`; il frontend
+  (`accountErrors.ts`) mostra la frase inglese. Esiste già `LAST_ADMIN` (409, `PATCH /users/{id}`), con un testo
+  «né disattivare né declassare» che non va bene per un'eliminazione; su un'eliminazione `LAST_ADMIN` può venire solo
+  dall'eliminazione di sé (quella di un altro admin risponde `DEMOTE_FIRST`).
+- **Cura**: stato **400 invariato**, `detail = {error_code: "LAST_ADMIN", message: "Cannot delete account: you are the
+  last active administrator"}` (la frase vecchia diceva «only», ma la regola conta gli admin **attivi**, ACCDEL-003).
+  Frontend: `describeAccountError(e, 'delete')` con `LAST_ADMIN` → la chiave nuova
+  `settings.usersTab.errors.LAST_ADMIN_DELETION` (4 lingue, con le parole dei bottoni: «Make administrator»…); senza
+  `'delete'` resta `…LAST_ADMIN`.
+- I test che riconoscono la frase: `SOLE_ADMIN_DELETE_DETAIL` in 6 file (`test_broker_access_api.py`, da cui lo importa
+  `test_account_deletion_api.py`, e le pulizie di `test_http_compression_api`, `test_portfolio_wac`, `test_assets_provider`,
+  `test_pac_planner_tool_api`, `test_portfolio_api`, nel caso dell'utente di test che resta l'unico admin): la costante
+  diventa il dizionario nuovo, una riga per file, il confronto resta. ACCDEL-002/003 diventano i rossi.
+- Frontend: `accountErrors.test.ts`, `AccountDeletionDialog.test.ts` (modo self: il testo tradotto, non la frase),
+  `ProfileTab.test.ts` (il rifiuto con la forma vera).
+- **Fuori, da registrare** (A-52): la guardia legge il conteggio degli admin prima del lock di scrittura (classe A-51):
+  due ultimi admin che si eliminano nello stesso istante passerebbero entrambi. Il percorso dell'admin
+  (`DELETE /users/{id}`) usa già `begin_writes`.
+
+**A-40 · `user activate` sull'admin in attesa avvisa del limite**
+- Verificato: `cmd_set_user_active` avvisa per ogni account inattivo a istanza piena, salvo quello che aspetta la verifica
+  dell'email (`holds_place`); l'admin iniziale in attesa è già contato da `user_usage` (`pending_admin_filter`). L'API
+  non ha il difetto (risponde 409 `PENDING_SETUP` prima del limite).
+- **Cura**: nessun avviso anche quando `registration_service.is_pending_admin(session, user)` (lo stesso filtro del
+  conteggio). Test: IMG-030f in `test_dev_cli_image.py` (PURE), accanto a IMG-030c.
+
+**A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico**
+- **Cura** (solo test): in `test_migration_005_accounts.py`, la chiave `indexes (name, columns, unique)` di `_shape` da
+  `_index_list` (origine `'c'`) invece che dall'ispettore di SQLAlchemy, che salta gli indici su espressione. Rosso: un
+  meta-test di `_shape` su copie di `fresh_head` (un indice su espressione non unico da una parte sola, o con due nomi →
+  forme diverse); guardia: due copie uguali → forme uguali; il contratto 3 resta verde.
+- Lo stesso punto cieco è in `test_migration_010_reported_currency.py` (di Z): lo segnalo soltanto.
+
+**Corsia**: tutti i rossi si osservano senza server (in-process, PURE, Vitest). Lo slot API (uno) a fine lotto:
+`api settings`, `api account-deletion`, `api auth`. Doc (`docs-writer`): sviluppatore (impostazioni, controllo d'accesso,
+componenti delle impostazioni), `admin/cli_tools.en.md` (A-40, solo EN: le traduzioni sono già indietro, A-10).
+
+### A52.1 — Rossi (18:45–19:16, due `test-author` in parallelo, file distinti) ✅
+- **Backend** (agente `f24a8ad6`; ripetuti da me 19:14–19:16 con `/tmp/libreFolio_a8a_inproc/run.sh`, nessun server):
+  - A-11, `test_settings_api.py` classe `TestStoredThemeUnknownToTheApp` (SET-A11-01…07, in-process su un file privato,
+    i router veri di auth e impostazioni, `get_async_engine` come trappola): **7 rossi** (`ValidationError` di
+    `UserSettingsRead`, `literal_error`, al login, al GET e al PUT), **5 guardie verdi** (01, 05, 06×3);
+  - A-16, `test_account_deletion_api.py` ACCDEL-002/003 e la costante `SOLE_ADMIN_DELETE_DETAIL` (una riga in 6 file):
+    **2 rossi** sul controllo `error_code` («its detail is 'Cannot delete account: you are the only administrator'»);
+  - A-40, `test_dev_cli_image.py` IMG-030f: **1 rosso** («⚠️ The instance is at its limit … reactivates the account
+    anyway»), 7 verdi (IMG-030…030e, la guardia 030c compresa);
+  - A-26, `test_migration_005_accounts.py` MIG005-A26-01/02 (non unico e unico): **3 rossi** (forme uguali), la guardia
+    A26-03 verde.
+- **Frontend** (agente `0291b358`; ripetuto da me): `accountErrors.test.ts` AERR-15/16/17 rossi, AERR-18/19 guardie;
+  `AccountDeletionDialog.test.ts` ADEL-28 ×4 lingue rossi (chiave mancante; oggi il dialogo mostra il testo di
+  `LAST_ADMIN`, «né disattivare né declassare»), ADEL-29 ×4 guardie; `ProfileTab.test.ts` sulla forma nuova (verde prima e
+  dopo). **7 rossi, 193 verdi** (`/tmp/libreFolio_a52_front_red.log`).
+- **Note dell'agente**: il testo nuovo senza `''` ICU (il test confronta il valore grezzo del catalogo); diverso da quello
+  di `LAST_ADMIN` in ogni lingua. Dopo la cura il contratto 3 di 005 confronta per nome anche gli indici creati: da
+  verificare verde sul file intero.
+
+### A52.2 — Codice applicato e verdi locali ✅ (19:16–19:30)
+- **Codice** (`work/a52/apply_a52.py`, `work/a52/i18n_a52.py`):
+  - A-11, `services/accounts/settings_service.py`: `KNOWN_THEMES` (letto dal `Literal` di `UserSettingsRead.theme`),
+    `FALLBACK_THEME = "auto"`, `_shown_theme()` (il tema salvato se noto, altrimenti `default_theme` se noto, altrimenti
+    `auto`; un WARNING con `user_id`, `stored` tagliato a 20, `shown`) e `_settings_read()`, usato da `get_user_settings()`
+    e da `update_user_settings()`; la lettura non scrive;
+  - A-16, `api/v1/auth.py` `delete_own_account`: 400 con `{error_code: "LAST_ADMIN", message: "Cannot delete account: you
+    are the last active administrator"}`; `accountErrors.ts`: `LAST_ADMIN` con `'delete'` → la chiave nuova
+    `settings.usersTab.errors.LAST_ADMIN_DELETION` (4 lingue, sorgente `settings`), il commento falso riscritto;
+  - A-40, `scripts/user_cli.py` `cmd_set_user_active`: nessun avviso anche per `registration_service.is_pending_admin`;
+  - A-26, `test_migration_005_accounts.py` `_shape`: la chiave `indexes (name, columns, unique)` da `_index_list`
+    (origine `c`), la docstring aggiornata.
+- **Verdi** (in-process, nessun server): SET-A11 12/12; ACCDEL-002/003 2/2; `TestUserLimitFromTheCommandLine` 8/8;
+  `test_migration_005_accounts.py` intero 29/29 (il contratto 3 resta verde confrontando per nome anche gli indici
+  creati); `test_dev_cli_image.py` intero 95/95. Vitest dei 3 file 200/200. `ruff` pulito su 13 file, `black` pulito su
+  12 (`test_portfolio_api.py` non lo è già a HEAD, 38 righe: tocco solo la costante); Prettier pulito; i18n strict 5 064.
+- **⚠️ Fuori pista**: `front check` rosso su `components/fx/FxPairAddModal.svelte:327` (`queries: {replace: true}`, X-R75
+  entrata con l'avanzamento): il client generato (ignorato da git) era vecchio. `dev.py api sync` → nessun file tracciato
+  cambiato → `front check` 0 errori e 0 avvisi.
+- Doc: affidate al `docs-writer` (`3a36f6e7`), solo EN, nessun timbro.
+- **Unità leggere della corsia** (19:25–19:36, `work/a8a/reds.sh g52`, nessun server): `services settings` 23/23;
+  `front-utility core-unit` 214 file / 8 912; `front-utility component-unit` **rc 1**: 4 785 verdi, 113 saltati, 3 file
+  rossi per «Hook timed out in 60000ms» nel `beforeAll` che importa il componente — `changelog/WhatsNewModal.test.ts`
+  (C-54), `backup/RestoreCard.test.ts` e `backup/RestoreReportModal.test.ts` (B), nessuno toccato dal lotto.
+  - **Triage** (skill `test-triage`): nessuna asserzione eseguita (§1 non applicabile); il tempo dell'import nell'esecuzione
+    intera 1 895 s cumulati, il carico salito da 46 a **124** (media a 5 minuti, 19:37: le corse pesanti di altre
+    sessioni). I tre file da soli (19:39, carico a 1 minuto < 50): **113/113 in 12,8 s, import 0,4 s** — esattamente i 113
+    saltati. **Verdetto: ambiente** (macchina satura oltre il cancello; il mio `reds.sh` controlla il carico a 1 minuto
+    solo alla partenza). Rimedio: `component-unit` intera di nuovo dietro il cancello a 5 minuti, dopo lo slot API.
+
+### A52.3 — Doc e indice ✅ (19:20–19:45)
+- **Doc** (`docs-writer` `3a36f6e7`, solo EN, nessun timbro): `developer/architecture/settings.md` (paragrafo «A stored
+  theme the app does not know», A-11); `developer/architecture/access_control.md` («Superusers…»: il 400 `LAST_ADMIN`;
+  la tabella «The User Limit»: `user activate` senza avviso anche per l'admin in attesa, A-40);
+  `developer/architecture/users_and_brokers.md` («Deleting an Account»); `developer/frontend/components/features/settings.md`
+  (tabella «Account Errors»: la riga `LAST_ADMIN` su un'eliminazione, la riga della frase senza codice ora un ripiego
+  senza esempio; l'esito di `AccountDeletionDialog`; i test AERR-15…19 e ADEL-28/29); `admin/cli_tools.en.md` (📏 e 🏁);
+  `admin/users.en.md` («Waiting for Its Setup Link»). Verificato da me nel diff.
+- **⚠️ Fuori pista**: il `docs-writer` segnala `admin/configuration.en.md` («When the Instance Is Full»: «`user activate`
+  print[s] a warning») falso per chi tiene già il posto — già per la verifica dell'email, ora anche per l'admin in attesa:
+  corretto da me con una frase (stessa materia di A-40). E `developer/api/curl-testing.md` (~95–99): una rotta che non
+  esiste (`PATCH /auth/users/me/preferences`) → **A-53** nell'indice, non toccata.
+- `mkdocs build` strict pulito, `check-links` 97 validi (`/tmp/libreFolio_a52_mkdocs.log`, `…_links.log`).
+- **Indice** (la mia sezione): ✅ A-11, A-16, A-26, A-40; nuove **A-52** (l'eliminazione di sé conta gli admin attivi prima
+  del lock di scrittura, classe A-51) e **A-53**; ad A-10 una nota: in EN cambiano ancora `admin/cli_tools` e
+  `admin/configuration` (traduzioni indietro, nessun timbro).
+
+### A52.4 — Slot API (GO del coordinatore, 19:28) ✅ (19:43–19:54)
+- `work/slot_a52/slot.sh c5b9cca75 all`, dietro il cancello del carico a 5 minuti (atteso dalle 19:43 alle 19:46): `api
+  settings` **110/110** (le classi in-process comprese), `api account-deletion` **9/9**, `api auth` **95/95**;
+  `front-utility core-unit` **214 file / 8 912**; `front-utility component-unit` **181 file / 4 898** (i tre file del
+  timeout delle 19:36 verdi: verdetto «ambiente» confermato). Impronta dell'albero invariata (`0fdc3b5744821d76`),
+  porta 6182 libera.
+- **Lotto A-11/A-16/A-40/A-26: definizione di fatto ✅** — rossi osservati prima del codice, verdi locali e di corsia, doc
+  EN con build strict e link, indice aggiornato. Non eseguiti: nessun E2E (il lotto non ne tocca), `all-backend`.
+
+## Lotto A-11/A-16/A-40/A-26 — Entrato nel ramo; note di E e di H (17/10, 19:55–)
+- **Checkpoint del coordinatore** (6 commit, 30 file): `3e12b09ae` (A-11), `16164411d` (A-16), `87356c8c5` (A-40),
+  `f8503b48e` (A-26), `c64d8192b` (doc), `a1b826e42` (journal). HEAD `a1b826e42`, albero pulito.
+- **Revisione di E di A-51: OK**, con tre note → indice, sezione A: **A-54** (la `refresh` di una riga cancellata nella
+  finestra → 500, quattro punti), **A-55** (la DELETE rilegge sotto il lock solo l'admin in attesa), **A-56** (il limite
+  contato prima del lock: la riattivazione dal PATCH e, trovato da me, `create_invite`; la registrazione è già sicura).
+  Proposto al coordinatore un lotto «decidere sotto il lock»: A-52 + A-54 + A-55 + A-56 + A-53; in attesa del GO.
+- **Da H-43** (dev `a6adb0066`, la corsia gestita), due righe nell'indice: **A-57** (LGM-E-01/03 di
+  `legal-and-managed.spec.ts` leggono il profilo della corsia; in 1.3, prima della fase 2 di H-43; dopo il lotto in corso)
+  e **A-58** (la metà UX di H-53, dopo la 1.3: cosa vede l'admin quando `connect-src 'self'` blocca la verifica
+  dell'indirizzo).

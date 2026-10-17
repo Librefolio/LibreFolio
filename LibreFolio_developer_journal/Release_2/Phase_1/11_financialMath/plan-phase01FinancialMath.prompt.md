@@ -3186,3 +3186,128 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
   `roi-fifo-utils` **1443**; `financial-math` **1474**. ruff, black, diff-check. Il runner raccoglie tutta
   `test_financial/` (`_backend_services.py:994`, registrata a `:2399`): nessuna riga nuova. Porta libera.
   **CHECKPOINT READY** inviato, FROZEN.
+
+#### J45c entrato (dev `ab74aafbf`); MF-A10 — le finestre alla quota del proprietario, più il nit di A9 (17/10, 19:5x)
+- Coordinatore: J45c **entrato** (dev `ab74aafbf`, mio `6119fccd0`); worktree a `ab74aafbf`, pulito. J ha rivisto A7 e
+  A9: OK. **GO per MF-A10 + il nit di A9**; poi l'analisi di **J-14** (sola lettura, passata da J: le copie del realizzato
+  e del G/L % da portare alla regola 26). MF-A11 (proposta di J sulla base unica delle righe aperte) nelle domande del
+  developer. Backlog: ✅ J45c e A7; nuove MF-A10 (in corso) e MF-A11 (da decidere).
+- ✅ **Codice A10**: `holding_window.quantity_moves(transactions, split_ids, share=Decimal("1"))` scala ogni quantità
+  per la quota, come il motore (`daily_state.py:380`, `effective_share(role, share_percentage)`, costante per broker);
+  `get_summary` (~:675) e `get_positions_contribution` (~:1660) passano `lot_shares[broker_id]` dagli `accesses`.
+  `oldest_open_lot_date`, `closed_position_window`, `exits_in` vedono così la quantità della riga. Quota 0: ogni moto è
+  0, nessuna finestra (il motore non muove nulla). Numeri visibili: solo broker con s < 1 e un residuo grezzo in
+  (polvere, polvere/s] — la data «Lotto aperto più vecchio» e la finestra dell'annualizzato dal lotto vero; una chiusa
+  a polvere/quota ha la sua finestra chiusa invece della ricaduta.
+- ✅ **Nit di A9** (J): la condizione è `row_exits == 0` — nessuna unità uscita nel periodo, prima o dopo l'arrivo; allineati
+  docstring di `annualized_period_return`, commento in `get_positions_contribution` e prima frase del paragrafo in
+  `net-annualized-return.en.md`.
+- ✅ **Doc A10**: `net-annualized-return.en.md` — le quantità sono quelle del motore alla quota (esempio 50 %: 0,000012 →
+  0,000006, polvere per la finestra come per la riga); «chiusa» con la quantità alla quota.
+- ✅ **Test A10** (test-author `a10-tests`): puro `TestQuantityMovesAtTheOwnersShare` (30 casi: la quota scala ogni
+  quantità e tiene date, ordine e split; il caso di J 2015 → 2024 a ½; chiusa a polvere/quota → la data della vendita;
+  default = broker intero sul corpus; split avanti e indietro a ½; quota 0; `exits_in` invariato a ogni quota
+  positiva). Servizio `TestCoOwnedBrokerShare` (7): Esposizione e riga aperta datano dall'acquisto dopo il residuo
+  (0,741177 su 120 giorni, HEAD 0,243821 su 305); chiusa a polvere/quota 0,432922 su 185 giorni (HEAD None); tenuta
+  all'inizio: regola chiusa 0,152568 su 245 (HEAD generale 0,090900 su 365); guardie: broker intero (proprietario 100 %
+  ed editor con quota 0 registrata), residuo sopra polvere/quota. `share_percentage` è una frazione 0–1 (vincolo CHECK).
+  Helper `_scope` con `role`/`share` opzionali, default = prima. 11 mutanti presi (quota ignorata, divisa, invertita nei
+  chiamanti, solo agli split, tutto tranne gli split, default ½, solo in uno dei due chiamanti, `closed_position_window`
+  o il lotto più vecchio grezzi, `share_percentage` senza `effective_share`).
+  **Trovato** (test-author, non fissato): a broker intero un residuo 0,000012 (> polvere) lascia una riga tenuta con costo
+  alla fine 0,0012 e l'annualizzato della regola generale vale **1 774 600,33** (HEAD e ora): la base di ricaduta
+  minuscola. La proposta MF-A11 di J (base = costo alla fine + `closed_position_base`) lo cura; annotato su MF-A11.
+  Quota 0: `exits_in` 0 contro `per_sales` > 0 (il motore emette vendite a zero), innocuo (finestra `(None, None)`).
+- ✅ **Corsia** (19:59; prodotto tolto `holding_window.py` + `portfolio_service.py`, sha `fd531c23…` uguale dopo):
+  `financial-math holding_window` rosso **30** / 131 (tutti `TypeError … 'share'`); `roi-fifo-utils
+  test_holding_window_service` rosso **4** / 16 (i valori di HEAD nel messaggio). Verdi: `financial-math` **1504**,
+  `roi-fifo-utils` **1450**, `portfolio-engine` 41. ruff, black, diff-check, `mkdocs build` stretto, `check-links`. Porta
+  libera. Slot chiesto (`files/a10.sh slot`: `api portfolio`).
+- Coordinatore (20:03): slot A10 approvato, **attendere il suo segnale** (tre corse pesanti: H, B, Y). **J-14 approvata**
+  dopo l'ingresso di A10 (`period_identity_residual` + `is_reconciled` in `period.py`, parità esatta, nessun aumento di
+  versione); `ai_export/components/{portfolio_financial,broker_financial}.py` **liberi**. La variazione d'un giorno →
+  **MF-A12** (backlog), dopo J-14 se resta piccola. Il caso 1 774 600 va nella domanda di A11 al developer.
+- ✅ **Slot** (segnale 20:05; HEAD `ab74aafbf`): `api portfolio` **53** passati; porta 6190 libera. **CHECKPOINT READY**
+  inviato, FROZEN.
+
+#### J-14 — analisi (sola lettura, 17/10, 20:0x; base `ab74aafbf`)
+Passata da J (coordinatore, 19:48): le copie del realizzato e della G/L % da portare alla regola 26 (costo al cambio
+dell'acquisto, proventi al cambio della vendita). Inventario di J (piano 05, «Inventario del punto 26», 15/10)
+riverificato sul codice di oggi:
+
+| # | Superficie (inventario) | Oggi | Esito |
+|---|---|---|---|
+| 1 | motore: `_realized_sale` | `RealizedSale`: proventi al cambio della vendita − costo WAC storico | riferimento, nulla |
+| 2 | lotti: `lots/histories.py:160-182`, chiusure `lots_analysis_service.py:1042-1045` | `known_realized_pnl`/`known_cumulative_proceeds` (`histories.py:269-290`) e le righe di chiusura (`lots_analysis_service.py:1106-1122`) leggono `lots/conversions.convert_closure` (`:90-112`): gamba del lotto al cambio d'apertura, gamba di chiusura al cambio della chiusura, `realized_gain` della casa | **chiusa da CP-7a** (`4f9e94420`) |
+| 3 | sintesi del lotto `lots_analysis_service.py:728-770` | `financial_math/lots/summary.py` (`lot_value`, `lot_summary_figures`: `market_pnl = pnl − realized` sui valori già convertiti) | **chiusa da CP-7a** |
+| 4 | AI Export `payloads/portfolio_broker.py:604-606`, `:775-776` | ora `:614-616` (somme `_sum_complete("realized_pnl")`, `_sum_optional("unrealized_pnl")` delle righe dei lotti) e `:825-826` (`lot.realized_pnl`, `lot.market_pnl`): legge la sintesi già convertita | eredita; nessuna aritmetica finanziaria propria; nessun aumento di versione (regola «never for new values through an unchanged builder», CP-7a) |
+| 5 | AI Export: identità del periodo `portfolio_financial.py:489`, `broker_financial.py:434` | ora `portfolio_financial.py:491-495` e `broker_financial.py:432-436`, identiche: `residual = pnl − (ΔUGL + realized + income − fees + other)`, `reconciled = |residual| < CONVERSION_DUST` | **aperta**: duplicato senza cambio di valore |
+| 5b | (nuovo) `portfolio_service.py:1854` (`get_positions_contribution`) | `period_other_result = pnl − ΔUGL − realized − income + fees` scritto in linea, mentre `get_summary` (`:942`) chiama la casa `period.period_other_result` | **aperta**: duplicato, stesso ordine delle operazioni della casa → valori identici al bit |
+| 6 | G/L % posizioni e broker `portfolio_service.py:824`, `:939` | `returns.gain_loss_ratio` (`:730`, `:842`, `:915`) | **chiusa da CP-4** |
+| 7 | `brokers/summary.py:119-135` (W) | `gain_loss_ratio(..., positive_base=False)` (`:140`) | **chiusa da CP-7a** |
+
+**Il resto di J-14 = 5 + 5b, senza cambio di valore.**
+- Casa: in `financial_math/portfolio/period.py`, accanto a `period_other_result`, `period_identity_residual(pnl,
+  ugl_delta, realized, income, fees_taxes, other_result) -> Decimal` con **l'associazione di oggi**
+  (`pnl − (ugl_delta + realized + income − fees_taxes + other_result)`: Decimal a 28 cifre, un altro ordine potrebbe
+  cambiare l'ultima cifra d'un residuo di conversione e quindi il valore esportato) e il predicato
+  `is_reconciled(residual)` (`|residual| < CONVERSION_DUST`, da `native_cash`).
+- Chiamanti: `portfolio_financial._build_portfolio_reconciliation`, `broker_financial._build_broker_reconciliation`;
+  `get_positions_contribution` chiama `period_other_result`.
+- Prove: test puri con la copia di oggi scritta per esteso (parità esatta, esponente compreso, su un corpus con
+  residui di conversione a molte cifre, zero, negativi, al bordo di `CONVERSION_DUST`); i test esistenti dei due
+  componenti di riconciliazione e `api portfolio` invariati. Nessun rosso di comportamento: nulla cambia. AI Export:
+  nessun aumento di versione dei componenti (stessi valori dallo stesso builder); una sonda mirata solo se J la vuole.
+- Superfici: `period.py` (casa), `portfolio_service.py`, `ai_export/components/{portfolio_financial,broker_financial}.py`
+  — erano nella lista vietata del kickoff finché i lotti di J aperti allora non entravano: da confermare col
+  coordinatore. Doc: nessuna (la pagina `period-pnl` descrive già l'identità).
+- Taglia: piccola (~25 righe di prodotto, un file di test puri), corsia `financial-math` + `ai-export` dei due
+  componenti; slot `api portfolio` per il servizio.
+
+**Trovato di passaggio, fuori da J-14 (stessa regola «una casa»)**: in `get_summary` la variazione d'un giorno delle
+posizioni è scritta in linea — `price_change_1d = ((corrente − precedente) / precedente).quantize(0.0001)` (`:745`) e
+`gain_loss_change_1d_percent = (variazione / |valore precedente| × 100).quantize(0.01)` con la guardia
+`|precedente| > 0,01` (`:759`) — accanto a `returns.price_return` e `returns.change_ratio`. Valori: `price_return` fa
+`fine/inizio − 1`, non `(fine − inizio)/inizio`; dopo il quantize a 4 decimali coincidono salvo un pareggio al bordo
+dell'arrotondamento (da provare con un corpus). Proposta: voce MF a sé, dopo J-14, se il coordinatore la vuole.
+
+#### A10 entrato (dev `4753b66f6`); J-14 — l'identità del periodo nella casa (17/10, 20:1x)
+- Coordinatore: A10 **entrato** (dev `4753b66f6`, miei `dddadd359` + `e80766d69`, CHANGELOG 🐛 `e6d3e61e0`); worktree a
+  `e6d3e61e0`, pulito. **GO per J-14**, poi MF-A12. Revisore post-ingresso di A10: J.
+- ✅ **Codice J-14** (nessun cambio di valore): `financial_math/portfolio/period.py` + `period_identity_residual(pnl,
+  ugl_delta, realized, income, fees_taxes, other_result)` (`pnl − (ugl_delta + realized + income − fees_taxes +
+  other_result)`, l'associazione dell'AI Export) e `is_reconciled(residual)` (`|residual| < CONVERSION_DUST`, importata da
+  `native_cash`: nessun ciclo). Chiamanti: `ai_export/components/portfolio_financial._build_portfolio_reconciliation`,
+  `broker_financial._build_broker_reconciliation` (l'import di `CONVERSION_DUST` sostituito da quello della casa), e
+  `portfolio_service.get_positions_contribution` chiama `period_math.period_other_result` (stesso ordine: identico al
+  bit). Versione dei componenti invariata: stesso valore, stessa bandiera calcolata allo stesso modo (devWiki
+  `ai-export-version-bump-once-per-release`, punto 1; approvato dal coordinatore). Doc sviluppatore:
+  `developer/backend/financial_math.md`, mappa del pacchetto (`period.py` … «e il suo residuo»). ruff (anche `I`), black,
+  import a freddo verdi.
+- In corso: test-author `j14-tests` (parità esatta con la copia di oggi, la ricerca d'un caso in cui l'associazione conta,
+  il bordo di `CONVERSION_DUST`, il componente legato alla casa).
+- ✅ **Test J-14** (test-author `j14-tests`): in `test_period_and_unit_costs.py` `TestPeriodIdentityResidual` (parità con la
+  copia di HEAD, `_same_decimal`, 144 casi brevi + 15 625 a molte cifre; l'identità si chiude col suo termine;
+  **l'associazione conta**: con conversioni per divisione — `/1,19533`, `/1,27229` — quattro raggruppamenti alternativi
+  danno `0E-23`, `1E-22`, `4E-23` o l'esponente diverso, dove oggi `6E-23`/`0E-23`: due casi fissati), `TestIsReconciled`
+  (bordo di `CONVERSION_DUST` sui due segni, parità, la costante è quella di `native_cash` e la funzione la segue) e
+  `TestPeriodOtherResultInPositionsContribution` (la copia in linea di `get_positions_contribution` a molte cifre: verde
+  su HEAD per costruzione); in `test_ai_export_components_portfolio_broker_financial.py`
+  `TestReconciliationFromTheHouse` (portafoglio e broker: residuo e bandiera della casa e di oggi su 4 casi a molte
+  cifre, sotto e alla soglia; il componente chiama la casa una volta per costruzione — guardia strutturale). Mutanti:
+  associazione scambiata, `<=`, soglia 1e-8, componente reinlineato (altra o stessa associazione), `period_other_result`
+  riordinato: tutti presi.
+- ✅ **Corsia** (20:23; prodotto tolto `period.py`, `portfolio_service.py`, i due componenti, sha `3e1965c5…` uguale dopo):
+  `financial-math test_period_and_unit_costs` rosso **18** / 26, `ai-export
+  test_ai_export_components_portfolio_broker_financial` rosso **10** / 132 (tutti `AttributeError` sui nomi nuovi di
+  `period`). Verdi: `financial-math` **1523**, quel file **142**, `roi-fifo-utils` **1450**, `portfolio-engine` 41,
+  `services ai-export` intera **1093**. ruff, black, diff-check, `mkdocs build` stretto, `check-links`. Porta libera.
+- **Fuori pista**: `services ai-export` intera lanciata a mano con il carico a 1 minuto a **66** (sopra 50: la regola delle
+  prove leggere); la corsa è passata, ma il controllo del carico andava fatto prima — d'ora in poi solo dagli script con
+  `wait_load`.
+- Backlog: J-14 sta nella sezione di J — non la tocco; al coordinatore la chiusura.
+- ✅ **Slot** (GO 20:32; HEAD `e6d3e61e0`): `api portfolio` **53** passati; porta 6190 libera. Il coordinatore chiude J-14
+  nella sezione di J all'ingresso. Revisione post-ingresso di Z-33 (`60170aae5`, `price_store.redate_provider_rows`):
+  OK; LOW — l'ordine «dal più recente» vale solo per bersagli in avanti (`target > stored`; l'unico chiamante lo
+  rispetta), da dire nella docstring o rifiutare; nit — un commento sul `flush()` per riga (la chiave unica fra gli
+  spostamenti). **CHECKPOINT READY** inviato, FROZEN.

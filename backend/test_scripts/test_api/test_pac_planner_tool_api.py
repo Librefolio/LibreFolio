@@ -54,7 +54,7 @@ TIMEOUT = 30.0
 # the transport must outwait it, or a slow worker reads as a transport error.
 COMPUTE_TIMEOUT = 70.0
 PASSWORD = "PacToolApiPass123!"
-SOLE_ADMIN_DELETE_DETAIL = "Cannot delete account: you are the only administrator"
+SOLE_ADMIN_DELETE_DETAIL = {"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"}
 
 TOOL_CODE = "pac_allocator"
 IDENTITY_KEYS = ("tool_code", "contract_version", "implementation_version", "schema_fingerprint")

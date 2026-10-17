@@ -348,11 +348,19 @@ No transformation is needed between the DFS output and the API request body.
   whose pair is neither configured yet nor the main pair, a 1-step route at `priority` 1,
   deduplicated across chains.
 - A pair that is already configured cannot be created again: the save button is disabled, and
-  before posting the modal reloads the configured routes and drops the save if the pair appeared
-  meanwhile.
+  before posting the modal checks the configured pairs it holds and drops the save if the pair is
+  among them. It does not reload them: `ensureFxRoutesLoaded()` (`fxRoutesStore.ts`) answers from
+  the store until `invalidateFxRoutes()` empties it (after a save of this tab), so a pair another
+  tab configured since the last load is not seen.
 - In edit mode (**Providers** on the pair page) the modal posts the new list in one request with
   `?replace=true` (X-R75): the backend keeps exactly those routes for the pair, in one transaction,
   so a save that fails or never arrives leaves the pair as it was. With an empty list it posts the
   `MANUAL` item, and the pair becomes manual. Before X-R75 the modal deleted all the pair's routes
   first, so a failed post left the pair with no route, and an empty list deleted the pair: a
   whole-pair delete never reinstates the `MANUAL` sentinel.
+- In edit mode, the intermediate pairs go first, in a plain request, then the pair alone with
+  `?replace=true` (X-R79): `replace` applies to every pair a request names, so a leg another tab
+  configured meanwhile would lose its other routes. The plain request keeps them, though it still
+  rewrites the leg's `priority` 1, as a creation does. Legs refused: nothing is written. Legs
+  written and the pair refused: the pair is as it was, and the legs stay configured. A creation
+  posts the pair and its intermediate pairs in one plain request.

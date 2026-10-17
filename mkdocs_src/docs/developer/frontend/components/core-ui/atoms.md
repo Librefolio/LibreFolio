@@ -143,14 +143,23 @@ A **decimal text field that never goes through a JavaScript number**.
   canonical form (`.` separator, trailing zeros trimmed), then `oncommit` fires. An invalid value
   stays as typed: never cut, never coerced on blur
 - Validation is exact: digit budget (`maxIntegerDigits`, `maxFractionDigits`, default 12 each),
-  `min`/`max` (strings, compared as exact decimals, once the digits fit the budget: a longer value
-  is invalid anyway, and the comparison would build a BigInt of every pasted digit), `required`,
+  `min`/`max` (strings, compared as exact decimals with the value stripped of the zeros the budget
+  does not count, once the digits fit the budget: a longer value is invalid anyway, and comparing
+  the text would build a BigInt of every pasted digit, zeros included), `required`,
   `allowNegative`;
   `onvaliditychange` reports `{normalized, empty, syntaxValid, requiredValid, digitsValid,
-  rangeValid, valid}`, and `externalInvalid` lets the parent mark it invalid
-- A fraction longer than `maxFractionDigits` is flagged (`digitsValid: false`, `aria-invalid`, red
-  border) and also said under the field: a `<p>` rendered right after the `<input>`, as its
-  sibling, with `data-testid="<testid>-digits-error"` (when `testid` is set), `data-max` set to the
+  rangeValid, valid}`, and `externalInvalid` lets the parent mark it invalid. The digits are
+  counted as the backend counts them (`_digit_counts` in `backend/app/db/precision.py`; W-B64):
+  leading integer zeros and trailing fraction zeros are not digits of the value, so
+  `0.10000000000` has one decimal, `5.0` none and `007` one integer digit.
+  `decimalDigitCounts(value)` (`lib/utils/core/parseDecimalInput.ts`) gives these counts for a
+  canonical decimal, with the value without those zeros (`stripped`). So `0.10000000000` is valid
+  at `maxFractionDigits={10}`, `5.0` at `maxFractionDigits={0}` (the PAC priority fields; a blur
+  commits it as `5`) and `0000000000001.5` at the default 12 integer digits
+- A fraction longer than `maxFractionDigits`, its trailing zeros not counted, is flagged
+  (`digitsValid: false`, `aria-invalid`, red border) and also said under the field: a `<p>`
+  rendered right after the `<input>`, as its sibling, with
+  `data-testid="<testid>-digits-error"` (when `testid` is set), `data-max` set to the
   budget, and a text that follows the budget (`common.decimalPlacesExceeded`, an ICU plural):
   *Whole numbers only* for `maxFractionDigits={0}`, as in the PAC priority fields,
   *At most 1 decimal place* for 1, *At most N decimal places* above. It is withdrawn as soon as
@@ -159,10 +168,15 @@ A **decimal text field that never goes through a JavaScript number**.
   a number that looked valid
 - ↑/↓ step by `step` in exact decimal arithmetic, clamped to the bounds (to 0 without
   `allowNegative`); `accelerateOnHold` (default `false`) climbs by powers of ten while the key is
-  held. A value past the digit budget, or a text kept for its exponent, is not stepped
+  held. A value whose text fits the budget steps from that text, its typed places kept (`1.50` →
+  `2.50` at step 1); one whose text is longer, within the budget only because the zeros it starts
+  or ends with are not counted, steps from the value without them, so no BigInt is as long as the
+  text (`5.` followed by 40 000 zeros, ↑ at step 1 → `6`; W-B64). A value past the digit budget,
+  or a text kept for its exponent, is not stepped
 - The checks stay linear on a long paste: the regular expressions of `normalizeDecimalInput` and
   `formatDecimalForDisplay` (`lib/utils/core/formatDecimal.ts`) and its trailing-zero strip used
-  to backtrack quadratically, about 3 s on a 40 000-character text, in the paster's own tab (W-B66)
+  to backtrack quadratically, about 3 s on a 40 000-character text, in the paster's own tab (W-B66);
+  `decimalDigitCounts` drops its zeros with two loops, never a `/0+$/`, for the same reason
 
 **Used by**: the PAC planner steps (targets, routing, fees, liquidity, prices).
 
@@ -177,14 +191,19 @@ A **decimal text field that never goes through a JavaScript number**.
 - `value` is always the normalized draft (`.` separator), while the text the user types stays in a
   private buffer: a parent echoing the value back never rewrites `1,20` into `1.20` mid-typing;
   `resetKey` forces the buffer to reload
+- A new value from the parent is shown in canonical form (`formatDecimalForDisplay`: `.`
+  separator, trailing zeros trimmed) when its digits fit the budget, counted as `ExactDecimalInput`
+  counts them: `0.10000000000` at `maxFractionDigits={10}` is shown `0.1` (W-B64). A value past
+  the budget is shown as given, and refused: formatting would cut it to fit
 - `signRule`: `positive`, `negative`, `nonzero`, `zero` or `any` (default) — a sign that breaks the
   rule makes the value invalid and the border red, a matching one turns it green
 - `accelerateOnHold` defaults to `true`
 - `testid` is passed to the inner field, so the message under it is `<testid>-digits-error`
 
-**Used by**: the quantity field of `TransactionFormModal` (`tx-form-quantity`), with at most 12
-integer and 10 fraction digits — the 10 decimals the backend keeps for a quantity — so a longer
-fraction shows `tx-form-quantity-digits-error`.
+**Used by**: the quantity field of `TransactionFormModal` (`tx-form-quantity`), with at most 15
+integer digits (the backend's limit for a quantity, decision N63) and 10 fraction digits (the 10
+decimals the backend keeps for a quantity), so a longer fraction shows
+`tx-form-quantity-digits-error`.
 
 ---
 

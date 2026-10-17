@@ -133,8 +133,8 @@ perform blocking I/O directly on the application's main event loop.
 | `provider_name` | `@property → str` | Display name (e.g., `"Yahoo Finance"`) |
 | `test_cases` | `@property → list[dict]` | Test cases for automated testing (`identifier`, `identifier_type`, `provider_params`) |
 | `test_search_query` | `@property → str \| None` | Search query for automated tests. `None` if search not supported. |
-| `get_current_value(identifier, type, params)` | `async → FACurrentValue` | Fetch latest price. Returns `value`, `currency`, `as_of_date`, `source`. |
-| `get_history_value(identifier, type, params, start, end)` | `async → FAHistoricalData` | Fetch historical OHLCV data for date range. Return raw data only — no gap filling. |
+| `get_current_value(identifier, type, params)` | `async → FACurrentValue` | Fetch latest price. Returns `value`, `currency`, `as_of_date`, `source`, and optionally `exchange_timezone`. When the quote carries a timestamp, `as_of_date` is its date in the exchange's timezone, not in UTC. |
+| `get_history_value(identifier, type, params, start, end)` | `async → FAHistoricalData` | Fetch historical OHLCV data for date range. Return raw data only — no gap filling. Date each point and event on its session's day in the exchange's timezone, not on the UTC date of a midnight timestamp; the optional `exchange_timezone` names that IANA timezone, which the refresh keeps on the assignment ([The Exchange's Timezone](../../backend/assets/architecture.md#exchange-timezone)). |
 | `validate_params(params)` | `→ None` | Validate provider-specific `provider_params`. Raise `AssetSourceError` if invalid. Use `pass` if no params needed. |
 
 ### 💪 Strongly Recommended (Override)

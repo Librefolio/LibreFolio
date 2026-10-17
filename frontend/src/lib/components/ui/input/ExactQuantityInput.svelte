@@ -1,7 +1,7 @@
 <script lang="ts">
     import ExactDecimalInput from './ExactDecimalInput.svelte';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {decimalDigitCounts, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
 
     type QuantitySignRule = 'positive' | 'negative' | 'nonzero' | 'zero' | 'any';
     type SignState = 'ok' | 'bad' | 'neutral';
@@ -102,12 +102,10 @@
         return sign === 0 ? 'ok' : 'bad';
     }
 
+    /** Within the budget as the backend counts digits, leading integer and trailing fraction zeros not counted (W-B64). */
     function withinDigitBudget(candidate: string): boolean {
-        const normalized = normalizeDecimalInput(candidate);
-        if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) return false;
-        const unsigned = normalized.startsWith('-') ? normalized.slice(1) : normalized;
-        const [integer = '', fraction = ''] = unsigned.split('.');
-        return (integer || '0').length <= maxIntegerDigits && fraction.length <= maxFractionDigits;
+        const counts = decimalDigitCounts(normalizeDecimalInput(candidate));
+        return counts !== null && counts.integerDigits <= maxIntegerDigits && counts.fractionDigits <= maxFractionDigits;
     }
 
     function displayValue(candidate: string): string {

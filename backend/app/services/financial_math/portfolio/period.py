@@ -14,6 +14,7 @@ from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
 
+from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
 from backend.app.services.financial_math.returns import change_ratio
 
@@ -142,3 +143,20 @@ def period_other_result(pnl: Decimal, ugl_delta: Decimal, realized: Decimal, inc
     ``pnl = ugl_delta + realized + income − fees_taxes + other_result``.
     """
     return pnl - ugl_delta - realized - income + fees_taxes
+
+
+def period_identity_residual(pnl: Decimal, ugl_delta: Decimal, realized: Decimal, income: Decimal, fees_taxes: Decimal, other_result: Decimal) -> Decimal:
+    """What the identity leaves once its five terms are taken from the period's P&L (J-14).
+
+    ``pnl − (ugl_delta + realized + income − fees_taxes + other_result)``, in this association: the AI Export's
+    reconciliation always computed it so, and Decimal arithmetic on converted amounts may round a different
+    association differently in the last digit. With ``other_result`` from :func:`period_other_result` it is that
+    rounding alone (:func:`is_reconciled`).
+    """
+    return pnl - (ugl_delta + realized + income - fees_taxes + other_result)
+
+
+def is_reconciled(residual: Decimal) -> bool:
+    """The identity closes: a residual below ``CONVERSION_DUST`` is the rounding of Decimal arithmetic on converted
+    amounts, not a gap."""
+    return abs(residual) < CONVERSION_DUST

@@ -308,6 +308,16 @@ def db_migration_010(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Migration 010 tests", verbose=verbose)
 
 
+def db_migration_011(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 011_provider_exchange_timezone on temporary databases: the exchange's timezone and the mark of the Yahoo rows dated by UTC (Z-33)."""
+    print_section("DB Test: Migration 011 (provider exchange timezone)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, asset_provider_assignments.exchange_timezone as the models build it, the 'legacy-utc' mark on the yfinance assignments, a populated install kept row by row, the restore upgrade, the downgrade, both ways idempotent")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_011_exchange_timezone.py", test_names)
+    return run_command(cmd, "Migration 011 tests", verbose=verbose)
+
+
 def db_session_pragmas(verbose: bool = False, test_names: list = None) -> bool:
     """Test the pragmas every SQLAlchemy engine's connection gets (set_sqlite_pragma, H-51): trusted_schema off first, the schema reset last."""
     print_section("DB Test: Session Pragmas (trusted_schema off)")
@@ -363,7 +373,7 @@ def db_all(verbose: bool = False) -> bool:
         "session-pragmas",  # temporary databases only too
         "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
         "post-migration-orphan-pairs",
-        "migration-005", "migration-006", "migration-007", "migration-008", "migration-009", "migration-010", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
+        "migration-005", "migration-006", "migration-007", "migration-008", "migration-009", "migration-010", "migration-011", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
     tests = []
@@ -462,6 +472,10 @@ Note: No backend server required. Tests operate directly on test DB.
     # PURE, as migration-005 to 009: private files under tmp_path only.
     add_test(cat, "migration-010", db_migration_010, name="Migration 010 Provider Reported Currency",
              desc="010_provider_reported_currency (Z-32): asset_provider_assignments.reported_currency VARCHAR(8) NULL, added and dropped in place (no batch: no foreign-key action); every row kept; idempotent both ways",
+             prereq="None (temporary databases)", isolation="pure")
+    # PURE, as migration-005 to 010: private files under tmp_path only.
+    add_test(cat, "migration-011", db_migration_011, name="Migration 011 Provider Exchange Timezone",
+             desc="011_provider_exchange_timezone (Z-33): asset_provider_assignments.exchange_timezone VARCHAR(64) NULL, 'legacy-utc' on the yfinance assignments still NULL; added and dropped in place; every row kept; the restore upgrade marks too; idempotent both ways",
              prereq="None (temporary databases)", isolation="pure")
     add_test(cat, "session-pragmas", db_session_pragmas, name="Session Pragmas",
              desc="H-51: set_sqlite_pragma (db/session.py, every SQLAlchemy engine of the process) turns trusted_schema off first and resets the schema last (writable_schema=RESET, read again once SQLAlchemy has registered its Python regexp and floor): an archive's DEFAULT calling regexp or floor refused at the insert, a CHECK calling regexp at the first statement, instead of running them; built-ins in the schema (lower() of ux_users_email_lower), a database at the head and top-level SQL unchanged; foreign_keys, WAL and busy_timeout as before; sync and async engines",

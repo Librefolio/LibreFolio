@@ -4174,6 +4174,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     queste quattro. A non ha scritto né codice né test per A-9.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5.2».
 - **A-10 · Debito di traduzione delle pagine toccate da A5** — basso; A, 15/10.
+  - 17/10, lotto A-11/A-16/A-40: in EN cambiano ancora `admin/cli_tools` (i punti 📏 e 🏁 su `user activate`) e
+    `admin/configuration` («When the Instance Is Full»: `user activate` senza avviso per chi tiene già il posto).
   - Le pagine EN di A5a e A5b sono nel lotto; IT, FR ed ES sono indietro su 6 pagine: `admin/configuration`,
     `admin/cli_tools`, `admin/settings`, `admin/service_exposure`, `community/faq`, `user/getting-started`.
   - Vanno tradotte insieme: si linkano con ancore esplicite nuove (`#accounts`, `#user-limit`, `#registration`,
@@ -4206,7 +4208,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     «Changing Your Email» (un punto cambiato, uno nuovo: le maiuscole).
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
-- **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
+- ✅ **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; chiusa il 17/10 (commit del
+  coordinatore): un tema salvato che l'app non conosce si mostra come il `default_theme` noto, altrimenti `auto`, con un
+  avviso nel log; la riga non si riscrive (SET-A11-01…07); trovata dal `test-author` di E (15/10),
   letta nel codice e non ancora provata; segnalata dal coordinatore.
   - Una riga di `user_settings` con un `theme` diverso da `light`, `dark` e `auto` farebbe rispondere 500 a
     `/auth/login` e a `/settings/user`.
@@ -4254,7 +4258,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Una riga, da mettere nel lotto piccolo di H su `ALLOWED_WHEN_BLOCKED`, o da A al prossimo aggiornamento di base.
   - **Girata ad H** dal coordinatore (15/10, 16:56).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
-- **A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`** — minimo; A (15/10, dal
+- ✅ **A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`** — minimo; chiusa il 17/10
+  (commit del coordinatore): 400 `{error_code: LAST_ADMIN, message}`, nel dialogo la chiave nuova
+  `settings.usersTab.errors.LAST_ADMIN_DELETION` (ACCDEL-002/003, AERR-15…19, ADEL-28/29); A (15/10, dal
   `test-author` V4 di A6b).
   - `DELETE /auth/users/me` risponde `400 "Cannot delete account: you are the only administrator"`: una frase
     inglese e nessun codice.
@@ -4344,7 +4350,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Cura approvata dal coordinatore (16/10): solo logica, nessuna classe; un helper `sameEmail` (A–Z come il backend),
     `emailNeedsPassword` e il blocco della password solo per un indirizzo diverso; rossi prima in `ProfileTab.test.ts`.
     Lotto subito dopo l'aggiornamento di base che porta IM, come commit a sé; poi una frase in `user/settings/profile`.
-- **A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico** — minimo; dal
+- ✅ **A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico** — minimo;
+  chiusa il 17/10 (commit del coordinatore): la chiave degli indici di `_shape` viene da `_index_list` (MIG005-A26-01…03,
+  anche un indice unico con due nomi); dal
   `test-author` di P18 (16/10).
   - In `test_migration_005_accounts.py`, la chiave `indexes` di `_shape` viene dall'inspector di SQLAlchemy, che salta gli
     indici su espressione da entrambe le parti (con un avviso). Gli insiemi unici li vede (riparazione di P18), ma un
@@ -4456,7 +4464,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   administrator's address changed: the setup link handed over before no longer works; …», e quelli dopo l'avviso di
   scadenza. Una frase, e la stessa nelle tre traduzioni. Dettagli: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2.2».
-- **A-40 · `user activate` sull'admin in attesa avvisa del limite di utenti anche se il suo posto è già contato** —
+- ✅ **A-40 · `user activate` sull'admin in attesa avvisa del limite di utenti anche se il suo posto è già contato** —
+  chiusa il 17/10 (commit del coordinatore): nessun avviso anche con `is_pending_admin` (IMG-030f);
   minimo; dal `docs-writer` di A7b-2, tramite il coordinatore (17/10); preesistente. A istanza piena il CLI scrive
   l'avviso del limite (che supera), ma l'admin in attesa era già contato fra i posti (D-A10): l'attivazione non ne
   occupa uno nuovo. Cura possibile: nel CLI, nessun avviso quando l'account era in attesa. Dettagli: [piano
@@ -4538,6 +4547,37 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   attivato senza `DEMOTE_FIRST`; in più la scheda annulla con lo stesso corpo di una disattivazione (una riga vecchia
   disattiva il proprietario nuovo), e `user deactivate` può disattivare l'unico admin. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-51».
+- **A-52 · L'eliminazione di sé conta gli admin attivi prima del lock di scrittura** — basso (classe A-51); A (17/10,
+  analisi del lotto A-11/A-16/A-40/A-26). `DELETE /auth/users/me` legge `count_active_superusers()` senza
+  `begin_writes`: gli ultimi due admin attivi che si eliminano nello stesso istante passerebbero entrambi, e l'istanza
+  resterebbe senza admin. `DELETE /users/{id}` e il PATCH decidono già sotto il lock. Cura: `begin_writes(session,
+  User)` e il conteggio ripetuto, rosso prima. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Lotto A-11/A-16/A-40/A-26».
+- **A-53 · `developer/api/curl-testing.md`: l'esempio «Update preferences» usa una rotta che non esiste** — minimo
+  (doc); dal `docs-writer` del lotto A-11/A-16/A-40 (17/10). `PATCH /api/v1/auth/users/me/preferences` con
+  `{language, currency}`: le preferenze sono `PUT /api/v1/settings/user` (`language`, `base_currency`, `theme`,
+  `avatar_url`). Pagina solo EN.
+- **A-54 · Un account cancellato da un altro admin nella stessa finestra risponde 500, non 404** — basso (classe A-51);
+  dalla revisione di E di A-51 (17/10), tramite il coordinatore. Dopo `begin_writes`, `session.refresh(user)` solleva
+  `InvalidRequestError` su una riga appena cancellata (prima era `StaleDataError`, sempre un 500), in quattro punti:
+  `update_user_status` (PATCH), `set_user_active` e `set_user_admin` (CLI), il ramo «in attesa» di `DELETE /users/{id}`.
+  Cura: un aiuto che la intercetta, fa rollback e risponde il 404 di `_user_or_404` (con `USER_NOT_FOUND`: da decidere),
+  nella CLI «User 'x' not found». Proposta nel lotto «decidere sotto il lock» (A-52, A-54, A-55, A-56).
+- **A-55 · `DELETE /users/{id}` rilegge sotto il lock solo l'admin in attesa** — basso; da E (17/10), come A-54. Un
+  account promosso da un altro admin nella finestra viene cancellato senza `DEMOTE_FIRST` (non può togliere l'ultimo
+  admin attivo: chi cancella lo è). Cura: rileggere sotto il lock per ogni cancellazione.
+- **A-56 · Il limite di utenti si conta prima del lock** — basso (conta per i limiti dei piani); da E (17/10, la
+  riattivazione, preesistente), e da A la creazione degli inviti. Il PATCH guarda `usage.full` prima di
+  `update_user_status`, `create_invite` conta prima di ogni scrittura: due operazioni concorrenti a limite − 1 lo
+  superano di uno. La registrazione è già sicura: riconta dopo la sua scrittura, sotto il lock. Cura: contare dopo
+  `begin_writes`.
+- **A-57 · `legal-and-managed.spec.ts`: LGM-E-01 e LGM-E-03 devono leggere il profilo della corsia** — basso, solo test;
+  in 1.3, prima della fase 2 di H-43 (il cancello RC di H); dal coordinatore (17/10, da H-43, dev `a6adb0066`, la corsia
+  di prova gestita). I due casi danno per scontata la variante self-hosted: su una corsia gestita falliscono per
+  costruzione. Cura: leggere `GET /api/v1/system/instance` della corsia e verificare la variante corrispondente; poi H
+  rimette la spec in `CLOUD_SMOKE_SPECS`. Dopo il lotto in corso.
+- **A-58 · Con `connect-src 'self'` imposto, la verifica dell'indirizzo di un link verso un'altra origine è bloccata** —
+  basso, UX; dopo la 1.3, la metà UX di H-53; dal coordinatore (17/10). Il dialogo d'invito della scheda Utenti
+  (`LinkShare` → `checkAddress()`) oggi dice «non verificabile»: decidere cosa vede l'admin. Decisione aperta.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -4736,7 +4776,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   `comparisonAssetIds`, che il FE5c ha portato in `lib/charts/chartPageSignals.ts` (N18). E `toSlug` di
   `assetDetailFxRequirements.ts` è una copia di `createPairSlug` (`fxStoreRegistry.ts`), che però rende maiuscolo.
   Da adottare e unificare nel FE4 (CP7). Dettagli: piano 03, sezione «FE5c-2» e «FE5c-6».
-- **X-R15 · Due testi inglesi fissi nella pagina dell'asset** — minimo, i18n; X, 16/10 (FE5c-3, FE5c-5). «Provider»
+- ✅ **X-R15 · Due testi inglesi fissi nella pagina dell'asset** (chiusa il 17/10, in attesa del commit del coordinatore: «Provider» riusa `common.provider`, «Manual» è `assetDetail.manualChip`) — minimo, i18n; X, 16/10 (FE5c-3, FE5c-5). «Provider»
   (il titolo della fonte nel pannello dei metadati) e «✏️ Manual» (il chip dell'intestazione) non passano dal
   catalogo. Il FE5c li sposta così come sono, in `AssetDetailMetadataPanel` e in `AssetDetailHeader`: due chiavi in
   `assets` dopo il taglio, come O-8. Dettagli: piano 03, sezione «FE5c-3/4/5».
@@ -4749,21 +4789,21 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Cura**: leggere i segnali dopo la cache e la risoluzione, o catturare l'errore solo attorno ai segnali. Con un
     test di componente o E2E che instrada un segnale non valido.
   - Fuori dal FE5c, che sposta il codice senza cambiarlo. Dettagli: piano 03, sezione «FE5c-2».
-- **X-R17 · La conferma di cancellazione di un asset non nomina i suoi eventi** — basso, UX; dal test-author di
+- ✅ **X-R17 · La conferma di cancellazione di un asset non nomina i suoi eventi** (chiusa il 17/10, in attesa del commit del coordinatore: `confirmWarning` e `bulkConfirmMessage` nominano gli eventi, con il plurale e due refusi corretti) — basso, UX; dal test-author di
   W-B42 (lettura), girata a X dal coordinatore il 16/10. La descrizione della conferma singola
   (`routes/(app)/assets/+page.svelte:1808`, `assets.delete.confirmWarning`) dice «Provider assignments and price history
   will be removed», ma anche gli eventi (dividendi, split) se ne vanno in cascata. Cura: una frase nella chiave in 4
   lingue, e lo stesso nella conferma multipla. Dopo il FE5c.
-- **X-R18 · Una transazione blocca la cancellazione solo dopo la conferma** — basso, UX; stessa origine.
+- ✅ **X-R18 · Una transazione blocca la cancellazione solo dopo la conferma** (chiusa il 17/10, in attesa del commit del coordinatore: la conferma singola si apre già bloccata, con il link, quando il `tx_count` della riga è sopra 0) — basso, UX; stessa origine.
   `confirmDeleteAsset` (`:925`) chiama il DELETE e solo allora riceve `HAS_TRANSACTIONS`, con il conteggio e il link
   alle transazioni; la multipla fa lo stesso (`:995`). L'utente conferma una cosa che non può succedere. Cura: usare il
   `tx_count` della riga della lista (`:554`) per aprire la conferma già bloccata, con il link. È solo un'indicazione,
   perché può contare solo le transazioni visibili all'utente, e il controllo del backend resta quello che decide. Dopo
   il FE5c.
-- **X-R19 · «N assets» in inglese fisso nella conferma multipla** — minimo, i18n; stessa origine.
+- ✅ **X-R19 · «N assets» in inglese fisso nella conferma multipla** (chiusa il 17/10, in attesa del commit del coordinatore: `assets.delete.itemsLabel`, un plurale) — minimo, i18n; stessa origine.
   `itemsLabel={\`${deletingAssets.length} assets\`}` (`:1826`). Cura: una chiave con il plurale in `assets.delete`, 4
   lingue. Dopo il FE5c.
-- **X-R20 · Il cestino della card e la conferma singola senza `data-testid`** — minimo, test; stessa origine.
+- ✅ **X-R20 · Il cestino della card e la conferma singola senza `data-testid`** (chiusa il 17/10, in attesa del commit del coordinatore: `asset-card-delete-btn`, `asset-delete-confirm`, `asset-bulk-delete-confirm`; le E2E li usano) — minimo, test; stessa origine.
   Il bottone del cestino di `AssetCard.svelte:318` non ha `data-testid`, e la `ConfirmModal` singola (`:1805`) non
   passa `testId` (la multipla nemmeno). Cura: `asset-card-delete-btn` e `testId` sulle due conferme, poi le E2E che
   oggi passano dal testo o dalla posizione. Dopo il FE5c.
@@ -4903,7 +4943,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Il rischio vero di C-66 è questo.
   - **Cura proposta**: una sola funzione in `services/assets/core.py` che costruisce la chiave, usata nei quattro
     punti, con un rosso per ciascun difetto. È naturale farla nello stesso lotto di X-R27.
-- **X-R31 · Ricerca degli asset: il messaggio d'errore non è tradotto** — basso; X, 16/10 (trovato dal test-author di
+- ✅ **X-R31 · Ricerca degli asset: il messaggio d'errore non è tradotto** (chiusa il 17/10, in attesa del commit del coordinatore: `assets.search.failed`) — basso; X, 16/10 (trovato dal test-author di
   F21/P20, fuori perimetro).
   - Quando falliscono sia lo streaming sia il ripiego REST, la tendina mostra `e.message` così com'è, oppure
     `'Search failed'` in inglese (`AssetSearchAutocomplete.svelte`, ramo `catch` del REST).
@@ -4966,7 +5006,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - ~865: l'avviso si ripete a ogni interrogazione della stessa quotazione (lo scheduler ogni 10 minuti, più ogni pagina
     aperta). Cura: una volta per (asset, valore) per processo (`functools.cache`, come `_report_invalid`), oppure
     `info`.
-- **X-R41 · `POST /fx/currencies/convert` con importo 0 dà un 500** — basso; X, 17/10 (trovato dal test-author di
+- ✅ **X-R41 · `POST /fx/currencies/convert` con importo 0 dà un 500** (chiusa il 17/10, in attesa del commit del coordinatore: un importo 0 si converte come una unità: risposta 0 al tasso del giorno) — basso; X, 17/10 (trovato dal test-author di
   X-R38, girato nel backlog dal coordinatore).
   - L'endpoint divide per l'importo di partenza: convertire 0 fra due valute solleva un'eccezione invece di rispondere 0.
 - **X-R42 · Due fixture dei test FX lasciano righe committate** — basso, test; X, 17/10 (dal test-author di X-R38).
@@ -5069,6 +5109,14 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     e cancella le altre. È una corsa stretta, e la docstring di B la dice.
   - Cura (frontend): in modifica, prima le gambe con un upsert semplice (solo aggiunta), poi la sola coppia principale
     con `replace=true`; un Vitest fissa l'ordine delle due richieste. Se fallisce la seconda, restano solo gambe nuove.
+- **X-R80 · Le gambe delle catene non sono mai davvero «solo aggiunte»** — basso, **dopo la 1.3**; X, 17/10 (dall'analisi
+  di B per X-R79, girata dal coordinatore).
+  - `create_routes_bulk` fa un upsert per (base, quote, priorità): a una priorità esistente sovrascrive `chain_steps`
+    (`api/v1/fx/providers.py` ~249-262), e un provider vero toglie la rotta MANUAL.
+  - Così anche il POST delle gambe di X-R79 (opzione A, solo frontend) può sovrascrivere la priorità 1 di una gamba
+    configurata nel frattempo. È la stessa esposizione che il percorso di creazione ha sempre avuto.
+  - Per avere davvero «solo aggiunta» serve un flag del backend, per esempio `create_only`: salta una coppia che ha
+    già rotte, nella stessa transazione. Più `api sync`.
 - ✅ **X-R47 · Il rapporto di uno SPLIT non è mai validato** (chiusa il 17/10: `5f68a8db0`, la regola (d) con `1b6d65da7`; entrata in dev `952c68cd5`; gli SPLIT già salvati sono MF-D4) — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
   V-4 di CP-14a, F4, girato dal coordinatore).
   - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
@@ -5634,6 +5682,8 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `frontend/e2e/fx/fx-csv-import.spec.ts:56` l'asserzione dipende dalla parola «error» (testo tradotto). Cura: dopo il
   lotto W1-g di T (~07:30, che tocca quei file: `asset-data-editor.spec.ts:287`, `fx-csv-import.spec.ts:53,56,289`), coi
   `data-testid`/`data-state` che introduce. Dettagli: messaggio del coordinatore, 16/10 06:07.
+  ✅ 16/10 (riconciliato il 17/10): i due spec asseriscono invece di sondare, dev `d6a260c89` (`a59593570`). Restano W-B47 e
+  W-B48. Dettagli: piano 04, sezione W-B43.
 - **W-B44 · `PromoteMergeModal` senza `data-testid` univoci** — minimo, test; W, 16/10 (W-B39, test-author). Con la modale
   aperta `promote-merge-modal` trova due elementi, e il suo «Annulla» non ha `data-testid`: un test della promozione con campi
   diversi non li può prendere in modo stabile (oggi nessuno lo fa). Cura: un `data-testid` per elemento, in
@@ -5670,6 +5720,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   > 0)` che lo fanno passare senza asserire nulla (lo stesso difetto del test 21). Cura: i `data-testid` e gli attributi che
   esistono già, nessun codice di prodotto; tranne il ✕, che chiede un `data-testid` (file dell'area dei colori). Dettagli:
   piano 04, sezione W-B43.
+  ✅ 17/10: i due spec senza selettori per testo né classi (`data-import-confirm` con `data-valid-rows`, `asset-editor-save-btn`/
+  `-cancel-btn`, `tab-badge` con `data-badge`, `data-import-discard-confirm`, `data-import-cancel`), il test 14 asserisce, e i due glifi
+  su `data-testid` nuovi (`asset-detail-editor-close`, `fx-import-swap`, OK del coordinatore). Dettagli: piano 04, «W-B48».
 - **W-B49 · Svuotare il costo nel modulo: il rifiuto arriva solo a «Salva tutto», e tre testi dicono ancora «vuoto = Auto»**
   — minimo, chiarezza; W, 16/10 (W-B30, docs-writer). (1) Ogni modifica passa dalla Bulk, che apre il modulo; il controllo
   dal vivo del modulo su una coppia (`collectDualUpdates` → `diffDualItem`,
@@ -5700,6 +5753,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   giorno (0,00015 e 0,00008 BTC) coincidono sulla quantità, e un import che li ritrova li segna come doppioni probabili
   (deselezionati per default) se anche l'importo coincide a 0,01. Cura: una tolleranza relativa alla scala (o l'uguaglianza,
   ora che le quantità tornano esatte), con un rosso; dopo C-97a. Dettagli: piano 04, sezione C-97.
+  ✅ 17/10 (D-W51-1, coordinatore): uguali arrotondate half-up alla scala della meno precisa (`normalize()`) e mai oltre 0,0001
+  (`_same_quantity`); una quantità salvata illeggibile non è più un `TypeError`. 4 rossi, 7 guardie. Resta il gemello del wizard:
+  W-B81. Dettagli: piano 04, «W-B51».
 - **W-B52 · Svuotare il massimo di un prezzo rifiuta la data** — minimo, dati; W, 16/10 (C-97a, test-author). In
   `bulk_upsert_prices` (`backend/app/services/assets/price_store.py`, ~194–197) il controllo OHLC confronta i valori
   ricevuti, sentinella compresa: con `high = -1` (svuota il massimo), da solo o con `low = -1`, vale `low <= close <= -1`,
@@ -5751,10 +5807,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   promozione controllata, i blocchi dei provider senza eccezioni a metà. Da chiudere prima del rilascio. Cifre intere: 15 per
   quantità e importo (decisione notturna N63 del coordinatore, da rivedere col developer), le altre colonne come dichiarate (12
   prezzi, costo per unità e valore dell'evento; 24 il volume). Dettagli: piano 04, sezione «W-B58 e W-B59».
+  ✅ 17/10 (riconciliato): entrato con W-B59, dev `4e9d1815f` (`94fbd54fd`). Dettagli: piano 04, «W-B58 e W-B59».
 - **W-B59 · Il precaricamento del pool BRIM ferma il server al primo import (W-B53)** — medio, disponibilità; E, 17/10
   (R13-SEC2, nota 12, 9/10, provata). `_get_pool()` imposta il precaricamento anche col prewarm spento: su 3.13 il primo parse
   dopo un avvio blocca il loop per tutto l'import di BRIM (~4 s a riposo, 30–50 s sotto carico), contro N56. Cura: il
   precaricamento solo col prewarm acceso. Dettagli: piano 04, sezione «W-B58 e W-B59».
+  ✅ 17/10 (riconciliato): il pool si precarica solo col prewarm acceso, dev `4e9d1815f` (`e69544f79`). Dettagli: piano 04,
+  «W-B58 e W-B59».
 - **W-B64 · Il Form accetta 12 cifre intere per la quantità, il backend 15 (N63)** — minimo, chiarezza; W, 17/10 (C-97b). Le tre
   quantità del Form (`features/transactions/form/TxFormSingleSection.svelte` ×2, `TxFormPairSection.svelte`) hanno
   `maxIntegerDigits={12}`: una quantità da mille miliardi in su è segnata invalida nel Form, mentre il backend la accetta (N63:
@@ -5821,11 +5880,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `99999999999999.906250`). Gli importi interi (VND, IDR) tornano esatti. Cura: `RealDecimal(18, 6)` (stesso DDL, nessuna
   migrazione), dopo aver controllato le `SUM` in SQL su quelle colonne; rossi prima. Chiude anche metà di W-B63. Dettagli: piano 04,
   sezione «W-B58 e W-B59».
+  ✅ 17/10 (riconciliato): importi e valori degli eventi letti esatti, dev `484c71afb`. Dettagli: piano 04, «W-B60».
 - **W-B61 · I cambi senza limite di grandezza (classe di W-B58)** — medio, dati; W per X, 17/10 (W-B58). Il cambio manuale
   (`api/v1/fx/currencies.py:92` → `services/fx/storage.py:60`) non ha limite: `1E+400` si salva come REAL inf, e il suo inverso
   `1E-400` come 0; dei provider, `truncate_fx_rate` (`db/precision.py`) solleva `InvalidOperation` da `1E+50`. Codice di X (il
   coordinatore lo avvisa). Cura: `decimal_limit_issue` e `storable_value` di W-B58 sulla colonna `FxRate.rate`. Dettagli: piano 04,
   sezione «W-B58 e W-B59».
+  ✅ 17/10 (riconciliato), da X: i cambi che non si salvano rifiutati o saltati, `80f5c65ff`.
 - **W-B62 · `/prices/current` risponde per intero un prezzo enorme del provider** — basso, disponibilità; W, 17/10 (R13-SEC2, nota
   6). Il serializzatore `format(v, "f")` (`backend/app/schemas/common.py:47`) scrive per intero un `1E+50000000`: ~50 MB per
   risposta, che la cache di 2 minuti riserve. Dopo W-B58 il valore non si salva più, ma la risposta lo porta ancora. Cura: la
@@ -5833,6 +5894,7 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (17/10): anche la cache di 2 minuti e il delta del refresh la portano; proposta al confine del provider, mai nel serializzatore.
   **Passata a X** (coordinatore, 17/10 03:4x), con la sua X-R40; i rossi scritti da W gli vanno consegnati. Dettagli: piano 04,
   sezioni «W-B58 e W-B59» e «W-B62 e W-B63».
+  ✅ 17/10 (riconciliato), da X (X-R40): dev `fd6886bb0`. Resta W-B63 (D-W63-1).
 - **W-B63 · Un inf già salvato in una colonna `Numeric` rompe le risposte** — basso, dati; W, 17/10 (W-B58). Importo, valore di
   evento, volume e cambio si rileggono `Decimal('Infinity')` (formato `'%.Nf'`), che il JSON scrive `Infinity`. Solo dati scritti
   prima di W-B58 o a mano. Importo e valore dell'evento li chiude W-B60 (letti `None`, mai più scritti); volume e cambio restano.
@@ -5940,6 +6002,24 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   data e costo base, che `PromoteMergeModal` non offre più dal maggio 2026 (SP-C Step 5): la modale si apre senza campi e il corpo dice
   solo «Confirm promotion». Cura: la divergenza su descrizione e tag soltanto (come «Unisci» nel Bulk), altrimenti la conferma semplice;
   un rosso di componente o E2E prima. Dopo la 1.3. Dettagli: piano 04, «W-B70 (+ W-B77) — cura».
+- **W-B80 · I rifiuti `ledger_unreadable` del gap-fix arrivano in inglese in ogni lingua** — minimo, chiarezza; W, 17/10 (revisione
+  di E-19a). Il 409 del gap-fix (`backend/app/services/brim/brim_gap_fix.py`: le righe illeggibili di W-B74 e, da E-19a, i codici di
+  valuta non ISO, con i codici citati) è una frase inglese che il passo del wizard mostra com'è (`extractErrorMessage` →
+  `GapFixStep.svelte:337`, testo semplice, sicuro): l'utente italiano, francese o spagnolo la legge in inglese, mentre lo stesso caso nel
+  batch è tradotto (`transactions.errors.ledgerUnreadable`). Cura: il 409 con un codice e i parametri (`count`, i codici e il loro ISO),
+  tradotto nel wizard, come C-70 per i rifiuti dei plugin. Dopo la 1.3, salvo spazio. Dettagli: questa voce.
+- **W-B81 · I doppioni del wizard tra file usano la stessa tolleranza fissa di W-B51** — minimo, dati; W, 17/10 (W-B51). Il wizard
+  raggruppa le righe di file diversi e del pool in attesa con `dedupKeysMatch`
+  (`frontend/src/lib/features/transactions/import/importDedup.ts:145-157`): la quantità e il costo per unità a 0,0001
+  (`QUANTITY_TOLERANCE`, `importTypes.ts:105`) su `Number(...)`, e l'identità del gruppo con `toFixed(4)` (`describeDedupKey`). Due
+  acquisti ricorrenti di crypto in due file dello stesso import (o un file e il pool) finiscono nello stesso gruppo, «sicuro» se la
+  descrizione coincide. Cura: la regola di D-W51-1 sui testi decimali esatti (la scala del meno preciso, half-up, mai oltre 0,0001),
+  l'identità senza `toFixed(4)`; rossi Vitest in `importDedup.test.ts`; la pagina `import-wizard.md` («The dedup signature»). Subito dopo
+  W-B51, proposta. Dettagli: piano 04, «W-B51».
+  ✅ 17/10 (via del coordinatore): `sameDedupQuantity`, la regola di D-W51-1 letta esatta dai testi decimali (mai un float, mai un
+  esponente in un testo), per la quantità e il costo per unità; l'importo entro 0,01 calcolato esatto; `DedupKey` e l'identità del
+  gruppo con i testi esatti. In più: una quantità illeggibile (`'n/a'`) non combacia più con tutto. 67 rossi Vitest, la tabella dei casi
+  condivisa coi nomi del backend. Dettagli: piano 04, «W-B81».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
@@ -6229,7 +6309,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   La matrice dei plugin lo fissa (`test_period_params_declare_their_unit_and_tooltip`). Commit: il checkpoint di CP-10a.
 
   Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati».
-- **J-14 · Copie del realizzato e della G/L % da portare alla regola del punto 26** — medio, numeri; J, 15/10. Il
+- ✅ **J-14 · Copie del realizzato e della G/L % da portare alla regola del punto 26** — medio, numeri; J, 15/10. Il
   developer (punto 26): «se ci sono altre aree di codice che fanno una cosa simile, magari duplicando, segna che bisogna
   fattorizzare e ottenere il meglio dalle 2 con la policy corretta». Regola: costo al cambio dell'acquisto, proventi al
   cambio della vendita; il motore della Dashboard la applica già.
@@ -6243,6 +6323,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     dal coordinatore. ✅ Fatta da CP-7a (`gain_loss_ratio`, treno 107, `4f9e94420`).
 
   Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati», «Inventario del punto 26».
+  ✅ **Chiusa il 17/10** (coordinatore, mappatura di MF): i punti 2, 3 e 7 da CP-7a, il 6 da CP-4 (`gain_loss_ratio`), il 4 ereditato (somma valori già convertiti); il 5 (residuo d'identità dell'AI Export) e il 5b (`period_other_result` in `get_positions_contribution`) dal lotto J-14 di MF: `period_identity_residual` e `is_reconciled` in `financial_math/portfolio/period.py`, nessun valore cambia (`8cc5661bc`, dev `f44340118`).
 - **J-15 · La galleria ristampa l'output di Playwright senza flush** — basso, strumenti (programma colori); J, 15/10,
   nella prova di C-94. `dev.py`, `cmd_mkdocs_gallery`, `print(line, end='')` nel ciclo su `proc.stdout`: su una pipe
   (il `tee` di `gallery_snapshot.sh`, i log) Python bufferizza a blocchi, e l'avanzamento di Playwright arriva a pezzi da
@@ -6994,8 +7075,11 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     non il totale.
   - Una scheda ne mostra un riassunto (ultimo prezzo, mini grafico): servirebbe una serie ridotta dal backend
     (campionata) o un'altra fonte per le schede. Da progettare dopo la 1.3; tocca la lista (X) e la query dei prezzi.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-27 — il web app e i tetti
-  delle richieste di massa: analisi».
+  - Analisi del 17/10 (sola lettura, chiesta dal coordinatore per la 1.3): consigliata (A), `max_points` facoltativo
+    nella query dei prezzi (il backend sceglie il passo per asset, ~30× meno punti su «All»), in due lotti: Z-29a
+    backend, Z-29b lista (X). In attesa della decisione.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-27 — il web app e i tetti
+  delle richieste di massa: analisi» e «Z-29 — una scheda della lista asset e lo storico intero: analisi».
 - ✅ **Z-28 · Due file di lock aperti con `open()`, che segue un symlink** — basso, sicurezza; Z, 17/10
   (dall'analisi di Z-23; via coordinatore, che l'ha assegnata). **Chiusa il 17/10 col lotto Z-28** (il commit è del
   coordinatore).
@@ -7040,7 +7124,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     di qualità dei dati. Parere: (c) nella 1.3 se serve, (b) dopo.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «GBp — i dividendi Yahoo e
   `quote_base_quantity`: verifica».
-- **Z-33 · I prezzi Yahoo delle borse a est di UTC salvati un giorno prima** — **alto**, dati; Z, 17/10 (trovato da
+- ✅ **Z-33 · I prezzi Yahoo delle borse a est di UTC salvati un giorno prima** — **alto**, dati; Z, 17/10 (trovato da
   test-author scrivendo la guardia di Z-32, confermato da Z e dal coordinatore). Proprietario Z; X rivede il plugin.
   Nella 1.3, subito dopo il checkpoint di Z-32 (c).
   - yfinance 1.7.0 (`scrapers/history.py:494–501`) data le barre giornaliere, i dividendi e gli split a mezzanotte
@@ -7049,7 +7133,29 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   - Il prezzo salvato al giorno D è la chiusura vera di D+1; righe di domenica; dividendi e split un giorno prima.
   - La correzione del codice è semplice (la data locale); la riparazione dei dati già salvati è da decidere
     (sviluppatore): righe in più nei giorni senza borsa, eventi forse doppi a una risincronizzazione.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33».
+  - **Decisione N86** (coordinatore, 17/10), nella forma D″: il controllo una volta, in linea, nel refresh, insieme
+    alla correzione; la storia intera di Yahoo solo come calendario (i valori non cambiano mai); migrazione 011
+    (`exchange_timezone`, col segno `'legacy-utc'` sulle assegnazioni yfinance esistenti); anche la data del valore
+    corrente. **Chiusa il 17/10 col lotto Z-33** (il commit è del coordinatore; revisori X, H, MF, W).
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-33 — … analisi» e
+  «Z-33 — … lavoro».
+- **Z-35 · Le chiusure Yahoo salvate con la rettifica del giorno in cui sono state lette** — medio, dati, **dopo la
+  1.3**, decisione dello sviluppatore; proprietari X e MF; Z, 17/10 (trovato nell'analisi di Z-33, archiviato dal
+  coordinatore).
+  - Il plugin chiama `ticker.history(...)` senza `auto_adjust`; yfinance 1.7.0 rettifica di default
+    (`auto_adjust=True`): OHLC salvati rettificati per dividendi e split al momento della lettura. Lo scheduler
+    rilegge solo 14 giorni: le righe vecchie restano con rettifiche vecchie, le nuove con quella di oggi (una toppa).
+  - Le metriche di rendimento possono contare due volte i dividendi: già nei prezzi rettificati e negli eventi.
+  - Da decidere: `auto_adjust=False` (prezzi di borsa veri, split a parte) e la riscrittura della storia.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
+- **Z-34 · Il rapporto (C) delle righe Yahoo rimaste spostate** — basso, dati, **dopo la 1.3**; Z, 17/10 (decisione
+  N86, D4).
+  - La ridatazione di Z-33 avviene al primo giro di ogni assegnazione yfinance segnata dalla migrazione 011. Restano
+    spostate le righe degli asset la cui assegnazione yfinance è stata tolta prima dell'aggiornamento, o prima del
+    suo primo giro dopo; e quelle di un cambio di identificativo fra fusi di segno diverso prima di quel giro.
+  - Proposta: un comando che le elenca (asset, righe `yfinance` senza assegnazione o col segno ancora presente,
+    domeniche senza sabati come indizio) e, con la rete, le ridata con la stessa regola.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
 
 ## B · Backup e Docker (fase 01)
 
@@ -7581,6 +7687,40 @@ sulla base `23f6578f3`.
   - È precedente a B-43. Da decidere: tenerlo, perché serve a capire un upgrade fallito di un archivio vero, o ridurlo
     alla classe dell'ultima eccezione.
   Dettagli: piano 07, «B-43 + B-44».
+- **B-47 · Nel Bulk, un focus e un blur sulla cassa del Form fanno chiedere di scartare** — minimo, chiarezza; B,
+  17/10 (W-B64 + W-B65, dalla lettura del codice; area di W).
+  - Le somme tornano dall'API con almeno 6 decimali (`READ_MIN_SCALE`, `db/real_decimal.py`: `0.010000`). Il Bulk le
+    tiene così, e `CompactCashCell` le mostra formattate (`0.01`). Al blur, però, emette sempre il valore formattato
+    (`handleBlur` → `emit`) e `setCash` del Form lo prende senza confronto. Così un «Applica» dopo un focus sulla cassa,
+    senza cambiare nulla, riscrive la riga come `0.01`, e la guardia della chiusura (`serializeOps`, che confronta il
+    testo) chiede di scartare. Precedente a W-B65, che ha tolto le altre due cause (il segno, il `null` del
+    suggerimento WAC).
+  - Cura possibile: `CompactCashCell` emette al blur solo se il valore cambia (`exactDecimalEqual` con quello
+    ricevuto), oppure la chiave della guardia legge i decimali per valore e non per testo.
+  - Nello stesso giro: l'ingresso dell'import (`txCreateItemToPendingOp`) passa ancora la cassa da `Number`, e
+    `isDraftReadyForValidation` legge `amount === '0'`.
+  Dettagli: piano 07, «W-B64 + W-B65 (per W)».
+- **B-48 · Il Form accetta una quantità che il backend rifiuta per le cifre significative** — minimo, chiarezza; B,
+  17/10 (W-B64, nota del test-author; area di W).
+  - Con W-B64 il Form tiene 15 cifre intere e 10 decimali, ma il backend ne tiene al massimo 15 significative in tutto
+    (`REAL_SIGNIFICANT_DIGITS`). `999999999999999.5` passa il Form e si ferma solo alla validazione
+    (`significantDigitsExceeded`, con un messaggio chiaro). Era già così a 12 + 10.
+  - Un commento vecchio in `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` dice ancora «the form
+    (12 integer digits, 6 decimals)».
+  Dettagli: piano 07, «W-B64 + W-B65 (per W)».
+- **B-49 · Un testo non UTF-8 nei dati di un backup passa la verifica del ripristino** — basso, da decidere dopo
+  W-B65; E, 17/10 (RNW-109 e la barriera SCA-036 di E; la decisione è di B).
+  - E l'ha trovato in 4 posti: un valore TEXT con byte non UTF-8 passa la verifica su copia. `integrity_check`, i
+    conteggi e i totali non leggono quei testi.
+  - Dopo il ripristino, molto probabilmente rompe le letture del server di quelle righe: pysqlite lancia alla lettura
+    («Could not decode to UTF-8 column …»), come prova la barriera SCA-036 di E. Non misurato su un server.
+  - Un caso è già rifiutato, per caso: il nome utente non UTF-8 di un amministratore attivo. `_administrators` lancia
+    `OperationalError`, che l'involucro di B-43 fa diventare `database_damaged`, con un messaggio generico. Le colonne
+    che la verifica non legge passano.
+  - Da decidere: la verifica rifiuta (un codice suo, senza mai citare il testo, che è dell'archivio) o avvisa come
+    E-19b1. Per trovarli serve leggere i testi come byte (`text_factory = bytes`) e provarne la decodifica: un costo
+    sui backup grandi.
+  Dettagli: piano 07, «W-B64 + W-B65 (per W)», punto di E-19b1.
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
@@ -8183,6 +8323,24 @@ da Y il 15/10.
   - ✅ 17/10: dopo il clic, prima l'URL (tetto 30 s), poi la radice (10 s), nell'aiuto e nella copia in riga del test della
     cache degli eventi; commento di `:332` senza totali (`test-author`). E2E `front-asset asset-detail` 39/39. Review di X.
     Dettagli: piano di Y, «Y-33».
+- **Y-34 · `brokers-detail.spec.ts`: 5 s per il pannello dei lotti dopo «analizza i lotti», sotto carico** — minimo, stabilità
+  dei test; gate I, via il coordinatore, 17/10. Review di X.
+  - `:355` («right-clicking a holding row shows a context menu with both actions») aspetta 5 s `lots-analysis-panel` dopo
+    l'azione: caduto una volta col carico vicino a 90, verde da solo col carico a 28 (40/40). La stessa attesa di 5 s è in 12
+    test del file (`:314`…`:610`). L'azione scrive `?asset=<id>` nell'URL (`assetPanelUrl.ts`), la pagina lo legge in un `$:`
+    (`brokers/[id]/+page.svelte` ~:185-189) e monta il pannello sotto `{#if open && assetId != null}`
+    (`LotsAnalysisPanel.svelte:470`): una navigazione nella stessa rotta più un montaggio, che sotto carico aspettano un thread
+    principale occupato. Stessa classe di Y-33.
+  - Rimedio deciso: un aiuto, prima l'URL con `?asset=` (tetto 30 s), poi il pannello (10 s), per i 12 punti.
+  - Dentro anche la nota di X sulla review di Y-33: in `asset-detail.spec.ts` i quattro test «Live price direction flash»
+    (`:8265`, `:8279`, `:8316`, `:8351`) abbassano il loro timeout a 20 s, sotto il tetto di 30 s dell'URL di
+    `goToSeededAssetDetail`: sotto carico cadrebbero su «Test timeout of 20000ms exceeded». Un
+    `test.describe.configure({timeout: 60_000})` sul loro describe.
+  - **Residuo, da instradare**: `dashboard-cache.spec.ts:295` (`analyzeLots`) è della stessa classe (azione → `?asset=` →
+    pannello) con un'attesa sola di 30 s per navigazione e montaggio: regge, ma cadrebbe su «pannello non visibile» invece che
+    sull'URL. Le altre attese del pannello (`data-quality-real`, `data-quality-legacy`, `stale-price-banner`) seguono un deep
+    link: fuori classe.
+  - Dettagli: piano di Y, «Y-34».
 
 ## MF · Matematica finanziaria (fase 01)
 
@@ -8367,8 +8525,8 @@ punto di partenza, l'audit dello stesso giorno:
   `fx/sync.py:234` in blocchi (`utils/sql_chunks.OR_TERMS_PER_QUERY`), un tetto di scrittura `MAX_BULK_WRITE_ITEMS`
   (10 000) su `POST`/`DELETE /fx/currencies/rate` e `DELETE /prices`, la sonda letta a ogni chiamata. Restano da
   verificare `brim_provider.py:2030` e `pac_allocator/source/wac.py:44`. Dettagli: piano MF, sezione «MF-SEC9a».
-- **MF-J45c · Il report in cache `portfolio_layer2` è un oggetto condiviso fra le richieste** — minimo, robustezza;
-  **Pronto (17/10)**: guardia `test_financial/test_portfolio_l2_report_shared.py` (API, rischio, AI Export intero), nessuna
+- ✅ **MF-J45c · Il report in cache `portfolio_layer2` è un oggetto condiviso fra le richieste** — minimo, robustezza;
+  **Chiusa il 17/10**, dev `ab74aafbf`: guardia `test_financial/test_portfolio_l2_report_shared.py` (API, rischio, AI Export intero), nessuna
   scrittura trovata, nessun cambio di prodotto. Nota: i risultati del rischio portano l'oggetto `data_quality` del report
   in cache tale e quale (secondo riferimento, oggi nessuna scrittura; la guardia la vedrebbe).
   test-author di MF, 17/10 (MF-J45b). Come il risultato del motore (ora condiviso anche dal single-flight, con una
@@ -8425,11 +8583,33 @@ punto di partenza, l'audit dello stesso giorno:
   `daily_state.py` alla stessa soglia resta dopo la 1.3 (coordinatore).
   giornaliero valuta ogni quantità > 0, le righe considerano ≤ 1e-5 come non tenuta: la stessa soglia dai due lati, o il
   §7 dice «polvere a parte». Dettagli: piano MF, «MF-A5».
-- **MF-A7 · `oldest_open_lot_date` senza soglia della polvere** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di
-  **Pronto (17/10, nella 1.3 per il coordinatore)**: i lotti più vecchi che insieme tengono la polvere o meno sono messi
+- ✅ **MF-A7 · `oldest_open_lot_date` senza soglia della polvere** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di
+  **Chiusa il 17/10** (nella 1.3 per il coordinatore), dev `09d29671d`, CHANGELOG `5af05312b`: i lotti più vecchi che insieme tengono la polvere o meno sono messi
   da parte, None se la posizione tiene solo polvere.
   MF-A2). Un residuo di polvere può spostare l'inizio della finestra di ricaduta dell'annualizzato. Dettagli: piano MF,
   «MF-A5».
+- **MF-A10 · Le finestre di detenzione leggono la quantità grezza, le righe quella alla quota** — basso, numeri, nella
+  1.3 (coordinatore); J, 17/10 (revisione di MF-A7). **Pronto (17/10)**. `quantity_moves` → `oldest_open_lot_date`,
+  `closed_position_window` leggono `tx.quantity`; il test della polvere della riga (`is_fully_sold`, `qty_at_end`) e la
+  lista delle posizioni leggono la quantità del motore alla quota (`daily_state.py:380`). Su un broker posseduto in
+  parte (s < 1) un residuo in (polvere, polvere/s] è polvere per la riga e non per la finestra: s = 0,5, residuo
+  0,000012 del 2015 e un BUY del 2024 → la finestra parte ancora dal 2015; chiusa a polvere/quota con residuo grezzo
+  sopra la polvere → `closed=None` (A2/A5). Cura: la convenzione del motore, `quantity_moves(..., share=…)`, i due
+  chiamanti passano la quota del broker. Rossi prima con s = 0,5. Dettagli: piano MF, «MF-A10».
+- **MF-A11 · Una base unica per le righe aperte nel periodo** — basso-medio, numeri (**da decidere, developer**); J,
+  17/10 (revisione di MF-A9). Proposta di J: ogni riga aperta nel periodo prende la base `costo alla fine +
+  closed_position_base(cost_sold, sales, moved_out, exits, moved_in)` quando ogni uscita è coperta, altrimenti il solo
+  costo alla fine come oggi; la finestra parte dalla prima apertura nel periodo. Toglie il limite di MF-A9 (righe con
+  uscite) ed è continua all'ultima vendita: oggi −10 % da aperta contro −1 % da chiusa. Cambia valori: nelle domande
+  del developer (coordinatore). Caso estremo trovato col test di MF-A10: a broker intero un residuo di 0,000012 (sopra
+  la polvere) lascia una riga tenuta con costo alla fine 0,0012, e l'annualizzato vale 1 774 600,33 (oggi): con la base
+  proposta (0,0012 + il costo venduto) torna sensato. Dettagli: piano MF, «MF-A10».
+- **MF-A12 · La variazione d'un giorno delle posizioni scritta in linea** — minimo, nessun valore (salvo un pareggio
+  d'arrotondamento); MF, 17/10 (analisi di J-14). In `get_summary` `price_change_1d = ((corrente − precedente) /
+  precedente).quantize(0,0001)` (`portfolio_service.py` ~:745) e `gain_loss_change_1d_percent = (variazione / |valore
+  precedente| × 100).quantize(0,01)` con la guardia `|precedente| > 0,01` (~:759), accanto a `returns.price_return`
+  (`fine/inizio − 1`) e `returns.change_ratio`. Nella 1.3 dopo J-14 se resta piccola (coordinatore): test di parità, il
+  pareggio dichiarato. Dettagli: piano MF, «J-14 — analisi».
 - **MF-SEC9f · Altri OR per elemento, censiti da E** — minimo, informazione; E, 17/10 (revisione di MF-SEC9a).
   `scheduler/jobs.py:100` costruisce un termine per coppia configurata: rifiutato solo con ~1 000 coppie, improbabile.
   `portfolio/engine.py:133` è sicuro. Nessuna azione ora. Dettagli: piano 08 di E, «MF-SEC9a».

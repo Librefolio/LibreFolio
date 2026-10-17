@@ -158,7 +158,10 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   demotion also ends every session of the account (`user_service.end_sessions()` raises
   `users.session_version`, see [Session Revocation](security.md#session-revocation)); a promotion
   does not. Self-deletion has the same guard: `DELETE /api/v1/auth/users/me` answers `400` to an
-  administrator when no other active administrator remains (`count_active_superusers()`). The
+  administrator when no other active administrator remains (`count_active_superusers()`), with
+  `detail` `{"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"}`
+  since lot A-16 (a bare sentence before); the deletion dialog words it with its own key
+  ([Account Errors](../frontend/components/features/settings.md#account-errors)). The
   administrator API deletes no administrator, active or not: `DELETE /api/v1/users/{user_id}` answers
   `409` `DEMOTE_FIRST` until the account is demoted ([Deleting an Account](#admin-account-deletion)),
   except for the initial administrator waiting for its setup, which cannot be demoted and is deleted
@@ -327,7 +330,7 @@ live. A value that is not a whole number of at least 1 is a limit of 0, logged l
 | `POST /auth/register` with a valid invitation, or for the first account | Not checked |
 | `POST /users/invites` | `409` `USER_LIMIT_REACHED` with `limit`, `used` and `billing_url` |
 | `PATCH /users/{user_id}` reactivating an account | The same `409`, except for an account waiting for its email verification whose link is live: `holds_place()` says that its place is already counted. Once the link has expired, the account needs a free place like any other. Promotions, demotions and deactivations are not checked |
-| `./dev.py user create`, `./dev.py user invite`, `./dev.py user activate` of an inactive account | The warning `The instance is at its limit (LIBREFOLIO_MAX_USERS: <used> of <max> places taken): the command line <action> anyway`, `<action>` being `creates the account`, `creates the invitation` or `reactivates the account`; then the command goes ahead. `user activate` prints none for an account waiting for its email verification whose link is live: it already holds its place (`holds_place()`) |
+| `./dev.py user create`, `./dev.py user invite`, `./dev.py user activate` of an inactive account | The warning `The instance is at its limit (LIBREFOLIO_MAX_USERS: <used> of <max> places taken): the command line <action> anyway`, `<action>` being `creates the account`, `creates the invitation` or `reactivates the account`; then the command goes ahead. `user activate` prints none for an account that already holds its place: one waiting for its email verification whose link is live (`holds_place()`), or, since lot A-40, the initial administrator waiting for its setup (`registration_service.is_pending_admin()`, the filter `user_usage()` counts it with; IMG-030f of `./dev.py test utils dev-cli-image`) |
 
 `billing_link()` returns `LIBREFOLIO_BILLING_URL` to administrators only: in `usage.billing_url` of
 `GET /users` and `GET /users/invites`, in the `409` `USER_LIMIT_REACHED` of the administrator
