@@ -6865,15 +6865,29 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   prima del 1900: lavoro», passo 4.
 - **Z-32 · Le linee Yahoo in pence (`GBp`) salvate come sterline** — medio, dati; Z, 17/10 (verifica chiesta dal
   coordinatore, da una nota di E in MF-SEC9b). Da assegnare a chi possiede i provider.
+  - **(c) chiusa il 17/10** (decisioni D1–D5 del coordinatore; il commit è suo; revisori X, MF, H): la valuta come la
+    dice il provider (`FAHistoricalData.currency`, non normalizzata) salvata sull'assegnazione (`reported_currency`,
+    migrazione 010), l'avviso `QUOTE_IN_MINOR_UNIT` nel report di qualità del portafoglio. Restano (a) e (b), per
+    lo sviluppatore, dopo la 1.3; la strada 3 (chiusure contro operazioni) va nella sezione di MF (il coordinatore).
   - Yahoo dà `GBp` per le linee LSE in pence; gli schemi lo normalizzano a `GBP` senza scala: prezzi e dividendi
     restano in pence ma salvati come sterline. Nessuno imposta `quote_base_quantity`: con la base di default (1) la
     linea vale 100 volte il dovuto; con la base 100 messa a mano i valori tornano, ma i dividendi mostrati (dettaglio
-    dell'asset, suggerimenti di eventi) restano in pence. `ZAc`, `ILA` e `GBX` sono invece rifiutati.
+    dell'asset, evento collegato di una transazione) restano in pence. `ZAc`, `ILA` e `GBX` sono invece rifiutati.
   - Strade: (a) Yahoo divide per 100 (dati puliti, ma le righe salvate vanno ricalcolate e la base messa a mano si
     rompe); (b) la base 100 impostata quando Yahoo dà `GBp` e divisa dove un evento diventa un importo; (c) un avviso
     di qualità dei dati. Parere: (c) nella 1.3 se serve, (b) dopo.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «GBp — i dividendi Yahoo e
   `quote_base_quantity`: verifica».
+- **Z-33 · I prezzi Yahoo delle borse a est di UTC salvati un giorno prima** — **alto**, dati; Z, 17/10 (trovato da
+  test-author scrivendo la guardia di Z-32, confermato da Z e dal coordinatore). Proprietario Z; X rivede il plugin.
+  Nella 1.3, subito dopo il checkpoint di Z-32 (c).
+  - yfinance 1.7.0 (`scrapers/history.py:494–501`) data le barre giornaliere, i dividendi e gli split a mezzanotte
+    nel fuso della borsa; `_normalize_yahoo_date` (`yahoo_finance/plugin.py:146–150`) le porta in UTC: a est di UTC
+    è il giorno prima. Milano tutto l'anno, Londra con l'ora legale, Tokyo; New York è giusta.
+  - Il prezzo salvato al giorno D è la chiusura vera di D+1; righe di domenica; dividendi e split un giorno prima.
+  - La correzione del codice è semplice (la data locale); la riparazione dei dati già salvati è da decidere
+    (sviluppatore): righe in più nei giorni senza borsa, eventi forse doppi a una risincronizzazione.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33».
 
 ## B · Backup e Docker (fase 01)
 
