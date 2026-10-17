@@ -48,6 +48,7 @@ from backend.app.services.financial_math.lots.histories import (
     trim_dates,
 )
 from backend.app.services.financial_math.lots.prices import last_day_without_observation, opening_reference_price
+from backend.app.services.financial_math.lots.scope_boundary import ScopeBoundaryReading, TransferPartner, partner_ids_to_load, read_transfers_at_scope_boundary
 from backend.app.services.financial_math.lots.summary import lot_summary_figures
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, MarkSource, build_asset_price_series
@@ -155,6 +156,11 @@ class LotsAnalysisService:
             asset_currency=asset.currency,
             quote_base_quantity=quote_base_quantity,
         )
+        # J-10 (N76): a TRANSFER leg whose partner pairs back from a broker outside the scope is read the way the scope
+        # sees it, for every reader below: the engine, the histories, the conversions and the average-cost lines. The
+        # series above is not touched: a TRANSFER or an ADJUSTMENT is never an observation.
+        boundary = await self._read_at_scope_boundary(transactions, scope_broker_ids=scope_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
+        transactions = boundary.transactions
         income_transactions = await self._load_income_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
         cost_transactions = await self._load_cost_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
 
@@ -243,12 +249,16 @@ class LotsAnalysisService:
             fragments_by_lot=fragments_by_lot,
             closures_by_lot=closures_by_lot,
             tx_by_id=tx_by_id,
+            boundary_legs=boundary.legs,
         )
         if LotAnalysisType.PERFORMANCE_HISTORY in normalized_analyses and broker_ids is not None:
             accessible_broker_ids = await self._get_scope_broker_ids(user_id=user_id, broker_ids=None)
             if accessible_broker_ids != scope_broker_ids:
-                performance_transactions = await self._load_transactions(asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
-                performance_split_ratios = await self._load_split_ratios(performance_transactions)
+                accessible_transactions = await self._load_transactions(asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
+                performance_split_ratios = await self._load_split_ratios(accessible_transactions)
+                # The brokers the user can see have an edge as well: a partner at a broker shared with someone else.
+                performance_boundary = await self._read_at_scope_boundary(accessible_transactions, scope_broker_ids=accessible_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
+                performance_transactions = performance_boundary.transactions
                 performance_broker_shorting = await self._load_broker_shorting(accessible_broker_ids)
                 performance_engine_result = run_fifo_lot_engine(
                     transactions=performance_transactions,
@@ -265,6 +275,7 @@ class LotsAnalysisService:
                     fragments_by_lot=group_fragments(performance_engine_result.fragment_intervals),
                     closures_by_lot=group_closures(performance_engine_result.closures),
                     tx_by_id={tx.id: tx for tx in performance_transactions if tx.id is not None},
+                    boundary_legs=performance_boundary.legs,
                 )
 
         collect_fx_needs(
@@ -540,6 +551,27 @@ class LotsAnalysisService:
         stmt = select(Transaction).where(Transaction.asset_id == asset_id).where(Transaction.broker_id.in_(scope_broker_ids)).where(Transaction.date <= date_to).where(Transaction.quantity.is_not(None)).where(Transaction.quantity != 0).order_by(Transaction.date, Transaction.id)
         return list((await self.db.execute(stmt)).scalars().all())
 
+    async def _read_at_scope_boundary(
+        self,
+        transactions: Sequence[Transaction],
+        *,
+        scope_broker_ids: Sequence[int],
+        price_series: AssetPriceSeries,
+        quote_base_quantity: int,
+    ) -> ScopeBoundaryReading:
+        """The scope's rows with each transfer leg whose partner sits outside the scope read at its edge (J-10, N76).
+
+        Of the partners only the pairing columns are loaded, never an amount or a cost: nothing of a broker outside
+        the scope reaches the figures.
+        """
+        partner_ids = partner_ids_to_load(transactions)
+        partners: dict[int, TransferPartner] = {}
+        if partner_ids:
+            stmt = select(Transaction.id, Transaction.broker_id, Transaction.asset_id, Transaction.type, Transaction.quantity, Transaction.related_transaction_id).where(Transaction.id.in_(partner_ids))
+            for row in (await self.db.execute(stmt)).all():
+                partners[row.id] = TransferPartner(id=row.id, broker_id=row.broker_id, asset_id=row.asset_id, type=str(getattr(row.type, "value", row.type)), quantity=row.quantity, related_transaction_id=row.related_transaction_id)
+        return read_transfers_at_scope_boundary(transactions, partners=partners, scope_broker_ids=scope_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
+
     async def _load_income_transactions(self, asset_id: int, scope_broker_ids: Sequence[int], date_to: date_type) -> list[Transaction]:
         """Load asset-linked DIVIDEND/INTEREST cash transactions for pro-rata lot allocation.
 
@@ -653,7 +685,7 @@ class LotsAnalysisService:
     async def _compute_average_cost_lines(
         self,
         *,
-        transactions: Sequence[Transaction],
+        transactions: Sequence[Transaction | FifoInputTransaction],
         split_ratios_by_tx_id: dict[int, Decimal],
         asset_currency: str,
         target_currency: str,
