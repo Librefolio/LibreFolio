@@ -5366,6 +5366,85 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-41 + B-42 — l'esito anonimo controlla il biglietto prima dello stato, e un file del biglietto rotto si registra una volta (2026-10-17, 14:10-14:56) — ✅ 🧊 FROZEN (checkpoint delle 14:56)
+
+> **B-34 entrato** (coordinatore, 14:10): `731337a5a` → dev `202849800`; HEAD portata in avanti. Via a B-41 nella 1.3
+> («cheap: check the ticket before reading the state»). Dopo, se B-33 e B7 aspettano ancora il developer, il
+> coordinatore trova lavoro in un'altra sezione.
+>
+> **Stato reale** (14:10-14:20):
+> - `get_restore_outcome` (`restore.py:443-447`) legge lo stato (`read_restore`) prima di `outcome.read_outcome`. Con uno
+>   stato che il file system rifiuta, `_read_state` registra un errore a ogni chiamata, qualunque biglietto: nessuno,
+>   malformato, 43 caratteri qualsiasi.
+> - `read_outcome` usa lo stato solo dopo forma, cartella, registro, impronta e scadenza: basta passargli il modo di
+>   leggerlo.
+> - **⚠️ Fuori pista — B-42**: `_read_record` registra un errore a ogni chiamata con un biglietto ben formato quando il
+>   file del biglietto è rotto (illeggibile, un link, spazzatura, troppo grande). Stessa classe di rumore, dal B5c.
+>   Chiesto al coordinatore; **dentro questo lotto** (coordinatore, 14:24).
+> - **Nota per B-33** (nella sua riga, coordinatore 14:24): con uno stato illeggibile dopo un riavvio, il ripiego della
+>   pagina su `/status` riceve 500, che `readStatusWithSession` prende per «server giù». L'overlay interroga ogni secondo
+>   per sempre, senza dire perché.
+>
+> **Contratto** (`b41-contract.md`):
+> 1. **B-41**: `read_outcome(ticket, state, …)` accetta come `state` anche la funzione che lo legge, chiamata una volta
+>    e solo per il biglietto di un riavvio non scaduto. La rotta le passa `lambda: _state_for_outcome(data_dir)`, la
+>    lettura indulgente di oggi.
+> 2. **B-42**: `_report` registra un errore la prima volta per cartella dati, poi `debug` finché dura lo stesso errore;
+>    `_forget` lo dimentica quando il file viene scritto, tolto o letto. Un lock rende esatto il controllo.
+> 3. Invariati: ogni risposta (la sola 404), il titolare del biglietto giusto (guardia b5), le rotte dell'admin.
+>
+> - **Codice pronto** in `b41-wip/apply_b41.py`: 11 operazioni in 2 file; ruff e black puliti sulla copia emessa.
+>   Prova a mano (`probe_b41.py`) sulla copia emessa: 15/15.
+> - **Rossi in scrittura** (TA-B41): (j) B-41 in `test_backup_restore_apply.py`; (c) B-41 e B-42 in
+>   `test_backup_outcome.py`. Doc (DW-B41): `security.md`, tre punti.
+> - ✅ **Doc scritta** (DW-B41, 14:30): `security.md`
+>   - l.2052-2055, «What cannot be read is not none»: l'esito legge lo stato solo per il biglietto di un riavvio non
+>     scaduto (lot B-41);
+>   - l.2168-2172, «Kept as a hash.»: un file del biglietto illeggibile o non valido, un errore una volta per cartella
+>     dati, poi `debug` finché dura lo stesso errore (lot B-42);
+>   - l.2186-2187, «One answer for every miss.»: il biglietto prima dello stato (lot B-41).
+>   - Pagina solo inglese (`developer/`): nessun debito di traduzione.
+> - ✅ **Rossi scritti** (TA-B41, 14:15-14:35):
+>   - API (j), dopo b5 (b5 invariata): `test_a_ticket_that_does_not_open_the_outcome_never_reads_the_state_nor_logs_it`.
+>     - I 15 casi di `NOT_OPENING` decisi dal biglietto: tutti tranne `no-restore` e `a-restore-of-another-stage`.
+>       Esclusi per id, con una barriera che li trova in `NOT_OPENING`. Per i 3 modi di `unreadable`: 45 casi.
+>     - Asserzioni: la sola 404; il file dello stato mai aperto; nessun evento «The state of the restore cannot be read».
+>     - Barriera: dopo la risposta, `read_restore` a mano è rifiutato e registrato, quindi `capture_logs` sente il
+>       logger di `apply`.
+>   - Servizi (c), B-41: il lettore chiamato una volta per il biglietto giusto, 3 casi (rosso). Guardie, il lettore mai
+>     chiamato: 32 casi in 4 test (`NOT_THE_TICKET`, `UNTRUSTED_FILES`, senza file, scaduto).
+>   - Servizi (g), B-42, 32 casi rossi in 4 test, su 5 modi di rompere il file (non un biglietto, oltre 4096 byte, un
+>     link, modo 000, EIO):
+>     - letto 3 volte: un solo errore;
+>     - di nuovo un errore dopo una scrittura, una lettura valida, una rimozione, o un file trovato mancante (20 casi);
+>     - un errore diverso conta come nuovo, anche tornando al primo (2 sequenze);
+>     - una memoria per cartella dati.
+>   - (e): il biglietto vero presentato al file rotto in 4 modi, mai nei log.
+>   - Desc dei runner, in aggiunta: `backup-restore-apply` e `backup-outcome`.
+> - ✅ **Rosso dei servizi** (corsia 6187, 14:38): `services backup-outcome` **35 falliti** e 129 passati, esattamente i
+>   3 + 32 attesi: l'`AttributeError` del lettore, e gli errori ripetuti di B-42 (`files/logs/b41_red_services.log`).
+> - ⏳ Rosso dell'API: aspetta uno slot breve (chiesto alle 14:36).
+> - ✅ **Rosso dell'API** (slot del coordinatore, 14:38-14:47): `api backup-restore-apply` **45 falliti** e 170
+>   passati, esattamente i casi nuovi: «the state file never opened for a ticket that does not open the outcome»
+>   (`files/logs/b41_red_api.log`).
+>   - **⚠️ Fuori pista**: 8 minuti invece di 1-2. I merge di dev avevano reso vecchia la build di debug del frontend
+>     della corsia, quindi il runner l'ha rifatta (vite) prima del server. Detto al coordinatore durante lo slot.
+> - ✅ **Patch applicata** (14:47:00): 11 operazioni in 2 file; ruff e black puliti.
+> - ✅ **Verdi** (14:47-14:49): `api backup-restore-apply` **215** (170 + 45), `services backup-outcome` **164**
+>   (129 + 35), `services backup-apply` **255** (regressione: chi chiama `read_outcome` con uno stato). Slot liberato
+>   alle 14:49.
+> - ✅ **Controlli** (14:50-14:54):
+>   - `schemas openapi-client-text` 78: la docstring della rotta finisce nella descrizione OpenAPI, senza `${` né `\`;
+>   - ruff e black puliti sui 6 file Python; `git diff --check` pulito;
+>   - `lint --dead-code --scope backend`: nessun simbolo nuovo; l'uscita 1 viene da voci di altri pacchetti, già
+>     presenti;
+>   - client generato: ignorato da git, niente da fare;
+>   - `mkdocs build` strict, `check-links`, gate 63; porta 6187 libera.
+> - **Una precisazione mia nella doc**: `_REPORTED` è memoria di processo. Con più worker ognuno registra il suo errore
+>   una volta: «once per data directory in each server process».
+> - **Backlog**: B-41 ✅, B-42 ✅; la nota della pagina è nella riga B-33. CHANGELOG: una riga 🔒 proposta nell'handoff
+>   (meno rumore nei log per una rotta anonima).
+
 ### B-34 — la causa giusta quando l'istanza non ha ancora una chiave, e le frasi della doc (2026-10-17, 14:00-14:10) — ✅ 🧊 FROZEN (checkpoint delle 14:10)
 
 > **B-38 entrato** (coordinatore, 14:00): `1ed071c2f` → dev `c2a09b960`, CHANGELOG 🔒 `9b02120a7`; HEAD portata in
