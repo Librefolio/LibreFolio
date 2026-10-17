@@ -87,7 +87,11 @@ The `RegisterCard` handles new user registration with client-side validation.
 ### ⚡ Features
 
 - **Validation**: on blur of each field, and all together on submit:
-    - Username (at least 3 characters, after trimming)
+    - Username (at least 3 characters, after trimming, and no `@`: `auth.validation.usernameNoAt`,
+      lot A-21a). The sign-in reads a name with `@` as an email address, so the server refuses it too
+      ([Which Account an Identifier Names](../../../architecture/security.md#sign-in-identifier)): the
+      card keeps it off the wire, on blur and on submit. Spaces, accents, `.`, `_`, `-` and `+` go out
+      as typed
     - Email (format)
     - Password: the [password rules](#passwordstrength), read from `PasswordStrength`'s `valid`
       (`bind:valid={passwordRulesMet}`): the card keeps no copy of them
@@ -349,10 +353,11 @@ its `detail` as below. Otherwise:
 | `{error_code: "USER_LIMIT_REACHED"}` | `auth.userLimitReached`: the server is full, with no count, as the caller is not signed in |
 | `{error_code: "PASSWORD_TOO_WEAK"}` | `auth.validation.passwordTooWeak`: the password misses a [rule of the server](../../../architecture/security.md#password-rules), and the checklist under the field says which |
 | `{error_code: "EMAIL_VERIFICATION_UNAVAILABLE"}` | `email.verification.signUpUnavailable`: email verification is required and no email with a link can go out now |
+| `{error_code: "USERNAME_INVALID"}` | `auth.validation.usernameNoAt`: a username holding `@` (lot A-21a), the key of the card's own check — one rule, the same words, from the client or from the server |
 | Any other object | `auth.registrationFailed` |
 | A Pydantic error list | Its first error: on `email`, `auth.validation.invalidEmailDomain` for a special-use or reserved domain, `auth.validation.invalidEmail` otherwise; on `username`, `auth.validation.usernameMinLength`; on `password`, `auth.validation.passwordTooWeak`; anything else, `auth.registrationFailed` |
 | A string that mentions `username` (case-folded) | `auth.validation.usernameTaken` |
-| A string that mentions `email` | `auth.validation.emailTaken` |
+| A string that mentions `email` | `auth.validation.emailTaken`: *Email already registered*, for an address another account has, or since lot A-21a one that is another account's username |
 | Any other string | The string itself |
 | No `detail` | `auth.registrationFailed` |
 

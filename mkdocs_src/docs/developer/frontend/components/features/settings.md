@@ -318,7 +318,13 @@ Manages user profile information:
   `settings.tooManyPasswordAttempts`, *Too many wrong passwords: wait a few minutes and try again.*)
   and published on `profile-error` as `data-error-code`. The typed email stays; the password is
   emptied after the first two, and kept after `TOO_MANY_ATTEMPTS`, since it may be right and waiting
-  is all there is to do. Any other refusal shows the server's `detail` when it is a sentence
+  is all there is to do. Since lot A-21a, `PASSWORD_REFUSALS` also holds `USERNAME_INVALID`, a new
+  username holding `@` (see
+  [Which Account an Identifier Names](../../../architecture/security.md#sign-in-identifier)):
+  `auth.validation.usernameNoAt`, the key of the [registration card](auth.md#registercard)'s own
+  check, published as `data-error-code` like the others, never the server's sentence nor
+  `settings.updateFailed`; the username goes back to the stored value. Any other refusal shows the
+  server's `detail` when it is a sentence
   (*Email already registered*), `settings.updateFailed` for any other `detail` (another code, a
   `422` list), and puts the field back to the stored value. The banner clears after 5 seconds
 - **Password change**: opens `PasswordChangeModal` (`features/settings/PasswordChangeModal.svelte`):

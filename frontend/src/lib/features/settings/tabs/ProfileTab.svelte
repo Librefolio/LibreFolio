@@ -120,12 +120,14 @@
         showDiscardConfirm = false;
     }
 
-    /** Refusals of an email change the tab words itself (A6e); any other code reads as a failed update. */
+    /** Refusals the tab words itself — an email change (A6e), a new username with an @ (A-21a); any other code reads as a failed update. */
     const PASSWORD_REFUSALS: Record<string, string> = {
         CURRENT_PASSWORD_INVALID: 'settings.currentPasswordIncorrect',
         CURRENT_PASSWORD_REQUIRED: 'settings.currentPasswordRequired',
         // The server's limit on failed passwords (A8a)
         TOO_MANY_ATTEMPTS: 'settings.tooManyPasswordAttempts',
+        // The sign-in reads a name with @ as an email address (A-21a)
+        USERNAME_INVALID: 'auth.validation.usernameNoAt',
     };
 
     /** A refusal as the tab shows it: a known code in words (with the code), the server's sentence, or a generic text. */

@@ -590,7 +590,7 @@ registered becomes the administrator ([Who Can Sign Up](settings.md#registration
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `LIBREFOLIO_ADMIN_EMAIL` | _not set_ | The email address of the administrator. Setting it turns the initial administrator on. |
-| `LIBREFOLIO_ADMIN_USERNAME` | `admin` | The administrator's username: 3 to 50 characters, as at registration. |
+| `LIBREFOLIO_ADMIN_USERNAME` | `admin` | The administrator's username: 3 to 50 characters, without `@`, as at registration. |
 | `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` | _not set_ | Optional: the token of the setup link, for a hosting panel that delivers the link itself. 32 to 200 characters, only letters, digits and `-` `.` `_` `~`, since it travels in a link: the output of `openssl rand -hex 32`, for example. `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` reads it from a file instead: see [Secrets](#secrets). Not set: LibreFolio generates the token. |
 
 An empty value counts as not set. Spaces around the email and the username do not matter; the token
@@ -641,7 +641,9 @@ has accounts included:
 - `LIBREFOLIO_ADMIN_USERNAME` or `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` set without
   `LIBREFOLIO_ADMIN_EMAIL`;
 - an email that is not an address;
-- a username shorter than 3 or longer than 50 characters;
+- a username shorter than 3 or longer than 50 characters, or with an `@` in it: the sign-in reads a
+  name with `@` as an email address, and the administrator signs in with the address of
+  `LIBREFOLIO_ADMIN_EMAIL` anyway;
 - a token shorter than 32 or longer than 200 characters, or with a character other than letters,
   digits and `-` `.` `_` `~`, a space included;
 - a `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` that cannot give the token
