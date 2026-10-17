@@ -1,66 +1,112 @@
 /**
- * Colours drawn outside CSS — handed to a canvas library or baked into an SVG data URL — where a
- * `var(--lf-cmp-*)` token cannot reach (plan 55, workstream R). Same values and same strings as before: the
- * designer decides any change (phase B).
+ * Colours drawn outside CSS — handed to a canvas library or baked into an SVG data URL — where a `var(--lf-…)` cannot
+ * reach. Each one is a colour role of tokens.css, read for the active theme through the {@link ChartRoles} of
+ * `./roleColors`: the caller takes `chartRoles(dark, element)` once per drawing and passes it here, so a theme switch or
+ * a Designer Lab edit shows at the next build.
+ *
+ * Provisional choices, in the designer's collection (point 35): the rows a caller points at on `mark`, the avatar
+ * initial by `readableText`, and the light spreadsheet on cheetah-grid's `MATERIAL_DESIGN` with only its two borders on
+ * roles.
  */
+
+import {parseRgba} from './colorAlpha';
+import {over} from './contrast';
+import type {ChartRoles} from './roleColors';
 
 /**
- * Spreadsheet preview (`FilePreviewModal`, cheetah-grid): rows the caller points at. Amber, matching the
- * "look at this row" accent used by the evidence tables. Same in both themes.
+ * `top` composited over the opaque `bottom`, as an opaque `rgb()`: what CSS shows for a translucent role on its surface.
+ * cheetah-grid fills a cell without clearing it, so a translucent fill would add up with whatever the canvas already
+ * held. `roleColors` hands every role back in sRGB (`#rrggbb`, or `rgba()` when translucent); anything else passes as is.
  */
-export const SPREADSHEET_TARGET_ROW_BG = 'rgba(251, 191, 36, 0.35)';
+function flatten(top: string, bottom: string): string {
+    const front = parseRgba(top);
+    const back = parseRgba(bottom);
+    if (!front || !back) return top;
+    const {r, g, b} = over(front, back);
+    return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+}
 
-/** Spreadsheet preview, light theme: firmer grid lines over cheetah-grid's `MATERIAL_DESIGN` theme. */
-export const SPREADSHEET_LIGHT_BORDERS = {borderColor: '#cbd5e1', frozenRowsBorderColor: '#94a3b8'};
+/**
+ * Spreadsheet preview (`FilePreviewModal`, cheetah-grid): the rows the caller points at, a highlighted result (Q7). The
+ * same role in both themes, on the cell's field.
+ */
+export function spreadsheetTargetRowBg(roles: ChartRoles): string {
+    return flatten(roles.color('--lf-mark-bg'), roles.color('--lf-surface-field'));
+}
 
-/** Spreadsheet preview, dark theme: a fresh cheetah-grid theme object at every call. */
-export function buildDarkSpreadsheetTheme() {
+/**
+ * Spreadsheet preview, light theme: firmer grid lines over cheetah-grid's `MATERIAL_DESIGN` theme — the dividers, and
+ * under the header the edge of an input. The rest of the light theme is the library's.
+ */
+export function spreadsheetLightBorders(roles: ChartRoles): {borderColor: string; frozenRowsBorderColor: string} {
+    return {borderColor: roles.color('--lf-border-subtle'), frozenRowsBorderColor: roles.color('--lf-border-input')};
+}
+
+/**
+ * Spreadsheet preview, dark theme: a fresh cheetah-grid theme object at every call. The cells are a field and the
+ * header a panel; the active cell is lifted to the hover surface with the focus edge, a range selection takes the
+ * selected tint. Checkboxes, radios, buttons, trees and cell messages are not used by the preview: they follow the
+ * same roles so that the theme stays whole.
+ */
+export function buildDarkSpreadsheetTheme(roles: ChartRoles) {
+    const field = roles.color('--lf-surface-field');
+    const subtle = roles.color('--lf-border-subtle');
+    const input = roles.color('--lf-border-input');
+    const checked = roles.color('--lf-checked');
     return {
-        color: '#e2e8f0',
-        frozenRowsColor: '#cbd5e1',
-        defaultBgColor: '#0f172a',
-        frozenRowsBgColor: '#111827',
-        selectionBgColor: 'rgba(37, 99, 235, 0.38)',
-        highlightBgColor: '#1e293b',
-        borderColor: '#475569',
-        frozenRowsBorderColor: '#64748b',
-        highlightBorderColor: '#60a5fa',
+        color: roles.color('--lf-text-primary'),
+        frozenRowsColor: roles.color('--lf-text-secondary'),
+        defaultBgColor: field,
+        frozenRowsBgColor: roles.color('--lf-surface-panel'),
+        selectionBgColor: flatten(roles.color('--lf-selected'), field),
+        highlightBgColor: roles.color('--lf-surface-hover'),
+        borderColor: subtle,
+        frozenRowsBorderColor: input,
+        highlightBorderColor: roles.color('--lf-focus'),
         checkbox: {
-            uncheckBgColor: '#0f172a',
-            checkBgColor: '#2563eb',
-            borderColor: '#64748b',
+            uncheckBgColor: field,
+            checkBgColor: checked,
+            borderColor: input,
         },
         radioButton: {
-            checkColor: '#60a5fa',
-            checkBorderColor: '#60a5fa',
-            uncheckBorderColor: '#64748b',
-            uncheckBgColor: '#0f172a',
-            checkBgColor: '#0f172a',
+            checkColor: checked,
+            checkBorderColor: checked,
+            uncheckBorderColor: input,
+            uncheckBgColor: field,
+            checkBgColor: field,
         },
         button: {
-            color: '#e2e8f0',
-            bgColor: '#2563eb',
+            color: roles.color('--lf-on-action'),
+            bgColor: roles.color('--lf-action'),
         },
         tree: {
-            lineColor: '#475569',
+            lineColor: subtle,
         },
         header: {
-            sortArrowColor: '#94a3b8',
+            sortArrowColor: roles.color('--lf-text-muted'),
         },
+        // A message box is filled with the state and draws its mark in the cell's own background.
         messages: {
-            infoBgColor: '#1d4ed8',
-            errorBgColor: '#b91c1c',
-            warnBgColor: '#b45309',
+            infoBgColor: roles.color('--lf-info'),
+            errorBgColor: roles.color('--lf-danger'),
+            warnBgColor: roles.color('--lf-warning'),
         },
         indicators: {
-            topLeftColor: '#475569',
+            topLeftColor: subtle,
         },
-        underlayBackgroundColor: '#0f172a',
+        underlayBackgroundColor: field,
     };
 }
 
-/** Placeholder images of `LazyImage` (SVG data URLs), the same in both themes. */
-export const IMAGE_PLACEHOLDER_COLORS = {background: '#e5e7eb', shape: '#9ca3af'};
+/** Placeholder images of `LazyImage` (SVG data URLs): a skeleton fill and its muted figure. */
+export function imagePlaceholderColors(roles: ChartRoles): {background: string; shape: string} {
+    return {background: roles.color('--lf-surface-neutral'), shape: roles.color('--lf-text-muted')};
+}
 
-/** Initial of the uploader avatars in the files table (SVG data URL), drawn over a `getStringColor` disc. */
-export const FILE_AVATAR_INITIAL_COLOR = '#ffffff';
+/**
+ * The initial of an uploader avatar in the files table (SVG data URL), drawn over a `getStringColor` disc: the primary
+ * or the inverse text, whichever reads better on that disc.
+ */
+export function fileAvatarInitialColor(roles: ChartRoles, disc: string): string {
+    return roles.readableText(disc);
+}
