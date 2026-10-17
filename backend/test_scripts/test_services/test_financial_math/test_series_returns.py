@@ -7,15 +7,15 @@ Module under test: ``backend/app/services/financial_math/returns.py``, two funct
 * ``float_price_return(start, end) -> float`` = ``float(price_return(start, end))``: the price return computed in
   Decimal, then rounded to a float once, which is what a return series carries. A series never carries an unavailable
   return, so where ``price_return`` answers None (a price missing, a zero start) this raises ``ValueError``. It
-  replaces ``series_preparation._price_return_value``, which was the same function under a private name. The sign of the
+  replaces ``market_series._price_return_value``, which was the same function under a private name. The sign of the
   prices is NOT checked here: ``price_return`` divides whatever it gets, and the series callers validate positivity
-  before calling (``series_preparation``'s valuation points are ``AssetValuationPoint``, whose ``target_close`` is
+  before calling (``market_series``'s valuation points are ``AssetValuationPoint``, whose ``target_close`` is
   ``gt=0``; the AI Export drawdown snapshot refuses a close ``<= 0`` as ``invalid_observed_prices``);
 * ``observed_annualization(n_observations, baseline_date, final_date) -> tuple[int, float | None]``, moved verbatim from
-  ``series_preparation.py``: the calendar span of the series and ``observations × 365 / days``.
+  ``market_series.py``: the calendar span of the series and ``observations × 365 / days``.
 
-And the parity guard: ``series_preparation`` keeps neither definition and does not re-export the moved name, so the
-risk results and the comparison plugin import it from the house. ``series_preparation`` imports both names from the house
+And the parity guard: ``market_series`` keeps neither definition and does not re-export the moved name, so the
+risk results and the comparison plugin import it from the house. ``market_series`` imports both names from the house
 with ``from ... import``, which binds them in its namespace: whatever it binds must be the house's own object, never a
 second implementation.
 
@@ -42,11 +42,11 @@ from pathlib import Path
 
 import pytest
 
-import backend.app.services.series_preparation as series_preparation
+import backend.app.services.market_series as market_series
 from backend.app.services.financial_math import returns
 from backend.app.services.financial_math.returns import float_price_return, observed_annualization, price_return
 
-SERIES_PREPARATION_SOURCE = Path(series_preparation.__file__)
+MARKET_SERIES_SOURCE = Path(market_series.__file__)
 
 # =============================================================================
 # observed_annualization — moved from test_series_preparation.py with its assertions unchanged
@@ -239,7 +239,7 @@ def test_a_zero_end_price_is_a_total_loss_not_an_error():
 def test_a_negative_start_is_not_refused_by_the_house():
     """The house divides what it gets: ``110 / -100 - 1`` is ``-2.1``, returned as is.
 
-    The sign of a price is the series callers' check, made before they call: ``series_preparation`` builds its returns
+    The sign of a price is the series callers' check, made before they call: ``market_series`` builds its returns
     from valuation points whose ``target_close`` is validated positive upstream (``AssetValuationPoint``, ``gt=0``), and
     the AI Export drawdown snapshot turns a close ``<= 0`` into ``invalid_observed_prices`` before computing any return.
     Pinned so that a sign check added here later is a decision, not a side effect.
@@ -249,7 +249,7 @@ def test_a_negative_start_is_not_refused_by_the_house():
 
 
 # =============================================================================
-# Parity guard: series_preparation keeps no copy and re-exports nothing it moved
+# Parity guard: market_series keeps no copy and re-exports nothing it moved
 # =============================================================================
 
 
@@ -257,8 +257,8 @@ def _top_level_functions(path: Path) -> set[str]:
     return {node.name for node in ast.parse(path.read_text(encoding="utf-8")).body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)}
 
 
-def test_series_preparation_no_longer_defines_the_moved_functions():
-    defined = _top_level_functions(SERIES_PREPARATION_SOURCE)
+def test_market_series_no_longer_defines_the_moved_functions():
+    defined = _top_level_functions(MARKET_SERIES_SOURCE)
     # Presence barrier: the scan sees the module's own functions, so an empty set cannot pass for an absence.
     assert {"prepare_asset_series_set", "gap_slots", "fx_content_fingerprint"} <= defined
 
@@ -266,21 +266,21 @@ def test_series_preparation_no_longer_defines_the_moved_functions():
     assert "_price_return_value" not in defined
 
 
-def test_series_preparation_does_not_re_export_observed_annualization():
+def test_market_series_does_not_re_export_observed_annualization():
     # Presence barrier: __all__ is there and still lists what the module does own.
-    assert "prepare_asset_series_set" in series_preparation.__all__
+    assert "prepare_asset_series_set" in market_series.__all__
 
-    assert "observed_annualization" not in series_preparation.__all__
+    assert "observed_annualization" not in market_series.__all__
 
 
-def test_series_preparation_has_no_private_price_return_left():
-    assert not hasattr(series_preparation, "_price_return_value")
+def test_market_series_has_no_private_price_return_left():
+    assert not hasattr(market_series, "_price_return_value")
 
 
 @pytest.mark.parametrize("name", ["observed_annualization", "float_price_return"])
-def test_what_series_preparation_binds_of_the_house_is_the_house_object(name):
-    # ``from ... import`` binds the name in series_preparation's namespace: it may be there, but only as the house's own
+def test_what_market_series_binds_of_the_house_is_the_house_object(name):
+    # ``from ... import`` binds the name in market_series's namespace: it may be there, but only as the house's own
     # function — one implementation, never a copy that a later edit could make drift.
-    bound = getattr(series_preparation, name, None)
+    bound = getattr(market_series, name, None)
 
     assert bound is None or bound is getattr(returns, name)
