@@ -13,6 +13,16 @@ LEDGER L1 — an EUR asset (quote_base_quantity 1) quoted 100 EUR on 10 Jan 2025
 - broker B: TRANSFER +10 on 13 Jan carrying a cost basis of 100 EUR a unit — the Auto cost a receiving leg must carry;
   SELL 4 on 15 Jan for 600 EUR (150 a unit);
 - the two TRANSFER legs point at each other; the owner U is OWNER of A and B (share 1). Read on 16 Jan.
+
+LEDGER L2 (J-47: a transfer still in transit on the reading day) — an EUR asset (quote_base_quantity 1) quoted 100 EUR on
+10 Jan 2025, 110 on 11 Jan, 120 on 12 Jan, 125 on 13 Jan, 130 on 14 Jan, 135 on 15 Jan and 140 on 16 Jan:
+
+- broker A: BUY 10 on 10 Jan for 1000 EUR; TRANSFER −10 on 12 Jan (amount 0);
+- broker B: TRANSFER +10 on 16 Jan carrying a cost basis of 100 EUR a unit;
+- the two legs point at each other; U is OWNER of A and B (share 1). Read on 14 Jan: departed, not arrived. ``seed_l2``
+  takes the legs' days, so the receiving leg can be dated before the giving one (the engine's transit window is
+  [min(dates), max(dates))). Used by ``test_financial/test_lots_transfer_in_transit_at_date_to.py`` and
+  ``test_ai_export_portfolio_fifo_summary_in_transit.py``.
 """
 
 from __future__ import annotations
@@ -144,3 +154,46 @@ async def seed_l1(session: AsyncSession, *, in_leg_cost: str | None = "100") -> 
     await session.flush()
     await link(session, out_leg, in_leg)
     return LedgerL1(owner=owner, asset=asset, broker_a=broker_a, broker_b=broker_b, buy=buy, out_leg=out_leg, in_leg=in_leg, sell=sell)
+
+
+L2_BUY_DAY = date(2025, 1, 10)
+L2_DEPARTURE_DAY = date(2025, 1, 12)  # A's leg leaves
+L2_ARRIVAL_DAY = date(2025, 1, 16)  # B's leg arrives: after the reading day
+L2_DATE_TO = date(2025, 1, 14)  # in transit: the market says 130
+L2_PRICES: Mapping[date, str] = {
+    date(2025, 1, 10): "100",
+    date(2025, 1, 11): "110",
+    date(2025, 1, 12): "120",
+    date(2025, 1, 13): "125",
+    date(2025, 1, 14): "130",
+    date(2025, 1, 15): "135",
+    date(2025, 1, 16): "140",
+}
+
+
+@dataclass(frozen=True)
+class LedgerL2:
+    owner: User
+    asset: Asset
+    broker_a: Broker
+    broker_b: Broker
+    buy: Transaction
+    out_leg: Transaction  # A's TRANSFER −10, the giving leg
+    in_leg: Transaction  # B's TRANSFER +10, the receiving leg
+
+
+async def seed_l2(session: AsyncSession, *, out_day: date = L2_DEPARTURE_DAY, in_day: date = L2_ARRIVAL_DAY, in_leg_cost: str | None = "100") -> LedgerL2:
+    """Ledger L2 (module docstring), the legs dated ``out_day`` (A's) and ``in_day`` (B's); ``in_leg_cost=None`` writes B's
+    leg without a cost basis, as legacy data has it."""
+    owner = await new_user(session, "owner")
+    broker_a = await new_broker(session, "A", owner)
+    broker_b = await new_broker(session, "B", owner)
+    asset = await new_asset(session, "L2")
+    add_prices(session, asset, L2_PRICES)
+    buy = asset_row(broker_a, asset, TransactionType.BUY, L2_BUY_DAY, "10", amount="-1000")
+    out_leg = asset_row(broker_a, asset, TransactionType.TRANSFER, out_day, "-10")
+    in_leg = asset_row(broker_b, asset, TransactionType.TRANSFER, in_day, "10", cost=in_leg_cost)
+    session.add_all([buy, out_leg, in_leg])
+    await session.flush()
+    await link(session, out_leg, in_leg)
+    return LedgerL2(owner=owner, asset=asset, broker_a=broker_a, broker_b=broker_b, buy=buy, out_leg=out_leg, in_leg=in_leg)

@@ -166,6 +166,25 @@ broker-scope Dashboard does:
 
 The timeline shows a read leg as an `ADJUSTMENT_IN` / `ADJUSTMENT_OUT` row.
 
+### ⏳ Transfers In Transit at the End {: #in-transit-at-date-to }
+
+The analysis reads the rows up to `date_to`, so a transfer still on its way that day (departure ≤ `date_to` < arrival,
+in either order of the two legs' dates) would lose its arriving leg, and the engine would fail the asset
+(`TRANSFER_PAIR_MISSING`) even over every broker (J-47). The Dashboard keeps such units in transit from the
+departure to the arrival; the lots do the same:
+
+- `_load_late_transfer_legs()` loads the partners, dated after `date_to`, of the scope's TRANSFER legs that sit in the
+  scope (same asset, a `TRANSFER`), as detached `FifoInputTransaction` copies. They go to the engine only: no history,
+  WAC line or rate reaches past `date_to`.
+- The engine replays up to `date_to` (`replay_until`): the arrival is not applied, so the fragment stays `IN_TRANSIT`,
+  valued at market like any open fragment. The lot carries the `IN_TRANSIT` state, the Gantt draws the transit to the
+  end, and the timeline has the `TRANSFER_DEPART` row and no `TRANSFER_ARRIVE` (`_build_transfer_rows()` writes no
+  arrival for a fragment still in transit).
+- The re-run over the accessible brokers of `PERFORMANCE_HISTORY` does the same. Its performance counts the transit
+  value only when both brokers are in the requested scope (`_fragment_in_scope`), as the Dashboard's combined view.
+- A partner outside the scope is read at the scope's edge instead (see
+  [Transfers Across the Scope's Edge](#scope-edge-transfers)), whatever its date.
+
 ### 💱 FX Conversion {: #fx-conversion }
 
 `FxRateResolver` (`financial_math/lots/conversions.py`) is a thin prefetch + conversion helper:
