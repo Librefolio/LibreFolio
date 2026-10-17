@@ -1,8 +1,8 @@
 /**
  * assetPriceDerived.ts — Pure, side-effect-free computation of per-asset derived price
- * state (last price, the delta over the range, chart-ready data) from a raw price
- * array. The Δ columns of fixed periods (1D … 5Y) are not computed here: the backend
- * does (`utils/periodChanges.ts`, X-R53).
+ * state (last price, chart-ready data) from a raw price array. No Δ is computed here:
+ * the fixed periods (1D … 5Y) and the change over the whole range are the backend's
+ * (`utils/periodChanges.ts`, X-R53; `utils/rangeChange.ts`, X-R59).
  *
  * Extracted from the Assets list page (`assets/+page.svelte`) so the SAME logic can run
  * either on the main thread (cache-hit fast path, cheap) or inside a Web Worker (fetch
@@ -96,8 +96,6 @@ export interface DerivedChartPoint {
 
 export interface DerivedPriceState {
     lastPrice: number | null;
-    deltaAbs: number | null;
-    deltaPercent: number | null;
     chartData: DerivedChartPoint[];
 }
 
@@ -119,26 +117,18 @@ export function deltaPeriodLabel(key: string, t: DurationLabelTranslate): string
 }
 
 /**
- * Compute all derived price state (last price, abs/percent delta over the range,
- * chart-ready points) from a raw price array for ONE asset.
+ * Compute the derived price state (last price, chart-ready points) from a raw price array
+ * for ONE asset. The change over the range is not here: the backend computes it (X-R59).
  *
  * Pure function: same input always produces the same output, no shared/mutable state
  * touched — safe to call from a Worker as well as the main thread.
  */
 export function computeDerivedPriceState(prices: RawPricePoint[]): DerivedPriceState {
     if (prices.length === 0) {
-        return {lastPrice: null, deltaAbs: null, deltaPercent: null, chartData: []};
+        return {lastPrice: null, chartData: []};
     }
 
-    const firstPrice = prices[0]?.close != null ? Number(prices[0].close) : null;
     const lastPrice = prices[prices.length - 1]?.close != null ? Number(prices[prices.length - 1].close) : null;
-
-    let deltaAbs: number | null = null;
-    let deltaPercent: number | null = null;
-    if (firstPrice !== null && lastPrice !== null && firstPrice !== 0) {
-        deltaAbs = lastPrice - firstPrice;
-        deltaPercent = ((lastPrice - firstPrice) / firstPrice) * 100;
-    }
 
     const chartData: DerivedChartPoint[] = prices.map((p) => ({
         date: p.date,
@@ -146,5 +136,5 @@ export function computeDerivedPriceState(prices: RawPricePoint[]): DerivedPriceS
         staleDays: extractDaysBack(p),
     }));
 
-    return {lastPrice, deltaAbs, deltaPercent, chartData};
+    return {lastPrice, chartData};
 }

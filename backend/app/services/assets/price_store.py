@@ -59,7 +59,7 @@ def _reject_prices_over_the_limit(data: List[FAUpsert]) -> None:
     (``_unstorable_provider_point``).
 
     Raises:
-        ValueError: the router turns it into HTTP 400, as it does a currency mismatch.
+        ValueError: the router turns it into HTTP 400 (a currency mismatch of a manual call is a 422, X-R71).
     """
     for item in data:
         offending = [f"{price.date.isoformat()} ({name})" for price in item.prices for name in (*_PRICE_LIMIT_FIELDS, "volume") if _price_limit_issue(price, name) is not None]
@@ -90,6 +90,55 @@ def _reject_dates_out_of_range(data: List[FAUpsert], earliest: date, latest: dat
             count += len(dates)
     if items:
         raise DateOutOfRangeError(items=items, count=count, earliest=earliest, latest=latest)
+
+
+class PriceCurrencyMismatchError(Exception):
+    """A manual upsert holds prices in a currency other than their asset's: refused before anything is written (X-R71).
+
+    ``items``: one entry per item at fault, in the request's order; ``count``: every date at fault. A plain
+    ``Exception``, as ``DateOutOfRangeError``: the router answers a ``ValueError`` with 400, this with 422.
+    """
+
+    def __init__(self, items: list[dict], count: int):
+        super().__init__(f"{count} price date(s) in a currency other than their asset's")
+        self.items = items
+        self.count = count
+
+
+def price_currency_mismatch_detail(items: list[dict], count: int) -> dict:
+    """The ``detail`` of the 422 for a manual upsert with prices in a currency other than their asset's: at most 10
+    ``items``, and ``count`` the dates refused in all (X-R71)."""
+    return {"code": "price_currency_mismatch", "message": f"Prices must be in their asset's currency: {count} are not", "items": items[:10], "count": count}
+
+
+async def _reject_currency_mismatches(session: AsyncSession, data: List[FAUpsert]) -> None:
+    """Refuse a manual upsert holding a price in a currency other than its asset's, before anything is written (X-R71).
+
+    The currencies of every asset named are read first, in slices, and nothing else is done on the session. Then each
+    item, in the request's order: a point whose currency, when given, is not its asset's is at fault, the comparison of
+    the loop below. An item whose asset does not exist is left to the loop, which answers it «not found». One entry per
+    item at fault: its asset's currency (``expected``), the currencies given (``found``, first seen first) and at most
+    10 of its dates, in the request's order.
+
+    Raises:
+        PriceCurrencyMismatchError: the router turns it into HTTP 422 ``price_currency_mismatch``.
+    """
+    currencies: dict[int, str] = {}
+    for chunk in chunks(list(dict.fromkeys(item.asset_id for item in data))):
+        rows = await session.execute(select(Asset.id, Asset.currency).where(Asset.id.in_(chunk)))
+        currencies.update(rows.all())
+    items: list[dict] = []
+    count = 0
+    for item in data:
+        if item.asset_id not in currencies:
+            continue
+        expected = currencies[item.asset_id]
+        offending = [price for price in item.prices if (price.currency or expected) != expected]
+        if offending:
+            items.append({"asset_id": item.asset_id, "expected": expected, "found": list(dict.fromkeys(price.currency for price in offending)), "dates": [price.date.isoformat() for price in offending[:10]]})
+            count += len(offending)
+    if items:
+        raise PriceCurrencyMismatchError(items=items, count=count)
 
 
 def _unstorable_provider_point(price: FAPricePoint) -> Optional[str]:
@@ -198,13 +247,14 @@ class PriceStoreOperations:
             {inserted_count, updated_count, results: [{asset_id, count, message}, ...]}
 
         Raises:
-            ValueError: if any price point has a currency that doesn't match
-                ``asset.currency`` (I.2 — Supersedes E.3). The router translates
-                this into **HTTP 400** with the offending dates. This is the
-                definitive semantics after Block I — soft-skip with ``errors[]``
-                was dropped because, post-I.5/I.8, the DataEditor no longer
-                sends a per-point currency. See
-                ``plan-phase07-transaction-Part3_1_Closure.md`` §E.3.
+            ValueError: a manual price over its column's limits (``_reject_prices_over_the_limit``; the router answers
+                HTTP 400); under a provider's key, a point whose currency is not its asset's (I.2 — Supersedes E.3:
+                soft-skip with ``errors[]`` was dropped because, post-I.5/I.8, the DataEditor no longer sends a
+                per-point currency. See ``plan-phase07-transaction-Part3_1_Closure.md`` §E.3).
+            DateOutOfRangeError: a manual date outside ``stored_date_bounds()`` (X-R65, N83; HTTP 422).
+            PriceCurrencyMismatchError: a manual price in a currency other than its asset's, on any item of the call
+                (X-R71; HTTP 422 ``price_currency_mismatch``). The three refusals of a manual call come before anything
+                of it is written.
 
         Optimized: Batch operations per asset, minimize DB roundtrips.
         """
@@ -214,6 +264,7 @@ class PriceStoreOperations:
         if source_plugin_key == "MANUAL":
             _reject_prices_over_the_limit(data)
             _reject_dates_out_of_range(data, earliest, latest)
+            await _reject_currency_mismatches(session, data)
 
         total_inserted = 0
         results = []
@@ -243,11 +294,10 @@ class PriceStoreOperations:
             #   - field >= 0               → write the provided value
             # I.2 — Currency coherence validation (Supersedes E.3).
             # Hard reject (not per-item skip): if ANY point has a currency that doesn't
-            # match asset.currency, raise ValueError immediately so the router returns
-            # 400 with the offending dates. This is defensive — the frontend, after
-            # Block I, no longer sends a per-point currency (the column was dropped
-            # from the DataEditor), so reaching this branch means the client is buggy
-            # or someone is hitting the API directly.
+            # match asset.currency, raise ValueError. A manual call never gets here with
+            # one: _reject_currency_mismatches refused the whole call before any write
+            # (X-R71), and this stays as a safety net for an asset whose currency changed
+            # since. A provider's call holds one asset, checked here before its first slice.
             offending_dates: list[str] = []
             for price in prices:
                 effective_currency = price.currency or default_currency

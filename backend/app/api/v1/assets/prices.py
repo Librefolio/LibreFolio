@@ -32,6 +32,7 @@ from backend.app.schemas.signals import (
 )
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.period_changes import get_period_changes_bulk, live_range_changes
+from backend.app.services.assets.price_store import PriceCurrencyMismatchError, price_currency_mismatch_detail
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, MAX_BULK_WRITE_ITEMS, BulkTooManyDaysError, DateOutOfRangeError, bulk_too_many_days_detail, bulk_too_many_items_detail, date_out_of_range_detail
@@ -68,8 +69,11 @@ async def upsert_prices_bulk(
 ):
     """Bulk upsert prices manually (PRIMARY bulk endpoint).
 
-    A date outside ``stored_date_bounds()`` (1900-01-01 to tomorrow) refuses the whole request with 422
-    ``date_out_of_range``, before anything is written (X-R65, N83).
+    Every refusal of the whole request comes before anything is written. A price over its column's limits refuses it
+    with 400; a date outside ``stored_date_bounds()`` (1900-01-01 to tomorrow) with 422 ``date_out_of_range`` (X-R65,
+    N83); a price in a currency other than its asset's, on any asset of the request, with 422
+    ``price_currency_mismatch``, naming every asset at fault (X-R71). An asset that does not exist is answered in its
+    own result, and the others are written.
     """
     try:
         # Pass FAUpsert objects directly to service
@@ -86,9 +90,11 @@ async def upsert_prices_bulk(
         )
     except DateOutOfRangeError as e:
         raise HTTPException(status_code=422, detail=date_out_of_range_detail(e.items, e.count, e.earliest, e.latest)) from e
+    except PriceCurrencyMismatchError as e:
+        raise HTTPException(status_code=422, detail=price_currency_mismatch_detail(e.items, e.count)) from e
     except ValueError as e:
-        # I.2 — currency mismatch (or other domain validation errors from the service)
-        # surface as 400 Bad Request, with the structured message the service produced.
+        # A domain refusal of the service (C-97: a price over its column's limits) surfaces as 400 Bad Request, with
+        # the structured message the service produced.
         logger.warning("Upsert prices validation error: %s", e)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

@@ -26,9 +26,10 @@
  * `$app/environment` mock reports `browser: false`, so `setPrivacyEnabled` never touches `localStorage`.
  *
  * Expectations. Broker names are the ones put in the props. A day is `formatDay(iso)` and a quantity
- * `maskableQuantity(formatExactDecimal(raw, {minFrac: 0, maxFrac: 8}))` — the lots' quantity pattern
- * (LotCustodyModal's `formatQuantity`), masked under privacy by D5′ — computed here, in this runtime, by the functions
- * the notice uses: never a frozen locale string. The clear quantity is checked once against the digits put in; the
+ * `maskableQuantity(formatExactDecimal(raw, {minFrac: 0, maxFrac: 10}))` — the backend's decimal string, exact, up to the
+ * ten decimals of its column (C-97c-2: the notice cuts at the eighth until the cure, and RAW_QUANTITY reads the same at
+ * both), masked under privacy by D5′ — computed here, in this runtime, by the functions the notice uses: never a frozen
+ * locale string. The clear quantity is checked once against the digits put in; the
  * masked one is the formatter's own placeholder. The broker ids are long enough to be unmistakable, and are looked for
  * in each row's text with the separators a locale writes inside a number taken out, so `98,765` is caught as well as
  * `98765`. Nothing here reads translated text: the explanation and the sentences belong to the catalogue.
@@ -39,6 +40,9 @@
  * Red, before the cure: the file does not collect, because `./LotAnalysisFailedNotice.svelte` does not exist. Once it
  * does, «never shows a bare broker id» stays red until the catalogue texts stop printing `{broker_id}` (today
  * «… (broker {broker_id})»): that rewrite is part of the cure.
+ *
+ * C-97c-2 (the last block): a missing quantity keeps the ten decimals of its column, where the notice cuts it at the
+ * eighth. Red until that cure.
  */
 import {afterEach, beforeAll, describe, expect, it, vi, type Mock} from 'vitest';
 import {flushSync, tick} from 'svelte';
@@ -128,9 +132,9 @@ function ungrouped(element: HTMLElement): string {
     return (element.textContent ?? '').replace(/[\s.,'’\u00a0\u202f]/g, '');
 }
 
-/** A quantity as the notice must write it: the lots' pattern, masked under privacy (D5′). */
+/** A quantity as the notice must write it: the backend's decimal string, exact, up to the ten decimals of its column (C-97c-2), masked under privacy (D5′). */
 function quantity(raw: string): string {
-    return maskableQuantity(formatExactDecimal(raw, {minFrac: 0, maxFrac: 8}));
+    return maskableQuantity(formatExactDecimal(raw, {minFrac: 0, maxFrac: 10}));
 }
 
 /** Set the privacy flag, then flush: synchronously, and once more through the microtask the app itself waits on. */
@@ -297,5 +301,41 @@ describe('LotAnalysisFailedNotice — what failed, where, and the transaction to
         expect(within(notice).getByTestId('lots-analysis-failed-explanation'), 'the explanation').toBeInTheDocument();
         expect(screen.queryByTestId('lots-analysis-failed-list'), 'nothing to list').toBeNull();
         expect(screen.queryAllByTestId(new RegExp(`^${ROW_PREFIX}`)), 'no row').toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C-97c-2 — a missing quantity keeps every decimal of its column
+// ---------------------------------------------------------------------------
+
+/**
+ * D-C97c-1 (the coordinator, 17/10), applied to the lots (BK). The notice writes `missing_quantity`, the backend's decimal
+ * string, with `formatExactDecimal(raw, {maxFrac: 8})`, so 0.1234567891 reads 0.12345678. A lot quantity keeps ten
+ * decimals; the contract: `maxFrac: 10`. Red today. The cases above stay green before and after the cure: RAW_QUANTITY,
+ * 1234.5678 once its trailing zeros go, reaches no cut at the eighth decimal nor at the tenth.
+ *
+ * The expected text is `quantity()`'s — the contract's formatter, in this runtime — checked once against the ten decimals
+ * put in, and matched as a whole number token in the message: no digit, decimal mark or separator glued to either side.
+ */
+describe('LotAnalysisFailedNotice — a missing quantity keeps every decimal of its column, up to ten (C-97c-2)', () => {
+    /** Ten decimals, as a lot quantity keeps them. */
+    const TEN_DECIMAL_QUANTITY = '0.1234567891';
+
+    /** Tx 4270 at Broker Alfa, 12 March 2026, a sale TEN_DECIMAL_QUANTITY beyond what the broker holds. */
+    const TEN_DECIMAL_SHORTFALL = blocking('FIFO_SOURCE_QUANTITY_MISSING', {transaction_id: 4270, broker_id: ALFA.id, transaction_date: '2026-03-12', missing_quantity: TEN_DECIMAL_QUANTITY});
+
+    /** `text` as a whole number in a longer text: no digit, decimal mark or group separator glued to either side. */
+    function numberToken(text: string): RegExp {
+        return new RegExp(`(?<![\\d.,])${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![.,]?\\d)`);
+    }
+
+    it('writes a missing quantity of 0.1234567891 whole: the ten decimals of its column, not eight', () => {
+        const expected = quantity(TEN_DECIMAL_QUANTITY);
+        expect(expected.replace(/\D/g, ''), 'control: the expected text keeps the ten decimals put in').toBe('01234567891');
+
+        const {notice} = mountNotice([TEN_DECIMAL_SHORTFALL]);
+        const message = shown(messageOf(notice, rowId('FIFO_SOURCE_QUANTITY_MISSING', 4270)));
+
+        expect(message, 'the ten decimals (today cut at the eighth: 0.12345678)').toMatch(numberToken(expected));
     });
 });

@@ -71,6 +71,15 @@ def shutdown_engine_executor() -> None:
         executor.shutdown(wait=False, cancel_futures=True)
 
 
+class _LeaderGone(Exception):
+    """The build a request was waiting for failed or was cancelled: the waiting request builds for itself (MF-J45b)."""
+
+
+#: MF-J45b: the builds in flight in this process, by blob key and range. An identical request waits for the one running
+#: instead of rebuilding; each entry is settled, then removed, when its build ends however it ends (``calculate``).
+_IN_FLIGHT: dict[tuple, asyncio.Future] = {}
+
+
 # =============================================================================
 # PORTFOLIO CALCULATION ENGINE — Async orchestrator
 # =============================================================================
@@ -356,6 +365,66 @@ class PortfolioCalculationEngine:
             # A blob that ends earlier is not resumed (EngineEndState is kept for that): the range is recomputed.
             logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id, blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
 
+        # MF-J45b: one build per key and range at a time in this process. An identical request that arrives while one
+        # runs waits for it and gets the same result (the object the cache holds, read-only like a cache hit), instead
+        # of paying the reads and an executor worker again. If that build fails or is cancelled, a waiting request builds
+        # for itself (the first one to resume leads the others); it never waits on a build nobody will finish.
+        flight_key = (blob_key, actual_from, actual_to)
+        loop = asyncio.get_running_loop()
+        while (flight := _IN_FLIGHT.get(flight_key)) is not None and flight.get_loop() is loop:
+            try:
+                return await asyncio.shield(flight)
+            except _LeaderGone:
+                logger.debug("Portfolio build awaited failed or was cancelled; building", user_id=user_id)
+        flight = loop.create_future()
+        _IN_FLIGHT[flight_key] = flight
+        try:
+            result = await self._compute_uncached(
+                user_id=user_id,
+                blob_key=blob_key,
+                held_asset_ids=held_asset_ids,
+                actual_from=actual_from,
+                actual_to=actual_to,
+                target_currency=target_currency,
+                include_candles=include_candles,
+                include_acquisition_funding=include_acquisition_funding,
+                period_start=period_start,
+                classification=classification,
+                split_linked_tx_ids=split_linked_tx_ids,
+                split_history=split_history,
+                all_txs=all_txs,
+                invalid_split_events=invalid_split_events,
+            )
+            flight.set_result(result)
+            return result
+        finally:
+            # Settled before the key goes: a waiting request never sees an orphaned build
+            if not flight.done():
+                flight.set_exception(_LeaderGone())
+                flight.exception()  # retrieved: no «never retrieved» warning when nobody was waiting
+            if _IN_FLIGHT.get(flight_key) is flight:
+                del _IN_FLIGHT[flight_key]
+
+    async def _compute_uncached(  # noqa: C901 — steps 6–12 of calculate, moved unchanged (MF-J45b)
+        self,
+        *,
+        user_id: int,
+        blob_key: tuple,
+        held_asset_ids: set[int],
+        actual_from: date_type,
+        actual_to: date_type,
+        target_currency: str,
+        include_candles: bool,
+        include_acquisition_funding: bool,
+        period_start: date_type | None,
+        classification,
+        split_linked_tx_ids: set[int],
+        split_history: dict[int, SplitHistory],
+        all_txs: list[Transaction],
+        invalid_split_events: dict[int, InvalidSplitEvent],
+    ) -> PortfolioCalculationResult:
+        """Steps 6–12 of :meth:`calculate` on a cache miss: preload, replay, store in the blob cache (MF-J45b moved them here,
+        unchanged, so ``calculate`` can let one build serve identical concurrent requests)."""
         # ── 6. Preload prices (bulk) ──
         price_map: dict[int, list[tuple[date_type, Decimal, str]]] = {}
         # G1b: per-asset OHLC keyed by date, from the same already-loaded rows — no extra query.

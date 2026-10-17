@@ -65,8 +65,10 @@
     import {getAssetPriceStore, invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
     import {computeDerivedPriceState} from '$lib/utils/assetPriceDerived';
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import {BULK_SIGNAL_MARGIN_DAYS, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
+    import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
@@ -97,8 +99,6 @@
 
     interface AssetState extends AssetInfo {
         lastPrice: number | null;
-        deltaAbs: number | null;
-        deltaPercent: number | null;
         chartData: Array<{date: string; value: number; staleDays?: number}>;
         loadingPrices: boolean;
     }
@@ -329,6 +329,15 @@
     let periodDeltas = $state<Map<number, PeriodDeltas>>(new Map());
     let periodChangesLoading = $state(false);
     const periodChangesLedger = new PeriodChangesLedger<number>();
+    // The cards' Δ over the whole range comes in the same answer (X-R59), kept by a ledger of its own: it belongs to the
+    // range's first day too, so a failed request keeps only the values of the same range (`rangeKey`).
+    let rangeDeltas = $state<Map<number, RangeDelta>>(new Map());
+    const rangeDeltaLedger = new PeriodChangesLedger<number>();
+
+    /** The identity of a range for the range-Δ ledger: both its days. */
+    function rangeKey(start: string, end: string): string {
+        return `${start}…${end}`;
+    }
 
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(visiblePeriodColumns(periodSpecs, dateStart, dateEnd));
@@ -345,8 +354,6 @@
             active: a.active,
             quote_base_quantity: a.quote_base_quantity,
             lastPrice: a.lastPrice,
-            deltaAbs: a.deltaAbs,
-            deltaPercent: a.deltaPercent,
             deltas: periodDeltas.get(a.id) ?? {},
             txCount: a.tx_count ?? 0,
             txScope: assetScope(a),
@@ -571,8 +578,6 @@
                 held_by_me: item.held_by_me ?? false,
                 held_by_others: item.held_by_others ?? false,
                 lastPrice: null,
-                deltaAbs: null,
-                deltaPercent: null,
                 chartData: [],
                 // Born already waiting for wave 2, so the row draws its own
                 // skeleton the instant it appears instead of a bare empty cell.
@@ -641,28 +646,36 @@
         await Promise.all([fetchPriceSeries(), loadPeriodChanges()]);
     }
 
-    /** The Δ columns of every listed asset up to the end of the range, from the backend (X-R53). */
+    /** The Δ columns of every listed asset up to the end of the range, and each card's Δ over the range, from the backend (X-R53, X-R59). */
     async function loadPeriodChanges() {
         const ticket = periodChangesLedger.begin(dateEnd, true);
-        periodChangesLoading = periodChangesLedger.busy;
+        const rangeStart = dateStart;
+        const rangeTicket = rangeDeltaLedger.begin(rangeKey(rangeStart, ticket.asOf), true);
+        periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
         try {
             const result = await fetchAssetPeriodChanges(
                 assets.map((asset) => asset.id),
                 ticket.asOf,
+                rangeStart,
             );
+            const nextRange = rangeDeltaLedger.settle(rangeTicket, rangeDeltas, result.rangeDeltaByAssetId);
+            if (nextRange !== null) rangeDeltas = nextRange;
             const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByAssetId);
             if (next === null) return;
             if (result.periods.length > 0) periodSpecs = result.periods;
             periodDeltas = next;
         } catch (e: any) {
-            // The Δ computed up to the same day stay: only those of another range go (X-R60).
+            // The Δ computed up to the same day stay: only those of another range go (X-R60); the cards' Δ, only for the same range.
+            const nextRange = rangeDeltaLedger.fail(rangeTicket, rangeDeltas);
+            if (nextRange !== null) rangeDeltas = nextRange;
             const next = periodChangesLedger.fail(ticket, periodDeltas);
             if (next === null) return;
             console.error('Failed to fetch period changes:', e);
             periodDeltas = next;
         } finally {
             periodChangesLedger.end(ticket);
-            periodChangesLoading = periodChangesLedger.busy;
+            rangeDeltaLedger.end(rangeTicket);
+            periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
         }
     }
 
@@ -780,6 +793,9 @@
             const unansweredIds = new Set(queryItems.filter((item) => !answeredIds.has(item.asset_id)).map((item) => item.asset_id));
             if (outcome.failed) {
                 console.error('Failed to fetch prices bulk:', outcome.error);
+                // X-R58: a request the backend refused as too large is said, not left as cards without prices.
+                const refusal = bulkRefusalMessage(outcome.error, $t);
+                if (refusal !== null) toasts.error(refusal);
             }
             const anySignals = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
             const unansweredSignals = [...requestContexts].some(([assetId, context]) => unansweredIds.has(assetId) && context.plan.requests.length > 0);
@@ -841,7 +857,7 @@
         // Empty prices: preserve whatever chart data the asset already had (e.g. a
         // stale-but-valid previous fetch) — only reset loadingPrices, matching the
         // pre-extraction behavior exactly (do NOT wipe lastPrice/chartData to null/empty).
-        // The Δ columns are not here: the backend computes them (loadPeriodChanges, X-R53).
+        // No Δ here: the backend computes the columns and the cards' Δ over the range (loadPeriodChanges, X-R53, X-R59).
         if (prices.length === 0) {
             return {...asset, loadingPrices: false};
         }
@@ -1807,8 +1823,8 @@
                                     txCount={asset.tx_count ?? 0}
                                     livePrice={livePriceMap.get(asset.id)?.value ?? asset.lastPrice ?? null}
                                     livePriceDirection={livePriceMap.get(asset.id)?.direction ?? 'neutral'}
-                                    deltaPercent={asset.deltaPercent}
-                                    deltaAbs={asset.deltaAbs}
+                                    deltaPercent={rangeDeltas.get(asset.id)?.pct ?? null}
+                                    deltaAbs={rangeDeltas.get(asset.id)?.abs ?? null}
                                     dateStart={urlDateStart}
                                     dateEnd={urlDateEnd}
                                     {globalViewMode}

@@ -21,6 +21,13 @@ _RATIO_QUANTUM = Decimal("0.0001")
 _ZERO = Decimal("0")
 
 
+def counted_tract(transfer: InternalAssetTransfer, date_from: date_type | None, end: date_type) -> bool:
+    """Whether the period's rows split ``transfer``'s result between its two brokers (P22): it leaves after the period's
+    start and arrives by its end, its value on arrival and the cost moved both known. The one rule of the tract
+    adjustments and of the moved cost a closed position's base counts (MF-A5)."""
+    return (date_from is None or transfer.departure > date_from) and transfer.arrival <= end and transfer.value_at_arrival is not None and transfer.cost_moved is not None
+
+
 def transfer_tract_adjustments(transfers: Iterable[InternalAssetTransfer], date_from: date_type | None, end: date_type) -> dict[tuple[int, int], Decimal]:
     """What each ``(broker_id, asset_id)`` row adds to its unrealized change for the internal transfers of the period.
 
@@ -32,14 +39,40 @@ def transfer_tract_adjustments(transfers: Iterable[InternalAssetTransfer], date_
     """
     adjustments: dict[tuple[int, int], Decimal] = defaultdict(lambda: _ZERO)
     for transfer in transfers:
-        if date_from is not None and transfer.departure <= date_from:
-            continue
-        if transfer.arrival > end or transfer.value_at_arrival is None or transfer.cost_moved is None:
+        if not counted_tract(transfer, date_from, end):
             continue
         tract = transfer.value_at_arrival - transfer.cost_moved
         adjustments[(transfer.sender_broker_id, transfer.asset_id)] += tract
         adjustments[(transfer.receiver_broker_id, transfer.asset_id)] -= tract
     return dict(adjustments)
+
+
+def transfer_costs_moved_out(transfers: Iterable[InternalAssetTransfer], date_from: date_type | None, end: date_type) -> dict[tuple[int, int], tuple[Decimal, int]]:
+    """For each sender ``(broker_id, asset_id)``, the cost its counted tracts moved out of it and how many (MF-A5)."""
+    moved: dict[tuple[int, int], tuple[Decimal, int]] = {}
+    for transfer in transfers:
+        if counted_tract(transfer, date_from, end):
+            key = (transfer.sender_broker_id, transfer.asset_id)
+            cost, count = moved.get(key, (_ZERO, 0))
+            moved[key] = (cost + transfer.cost_moved, count + 1)
+    return moved
+
+
+def closed_position_base(cost_sold: Decimal, sales: int, moved_out: tuple[Decimal, int] | None, exits: int) -> Decimal | None:
+    """The base of a closed position's annualized return: the cost of every unit that left it in the period (MF-A5).
+
+    The row's result carries what the units it sold realized and what the units it moved to another broker of the scope
+    did while there (the tract adjustment), so the base is the cost of both: ``cost_sold`` over its ``sales`` disposals
+    counted in Realized, plus the cost its counted tracts moved out. When a unit left any other way — ``exits``, the
+    position's outgoing quantity moves of the period, outnumber those disposals and tracts: a transfer outside the scope
+    or still in transit at the end, a tract or a sale whose value or cost is unknown, an ADJUSTMENT without a cost —
+    the row's result is not covered by a base, and None leaves the general rule standing. None without a base too.
+    """
+    moved_cost, moved_count = moved_out or (_ZERO, 0)
+    if exits != sales + moved_count:
+        return None
+    base = cost_sold + moved_cost
+    return base if base else None
 
 
 def period_return_on_start(period_pnl: Decimal | None, start_value: Decimal | None) -> Decimal | None:
@@ -86,9 +119,9 @@ def closed_position_annualized(
 ) -> Decimal | None:
     """The annualized return of a position closed in the period, over its flight time inside it.
 
-    Base: the cost of the units it sold (the capital actually deployed). Window: from its first opening, clamped to
-    the period's start, to the day its last lot closed (``holding_window.closed_position_window``). None without a
-    base, either date, or enough days.
+    Base: the cost of the units that left it, sold or moved to another broker of the scope
+    (:func:`closed_position_base`). Window: from its first opening, clamped to the period's start, to the day its last
+    lot closed (``holding_window.closed_position_window``). None without a base, either date, or enough days.
     """
     if period_pnl is None or not deployed_cost or opened is None or closed is None:
         return None

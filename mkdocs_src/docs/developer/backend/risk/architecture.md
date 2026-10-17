@@ -466,8 +466,10 @@ returns on the joint calendar of the whole selection.
 A [historical replay](../../../financial-theory/technical-analysis/risk-metrics/historical-replay.md)
 compares values at the two ends of a crisis window, so it prepares its **own** series over
 `replay_range` (`prepare_historical_replay_context()` in `risk/replay.py`), bounded first like the
-request's range ([The range first](#request-flow)). The bounded window drives everything below; the
-parameters keep the request, so `output.replay_range` and `metadata.params` echo it as asked. Before that
+request's range ([The range first](#request-flow)). The bounded window drives everything below. The
+parameters keep the request, so `metadata.params` echoes it as asked, while `output.replay_range` states the
+window replayed, the bounded one, which `metadata.analyzed_range` narrows to the observations found (J-52,
+stress `3.0.1`). Before that
 preparation, every scope asset the user neither proxied nor excluded is checked with
 `replay_coverage()`. An asset that is not priced at both ends within the staleness threshold is
 excluded automatically (`no_prices_in_window`, `starts_after_window_start`,

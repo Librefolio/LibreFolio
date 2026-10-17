@@ -13,10 +13,10 @@ scope's period, not this window.
 THE RULE (coordinator, 17/10; the fix follows these reds). The replay window ends at ``latest_range_end()`` at most and
 starts no earlier than ``range_span_floor(end)`` = ``end − RANGE_SPAN_LIMIT_DAYS`` (36 525 days,
 ``utils/date_range_limits.py``); a start after that end moves to the end. The bounded window drives the facts, the
-coverage, the suggestion and the preparation, and ``analyzed_range`` falls back to it; the output's ``replay_range``
-and the parameters the metadata repeats echo the request, unchanged. The request's own period is bounded the same way,
-at the entry of ``RiskService.execute``, for every scope kind (R4, G3: one ASSET scope is enough, the asset-series call
-is shared).
+coverage, the suggestion and the preparation, and ``analyzed_range`` falls back to it; the parameters the metadata
+repeats echo the request, unchanged, and so did the output's ``replay_range`` until J-52 (below). The request's own
+period is bounded the same way, at the entry of ``RiskService.execute``, for every scope kind (R4, G3: one ASSET scope
+is enough, the asset-series call is shared).
 
 TODAY (base ``4e11fabec``) the window reaches the facts, the coverage, the suggestion and the preparation raw:
 - a window ending in the future excludes an asset quoted until yesterday as stale at its end (R1), and a suggestion keeps
@@ -33,7 +33,8 @@ THE BOOKS, every date relative to ``date.today()``, every close moving from day 
 - B: one quote planted at P = today − 40 000, beyond the span but near enough for the old walk to take about a second,
   and the recent quotes;
 - C: first quoted at today − 10 (the nearest weekday when that day is not one), then every weekday through yesterday;
-- G: one quote planted at ``date(1, 1, 2)`` — clear of ``date.min``'s arithmetic — and the recent quotes.
+- G: one quote planted at ``date(1, 1, 2)`` — clear of ``date.min``'s arithmetic — and the recent quotes;
+- F: one quote planted the day before the floor of a window ending yesterday, yesterday − 36 526, and the recent quotes.
 Each replay runs one window over one asset (an ASSET scope, ``current_composition`` as the stress requires; the request's
 own period is the last 30 days); R4 and G3 ask the KPIs of one asset over the request's period.
 
@@ -45,8 +46,17 @@ READING A REPLAY. An asset the replay leaves out is reported in two places: on a
 ``metadata.excluded_assets`` (``historical_replay_<reason>``); when nothing is left to replay — the one asset of an
 ASSET scope excluded — the stress is unavailable (``insufficient_history``) and its error's ``details.excluded_assets``
 name it (``<reason>``), with the suggested window if any. ``_replay_exclusions`` and ``_suggested_range`` read both.
-``_stated_dates`` reads every date of the result, the two echoes of the request's window aside (``output.replay_range``
-and the parameters the metadata repeats).
+``_stated_dates`` reads every date of the result, the request's window aside where the parameters the metadata repeats
+echo it (``ECHOES``); the output's ``replay_range``, the window replayed since J-52, is read with the rest.
+
+J-52 (E's review of SEC8-1b; coordinator, 17/10). One convention for the replay's window: the parameters the metadata
+repeats (``metadata.params.replay_range``) say what was asked, the request as sent; the output's ``replay_range`` and
+``metadata.analyzed_range`` say what was replayed. The output's echo becomes ``prepared.requested_range``, the request
+bounded, where ``risk_plugins/stress/plugin.py`` still hands it ``params.replay_range``. Only a window out of bounds
+tells the two apart: R1 (an end after tomorrow) and R6 (a start before the floor) pin both echoes, G1 (within bounds) an
+output echo equal to the request. The stress analytic's ``algorithm_version`` goes from 3.0.0 to 3.0.1, one bump for
+both lots: SEC8-1b changed the window an out-of-bounds request replays without one, J-52 changes its echo (R7). Red run
+(base ``a3d4d60a7``, G2 and G3 already bounded): ``services risk-all replay_range_bounds``.
 
 Isolation: a private SQLite file under ``tmp_path`` built by ``create_all`` (as ``test_risk_price_day_budget.py``) — no
 lane database, no server, no network; uuid4 names; the market holiday table empty (built for real, it takes a QuantLib
@@ -70,6 +80,7 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import Asset, AssetType, PriceHistory
+from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.risk import RiskAnalyticResult, RiskQueryRequest, RiskResultStatus
 from backend.app.services.assets import price_query
 from backend.app.services.risk import service as risk_service_module
@@ -78,8 +89,9 @@ from backend.app.services.risk.service import RiskService
 SPAN_DAYS = 36_525  # RANGE_SPAN_LIMIT_DAYS: how far back a per-day walk may go from the end of its range
 PLANTED_DAYS_BACK = 40_000  # B's planted quote: today − 40 000
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# The request's window, echoed unchanged: in the output, and in the parameters the metadata repeats.
-ECHOES = (("output", "replay_range"), ("metadata", "params", "replay_range"))
+# The request's window, echoed as asked: only in the parameters the metadata repeats. The output's ``replay_range`` is
+# the window replayed (J-52), and is read like every other date the result states.
+ECHOES = (("metadata", "params", "replay_range"),)
 
 
 # --------------------------------------------------------------------------- #
@@ -255,9 +267,18 @@ def _analyzed_range(result: RiskAnalyticResult) -> tuple[date, date] | None:
 
 
 def _echo(result: RiskAnalyticResult) -> tuple[date, date] | None:
-    """The window the output echoes, the request's."""
+    """The window the output echoes: the one replayed, the request bounded (J-52)."""
     echoed = result.output.replay_range if result.output is not None else None
     return None if echoed is None else (echoed.start, echoed.end or echoed.start)
+
+
+def _params_echo(result: RiskAnalyticResult) -> tuple[date, date] | None:
+    """The window the parameters the metadata repeats ask for: the request, as sent, whatever shape it is kept in."""
+    asked = None if result.metadata is None else result.metadata.params.get("replay_range")
+    if asked is None:
+        return None
+    window = DateRangeModel.model_validate(asked)
+    return window.start, window.end or window.start
 
 
 def _dates(value: Any, path: tuple = ()) -> Iterator[tuple[str, date]]:
@@ -274,7 +295,7 @@ def _dates(value: Any, path: tuple = ()) -> Iterator[tuple[str, date]]:
 
 
 def _stated_dates(result: RiskAnalyticResult) -> list[tuple[str, date]]:
-    """Every date the result states, with its path, the two echoes of the request's window aside."""
+    """Every date the result states, with its path, but the request's window where the metadata's parameters echo it."""
     return list(_dates(result.model_dump(mode="json")))
 
 
@@ -295,12 +316,17 @@ def _today_reading(result: RiskAnalyticResult) -> str:
 async def test_r1_a_window_ending_after_tomorrow_is_replayed_to_tomorrow_and_dates_nothing_later(private_db):
     """R1: A quoted every weekday until yesterday, the window [today − 20, today + 400]. The window ends at tomorrow, so A is
     priced at both of its ends and replayed: no exclusion, no suggestion, the analyzed range from A's first quote in the
-    window to its last, nothing in the result dated after ``latest_range_end()``; the output echoes the request.
+    window to its last, nothing in the result dated after ``latest_range_end()``, the output's window included. The output
+    echoes the window replayed, [today − 20, ``latest_range_end()``]; the parameters the metadata repeats keep the
+    request, [today − 20, today + 400] (J-52).
 
-    Today (read 17/10/2026): unavailable, ``insufficient_history``. A, the scope's only asset, is excluded as
-    ``stale_at_window_end`` (its last quote 401 days before the window's end), so nothing is left to replay; the error
-    suggests [today − 20, A's last quote], which recovers A. No output, so no echo; the metadata's ``analyzed_range`` is
-    the request's own period (from today − 30), not the replay's. Nothing is dated after tomorrow.
+    Before SEC8-1b (base ``4e11fabec``, read 17/10/2026): unavailable, ``insufficient_history``. A, the scope's only
+    asset, is excluded as ``stale_at_window_end`` (its last quote 401 days before the window's end), so nothing is left to
+    replay; the error suggests [today − 20, A's last quote], which recovers A. No output, so no echo; the metadata's
+    ``analyzed_range`` is the request's own period (from today − 30), not the replay's. Nothing is dated after tomorrow.
+
+    Today (base ``a3d4d60a7``, read 17/10/2026): replayed as above, but the output echoes the request: its end,
+    today + 400 (``output.replay_range.end``), is the one date after tomorrow.
     """
     today = date.today()
     latest_end = today + timedelta(days=1)  # latest_range_end()
@@ -317,6 +343,7 @@ async def test_r1_a_window_ending_after_tomorrow_is_replayed_to_tomorrow_and_dat
         "analyzed_range": _analyzed_range(result),
         "dated after latest_range_end()": [(path, day) for path, day in _stated_dates(result) if day > latest_end],
         "replay_range echo": _echo(result),
+        "params echo": _params_echo(result),
     }
     assert observed == {
         "error": None,
@@ -325,7 +352,8 @@ async def test_r1_a_window_ending_after_tomorrow_is_replayed_to_tomorrow_and_dat
         "suggested_range": None,
         "analyzed_range": (_first_weekday_from(window[0]), _last_weekday_until(today - timedelta(days=1))),
         "dated after latest_range_end()": [],
-        "replay_range echo": window,
+        "replay_range echo": (window[0], latest_end),
+        "params echo": window,
     }, _today_reading(result)
 
 
@@ -438,6 +466,72 @@ async def test_r5_a_window_from_year_one_to_year_9999_suggests_only_the_bounded_
 
 
 # --------------------------------------------------------------------------- #
+# R6 — J-52: a window starting beyond the span, replayed from its floor, echoes the floor
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_r6_a_window_starting_beyond_the_span_is_replayed_from_its_floor_and_echoes_it(private_db):
+    """R6 (J-52): F quoted on yesterday − 36 526 and every weekday from today − 40, the window [P + 1, yesterday] — R2's,
+    P = today − 40 000. Bounded, the window starts at its floor, ``range_span_floor(yesterday)`` = yesterday − 36 525, and
+    F's quote of the day before prices it there: F is covered at both ends and replayed, the analyzed range from its first
+    recent quote to its last. The output echoes the window replayed, [floor, yesterday]; the parameters the metadata
+    repeats keep the request, [P + 1, yesterday].
+
+    Today (base ``a3d4d60a7``, read 17/10/2026): replayed as above, but the output echoes the request, from P + 1, before
+    the floor.
+    """
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    floor = yesterday - timedelta(days=SPAN_DAYS)  # range_span_floor(yesterday)
+    planted = today - timedelta(days=PLANTED_DAYS_BACK)
+    asset_f = await _asset(private_db, "F", [floor - timedelta(days=1), *_recent_quotes()])
+    window = (planted + timedelta(days=1), yesterday)
+
+    result = await _replay(private_db, asset_f, window)
+
+    observed = {
+        "replayed": _replayed(result),
+        "excluded": _replay_exclusions(result),
+        "analyzed_range": _analyzed_range(result),
+        "replay_range echo": _echo(result),
+        "params echo": _params_echo(result),
+    }
+    assert observed == {
+        "replayed": [asset_f],
+        "excluded": {},
+        "analyzed_range": (_first_recent_quote(), _last_weekday_until(yesterday)),
+        "replay_range echo": (floor, yesterday),
+        "params echo": window,
+    }, _today_reading(result)
+
+
+# --------------------------------------------------------------------------- #
+# R7 — J-52: the stress analytic's version
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_r7_bounding_the_replay_window_is_a_new_algorithm_version(private_db):
+    """R7 (J-52): a historical replay states the stress analytic's ``algorithm_version`` 3.0.1. Results and worker caches
+    key on it, and it moves whenever the values do: SEC8-1b changed the window an out-of-bounds request replays, J-52 the
+    window its output echoes — one bump for both. R1's request: A over [today − 20, today + 400].
+
+    Today (base ``a3d4d60a7``, read 17/10/2026): replayed, 3.0.0.
+    """
+    today = date.today()
+    asset_a = await _asset(private_db, "A", _recent_quotes())
+
+    result = await _replay(private_db, asset_a, (today - timedelta(days=20), today + timedelta(days=400)))
+
+    observed = {
+        "replayed": _replayed(result),
+        "algorithm_version": None if result.metadata is None else result.metadata.algorithm_version,
+    }
+    assert observed == {"replayed": [asset_a], "algorithm_version": "3.0.1"}, _today_reading(result)
+
+
+# --------------------------------------------------------------------------- #
 # G1 — GUARD: a plain past replay
 # --------------------------------------------------------------------------- #
 
@@ -447,7 +541,8 @@ async def test_guard_g1_a_plain_past_replay_is_unchanged(private_db):
     """GUARD (green today and after): the window [today − 25, today − 5] over A lies inside every bound. A is replayed from
     its close on the last weekday before the window (the baseline, today − 26 or the Friday before it) to its last quote in
     the window; the analyzed range runs from its first quote in the window to that last one, one observation a weekday;
-    nothing is excluded or suggested; the output echoes the request.
+    nothing is excluded or suggested; the output echoes the window replayed, which within bounds is the request itself
+    (J-52 changes nothing here).
     """
     today = date.today()
     asset_a = await _asset(private_db, "A", _recent_quotes())

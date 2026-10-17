@@ -747,14 +747,18 @@ async def test_get_current_prices_empty_list(test_server):
 
 
 # ============================================================
-# Tests 15–17: I.9 — Currency mismatch hard-400 (Supersedes E.3)
+# Tests 15–17: I.9 — Currency mismatch hard reject (Supersedes E.3); 422 price_currency_mismatch since X-R71
 # ============================================================
 
 
 @pytest.mark.asyncio
-async def test_upsert_mismatch_single_row_rejects_400(test_server):
-    """I.9 Test 15: single row with mismatched currency → HTTP 400 hard reject."""
-    print_section("Test 15: I.9 — single mismatch rejects 400")
+async def test_upsert_mismatch_single_row_rejects_422(test_server):
+    """I.9 Test 15: single row with mismatched currency → HTTP 422 ``price_currency_mismatch`` hard reject (X-R71).
+
+    Contract: the detail names the asset, its currency (``expected``), the one given (``found``) and the date; ``count`` 1.
+    Red before X-R71: 400 with a string detail («Currency mismatch for asset …»).
+    """
+    print_section("Test 15: I.9 — single mismatch rejects 422")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -766,18 +770,25 @@ async def test_upsert_mismatch_single_row_rejects_400(test_server):
         prices = [FAPricePoint(date=today, close=Decimal("1.0"), currency="EUR")]
         upsert = FAUpsert(asset_id=asset_id, prices=prices)
         resp = await client.post(f"{API_BASE}/assets/prices", json=[upsert.model_dump(mode="json")], timeout=TIMEOUT)
-        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}: {resp.text}"
-        body = resp.json()
-        assert "Currency mismatch" in body["detail"]
-        assert "USD" in body["detail"]
-        assert "EUR" in body["detail"]
-        print_success("  ✓ single EUR row on USD asset → 400 with Currency mismatch")
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+        detail = resp.json()["detail"]
+        assert isinstance(detail, dict) and detail.get("code") == "price_currency_mismatch", detail
+        assert detail["items"] == [{"asset_id": asset_id, "expected": "USD", "found": ["EUR"], "dates": [today.isoformat()]}], detail
+        assert detail["count"] == 1, detail
+        print_success("  ✓ single EUR row on USD asset → 422 price_currency_mismatch")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
 
 
 @pytest.mark.asyncio
-async def test_upsert_mismatch_partial_rejects_entire_batch_400(test_server):
-    """I.9 Test 16: one mismatch in a batch of 3 → entire batch rejected with 400 (hard)."""
-    print_section("Test 16: I.9 — partial mismatch rejects entire batch 400")
+async def test_upsert_mismatch_partial_rejects_entire_batch_422(test_server):
+    """I.9 Test 16: one mismatch in a batch of 3 → entire batch rejected with 422 ``price_currency_mismatch`` (X-R71).
+
+    Contract: the detail names the asset, USD expected, GBP found, and the GBP day alone; ``count`` 1; nothing stored.
+    Red before X-R71: 400 with a string detail.
+    """
+    print_section("Test 16: I.9 — partial mismatch rejects entire batch 422")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -793,7 +804,11 @@ async def test_upsert_mismatch_partial_rejects_entire_batch_400(test_server):
         ]
         upsert = FAUpsert(asset_id=asset_id, prices=prices)
         resp = await client.post(f"{API_BASE}/assets/prices", json=[upsert.model_dump(mode="json")], timeout=TIMEOUT)
-        assert resp.status_code == 400, f"Expected 400, got {resp.status_code}"
+        assert resp.status_code == 422, f"Expected 422, got {resp.status_code}: {resp.text}"
+        detail = resp.json()["detail"]
+        assert isinstance(detail, dict) and detail.get("code") == "price_currency_mismatch", detail
+        assert detail["items"] == [{"asset_id": asset_id, "expected": "USD", "found": ["GBP"], "dates": [(today - timedelta(days=1)).isoformat()]}], detail
+        assert detail["count"] == 1, detail
         # Verify NO rows were inserted (atomic reject)
         query_resp = await client.post(
             f"{API_BASE}/assets/prices/query",
@@ -804,6 +819,9 @@ async def test_upsert_mismatch_partial_rejects_entire_batch_400(test_server):
         # Should be empty or only the price points that were present before (none in this test)
         assert len(data["items"][0].get("prices", [])) == 0, "Batch should have been atomically rejected"
         print_success("  ✓ 1/3 mismatch rejected whole batch (atomic)")
+
+        # Cleanup
+        await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
 
 
 @pytest.mark.asyncio

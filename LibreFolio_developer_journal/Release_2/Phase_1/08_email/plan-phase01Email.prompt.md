@@ -6492,6 +6492,666 @@ non sposti il registro.
 >
 > Nessuna riga nel backlog di E: il coordinatore smista i reperti nel codice degli altri, come per SEC9-1.
 
+### A-46/A-47 — La revisione dopo l'ingresso (2026-10-17, 14:5x–15:0x; sola lettura, dev `abbe19d37`)
+> **Il compito** (coordinatore, 14:53):
+> - `_new_username_refusal()`: prima la `@`, poi da 3 a 50 caratteri. La usano `create_user` e `update_profile`,
+>   quest'ultimo solo per un nome cambiato.
+> - `dev.py user create` rifiuta 2 e 51 caratteri.
+> - `AccountError` è uno `str` con `.code`; la rotta del profilo e `register_user` decidono sul codice.
+>
+> **Esito: OK, nessun reperto.** Due note informative, una cura di un metodo.
+>
+> **Verificato, sull'albero del merge** (le mie ricerche con `\s` e `\b` erano vuote per finta, rifatte con le classi
+> POSIX e un controllo positivo):
+> - **Ogni ritorno** di `create_user` (3 rifiuti) e di `update_profile` (4) dà un `AccountError` o `None`: `.code` non
+>   può alzare `AttributeError`.
+> - **I 5 chiamanti**:
+>   - la rotta del profilo e `register_user` decidono sul codice e passano `str(error)`;
+>   - il bootstrap dell'admin passa l'oggetto a structlog;
+>   - `user_cli` `create` e `set-email` lo stampano.
+> - **Le scritture dello username** sono solo due (`user_service.py:304` creazione, `:613` cambio), tutte e due dietro
+>   la regola. Nessuna rotta d'amministrazione e nessun comando lo scrive altrove.
+> - **Lo schema viene prima, sempre**:
+>   - nessuno toglie spazi o normalizza lo username tra lo schema e il servizio (rotta, servizi, configurazione dello
+>     schema), quindi contano la stessa stringa;
+>   - `AuthRegisterRequest` e `UpdateProfileRequest` hanno 3–50: il rifiuto di lunghezza del servizio non arriva via
+>     HTTP;
+>   - il modulo del profilo manda `{username}` solo se cambiato: un vecchio nome fuori da 3–50 non blocca un cambio
+>     d'indirizzo.
+> - **I nomi vecchi delle costanti** (`ADMIN_USERNAME_MIN/MAX_LENGTH`) non restano da nessuna parte: codice, test,
+>   docs.
+> - **I test**:
+>   - i due file sono registrati (`_backend_services.py:601`, `_backend_api.py:634`);
+>   - UNAME-020…023, -030, -031 e UNAME-API-12…14 ci sono;
+>   - UNAME-API-14 è la guardia parametrica del 422 sulle due rotte.
+> - **I docs** dicono quello che fa il codice:
+>   - `ACCOUNT_EXISTS` non è in `_REGISTRATION_REFUSALS`, quindi la rotta risponde 400 col messaggio semplice;
+>   - l'àncora `{: #username-refusal-codes }` sta subito sotto il suo paragrafo (attr_list la attacca) e ha due link.
+> - **`81b517f4c`** (un test di AI Export entrato col merge) cambia solo commenti: nessuna asserzione toccata.
+>
+> **Le prove**, solo Python in memoria (nessuna corsia; `files/a46/`: `probe_account_error.py`, `probe_cure.py`, coi
+> log; `backend/data` invariato):
+> - `==`, `str()`, f-string, `json.dumps` e la catena structlog dell'app da `mask_event_dict` in poi: tutti danno il
+>   messaggio come stringa semplice. Il log del bootstrap funziona.
+> - `copy.copy`, `copy.deepcopy` e `pickle`: **`TypeError`** (`__new__() missing … 'message'`). `str.__getnewargs__`
+>   rende solo il messaggio.
+>
+> **Note**:
+> 1. **Info, robustezza: `AccountError` non si copia e non si serializza con pickle.**
+>    - Oggi non si raggiunge: nessun chiamante lo copia, lo serializza o lo passa tra processi.
+>    - Ma uno `str` invita a girare come stringa: un `model_copy(deep=True)`, un aiuto di test che fa `deepcopy`, un
+>      futuro processore di log che copia l'evento.
+>    - La cura, provata: `def __getnewargs__(self): return self.code, str(self)`. Copia, copia profonda e pickle tengono
+>      codice e messaggio.
+> 2. **Info, già documentata e protetta**: `USERNAME_INVALID` ora vale per la `@` e per la lunghezza, mentre l'app la
+>    traduce come «niente `@`» (`ProfileTab.svelte:130`, `registrationErrors.ts:25`).
+>    - Regge perché il 422 degli schemi viene prima. `security.md` lo dice e UNAME-API-14 lo protegge.
+>    - Se un giorno i limiti dello schema cambiano, serve un codice per la lunghezza, o una frase neutra.
+
+### E-19 — L'avviso dei codici di valuta non ISO salvati (MF-SEC9b, seguito di E-18)
+#### E-19.0 — Analisi ✅ (2026-10-17, 15:0x–15:3x; sola lettura, HEAD `e743fc6a3`)
+> **Il compito** (coordinatore, 14:5x): l'analisi prima del codice. Conta di più dopo E-18: una riga salvata con un
+> codice non ISO non si salva più dopo una modifica, quindi l'utente deve sapere quali righe sono e come correggerle.
+> Dentro: dove appare l'avviso, che cosa ne fa l'utente, la nota sul gap-fix del BRIM.
+>
+> **Il metodo**:
+> - due agenti `explore` in parallelo (frontend: le modifiche e le superfici; backend: le scritture fuori dagli schemi
+>   e l'infrastruttura dei rapporti), più le mie letture dirette (le colonne, il gap-fix, il ripristino, le
+>   riparazioni);
+> - ogni affermazione portante l'ho riletta io nel codice;
+> - una sonda in memoria: `files/sec9b/suggest_probe.py`, col log.
+>
+> **1. Dove stanno.** 12 colonne in 7 tabelle (`db/models.py`):
+> - `transactions.currency`, `.cost_basis_currency`; `assets.currency`; `price_history.currency`;
+>   `asset_events.currency`; `fx_rates.base`/`.quote`; `fx_conversion_routes.base`/`.quote`; `user_settings.base_currency`;
+> - più due testi JSON: `fx_conversion_routes.chain_steps` (le valute dei passi) e
+>   `asset_provider_assignments.provider_params` (il `currency` di uno scraper, esempio a `:1215`).
+> - **Correzione alla mia SQL di misura** (`files/sec9b/non_iso_currencies.sql`): copre le 10 colonne, non i due JSON.
+>
+> **2. Da dove arrivano dopo la 1.3.**
+> - I dati di una 1.2 aggiornata: una volta.
+> - **Il ripristino di un backup più vecchio, sempre.**
+>   - Il ripristino scambia il file SQLite intero (`instance_backup/apply.py:423-432`) e non valida nessuna valuta.
+>   - Nel cloud F01 lo rende normale: un cliente porta il backup del suo homelab.
+> - **Un buco di E-18, da correggere nella mia analisi MF-SEC9b**: là ho scritto «settings già stretto», ma vale solo
+>   per il `default_currency` globale.
+>   - `UserSettingsUpdate.base_currency` e `OnboardingWelcomeSettings.base_currency` (`schemas/settings.py:41`, `:96`)
+>     controllano solo la lunghezza 3, e `settings_service.py:139-140` scrive il valore così com'è.
+>   - Via API passano `978`, `YEN`, `XYZ`. Il selettore dell'interfaccia offre solo codici ISO.
+> - **Dai provider no**:
+>   - il refresh scarta ogni punto la cui valuta è diversa da quella dell'asset (`refresh.py:507`, confronto esatto);
+>   - le basi FX sono costanti ISO.
+>
+> **3. Che cosa vede l'utente oggi** (verificato nel codice):
+> - **Il selettore** (`CurrencySearchSelect`, su `SearchSelect.svelte:98`, `:473`):
+>   - per `978` mostra un campo **vuoto**, ma tiene il valore e lo rimanda;
+>   - l'utente non vede il codice sbagliato.
+> - **Le transazioni**:
+>   - `cash` parte solo se codice o importo cambiano (`txPayloadHelpers.ts:284-325`);
+>   - ma in modalità Auto `cost_basis_override` parte **sempre** (`:320-323`, `TransactionFormModal.svelte:392-393`).
+>     Un trasferimento o una rettifica col costo salvato in `978` dà 422 a **qualunque** modifica.
+> - **Gli asset**:
+>   - `currency` parte **sempre** (`assetPayload.ts:127`), quindi anche rinominare un asset in `978` dà 422;
+>   - il messaggio del backend arriva nel banner (`AssetModal.svelte:1193`);
+>   - **e la correzione dal modulo distrugge dati.** Scegliere EUR è un cambio di valuta: la PATCH rifiuta,
+>     `AssetCurrencyChangeModal` offre solo il wipe della Policy D (`currency_change.py`: tutti i prezzi, tutti gli
+>     eventi, manuali compresi, e le transazioni staccate). Per un'etichetta da correggere;
+>   - in più i prezzi non si aggiornano più: ogni punto del provider è «currency mismatch (got N EUR, expected 978)».
+> - **Gli eventi manuali e i tassi FX**: 422 a ogni riga modificata (`AssetDataEditorSection.svelte:368-377`,
+>   `FxDataEditorSection.svelte:177-188`). La cancellazione funziona: `FXDeleteItem` è tollerante per disegno.
+> - **Le rotte FX: si perdono.** In modifica il modale cancella tutte le rotte della coppia e le ripubblica
+>   (`FxPairAddModal.svelte:325-339`). Con un codice non ISO la cancellazione passa (tollerante) e il POST dà 422.
+> - **Il cruscotto porta in un vicolo cieco**: `978/EUR` diventa `MISSING_FX_MARKET` (`data_quality.py:266-336`), e
+>   l'azione naturale, aggiungere la coppia o i tassi, ora è un 422.
+> - **I saldi si dividono**: `978` accanto a `EUR`, due righe per una valuta.
+> - **Il rischio L4**: `riskAnalysisHelpers.ts:168` usa `Intl` in stile valuta senza guardia, quindi `RangeError` per
+>   un codice non alfabetico.
+>   - **Correzione alla mia analisi MF-SEC9b**: gli altri tre punti che citavo hanno il loro `try`.
+> - **Il 422 dice sempre «such as EUR»**: per `840` suggerisce la valuta sbagliata.
+>
+> **4. Il gap-fix del BRIM.**
+> - **(a) Dal lato dei dati salvati: raggiungibile e silenzioso.**
+>   - `_state_at` somma i saldi per il `Transaction.currency` salvato; `_cash_rows` confronta solo le valute della banca.
+>   - Un broker con movimenti salvati in `978` o `EURO` vede in EUR solo la parte ISO: il gap-fix **propone un
+>     deposito correttivo per denaro che c'è già**.
+>   - Anche `_present_counter` sbaglia la spiegazione: le righe assorbite risultano mancanti.
+>   - È la stessa ragione per cui W-B74 rifiuta i valori non numerici: «un saldo sbagliato proporrebbe una correzione
+>     sbagliata» (`unreadable_rows.py`, `balances.py:171-188`).
+>   - La cura nello stesso stile: contare le valute non ISO del broker fino alla data e rifiutare con
+>     `BRIMLedgerUnreadable`, nominando i codici (il broker è dell'utente, come per il conteggio di W-B74).
+> - **(b) Dal lato della banca** (il mio residuo di E-18): una valuta di truth non ISO alzerebbe `ValidationError` in
+>   `_cash_proposals` (`:148`) o in `_position_proposals` (`:183`, `unit_cost`), cioè un 500.
+>   - Oggi non si raggiunge: Danske ha una costante.
+>   - La cura: lo stesso rifiuto, o un avviso che salta quella valuta.
+>
+> **5. La correzione è quasi sempre deterministica** (sonda):
+> - ogni valore largo indica una sola valuta: `978`→EUR, `840`→USD, `999`→XXX, `EURO`→EUR, `US DOLLAR`→USD,
+>   `YEN`→JPY, `LEK`→ALL, `SOM`→KGS, `WON`→KRW, `SOL`→PEN;
+> - **ambiguo** un solo caso, `BOLÍVAR SOBERANO` (VED o VES);
+> - maiuscole o spazi (`eur`, `' EUR '`) passano la regola stretta, ma sono salvati in forma non canonica: i confronti
+>   SQL esatti li mancano;
+> - **mai ritoccare** `ZAC`, `ILA`, `GBX`, che solo un ripristino può portare: sono sottounità, e l'etichetta ISO
+>   sbaglierebbe gli importi di 100 volte.
+>
+> **6. Dove appare l'avviso** (proposta, per pubblico):
+> - **L'utente** (nel cloud l'unico che può agire):
+>   - il rapporto di qualità del portafoglio esiste già, coi suoi `issues`. Un nuovo `IssueCode.NON_ISO_CURRENCY`, uno
+>     per valore salvato nel suo perimetro (transazioni dei suoi broker, asset che ha, la sua valuta base), col
+>     suggerimento e un'azione;
+>   - sostituisce `MISSING_FX_*` per le coppie con un lato non ISO, e toglie il vicolo cieco;
+>   - lo mostra il `DataQualityBanner` esistente: cruscotto (`dashboard/+page.svelte:1011`), dettaglio asset
+>     (`:2286`), dettaglio FX (`:1272`). L'azione passa da `onaction`/`cta_action`.
+> - **Nel modulo**: il selettore mostra il valore salvato col suggerimento, invece del campo vuoto.
+> - **Nel 422**: il testo nomina la valuta indicata (`'840' is USD`), non «such as EUR».
+> - **L'amministratore**:
+>   - il rapporto di controllo del ripristino (`staging.py:159-192`), come avviso, che non blocca;
+>   - una riga al log d'avvio, nello stile di `config_audit`;
+>   - un elenco da riga di comando.
+>
+> **7. Che cosa ne fa l'utente: tre modelli.** Una decisione dello sviluppatore.
+> - **A, guidato dall'utente**:
+>   - un'azione «Usa EUR per 978» chiama una rotta di correzione sul suo perimetro: transazioni modificabili, eventi,
+>     la sua valuta base;
+>   - per gli asset la correzione non passa dal wipe della Policy D quando `lookup(vecchio) == nuovo`, e corregge con
+>     essi prezzi ed eventi;
+>   - le coppie e le rotte FX restano solo segnalate: si cancellano (tollerante) e si rifanno sulla coppia ISO.
+> - **B, solo amministratore**: `--fix` da riga di comando, deterministico; FX solo segnalate. Nel cloud il gestore
+>   toccherebbe i dati dei clienti.
+> - **C, automatico**:
+>   - un `CurrencyCodeFix` in `backend/app/db/post_migration/`, che già fa rileva, backup, una transazione, verifica,
+>     rollback;
+>   - gira a ogni avvio **e su ogni copia ripristinata** (lo staging esegue le correzioni «in either case»);
+>   - il ripristino mostra «control totals changed» come avviso, perché i secchi si uniscono; non lo rifiuta;
+>   - il residuo (l'ambiguo, i codici sconosciuti, le collisioni FX) resta all'avviso.
+> - **La mia raccomandazione: C per le colonne senza chiave, più l'avviso per il residuo.** Il ripristino continuerà a
+>   portare dati vecchi, e nel cloud l'utente non ha la riga di comando.
+>   - Ma C cambia dati in ogni installazione all'avvio: decide lo sviluppatore. Se lo rifiuta, A.
+>
+> **8. Le decisioni**:
+> - **D1**: il modello di correzione (A, B o C).
+> - **D2**: la correzione dell'asset senza il wipe della Policy D, quando il vecchio valore è una grafia del nuovo
+>   codice.
+> - **D3**: la gravità di `NON_ISO_CURRENCY` (`warning` o `error`).
+> - **Senza decisione**, se il coordinatore lo assegna: `base_currency` stretto (il buco di E-18), il testo del 422
+>   col suggerimento, la guardia del gap-fix.
+>
+> **9. Fuori da questo lotto, ad altri proprietari**:
+> - il modale delle rotte FX che cancella prima di ripubblicare (frontend FX). Preesistente, ma E-18 lo rende
+>   raggiungibile;
+> - `riskAnalysisHelpers.ts:168` senza guardia (rischio);
+> - **non verificato**: se il `GBp` di Yahoo arriva al confronto esatto di `refresh.py:507`. Se sì, un asset di Londra
+>   in GBP scarta ogni punto (Z o provider).
+>
+> **10. La misura e le dimensioni.**
+> - **La misura**: la SQL va estesa ai due JSON prima di finire nella lista dello sviluppatore.
+> - **Avviso, guardie e testo del 422**: un lotto medio-piccolo. Backend: servizio, codice nuovo, `api sync`.
+>   Frontend: banner e selettore, i18n nelle 4 lingue. Test: services, api, Vitest.
+> - **La correzione** (A o C) e quella degli asset: un lotto medio.
+
+#### E-19a.3 — Fix-forward: il passo d'avvio dopo le due riparazioni ✅ (2026-10-17, 17:1x–17:2x; HEAD `e98934eed`)
+> **Il rosso** (coordinatore, 17:1x, gate I, `all-backend` in dev):
+> `test_lone_transfer_legs.py::test_the_startup_step_runs_right_after_the_post_migration_fixes`, perché
+> `lone-transfer-legs` deve venire subito dopo `post-migration-fixes`, e il mio `stored-currencies` si era messo in
+> mezzo.
+>
+> **⚠️ Fuori pista, perché mi era sfuggito.** In E-19a avevo cercato i test che leggono l'ordine dei passi con
+> `grep -rln … | head -n 5`. La lista era tagliata esattamente a cinque file, e i file erano **dodici**.
+> - **La lezione**: un passo d'avvio nuovo vuol dire far girare **ogni** suite che legge l'ordine
+>   (`grep -rln -E "post-migration-fixes|lone-transfer-legs|STARTUP_STEPS" backend/test_scripts`), **senza troncare**.
+> - È la regola del `tee` + `head`: una lista per decidere non si tronca.
+>
+> **La cura**:
+> - `stored-currencies` va subito dopo `lone-transfer-legs`: è un controllo che solo scrive nel log, quindi sta dopo
+>   le due riparazioni;
+> - in `overview.md` i passi 13 e 14 sono scambiati, e il 14 dice «after both repairs».
+>
+> **Prove** (`files/tools/e9_suites.sh e19fix …`, 17:18–17:27, corsia 6188, carico sotto 50): **11 suite, 986 verdi**.
+>
+> | Suite | Verdi |
+> |---|---|
+> | services `lone-transfer-legs` | 20 |
+> | services `stored-currencies` | 24 |
+> | services `admin-bootstrap` | 218 |
+> | services `app-lifecycle` | 53 |
+> | services `plugin-secrets-check` | 11 |
+> | services `shutdown-process` | 7 |
+> | services `sleep-wake-suspend` | 141 |
+> | services `backup-leftovers` | 44 |
+> | services `backup-apply` | 255 |
+> | services `backup-staging` | 168 |
+> | db `post-migration` | 45 |
+>
+> - ruff e black puliti su `app_lifespan.py`.
+> - `api backup-roundtrip` non l'ho rifatto: taglia i passi per nome (da `pending-restore` a `restore-commit`), quindi
+>   lo spostamento non lo tocca, ed era verde nel gate I.
+
+#### E-19b.0 — Analisi del lato utente (2026-10-17, 16:4x–17:0x; sola lettura, HEAD `e98934eed`)
+> **Il quadro del coordinatore**:
+> - Z-32 (c), non ancora in dev, porta:
+>   - `IssueCode.QUOTE_IN_MINOR_UNIT` (`WARNING`, `navigate_asset`, sul modello di `INVALID_SPLIT_RATIO` di MF-D4);
+>   - la colonna `asset_provider_assignments.reported_currency` (migrazione 010);
+>   - un lettore unico in `portfolio_service.py` degli asset tenuti e delle loro assegnazioni.
+> - `NON_ISO_CURRENCY` usa quel lettore, non un secondo.
+>
+> **Lo stato vero** (un agente `explore` sul frontend, letture mie sul backend):
+> - **Il rapporto di qualità** (`data_quality.py`):
+>   - le voci `MISSING_FX_*` nascono dalle stringhe grezze `from/target` di `missing_fx_pairs_dto`
+>     (`daily_state.py:941` scrive `f"{from_ccy}/{target}"` col codice salvato). Un `978` arriva quindi come
+>     `978/EUR`;
+>   - il rapporto si costruisce in due punti di `portfolio_service.py` (`:993` riepilogo, `:2068` l'altro percorso);
+>   - `DataQualityIssue` ha `message_i18n_key`, `message_params`, gli asset e le coppie toccate, e una CTA facoltativa.
+> - **Il banner** (`DataQualityBanner.svelte`):
+>   - traduce `message_i18n_key` con i soli `message_params`;
+>   - senza `cta_action` non disegna il bottone;
+>   - `data-testid="data-quality-issue-{code}"`;
+>   - le chiavi stanno in `i18n/dataQuality/*.json`.
+> - **Il selettore**:
+>   - le valute vengono da `GET /utilities/currencies?language=` (`currencyStore.ts`): codice, nome **tradotto**,
+>     simbolo, nessun codice numerico. Quindi il client non può sapere che `978` è EUR;
+>   - nessuno spazio per un suggerimento o un avviso;
+>   - lo usano 15 moduli, fra cui il modale dell'asset, dove scegliere EUR apre il wipe della Policy D.
+>   - `/utilities/currencies/normalize` esiste già, ma confronta simboli e nomi tradotti, che è un'altra regola, e
+>     nessun frontend lo chiama.
+> - **Il rapporto del ripristino**:
+>   - gli avvisi sono chiavi senza parametri (`restoreText.ts` `WARNING_KEYS`, con un ripiego `unknown`);
+>   - gli elenchi di dettaglio seguono il modello di `control_totals_differences`, con una riga `more`;
+>   - `restoreI18n.test.ts` ha una lista di codici scritta a mano.
+> - **L'i18n**:
+>   - `./dev.py i18n add` scrive le sorgenti `i18n/<sottosistema>/` e rigenera il catalogo;
+>   - le porte HTML (`htmlInterpolation.gate`, `htmlSink.gate`, in `front-utility core-unit`) vietano `<` e `&` nei
+>     valori.
+>
+> **La proposta: E-19b in due tempi.**
+> - **b1, ora, indipendente da Z**:
+>   - **Suggerimento**: `GET /utilities/currencies/suggest?value=` → `{value, suggestion, candidates}`, sulla regola
+>     unica di E-19a (`suggested_iso_currency`).
+>   - **Selettore** (`CurrencySearchSelect`): un valore assente dalle opzioni diventa un'opzione sintetica, e il campo
+>     mostra «978» con un avviso e il suggerimento («it stands for EUR»), invece del vuoto.
+>     - Niente scelta in un clic finché D1 e D2 non decidono: nel modale dell'asset scegliere EUR è ancora il wipe.
+>   - **L'avviso del ripristino**, col via di B:
+>     - `staging.py` legge i reperti sulla copia aggiornata (lo stesso `stored_currencies`);
+>     - `schemas/backup.py` riceve il codice `non_iso_currencies` e l'elenco (posto, valore, righe, suggerimento);
+>     - `backup_cli.py` riceve il testo e le prime righe;
+>     - `restoreText.ts`, le righe in `RestoreReportModal` e `restoreI18n.test.ts`.
+>   - i18n in 4 lingue (`currency`, `backup`), `api sync`, Vitest e le porte.
+> - **b2, dopo Z-32 (c)**:
+>   - `IssueCode.NON_ISO_CURRENCY`: una voce per codice salvato, con `message_params {value, suggestion}`, gli asset
+>     tenuti in quel codice (dal lettore di Z), le coppie spostate, nessuna CTA, `group_key="non_iso_currency"`;
+>   - le voci `MISSING_FX_*` saltano le coppie con un lato non ISO, classificato sulla stringa grezza `from/target`
+>     (un nome può avere un trattino);
+>   - più la valuta base non ISO, con una sua chiave;
+>   - i18n in `dataQuality` e `api sync`.
+>
+> **Da decidere col coordinatore**:
+> - lo spezzamento b1/b2;
+> - l'endpoint nuovo o l'estensione di `normalize`;
+> - i proprietari di `utilities.py`, di `CurrencySearchSelect`/`SearchSelect` (UI condivisa) e dei file del
+>   ripristino (B).
+>
+> **Le risposte** (coordinatore, 16:3x):
+> - **Il ripristino (B)**: un codice d'avviso nuovo tocca **sette posti**, e ho il via su tutti; B rivede.
+>   - `schemas/backup.py:196` (il `Literal`) e il commento a :167, poi `api sync`;
+>   - `staging.py`, il codice e la docstring a :158-162;
+>   - `backup_cli.py` `_STAGE_WARNINGS`;
+>   - `restoreText.ts` `WARNING_KEYS`;
+>   - `backup.restore.report.warning.<code>` in `i18n/backup/*`;
+>   - `restoreI18n.test.ts` §5;
+>   - `admin/cli_tools.en.md` (l.462 in dev, l.491 qui).
+>   - La mia scelta, comunicata: **solo il codice, senza elenco di dettaglio**, quindi `RestoreReportModal.svelte` non si
+>     tocca. Il testo rimanda a `db currencies`, e dopo il ripristino il banner di b2 nomina i codici.
+> - **Spezzamento ok, via su b1**, prima i rossi; **un endpoint `suggest` nuovo**; il via su tutti i file di b1. Con due
+>   attenzioni:
+>   - **`staging.py` per ultimo**, dopo l'ingresso di B-43 (B tradurrà lì in `database_damaged` gli errori di schema
+>     illeggibile, in `_stage` e `_refuse_foreign_objects`): me lo dirà il coordinatore;
+>   - **`CurrencySearchSelect.svelte`** è nell'area del programma colori: la riga d'avviso usa solo ruoli esistenti, e
+>     `theme-roles --check` deve restare pulito. Per un tono nuovo, chiedere prima.
+> - b2 aspetta Z-32 (c).
+
+#### E-19b1.0 — Il contratto e i rossi al `test-author` (2026-10-17, 16:3x–16:5x; HEAD `e98934eed`)
+> Skill `design-system` caricata. Per la riga d'avviso valgono:
+> - solo ruoli (`text-lf-warning` regge 4,5:1 su card e campo);
+> - niente stato nelle righe evidenziate delle opzioni: sulla tinta `selected` gli stati non reggono, quindi l'avviso
+>   sta sotto il campo e nella resa del valore scelto;
+> - lo stato per i test come `data-*`, mai come colore.
+>
+> **Il contratto** (al `test-author` `116f6270`, sei file nuovi):
+> - **CCA**: `iso_currency_candidates(value)` pubblica in `schemas/common.py`, la base di `suggested_iso_currency`
+>   (uguali per proprietà).
+> - **CSA-API**: `GET /api/v1/utilities/currencies/suggest?value=` (pubblica come `GET /utilities/currencies`), che
+>   risponde `{canonical, suggestion, candidates}`; `value` da 1 a 200 caratteri, altrimenti 422.
+> - **RNW**:
+>   - il `Literal` di `schemas/backup.py` accetta `non_iso_currencies`;
+>   - `staging._report(..., non_iso_currencies=True)` lo mette dopo gli altri codici; resta rosso fino a B-43;
+>   - `backup_cli._STAGE_WARNINGS` lo ha, con `db currencies` nel testo;
+>   - la parità `Literal` ↔ `_STAGE_WARNINGS`.
+> - **CNI** (Vitest), `CurrencySearchSelect`, con `978` assente dalle opzioni:
+>   - il campo mostra `978`;
+>   - `data-testid="currency-non-iso-hint"` con `data-suggestion`;
+>   - le chiavi `common.nonIsoCurrency.{suggestion,candidates,unknown}`;
+>   - una sola chiamata a `suggestCurrency`; i casi ambiguo, sconosciuto ed errore;
+>   - scegliere USD toglie l'avviso; `978` non è un'opzione scegliente;
+>   - le guardie per un codice noto e per il vuoto.
+> - **CSS** (Vitest): `currencyStore.suggestCurrency()` chiama
+>   `suggest_currency_api_v1_utilities_currencies_suggest_get`, una volta per valore; un errore non si mette in cache e
+>   risponde il vuoto.
+> - **RTN** (Vitest): `restoreWarningKey('non_iso_currencies')`.
+
+#### E-19a.0 — Il disegno, e i rossi al `test-author` (2026-10-17, 15:1x–15:3x; HEAD `e743fc6a3`)
+> **Il via del coordinatore** (15:1x):
+> - D1 e D2 vanno allo sviluppatore, con la mia raccomandazione (C più D2). **D3 è deciso: `warning`.**
+> - **Via** su ciò che serve qualunque sia D1, in due checkpoint, prima i rossi.
+>   - **E-19a, backend**: `base_currency` stretto; una funzione di suggerimento deterministica; il 422 col suggerimento;
+>     l'avviso nel rapporto del ripristino, la riga d'avvio, l'elenco da riga di comando; i due JSON nella rilevazione e
+>     nella SQL; la guardia (a) del gap-fix. Il file è di W: ho il permesso di scrivere solo quella guardia, e W
+>     rivede.
+>   - **E-19b, utente**: `IssueCode.NON_ISO_CURRENCY` al posto di `MISSING_FX_*`; il banner, senza bottone di
+>     correzione finché manca D1; il selettore col valore salvato e il suggerimento; i18n nelle 4 lingue, gate HTML,
+>     `core-unit`, `api sync`.
+> - **Altrove**: il modale delle rotte a X, `riskAnalysisHelpers.ts:168` a J, `GBp` a Z.
+> - La revisione del seguito di MF-SEC9a aspetta dopo E-19a.
+>
+> **Il contratto** (dato al `test-author`):
+> - **`suggested_iso_currency(value)`**, in `schemas/common.py`:
+>   - `None` per un valore non stringa, vuoto, oltre 64 caratteri, o in
+>     `NEVER_RELABELLED_CURRENCY_CODES = {GBX, ZAC, ILA}`, in qualunque grafia;
+>   - un codice ISO valido torna maiuscolo (`eur` → EUR, `GBp` → GBP);
+>   - altrimenti l'unico `alpha_3` il cui numerico o nome coincide senza maiuscole; nessuno o più d'uno → `None`.
+> - **Il 422 di `iso_currency_code`**:
+>   - con un suggerimento: «… the ISO 4217 alphabetic code is USD»;
+>   - ambiguo: «… is VED or VES»;
+>   - senza suggerimento: «expected an ISO 4217 alphabetic code, such as EUR or USD»;
+>   - resta il limite di 16 caratteri di E-18.
+> - **`base_currency`** stretto in `UserSettingsUpdate` e `OnboardingWelcomeSettings`, col `Field(min_length=3,
+>   max_length=3)` tenuto: lo schema OpenAPI resta identico.
+> - **Il nuovo modulo `services/platform/stored_currencies.py`**, in sola lettura su `sqlite3`:
+>   - `STORED_CURRENCY_PLACES` (13 posti: 10 colonne, `chain_steps.from`/`.to` e `provider_params.currency`);
+>   - `StoredCurrencyFinding(place, value, rows, suggestion)`, `find_stored_currency_findings()`,
+>     `summarize_findings()`;
+>   - `log_stored_currency_audit()`: un solo `WARNING` all'avvio, mai un'eccezione;
+>   - `main()`, che esce con 0 se pulito, 1 con dei reperti, 2 se il file non si legge;
+>   - «canonico» vuol dire `iso_currency_code(v) == v`, quindi `eur` è un reperto.
+> - **La guardia del gap-fix**: `BRIMLedgerUnreadable` (409, `ledger_unreadable`) se il contante del broker fino ad
+>   `as_of`, senza le cancellazioni in attesa, ha un codice non canonico.
+>   - Il messaggio cita al più 5 codici, ognuno col suo suggerimento.
+>   - Il controllo di W-B74 viene prima.
+>   - Il wizard mostra il `message` (`extractErrorMessage`, `ImportWizardModal.svelte:1381`): nessun cambio nel
+>     frontend.
+>
+> **I file del codice**:
+> - miei: `schemas/common.py`, il nuovo `stored_currencies.py`;
+> - con il permesso già dato: la guardia in `brim_gap_fix.py` (di W);
+> - **da chiedere**: `schemas/settings.py`, `services/platform/app_lifespan.py` (il passo d'avvio, dopo
+>   `post-migration-fixes`), `dev.py` (`db currencies`, che `docker compose exec … python dev.py` raggiunge),
+>   `admin/cli_tools.en.md`;
+> - più la registrazione delle suite.
+>
+> **Da decidere col coordinatore**:
+> - **L'avviso del ripristino** tocca:
+>   - `instance_backup/staging.py`, `schemas/backup.py:196` (il `Literal` dei codici, quindi OpenAPI e `api sync`) e
+>     `scripts/backup_cli.py:528`, file di B;
+>   - poi `restoreText.ts`, l'i18n nelle 4 lingue e `restoreI18n.test.ts`.
+>   - La mia proposta: in E-19b, con il resto di i18n e `api sync`.
+> - **`global_settings.default_currency`** non è fra i 13 posti. In scrittura è stretto, ma un ripristino può portarne
+>   uno largo: aggiungerlo?
+>
+> **Il `test-author`** (`65630e49`) scrive quattro file nuovi:
+> - `test_currency_suggestion.py` (CSG);
+> - `test_stored_currency_audit.py` (SCA);
+> - `test_gap_fix_currency_guard.py` (GFC);
+> - `test_settings_currency_strict_api.py` (SCS-API).
+>
+> I file puri li esegue lui; quello API solo `--collect-only`.
+>
+> **Le risposte del coordinatore** (15:3x):
+> - **Via sui quattro file**:
+>   - `schemas/settings.py`;
+>   - `app_lifespan.py`: di H; un passo dopo `post-migration-fixes`, solo un avviso; H rivede;
+>   - `dev.py db currencies`;
+>   - `cli_tools.en.md`.
+>   - Nessuno è aperto in un altro worktree.
+> - **L'avviso del ripristino va in E-19b**, con il via di B su `staging.py`, `schemas/backup.py` e `backup_cli.py`.
+> - **`global_settings.default_currency` diventa il posto 14**: il `value` della riga con `key = 'default_currency'`,
+>   testo semplice. Mandato al `test-author`.
+>
+> **Preparato fuori dal worktree**, per non far diventare verdi i rossi prima del loro rapporto:
+> - la bozza del modulo, `files/e19a/stored_currencies.py`;
+> - **la SQL di misura v2 per lo sviluppatore**, `files/sec9b/non_iso_currencies_v2.sql`.
+>   - Sono i 14 posti, sola lettura, con la lista ISO generata da pycountry (`make_sql_v2.py`, quindi nessuna lista
+>     scritta a mano).
+>   - «Canonico» vuol dire maiuscolo, senza spazi: `eur` è segnalato.
+>   - Provata (`test_sql_v2.py`) su un DB dallo schema dell'app:
+>     - i 12 valori piantati tornano tutti, `978`, `eur`, `EURO`, `US DOLLAR`, … anche nei due JSON e in
+>       `default_currency`;
+>     - `EUR`, `USD`, `JPY`, i JSON malformati (`not json`, `bad`, `{}`) e `default_language = '978'` no, e nessun
+>       errore.
+>   - Le stesse forme di query della bozza del modulo, quindi provate anche quelle.
+
+#### E-19a.1 — I rossi ✅ (2026-10-17, 15:3x–16:0x; `test-author` `65630e49`, solo file nuovi)
+> **Quattro file nuovi**, nessun file esistente toccato; ruff e black puliti:
+>
+> | File | ID | Rossi | Guardie verdi |
+> |---|---|---|---|
+> | `test_schemas/test_currency_suggestion.py` | CSG-001…035 | 93 | 26 |
+> | `test_services/test_stored_currency_audit.py` | SCA-001…050 | 23 | 1 |
+> | `test_services/test_gap_fix_currency_guard.py` | GFC-001…015 | 6 | 7 |
+> | `test_api/test_settings_currency_strict_api.py` | SCS-API-01…06 | 5 (solo `--collect-only`) | 1 |
+>
+> - Ogni rosso fallisce come «red until E-19a», e la raccolta riesce: i simboli nuovi si cercano dentro i test.
+> - GFC mostra la risposta di oggi per `978`: EUR (banca 600, LibreFolio −400) e USD (50, 0), con depositi proposti per
+>   denaro che c'è già.
+> - Senza il codice, il `test-author` ha confrontato le sue attese a mano con un'implementazione indipendente del
+>   contratto, in sola lettura: tutte coincidono.
+>
+> **⚠️ Fuori pista, due correzioni al contratto dai suoi punti aperti**:
+> - **Il limite della ricerca passa da 64 a 80 caratteri.** Il nome ISO di XXX ne ha 65 (il più lungo; il secondo,
+>   XBD, 57): la vecchia validazione poteva salvarlo, quindi l'audit deve suggerire XXX. CSG-004 e CSG-012 sono
+>   chiesti di nuovo al `test-author`.
+> - **Un percorso con spazi o `#`** (SCA-034, `data dir #1`) rompe l'URI `file:{path}?mode=ro`: il `#` apre un
+>   frammento. Il codice userà `path.resolve().as_uri()`.
+>
+> **Tenuto, ma da documentare**:
+> - `GBp` → GBP, come lo salva una scrittura di E-18 (`quote_base_quantity`). Se un giorno degli importi in pence
+>   fossero salvati grezzi, GBP sarebbe 100 volte sbagliato.
+> - Oggi non si raggiunge: la validazione larga mette in maiuscolo, e il refresh scarta i punti in `GBp`.
+> - **Per D1**: una rietichettatura automatica deve escludere anche le grafie di sottounità come `GBp`, non solo
+>   GBX/ZAC/ILA.
+>
+> **Le registrazioni** (nel lotto del codice):
+> - file 1 e 3 puri;
+> - file 2 puro (file in `tmp_path`, un sottoprocesso);
+> - file 4 `WRITE_SCOPED`: i suoi utenti, e `fx_rates` solo se il prodotto regredisce, poi pulito.
+>
+> **Il mio giro dei rossi** (`files/tools/e19a_pure.sh reds`, 15:55–15:57, file 1 già col limite a 80):
+> - 93/26, 23/1 e 6/7: gli stessi del `test-author`;
+> - ogni fallimento ha il suo «red until E-19a» nel corpo del log.
+
+#### E-19a.2 — Il codice ✅ (2026-10-17, 15:5x–16:1x; HEAD `e743fc6a3`)
+> **Note implementazione**:
+> - **`schemas/common.py`**:
+>   - `_SUGGESTION_MAX_LENGTH = 80` e `NEVER_RELABELLED_CURRENCY_CODES`;
+>   - `shown_currency_text()` (il limite di 16 di E-18, ora pubblico);
+>   - `_is_iso_alpha_3()` e `is_canonical_iso_currency()`. Uguale alla sua forma `strip().upper()` **e** ISO: serve,
+>     perché `pycountry.currencies.get(alpha_3="eur")` non distingue le maiuscole;
+>   - `_iso_currency_candidates()` (`lru_cache` 256, numerico o nome) e `suggested_iso_currency()`;
+>   - il rifiuto di `iso_currency_code` nomina il codice: «the ISO 4217 alphabetic code is USD», «… is VED or VES»,
+>     altrimenti «expected an ISO 4217 alphabetic code, such as EUR or USD».
+> - **`schemas/settings.py`**: `base_currency` di `UserSettingsUpdate` e `OnboardingWelcomeSettings` passa a
+>   `IsoCurrencyCode`, col `Field(min_length=3, max_length=3)` tenuto.
+> - **`services/platform/stored_currencies.py`**, nuovo: i 14 posti, le query della bozza, provate dalla SQL v2.
+> - **`brim_gap_fix.py`** (di W, solo la guardia): `NON_ISO_CODES_NAMED = 5` e `_refuse_non_iso_cash()`.
+>   - Una `SELECT DISTINCT currency` sulle stesse righe di `get_balances_at_end_of`, chiamata in `_state_at` dopo il
+>     controllo di W-B74.
+>   - Salta i valori vuoti, come la somma del contante.
+> - **`app_lifespan.py`** (di H): il passo `stored-currencies` dopo `post-migration-fixes`, in un thread.
+> - **`dev.py`**: `db currencies [path]`, costruito come `db check`; `run_pipenv` esegue direttamente in Docker.
+> - **Il runner**: `schemas currency-suggestion`, `services stored-currencies` e `services gap-fix-currency-guard`
+>   (puri), `api settings-currency-strict` (isolamento di default).
+> - **I docs**:
+>   - `admin/cli_tools.en.md`: la riga nel blocco `db`, la nota Docker, la sezione «💱 Currency Codes That Are Not ISO
+>     Codes» `{: #currency-codes }`. Pagina tradotta, contenuto nuovo: il debito di traduzione resta, nessun timbro;
+>   - `developer/architecture/overview.md`: il passo 13 e la rinumerazione 14–24, con uno script, solo sulla lista;
+>   - `patterns/brim_plugin_guide.md`: il paragrafo della guardia, dopo quello di W-B74;
+>   - `database/brokers_transactions.md`: le scritture (più la valuta base), il 422 col codice, i valori salvati
+>     segnalati;
+>   - `architecture/settings.md`: la frase su `default_currency` e `base_currency`;
+>   - `.github/instructions/backend-schemas.instructions.md`: i nuovi aiuti.
+>
+> **⚠️ Fuori pista, `mode=ro` lascia dei file.**
+> - I 5 rossi rimasti di SCA (`log_…` e la CLI) erano un solo difetto: aprire un DB in WAL con `mode=ro`, senza altre
+>   connessioni, crea `-wal` e `-shm` e non li toglie alla chiusura.
+> - Su un server fermo, `db currencies` li avrebbe lasciati accanto al DB di produzione.
+> - Sonda (`files/e19a/probe_wal.py`):
+>   - con `mode=rw` più `PRAGMA query_only = ON` la cartella e l'hash restano uguali, da solo e accanto a un'altra
+>     connessione;
+>   - ogni scrittura è rifiutata;
+>   - un file mancante non viene creato.
+> - Adottato in `_read_only`.
+>
+> **Prove, finora**:
+> - **Puri** (`e19a_pure.sh green2`, 16:03): **119 + 24 + 13 = 156 verdi**.
+> - **ruff**: pulito sui file del backend e del runner. `dev.py` ha 43 reperti ruff e un riformato di black anche a
+>   HEAD: preesistenti, nessuno sulle mie righe.
+> - **black**: ha rimesso su una riga il `raise` del gap-fix (sotto i 300 caratteri).
+> - **OpenAPI**: `app.openapi()` di HEAD (estratto con `git archive` in una cartella temporanea) contro E-19a.
+>   Componenti, percorsi e `info` identici, quindi nessun `api sync` in E-19a (`files/e19a/openapi_{head,e19a}.json`).
+>
+> **Le suite** (`files/tools/e9_suites.sh e19a …`, 16:04–16:10, corsia 6188, una alla volta, carico sotto 50):
+> **14 suite, 3 800 verdi, 0 rossi**.
+>
+> | Suite | Verdi |
+> |---|---|
+> | `schemas all` (2 816 di prima + i 119 di CSG) | 2 935 |
+> | services `stored-currencies` | 24 |
+> | services `gap-fix-currency-guard` | 13 |
+> | services `brim-gap-fix` | 115 |
+> | services `settings` | 23 |
+> | services `admin-bootstrap` | 216 |
+> | services `plugin-secrets-check` | 11 |
+> | services `shutdown-process` | 7 |
+> | api `settings-currency-strict` | 6 |
+> | api `settings` | 98 |
+> | api `auth` | 95 |
+> | api `email` | 168 |
+> | api `instance-block` | 62 |
+> | api `fx` | 27 |
+>
+> - Le scelte: ogni suite che usa gli schemi delle impostazioni (`welcome_settings`, `/settings/user`), le tre che
+>   leggono l'ordine dei passi d'avvio (contano solo ordini relativi: il mio passo non li tocca), il gap-fix di W, e
+>   `api fx` per il testo del 422.
+>
+> **I controlli statici** (`files/tools/e19a_static.sh`, 16:11; poi la build rifatta):
+> - ruff e black puliti su 12 file (backend, runner, test).
+> - **La CLI vera**:
+>   - `dev.py db currencies` sul DB della corsia: «No stored currency code needs attention», exit 0;
+>   - su un file mancante: rifiutato da `_existing_db_file`;
+>   - la cartella `sqlite/` della corsia è identica prima e dopo (`app.db`, `app.db.post-migration.lock`).
+> - **⚠️ Fuori pista, `mkdocs build` stretto rosso.** Tre avvisi: i link delle pagine developer a
+>   `cli_tools.md#currency-codes` cadono, nella build italiana, su `cli_tools.it.md`, che non ha ancora la sezione.
+>   - I link ora puntano alla pagina senza àncora e nominano la sezione.
+>   - Rifatta la build: 0 righe WARNING/ERROR; `check-links` 97 validi; `git diff --check` pulito; la porta 6188 è
+>     libera.
+> - **`translate-validate`**: la pagina `admin/cli_tools` era già indietro di struttura in it/fr/es prima di E-19a
+>   (conteggi di avvisi e di blocchi di codice).
+>   - La mia sezione aggiunge i suoi elementi (`db currencies`, i blocchi, il titolo): debito vero per la traduzione
+>     futura, quindi nessun timbro.
+
+### MF-SEC9a resto + SEC9c — La revisione dopo l'ingresso (2026-10-17, 15:1x, ripresa 16:1x; sola lettura, codice `f0e54254f`, dev `29e30b6cc`) ✅
+> **Sospesa** per ordine del coordinatore (15:1x): riprende dopo il checkpoint di E-19a.
+>
+> **Verificato finora, nessun reperto**:
+> - **Bisezione in `delete_rates_bulk`**:
+>   - le date di ogni coppia sono ordinate una volta, con gli id paralleli;
+>   - la fetta `[bisect_left(start), bisect_right(end or start))` è inclusiva come prima;
+>   - `max(0, hi - lo)` copre `end < start`, che dà 0 come prima.
+> - **La docstring di `sql_chunks.py`**:
+>   - elenca i siti curati e dice che un `or_` annidato conta tutti i suoi termini;
+>   - «un `and_()` dentro aggiunge profondità, non lunghezza» è giusto: la catena cresce di un livello per termine OR,
+>     un `and_` di tre è una costante.
+> - **BRIM**:
+>   - i 7 `ilike` del nome sono termini separati, più `display_name`: 11 al massimo per asset;
+>   - l'OR si distribuisce sui blocchi, quindi l'unione per id è esatta.
+> - **PAC WAC**: ogni chiave sta in un solo blocco; il filtro per blocco unisce bene.
+> - **SEC9c**:
+>   - il `gather` fa solo le chiamate live, e `_live_quote_item` non riceve la sessione;
+>   - poi una sola lettura raggruppata `MAX(date)` per asset, e un `_last_readable_price` in sequenza per i soli asset
+>     la cui ultima chiusura non si legge (W-B62);
+>   - «Asset not found», i rifiuti e l'ordine della risposta restano gli stessi.
+>
+> **Da verificare alla ripresa**:
+> - il riordino in Python di BRIM: MF dice `display_name` unico e mai nullo, con l'ordine per code point di SQLite. Da
+>   controllare la collation della colonna (una `NOCASE` romperebbe la parità col percorso per asset) e l'unicità;
+> - SEC9c: l'unicità di `(asset_id, date)` in `price_history`, altrimenti più righe alla stessa data massima;
+> - i test (`test_bulk_reads_chunked.py` nuovo, le aggiunte in `test_bulk_writes_chunked.py` e
+>   `test_current_prices_bulk.py`) e la loro registrazione;
+> - info: il costo di un report con migliaia di strumenti distinti (`ceil(termini/500)` scansioni con `ilike`). È lento
+>   ma non blocca, e lo limita il tetto di upload.
+>
+> **Ripresa e chiusa** (2026-10-17, 16:1x–16:4x, dopo il checkpoint di E-19a; sola lettura): **OK sulle cure, nessun
+> reperto. Un LOW preesistente, che il chunking rende raggiungibile in scala.**
+> - **Il riordino di BRIM in Python regge.**
+>   - `display_name` è `NOT NULL UNIQUE` senza COLLATE (`001_initial.py:101`, `:120`), cioè collation BINARY: l'ordine
+>     dei byte UTF-8 è l'ordine dei code point di Python;
+>   - unico, quindi senza pari: stesso ordine della `ORDER BY` di prima.
+> - **SEC9c regge**: `price_history` ha `UniqueConstraint("asset_id", "date")` (`models.py:999`), quindi un riga per
+>   asset nel join sul `MAX(date)`.
+> - **I test**:
+>   - `bulk-reads-chunked`, nuovo e puro: due barriere dimostrano il meccanismo (SQLite rifiuta un OR di 1 500 termini,
+>     e un `or_` annidato conta ogni termine);
+>   - la parità del bulk col percorso per asset a 100 (il primo oltre i miei 91), 300 e 150 solo nome; le guardie a
+>     50/90; 1 500 chiavi WAC;
+>   - SEC9c: un `_WatchedSession` (`most_in_flight == 1` con 20 ripieghi), i ripieghi in una lettura raggruppata, la
+>     guardia di W-B62.
+>
+> **LOW, disponibilità, preesistente, per il proprietario del BRIM.**
+> - La catena di priorità in memoria di `search_asset_candidates_bulk` (`brim_provider.py` ~2073):
+>   - per ogni estrazione più passate `for asset in universe`, e 8 `_contains` per un nome;
+>   - cioè **O(estrazioni × universo) in Python, sul ciclo degli eventi**.
+> - Misurato col codice di MF (`f0e54254f`, caricato da `git show`), 5 000 asset salvati, SQLite in memoria
+>   (`files/mfsec9a_rest/probe/`), con un monitor del ritardo del ciclo:
+>
+> | Caso | Strumenti distinti | Blocco peggiore | Tempo totale |
+> |---|---|---|---|
+> | realistico: ogni ISIN o nome trova un asset | 90 | 0,01 s | 0,5 s |
+> | | 1 000 | 0,5 s | 5,8 s |
+> | | 3 000 | **4,5 s** | 20 s |
+> | nomi generici che trovano molti asset | 90 | **7,9 s** | 8,4 s |
+> | | 1 000 | **104 s** | 108 s |
+> | | 3 000 | **246 s** | 265 s |
+>
+> - Il caso a 90 era raggiungibile anche prima, quindi il blocco è preesistente. Prima, oltre i 91 strumenti, il
+>   parse falliva subito con un 500; ora gira, e la portata del blocco cresce.
+> - **Le cure possibili**:
+>   - la classificazione in memoria in `asyncio.to_thread`: toglie il blocco, gli oggetti ORM sono già caricati;
+>   - dei dizionari per le priorità esatte (ISIN, ticker);
+>   - un tetto di strumenti distinti per parse.
+>   - Le prove di parità (`test_brim_bulk_candidates.py`, `test_bulk_reads_chunked.py`) proteggono una riscrittura.
+> - Senza la SQL, il costo della sola query è 17 s di orologio a 3 000 per 5 000. Ma gira nel thread di `aiosqlite`, e
+>   non blocca.
+
+### MF-SEC9e — La revisione dopo l'ingresso (2026-10-17, 16:3x; sola lettura, codice `53bec4d59`, dev `4507f7507`)
+> **Esito: OK, nessun reperto.**
+> - **La fusione per asset** in intervalli disgiunti e inclusivi è corretta:
+>   - i giorni adiacenti si uniscono;
+>   - un intervallo rovesciato non estende niente: il `max` tiene la fine vera;
+>   - un asset nominato da più voci è unito su tutte.
+> - **Il `COUNT` raggruppato per blocco è esatto**: una riga soddisfa al più una condizione, quindi una sola volta in un
+>   solo blocco. Poi un `DELETE` per blocco e un commit.
+> - **La richiesta vuota** costruiva la risposta con campi sbagliati (`deleted_count`), cioè un 500: ora è valida, e la
+>   rotta risponde 200.
+> - **§8 dei test**:
+>   - una sovrapposizione contata una volta;
+>   - un asset in due voci;
+>   - richieste casuali contro un'enumerazione bruta;
+>   - al più ⌈intervalli/500⌉ + 2 SELECT;
+>   - la guardia dei limiti inclusivi;
+>   - la richiesta vuota.
+>
+> **Info**:
+> 1. Un asset nominato da due voci riporta il suo totale in tutte e due, per disegno (docstring e test). La somma dei
+>    `deleted_count` per voce non vale `total_deleted` in quel caso, che è il numero da mostrare.
+> 2. Preesistente: conta e cancella in una transazione differita. Un inserimento concorrente fra il `COUNT` e il
+>    `DELETE` farebbe restare indietro i conteggi per asset rispetto a `total_deleted`. Cosmetico.
+
 ### MF-SEC9b — `Currency.validate_code` accetta nomi e numeri: analisi (2026-10-17, 13:2x–13:5x; sola lettura)
 > **Il compito del coordinatore** (13:22), dal backlog di MF, che è occupato con SEC9-1/D1: dove si usa, a che cosa
 > normalizza oggi, se dati salvati o client dipendono dalla forma larga, il rischio, una regola stretta e l'impatto di

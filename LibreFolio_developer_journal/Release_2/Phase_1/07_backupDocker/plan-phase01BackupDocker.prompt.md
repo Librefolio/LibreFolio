@@ -5366,6 +5366,202 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-43 + B-44 — una funzione sconosciuta nello schema dell'archivio diventa `database_damaged`; i testi di `trusted_schema` dopo H-51 (2026-10-17, 16:01-16:45) — ✅ 🧊 FROZEN (checkpoint delle 16:45)
+
+> **Assegnazione** (coordinatore, 15:50, dalla revisione H-51 di H): (1) un archivio il cui CHECK o indice chiama una
+> funzione sconosciuta si ferma come `sqlite3.OperationalError` grezzo, non come `StagingError`: l'API dice
+> `stage_failed`, la CLI finisce probabilmente in un traceback. «Translate it into `database_damaged`, as
+> `_refuse_foreign_objects` already does. Reds first; file it with an ID.» (2) Dopo l'ingresso di H-51: allineare la
+> docstring di `env.py` («before anything else») e il punto «`trusted_schema` off on every connection to the copy» a
+> `security.md#trusted-schema-server`.
+>
+> **Analisi** (15:52-16:15, in sola lettura mentre ero FROZEN; `files/b43-contract.md`):
+> - **Misura su SQLite 3.54.0** (`b43-wip/sqlite_probe*.py`, log `b43_sqlite_probe*.log`):
+>   - un'espressione di un indice o una colonna generata che chiama una funzione sconosciuta: `integrity_check` lancia
+>     `OperationalError: unknown function`, anche in sola lettura → `describe_database()` (`mode=ro`) lo lascia uscire;
+>   - un **CHECK**: in sola lettura SQLite **salta i vincoli `CHECK`** («ok», anche per un CHECK violato su una funzione
+>     predefinita). La descrizione passa; fallisce il primo `integrity_check` in lettura e scrittura, quello di
+>     `run_post_migration_fixes()._integrity_ok()`, e così pure una scrittura su quella tabella.
+>   - La frase nuova di H in `#trusted-schema-server` («A `CHECK` or an index's expression … stops the check at the
+>     `PRAGMA integrity_check` of `describe_database()`») è vera per indici e colonne generate, non per i CHECK.
+> - **Cura**: in `_stage`, tutta la fase del database (da `_refuse_foreign_objects` al report) dentro
+>   `except sqlite3.DatabaseError`, tranne `ProgrammingError` (un nostro difetto, che deve restare visibile) →
+>   `StagingError("database_damaged")`. Nel log solo la classe e `sqlite_errorname` (regola di B-28). Gli
+>   `StagingError` interni passano com'erano.
+> - **B-44**: gli import di `env.py` caricano `db/session.py`, quindi sulle connessioni di Alembic l'ordine è il
+>   listener di classe (H-51: `trusted_schema` spento per primo, `writable_schema=RESET` per ultimo), poi il dialetto
+>   (`regexp`, `floor`), poi `_schema_untrusted`. Il suo «before anything else» non è mai stato letterale.
+>
+> **Decisioni** (coordinatore, 15:58): **GO** dopo l'ingresso di X-R71. La frase di H si corregge nella doc di B-43, e H
+> la rivede. B-44 nello stesso checkpoint.
+>
+> **X-R71 entrato** (coordinatore, 16:01): combinato verde su `f0645ff98`, dev `1c7937984`, CHANGELOG 🐛 `e9746b959`;
+> HEAD portata in avanti. Nel merge, il conflitto della desc del runner con MF-SEC9e risolto dal coordinatore: il testo
+> di dev più la mia clausola sulla guardia del `ValueError`.
+>
+> - **Codice pronto**: `b43-wip/apply_b43.py` (2 operazioni in `staging.py`) e `apply_b44.py` (la docstring di `env.py`).
+>   ruff e black puliti sulle copie emesse; si applicano su `e9746b959`.
+> - **Rossi in scrittura** (TA-B43): `services backup-staging` (indice, colonna generata, CHECK; guardie: un CHECK su
+>   `abs`, nessun nome di funzione nei log) e `utils backup-cli-restore` (nessun traceback). Doc (DW-B43): la frase di H,
+>   le cause di `database_damaged`, il punto di B-44.
+> - **Backlog**: B-43 e B-44 registrate nella sezione B.
+> - ✅ **Rossi scritti** (TA-B43, 16:01-16:18), sezione (n) di `test_backup_staging.py` e (j) di
+>   `test_backup_cli_restore.py`:
+>   - **rossi**: indice, colonna generata (tipizzata, VIRTUAL), CHECK → `database_damaged`, senza resti. Il CHECK ha
+>     una barriera: `describe_database()` risponde «ok». Il log ha un solo avviso, con la classe e `sqlite_errorname`,
+>     e nessuna riga nomina la funzione. Più la CLI: `restore --dry-run` → ❌ `(database_damaged)`, uscita 1, nessun
+>     traceback;
+>   - **guardia**: un CHECK su `abs()` verificato come sempre.
+>   - Il costruttore: un backup vero alla head, il database modificato con la funzione registrata e
+>     `trusted_schema=ON`, il manifest aggiornato; precondizioni che non si confondono con il rosso.
+> - ✅ **Doc** (DW-B43, 16:01-16:15, più due ritocchi miei):
+>   - `security.md`: il punto nuovo «What the check cannot read.» (B-43), il punto di B-44 (sulle connessioni
+>     dell'upgrade, prima il listener di classe, poi `_schema_untrusted` dopo il dialetto), la frase di H corretta in
+>     `#trusted-schema-server`, la frase dei test.
+>   - **⚠️ Fuori pista**: DW ha misurato che una colonna generata semplice passa `integrity_check`. Rimisurato
+>     (`b43_sqlite_probe_generated.log`): falliscono solo una colonna VIRTUAL con un tipo dichiarato (INTEGER o TEXT) e
+>     una `NOT NULL`; una non tipizzata o una STORED passano. Le due frasi ora lo dicono così.
+>   - **⚠️ Fuori pista, la scoperta più grande di DW**: da H-51 alcuni schemi passano tutta la verifica e poi rompono il
+>     server. Misurato con segnaposto deterministici (`b43_sqlite_probe_standins.log`):
+>     - una colonna generata che chiama `regexp`, o un indice su `floor`, rendono illeggibile lo schema sulle
+>       connessioni del server, e così tutte le connessioni falliscono;
+>     - un `CHECK` o un `DEFAULT` passano anche la lettura con i segnaposto.
+>   - **Decisione** (coordinatore, 16:25): la parte 1 dentro B-43, con due rossi in più. Il resto in backlog, dopo la
+>     1.3: la parte 2 è **B-45**, il testo dell'archivio nel log dell'upgrade è **B-46**.
+> - **Patch** `apply_b43.py`, ora a 4 operazioni. `_refuse_foreign_objects()` registra i segnaposto
+>   (`_SERVER_FUNCTIONS`, `_register_server_functions`, `_stand_in`) e perde il suo `except`: ogni errore `sqlite3`
+>   della fase passa dall'involucro di B-43, con un solo avviso. ruff e black puliti sulla copia emessa.
+> - ✅ **I due rossi della parte 1** (TA-B43, seguito, 16:25-16:32):
+>   - `regexp` in una colonna generata non tipizzata e `floor` in un indice → `database_damaged`, rifiutati prima che
+>     `describe_database()` apra la copia (`never_described`);
+>   - il test del log esteso ai due casi;
+>   - una guardia: l'indice di LibreFolio su `lower()` si legge con i segnaposto, e il suo backup si verifica come
+>     sempre;
+>   - le precondizioni dicono che un lettore semplice passa i due schemi, e uno con i segnaposto no.
+> - ✅ **Rossi** (corsia 6187, 16:33-16:34): `services backup-staging` **11 falliti** e 170 passati, `utils
+>   backup-cli-restore` **1 fallito** e 108 passati. Esattamente i casi nuovi (`files/logs/b43_red_*.log`).
+> - ✅ **Patch applicate** (16:34:21): `apply_b43.py` (4 operazioni in `staging.py`) e `apply_b44.py` (la docstring di
+>   `env.py`); ruff e black puliti.
+> - ✅ **Verdi** (16:34-16:38):
+>   - `services backup-staging` **181**, `utils backup-cli-restore` **109**;
+>   - le regressioni: `utils dev-cli-db-path` 17 (il controllo AST di `env.py`), `services backup-secure` 77,
+>     `backup-apply` 255, `utils backup-cli` 102.
+>   - Porta 6187 libera.
+> - ✅ **La guardia dei codici**, senza slot: lo stesso confronto AST di `test_every_code_a_check_can_end_with…`, fatto a
+>   mano. Nessun codice prodotto da `staging.py` manca da `RestoreErrorCode`; `database_damaged` c'era già.
+> - ✅ **Doc e controlli** (16:38-16:44):
+>   - la frase dei test di `security.md` estesa alla parte 1;
+>   - `mkdocs build` strict, `check-links`, gate 63;
+>   - ruff e black puliti sui 6 file Python, `git diff --check` pulito;
+>   - una riga mia oltre i 120 caratteri, riavvolta dopo la build (solo a capo); la riga 2017 lunga è di H.
+> - **Backlog**: B-43 ✅, B-44 ✅; B-45 e B-46 aperte, dopo la 1.3. CHANGELOG: una riga 🔒 proposta nell'handoff.
+
+### X-R71 (per X) — il caricamento manuale dei prezzi, tutto o niente; più le due note di H su B-36/B-37 (2026-10-17, 14:58-15:52) — ✅ 🧊 FROZEN (checkpoint delle 15:52)
+
+> **Assegnazione** (coordinatore, 14:58, dalla sezione di X): «a manual price upload (`POST /assets/prices` →
+> `price_store.bulk_upsert_prices`, MANUAL) checks the currency asset by asset. When asset 3 of 5 has a currency
+> mismatch, assets 1–2 are already written before the refusal. The upload must be all or nothing: every check before the
+> first write, as X-R65 now does for dates.» File: `api/v1/assets/prices.py`, `services/assets/price_store.py`; rivede X.
+> Origine: la nota di Z per X nel piano 06, X-R65 passo 6.
+>
+> **Analisi** (14:58-15:10, sola lettura; `files/xr71-analysis.md`):
+> - Una chiamata manuale: le cifre (`ValueError` → 400, solo il primo asset) e le date (X-R65, 422) prima di ogni
+>   istruzione. Poi, asset per asset: lettura, valuta, scrittura a fette di 1000 date con un `commit` per fetta
+>   (`:400`), voluto per il lock di scrittura di SQLite. Il controllo della valuta (`:251-259`) rifiuta tutto **dopo**
+>   che gli asset precedenti sono già scritti: è l'unico rifiuto dell'intera chiamata che viene dopo una scrittura.
+> - Morbidi per scelta: l'asset che non esiste («Asset N not found») e il controllo OHLC, data per data (W-B52 per la
+>   sentinella).
+> - **Il refresh dei fornitori non c'entra**: un asset per chiamata, controllato prima della sua prima fetta, e il
+>   refresh scarta da sé i punti in un'altra valuta. La web app manda un asset e nessuna valuta: lo vede solo un client
+>   dell'API.
+> - Scartata: una transazione unica per la chiamata manuale, come gli eventi. Riporterebbe il lock lungo che le fette
+>   evitano.
+> - **Fratello per X**: l'editor conta come salvata ogni riga mandata (`AssetDataEditorSection.svelte:316`) e non legge
+>   `results[].message`. Una data saltata dal controllo OHLC risulta salvata. Va ad X, nella sua X-R46.
+>
+> **Decisioni** (coordinatore, 15:15): **GO**. D1 il 422 codificato `price_currency_mismatch`; D2 (il rifiuto delle
+> cifre) e D3 (gli asset sconosciuti) invariati. Il permesso di scrittura copre `schemas/prices.py`, solo la riga della
+> descrizione. X aggiunge X-R71 (proprietario B) e il fratello al backlog; il diario sta qui. Nessun altro worktree ha i
+> tre file di test né i tre file di prodotto.
+>
+> **Contratto** (`files/xr71-contract.md`):
+> - `price_store.PriceCurrencyMismatchError(items, count)`, un'`Exception` come `DateOutOfRangeError`;
+>   `price_currency_mismatch_detail()` → `{code, message, items (≤ 10), count}`.
+> - `_reject_currency_mismatches(session, data)`, solo per MANUAL, dopo le date e prima del ciclo. Legge le valute di
+>   tutti gli asset a fette di 500, nient'altro sulla sessione. Una voce per elemento in difetto: `asset_id`,
+>   `expected`, `found` (nell'ordine in cui compaiono), `dates` (≤ 10, in ordine di richiesta). Un asset sconosciuto
+>   resta al ciclo.
+> - La rotta: 422 prima del `ValueError` generico. Il controllo nel ciclo resta: i fornitori come oggi; per MANUAL una
+>   rete di sicurezza.
+>
+> - **Codice pronto** in `xr71-wip/apply_xr71.py`: 8 operazioni in 3 file. ruff (C416 corretto: `update(rows.all())`) e
+>   black puliti sulla copia emessa. Prova a mano `probe_xr71.py` su una sessione finta: 9/9.
+> - **Rossi in scrittura** (TA-XR71): `api prices-currency-coherence`, `api assets-price` (15-16),
+>   `services asset-source-guards`, la guardia di `bulk-writes-chunked`.
+> - ✅ **Rossi scritti** (TA-XR71, 15:05-15:18):
+>   - `api prices-currency-coherence`: il caricamento di A (pulito), B (in difetto) e C (pulito) è rifiutato con 422 e
+>     non scrive nessun asset; ogni asset in difetto nominato, in ordine, con `found` nell'ordine in cui compaiono.
+>     G.5.1, G.5.2 e G.5.5 passano a 422, G.5.5 con 10 date e `count` 12. Guardie: G.5.3, G.5.4, e un asset sconosciuto
+>     fra due puliti (200, «Asset N not found», gli altri scritti: D3).
+>   - `api assets-price`: i test 15-16 diventano `…_rejects_422`.
+>   - `services asset-source-guards`:
+>     - il rifiuto arriva dopo una sola lettura, nient'altro sulla sessione e niente scritto;
+>     - i numeri su 12 asset veri (fixture `xr71_assets`), con un asset sconosciuto in mezzo, non contato;
+>     - guardie: il fornitore ha ancora il suo `ValueError`; le date sono controllate prima delle valute.
+>   - `bulk-writes-chunked:875`: l'esempio diventa il rifiuto delle cifre.
+> - ✅ **Doc** (DW-XR71, 15:10-15:16, più tre ritocchi miei):
+>   - `developer/backend/assets/architecture.md`: un rimando dopo il controllo delle cifre (l.221-223); la sezione
+>     nuova `#price-currency-coherence` dopo quella delle date; la riga della rotta; e, mio, la riga di `price_store.py`
+>     nella tabella dei moduli;
+>   - `developer/frontend/components/core-ui/data-editor.md` l.82: diceva «HTTP 400» per un prezzo in un'altra
+>     valuta; ora 422 `price_currency_mismatch` per i prezzi, 400 per gli eventi;
+>   - da DW, aggiunto alla patch: il commento di `_reject_prices_over_the_limit` («as it does a currency mismatch»),
+>     operazione 1b. Patch a 9 operazioni.
+>   - Da DW, **per X** (di prima, non mio): il commento di `refresh.py:497-500` dice che l'upsert rifiuterebbe con
+>     `HTTPException(400)`. Era già sbagliato: sotto la chiave di un fornitore il refresh prende un `ValueError`.
+>   - Pagine solo inglesi: nessun debito di traduzione. `mkdocs build` stretto, `check-links` e il gate dei link (63)
+>     verdi alle 15:16-15:18.
+> - ✅ **Rossi dei servizi** (corsia 6187, 15:18-15:19): `services asset-source-guards` **2 falliti** e 41 passati,
+>   esattamente i due nuovi; la guardia di `bulk-writes-chunked` 42 passati.
+> - ✅ **Rossi dell'API** (slot del coordinatore, 15:20-15:29):
+>   - `api prices-currency-coherence`: **5 falliti** e 3 passati;
+>   - `api assets-price`: **2 falliti** e 20 passati.
+>   - Esattamente i casi nuovi (`files/logs/xr71_red_*.log`).
+>   - **⚠️ Fuori pista**: il primo rosso ha rifatto la build di debug del frontend della corsia. Il merge di B-41 in
+>     dev aveva portato modifiche al frontend di altri: avevo detto al coordinatore che la build era fresca, e non lo
+>     era.
+> - ✅ **Patch applicata** (15:29:22): 9 operazioni in 3 file; ruff e black puliti; `import backend.app.main` riuscito.
+> - ✅ **Verdi dell'API** (15:36-15:42): `api prices-currency-coherence` **8**, `api assets-price` **22**.
+>   - **⚠️ Fuori pista**: il verde ha aspettato dalle 15:29 alle 15:36: lo slot E2E di Y ha portato il carico a
+>     85-106. Slot liberato alle 15:42.
+> - ✅ **Regressioni leggere** (15:42-15:47), tutte verdi:
+>   - `services asset-source-guards` 43, `bulk-writes-chunked` 42, `asset-digit-limits` 79;
+>   - `services asset-source` 61, `asset-source-refresh` 18, `current-price-storable` 27, `range-ceiling` 57;
+>   - `schemas openapi-client-text` 78: la nuova descrizione di `FAPricePoint.currency` e la docstring della rotta.
+>   - Porta 6187 libera.
+> - ✅ **Testi del runner** (dopo i verdi, solo testo): il `print_info` e la desc di `prices-currency-coherence` dicevano
+>   «hard-400»; il commento d'isolamento di `asset-source-guards` ora conta anche i 12 asset di X-R71. Il runner si
+>   carica.
+> - ✅ **Controlli** (15:48-15:50): ruff e black puliti sui 10 file Python; `git diff --check` pulito.
+> - **Backlog**: X aggiunge X-R71 (proprietario B) e il fratello dell'editor nella sua sezione; io non la tocco. Nel
+>   backlog, la mia sola modifica è la frase di B-37 e la riga B-36 (le note di H). CHANGELOG: la riga 🐛 proposta
+>   nell'handoff.
+>
+> **Le due note di H su B-36/B-37** (coordinatore, 14:54; commit a parte, approvato alle 15:15):
+> - **La frase di B-37** nel backlog («nessuna funzione dell'app è registrata lì») era sbagliata per il motore di
+>   Alembic: SQLAlchemy (dialetto pysqlite, 2.0.52) registra `regexp` e `floor` in Python a ogni connessione. Il
+>   listener di `env.py` è quindi una cura vera. Riscritta. Il piano 07 e `security.md` non ripetono l'errore: il
+>   piano dice solo che le funzioni predefinite di SQLite sono innocue, ed è vero per la connessione `sqlite3` delle
+>   correzioni.
+> - **Due `_quoted` con contratti diversi**: `snapshot._quoted` diventa `_identifier`, che dà l'identificatore intero
+>   fra virgolette, come `post_migration._quoted`; il suo unico chiamante produce lo stesso SQL. `post_migration` non
+>   è toccato. Anche la riga B-36 del backlog nomina il nuovo nome.
+> - ✅ Applicata alle 15:07:05 (`h37-wip/apply_h37.py`, 4 operazioni in 2 file); ruff e black puliti. Verdi, i file che
+>   usano `snapshot`: `services backup-archive` 155 (1 saltato, come prima), `backup-jobs` 69, `backup-secure` 77,
+>   `backup-staging` 168. Porta 6187 libera.
+>   - **⚠️ Fuori pista**: `services backup-snapshot` non esiste (nome della mia proposta del §8). I test di `snapshot`
+>     sono in archive, jobs, secure e staging.
+
 ### B-41 + B-42 — l'esito anonimo controlla il biglietto prima dello stato, e un file del biglietto rotto si registra una volta (2026-10-17, 14:10-14:56) — ✅ 🧊 FROZEN (checkpoint delle 14:56)
 
 > **B-34 entrato** (coordinatore, 14:10): `731337a5a` → dev `202849800`; HEAD portata in avanti. Via a B-41 nella 1.3

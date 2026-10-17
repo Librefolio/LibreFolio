@@ -53,6 +53,19 @@
  * through the identity translator is the key the tab chose; the values that key was given, from the translator's own
  * calls (the identity translator is a spy for this alone); and the real catalogues. Red until A-43, every case marked
  * so; the two guards (UTAB-58, UTAB-59, the catalogue reader's positive control) are green today.
+ *
+ * Accounts lot A-51 (release 1.3, workstream A — the coordinator's OK of 17/10, 14:52), cases UTAB-61…UTAB-62. The
+ * cancellation sent the body of a deactivation, `{is_active: false}`, so the backend could not tell one from the other:
+ * when the waiting administrator completed its setup while the tab still drew it waiting, a click minutes later
+ * deactivated the new administrator, and the toast said its link was cancelled. Since A-51 the request carries its
+ * intent: confirmed, the cancellation sends exactly `{is_active: false, cancel_setup: true}` to that account (UTAB-61;
+ * UTAB-56 keeps the rest of that flow and, since A-51, pins only `is_active: false`). A setup completed meanwhile
+ * answers 409 `SETUP_COMPLETED`, and the tab says so with the wording `accountErrors.ts` gives that code — the key
+ * `settings.usersTab.errors.SETUP_COMPLETED`, a sentence in the four catalogues (`accountErrors.test.ts`) —, announces
+ * no success, and reloads onto the account as the server has it: active, waiting for nothing (UTAB-62). A deactivation
+ * keeps its plain body: UTAB-32 pins `{is_active: false}` with `toEqual`, which a defined `cancel_setup` turns red — the
+ * guard, green today. The mocked server stores no `cancel_setup`: it says why `is_active: false` is asked, it is not a
+ * column. Red until A-51, both cases.
  */
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
@@ -421,7 +434,8 @@ beforeEach(() => {
     listInvites().mockImplementation(async () => invitesAnswer());
     patchUser().mockImplementation(async (body: Partial<Account> | undefined, config: unknown) => {
         const target = onServer(userIdOf(config));
-        for (const [key, value] of Object.entries(body ?? {})) if (value !== undefined && value !== null) Object.assign(target, {[key]: value});
+        // `cancel_setup` (A-51) says why `is_active: false` is asked; it is not a column, and the backend stores nothing under it
+        for (const [key, value] of Object.entries(body ?? {})) if (key !== 'cancel_setup' && value !== undefined && value !== null) Object.assign(target, {[key]: value});
         return {...target};
     });
     revokeSessions().mockImplementation(async (_body: unknown, config: unknown) => void onServer(userIdOf(config)));
@@ -1067,7 +1081,8 @@ describe('UsersTab — cancelling the setup link of the waiting administrator (U
 
         await waitFor(() => expect(patchUser()).toHaveBeenCalledTimes(1));
         const [body, options] = patchUser().mock.calls[0];
-        expect(body, 'the body is the subject').toEqual({is_active: false});
+        // Since A-51 the body also says it cancels (`cancel_setup: true`): its exact shape is UTAB-61's subject.
+        expect(body, 'a deactivation is how a waiting administrator’s link is revoked').toEqual(expect.objectContaining({is_active: false}));
         expect(options, 'the options come second: (body, {params})').toEqual(expect.objectContaining({params: {user_id: WAITING_ADMIN.id}}));
         const note = await oneNote('accounts.user.setup-cancelled');
         expect(note.detail).toEqual(expect.objectContaining({user_id: WAITING_ADMIN.id}));
@@ -1169,6 +1184,58 @@ describe('UsersTab — cancelling the setup link of the waiting administrator (U
         // red until A-43
         it('UTAB-60: the keys of the cancelSetup confirmation and of its toast are sentences in the four catalogues, naming no value but the username', () => {
             expect(defectsOf({...confirmationOf('cancelSetup'), [SETUP_CANCELLED_TOAST]: ['username']})).toEqual([]);
+        });
+    });
+
+    describe('a cancellation the backend can tell from a deactivation (UTAB-61…62, A-51)', () => {
+        const SETUP_COMPLETED_ERROR = 'settings.usersTab.errors.SETUP_COMPLETED';
+
+        // red until A-51
+        it('UTAB-61: confirmed — the PATCH says it cancels: exactly {is_active: false, cancel_setup: true}, for that account', async () => {
+            await mount(WITH_WAITING_ADMIN);
+            const row = await openPanel(WAITING_ADMIN.id);
+            const listsBefore = listUsers().mock.calls.length;
+
+            await fireEvent.click(actionIn(row, 'cancel-setup'));
+            await acceptConfirmation();
+
+            await waitFor(() => expect(patchUser()).toHaveBeenCalledTimes(1));
+            const [body, options] = patchUser().mock.calls[0];
+            // The flag is the intent: without it the backend reads a deactivation, and deactivates an administrator whose setup is done.
+            expect(body, 'the body is the subject: a deactivation that says it cancels the setup link').toEqual({is_active: false, cancel_setup: true});
+            expect(options, 'the options come second: (body, {params})').toEqual(expect.objectContaining({params: {user_id: WAITING_ADMIN.id}}));
+            // Rule 19: end on the flow's own end, the tab idle after its reload.
+            await waitFor(() => expect(listUsers().mock.calls.length, 'the tab reloads after the action').toBeGreaterThan(listsBefore));
+            await settled();
+        });
+
+        // red until A-51
+        it('UTAB-62: a cancellation refused with 409 SETUP_COMPLETED (the setup was completed meanwhile) → that code, the toast worded settings.usersTab.errors.SETUP_COMPLETED, no success, and the row redrawn as the server has it', async () => {
+            patchUser().mockRejectedValue(conflict('SETUP_COMPLETED'));
+            await mount(WITH_WAITING_ADMIN);
+            const row = await openPanel(WAITING_ADMIN.id);
+            // The administrator completed its setup after this list was drawn: the server has it active, waiting for nothing.
+            Object.assign(onServer(WAITING_ADMIN.id), {is_active: true, pending_setup: false});
+            const listsBefore = listUsers().mock.calls.length;
+
+            await fireEvent.click(actionIn(row, 'cancel-setup'));
+            await acceptConfirmation();
+
+            await waitFor(() => expect(patchUser(), 'the PATCH is what was refused').toHaveBeenCalledTimes(1));
+            const failure = await oneNote('accounts.action.failed');
+            expect(failure.detail).toEqual(expect.objectContaining({code: 'SETUP_COMPLETED', user_id: WAITING_ADMIN.id, action: expect.any(String)}));
+            // The wording is the subject here; through the identity translator it is a key, not a phrase.
+            expect(failure.toast).toEqual(expect.objectContaining({variant: 'error', message: SETUP_COMPLETED_ERROR}));
+            expect(notes('accounts.user.setup-cancelled'), 'a refusal is not announced as done').toHaveLength(0);
+            // The failure above is the barrier: one action ends in success or in failure, never both.
+            expect(
+                notify.mock.calls.map(([note]) => (note as Note).toast?.variant),
+                'no success toast',
+            ).not.toContain('success');
+            await waitFor(() => expect(listUsers().mock.calls.length, 'the tab reloads after a refusal too').toBeGreaterThan(listsBefore));
+            await waitFor(() => expect(rowOf(WAITING_ADMIN.id), 'the reloaded row waits no more').toHaveAttribute('data-pending-setup', 'false'));
+            expect(rowOf(WAITING_ADMIN.id), 'it is active, as the server has it').toHaveAttribute('data-active', 'true');
+            await settled();
         });
     });
 });

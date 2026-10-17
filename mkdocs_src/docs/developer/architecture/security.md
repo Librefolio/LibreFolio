@@ -105,7 +105,9 @@ keeps working, with a `code`. `USERNAME_INVALID` for a new username against its 
 `update_profile()`. `register_user()` and `PUT /api/v1/auth/profile` branch on the code, never on the wording:
 `USERNAME_INVALID` becomes the `RegistrationError` `USERNAME_INVALID`, or the profile's `400` with that `error_code`;
 any other refusal keeps its plain-string `400`, through the `RegistrationError` `ACCOUNT_EXISTS` for registration
-(not in `_REGISTRATION_REFUSALS`).
+(not in `_REGISTRATION_REFUSALS`). An `AccountError` survives `copy.copy`, `copy.deepcopy` and `pickle` with its code:
+its `__getnewargs__()` hands back the code with the message, where `str`'s own would give the message alone and
+`AccountError.__new__()` would raise `TypeError` (UNAME-032).
 {: #username-refusal-codes }
 
 Tests: `./dev.py test services username-rules` (`backend/test_scripts/test_services/test_username_rules.py`: the `@`
@@ -113,7 +115,8 @@ refused by `user create` and in `LIBREFOLIO_ADMIN_USERNAME`, and nothing else of
 a username, in any A–Z case, refused by `register_user()`, `user set-email` and `user create`; a legacy name left as it
 is; UNAME-020 to UNAME-023, lot A-46: a length of 2 or 51 refused by `user create`, `create_user()` and
 `update_profile()`, 3 and 50 taken, a legacy name of either length kept; UNAME-030 and UNAME-031, lot A-47: the code of
-every refusal, the message unchanged, and `register_user()` deciding on the code once the message is reworded),
+every refusal, the message unchanged, and `register_user()` deciding on the code once the message is reworded; UNAME-032:
+an `AccountError` copied, deep-copied and pickled keeps its code),
 `./dev.py test services username-lookup` (`test_username_lookup.py`: an address finds its owner before a legacy
 name written like it, in both orders of the rows; the exact legacy fallback; without `@` a username only, exact) and
 `./dev.py test api username-rules` (`backend/test_scripts/test_api/test_username_rules_api.py`, in-process: the
@@ -223,7 +226,8 @@ Activation, promotion, logout and every refused operation leave the version alon
 `change-password`; a missing or wrong current password, or an address or a username already
 taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; the
 demotion of the initial administrator waiting for its setup (lot A-43,
-[The Setup Link's Lifecycle](#setup-link-lifecycle)); a reset or setup link that is not valid, a link refused because
+[The Setup Link's Lifecycle](#setup-link-lifecycle)); a cancellation of its setup link refused with `SETUP_COMPLETED`
+(lot A-51); a reset or setup link that is not valid, a link refused because
 its account was set up before included. So do issuing a reset or setup link, which ends nothing until it is spent, a
 `PATCH` whose values equal the current ones, and a profile change that changes no email (a new username, or the
 stored email sent again, as written or in another A–Z case).
@@ -1475,6 +1479,32 @@ both by default; a finite value too large for its column is another matter: see
   `List[dict]`, and the service validates them one by one afterwards, each with its own model: a `SafeDecimal` there
   refuses infinity and NaN.
 
+### 🧯 Error Answers {: #error-answers }
+
+A `500` of the asset and FX routes never carries the error's text, which can name the database schema (an SQL error
+quotes its statement): the answer is a fixed message naming the action, such as «Internal error while assigning
+providers», and the error goes to the log with its exception (`logger.exception(...)`).
+
+- **Where.** First the price routes (`backend/app/api/v1/assets/prices.py`): R13-SEC9-3 for the query and the
+  [current prices](../backend/assets/architecture.md#current-quotes-and-todays-ohlc), then MF-SEC9a for the writes and
+  the sync, and for the FX rates' delete. Since X-R74 (release 1.3), the 26 sites of the other asset and FX routes that
+  still echoed the error (`detail=str(e)`, or `f"…: {e!s}"`): `providers.py`, `crud.py`, `events.py` and
+  `market_data.py` in `backend/app/api/v1/assets/`, `providers.py` and `currencies.py` (the sync's catch-all) in
+  `backend/app/api/v1/fx/`. The provider probe and the five FX sites did not log the error at all before.
+- **What stays.** The refusals the routes author answer as before: a `400` or `404` with an authored message, the coded
+  refusals `{"error_code", "message", "params"}` (the `409`s, and the events' `400`s), the `422`s with a code, and the
+  FX sync's `502` «Failed to sync rates: …» for an `FXServiceError`.
+- **A failed merge.** `merge_assets` answers an `AssetSourceError` with its text, `404` or `400`, and its messages are
+  authored. `MERGE_FAILED` is the one that wraps an unexpected error: `AssetCRUDService.merge_assets()`
+  (`backend/app/services/assets/crud.py`) raises it for any error that stops the merge, a database error included, and
+  logs that error with its exception. Since X-R74 it stays a `400` with its code, but its text is the fixed «Merge
+  failed: internal error».
+
+Tests: `./dev.py test services routes-generic-500` (`backend/test_scripts/test_services/test_routes_generic_500.py`),
+parametrized over the 26 failure paths, each a `500` that holds no word of the error while the error is logged with its
+exception; a failed merge, a `400` that holds no word of the error while the service logs it; and guards that the
+authored refusals answer as before.
+
 ### 📁 Uploaded Files: Common and Personal {: #upload-scope }
 
 Each uploaded static file (`<data directory>/custom-uploads/<uuid>.<ext>`, with its JSON sidecar `<uuid>.json`, see
@@ -1716,7 +1746,7 @@ change; what each rule guards against is in [The Setup Link's Lifecycle](#setup-
 | An activation | `./dev.py user activate` → `user_service.set_user_active(…, True)`, the waiting administrator included; `PATCH /api/v1/users/{user_id}` with `is_active: true` → `user_service.update_user_status()`, which the waiting administrator never reaches (`409` `PENDING_SETUP` first) | Retired |
 | A new password | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent → `user_service.complete_password_reset()`; `POST /api/v1/auth/change-password` | Retired |
 | A setup link presented for an account already active, or for an account another of whose setup links was already consumed (lot A-42) | `POST /api/v1/auth/setup` → `bootstrap_admin_service.complete_admin_setup()`, which refuses it (`400` `TOKEN_INVALID`) | Every one not consumed retired, not only the one presented |
-| A deactivation of the initial administrator waiting for its setup: the cancellation of its link (lot A-43) | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()`, refused for a [protected account](access_control.md#account-protection) | Revoked, not retired: the account still waits, for a new link |
+| A deactivation of the initial administrator waiting for its setup: the cancellation of its link (lot A-43) | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()`, refused for a [protected account](access_control.md#account-protection); the Users tab adds `cancel_setup: true`, refused with `409` `SETUP_COMPLETED` when the account waits no more (lot A-51) | Revoked, not retired: the account still waits, for a new link |
 | A deactivation of any other account (lot A-43) | The same entry points | Retired |
 | A new address, not the same one in another A–Z case (decision P18) | `LIBREFOLIO_ADMIN_EMAIL` at a start (`bootstrap_admin_service._follow_variables()`); `user_service.update_profile()`, behind `./dev.py user set-email` and `PUT /api/v1/auth/profile` | Revoked, not retired: they went to the earlier address, and the account still waits, for a link that reaches the new one |
 | The setup | A live setup link spent by `POST /api/v1/auth/setup` | That one consumed, the others revoked |
@@ -1785,8 +1815,8 @@ consumed sibling counts: a link re-armed after a revoked or an expired one still
 
 **Deactivating is the cancellation** (A-43). A deactivation ends the account's setup links in its own transaction,
 through `user_service._end_setup_links()`, behind `set_user_active(…, False)` (`./dev.py user deactivate`) and
-`update_user_status()` (`PATCH /api/v1/users/{user_id}` with `is_active: false`). Whether the account waits is read
-before anything changes:
+`update_user_status()` (`PATCH /api/v1/users/{user_id}` with `is_active: false`, plus `cancel_setup: true` from the
+Users tab: below). Whether the account waits is read before anything changes, under the write lock since lot A-51:
 
 - **The initial administrator waiting for its setup**, inactive already: its setup links are **revoked**. That is the
   cancellation of the link handed over, the **Cancel setup link** of the Users tab
@@ -1818,11 +1848,32 @@ The waiting administrator keeps its role until its setup: its demotion is refuse
 `account_tokens.user_id`. The routes and their answers are in
 [The Initial Administrator](access_control.md#initial-admin).
 
-Tests: A42-001 to A42-006, A43-001 to A43-005 and A50-001 to A50-004 (the WARNING of a start after a cancellation or
-an address change, and of an expiry) of `./dev.py test services admin-bootstrap`, SETUP-016 to SETUP-018
-of `./dev.py test api admin-setup`, and UADM-072 to UADM-079 of `./dev.py test api users-admin` (UADM-079: the
-cancellation of a protected waiting administrator refused, its link still working); the Users tab's side, UTAB-55 to
-UTAB-60 and UPS-12 to UPS-23, is in
+**A setup completed meanwhile** (A-51). Each of these decisions reads «waiting», and the setup can complete between
+that read and the write: from a Users tab loaded before it, or in the same millisecond. Read stale, the cancellation,
+sent as `{is_active: false}`, the body of a deactivation, would have deactivated the new owner; a deletion would have
+removed an active administrator never demoted; and on a new instance, where the waiting administrator is the only
+account, `./dev.py user demote` removed the only administrator, while `./dev.py user deactivate` answered success and
+ended the new owner's sessions without deactivating it. The cure is the one of A-42, the write lock first:
+
+- `update_user_status()`, `set_user_active()` and `set_user_admin()` take SQLite's write lock
+  (`backend.app.db.session.begin_writes()`), read the account again (`session.refresh()`), and only then decide: a
+  deactivation or a demotion, the last active administrator, «waiting». On a new instance, the command line's two then
+  refuse the administrator just set up as the last active one, nothing changed.
+- The Users tab cancels with `{is_active: false, cancel_setup: true}`: the cancellation and nothing else. An account
+  that no longer waits answers `409` `SETUP_COMPLETED`, rolled back, with an INFO line. A plain `{is_active: false}`
+  keeps its meaning, a deactivation decided on the account as the lock finds it, and its answer matches the database.
+- `DELETE /api/v1/users/{user_id}`, when its first read says «waiting», takes the lock, reads the account again and
+  asks once more: a setup completed in the meantime makes it `409` `DEMOTE_FIRST`, nothing deleted.
+
+The details, with the answers of each route: [A setup completed meanwhile](access_control.md#setup-completed-meanwhile).
+
+Tests: A42-001 to A42-006, A43-001 to A43-005, A50-001 to A50-004 (the WARNING of a start after a cancellation or
+an address change, and of an expiry) and A51-007 and A51-008 (`user deactivate` and `user demote` while the setup
+completes) of `./dev.py test services admin-bootstrap`, SETUP-016 to SETUP-018
+of `./dev.py test api admin-setup`, and UADM-072 to UADM-079 and A51-001 to A51-006 of `./dev.py test api users-admin`
+(UADM-079: the cancellation of a protected waiting administrator refused, its link still working; A51: the setup
+completed while the Users tab acts); the Users tab's side, UTAB-55 to UTAB-62, UPS-12 to UPS-23 and AERR-13 and
+AERR-14, is in
 [Users Tab and Account Deletion Tests](../frontend/components/features/settings.md#users-tests).
 
 ### 🧾 Transactions and Logs
@@ -1974,6 +2025,28 @@ anything of it can run.
 - **A schema SQLite refuses to read** is `database_damaged`: any `sqlite3.DatabaseError` of that read, such as a row
   whose SQL does not parse, or a row that disguises its object, a trigger whose row says `type = 'table'` (SQLite then
   refuses the whole schema, «malformed database schema», checked on 3.54.0).
+- **What the check cannot read.** `_refuse_foreign_objects()` takes each object's kind, never the expressions inside
+  a table or an index. An index's expression calling a function plain `sqlite3` lacks, such as `regexp`, fails the
+  integrity check of `describe_database()` («unknown function»), read only or not, and so does a generated column
+  calling one when that check computes it (a virtual column with a declared type, a `NOT NULL` one, one an index or a
+  `STRICT` table relies on; an untyped virtual column or a stored one passes, checked on 3.54.0). A `CHECK` calling one
+  passes that check: on a read-only connection SQLite leaves the `CHECK` constraints out, and its `integrity_check`
+  answers `ok` even for a violated built-in `CHECK` (checked on 3.54.0). Such a `CHECK` fails at the first read-write
+  `integrity_check`, the post-migration fixes', as it would at a write to its table. That error, and any other
+  `sqlite3` error while the check reads or checks the copy's database (not a `ProgrammingError`, a bug of
+  LibreFolio's), ends the check with `database_damaged`,
+  `The backup's database cannot be read or checked: it cannot be restored` (lot B-43). It is logged as a warning with
+  the error's class and SQLite's error name only: the error's message names the archive's function, and no text of
+  the archive reaches the log, as with the kinds above. Before B-43 such an error escaped as it was: the app's check
+  answered `stage_failed`, and `dev.py backup restore` stopped with a traceback. The schema itself is first read as
+  the server's connections read it: `_refuse_foreign_objects()` registers the functions SQLAlchemy registers there,
+  `regexp` and `floor`, as stand-ins that never run (`_register_server_functions()`). A schema that calls one in an
+  index or a generated column, which every connection of the server refuses since H-51 («unsafe use of …»), so that
+  the first start after the restore would fail, cannot be read there either: `database_damaged`, before anything else
+  opens the copy. A `CHECK` or a `DEFAULT` calling them passes that read, since SQLite resolves them only when used:
+  after a restore, the writes that need them fail, and nothing of the archive runs (backlog B-45). When the copy needs
+  an upgrade, the upgrade runs first: a `CHECK` calling `regexp`, which its connections refuse since H-51 (below), or
+  one on a table it writes, ends the check there, as `upgrade_failed`.
 - **`trusted_schema` off on every connection to the copy.** Every connection to the copy runs
   `PRAGMA trusted_schema=OFF` before any other statement: this read, `describe_database()` (`snapshot.py`, which also
   describes the backup's own snapshot), `_plugin_secrets()` and `_administrators()` (`staging.py`), the totals'
@@ -1983,9 +2056,11 @@ anything of it can run.
   the refusal, turns it off first on its own connection, on the live database too, where nothing changes, since
   LibreFolio's schema holds only tables and indexes (lot B-37); its `count(*)` of each table quotes the name, doubling
   `"`, since an archive's tables may be named anything (lot B-36). The upgrade runs `alembic upgrade head` in a process
-  of its own, stopped after an hour (`UPGRADE_TIMEOUT_SECONDS`), and `backend/alembic/env.py` turns it off on every
-  connection with a `connect` listener, `_schema_untrusted`, whatever the URL: the copy's, given with
-  `-x sqlalchemy.url`, and the live database's alike (lot B-37).
+  of its own, stopped after an hour (`UPGRADE_TIMEOUT_SECONDS`). On its connections `set_sqlite_pragma()` turns it off
+  first, since lot H-51 ([`trusted_schema` Off in the Server's Engines](#trusted-schema-server)), and
+  `backend/alembic/env.py` turns it off again with a `connect` listener of its own, `_schema_untrusted`, once the
+  dialect has registered `regexp` and `floor`, whatever the URL: the copy's, given with `-x sqlalchemy.url`, and the
+  live database's alike (lot B-37).
 - **Why the upgrade needs it.** SQLAlchemy's SQLite dialects (`pysqlite`, which `aiosqlite` inherits; SQLAlchemy
   2.0.52, `SQLiteDialect_pysqlite.on_connect()`) register two Python functions on every connection: `regexp`
   (`re.search`), behind the `REGEXP` operator, and `floor` (`math.floor`), in place of SQLite's own `floor()` where the
@@ -2004,6 +2079,11 @@ or a view; `trusted_schema` off first on every connection of a whole check, the 
 B-37), `./dev.py test db post-migration` (`backend/test_scripts/test_db/test_post_migration.py`: tables named `x"y` or
 `a" WHERE 1 --`, counted while a fix runs, lot B-36) and `./dev.py test utils dev-cli-db-path`
 (`backend/test_scripts/test_utilities/test_dev_cli_db_path.py`: the `connect` listener of `env.py`, lot B-37).
+Lot B-43: `./dev.py test services backup-staging` (a function plain `sqlite3` lacks, in an index's expression, a
+generated column and a `CHECK`, each `database_damaged`; `regexp` in a generated column and `floor` in an index,
+refused at the read of the schema, before anything else opens the copy; one warning, the function named in no log; a
+`CHECK` on a built-in function, restored as usual; LibreFolio's own index on `lower()`, read with the stand-ins) and
+`./dev.py test utils backup-cli-restore` (the refusal on the command line, no traceback).
 
 #### `trusted_schema` Off in the Server's Engines {: #trusted-schema-server }
 
@@ -2016,9 +2096,13 @@ with `PRAGMA writable_schema=RESET`.
   expressions inside tables and indexes, and its plain `sqlite3` connections never evaluate a `DEFAULT`:
   `PRAGMA integrity_check` answers `ok`. Before H-51, an archive whose column had `DEFAULT (regexp(…))` passed the
   check, and in the server every insert that omitted that column ran SQLAlchemy's Python `regexp` with the archive's
-  pattern and value, through the async engine too. A `CHECK` or an index's expression calling a function plain
-  `sqlite3` lacks, such as `regexp`, stops the check at the `PRAGMA integrity_check` of `describe_database()`
-  («unknown function»), before the upgrade runs.
+  pattern and value, through the async engine too. An index's expression calling a function plain `sqlite3` lacks,
+  such as `regexp`, stops the check at the `PRAGMA integrity_check` of `describe_database()` («unknown function»),
+  before the upgrade runs, and so does a generated column calling one when that check computes it (a virtual column
+  with a declared type, a `NOT NULL` one, one an index or a `STRICT` table relies on). A `CHECK` calling one passes
+  that read-only check, which SQLite runs without the `CHECK` constraints, and stops the check at the first read-write
+  one, the post-migration fixes' `integrity_check`. Either way the check ends with `database_damaged` (lot B-43),
+  unless an upgrade runs before and fails on the `CHECK` first (`upgrade_failed`, below).
 - **Why the reset, last.** SQLAlchemy calls the listeners registered on a class before those of one engine, so this
   one runs before the dialect's `on_connect()` registers `regexp` and `floor`, and its `PRAGMA journal_mode=WAL` makes
   SQLite read the schema right then. SQLite marks a call as the schema's own only when it finds the function, and

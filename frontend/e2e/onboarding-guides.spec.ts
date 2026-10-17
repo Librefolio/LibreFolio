@@ -290,7 +290,7 @@ test.beforeEach(async ({context}) => {
     // providers (yfinance, justetf, ...) and upserts today's OHLC row on the shared
     // seeded assets. No guide reads a live price, so the poll is answered with an
     // empty result: no test reaches a third party or writes a shared price.
-    await context.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await context.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
 });
 
 test.describe('T11 — every contextual guide walked against its real page', () => {

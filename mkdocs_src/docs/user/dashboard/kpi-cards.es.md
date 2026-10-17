@@ -28,7 +28,7 @@ Las tres tarjetas en la parte superior del panel responden tres preguntas de un 
 
 - **P&L período** — el número grande: $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, siendo los flujos netos el capital que moviste hacia dentro o hacia fuera → [P&L período](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **La línea debajo** — por ejemplo `+91,31 € (+16,36 %)`: cuánto se movió tu P&L Total desde ayer (panel a continuación)
-- **Variación no realizada** — cómo se movió la ganancia o pérdida no realizada de tus posiciones durante el periodo, incluido el efecto del tipo de cambio → [Valor contable](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+- **Variación no realizada** — cómo se movió la ganancia o pérdida no realizada de tus posiciones durante el periodo, incluido el efecto del tipo de cambio → [P&L período](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **Ventas** — la ganancia o pérdida realizada de las ventas del periodo, frente al coste medio de las unidades vendidas → [Precio medio de compra (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Dividendos e intereses** — dividendos, cupones e intereses P2P recibidos → [Dividendo e interés](../../financial-theory/instruments/transaction-types/dividend-interest.md)
 - **Costes e impuestos** — comisiones e impuestos registrados como transacciones; pasa el cursor sobre la fila para ver el desglose → [Comisión e impuesto](../../financial-theory/instruments/transaction-types/fee.md)

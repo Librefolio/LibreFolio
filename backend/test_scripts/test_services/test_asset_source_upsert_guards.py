@@ -4,8 +4,9 @@ Isolation: WRITE_GLOBAL. ``Asset`` and ``PriceHistory`` carry no ``user_id``, so
 the asset created here and the price rows written against it are visible to every
 concurrently running test. The module fixture creates exactly one asset with a
 unique display name and deletes it -- together with every price row it produced --
-in teardown, so nothing survives the unit. X-R65's section adds a second asset for
-one test (``xr65_second_asset``), removed the same way.
+in teardown, so nothing survives the unit. X-R65's and X-R71's sections add a second
+asset for some tests (``xr65_second_asset``), and X-R71's twelve for one
+(``xr71_assets``), removed the same way.
 
 Why these tests exist. ``bulk_upsert_prices`` implements a deliberately subtle
 policy that was written in response to a production incident, and none of its
@@ -1249,3 +1250,214 @@ async def test_a_provider_refresh_neither_counts_nor_announces_a_price_before_19
     assert stored == {legacy: Decimal("8"), day0: Decimal("20"), day1: Decimal("21")}, f"barrier: the upsert should store day 0 and day 1 alone and leave the legacy row as it was: {stored}; {result!r}"
     counted = (result.inserted_count, result.updated_count, result.points_changed, sorted(point.date for point in result.changed_points or []))
     assert counted == (1, 1, 2, [day0, day1]), f"(inserted, updated, changed, changed_points) = {counted}: the dates the upsert dropped, {legacy} and {before}, are counted or announced (points_fetched {result.points_fetched})"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# X-R71: a manual upsert holding a price in another currency than its asset's is refused whole, before any write
+#
+# The defect: ``bulk_upsert_prices`` checked the currency inside its loop, asset by asset in the request's order, after
+# the assets before it had been written and committed; a mismatch raised ``ValueError`` (the route's 400) and left them
+# stored: the upload was not all or nothing.
+#
+# Contract (MANUAL; the digits refusal, a ``ValueError``, and the dates, ``DateOutOfRangeError``, come first, on the
+# input alone):
+# * one read of ``Asset.id, Asset.currency`` for the request's distinct asset ids (in slices of 500), and nothing else
+#   asked of the session -- no add, flush or commit, every statement a SELECT; then, for each item in request order
+#   whose asset exists, the points whose ``price.currency or asset.currency`` is not the asset's give one entry
+#   ``{"asset_id", "expected": the asset's currency, "found": the other currencies given, first seen first, "dates":
+#   their ISO dates, request order, ten at most}``; an item whose asset does not exist is not checked (the loop answers
+#   «Asset N not found», as before, when nothing else is at fault);
+# * any entry raises ``price_store.PriceCurrencyMismatchError`` -- a plain ``Exception``, no ``ValueError`` -- whose
+#   ``items`` hold every entry and ``count`` every offending date; nothing is written, for any asset of the request.
+#   ``price_store.price_currency_mismatch_detail(items, count)`` is the route's 422 detail: ``{"code":
+#   "price_currency_mismatch", "message", "items": items[:10], "count"}``;
+# * under a provider's key nothing changes: the check in the loop raises ``ValueError`` («Currency mismatch for asset
+#   …»), as before.
+#
+# Both names are read from ``price_store`` inside the cases (``_refused_for_currency``): before X-R71 they do not exist,
+# and the cases fail on what the upsert did instead of breaking the module's import. The days are this unit's window
+# (``BASE_DATE``), inside the real bounds: no ceiling to freeze. The route's 422 is pinned by
+# ``api prices-currency-coherence``.
+# ─────────────────────────────────────────────────────────────────────────────
+
+XR71_ASSET_COUNT = 12
+
+
+def _in(day: date, close: str, currency: str) -> FAPricePoint:
+    """A close of ``close`` on ``day``, in ``currency``."""
+    return FAPricePoint(date=day, close=Decimal(close), currency=currency)
+
+
+def _statement_kind(statement: object) -> str:
+    """The first SQL keyword of ``statement`` (``SELECT``, ``INSERT`` …), or its class name when it does not print."""
+    try:
+        words = str(statement).split()
+    except Exception:  # a statement the default compiler cannot print is still recorded: by its class, never as a SELECT
+        return type(statement).__name__
+    return words[0].upper() if words else type(statement).__name__
+
+
+class _StatementSpy(_SessionSpy):
+    """``_SessionSpy`` on a session of the lane database that also records, in ``statements``, the kind of every
+    statement it executes (``_statement_kind``)."""
+
+    def __init__(self, real: AsyncSession) -> None:
+        super().__init__(real)
+        self.statements: list[str] = []
+
+    def __getattr__(self, name: str):
+        served = super().__getattr__(name)
+        if name != "execute":
+            return served
+
+        async def _execute(statement, *args, **kwargs):
+            self.statements.append(_statement_kind(statement))
+            return await served(statement, *args, **kwargs)
+
+        return _execute
+
+
+@pytest_asyncio.fixture
+async def xr71_assets():
+    """Twelve assets of this unit's own, in USD and without a price; removed with their prices afterwards."""
+    marker = f"{unique_id('UpsertGuards')} {uuid.uuid4().hex[:8]}"
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        assets = [Asset(display_name=f"Upsert Guard X-R71 {marker} {n}", currency="USD", asset_type=AssetType.STOCK, active=True) for n in range(XR71_ASSET_COUNT)]
+        session.add_all(assets)
+        await session.commit()
+        asset_ids = [asset.id for asset in assets]
+    yield asset_ids
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        await session.execute(delete(PriceHistory).where(PriceHistory.asset_id.in_(asset_ids)))
+        await session.execute(delete(Asset).where(Asset.id.in_(asset_ids)))
+        await session.commit()
+
+
+async def _refused_for_currency(spy: _SessionSpy, data: list[FAUpsert]):
+    """The ``PriceCurrencyMismatchError`` a MANUAL upsert of ``data`` on ``spy`` raises; when it raises anything else, or
+    nothing, the test fails saying what the upsert did and what it asked of the session."""
+    error_class = getattr(price_store_module, "PriceCurrencyMismatchError", None)
+    try:
+        result = await AssetSourceManager.bulk_upsert_prices(data, spy)
+    except Exception as error:
+        if error_class is not None and isinstance(error, error_class):
+            return error
+        pytest.fail(f"no PriceCurrencyMismatchError: the upsert raised {type(error).__name__}({error}), after reaching the session for {spy.used}")
+    pytest.fail(f"no PriceCurrencyMismatchError: the upsert answered {result}, after reaching the session for {spy.used}")
+
+
+@pytest.mark.asyncio
+async def test_a_currency_mismatch_refuses_the_clean_asset_before_it_after_reads_only(clean_prices, xr65_second_asset):
+    """X-R71: a clean asset first, then one with a price in EUR: neither is written, and one SELECT alone reaches the
+    session.
+
+    Before the fix: the upsert works asset by asset and commits as it goes: the first asset's two prices are written and
+    committed, then the second's EUR price raises ``ValueError`` («Currency mismatch for asset …», the route's 400).
+    Contract: ``PriceCurrencyMismatchError``, no ``ValueError``, naming the second asset alone (``items`` ``[{"asset_id":
+    second, "expected": "USD", "found": ["EUR"], "dates": [its EUR day]}]``, ``count`` 1); the session was asked for
+    ``execute`` alone -- no add, flush or commit -- and ran one statement, a SELECT (the assets' currencies); neither
+    asset has a price.
+    """
+    eur_day = BASE_DATE + timedelta(days=3)
+    data = [
+        FAUpsert(asset_id=clean_prices, prices=[_on(BASE_DATE, "10"), _on(BASE_DATE + timedelta(days=1), "11")]),
+        FAUpsert(asset_id=xr65_second_asset, prices=[_on(BASE_DATE + timedelta(days=2), "12"), _in(eur_day, "13", "EUR")]),
+    ]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        spy = _StatementSpy(session)
+        error = await _refused_for_currency(spy, data)
+
+    assert not isinstance(error, ValueError), f"{type(error).__mro__}: a manual currency refusal is no ValueError (the route's 400)"
+    assert set(spy.used) == {"execute"}, f"the session was asked for {spy.used} before the refusal: reads alone"
+    assert spy.statements == ["SELECT"], f"statements before the refusal: {spy.statements}; one read of the assets' currencies, nothing else"
+    assert (error.items, error.count) == ([{"asset_id": xr65_second_asset, "expected": "USD", "found": ["EUR"], "dates": [eur_day.isoformat()]}], 1)
+    assert await _stored_days(clean_prices) == []
+    assert await _stored_days(xr65_second_asset) == []
+
+
+@pytest.mark.asyncio
+async def test_a_currency_refusal_names_each_asset_at_fault_its_currencies_and_ten_dates_at_most(xr71_assets):
+    """X-R71: the numbers of a refusal: twelve assets of this unit at fault, and an asset id no asset has among them.
+
+    The first asset: twelve days in CHF, newest first, a USD day among them; the second: EUR, GBP, EUR and CHF on four
+    days, then a day without a currency (the asset's own); between the second and the third, an asset id no asset has,
+    with a price in EUR; the ten others: a USD day, then a day in JPY.
+    Before the fix: the first asset's CHF prices raise ``ValueError`` («Currency mismatch for asset …»).
+    Contract: ``items`` the twelve assets in request order, the unknown id not checked; each ``expected`` USD, ``found``
+    its other currencies first seen first (EUR, GBP, CHF: not sorted), ``dates`` its offending days in request order (not
+    sorted), the first one's ten at most; ``count`` 26, every offending date of the twelve; nothing stored for any of
+    them. ``price_currency_mismatch_detail(items, count)``: the code ``price_currency_mismatch``, a message naming the
+    count, the first ten entries, ``count`` 26.
+    """
+    first, second, *others = xr71_assets
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        missing_id = (await session.execute(select(Asset.id).order_by(Asset.id.desc()).limit(1))).scalar_one() + 100_000
+    chf_days = [BASE_DATE + timedelta(days=40 - n) for n in range(12)]
+    mixed = [(BASE_DATE + timedelta(days=n), currency) for n, currency in enumerate(("EUR", "GBP", "EUR", "CHF"))]
+    jpy_day = BASE_DATE + timedelta(days=1)
+    data = [
+        FAUpsert(asset_id=first, prices=[_in(day, "10", "CHF") for day in chf_days[:5]] + [_on(BASE_DATE, "10")] + [_in(day, "10", "CHF") for day in chf_days[5:]]),
+        FAUpsert(asset_id=second, prices=[_in(day, "10", currency) for day, currency in mixed] + [FAPricePoint(date=BASE_DATE + timedelta(days=4), close=Decimal("10"))]),
+        FAUpsert(asset_id=missing_id, prices=[_in(BASE_DATE, "10", "EUR")]),
+        *[FAUpsert(asset_id=asset_id, prices=[_on(BASE_DATE, "10"), _in(jpy_day, "10", "JPY")]) for asset_id in others],
+    ]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        spy = _StatementSpy(session)
+        error = await _refused_for_currency(spy, data)
+
+    expected = [
+        {"asset_id": first, "expected": "USD", "found": ["CHF"], "dates": [day.isoformat() for day in chf_days[:10]]},
+        {"asset_id": second, "expected": "USD", "found": ["EUR", "GBP", "CHF"], "dates": [day.isoformat() for day, _ in mixed]},
+        *[{"asset_id": asset_id, "expected": "USD", "found": ["JPY"], "dates": [jpy_day.isoformat()]} for asset_id in others],
+    ]
+    assert error.items == expected, error.items
+    assert error.count == 26, error.count
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        stored = (await session.execute(select(PriceHistory.asset_id).where(PriceHistory.asset_id.in_(xr71_assets)))).scalars().all()
+    assert stored == [], f"prices stored for the assets {sorted(set(stored))}"
+
+    detail_of = getattr(price_store_module, "price_currency_mismatch_detail", None)
+    assert detail_of is not None, "no price_store.price_currency_mismatch_detail"
+    detail = detail_of(error.items, error.count)
+    assert set(detail) == {"code", "message", "items", "count"}, detail
+    assert (detail["code"], detail["items"], detail["count"]) == ("price_currency_mismatch", expected[:10], 26), detail
+    assert isinstance(detail["message"], str) and "26" in detail["message"], detail["message"]
+
+
+@pytest.mark.asyncio
+async def test_a_date_out_of_range_is_refused_before_the_currencies_are_read(clean_prices, xr65_second_asset):
+    """X-R71 guard, green before the fix and after: the dates are checked first, on the input alone (X-R65).
+
+    The first asset with a day in EUR, the second with a price on 1899-12-31.
+    Contract: ``DateOutOfRangeError`` naming the second asset, the session never reached (the currencies are not read),
+    and neither asset has a price.
+    """
+    data = [
+        FAUpsert(asset_id=clean_prices, prices=[_on(BASE_DATE, "10"), _in(BASE_DATE + timedelta(days=1), "11", "EUR")]),
+        FAUpsert(asset_id=xr65_second_asset, prices=[_on(BASE_DATE + timedelta(days=2), "12"), _on(XR65_BEFORE, "13")]),
+    ]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        spy = _SessionSpy(session)
+        error = await _refused_out_of_range(spy, data)
+
+    assert spy.used == [], f"the session was reached for {spy.used} before the refusal"
+    assert (error.items, error.count) == ([{"asset_id": xr65_second_asset, "dates": [XR65_BEFORE.isoformat()]}], 1)
+    assert await _stored_days(clean_prices) == []
+    assert await _stored_days(xr65_second_asset) == []
+
+
+@pytest.mark.asyncio
+async def test_a_providers_currency_mismatch_still_raises_value_error(clean_prices):
+    """X-R71 guard, green before the fix and after: under a provider's key the check stays in the loop, a ``ValueError``.
+
+    One asset: a USD day, then a EUR day, under ``XR65_PROVIDER``.
+    Contract: ``ValueError`` saying «Currency mismatch for asset …» (this one), never ``PriceCurrencyMismatchError``; the
+    asset has no price (the check comes before its writes).
+    """
+    data = [FAUpsert(asset_id=clean_prices, prices=[_on(BASE_DATE, "10"), _in(BASE_DATE + timedelta(days=1), "11", "EUR")])]
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        with pytest.raises(ValueError, match=rf"Currency mismatch for asset {clean_prices}\b") as raised:
+            await AssetSourceManager.bulk_upsert_prices(data, session, source_plugin_key=XR65_PROVIDER)
+
+    assert type(raised.value).__name__ != "PriceCurrencyMismatchError", f"{type(raised.value).__mro__}: a provider's mismatch is not the manual refusal"
+    assert await _stored_days(clean_prices) == []

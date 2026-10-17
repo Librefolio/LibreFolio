@@ -196,7 +196,9 @@ describe('AI Export prompt renderer', () => {
 
         expect(diagnostics.rendered).toEqual(rendered);
         expect(reconstructedPrompt).toBe(rendered.prompt);
-        expect(reconstructedSnapshotData).toContain('technical_components=compact_pipe_tables_v1');
+        // T-B7: both table families move to v2 (the declaration of the columns null in every row). Before T-B7: v1.
+        expect(reconstructedSnapshotData).toContain('technical_components=compact_pipe_tables_v2');
+        expect(reconstructedSnapshotData).toContain('other_components=generic_pipe_tables_v2');
         expect(reconstructedSnapshotData).toContain('COMPONENT portfolio.summary');
         expect(reconstructedSnapshotData).toContain('2026/03/04');
         expect(rendered.prompt).toContain('```text');

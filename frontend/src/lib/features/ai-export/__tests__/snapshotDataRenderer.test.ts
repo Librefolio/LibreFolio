@@ -1,6 +1,8 @@
 import {describe, expect, it} from 'vitest';
 
 import {serializeYaml} from '../serialization';
+// J-54: `NULL_MEANS_NONE_COLUMNS` is read by name through the namespace, so while it is missing only the tests reading it fail.
+import * as snapshotDataRendererModule from '../templates/snapshotDataRenderer';
 import {formatPromptNumber, renderSnapshotDataText} from '../templates/snapshotDataRenderer';
 
 function rangeCell(first: number, last: number, min: number, max: number, start: string, end: string) {
@@ -80,6 +82,25 @@ function indicatorSection(rows = 1) {
             ],
         },
     };
+}
+
+/** T-B7: the key of the line that names, right after a table's last row, the columns dropped for holding null in every row. */
+const NULL_COLUMNS_DECLARATION = 'omitted_null_columns=';
+
+/** The line right after the last pipe row of the table whose title line is `marker`; undefined when the text ends there. */
+function lineAfterTable(content: string, marker: string): string | undefined {
+    const lines = content.split('\n');
+    const start = lines.indexOf(marker);
+    expect(start, `a "${marker}" line`).toBeGreaterThanOrEqual(0);
+    let end = start + 1;
+    while (end < lines.length && lines[end].startsWith('|')) end += 1;
+    return lines[end];
+}
+
+/** The column names declared on the line right after the table titled `marker`, in printed order; [] when it declares none. */
+function declaredAfter(content: string, marker: string): string[] {
+    const line = lineAfterTable(content, marker);
+    return line?.startsWith(NULL_COLUMNS_DECLARATION) ? line.slice(NULL_COLUMNS_DECLARATION.length).split(',') : [];
 }
 
 describe('AI Export compact Snapshot Data renderer', () => {
@@ -1272,7 +1293,8 @@ describe('AI Export compact Snapshot Data renderer', () => {
          * currency, a root scalar of `asset.lot_detail` v3 and `portfolio.fifo_lots`/`broker.fifo_lots` v2, so the
          * generic renderer lists it in the SUMMARY. It must always be visible, 0 included, because the table
          * cannot always say it: an amount null in every lot has no column at all (the existing all-empty column
-         * rule, see 'removes all-empty generic columns and parent columns…'). There the counter is what is left.
+         * rule, see 'removes all-empty generic columns and parent columns…'). Since T-B7 the line right after the
+         * table names that column; the counter still counts the lots.
          */
         const COUNTED_LOT_COMPONENTS = [
             ['asset.lot_detail', 3],
@@ -1318,7 +1340,10 @@ describe('AI Export compact Snapshot Data renderer', () => {
                 expect(columnsOf(header, field), `columns of ${field}`).toEqual([]);
             }
             expect(rendered.formatDiagnostics.empty_columns_removed).toBeGreaterThanOrEqual(loneUnknownLotAmounts.length);
-            // What the table no longer says, the counter does.
+            // T-B7: the line right after the table's last row names each removed amount column by its public name.
+            // Before T-B7 nothing in the prompt named them.
+            expect(declaredAfter(rendered.content, 'TABLE lots')).toEqual(expect.arrayContaining([...loneUnknownLotAmounts]));
+            // The line names the columns; the counter still counts the lots.
             expect(summaryValue(rendered.content, 'unavailable_amount_lot_count')).toBe('1');
         });
 
@@ -1783,11 +1808,15 @@ describe('AI Export compact Snapshot Data renderer', () => {
 
         expect(rendered.content).toContain('|row|index|meaningful_small_value|reconciliation_diff.amount|reconciliation_diff.code|');
         expect(rendered.content).toContain('|2|2|0.0000004568|0|EUR|');
-        expect(rendered.content).not.toContain('empty_metric');
+        // T-B7: the column null in every row is still removed, and the line right after the table names it — only it: the
+        // parent `reconciliation_diff`, whose values live in `.amount` / `.code`, is never named. Before T-B7 the prompt
+        // did not contain `empty_metric` at all.
+        expect(lineAfterTable(rendered.content, 'TABLE buckets')).toBe('omitted_null_columns=empty_metric');
         expect(rendered.content).not.toMatch(/\|reconciliation_diff\|/);
         expect(rendered.formatDiagnostics.monetary_residuals_zeroed).toBe(1);
         expect(rendered.formatDiagnostics.empty_columns_removed).toBe(2);
         expect(rendered.formatDiagnostics.empty_parent_columns_removed).toBe(1);
+        expect(rendered.formatDiagnostics).toMatchObject({null_columns_declared: 1});
     });
 
     it('zeros sub-minor-unit reconciliation effects without hiding small real values elsewhere', () => {
@@ -2432,6 +2461,1237 @@ describe('AI Export compact Snapshot Data renderer', () => {
             const row = rowWhere(tableAfter(rendered, 'TABLE portfolio_role.unavailable'), 'field', 'portfolio_gross_absolute_value');
             // Only a reference key is renamed: the reason is free text and keeps the raw name.
             expect(row.get('reason')).toBe(reason);
+        });
+    });
+
+    /**
+     * T-B7: a compact table drops a column empty in every row, and the prompt did not say so: a reader could not tell
+     * «unavailable in every row» from «not part of this export». The line right after the table's last row,
+     * `omitted_null_columns=…`, now names the dropped columns that held an explicit null («unavailable») by their public
+     * header names. A column dropped for `undefined` or `''` («not applicable») and a parent column stay unnamed: these
+     * tests pin both sides. Keys, names, positions and counters only — never prompt wording. J-54 leaves unnamed a third
+     * kind, a named set of columns whose null means «none»: see the nested describe at the end.
+     */
+    describe('columns null in every row are named after their table (T-B7)', () => {
+        type Rendered = ReturnType<typeof renderSnapshotDataText>;
+        const directory = {
+            assets: [
+                {asset_id: 42, display_name: 'First Asset'},
+                {asset_id: 43, display_name: 'Second Asset'},
+            ],
+            brokers: [{broker_id: 5, display_name: 'Named Broker'}],
+            fx_pairs: [],
+        };
+        const portfolio = {kind: 'portfolio'};
+        const asset = {kind: 'asset', asset_id: 42};
+        const FX_TARGET = {kind: 'fx_pair', base_currency: 'USD', quote_currency: 'EUR'};
+        const FX_DIRECTORY = {assets: [], brokers: [], fx_pairs: [{base_currency: 'USD', quote_currency: 'EUR'}]};
+        // A target-currency amount, keys in the order the backend `Currency` serializes them.
+        const eur = (amount: string) => ({code: 'EUR', amount});
+        // The real-prompt probe's `raw_ratio_weight_name` and `raw_entity_id_field` patterns, verbatim
+        // (`forbidden_prompt_patterns`, backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py).
+        const RAW_RATIO_WEIGHT_NAME =
+            /\b(?:portfolio_weight_ratio|technical_normalized_weight_ratio|eligible_portfolio_weight_ratio|covered_portfolio_weight_ratio|covered_weight_ratio|eligible_current_scope_weight_ratio|covered_current_scope_weight_ratio|excluded_current_scope_weight_ratio|coverage_ratio|return_1m_ratio|return_3m_ratio|return_30d_ratio|return_91d_ratio|return_period_ratio|daily_return_volatility_ratio)\b/;
+        const RAW_ENTITY_ID_FIELD = /\b(?:asset_id|broker_id)\b/;
+
+        // Generic rows: every cell filled; a column blank in every row; a column null in every row.
+        const FULL_GENERIC_ROWS = [
+            {label: 'first', quantity: '10', target_amount: eur('5')},
+            {label: 'second', quantity: '20', target_amount: eur('7')},
+        ];
+        const BLANK_GENERIC_ROWS = [
+            {label: 'first', blank_note: ''},
+            {label: 'second', blank_note: ''},
+        ];
+        const NULL_METRIC_ROWS = [
+            {label: 'first', unavailable_metric: null, quantity: '10'},
+            {label: 'second', unavailable_metric: null, quantity: '20'},
+        ];
+
+        // The only lot, opened and partly sold on dates without an FX rate: every amount it carries is null. It is still
+        // open, so its `closing_date` is a payload null too: «none», not «unavailable», so dropped but never named (J-54).
+        const LONE_UNKNOWN_LOT_DETAIL = {
+            lot_ref: 'L1',
+            opening_broker_id: 5,
+            opening_date: '2025-09-15',
+            opening_unit_price: null,
+            original_quantity: '5',
+            original_cost: null,
+            open_quantity: '3',
+            realized_quantity: '2',
+            cumulative_proceeds: null,
+            realized_pnl: null,
+            open_value: '345.00',
+            unrealized_pnl: null,
+            total_pnl: null,
+            net_total_pnl: null,
+            income: null,
+            allocated_fees: null,
+            allocated_taxes: null,
+            value_source: 'MARKET_PRICE',
+            net_metrics_status: 'UNAVAILABLE',
+            states: ['PARTIALLY_CLOSED'],
+            closing_date: null,
+            current_custody: [{broker_id: 5, custody_type: 'BROKER', quantity: '3'}],
+        };
+        const LOT_DETAIL_V4_PAYLOAD = {
+            asset_id: 42,
+            period: {start: '2026-01-01', end: '2026-03-31'},
+            target_currency: 'EUR',
+            cost_allocation_semantics: 'cost allocation semantics placeholder',
+            lot_reconstruction_status: 'COMPLETE',
+            failure_codes: [],
+            lots: [LONE_UNKNOWN_LOT_DETAIL],
+            omitted_degraded_lot_count: 0,
+            unavailable_amount_lot_count: 1,
+        };
+        // Its null amount columns in header order, which is the lot's key order: the columns the line names. Before J-54 the
+        // list ended with `closing_date`.
+        const LOT_DETAIL_NULL_COLUMNS: readonly string[] = ['opening_unit_price', 'original_cost', 'cumulative_proceeds', 'realized_pnl', 'unrealized_pnl', 'total_pnl', 'net_total_pnl', 'income', 'allocated_fees', 'allocated_taxes'];
+        const LONE_UNKNOWN_FIFO_LOT = {
+            lot_ref: 'L1',
+            asset_id: 43,
+            asset_name: 'Second Asset',
+            asset_ticker: null,
+            opening_broker_id: 5,
+            direction: 'LONG',
+            status: 'PARTIAL',
+            opening_date: '2025-09-15',
+            closing_date: null,
+            opening_unit_price: null,
+            original_quantity: '5',
+            open_quantity: '3',
+            realized_quantity: '2',
+            original_cost: null,
+            residual_cost_basis: null,
+            cumulative_proceeds: null,
+            open_value: eur('345.00'),
+            realized_pnl: null,
+            unrealized_pnl: null,
+            total_pnl: null,
+            net_total_pnl: null,
+            income: null,
+            fees: null,
+            taxes: null,
+            value_source: 'MARKET_PRICE',
+            net_metrics_status: 'UNAVAILABLE',
+            states: ['PARTIALLY_CLOSED'],
+            current_custody: [{broker_id: 5, custody_type: 'BROKER', quantity: '3'}],
+        };
+        const FIFO_LOTS_V3_PAYLOAD = {
+            period_start: '2026-01-01',
+            period_end: '2026-03-31',
+            target_currency: 'EUR',
+            cost_allocation_semantics: 'cost allocation semantics placeholder',
+            lot_count: 1,
+            unavailable_amount_lot_count: 1,
+            failed_reconstruction_asset_count: 0,
+            failed_lot_reconstructions: [],
+            lots: [LONE_UNKNOWN_FIFO_LOT],
+        };
+        // Its null amount columns in header order (the lot's key order; `asset_name` and `asset_ticker` go to the directory):
+        // the columns the line names. Before J-54 the list opened with `closing_date`.
+        const FIFO_LOT_NULL_COLUMNS: readonly string[] = ['opening_unit_price', 'original_cost', 'residual_cost_basis', 'cumulative_proceeds', 'realized_pnl', 'unrealized_pnl', 'total_pnl', 'net_total_pnl', 'income', 'fees', 'taxes'];
+
+        function section(componentId: string, payload: Record<string, unknown>, componentVersion = 1) {
+            return {component_id: componentId, component_version: componentVersion, schema_id: componentId, schema_version: 1, payload};
+        }
+
+        /** A component the generic renderer prints (it has no dedicated renderer), whose one table is `TABLE rows`. */
+        function genericSection(rows: readonly Record<string, unknown>[], componentId = 'portfolio.performance') {
+            return section(componentId, {rows});
+        }
+
+        /** A populated price bucket: every field the BUCKETS table reads has a value, unless `overrides` says otherwise. */
+        function priceBucket(overrides: Record<string, unknown> = {}) {
+            return {
+                start_date: '2026/03/01',
+                end_date: '2026/03/15',
+                calendar_days: 15,
+                observation_count: 10,
+                first: {close: 100},
+                minimum: {close: 98},
+                maximum: {close: 102},
+                last: {close: 101},
+                minimum_date: '2026/03/04',
+                maximum_date: '2026/03/09',
+                return_start_date: '2026/02/27',
+                simple_return: 0.01,
+                ...overrides,
+            };
+        }
+
+        /** Two consecutive populated buckets, both with `overrides`. */
+        function twoPriceBuckets(overrides: Record<string, unknown> = {}) {
+            return [priceBucket(overrides), priceBucket({start_date: '2026/03/16', end_date: '2026/03/31', calendar_days: 16, return_start_date: '2026/03/15', ...overrides})];
+        }
+
+        /** `asset.ohlc_returns`, one Asset's price series: a single Asset has no portfolio weight, which the renderer passes as `undefined`. */
+        function assetSeriesSection(overrides: Record<string, unknown> = {}, buckets: readonly Record<string, unknown>[] = [priceBucket()]) {
+            return section('asset.ohlc_returns', {asset_id: 42, currency: 'EUR', price_basis: 'observed_close', buckets, latest_close: 101, latest_date: '2026/03/31', ...overrides});
+        }
+
+        /** `fx.rate_ohlc`, an FX pair's rate series: it carries `latest_rate` and `quote_currency`, no `latest_close` and no `currency`. */
+        function fxSeriesSection() {
+            return section('fx.rate_ohlc', {base_currency: 'USD', quote_currency: 'EUR', buckets: [priceBucket({first: {rate: 0.91}, minimum: {rate: 0.9}, maximum: {rate: 0.93}, last: {rate: 0.92}})], latest_rate: 0.92, latest_date: '2026/03/31'});
+        }
+
+        /** The rendered block of `componentId`: tables are looked up inside it, where no other component repeats a title. */
+        function blockOf(rendered: Rendered, componentId: string): string {
+            const block = rendered.blocks.find((candidate) => candidate.id === componentId);
+            if (block === undefined) throw new Error(`no block for ${componentId}`);
+            return block.content;
+        }
+
+        /** The pipe lines right after the title line `marker`, header first: the table as a reader of `|…|` lines sees it. */
+        function pipeLinesAfter(content: string, marker: string): string[] {
+            const lines = content.split('\n');
+            const start = lines.indexOf(marker);
+            expect(start, `a "${marker}" line`).toBeGreaterThanOrEqual(0);
+            const table: string[] = [];
+            for (const line of lines.slice(start + 1)) {
+                if (!line.startsWith('|')) break;
+                table.push(line);
+            }
+            return table;
+        }
+
+        /** The pipe table on the lines right after `marker`: its header, and one header-keyed map per data row. */
+        function pipeTableAfter(content: string, marker: string): {readonly header: readonly string[]; readonly rows: Map<string, string>[]} {
+            const [header = [], ...rows] = pipeLinesAfter(content, marker).map((line) => line.slice(1, -1).split(/(?<!\\)\|/));
+            return {header, rows: rows.map((cells) => new Map(header.map((column, index): [string, string] => [column, cells[index]])))};
+        }
+
+        /** The one row whose `column` reads `value`: rows are found by what they hold, never by position. */
+        function rowWhere(rows: readonly Map<string, string>[], column: string, value: string): Map<string, string> {
+            const matches = rows.filter((row) => row.get(column) === value);
+            expect(matches, `rows whose ${column} is ${value}`).toHaveLength(1);
+            return matches[0];
+        }
+
+        /** An asset's prompt ref, resolved through the ENTITY DIRECTORY as a reader of the prompt would. */
+        function assetRef(entityDirectory: string, displayName: string): string {
+            const ref = rowWhere(pipeTableAfter(entityDirectory, 'ASSETS').rows, 'display_name', displayName).get('ref');
+            if (ref === undefined) throw new Error(`the ENTITY DIRECTORY has no ref for ${displayName}`);
+            return ref;
+        }
+
+        /** The rendered text after the format preamble, whose rule line names the key: past it, only tables declare. */
+        function afterPreamble(rendered: Rendered): string {
+            expect(rendered.content.startsWith(rendered.formatPreamble), 'the content opens with the format preamble').toBe(true);
+            return rendered.content.slice(rendered.formatPreamble.length);
+        }
+
+        it('names a column null in every row, but neither a parent column nor a column blank in every row (generic table)', () => {
+            const rendered = renderSnapshotDataText(
+                [
+                    genericSection([
+                        {label: 'first', unavailable_metric: null, target_amount: null, blank_note: '', quantity: '10', unavailable_rate: null},
+                        {label: 'second', unavailable_metric: null, target_amount: eur('5'), blank_note: '', quantity: '20', unavailable_rate: null},
+                    ]),
+                ],
+                portfolio,
+            );
+            const block = blockOf(rendered, 'portfolio.performance');
+
+            // Presence barrier: the table is there, with both rows and the columns that hold a value, the parent's
+            // children among them ...
+            const {header, rows} = pipeTableAfter(block, 'TABLE rows');
+            expect(rows.map((row) => row.get('label'))).toEqual(['first', 'second']);
+            expect(header).toEqual(['row', 'label', 'quantity', 'target_amount.code', 'target_amount.amount']);
+            // ... and four columns were removed, one of them a parent: the existing rule and its counters, unchanged.
+            expect(rendered.formatDiagnostics).toMatchObject({empty_columns_removed: 4, empty_parent_columns_removed: 1});
+            // Subject: the line right after the last row names the two null columns, in header order, comma-joined.
+            expect(lineAfterTable(block, 'TABLE rows')).toBe('omitted_null_columns=unavailable_metric,unavailable_rate');
+            // The other side: the parent (its values live in `.code` / `.amount`) and the blank column stay unnamed.
+            expect(declaredAfter(block, 'TABLE rows')).not.toContain('target_amount');
+            expect(block).not.toContain('blank_note');
+        });
+
+        it('names a column null in one row and absent from the other (generic table)', () => {
+            const rendered = renderSnapshotDataText(
+                [
+                    genericSection([
+                        {label: 'first', quantity: '10'},
+                        {label: 'second', sparse_metric: null, quantity: '20'},
+                    ]),
+                ],
+                portfolio,
+            );
+            const block = blockOf(rendered, 'portfolio.performance');
+
+            // Presence barrier: both rows are there, and the column, with a value in neither, was removed.
+            const {header, rows} = pipeTableAfter(block, 'TABLE rows');
+            expect(rows.map((row) => row.get('label'))).toEqual(['first', 'second']);
+            expect(header).toEqual(['row', 'label', 'quantity']);
+            expect(rendered.formatDiagnostics).toMatchObject({empty_columns_removed: 1, empty_parent_columns_removed: 0});
+            // The row without the key prints null too (`?? 'null'`): the column is named.
+            expect(lineAfterTable(block, 'TABLE rows')).toBe('omitted_null_columns=sparse_metric');
+        });
+
+        it.each([
+            ['asset.lot_detail', 4, asset, LOT_DETAIL_V4_PAYLOAD, LOT_DETAIL_NULL_COLUMNS],
+            ['portfolio.fifo_lots', 3, portfolio, FIFO_LOTS_V3_PAYLOAD, FIFO_LOT_NULL_COLUMNS],
+        ] as const)('names the null amount columns of %s v%i, whose only lot is unknown, right after the last row of TABLE lots', (componentId, version, target, payload, namedColumns) => {
+            const rendered = renderSnapshotDataText([section(componentId, payload, version)], target, directory);
+            const block = blockOf(rendered, componentId);
+
+            expect(block).not.toContain('PAYLOAD YAML FALLBACK');
+            // Presence barrier: the lot is in the table, with what it still knows ...
+            const {header, rows} = pipeTableAfter(block, 'TABLE lots');
+            expect(rows.map((row) => row.get('lot_ref'))).toEqual(['L1']);
+            expect(header.filter((column) => column === 'open_value' || column.startsWith('open_value.'))).not.toHaveLength(0);
+            // ... and no column for what it does not know: each null column was removed, the open lot's closing_date too ...
+            expect(header.filter((column) => namedColumns.includes(column) || column === 'closing_date')).toEqual([]);
+            // ... but only the amounts are named, in header order, on the line right after the lot's row, and counted: the
+            // closing date of an open lot is not missing (J-54). Before J-54 the line and the counter took closing_date too.
+            expect(lineAfterTable(block, 'TABLE lots')).toBe(`omitted_null_columns=${namedColumns.join(',')}`);
+            expect(rendered.formatDiagnostics).toMatchObject({null_columns_declared: namedColumns.length});
+            // The line names columns; the counter still counts the lots.
+            expect(rowWhere(pipeTableAfter(block, 'SUMMARY').rows, 'field', 'unavailable_amount_lot_count').get('value')).toBe('1');
+        });
+
+        it('names a BUCKETS column null in every bucket, never the SERIES portfolio weight a single Asset does not have', () => {
+            // The renderer reads `volatility` from every series bucket (`fx.returns_volatility` fills it): here every bucket
+            // of a single-Asset price series carries it null. The Asset's portfolio weight the renderer passes as `undefined`.
+            const rendered = renderSnapshotDataText([assetSeriesSection({}, twoPriceBuckets({volatility: null}))], asset, directory);
+            const block = blockOf(rendered, 'asset.ohlc_returns');
+
+            // Presence barrier: both tables are there, with their rows ...
+            expect(rowWhere(pipeTableAfter(block, 'SERIES').rows, 'entity', assetRef(rendered.entityDirectory, 'First Asset')).get('latest_value')).toBe('101');
+            expect(pipeTableAfter(block, 'BUCKETS').rows.map((row) => row.get('start'))).toEqual(['2026/03/01', '2026/03/16']);
+            // ... and one column was removed from each: the portfolio weight from SERIES, the volatility from BUCKETS.
+            expect(rendered.formatDiagnostics).toMatchObject({empty_columns_removed: 2});
+            // Subject: the null one is named right after BUCKETS ...
+            expect(lineAfterTable(block, 'BUCKETS')).toBe('omitted_null_columns=volatility');
+            // ... the undefined one nowhere: SERIES is followed by the next title, and no line past the preamble names it.
+            expect(lineAfterTable(block, 'SERIES')).toBe('BUCKETS');
+            expect(afterPreamble(rendered)).not.toContain('portfolio_weight_percent');
+        });
+
+        it('keeps a null last price as null: a single Asset whose latest_close is null names latest_value after SERIES', () => {
+            // The last observation has no close (`latest_point_value`: its date stays, its value is None).
+            const rendered = renderSnapshotDataText([assetSeriesSection({latest_close: null})], asset, directory);
+            const block = blockOf(rendered, 'asset.ohlc_returns');
+
+            // Presence barrier: the series row is there, with its currency and its date.
+            const row = rowWhere(pipeTableAfter(block, 'SERIES').rows, 'entity', assetRef(rendered.entityDirectory, 'First Asset'));
+            expect(row.get('currency')).toBe('EUR');
+            expect(row.get('latest_date')).toBe('2026/03/31');
+            // `latest_close ?? latest_rate` made the null undefined, a column dropped in silence. The first key the payload
+            // carries wins, null included: the value is unavailable, and named.
+            expect(lineAfterTable(block, 'SERIES')).toBe('omitted_null_columns=latest_value');
+        });
+
+        it('keeps a null last price as null among two series: its SERIES cell reads null, not an empty cell', () => {
+            const rendered = renderSnapshotDataText(
+                [
+                    section('portfolio.technical_prices', {
+                        price_basis: 'observed_close',
+                        period_position_leg_count: 2,
+                        period_contributor_asset_count: 2,
+                        eligible_asset_count: 2,
+                        covered_asset_count: 2,
+                        assets: [
+                            {asset_id: 42, portfolio_weight_ratio: 0.6, currency: 'EUR', buckets: [priceBucket()], latest_close: null, latest_date: '2026/03/31'},
+                            {asset_id: 43, portfolio_weight_ratio: 0.4, currency: 'EUR', buckets: [priceBucket()], latest_close: 101, latest_date: '2026/03/31'},
+                        ],
+                    }),
+                ],
+                portfolio,
+                directory,
+            );
+            const block = blockOf(rendered, 'portfolio.technical_prices');
+            const series = pipeTableAfter(block, 'SERIES').rows;
+
+            // Control: the other series has its last price, so the column stays.
+            expect(rowWhere(series, 'entity', assetRef(rendered.entityDirectory, 'Second Asset')).get('latest_value')).toBe('101');
+            // Subject: the unknown last price reads null. Before T-B7: an empty cell, which reads «not applicable».
+            expect(rowWhere(series, 'entity', assetRef(rendered.entityDirectory, 'First Asset')).get('latest_value')).toBe('null');
+            // Nothing was dropped from SERIES, so nothing is named after it.
+            expect(lineAfterTable(block, 'SERIES')).toBe('BUCKETS');
+        });
+
+        it('keeps a null currency as null the same way: a single Asset whose currency is null names currency after SERIES', () => {
+            const rendered = renderSnapshotDataText([assetSeriesSection({currency: null})], asset, directory);
+            const block = blockOf(rendered, 'asset.ohlc_returns');
+
+            // Presence barrier: the series row is there, with its last price.
+            expect(rowWhere(pipeTableAfter(block, 'SERIES').rows, 'entity', assetRef(rendered.entityDirectory, 'First Asset')).get('latest_value')).toBe('101');
+            // `currency ?? quote_currency` follows the same rule as the last price: the key the payload carries wins.
+            expect(lineAfterTable(block, 'SERIES')).toBe('omitted_null_columns=currency');
+        });
+
+        it.each([
+            ['an FX series, which carries latest_rate and quote_currency only', 'fx.rate_ohlc', fxSeriesSection(), FX_TARGET, FX_DIRECTORY, '|F1|EUR|0.92|2026/03/31|'],
+            ['an Asset series, which carries latest_close and currency only', 'asset.ohlc_returns', assetSeriesSection(), asset, directory, '|A1|EUR|101|2026/03/31|'],
+        ] as const)('control: renders the SERIES of %s as before T-B7', (_label, componentId, seriesSection, target, entityDirectory, seriesRow) => {
+            const block = blockOf(renderSnapshotDataText([seriesSection], target, entityDirectory), componentId);
+
+            // The one key the payload carries fills the cell: the same table as before, and nothing named after it.
+            expect(pipeLinesAfter(block, 'SERIES')).toEqual(['|entity|currency|latest_value|latest_date|', seriesRow]);
+            expect(lineAfterTable(block, 'SERIES')).toBe('BUCKETS');
+        });
+
+        it('escapes each name like a header cell, so the declaration stays one line', () => {
+            const rendered = renderSnapshotDataText(
+                [
+                    genericSection([
+                        {label: 'first', metrics: {'pipe|key': null, 'line\nkey': null, kept: '1'}},
+                        {label: 'second', metrics: {'pipe|key': null, 'line\nkey': null, kept: '2'}},
+                    ]),
+                ],
+                portfolio,
+            );
+            const block = blockOf(rendered, 'portfolio.performance');
+
+            // Presence barrier: the table keeps its one filled nested column.
+            expect(pipeTableAfter(block, 'TABLE rows').header).toEqual(['row', 'label', 'metrics.kept']);
+            // `|` becomes `\|` and a newline `\n`, as in a header cell: one line, whole.
+            expect(lineAfterTable(block, 'TABLE rows')).toBe(String.raw`omitted_null_columns=metrics.pipe\|key,metrics.line\nkey`);
+        });
+
+        it.each([
+            ['no column is empty in every row', [genericSection(FULL_GENERIC_ROWS)], portfolio, 0],
+            ['only undefined columns drop: a single Asset has no portfolio weight, its price buckets no volatility', [assetSeriesSection()], asset, 2],
+            ['only a column blank in every row drops', [genericSection(BLANK_GENERIC_ROWS)], portfolio, 1],
+        ] as const)('declares nothing when %s', (_label, sections, target, removed) => {
+            const rendered = renderSnapshotDataText(sections, target, directory);
+
+            // Barrier: the renderer counts its declarations — none here — and removed exactly these columns.
+            expect(rendered.formatDiagnostics).toMatchObject({empty_columns_removed: removed, null_columns_declared: 0});
+            // Subject: no declaration anywhere past the preamble, whose rule line alone names the key.
+            expect(afterPreamble(rendered)).not.toContain(NULL_COLUMNS_DECLARATION);
+        });
+
+        it('declares nothing after a table with no row', () => {
+            // No event in the period: the events BUCKETS table keeps its header and has no row.
+            const noEvent = section('asset.states_events', {detected_event_count: 0, exported_event_count: 0, buckets: [{start_date: '2026/03/01', end_date: '2026/03/07', calendar_days: 7, event_count: 0, events: []}], selection_summaries: []});
+            const rendered = renderSnapshotDataText([noEvent], asset, directory);
+            const block = blockOf(rendered, 'asset.states_events');
+
+            // Presence barrier: the table is rendered, a header and no data row, and nothing was removed from it.
+            const {header, rows} = pipeTableAfter(block, 'BUCKETS');
+            expect(header).toEqual(['bucket_id', 'start', 'end', 'days', 'event_count']);
+            expect(rows).toEqual([]);
+            expect(rendered.formatDiagnostics).toMatchObject({empty_columns_removed: 0, null_columns_declared: 0});
+            // Every column is empty in each of no rows; still nothing was dropped, so nothing is named.
+            expect(lineAfterTable(block, 'BUCKETS')).toBeUndefined();
+        });
+
+        it('names a ratio column by its public _percent name and an id column by its _ref name, never a raw name the probe forbids', () => {
+            const rendered = renderSnapshotDataText(
+                [
+                    section('broker.allocation_concentration', {
+                        classifications: [
+                            {name: 'Italy', weight: '0.6', covered_portfolio_weight_ratio: null, broker_id: null},
+                            {name: 'Other', weight: '0.4', covered_portfolio_weight_ratio: null, broker_id: null},
+                        ],
+                    }),
+                ],
+                {kind: 'broker', broker_id: 5},
+                directory,
+            );
+            const block = blockOf(rendered, 'broker.allocation_concentration');
+
+            // Presence barrier: the table is there, its weight under its public name.
+            const {header, rows} = pipeTableAfter(block, 'TABLE classifications');
+            expect(header).toEqual(['row', 'name', 'weight_percent']);
+            expect(rows.map((row) => row.get('name'))).toEqual(['Italy', 'Other']);
+            // Subject: each null column is named as its header would have been printed.
+            expect(lineAfterTable(block, 'TABLE classifications')).toBe('omitted_null_columns=covered_portfolio_weight_percent,broker_ref');
+            // No line of the prompt carries a raw ratio name or a raw id field: the probe's public checks.
+            const lines = rendered.content.split('\n');
+            expect(lines.filter((line) => RAW_RATIO_WEIGHT_NAME.test(line))).toEqual([]);
+            expect(lines.filter((line) => RAW_ENTITY_ID_FIELD.test(line))).toEqual([]);
+        });
+
+        it.each([
+            ['nothing is named', [genericSection(FULL_GENERIC_ROWS)]],
+            ['a column is named', [genericSection(NULL_METRIC_ROWS)]],
+        ] as const)('states the key and the v2 table labels in the format preamble when %s', (_label, sections) => {
+            const preamble = renderSnapshotDataText(sections, portfolio).formatPreamble.split('\n');
+
+            // Both table families move to v2, each label once.
+            expect(preamble.filter((line) => line.startsWith('technical_components='))).toEqual(['technical_components=compact_pipe_tables_v2']);
+            expect(preamble.filter((line) => line.startsWith('other_components='))).toEqual(['other_components=generic_pipe_tables_v2']);
+            // One rule line for the key: the key only, its wording is the renderer's.
+            expect(preamble.filter((line) => line.startsWith(NULL_COLUMNS_DECLARATION))).toHaveLength(1);
+        });
+
+        it('counts the names declared across the prompt in null_columns_declared, the removal counters unchanged', () => {
+            const rows = [
+                {label: 'first', unavailable_metric: null, target_amount: null, quantity: '10'},
+                {label: 'second', unavailable_metric: null, target_amount: eur('5'), quantity: '20'},
+            ];
+            // The first bucket of a series has no previous close: no return start, no return.
+            const firstBucket = priceBucket({return_start_date: null, simple_return: null});
+            const rendered = renderSnapshotDataText([genericSection(rows, 'asset.position_performance'), assetSeriesSection({}, [firstBucket])], asset, directory);
+
+            // One table names one column, another two — BUCKETS by its header names ...
+            expect(declaredAfter(blockOf(rendered, 'asset.position_performance'), 'TABLE rows')).toEqual(['unavailable_metric']);
+            expect(declaredAfter(blockOf(rendered, 'asset.ohlc_returns'), 'BUCKETS')).toEqual(['return_from', 'simple_return']);
+            // ... and no other line declares anything.
+            expect(
+                afterPreamble(rendered)
+                    .split('\n')
+                    .filter((line) => line.startsWith(NULL_COLUMNS_DECLARATION)),
+            ).toHaveLength(2);
+            // 1 + 2 names. Removed, as before T-B7: the null column and the parent of the generic table, the portfolio
+            // weight of SERIES, the two null columns and the undefined volatility of BUCKETS — six, one of them a parent.
+            expect(rendered.formatDiagnostics).toMatchObject({null_columns_declared: 3, empty_columns_removed: 6, empty_parent_columns_removed: 1});
+        });
+
+        it.each([
+            ['a generic table', 'portfolio.performance', 'TABLE rows', [genericSection(NULL_METRIC_ROWS)], portfolio],
+            ['a fixed-header table', 'asset.ohlc_returns', 'BUCKETS', [assetSeriesSection({}, twoPriceBuckets({volatility: null}))], asset],
+        ] as const)('puts the declaration after %s right below its last row, outside every |…| block', (_label, componentId, marker, sections, target) => {
+            const lines = blockOf(renderSnapshotDataText(sections, target, directory), componentId).split('\n');
+            const title = lines.indexOf(marker);
+            expect(title, `a "${marker}" line`).toBeGreaterThanOrEqual(0);
+            // A table as the probe's public table audit reads it: the consecutive lines that start and end with `|`.
+            let end = title + 1;
+            while (end < lines.length && lines[end].startsWith('|') && lines[end].endsWith('|')) end += 1;
+            // The block starts right below the title and holds the header and both rows: the whole table ...
+            expect(end - title - 1).toBe(3);
+            expect(pipeTableAfter(lines.join('\n'), marker).rows).toHaveLength(2);
+            // ... and the line right below it is the declaration, which is no pipe row.
+            expect(lines[end]?.startsWith(NULL_COLUMNS_DECLARATION), 'the line after the last row declares').toBe(true);
+            expect(lines[end].startsWith('|')).toBe(false);
+        });
+
+        /**
+         * J-54: the backend serializes every payload with `model_dump(mode="json")` (`components/envelope.py`), so every
+         * `None` reaches the prompt as `null`, also where it means «none for this row» rather than «unknown». Named by the
+         * rule above, those columns claimed missing data that is not missing, e.g. the closing dates of open lots. The
+         * renderer keeps them in one exported set, `NULL_MEANS_NONE_COLUMNS`. A column it matches (header; table title and
+         * component id when the entry gives them) that is null in every row is still dropped and counted in
+         * `empty_columns_removed`, but neither named nor counted in `null_columns_declared`:
+         *
+         *   column                               table               component                         why its null means «none» (backend)
+         *   closing_date                         any                 any                               an open lot (`map_fifo_lot_row`, the lot detail row)
+         *   reason_code                          any                 any                               nothing to report (`PortfolioAssetDrawdownRow`)
+         *   conversion_reason                    any                 any                               converted at a known rate (`IncomeTimelineRow`)
+         *   component                            OUTPUT DEFINITIONS  any                               a scalar output (`IndicatorOutputColumn`)
+         *   minimum / maximum                    OUTPUT DEFINITIONS  any                               no lower / upper bound
+         *   asset_ref                            any                 portfolio.income_timeline         income tied to no asset, e.g. interest on cash
+         *                                                                                              (`IncomeTimelineRow`, `AggregatedIncomeRow`)
+         *   portfolio_weight_percent and         PERIOD SUMMARY      asset.indicators, fx.indicators   one Asset or FX pair has no portfolio weight
+         *   technical_normalized_weight_percent                      (four entries)                    (`SingleTargetIndicatorsPayload`)
+         *
+         * Each fixture puts the column, null in every row, beside a control column whose null is «unavailable»: the control
+         * is still named, and so is the same column wherever no entry reaches — the weights of a multi-asset PERIOD SUMMARY,
+         * where a null weight is missing. `partial_reason_code` is in no entry: ENTITY STATUS lists partial results only
+         * (`technical_shared.py` exports OK and PARTIAL), and a partial result's null reason is unknown, so it stays named.
+         */
+        describe('columns whose null means none are not named (J-54)', () => {
+            /** An entry of `NULL_MEANS_NONE_COLUMNS`: `table` and `component` absent mean any. */
+            interface NullMeansNoneEntry {
+                readonly column: string;
+                readonly table?: string;
+                readonly component?: string;
+                readonly means?: unknown;
+            }
+
+            /** One entry's table: a fixture whose rows all take the same payload overrides. */
+            interface NoneCase {
+                /** The header the entry matches. */
+                readonly entry: string;
+                /** The payload field printed under that header. */
+                readonly field: string;
+                /** A value of that field: the same rows holding it print the column, the baseline of the counters. */
+                readonly filled: unknown;
+                readonly componentId: string;
+                /** The title line the table follows. */
+                readonly table: string;
+                readonly fixture: string;
+                /** The rows of the table: the fixture's own, so their count is the test's. */
+                readonly rowCount: number;
+                /** The header of the control column, and the payload change that makes it null in every row. */
+                readonly control: string;
+                readonly controlOverride: Readonly<Record<string, unknown>>;
+                /** The line after the table when it names nothing: the next title, or undefined at the end of the block. */
+                readonly next: string | undefined;
+                readonly render: (rowOverrides: Readonly<Record<string, unknown>>) => Rendered;
+            }
+
+            /** A table where the entry's column holds a value in one row and is null in the other. */
+            interface MixedCase {
+                readonly entry: string;
+                readonly componentId: string;
+                readonly table: string;
+                readonly label: string;
+                /** The column rows are found by, the row holding a value, the row reading null. */
+                readonly key: string;
+                readonly rowWith: string;
+                readonly rowWithout: string;
+                /** The value the row holding one prints: a literal, or an Asset's ref read from the prompt's directory. */
+                readonly value: (rendered: Rendered) => string;
+                readonly render: () => Rendered;
+            }
+
+            // The contract, order aside: adding or removing an entry is a change to this list.
+            const CONTRACT_ENTRIES: readonly NullMeansNoneEntry[] = [
+                {column: 'closing_date'},
+                {column: 'reason_code'},
+                {column: 'conversion_reason'},
+                {column: 'component', table: 'OUTPUT DEFINITIONS'},
+                {column: 'minimum', table: 'OUTPUT DEFINITIONS'},
+                {column: 'maximum', table: 'OUTPUT DEFINITIONS'},
+                {column: 'asset_ref', component: 'portfolio.income_timeline'},
+                {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators'},
+                {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'fx.indicators'},
+                {column: 'technical_normalized_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators'},
+                {column: 'technical_normalized_weight_percent', table: 'PERIOD SUMMARY', component: 'fx.indicators'},
+            ];
+            // The control of a generic table: a column whose null does mean «unavailable», in the same rows.
+            const UNAVAILABLE_CONTROL = {unavailable_metric: null};
+            // The directory's names, as the backend copies them into the rows that carry an Asset.
+            const ASSET_NAMES: Readonly<Record<number, string>> = {42: 'First Asset', 43: 'Second Asset'};
+            // The three OUTPUT DEFINITIONS names, null in every row of a table that is not OUTPUT DEFINITIONS.
+            const GENERIC_OUTPUT_FIELD_ROWS = [
+                {label: 'first', component: null, minimum: null, maximum: null, quantity: '10'},
+                {label: 'second', component: null, minimum: null, maximum: null, quantity: '20'},
+            ];
+
+            /** An entry as its (column, table, component) triple, an absent scope as null: what the set is compared on. */
+            function triple(entry: NullMeansNoneEntry): string {
+                return JSON.stringify([entry.column, entry.table ?? null, entry.component ?? null]);
+            }
+
+            /** The exported set, read by name: while the export is missing, only the tests reading it fail. */
+            function exportedEntries(): readonly NullMeansNoneEntry[] {
+                const candidate: unknown = Reflect.get(snapshotDataRendererModule, 'NULL_MEANS_NONE_COLUMNS');
+                expect(Array.isArray(candidate), 'snapshotDataRenderer.ts exports NULL_MEANS_NONE_COLUMNS, a readonly array of {column, table?, component?, means}').toBe(true);
+                return candidate as readonly NullMeansNoneEntry[];
+            }
+
+            /** A lot of `asset.lot_detail`, every amount valued; open unless overridden, so its closing_date is null. */
+            function lotDetailRow(lotRef: string, openingDate: string, overrides: Readonly<Record<string, unknown>> = {}) {
+                return {
+                    lot_ref: lotRef,
+                    opening_broker_id: 5,
+                    opening_date: openingDate,
+                    opening_unit_price: '100.00',
+                    original_quantity: '10',
+                    original_cost: '1000.00',
+                    open_quantity: '10',
+                    realized_quantity: '0',
+                    cumulative_proceeds: '0.00',
+                    realized_pnl: '0.00',
+                    open_value: '1150.00',
+                    unrealized_pnl: '150.00',
+                    total_pnl: '150.00',
+                    net_total_pnl: '150.00',
+                    income: '0.00',
+                    allocated_fees: '0.00',
+                    allocated_taxes: '0.00',
+                    value_source: 'MARKET_PRICE',
+                    net_metrics_status: 'AVAILABLE',
+                    states: ['OPEN'],
+                    closing_date: null,
+                    current_custody: [{broker_id: 5, custody_type: 'BROKER', quantity: '10'}],
+                    ...overrides,
+                };
+            }
+
+            /** `asset.lot_detail` v4 of a COMPLETE reconstruction. */
+            function lotDetailSection(lots: readonly Record<string, unknown>[]) {
+                return section(
+                    'asset.lot_detail',
+                    {
+                        asset_id: 42,
+                        period: {start: '2026-01-01', end: '2026-03-31'},
+                        target_currency: 'EUR',
+                        cost_allocation_semantics: 'cost allocation semantics placeholder',
+                        lot_reconstruction_status: 'COMPLETE',
+                        failure_codes: [],
+                        lots,
+                        omitted_degraded_lot_count: 0,
+                        unavailable_amount_lot_count: lots.filter((lot) => lot.original_cost === null).length,
+                    },
+                    4,
+                );
+            }
+
+            /** A lot of `portfolio.fifo_lots`, every amount valued; open unless overridden, so its closing_date is null. */
+            function fifoLotRow(lotRef: string, assetId: number, overrides: Readonly<Record<string, unknown>> = {}) {
+                return {
+                    lot_ref: lotRef,
+                    asset_id: assetId,
+                    asset_name: ASSET_NAMES[assetId],
+                    asset_ticker: null,
+                    opening_broker_id: 5,
+                    direction: 'LONG',
+                    status: 'OPEN',
+                    opening_date: '2025-06-02',
+                    closing_date: null,
+                    opening_unit_price: eur('100.00'),
+                    original_quantity: '10',
+                    open_quantity: '10',
+                    realized_quantity: '0',
+                    original_cost: eur('1000.00'),
+                    residual_cost_basis: eur('1000.00'),
+                    cumulative_proceeds: eur('0.00'),
+                    open_value: eur('1150.00'),
+                    realized_pnl: eur('0.00'),
+                    unrealized_pnl: eur('150.00'),
+                    total_pnl: eur('150.00'),
+                    net_total_pnl: eur('150.00'),
+                    income: eur('0.00'),
+                    fees: eur('0.00'),
+                    taxes: eur('0.00'),
+                    value_source: 'MARKET_PRICE',
+                    net_metrics_status: 'AVAILABLE',
+                    states: ['OPEN'],
+                    current_custody: [{broker_id: 5, custody_type: 'BROKER', quantity: '10'}],
+                    ...overrides,
+                };
+            }
+
+            /** `portfolio.fifo_lots` v3 with no FAILED reconstruction. */
+            function fifoLotsSection(lots: readonly Record<string, unknown>[]) {
+                return section(
+                    'portfolio.fifo_lots',
+                    {
+                        period_start: '2026-01-01',
+                        period_end: '2026-03-31',
+                        target_currency: 'EUR',
+                        cost_allocation_semantics: 'cost allocation semantics placeholder',
+                        lot_count: lots.length,
+                        unavailable_amount_lot_count: lots.filter((lot) => lot.original_cost === null).length,
+                        failed_reconstruction_asset_count: 0,
+                        failed_lot_reconstructions: [],
+                        lots,
+                    },
+                    3,
+                );
+            }
+
+            // A lot sold out inside the period: its closing_date is a date. The backend sets it only on a closed lot.
+            const CLOSED_LOT_DETAIL = {open_quantity: '0', realized_quantity: '10', cumulative_proceeds: '1200.00', realized_pnl: '200.00', open_value: '0.00', unrealized_pnl: '0.00', total_pnl: '200.00', net_total_pnl: '200.00', states: ['CLOSED'], closing_date: '2026-02-27', current_custody: []};
+            const CLOSED_FIFO_LOT = {
+                status: 'CLOSED',
+                open_quantity: '0',
+                realized_quantity: '10',
+                residual_cost_basis: eur('0.00'),
+                cumulative_proceeds: eur('1200.00'),
+                open_value: eur('0.00'),
+                realized_pnl: eur('200.00'),
+                unrealized_pnl: eur('0.00'),
+                total_pnl: eur('200.00'),
+                net_total_pnl: eur('200.00'),
+                states: ['CLOSED'],
+                closing_date: '2026-02-27',
+                current_custody: [],
+            };
+
+            /** A row of `portfolio.asset_drawdown_snapshot` whose drawdown was computed: nothing to report, so reason_code is null. */
+            function okDrawdownRow(assetId: number | null, overrides: Readonly<Record<string, unknown>> = {}) {
+                return {
+                    asset_id: assetId,
+                    status: 'ok',
+                    reason_code: null,
+                    calculation_basis: 'observed_native_price_only_close',
+                    calculation_currency: 'EUR',
+                    data_quality_status: 'ok',
+                    current_drawdown_ratio: -0.1,
+                    maximum_drawdown_ratio: -0.2,
+                    maximum_drawdown_recovery_status: 'open',
+                    remaining_to_peak_ratio: 0.1111111111111111,
+                    available_start: '2024-06-03',
+                    available_end: '2024-12-31',
+                    n_observations: 3,
+                    coverage_ratio: 1,
+                    ...overrides,
+                };
+            }
+
+            /** A row whose drawdown could not be computed: its reason_code says why, and every metric is null. */
+            function unavailableDrawdownRow(assetId: number | null) {
+                return {
+                    asset_id: assetId,
+                    status: 'unavailable',
+                    reason_code: 'insufficient_observed_prices',
+                    calculation_basis: null,
+                    calculation_currency: null,
+                    data_quality_status: null,
+                    current_drawdown_ratio: null,
+                    maximum_drawdown_ratio: null,
+                    maximum_drawdown_recovery_status: null,
+                    remaining_to_peak_ratio: null,
+                    available_start: null,
+                    available_end: null,
+                    n_observations: 1,
+                    coverage_ratio: 0,
+                };
+            }
+
+            /** `portfolio.asset_drawdown_snapshot` v2. */
+            function drawdownSnapshotSection(rows: readonly Record<string, unknown>[]) {
+                return section('portfolio.asset_drawdown_snapshot', {policy_code: 'observed_price_drawdown_snapshot_v1', rows}, 2);
+            }
+
+            /** A dividend of an Asset, or interest on cash (`assetId` null), converted at a known rate: its conversion_reason is null. */
+            function convertedIncomeRow(date: string, assetId: number | null, overrides: Readonly<Record<string, unknown>> = {}) {
+                return {
+                    date,
+                    income_type: assetId === null ? 'INTEREST' : 'DIVIDEND',
+                    broker_id: 5,
+                    broker_name: 'Named Broker',
+                    asset_id: assetId,
+                    asset_name: assetId === null ? null : ASSET_NAMES[assetId],
+                    asset_ticker: null,
+                    native_amount: eur('12.50'),
+                    target_amount: eur('12.50'),
+                    conversion: {source: 'fx_convert_bulk', rate_date: date, backfill_applied: false, identity: true},
+                    conversion_reason: null,
+                    ...overrides,
+                };
+            }
+
+            /** The same income with no rate for its date: no target amount, no conversion, a conversion_reason saying why. */
+            function unconvertedIncomeRow(date: string, assetId: number | null, overrides: Readonly<Record<string, unknown>> = {}) {
+                return {...convertedIncomeRow(date, assetId), native_amount: {code: 'USD', amount: '8.00'}, target_amount: null, conversion: null, conversion_reason: 'fx_rate_not_found', ...overrides};
+            }
+
+            /** `portfolio.income_timeline` v2: at the standard detail its dated rows are `TABLE rows`, at compact its monthly ones `TABLE aggregated_rows`. */
+            function incomeTimelineSection(rows: readonly Record<string, unknown>[], aggregatedRows: readonly Record<string, unknown>[] = []) {
+                return section(
+                    'portfolio.income_timeline',
+                    {
+                        status: 'ok',
+                        detail_level: aggregatedRows.length ? 'compact' : 'standard',
+                        period_convention: 'exclusive_start_inclusive_end',
+                        reason_code: null,
+                        message: null,
+                        // Not under test: the backend's shape, placeholder figures.
+                        summary: {
+                            target_currency: 'EUR',
+                            transaction_count: rows.length + aggregatedRows.length,
+                            dividend_count: 1,
+                            interest_count: 1,
+                            distinct_asset_count: 1,
+                            distinct_broker_count: 1,
+                            earliest_date: '2026-02-10',
+                            latest_date: '2026-03-10',
+                            native_totals: [eur('12.50'), {code: 'USD', amount: '8.00'}],
+                            target_total: null,
+                            conversion_status: 'partial',
+                        },
+                        rows,
+                        aggregated_rows: aggregatedRows,
+                        rows_truncated: false,
+                        rows_omitted_count: 0,
+                    },
+                    2,
+                );
+            }
+
+            /** A COMPACT month of one Asset's dividends, or of interest on cash (`assetId` null), every amount converted. */
+            function aggregatedIncomeRow(month: string, assetId: number | null, overrides: Readonly<Record<string, unknown>> = {}) {
+                return {
+                    month,
+                    income_type: assetId === null ? 'INTEREST' : 'DIVIDEND',
+                    asset_id: assetId,
+                    asset_name: assetId === null ? null : ASSET_NAMES[assetId],
+                    asset_ticker: null,
+                    transaction_count: 1,
+                    native_amounts: [eur('12.50')],
+                    target_amount: eur('12.50'),
+                    conversion_complete: true,
+                    ...overrides,
+                };
+            }
+
+            /**
+             * `indicatorSection()`, two Assets with one EMA output each. `outputOverrides` changes every output alike, so the
+             * instances still group; `indicatorOverrides` changes every Asset's indicator result alike.
+             */
+            function indicatorFixture(outputOverrides: Readonly<Record<string, unknown>>, indicatorOverrides: Readonly<Record<string, unknown>> = {}) {
+                const fixture = indicatorSection();
+                for (const entity of fixture.payload.assets) {
+                    for (const indicator of entity.indicators) {
+                        for (const column of indicator.columns) Object.assign(column, outputOverrides);
+                        Object.assign(indicator, indicatorOverrides);
+                    }
+                }
+                return fixture;
+            }
+
+            /** `asset.indicators` or `fx.indicators`: one target's EMA, whose two weights the backend leaves null, unless overridden. */
+            function singleTargetIndicatorsSection(componentId: 'asset.indicators' | 'fx.indicators', overrides: Readonly<Record<string, unknown>> = {}) {
+                return section(componentId, {indicators: [{...emaIndicator(12, 0), portfolio_weight_ratio: null, technical_normalized_weight_ratio: null, ...overrides}]});
+            }
+
+            /** A weight entry: one PERIOD SUMMARY row, the EMA's; its control is the EMA without a value over the period. */
+            function singleTargetWeightCase(componentId: 'asset.indicators' | 'fx.indicators', entry: 'portfolio_weight_percent' | 'technical_normalized_weight_percent'): NoneCase {
+                const fx = componentId === 'fx.indicators';
+                return {
+                    entry,
+                    field: entry === 'portfolio_weight_percent' ? 'portfolio_weight_ratio' : 'technical_normalized_weight_ratio',
+                    // Never in the backend's payload of one target: only the baseline the counters are measured against.
+                    filled: 0.6,
+                    componentId,
+                    table: 'PERIOD SUMMARY',
+                    fixture: fx ? 'one FX pair, no portfolio weight' : 'one Asset, no portfolio weight',
+                    rowCount: 1,
+                    control: 'period_summary',
+                    controlOverride: {period_summary: {ema: null}},
+                    next: 'HISTORY',
+                    render: (overrides) => renderSnapshotDataText([singleTargetIndicatorsSection(componentId, overrides)], fx ? FX_TARGET : asset, fx ? FX_DIRECTORY : directory),
+                };
+            }
+
+            /** An entry of OUTPUT DEFINITIONS, on the contract's fixture: every output has component, minimum and maximum null. */
+            function outputDefinitionsCase(entry: 'component' | 'minimum' | 'maximum', filled: unknown): NoneCase {
+                return {
+                    entry,
+                    field: entry,
+                    filled,
+                    componentId: 'portfolio.technical_indicators',
+                    table: 'OUTPUT DEFINITIONS',
+                    fixture: 'every output scalar and unbounded',
+                    rowCount: 1,
+                    control: 'unit',
+                    controlOverride: {unit: null},
+                    next: 'INSTANCE ema_20',
+                    render: (overrides) => renderSnapshotDataText([indicatorFixture({component: null, minimum: null, maximum: null, ...overrides})], portfolio, directory),
+                };
+            }
+
+            const NONE_CASES: readonly NoneCase[] = [
+                {
+                    entry: 'closing_date',
+                    field: 'closing_date',
+                    filled: '2026-02-27',
+                    componentId: 'asset.lot_detail',
+                    table: 'TABLE lots',
+                    fixture: 'v4, two open lots',
+                    rowCount: 2,
+                    control: 'original_cost',
+                    controlOverride: {original_cost: null},
+                    next: undefined,
+                    render: (overrides) => renderSnapshotDataText([lotDetailSection([lotDetailRow('L1', '2025-06-02', overrides), lotDetailRow('L2', '2025-09-15', overrides)])], asset, directory),
+                },
+                {
+                    entry: 'closing_date',
+                    field: 'closing_date',
+                    filled: '2026-02-27',
+                    componentId: 'portfolio.fifo_lots',
+                    table: 'TABLE lots',
+                    fixture: 'v3, two open lots',
+                    rowCount: 2,
+                    control: 'original_cost',
+                    controlOverride: {original_cost: null},
+                    next: undefined,
+                    render: (overrides) => renderSnapshotDataText([fifoLotsSection([fifoLotRow('L1', 42, overrides), fifoLotRow('L2', 43, overrides)])], portfolio, directory),
+                },
+                {
+                    entry: 'reason_code',
+                    field: 'reason_code',
+                    filled: 'insufficient_observed_prices',
+                    componentId: 'portfolio.asset_drawdown_snapshot',
+                    table: 'TABLE rows',
+                    fixture: 'two drawdowns computed',
+                    rowCount: 2,
+                    control: 'unavailable_metric',
+                    controlOverride: UNAVAILABLE_CONTROL,
+                    next: undefined,
+                    render: (overrides) => renderSnapshotDataText([drawdownSnapshotSection([okDrawdownRow(42, overrides), okDrawdownRow(43, {current_drawdown_ratio: -0.05, ...overrides})])], portfolio, directory),
+                },
+                {
+                    entry: 'conversion_reason',
+                    field: 'conversion_reason',
+                    filled: 'fx_rate_not_found',
+                    componentId: 'portfolio.income_timeline',
+                    table: 'TABLE rows',
+                    fixture: 'two dividends converted',
+                    rowCount: 2,
+                    control: 'unavailable_metric',
+                    controlOverride: UNAVAILABLE_CONTROL,
+                    next: undefined,
+                    render: (overrides) => renderSnapshotDataText([incomeTimelineSection([convertedIncomeRow('2026-02-10', 42, overrides), convertedIncomeRow('2026-03-10', 43, overrides)])], portfolio, directory),
+                },
+                outputDefinitionsCase('component', 'middle'),
+                outputDefinitionsCase('minimum', 0),
+                outputDefinitionsCase('maximum', 1000),
+                {
+                    entry: 'asset_ref',
+                    field: 'asset_id',
+                    filled: 42,
+                    componentId: 'portfolio.income_timeline',
+                    table: 'TABLE rows',
+                    // One rate found, one missing: conversion_reason holds a value in a row, so asset_ref is the only entry
+                    // null in every row.
+                    fixture: 'STANDARD, two interests on cash, one converted',
+                    rowCount: 2,
+                    control: 'unavailable_metric',
+                    controlOverride: UNAVAILABLE_CONTROL,
+                    next: undefined,
+                    render: (overrides) => renderSnapshotDataText([incomeTimelineSection([convertedIncomeRow('2026-02-10', null, overrides), unconvertedIncomeRow('2026-03-10', null, overrides)])], portfolio, directory),
+                },
+                {
+                    entry: 'asset_ref',
+                    field: 'asset_id',
+                    filled: 42,
+                    componentId: 'portfolio.income_timeline',
+                    table: 'TABLE aggregated_rows',
+                    fixture: 'COMPACT, two months of interest on cash',
+                    rowCount: 2,
+                    control: 'unavailable_metric',
+                    controlOverride: UNAVAILABLE_CONTROL,
+                    next: undefined,
+                    render: (overrides) => renderSnapshotDataText([incomeTimelineSection([], [aggregatedIncomeRow('2026-02', null, overrides), aggregatedIncomeRow('2026-03', null, overrides)])], portfolio, directory),
+                },
+                singleTargetWeightCase('asset.indicators', 'portfolio_weight_percent'),
+                singleTargetWeightCase('asset.indicators', 'technical_normalized_weight_percent'),
+                singleTargetWeightCase('fx.indicators', 'portfolio_weight_percent'),
+                singleTargetWeightCase('fx.indicators', 'technical_normalized_weight_percent'),
+            ];
+            // One per fixture: the three OUTPUT DEFINITIONS entries share theirs, and so do the two weights of one target.
+            const NO_LINE_CASES = NONE_CASES.filter((candidate, index) => NONE_CASES.findIndex((other) => other.componentId === candidate.componentId && other.fixture === candidate.fixture) === index);
+
+            const MIXED_CASES: readonly MixedCase[] = [
+                {
+                    entry: 'closing_date',
+                    componentId: 'asset.lot_detail',
+                    table: 'TABLE lots',
+                    label: 'an open lot beside a closed one (v4)',
+                    key: 'lot_ref',
+                    rowWith: 'L1',
+                    rowWithout: 'L2',
+                    value: () => '2026-02-27',
+                    render: () => renderSnapshotDataText([lotDetailSection([lotDetailRow('L1', '2025-03-03', CLOSED_LOT_DETAIL), lotDetailRow('L2', '2025-09-15')])], asset, directory),
+                },
+                {
+                    entry: 'closing_date',
+                    componentId: 'portfolio.fifo_lots',
+                    table: 'TABLE lots',
+                    label: 'an open lot beside a closed one (v3)',
+                    key: 'lot_ref',
+                    rowWith: 'L1',
+                    rowWithout: 'L2',
+                    value: () => '2026-02-27',
+                    render: () => renderSnapshotDataText([fifoLotsSection([fifoLotRow('L1', 42, CLOSED_FIFO_LOT), fifoLotRow('L2', 43)])], portfolio, directory),
+                },
+                {
+                    entry: 'reason_code',
+                    componentId: 'portfolio.asset_drawdown_snapshot',
+                    table: 'TABLE rows',
+                    label: 'a computed drawdown beside one that could not be',
+                    key: 'status',
+                    rowWith: 'unavailable',
+                    rowWithout: 'ok',
+                    value: () => 'insufficient_observed_prices',
+                    render: () => renderSnapshotDataText([drawdownSnapshotSection([okDrawdownRow(42), unavailableDrawdownRow(43)])], portfolio, directory),
+                },
+                {
+                    entry: 'conversion_reason',
+                    componentId: 'portfolio.income_timeline',
+                    table: 'TABLE rows',
+                    label: 'a converted dividend beside one without a rate',
+                    key: 'date',
+                    rowWith: '2026-03-10',
+                    rowWithout: '2026-02-10',
+                    value: () => 'fx_rate_not_found',
+                    render: () => renderSnapshotDataText([incomeTimelineSection([convertedIncomeRow('2026-02-10', 42), unconvertedIncomeRow('2026-03-10', 43)])], portfolio, directory),
+                },
+                {
+                    entry: 'asset_ref',
+                    componentId: 'portfolio.income_timeline',
+                    table: 'TABLE rows',
+                    // The interest row has no rate, so no other column is null in every row.
+                    label: 'a dividend beside interest on cash (STANDARD)',
+                    key: 'date',
+                    rowWith: '2026-02-10',
+                    rowWithout: '2026-03-10',
+                    value: (rendered) => assetRef(rendered.entityDirectory, 'First Asset'),
+                    render: () => renderSnapshotDataText([incomeTimelineSection([convertedIncomeRow('2026-02-10', 42), unconvertedIncomeRow('2026-03-10', null)])], portfolio, directory),
+                },
+                {
+                    entry: 'asset_ref',
+                    componentId: 'portfolio.income_timeline',
+                    table: 'TABLE aggregated_rows',
+                    label: 'a month of dividends beside a month of interest on cash (COMPACT)',
+                    key: 'month',
+                    rowWith: '2026-02',
+                    rowWithout: '2026-03',
+                    value: (rendered) => assetRef(rendered.entityDirectory, 'First Asset'),
+                    render: () => renderSnapshotDataText([incomeTimelineSection([], [aggregatedIncomeRow('2026-02', 42), aggregatedIncomeRow('2026-03', null)])], portfolio, directory),
+                },
+            ];
+
+            /** One prompt holding every scope: the entries' own tables, and the same names where no entry reaches. */
+            function wholePromptSections() {
+                return [
+                    incomeTimelineSection([convertedIncomeRow('2026-02-10', null), unconvertedIncomeRow('2026-03-10', null)]),
+                    drawdownSnapshotSection([okDrawdownRow(null), unavailableDrawdownRow(null)]),
+                    genericSection(GENERIC_OUTPUT_FIELD_ROWS),
+                    indicatorFixture({component: null, minimum: null, maximum: null}),
+                ];
+            }
+
+            it('exports NULL_MEANS_NONE_COLUMNS with exactly the eleven (column, table, component) entries of the contract', () => {
+                const entries = exportedEntries();
+
+                // Order aside, exact: an entry more, an entry less or a changed scope is a change to the contract.
+                expect(entries.map(triple).sort()).toEqual(CONTRACT_ENTRIES.map(triple).sort());
+            });
+
+            it('gives every NULL_MEANS_NONE_COLUMNS entry a non-empty means', () => {
+                const entries = exportedEntries();
+
+                expect(entries).not.toHaveLength(0);
+                // Free text: only that it is there is pinned, never its wording.
+                expect(entries.filter((entry) => typeof entry.means !== 'string' || entry.means.trim() === '').map(triple)).toEqual([]);
+            });
+
+            it.each(NONE_CASES)('drops $entry, null in every row of $table of $componentId, but neither names nor counts it: the control beside it is named', (c) => {
+                const rendered = c.render({[c.field]: null, ...c.controlOverride});
+                const block = blockOf(rendered, c.componentId);
+
+                expect(block).not.toContain('PAYLOAD YAML FALLBACK');
+                // Presence barrier: the table is there with every row of the fixture, and both columns null in every row,
+                // the entry's and the control, were dropped ...
+                const {header, rows} = pipeTableAfter(block, c.table);
+                expect(rows).toHaveLength(c.rowCount);
+                expect(header).not.toContain(c.entry);
+                expect(header).not.toContain(c.control);
+                // ... as today: beside the same rows with the column filled, which print it, it is one more removed column.
+                const filled = c.render({[c.field]: c.filled, ...c.controlOverride});
+                expect(pipeTableAfter(blockOf(filled, c.componentId), c.table).header).toContain(c.entry);
+                expect(rendered.formatDiagnostics.empty_columns_removed - filled.formatDiagnostics.empty_columns_removed).toBe(1);
+                // Subject: the line after the last row names the control alone, and the counter counts no more than beside
+                // the column filled. Before J-54 the line named the entry too, and the counter counted it.
+                expect.soft(lineAfterTable(block, c.table)).toBe(`omitted_null_columns=${c.control}`);
+                expect.soft(rendered.formatDiagnostics.null_columns_declared - filled.formatDiagnostics.null_columns_declared).toBe(0);
+            });
+
+            it.each(NO_LINE_CASES)('follows $table of $componentId ($fixture) with no line at all when only columns whose null means none are null in every row', (c) => {
+                const rendered = c.render({[c.field]: null});
+                const block = blockOf(rendered, c.componentId);
+
+                // Presence barrier: the table is there with every row of the fixture, and the column was dropped.
+                const {header, rows} = pipeTableAfter(block, c.table);
+                expect(rows).toHaveLength(c.rowCount);
+                expect(header).not.toContain(c.entry);
+                // Subject: right after the last row comes what follows the table, the next title or the end of the block, and
+                // the prompt declares nothing. Before J-54 a line named the column.
+                expect.soft(lineAfterTable(block, c.table)).toBe(c.next);
+                expect.soft(rendered.formatDiagnostics.null_columns_declared).toBe(0);
+            });
+
+            it('control: still names component, minimum and maximum null in every row of a generic table', () => {
+                const rendered = renderSnapshotDataText([genericSection(GENERIC_OUTPUT_FIELD_ROWS)], portfolio);
+                const block = blockOf(rendered, 'portfolio.performance');
+
+                // Presence barrier: both rows, and only the column that holds a value.
+                const {header, rows} = pipeTableAfter(block, 'TABLE rows');
+                expect(rows.map((row) => row.get('label'))).toEqual(['first', 'second']);
+                expect(header).toEqual(['row', 'label', 'quantity']);
+                // The three entries reach OUTPUT DEFINITIONS only: anywhere else these nulls are «unavailable», named and
+                // counted as before J-54.
+                expect(lineAfterTable(block, 'TABLE rows')).toBe('omitted_null_columns=component,minimum,maximum');
+                expect(rendered.formatDiagnostics).toMatchObject({empty_columns_removed: 3, null_columns_declared: 3});
+            });
+
+            it('control: still names asset_ref null in every row of TABLE rows of another component', () => {
+                // Synthetic: the backend always gives a drawdown row its asset_id. The entry reaches the income timeline only.
+                const rendered = renderSnapshotDataText([drawdownSnapshotSection([okDrawdownRow(null), unavailableDrawdownRow(null)])], portfolio, directory);
+                const block = blockOf(rendered, 'portfolio.asset_drawdown_snapshot');
+
+                // Presence barrier: both rows, found by what they hold, and the asset column dropped.
+                const {header, rows} = pipeTableAfter(block, 'TABLE rows');
+                expect(rowWhere(rows, 'status', 'ok').get('reason_code')).toBe('null');
+                expect(rowWhere(rows, 'status', 'unavailable').get('reason_code')).toBe('insufficient_observed_prices');
+                expect(header).not.toContain('asset_ref');
+                // Named and counted as before J-54.
+                expect(lineAfterTable(block, 'TABLE rows')).toBe('omitted_null_columns=asset_ref');
+                expect(rendered.formatDiagnostics).toMatchObject({empty_columns_removed: 1, null_columns_declared: 1});
+            });
+
+            it.each([
+                ['portfolio.technical_indicators', portfolio],
+                ['broker.technical_indicators', {kind: 'broker', broker_id: 5}],
+            ] as const)('control: still names both weights null in every PERIOD SUMMARY row of %s, where a null weight is missing', (componentId, target) => {
+                // The same builder serves both: a weight is null when the universe has none for the Asset.
+                const multiAsset = (indicatorOverrides: Readonly<Record<string, unknown>>) => ({...indicatorFixture({}, indicatorOverrides), component_id: componentId, schema_id: componentId});
+                const missing = renderSnapshotDataText([multiAsset({portfolio_weight_ratio: null, technical_normalized_weight_ratio: null})], target, directory);
+                const weighted = renderSnapshotDataText([multiAsset({})], target, directory);
+                const block = blockOf(missing, componentId);
+
+                // Presence barrier: one PERIOD SUMMARY row per Asset of the fixture, without the two weight columns ...
+                const {header, rows} = pipeTableAfter(block, 'PERIOD SUMMARY');
+                expect(rows).toHaveLength(2);
+                expect(header).toEqual(['entity', 'column_key', 'latest', 'period_summary']);
+                // ... which the four weight entries do not reach: they hold a single target's PERIOD SUMMARY only. Named and
+                // counted as before J-54, against the same Assets weighted.
+                expect(lineAfterTable(block, 'PERIOD SUMMARY')).toBe('omitted_null_columns=portfolio_weight_percent,technical_normalized_weight_percent');
+                expect(missing.formatDiagnostics.null_columns_declared - weighted.formatDiagnostics.null_columns_declared).toBe(2);
+                expect(missing.formatDiagnostics.empty_columns_removed - weighted.formatDiagnostics.empty_columns_removed).toBe(2);
+            });
+
+            it('control: still names partial_reason_code null in every row of ENTITY STATUS, where a partial result has no known reason', () => {
+                // In no entry: the backend exports OK and PARTIAL results, ENTITY STATUS lists the non-OK ones, so its rows are
+                // partial results only, and a partial result's null reason is unknown (`technical_shared.py`).
+                const unknownReason = renderSnapshotDataText([indicatorFixture({}, {result_status: 'partial', partial_reason_code: null})], portfolio, directory);
+                const knownReason = renderSnapshotDataText([indicatorFixture({}, {result_status: 'partial', partial_reason_code: 'partial_input_coverage'})], portfolio, directory);
+                const block = blockOf(unknownReason, 'portfolio.technical_indicators');
+
+                // Presence barrier: both partial results are listed, without the reason column ...
+                const {header, rows} = pipeTableAfter(block, 'ENTITY STATUS');
+                expect(rows.map((row) => row.get('result_status'))).toEqual(['partial', 'partial']);
+                expect(header).toEqual(['entity', 'result_status']);
+                // ... which is named and counted, against the same results with a reason, as before J-54.
+                expect(lineAfterTable(block, 'ENTITY STATUS')).toBe('omitted_null_columns=partial_reason_code');
+                expect(unknownReason.formatDiagnostics.null_columns_declared - knownReason.formatDiagnostics.null_columns_declared).toBe(1);
+                expect(unknownReason.formatDiagnostics.empty_columns_removed - knownReason.formatDiagnostics.empty_columns_removed).toBe(1);
+            });
+
+            /*
+             * Green before and after J-54: a column with a value in some row is never dropped, so its other rows keep printing
+             * null. The entries change only whether a dropped column is named.
+             */
+            it.each(MIXED_CASES)('control: keeps printing null in the $entry cell of $label', (c) => {
+                const rendered = c.render();
+                const block = blockOf(rendered, c.componentId);
+                const {header, rows} = pipeTableAfter(block, c.table);
+
+                // The column holds a value in a row, so it stays in the table, with that value ...
+                expect(header).toContain(c.entry);
+                expect(rowWhere(rows, c.key, c.rowWith).get(c.entry)).toBe(c.value(rendered));
+                // ... and the row without one reads null in it, exactly as before J-54.
+                expect(rowWhere(rows, c.key, c.rowWithout).get(c.entry)).toBe('null');
+                // No column is named after the table.
+                expect(declaredAfter(block, c.table)).toEqual([]);
+            });
+
+            it('scopes each entry within one prompt: silent in its own table, named wherever else the same column is null', () => {
+                const rendered = renderSnapshotDataText(wholePromptSections(), portfolio, directory);
+                const income = blockOf(rendered, 'portfolio.income_timeline');
+                const indicators = blockOf(rendered, 'portfolio.technical_indicators');
+
+                // Presence barrier: the entries' tables are there, their columns dropped.
+                expect(pipeTableAfter(income, 'TABLE rows').header).not.toContain('asset_ref');
+                expect(pipeTableAfter(indicators, 'OUTPUT DEFINITIONS').header.filter((column) => ['component', 'minimum', 'maximum'].includes(column))).toEqual([]);
+                // Where no entry reaches, the same names are named in the same prompt, as before J-54 ...
+                expect(declaredAfter(blockOf(rendered, 'portfolio.asset_drawdown_snapshot'), 'TABLE rows')).toEqual(['asset_ref']);
+                expect(declaredAfter(blockOf(rendered, 'portfolio.performance'), 'TABLE rows')).toEqual(['component', 'minimum', 'maximum']);
+                // Subject: ... in the entries' own tables nothing is, and the counter counts the four names declared.
+                expect.soft(declaredAfter(income, 'TABLE rows')).toEqual([]);
+                expect.soft(declaredAfter(indicators, 'OUTPUT DEFINITIONS')).toEqual([]);
+                expect.soft(rendered.formatDiagnostics.null_columns_declared).toBe(4);
+            });
+
+            it('control: keeps one rule line for the key and the v2 table labels in the format preamble', () => {
+                const preamble = renderSnapshotDataText(wholePromptSections(), portfolio, directory).formatPreamble.split('\n');
+
+                // As T-B7 left them: J-54 changes which columns a table names, not the format.
+                expect(preamble.filter((line) => line.startsWith('technical_components='))).toEqual(['technical_components=compact_pipe_tables_v2']);
+                expect(preamble.filter((line) => line.startsWith('other_components='))).toEqual(['other_components=generic_pipe_tables_v2']);
+                expect(preamble.filter((line) => line.startsWith(NULL_COLUMNS_DECLARATION))).toHaveLength(1);
+            });
         });
     });
 });

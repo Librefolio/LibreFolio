@@ -1,6 +1,6 @@
 /** The answer of a failed account call, as a code and the key of the message to show (Users tab, deletion dialog). */
 
-export const ACCOUNT_ERROR_CODES = ['LAST_ADMIN', 'USER_LIMIT_REACHED', 'REGISTRATION_DISABLED', 'ACCOUNT_PROTECTED', 'SELF_DELETION', 'DEMOTE_FIRST', 'PENDING_SETUP'] as const;
+export const ACCOUNT_ERROR_CODES = ['LAST_ADMIN', 'USER_LIMIT_REACHED', 'REGISTRATION_DISABLED', 'ACCOUNT_PROTECTED', 'SELF_DELETION', 'DEMOTE_FIRST', 'PENDING_SETUP', 'SETUP_COMPLETED'] as const;
 
 export type AccountErrorCode = (typeof ACCOUNT_ERROR_CODES)[number] | 'NOT_FOUND' | 'DELETION_FAILED' | 'INVALID_INPUT';
 

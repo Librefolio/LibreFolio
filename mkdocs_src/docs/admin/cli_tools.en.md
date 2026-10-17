@@ -193,13 +193,16 @@ pipenv run ./dev.py db current
 # Look for missing CHECK constraints: changes nothing, exits with 1 if any
 pipenv run ./dev.py db check
 
+# List the currency codes that are not ISO codes: changes nothing, exits with 1 if any
+pipenv run ./dev.py db currencies
+
 # Upgrade and check another database file, such as a copy
 pipenv run ./dev.py db upgrade /path/to/copy/app.db
 pipenv run ./dev.py db check /path/to/copy/app.db
 ```
 
 - 📄 Without a path, the commands use the configured database. A path names another SQLite file: a relative one starts at the project root, wherever you run the command from. The file must exist, except for `db upgrade`, which creates it (folder included) and brings it up to date.
-- 🐳 In Docker, the path is inside the container, where `LibreFolio-data/` is `/app/backend/data/prod-docker` (the database is `sqlite/app.db` in it). `db current` and `db check` work in the running container: `docker compose exec librefolio python dev.py db current <path>`. `db upgrade` and `db downgrade` need the server stopped (`docker compose stop librefolio`), then a one-off container: `docker compose run --rm librefolio python dev.py db upgrade <path>` ([details](docker_advanced.md#docker-exec)).
+- 🐳 In Docker, the path is inside the container, where `LibreFolio-data/` is `/app/backend/data/prod-docker` (the database is `sqlite/app.db` in it). `db current`, `db check` and `db currencies` work in the running container: `docker compose exec librefolio python dev.py db current <path>`. `db upgrade` and `db downgrade` need the server stopped (`docker compose stop librefolio`), then a one-off container: `docker compose run --rm librefolio python dev.py db upgrade <path>` ([details](docker_advanced.md#docker-exec)).
 
 ### 🔤 Two Accounts with the Same Email Address {: #email-case-conflict }
 
@@ -264,6 +267,32 @@ The fix **`event_types`** repairs, once, the asset events stored with a type Lib
     To see what `orphan_pair_halves` will change on your database, preview it before the first start of the new version: `--dry-run` prints `Fix orphan_pair_halves: would_apply` when there is something to repair, and a warning lists the transactions by id, grouped by conversion (such as `TRANSFER->ADJUSTMENT`), with those that will stay without a cost and the transfers of securities sent to a deleted broker. Those transfers get a line each after the fixes: the average cost each would leave at (`would become an ADJUSTMENT at … per unit`), or why it would stay a transfer. The script also prints, on the console, what the server would log: the warning and, on a real run, one line per transaction changed (with `LOG_LEVEL` at `INFO`, the default). It writes no log file: keep its output if you want a record of a repair made by hand.
 
 🔗 How the fixes work inside: [Database Schema — Post-migration fixes](../developer/architecture/database/index.md#post-migration-fixes).
+
+### 💱 Currency Codes That Are Not ISO Codes {: #currency-codes }
+
+From version 1.3, LibreFolio saves a currency only as an ISO 4217 alphabetic code, such as `EUR` or `USD`. Earlier versions also accepted the name of a currency or its numeric code, and saved it as written: `Euro`, `978`. Such a value still reads, but an edit that saves its row again is refused until its code is corrected, and its amounts never meet those of the ISO code: `978` and `EUR` make two balances. A restored backup can bring such values back.
+
+At every start, the log warns when the database holds some, and LibreFolio does not change them by itself:
+
+```text
+Stored currency codes that are not ISO 4217 codes: an edit of their rows is refused until they are corrected (./dev.py db currencies lists them)
+```
+
+`db currencies` lists them, without changing anything:
+
+```bash
+# Where each value is stored, how many rows hold it, and the ISO code it stands for
+pipenv run ./dev.py db currencies
+
+# Another database file, such as a copy
+pipenv run ./dev.py db currencies /path/to/copy/app.db
+```
+
+- 🔎 Each line names the place (`transactions.currency`, `assets.currency`, the steps of an FX route, a provider's settings, a user's base currency…), the value, how many rows hold it, and the ISO code it stands for: `978` is `EUR`, `US DOLLAR` is `USD`.
+- ➖ A dash means there is no single code: a name two currencies share (`Bolívar Soberano`: `VED` or `VES`), a value that is no currency, or a code that counts cents rather than units (`GBX`, `ZAC`, `ILA`), which must never simply be renamed.
+- 🔤 A code in lower case or with spaces, such as `eur`, is listed too: the right currency, in a form that exact comparisons miss.
+- 🚦 The command exits with `0` when every code is an ISO code, `1` when it lists some, and `2` when it cannot read the database.
+- 🐳 In Docker: `docker compose exec librefolio python dev.py db currencies`.
 
 ### 🔧 Add Missing Global Settings
 
