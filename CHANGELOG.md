@@ -255,6 +255,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A portfolio, lots, risk or AI Export request with a date range reaching far into the future or the past no longer freezes the server: a range now ends no later than tomorrow and starts no earlier than your first transaction.
 - Scheduled Investment: the first sync of a new asset no longer fails, and an asset's late-interest value is the same in its history, its current price and its settlement.
 - A number too large for the server (`1E+400`) or `NaN` in a request body gets a validation error instead of a server error.
+- Numbers with an absurd exponent and transaction dates outside 1 January 1900 – one year from today are refused with a clear message, instead of slowing the server; the merged fields of a pair promotion are checked like a new transaction's.
 - Zooming or panning a price chart with arrow-ended signals (the measure tool, or a signal styled with arrows) no longer stutters: the arrows are re-aimed once the gesture pauses.
 - Asset events: changing the type of a split whose adjustments have no purchase cost is refused with a message in your language that counts those adjustments, including any at a broker you cannot see.
 - Charts: the tooltip's change from the first point shows «—» instead of 0 % when the chart starts at zero.
