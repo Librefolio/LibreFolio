@@ -5703,13 +5703,15 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     l'unica spiegazione per l'utente. **J-43a** (come scritta) subito; **J-43b** (portarlo nel rapporto, issue INFO
     `TRANSFER_SHARE_MISMATCH` in 4 lingue, o togliere i campi morti) aspetta il via del coordinatore. Dettagli:
     [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-43».
-- **J-44 · Il Δ% del tooltip del grafico dà 0 % quando il primo valore è 0** — minimo, numeri; J, 17/10, letto nel
+- ✅ **J-44 · Il Δ% del tooltip del grafico dà 0 % quando il primo valore è 0** — minimo, numeri; J, 17/10, letto nel
   codice durante CP-14b. `components/charts/priceChartHelpers.ts::buildDeltaHtml` calcola il Δ% dal primo valore del
   grafico e, per scelta scritta nel suo JSDoc, dà 0 % su un primo valore 0. È lo stesso numero sbagliato che la
   decisione N65 toglie al righello (CP-14b: `—`), in una seconda copia del Δ% nel frontend (regola 10: va segnalata).
   Da instradare: il file ha storia dei colori (lotto B) e di X (helper della pagina asset). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «CP-14b».
   - 17/10, coordinatore: **a J**, dopo F5, riusando `changePct` di `MeasureSignal.ts` (stessa regola di N65); X rivede in sola lettura, nessuna classe di colore toccata.
+  - ✅ 17/10: fatta da J nel checkpoint di F5 (`changePct` esportato da `MeasureSignal.ts`, `buildDeltaHtml` con «—» su un
+    primo valore 0); il coordinatore l'aveva passata a Y mentre era già fatta: resta nel checkpoint di J, **Y rivede**.
 - **J-45 (SEC7-1b) · Il rigioco del motore del portafoglio gira sul ciclo degli eventi** — medio, sicurezza
   (disponibilità); J, 17/10, nell'analisi di R13-SEC7-1. `PortfolioCalculationEngine.calculate` chiama
   `builder.build()` (`engine.py:424`), lavoro di CPU sincrono, dentro una funzione `async`: un rapporto lungo ferma

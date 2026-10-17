@@ -5348,3 +5348,44 @@ prossimo checkpoint.
 - **Coordinatore (07:00)**: X-R47 è entrato (dev `952c68cd5`): F5 dopo l'ingresso di J-43/SEC7-1, su una base che ha
   entrambi; poi J-44. **J-45 (SEC7-1b) passa a MF** (`run_in_executor` con un pool dedicato, `max_workers=2`): dopo il mio
   ingresso `engine.py` va a MF per MF-D4 + J-45, io rivedo.
+- ✅ **J-43 + SEC7-1 entrati** (coordinatore 07:08): diario `07ae05dc6` → dev `09cb9231a`, CHANGELOG (✨ avviso + 🐛
+  intervalli) `46c66f0c8`; HEAD avanzato a `46c66f0c8`. Via: F5, poi J-44. `engine.py` passa a MF (MF-D4 + J-45).
+- **Revisione di MF `f37b1d0ea` (07:13)**: OK. MF-SI1 («min» confrontato coi giorni: ogni investimento programmato nuovo
+  falliva la prima sincronizzazione) curato: «min» = il primo fra il primo valore del calendario e il primo evento
+  manuale; una forma chiusa per data per storia, valore corrente e liquidazione (chiude la mia nota). Provato in
+  memoria su 400 intervalli a caso fino a 9000 giorni: `compound_growth` contro il prodotto giorno per giorno a 60
+  cifre ≤ 4e-24 relativo nelle 4 convenzioni; i conteggi dei passi 30/360 uguali al conteggio a forza bruta 400/400.
+
+#### F5 — il messaggio tradotto del rifiuto P-10 (17/10, dalle 07:10; base `46c66f0c8`, con X-R47)
+
+- Contratto: in `features/transactions/events/eventSaveError.ts` (di W; W rivede) il caso
+  `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` → `events.saveError.splitAdjustmentsWithoutCost` con `{date, type, n, hidden}`:
+  `hidden` = `hidden_transactions_count` (intero ≥ 0, altrimenti 0), `n` = gli id visibili + `hidden` (i parametri
+  portano sempre i due campi da X-R47b). Chiave in 4 lingue con `dev.py i18n` (plurali ICU; il ramo `many` in FR).
+- Rossi affidati al test-author (07:10). In parallelo (file diversi) i rossi di **J-44** (07:17): `changePct`
+  esportato da `MeasureSignal.ts`, `buildDeltaHtml` con `—` su un primo valore 0 (vista assoluta), colore e vista
+  percentuale invariati; da riscrivere il test che fissava lo 0 % e il caso francese M-18.
+- ✅ **F5, rossi (test-author 07:10–07:23; corsa 07:24, codice vecchio)**: in `eventSaveError.test.ts` (di W) un blocco
+  nuovo (l.445–572): 24 rossi e una guardia (`existingEvents` resta `null` per questo 409). Motivo letto: chiamata la
+  chiave generica con la frase inglese del server, al posto di `events.saveError.splitAdjustmentsWithoutCost`. Vincoli
+  sulle traduzioni posti dai test: `{type}` in ogni lingua, un ramo muto `=0 {}` per `hidden` (in francese `one` copre
+  lo 0), `#` nei rami `one`, ogni lingua con parole sue (la build riempie di inglese una traduzione mancante).
+- ✅ **J-44, rossi (test-author 07:17–07:24; corsa 07:25)**: 4 rossi, 50 verdi. `changePct` non esportato (barriera),
+  `(Δ +10.0000 / 0.00%)` e `(Δ -10.0000 / 0.00%)` al posto di `—`, il caso francese M-18 `{10, 0}`. Selettore giusto:
+  `front-utility core-unit buildDeltaHtml MeasureSignal` (Vitest filtra sul nome dei test, non sul file).
+- ✅ **Codice (07:26–07:28)**:
+  > - F5: `eventSaveError.ts`, il caso `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` (`hidden` intero ≥ 0 o 0; `n` = id
+  >   visibili + `hidden`; `type` = `typeLabel('SPLIT')`); la chiave in 4 lingue con `dev.py i18n add` (in
+  >   `i18n/assets/`); la pagina utente `user/assets/detail/data-editor.en.md`, un punto nella lista dei rifiuti (solo
+  >   EN: la lista non esiste ancora in IT/FR/ES, debito di traduzione preesistente; nessun timbro).
+  > - J-44: `changePct` esportato da `MeasureSignal.ts`; `priceChartHelpers.ts::buildDeltaHtml` lo importa: vista
+  >   assoluta con `—` su un primo valore 0, colore e vista percentuale invariati; JSDoc aggiornato;
+  >   `financial_math.md` regola 6, una frase.
+  > - Mirati: `front-utility core-unit costless buildDeltaHtml MeasureSignal` **79 verdi**. Prettier pulito.
+- ✅ **Verdi interi di F5 + J-44 (07:28–07:39)**: `front-utility core-unit` **8020**, `component-unit` **4498**,
+  `front-portfolio chart-safety-unit` **86** (la guardia delle eccezioni della matematica finanziaria),
+  `gate-i18n-catalog` **176**, `gate-i18n-usage` **195**, `dev.py front check` **0 errori, 0 avvisi**, `check-orphans`
+  ok; `mkdocs build` stretto ok, `check-links` **97**. Porta 6185 libera.
+- **J-44 → Y?** Il coordinatore (07:38) l'ha passata a Y mentre era già fatta e verde qui: gliel'ho detto, scelta **(a)**
+  (07:41): resta nel checkpoint di F5, **Y rivede** (riusa `changePct`). Indice: J-44 ✅ con la nota.
+- **Checkpoint F5 + J-44 consegnato (17/10 ~07:45)**: FROZEN.
