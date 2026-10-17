@@ -38,7 +38,7 @@ from backend.app.services.assets.base import (
     AssetSourceProvider,
 )
 from backend.app.services.assets.event_store import EventStoreOperations
-from backend.app.services.assets.price_store import PriceStoreOperations, _unstorable_provider_point, storable_current_value
+from backend.app.services.assets.price_store import PriceStoreOperations, _unstorable_provider_point, storable_current_value, unstorable_quote_reason
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -62,6 +62,8 @@ class _FetchedRefreshData:
     prices: list[dict]
     source: str
     events: list[dict]
+    #: Reasons the result reports beside its prices: a refused current value (X-R51)
+    notes: tuple[str, ...] = ()
 
 
 async def _prepare_refresh_items(  # noqa: C901 — per-item validation maps each rejection to a typed result
@@ -200,6 +202,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
     paused provider fails the item, or leaves it partial, and the result tells when to try again (``retry_after``).
     """
     refusal: AssetRateLimitedError | None = None
+    refused_note: str | None = None  # a current value no price column keeps (X-R51)
     prov = prep.provider
     identifier = prep.identifier
     # Map ProviderInputType (stored in DB) to IdentifierType (expected by plugin methods)
@@ -319,6 +322,9 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                             current_data = storable_current_value(fetched_current, asset_id, provider_code)
                             if current_data:
                                 core._asset_current_cache.set(cache_key, current_data)
+                            elif fetched_current is not None:
+                                # Refused: the result says why, as the upsert did when the value reached it (X-R51)
+                                refused_note = unstorable_quote_reason(fetched_current.value)
 
                         if current_data and current_data.value:
                             current_price = {
@@ -334,13 +340,14 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                         logger.warning(f"Current value fetch failed for asset {asset_id}: {curr_e}")
 
                 if not prices_data:
-                    return None, (refusal.message if refusal is not None else "No price data available from provider"), refusal
+                    return None, (refusal.message if refusal is not None else (refused_note or "No price data available from provider")), refusal
 
                 return (
                     _FetchedRefreshData(
                         prices=prices_data,
                         source=provider_code,
                         events=events_data,
+                        notes=(refused_note,) if refused_note else (),
                     ),
                     None,
                     refusal,
@@ -497,6 +504,8 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
     if mismatch_buckets:
         detail = ", ".join(f"{cnt} {code}" for code, cnt in sorted(mismatch_buckets.items()))
         errors.append(f"{sum(mismatch_buckets.values())} points discarded: currency mismatch " f"(got {detail}, expected {asset_currency})")
+    # A refused current value is reported like a date the upsert rejects: the result is partial, and says why (X-R51)
+    errors.extend(remote_data.notes)
 
     # #R4-1: short-circuit when every fetched point was filtered out for currency mismatch.
     # Building ``FAUpsert(prices=[])`` would raise a raw Pydantic ``min_length`` validation

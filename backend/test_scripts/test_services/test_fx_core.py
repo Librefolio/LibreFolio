@@ -24,6 +24,12 @@ the inverse of a huge rate underflows to 0 without an exception (``1 / 1E+100003
 decimal context) and it returns that 0; the contract: None when the normalized rate is not above 0, a tiny inverse
 above 0 (``1E-1000000``) still returned, refusing it being ``storable_fx_rate``'s business. Its X-R50 rows are the X-R38
 ones; the underflow tests are pure.
+
+X-R51 (after X-R50): the refusal's words. Measured after X-R50: ``99999999999999.995`` is refused by the double rule, yet
+the refusal (``fx_rate_refusal``, from ``precision.fx_rate_limits_text``) is X-R38's, «at most 14 digits before the
+decimal point and 10 decimal places»: the user typed 14 digits and is told 14 is the limit, nothing saying why. The
+contract: the refusal also names the bound the database stores below, the whole number ``100000000000000``. Its rows are
+the X-R38 ones.
 """
 
 import asyncio
@@ -49,7 +55,7 @@ from sqlmodel import delete
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 from backend.app.db.models import FxRate
-from backend.app.db.precision import storable_fx_rate, truncate_fx_rate
+from backend.app.db.precision import storable_fx_rate, truncate_fx_rate, usable_fx_rate_bounds
 from backend.app.db.session import get_async_engine
 from backend.app.services.fx.storage import delete_rates_bulk, normalize_rate_for_storage, normalize_storable_rate, upsert_rates_bulk
 from backend.app.services.fx.sync import _count_actual_changes
@@ -525,7 +531,8 @@ class TestUpsertRatesBulkEdgeCases:
 @pytest.mark.usefixtures("xr38_rows")
 class TestUpsertRatesBulkDigitLimits:
     """X-R38 (the FX side of W-B58): a manual rate ``fx_rates.rate`` cannot keep is refused before anything is written.
-    X-R50 (E's review R13-SEC5 on X-R38): so is a rate whose double SQLite rounds to ``1E+14``."""
+    X-R50 (E's review R13-SEC5 on X-R38): so is a rate whose double SQLite rounds to ``1E+14``. X-R51: and its refusal
+    names the bound the database stores below, ``100000000000000``."""
 
     @pytest.mark.parametrize(
         ("base", "quote", "typed", "normalized"),
@@ -601,7 +608,8 @@ class TestUpsertRatesBulkDigitLimits:
 
         Contract (X-R50): refused like the X-R38 refusals, a ``ValueError`` naming the pair, the date and the limits (14
         digits before the decimal point, 10 decimal places), raised before anything of the call is written: the valid
-        CHF/ISK rate saved first in the same call is not written either.
+        CHF/ISK rate saved first in the same call is not written either. X-R51 adds to the refusal the bound the database
+        stores below: see the test beside this one.
         """
         typed = "99999999999999.995"
         print_section(f"upsert_rates_bulk: {FX_CORE_BASE}/{FX_CORE_QUOTE} {typed}, whose double is 1E+14, refused")
@@ -621,6 +629,31 @@ class TestUpsertRatesBulkDigitLimits:
         stored = await _xr38_stored()
         assert not stored, f"the call was refused, yet rows were written: {stored}"
         print_success("refused, nothing written")
+
+    async def test_xr51_the_refusal_of_a_rate_whose_double_is_1E14_names_the_bound_100000000000000(self):
+        """Red today: X-R50 refuses the rate, its double being ``1E+14`` (which every conversion skips), but the refusal is
+        X-R38's text, «at most 14 digits before the decimal point and 10 decimal places»: the user typed 14 digits before
+        the decimal point and is told 14 is the limit, nothing saying why the rate is refused.
+
+        Contract (X-R51): the refusal also names the bound the database stores below, the whole number
+        ``100000000000000``, beside what X-R50's names (the pair, the date, 14 digits and 10 decimal places).
+        """
+        typed, bound = "99999999999999.995", "100000000000000"
+        print_section(f"upsert_rates_bulk: {FX_CORE_BASE}/{FX_CORE_QUOTE} {typed} refused, the refusal naming {bound}")
+        first_skipped = format(usable_fx_rate_bounds()[1], "f")
+        assert first_skipped == bound, f"barrier: the reads skip a stored rate from {first_skipped}, not from {bound}: the bound this test asks the refusal to name is not the database's"
+        integer_digits, double = Decimal(typed).adjusted() + 1, float(Decimal(typed))
+        assert integer_digits == 14 and double >= 1e14, f"barrier: {typed} has {integer_digits} digits before the decimal point and the double {double!r}: expected the 14 X-R38 lets through and a double of 1E+14"
+        story = f"a manual {FX_CORE_BASE}/{FX_CORE_QUOTE} rate of {typed} on {XR38_DAYS[1]} (its double {double!r})"
+
+        refusal = await _xr38_upsert_refused([(XR38_DAYS[1], FX_CORE_BASE, FX_CORE_QUOTE, Decimal(typed), XR38_SOURCE)], story, rule="X-R50: not a rate whose double is 1E+14 or more, which every conversion skips")
+
+        message = str(refusal)
+        assert FX_CORE_BASE in message and FX_CORE_QUOTE in message and XR38_DAYS[1].isoformat() in message, f"barrier: the refusal does not name the pair {FX_CORE_BASE}/{FX_CORE_QUOTE} and the date {XR38_DAYS[1]}, as X-R50's does: {message!r}"
+        named = _xr38_numbers(message)
+        assert {"14", "10"} <= named, f"barrier: the refusal does not name the limits X-R50's names, 14 digits before the decimal point and 10 decimal places: {message!r}"
+        assert bound in named, f"{story}: the user is told «at most 14 digits before the decimal point» for a rate of 14 digits, and the refusal never names the bound the database stores below, {bound} (X-R51): {message!r}"
+        print_success(f"refused, the refusal naming {bound}")
 
 
 # ============================================================================
