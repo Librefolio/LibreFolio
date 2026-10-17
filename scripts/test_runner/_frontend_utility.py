@@ -377,6 +377,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/brokers/BrokerCard.test.ts",
             "src/lib/features/brokers/BrokerImportFilesModal.test.ts",
             "src/lib/components/assets/AssetTable.test.ts",
+            "src/lib/components/assets/AssetPriceSummary.test.ts",
             "src/lib/components/assets/AssetTable.privacy.test.ts",
             "src/lib/features/dashboard/KpiSection.test.ts",
             "src/lib/features/dashboard/ExposureTable.test.ts",
