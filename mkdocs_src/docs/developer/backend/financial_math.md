@@ -129,7 +129,15 @@ data-quality report with `build_data_quality_report()` (`data_quality.py`).
 movement (or `date_from`, when it is earlier) to `date_to`: a movement dated before `date_from`
 moves the cash, the quantities, the cost pools, the capital and the K/R/W pools like any other —
 the pool rules of a cash movement that reduces no position are one static method,
-`_apply_pool_rule()`. It emits one `DailyPortfolioState` for every day of `[date_from, date_to]`,
+`_apply_pool_rule()`. A linked-internal CASH_TRANSFER or FX_CONVERSION leg goes through
+`_move_linked_cash()` (developer decision D-MF4): the departure records its `(from R, amount)`
+split in `transfer_splits`, keyed by its transaction id, and its arrival takes it up once,
+bringing back what the departure took from K and R. The gap between the two legs — a
+conversion's spread, the rate move while the cash travels, two brokers owned at different shares —
+is already in the engine's P&L, since no leg is an external flow: it is booked as a result (a gain
+to R, a loss out of R then K). An arrival whose departure is unknown arrives in K, and one whose
+departure is on the same day is applied last on that day. The replay emits one
+`DailyPortfolioState` for every day of `[date_from, date_to]`,
 so a later `date_from` gets for its days exactly the states of the full replay. It evaluates only
 the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state
 (`dataclasses.replace()`, its containers copied), dated that day, with no external flow and no
