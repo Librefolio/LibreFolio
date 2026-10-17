@@ -119,7 +119,8 @@
     "backToDefault": "Torna al default",
     "createForex": "Crea forex…",
     "unknownError": "errore sconosciuto",
-    "decimalPlacesExceeded": "{max, plural, =0 {Solo numeri interi} one {Al massimo # decimale} other {Al massimo # decimali}}"
+    "decimalPlacesExceeded": "{max, plural, =0 {Solo numeri interi} one {Al massimo # decimale} other {Al massimo # decimali}}",
+    "decimalExponentOutOfRange": "Scrivi il numero per intero: la notazione scientifica si legge solo da sola, con un esponente fino a ±{max}"
   },
   "csvImport": {
     "title": "Importa dati CSV",

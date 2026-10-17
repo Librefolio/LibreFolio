@@ -308,6 +308,11 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
 - **Items**: more than `MAX_BULK_ITEMS` (1,000) items get a 422
   `{"code": "bulk_too_many_items", "message", "max_items", "items"}` from the route, before any
   work: no database read. Exactly 1,000 pass.
+- **Writes** (MF-SEC9a): `DELETE /assets/prices` takes at most `MAX_BULK_WRITE_ITEMS` (10,000) date ranges, all
+  assets together, the same 422 with that `max_items`; the deletion runs one `DELETE` per chunk of
+  `OR_TERMS_PER_QUERY` (500) ranges (`utils/sql_chunks.py`), in one transaction: one `DELETE` with an `OR` of every
+  range failed from 1,000 ranges. A failure of `POST`, `DELETE /assets/prices` or `POST /assets/prices/sync` answers
+  500 with a fixed message, the error in the log.
 - **Item-days**: once the prices and the seeds are read, before the events query and the fills,
   `get_prices_bulk()` sums the points each item's backward fill will emit. `_fill_span()` mirrors
   `_build_backward_filled_series()` without building anything: with a seed (a stored one, or a
@@ -425,10 +430,27 @@ directly, so a 5Y change exists whatever range the page has loaded.
 The Assets list calls the endpoint through `fetchAssetPeriodChanges()` (`frontend/src/lib/utils/periodChanges.ts`):
 one request for every asset of the list, native (no `target_currency`), with `as_of` the end of the selected range.
 Besides its fixed 1D column, the table shows each period whose `days` fit in the range's whole calendar days
-(`visiblePeriodColumns()`). The request is not split yet: past 1,000 assets it gets `bulk_too_many_items`, the
-`catch` of `loadPeriodChanges()` (`frontend/src/routes/(app)/assets/+page.svelte`) logs it to the browser console,
-and the Δ columns stay empty. Splitting the request into batches (backlog Z-27, as for the
-[price query](#bulk-request-limits)) is to cover this endpoint too: at most 1,000 items and one `as_of` per request.
+(`visiblePeriodColumns()`). Past 1,000 assets that request goes in batches (X-R64): the function hands the assets to
+`sendBulkBatches(items, () => 0, send)` (`frontend/src/lib/api/bulkBatches.ts`, Z-27,
+[Bulk requests in batches](../../frontend/state/registries.md#bulk-requests-in-batches)), which sends consecutive
+batches of at most `BULK_MAX_ITEMS` (1,000) assets, in the order given, one request after the other. There is no day
+estimate: the endpoint has the item cap, not the item-days budget of the [price query](#bulk-request-limits), and
+every batch asks up to the same `as_of`. The answers merge as if one request had answered, the periods taken from the
+first item that has any; up to 1,000 assets it is one request, as before. All or nothing: a batch that fails rejects
+the whole call with its own error and nothing is sent after it, so the list never shows a partial answer.
+
+Several of these requests can be in flight at once, a range change during a refresh for instance: the list keeps a
+`PeriodChangesLedger` (`periodChanges.ts`, X-R60) that says which answer it keeps.
+
+- Every request of the Assets list is full, for every asset, whatever starts it (the first load, a range change, a
+  refresh, an asset's sync), and it replaces every request before it: an older answer that lands later is not kept.
+- The page's `data-busy` (`data-testid="assets-page"`) stays true while the latest request is in flight; one it
+  replaced no longer counts.
+- A failed request keeps the Δ computed up to the same `as_of` (the end of the range) and drops the others. The
+  `catch` of `loadPeriodChanges()` (`frontend/src/routes/(app)/assets/+page.svelte`) logs it to the browser console,
+  unless a newer request has replaced it.
+- The signals' retry and a chart-settings save reload only the prices and signals (`fetchPriceSeries()`; a save, only
+  when it changes the backend signals), never the period changes: the Δ do not depend on the signals.
 
 ### 💹 Current Quotes and Today's OHLC
 
@@ -478,6 +500,10 @@ The fallback is the most recent `PriceHistory` row whose close reads a number
 number, reads `None` through `RealDecimal`
 ([Decimal Columns](../../architecture/database/index.md#decimal-columns)) and is passed over;
 before, `Decimal(str(None))` raised, and the whole bulk call, every asset, answered 500.
+The fallbacks are read once the live quotes are in (MF-SEC9c): `_last_readable_prices()` reads the latest row of
+every asset without a quote in one grouped query, and looks up alone, one after the other, only an asset whose latest
+close does not read. The quotes run in parallel and never touch the request's session: the fallbacks used to read it
+from those parallel tasks, which one `AsyncSession` does not allow.
 
 A successful provider quote dated today is written back to today's OHLC row:
 
@@ -530,12 +556,14 @@ it with its range's start and read `range_change` for the live quote: it does no
 ## 🧪 Provider Probe
 
 `POST /assets/provider/probe` allows **dry-run testing** of a provider configuration without persisting anything.
-Any user may start one, so each user gets at most 30 probes a minute (`PROBES_BY_USER`, a `SlidingWindowLimiter` in
+Any user may start one, so each user gets at most 30 probes a minute (a `SlidingWindowLimiter` in
 `api/v1/assets/providers.py`, counted in each process; MF-SI2): past it the route answers 429
 `{"error_code": "PROBE_RATE_LIMITED", "retry_after", "message"}` with `Retry-After`, before the provider is called.
-`LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read once when the
-server starts: `0` turns the limit off, with a warning in the log, and a value that is not a whole number up to
-10 000 is logged as an error and leaves 30. `dev.py server --test` sets it to `0` for every lane: the E2E suites pick
+`LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read at each probe by
+`probe_limiter()`, as the sign-in limit reads its variable: a change applies at the next probe, without a restart.
+`PROBES_BY_LIMIT` holds one limiter per limit the setting has had, so a value it comes back to finds its counts. `0`
+turns the limit off, with a warning in the log, and a value that is not a whole number up to 10 000 is logged as an
+error and leaves 30; each is logged once per value, and once at startup, when the module is imported. `dev.py server --test` sets it to `0` for every lane: the E2E suites pick
 search results as one user, two probes a pick.
 
 Operations (selectable per request):

@@ -28,6 +28,7 @@ from backend.app.schemas import (
 from backend.app.schemas.prices import FACurrentValue
 from backend.app.utils.date_range_limits import DateOutOfRangeError, stored_date_bounds
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.sql_chunks import chunks
 
 logger = structlog.get_logger(__name__)
 
@@ -436,7 +437,8 @@ class PriceStoreOperations:
         Returns:
             FABulkDeleteResponse with results and deleted count
 
-        Optimized: 1 SELECT COUNT + 1 DELETE query with complex WHERE
+        One COUNT per range (the per-asset counts), then one DELETE per chunk of ranges (``utils/sql_chunks``; MF-SEC9a),
+        in one transaction. The counts are up to ``MAX_BULK_WRITE_ITEMS`` awaited queries: slow, not a stall (MF-SEC9e).
         Note: Cannot parallelize with gather - DB operations are sequential and interdependent
         """
         if not data:
@@ -491,12 +493,12 @@ class PriceStoreOperations:
         if not conditions:
             return FABulkDeleteResponse(deleted_count=0, results=[])
 
-        # Execute single DELETE with OR of all conditions
-        stmt = delete(PriceHistory).where(or_(*conditions))
-        result = await session.execute(stmt)
+        # One DELETE per chunk of ranges, in one transaction (MF-SEC9a): SQLite refuses an OR of a thousand terms
+        deleted_count = 0
+        for chunk in chunks(conditions):
+            result = await session.execute(delete(PriceHistory).where(or_(*chunk)))
+            deleted_count += result.rowcount
         await session.commit()
-
-        deleted_count = result.rowcount
 
         # Build results per asset with exact counts
         results = [
