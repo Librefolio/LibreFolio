@@ -12,7 +12,7 @@ from pydantic import Field, field_validator
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import (
-    Currency,
+    IsoCurrencyAmount,
     SafeDecimal,
     StrictModel,
     check_decimal_exponent,
@@ -46,7 +46,7 @@ class TXTransferPromoteRequest(StrictModel):
     # destination item; if None the service will not set it. Refused on an
     # FX_CONVERSION, whose cash legs take none (N78, W-B72).
     # Object {code, amount} — e.g. {"code": "EUR", "amount": "42.50"}
-    cost_basis_override: Optional[Currency] = None
+    cost_basis_override: Optional[IsoCurrencyAmount] = None
 
     @field_validator("quantity")
     @classmethod
