@@ -5827,3 +5827,308 @@ del cambio password e del profilo). Dettagli fissati ora (scelte mie nel perimet
   subito; nessun file del repo toccato (verificato: nessun venv di questo worktree in `~/.local/share/virtualenvs`).
 - `dev.py mkdocs build` strict **verde**, `check-links` **verde**; `git diff --check` pulito; porta libera.
 - **CHECKPOINT READY** (N70 completo) al coordinatore. Stato: **FROZEN** 🧊.
+
+## A9 — Analisi (17/10, 07:00; solo lettura, nessun file del repo)
+
+Fonti: §4.9, §4.10, §15.1 (D-A7, D-A8 cambiata: niente `LIBREFOLIO_SUPPORT_URL` per le donazioni; D-A9 fatto in
+A5/A6; D-A11, D-A13, D-A14 da confermare col coordinatore a questo lotto); specifica SaaS F05 («nessun popup di
+donazione, nessun suggerimento docker o di aggiornamento»; link `LIBREFOLIO_TOS_URL`, `LIBREFOLIO_PRIVACY_URL`) e F09.
+
+**Stato reale (HEAD `da640e33a`)**
+- H ha già: `LIBREFOLIO_PROFILE` (`selfhosted|managed`), la configurazione pubblica `GET /system/instance`
+  (`InstanceConfigResponse`: `profile`, `accounts` di A, `email` di E) e `instanceConfig` nel frontend,
+  `instance_links.py` con `LIBREFOLIO_SUPPORT_URL` (il link «segnala» della ricerca asset di X: un'altra cosa rispetto
+  a D-A8). Nessun link legale, nessun disclaimer.
+- Donazioni: `donation_popup_service.is_donation_popup_disabled()` guarda solo la variabile nascosta (D-A7), non il
+  profilo. «Buy me a coffee» in `features/auth/AuthPageFrame.svelte:28` (mio), `layout/Header.svelte:256` e
+  `layout/HelpMenu.svelte:23,153` (di H), `features/support/SupportActions.svelte` (mio, nella scheda About; la
+  condivisione social resta, D-A8), `supportLinks.ts` (`BUY_ME_A_COFFEE_URL`); il popup (`DonationPopupModal`,
+  `donationPopupStore`) parte solo dal segnale del login.
+- Aggiornamenti: `features/update-check/` (le modali sono già lì, D-A13 fatta in A2): nessun controllo del profilo.
+- «Password dimenticata»: `features/auth/ForgotPasswordCard.svelte:39,41` mostra i comandi docker e `dev.py`; il modulo
+  email di E compare quando `instanceConfig.config.email.links`.
+- AI Export: le sezioni di `features/ai-export/templates/promptRenderer.ts:50` (`AiExportPromptSectionId`), di J.
+
+**Proposta di contratto**
+1. *F05, backend*: `is_donation_popup_disabled()` vero anche col profilo `managed` (il conteggio degli accessi
+   continua); la variabile nascosta resta (D-A7).
+2. *F05, frontend*: un aiuto unico (`features/instance/`, di H, o mio in `features/support/`) «l'istanza è
+   self-hosted, detto dal server»: i «Buy me a coffee» compaiono **solo a configurazione caricata e self-hosted**
+   (niente lampo sulle istanze gestite prima della risposta); nascosti nei 4 punti (2 file miei, 2 di H: una
+   condizione per file); il controllo degli aggiornamenti non parte nel profilo gestito (dentro il negozio
+   dell'update-check, senza toccare il layout di H); `ForgotPasswordCard` nel profilo gestito mostra «chiedi
+   all'amministratore» al posto dei comandi docker/CLI (il modulo email resta).
+3. *F09, backend*: `LIBREFOLIO_TOS_URL` e `LIBREFOLIO_PRIVACY_URL` (nomi della specifica), solo http(s), sbagliate →
+   errore nel log una volta e ignorate (come `LIBREFOLIO_BILLING_URL`); in `config/accounts.py` (o in
+   `instance_links.py` di H: da decidere); nella configurazione pubblica un blocco `legal: {terms_url, privacy_url}`
+   (schema mio, una riga in `system.py` di H, come `accounts`); righe in `.env.example`.
+4. *F09, frontend*: `features/legal/LegalNotice.svelte` (il testo del disclaimer e i link quando ci sono, con
+   `rel="noopener noreferrer"`) e `LegalLinks.svelte` (compatto). Posti (D-A11): la scheda About (card «Note
+   legali»), il fondo delle pagine d'accesso (`AuthPageFrame`, mio: login, registrazione, setup, invito, reset), la
+   Welcome (`WelcomePage`, dell'onboarding: una riga), una riga in fondo alla sidebar (di H: la monta H), ogni output
+   dell'AI Export come sezione finale `legal_notice` nella lingua dell'interfaccia (di J: `promptRenderer.ts` e i
+   test d'ordine). Nessuna registrazione dell'accettazione (§10.11).
+5. i18n: chiavi `legal.*` e la frase «chiedi all'amministratore», nelle 4 lingue; D-A14 (sorgente `support/`) da
+   confermare.
+6. Doc: `admin/configuration` (le due variabili, gli effetti del profilo gestito: aspetta l'ingresso di A8a, è una
+   pagina di A8a), `admin/hosting_providers`, la pagina About dell'utente, le pagine developer.
+
+**Decisioni da chiedere**
+- *Developer*: il **testo del disclaimer** (proposta: «LibreFolio ti aiuta a seguire i tuoi investimenti; non dà
+  consigli finanziari, fiscali o legali. I numeri possono contenere errori: verificali prima di agire.»); conferma dei
+  nomi `LIBREFOLIO_TOS_URL`/`LIBREFOLIO_PRIVACY_URL`.
+- *Coordinatore*: D-A11 (i 5 posti) e chi scrive le righe nei file di H (sidebar, Header, HelpMenu, `system.py`),
+  dell'onboarding (Welcome) e di J (`promptRenderer.ts`); dove stanno le due variabili (A o `instance_links` di H);
+  D-A14; se nel profilo gestito sparisce anche il pulsante «controlla aggiornamenti» del `ChangelogModal` di H.
+
+**Peso e ordine**: medio, molti punti di contatto. Backend prima (config, popup, configurazione pubblica), poi i
+componenti legali, poi le righe negli altri file con i loro proprietari, poi le doc (dopo l'ingresso di A8a).
+- **Decisioni del coordinatore su A9 (07:05)**: D-A11 i 5 posti **OK**; le righe nei file degli altri le scrivo io, con
+  la revisione del proprietario (H: sidebar, `Header`, `HelpMenu`, `system.py`; Welcome dell'onboarding seguendo la
+  skill `onboarding-guide`; J: `promptRenderer.ts` e i test d'ordine, con le istruzioni dell'AI Export e la politica
+  delle versioni); le due variabili **in `instance_links` di H**, accanto a BILLING (le scrivo io, H rivede); D-A14 a
+  mia scelta purché in una sorgente esistente; nel profilo gestito sparisce anche «controlla aggiornamenti» del
+  `ChangelogModal`; testo del disclaimer e nomi delle variabili sulla lista del developer (codice con la mia proposta,
+  facile da cambiare). **Codice dopo l'ingresso di A8a+N70+E-13**; intanto l'analisi di A-21.
+
+## A-21 — Analisi (17/10, 07:10; solo lettura)
+
+Richiesta (coordinatore, 16/10, dopo P18): nomi utente unici a prescindere dalle maiuscole (la regola di P18), i nomi
+nuovi senza `@` e con un insieme di caratteri, un identificativo con `@` cerca solo l'email al login e in «password
+dimenticata»; per i nomi esistenti con `@` o con varianti di maiuscole: prima l'analisi, nessun cambio silenzioso.
+
+**Stato reale (HEAD `da640e33a`)**
+- `users.username` unico **com'è scritto** (`Field(unique=True)`), 3–50 caratteri, **qualunque carattere** (spazi,
+  `@`, accenti); si controlla solo la lunghezza (`AuthRegisterRequest`, `UserProfileUpdate`, il modello,
+  `LIBREFOLIO_ADMIN_USERNAME` in `config/accounts.py:103`, la CLI).
+- `get_user_by_username_or_email()` (`user_service.py:150-163`): `username == identificativo OR lower(email) ==
+  lower(identificativo)`, poi `.first()`. **Difetto**: se il nome utente dell'account A è uguale (o uguale a meno delle
+  maiuscole) all'email dell'account B, la ricerca trova due righe e prende la prima: B può non riuscire ad accedere con
+  la sua email (la password si confronta con l'hash di A), e «password dimenticata» di B (E, `flows.py:251`) e il
+  resend (E) possono trovare A. Basta che A scelga come nome l'email di B. Usata da login, resend e «password
+  dimenticata».
+- I controlli «nome già preso» della registrazione (`user_service.py:238-241`) e del profilo (`:516`) sono esatti:
+  `Alice` e `alice` sono due account possibili. La ricerca per la condivisione dei broker (`search_users`) è già
+  `ilike`. La chiave del limite dei tentativi ripiega già A–Z.
+
+**Proposta**
+1. *Nomi nuovi* (registrazione, invito, profilo, CLI, `LIBREFOLIO_ADMIN_USERNAME`): 3–50 caratteri fra A–Z, a–z,
+   cifre, `.`, `_`, `-`; niente `@`, niente spazi.
+2. *Unici a prescindere dalle maiuscole* (A–Z, come P18): migrazione `010_username_unique_ignoring_case` sul modello
+   della 009: si ferma prima di scrivere se due account hanno lo stesso nome a meno delle maiuscole, nominandoli per id
+   e nome, col rimedio `./dev.py user rename <vecchio> <nuovo>` (comando nuovo, che lavora sul database com'è);
+   altrimenti l'indice unico su `lower(username)`. Il downgrade lo toglie. Rilanciabile.
+3. *Ricerca*: un identificativo con `@` cerca **solo** l'email; senza `@` solo il nome utente, A–Z ripiegate (senza
+   ambiguità grazie all'indice). Una funzione sola: login, resend e «password dimenticata» seguono (le chiamate di E non
+   cambiano; E rivede).
+4. *Nomi esistenti fuori regola* (con `@`, spazi, accenti): restano come sono; chi ha `@` nel nome accede con la sua
+   email (ogni account ne ha una), quindi nessuno resta fuori. Il profilo non chiede di cambiarli; un cambio di nome
+   segue la regola nuova. Facoltativo: un controllo `info` nella scheda Sicurezza che li conta.
+5. *Maiuscole*: il nome si mostra com'è scritto; l'accesso col nome diventa indifferente alle maiuscole (come le email
+   e come la chiave del limite).
+6. Test: la migrazione (fermata, rilancio, downgrade), le regole dei nomi in ogni ingresso, la ricerca (`@` → solo
+   email, nome indifferente alle maiuscole, l'ambiguità A/B chiusa), il resend e «password dimenticata» di E con un nome
+   che contiene `@`. Doc: utente, admin (CLI `rename`, il messaggio della migrazione, la regola di
+   `LIBREFOLIO_ADMIN_USERNAME`), developer.
+
+**Decisioni per il developer**: l'insieme di caratteri (proposta: solo ASCII, perché `lower()` di SQLite ripiega solo
+A–Z; in alternativa le lettere Unicode); i doppioni esistenti a meno delle maiuscole (proposta: fermare l'upgrade con
+`user rename`, come P18; in alternativa un suffisso automatico); i nomi esistenti con `@` (proposta: restano, accesso con
+l'email; in alternativa rinomina obbligata all'upgrade).
+
+**Peso**: medio. Tocca `user_service.py` e `schemas/auth.py` (file di A8a: dopo l'ingresso), una migrazione, la CLI.
+Il difetto dell'ambiguità A/B è da segnalare alla revisione di sicurezza (E).
+- **Coordinatore (06:57)**: le decisioni 1–3 di A-21 vanno sulla lista del developer con le mie proposte; **sì** ai
+  rossi di A9 e di A-21 **solo in file di test nuovi**, nessun codice di prodotto fino all'ingresso; il difetto
+  dell'ambiguità passa a E per la sicurezza.
+- **Rossi in scrittura** (07:15, quattro `test-author`, solo file nuovi, niente runner: le righe le aggiungo col codice):
+  A9 backend (`test_donation_managed_profile.py`, `test_legal_links.py`, `test_instance_config_legal_api.py`); A9
+  frontend gestito (`donations.test.ts` e sette `*.managed.test.ts`); A9 frontend legale (`LegalNotice`, `LegalLinks`
+  e quattro `*.legal.test.ts` dei posti); A-21 (`test_username_rules.py`, `test_username_lookup.py`,
+  `test_migration_010.py`, `test_username_rules_api.py`). Nota: le variabili legali vanno in `instance_links` di H
+  accanto a SUPPORT (BILLING sta in `config/accounts.py`, di A: il «accanto a BILLING» del coordinatore l'ho letto
+  come «nello stesso stile»; `tos_url()`/`privacy_url()` in `config/platform.py`, da dire al coordinatore).
+- **A-21 divisa** (coordinatore 07:01, da E: difetto **MEDIO 8/10** — con gli indici veri di SQLite `.first()` restituisce
+  sempre l'occupante; non serve la registrazione aperta, perché il profilo cambia il nome **senza password**; B si può
+  bloccare dopo 10 tentativi):
+  - **A-21a** (sicurezza, la prima dopo l'ingresso di A8a+N70+E-13, prima di A9; asticella di E): 1) niente `@` in ogni
+    nome **nuovo** (registrazione, cambio di nome, creazione da CLI, `LIBREFOLIO_ADMIN_USERNAME` con un errore
+    chiaro); 2) niente email uguale, a meno delle maiuscole, a un nome esistente; 3) ricerca: con `@` prima l'email,
+    poi il nome esatto solo se nessun account ha quell'email; senza `@` solo il nome esatto. Test del punto (c) di E:
+    maiuscole esatte e diverse, i due ordini di registrazione, il caso inverso con un nome `@` storico, i rifiuti, e
+    come regressione le suite email di E (EMA/EVA/EVH).
+  - **A-21b** (unicità a prescindere dalle maiuscole, insieme di caratteri, migrazione 010): aspetta il developer.
+    **Non** rendere la ricerca indifferente alle maiuscole prima dell'unicità (punto b di E: ricreerebbe il DoS fra
+    «Bob» e «bob»). Facoltativo, per H più avanti: il conteggio delle collisioni storiche nel controllo di Sicurezza.
+  - Al `test-author` di A-21: contratto cambiato, solo A-21a (via `test_migration_010.py`).
+- **Revisione della riga di E** (07:15, sola lettura): `bfa2729e9` `auth.py:299`
+  `registration_email_allowed(rate_limit_address(http_request))` (con `None` nessun conteggio per indirizzo, restano la
+  casella e il budget orario: coerente con N70), import a `:51` ridotto a `rate_limit_address` (nessun `client_address`
+  rimasto in `auth.py`); `email.py` (forgot `:159`, resend `:206`) su `rate_limit_address`, quindi il resend eredita N70
+  senza il kwarg; le tre frasi di `security.md` (`aad2a2bbf`, `:375`, `:411`, `:2301`) corrispondono al codice. **OK**.
+  Slot combinato (`8c9550ec6`) in corso sul ramo di E, poi l'ingresso congiunto.
+
+## Ingresso di A8a + N70 + E-13 e ritorno di A8b (17/10, 07:20–07:30)
+
+- **Entrati**: dev `440616c61`, CHANGELOG `45f9c5406` (✨ il limite con la frase di N70, ✨ `security/checks`, 🔒 sessioni
+  concorrenti, 🔒 H-36, 🐛 `1E+400`; E-13 accodato alla riga di `CLIENT_IP_HEADER`). Il mio ramo portato in avanti a
+  `45f9c5406`.
+- **A8b di ritorno**: il coordinatore apre il merge di `e-alfy-a-a8b` (`4fcf24e10`); due conflitti risolti tenendo i due
+  lati: `admin/backup_restore.en.md` (il testo di B-16 col percorso di A8b; in più le due righe nuove di B
+  `database_damaged`/`database_foreign_objects` portate a «Settings › Administration › Backup:»),
+  `developer/architecture/security.md` (18 messaggi di H-36 + la frase di A8b sulla scheda che ora esiste). Restano
+  apposta le due citazioni letterali delle stringhe di E in `admin/email.en.md:480,482`.
+- Controlli sull'albero unito: `api sync` rc 0; `mkdocs build` strict e `check-links` verdi; `front check` 0/0; Vitest
+  dei 9 file di A8b 353/353; `theme-roles --check` pulito; `git diff --cached --check` pulito; porta libera. In stage
+  solo i due file (più quello che git aveva già messo); i rossi non tracciati di A9 e A-21a fuori dal merge.
+- **Rossi scritti nel frattempo** (file nuovi, non registrati nel runner):
+  - **A9 backend** (`test-author`): `test_donation_managed_profile.py` (30: 10 rossi, 20 controlli),
+    `test_legal_links.py` (56 rossi), `test_instance_config_legal_api.py` (19: 18 rossi, 1 dal vivo da far girare
+    sulla corsia); contro una versione di riferimento tutti verdi, sei versioni sbagliate prese. Da cambiare col
+    codice: `test_system_api.py:843` e `test_registration_api.py:895` fissano l'insieme esatto dei campi della
+    configurazione pubblica (aggiungere `legal`). Letture: `mailto:` rifiutato per i link legali (come `env_url`), il
+    profilo gestito spegne il popup anche con la variabile nascosta a `0`, `" MANAGED "` vale gestito.
+  - **A9 frontend legale** (`test-author`): 6 file (`LegalNotice`, `LegalLinks`, `AboutTab.legal`,
+    `AuthPageFrame.legal`, `WelcomePage.legal`, `Sidebar.legal`): 50 rossi, 4 guardie. Note: la riga nella sidebar sta
+    sulla barra verde (`bg-lf-bar`): `LegalLinks` probabilmente vuole un tono (ruoli `text-lf-bar-*`); LGN-06 diventa
+    verde solo dopo `api sync` col backend di A9 (il client scarta i campi che non conosce); `verify-email-page` aggiunta
+    ai posti del telaio.
+  - **A-21a** (`test-author`): `test_username_rules.py` (25 rossi, 7 guardie), `test_username_lookup.py` (8 rossi, 9
+    guardie), `test_username_rules_api.py` (27 rossi, 12 guardie); contro una versione grezza di A-21a tutti verdi (sia
+    col rifiuto nel servizio, 400, sia nello schema, 422). Oggi la ricerca trova l'occupante in entrambi gli ordini delle
+    righe (SQLite cerca prima nell'indice del nome). Estensione: `user create` con un'email uguale a un nome esistente
+    (UNAME-012). Da fare nel frontend: `registrationErrors.ts:33,51` non ha parole giuste per il rifiuto della `@`.
+  - **A9 frontend gestito**: in attesa del `test-author`.
+
+### A8b.4 — E2E (17/10, 07:35–)
+
+- Merge di A8b committato dal coordinatore: **`2a8cb8a8a`** (genitori `45f9c5406` + `4fcf24e10`); rossi non tracciati e
+  piano fuori, intatti.
+- **Uso delle schede del gruppo nelle spec** (23 punti): cambiano i clic su un membro (non più nel DOM se il gruppo è
+  chiuso) e i controlli «un utente vede `settings-tab-admin`» (per un non admin non c'è la seconda barra:
+  `settings-tab-administration`); restano validi gli `aria-selected` dopo `?tab=<membro>` di un admin. Spec toccate:
+  `settings.spec.ts` (parti di A + la sezione G-15, che si aspetta una barra sola con tutte le schede), `admin-users`
+  (A), `backup` (B), `email-tab` (E), `scheduler` (Z), `gallery` (G); probabilmente invariate `email-send-link` e
+  `auth-email-verification` (E). Nuove (A): l'aiuto `fixtures/settings-tabs.ts` (`openSettingsTab`) e
+  `settings/security-tab.spec.ts` (sulla corsia il limite è spento → `accounts.login_limit` in avviso → distintivo
+  sul gruppo).
+- Chiesto al coordinatore il congelamento delle spec dei proprietari, con l'elenco; `test-author` avviato sulla fase 1
+  (solo i file di A), fase 2 dopo il congelamento.
+- **Congelamento concesso** (07:30) su `backup.spec.ts` (B), `email-tab.spec.ts` (E), `scheduler.spec.ts` (Z): modifiche
+  minime e additive, revisione dei proprietari al checkpoint. **`gallery.spec.ts:1989` e la sezione G-15 di
+  `settings.spec.ts`**: aspettano l'OK della squadra dei colori (non toccarle). Detto al `test-author`.
+- **OK della squadra dei colori** (07:31) su `gallery.spec.ts:1989` (tenere il contratto d'attesa di
+  `openGlobalSettings`: `aria-selected` sulla scheda aperta, poi `global-settings-tab` senza `data-busy`) e su G-15, che
+  è codice mio (`affae6ffe`): spagnolo, le larghezze desktop, l'admin, «tutta in vista» con la tolleranza di 1 px, per
+  **ogni scheda delle due barre**; **in più (punto 33)**: una scheda scelta non deve stare sotto una sfumatura attiva.
+  Passato al `test-author` E2E (fase 2 completa).
+> **⚠️ Fuori pista (punto 33)**: oggi `revealActiveTab()` porta la scheda solo fino al bordo («e non di più», G-15):
+> con altre schede oltre, i suoi 24 px esterni restano sotto la maschera. Regola nuova del riallineamento: dopo lo
+> scorrimento la scheda sta ad almeno 24 px (la larghezza della sfumatura) da ogni lato dove la sfumatura è attiva;
+> nessun margine dove non c'è più nulla da scorrere; se lo stato attuale già va bene, nulla si muove. Cambiano i valori
+> attesi dei casi di G-15 e di alcuni della sfumatura in `TabBar.test.ts` (es. 80 → 104, 70 → 46, 30 → 54): chiesto al
+> `test-author` della sfumatura di riscriverli (rossi prima), poi il codice.
+- **Rossi di A9, frontend gestito** (`test-author`, 07:40): 8 file, 51 casi, **42 rossi**, 9 controlli verdi
+  (`support/donations.test.ts`, `support/SupportActions.managed`, `auth/AuthPageFrame.managed`,
+  `auth/ForgotPasswordCard.managed`, `layout/Header.managed`, `layout/HelpMenu.managed`, `layout/ChangelogModal.managed`,
+  `update-check/updateCheck.managed`); contro una versione minima del contratto in una copia usa e getta, tutti verdi e
+  le varianti sbagliate prese. Decisioni: la chiave `auth.forgotPassword.askAdmin` non può esistere
+  (`auth.forgotPassword` è già una stringa, il catalogo non trasforma una stringa in un gruppo) → **`auth.askAdminToResetPassword`**,
+  piatta accanto alle sorelle; il pulsante «controlla aggiornamenti» del changelog si nasconde **solo** col profilo
+  gestito (i 24 casi di `ChangelogModal.test.ts` restano verdi); l'intestazione «Run this command on the server:» va
+  con i comandi. **Da fare col codice di A9**: `SupportActions.test.ts:32,41,71` e `DonationPopupModal.test.ts:75,92,124`
+  vogliono una risposta self-hosted; `forgot-email-unavailable` parla ancora del terminale anche col profilo gestito
+  (fuori contratto: da decidere); `/verify-email` non carica la configurazione (il caffè del telaio non comparirebbe
+  lì: `load()` nel telaio o in `donations`); una richiesta di configurazione fallita lascia il profilo self-hosted
+  (la sonda degli aggiornamenti parte, le donazioni no); il popup stesso dipende dal backend che non lo manda col
+  profilo gestito. Registrazione nel runner: `donations` e `updateCheck.managed` in `front_utility_unit`, i sei
+  componenti in `front_component_unit`.
+- **Punto 33 ✅ (07:48)**: rossi di `TabBar.test.ts` riscritti dal `test-author` della sfumatura (38 casi, **11 rossi**,
+  ognuno fermo sul `scrollLeft` di oggi: 80 → 104, 70 → 46, 0 → 4 al montaggio, 30 → 54, 20 → 44, la scheda larga
+  80 → 76). Regola applicata in `revealActiveTab()` (`work/a8b/apply_point33.py`): dopo il riallineamento la scheda sta
+  ad almeno la larghezza della sfumatura (1,5 × la dimensione del carattere radice, come la maschera `1.5rem`) da ogni
+  lato dove resta qualcosa da scorrere; nessun margine dove la barra non scorre oltre; una posizione che già va bene non
+  si tocca; una scheda più larga della barra tiene in vista l'inizio (anche nel ramo destro). Anche al montaggio (la
+  scheda tre, 160–280 in 300, si sposta di 4 px: inteso). Verdi: Vitest `TabBar.test.ts` **38/38**; Prettier e
+  `theme-roles --check` puliti.
+
+## A-21a — Nomi utente senza `@`, ricerca per indirizzo prima (17/10, 07:40–; base `2a8cb8a8a`)
+
+Contratto (coordinatore 07:01, asticella di E): 1) niente `@` nei nomi **nuovi**; 2) niente email uguale, a meno delle
+maiuscole A–Z, al nome di un altro account; 3) ricerca: con `@` l'email prima, poi il nome esatto; senza `@` solo il
+nome esatto. Nessuna ricerca indifferente alle maiuscole prima dell'indice di A-21b.
+
+### A-21a.1 — Rossi ✅ (07:43)
+- Riosservati sulla base `2a8cb8a8a` (in-process, `--noconftest`): **60 rossi, 28 guardie verdi** nei tre file
+  (`test_username_rules.py`, `test_username_lookup.py`, `test_username_rules_api.py`), ognuno sulla sua asserzione
+  «red until A-21a».
+- Rossi del frontend chiesti a un `test-author` (07:45): `registrationErrors.test.ts` (`USERNAME_INVALID` →
+  `auth.validation.usernameNoAt`), `RegisterCard.test.ts` (la `@` fermata nel client), `ProfileTab.test.ts` (il 400
+  `USERNAME_INVALID` in parole e il campo rimesso).
+
+### A-21a.2 — Codice del backend ✅ (07:44)
+`work/a21a/apply_a21a.py --part backend`:
+- `config/accounts.py`: la casa unica della regola, `USERNAME_RESERVED_CHARACTER = "@"` e `USERNAME_RESERVED_MESSAGE`;
+  `admin_bootstrap_config()` rifiuta `LIBREFOLIO_ADMIN_USERNAME` con `@` (`ADMIN_USERNAME_INVALID`, il messaggio nomina
+  la variabile e la `@` e dice che l'amministratore accede comunque con `LIBREFOLIO_ADMIN_EMAIL`).
+- `user_service.py`: `get_user_by_username_or_email` riscritta (regola 3, due letture); `address_is_a_username()` nuova
+  (`lower(username) = lower(indirizzo)`, l'account stesso escluso); `create_user` (regole 1 e 2: copre registrazione,
+  CLI `user create`, F02) e `update_profile` (regola 1 solo se il nome cambia, regola 2 solo se l'indirizzo cambia:
+  copre il profilo e la CLI `user set-email`). Il rifiuto dell'indirizzo è la risposta di sempre, «Email already
+  registered».
+- `registration_service.register_user`: il rifiuto della `@` diventa `RegistrationError("USERNAME_INVALID")`, non
+  `ACCOUNT_EXISTS`.
+- `api/v1/auth.py`: `USERNAME_INVALID` in `_REGISTRATION_REFUSALS` (400 con codice); il profilo risponde lo stesso
+  codice. Un codice solo per i due posti, così il frontend lo dice nella lingua dell'utente.
+- Runner: `services username-rules`, `services username-lookup`, `api username-rules` (pure).
+> **Note implementazione**: la regola 1 sta nel servizio, non nello schema: un account storico che rimanda il suo nome
+> invariato non va rifiutato, e la scheda Profilo manda il nome solo quando cambia. Un 400 con codice al posto di un 422
+> perché il frontend legge già i codici in entrambi i posti.
+
+### A-21a.3 — Verdi del backend ✅ (07:45–07:48)
+- In-process: i tre file **88/88**; `test_login_throttle_api.py` **55/55**.
+- Servizi sulla corsia (`reds.sh a21a`): `username-rules` 32, `username-lookup` 17, `email-case` 67, `registration` 151,
+  `admin-bootstrap` 190, `email-flows` 149, `email-verification` 127, `login-throttle` 33, `session-version` 56 →
+  **822 passati, 0 rossi**; porta libera. `ruff`/`black` puliti sui sei file.
+- Da fare nello slot API: `auth`, `registration`, `admin-setup`, le suite email di E (`email`, `email-verification`,
+  `email-verification-hooks`), `users-admin`, `system`, `instance-block`, `validation-errors`, `username-rules`.
+
+### A-21a.4 — Frontend ✅ (07:46–07:59)
+- **Rossi** (`test-author`): `registrationErrors.test.ts` (la riga `USERNAME_INVALID` → `auth.validation.usernameNoAt`
+  e la chiave nei 4 cataloghi), `RegisterCard.test.ts` (`bob.smith@example.com` e `a@b` fermati nel client, il caso al
+  blur, sei guardie senza `@` mandate come scritte), `ProfileTab.test.ts` (Salva della riga e «salva tutto»:
+  `data-error-code="USERNAME_INVALID"` e le parole, non la frase del server): **10 rossi**, i 224 casi esistenti verdi.
+- **Codice** (`work/a21a/apply_a21a.py --part frontend`, `work/a21a/i18n_add.py`): `USERNAME_INVALID` nella mappa dei
+  rifiuti della registrazione e del Profilo; `validateUsername()` della card ferma la `@` dopo la lunghezza; chiave
+  `auth.validation.usernameNoAt` in EN/IT/FR/ES (`i18n build`/`check` puliti, 4993 chiavi).
+- **Verdi**: Vitest dei tre file **240/240**; Prettier e `theme-roles --check` puliti; `front check` 0 errori, 0 avvisi.
+> **Note implementazione**: nessun controllo nel client del Profilo (decisione: il server risponde, la scheda lo dice
+> con le sue parole e rimette il campo); con una `@` in un nome corto vince il messaggio della lunghezza (non fissato).
+- **Revisione di E-14** (coordinatore 07:57, sola lettura): `login_throttle` invariato (solo `peek`/`hit`/`reset`, contratti
+  uguali; `None` = solo l'identificativo); le mie suite contro il `rate_window.py` di `4ec3057ef` caricato al posto
+  di quello dell'albero: **127/127**; la frase di E in `security.md:431-438` è esatta. OK mandato.
+
+### A-21a.5 — Doc ✅ (07:47–08:01)
+- `docs-writer`: 12 pagine inglesi — `admin/configuration`, `admin/cli_tools`, `admin/users` (nuova sottosezione
+  «🔤 Usernames with an @»), `admin/hosting_providers`, `user/getting-started`, `user/settings/profile`,
+  `developer/architecture/security.md` (nuova «🪪 Which Account an Identifier Names», righe `USERNAME_INVALID` e regola
+  2 nelle tabelle), `access_control.md`, `users_and_brokers.md`, `database/users_access.md`,
+  `frontend/components/features/auth.md`, `features/settings.md` (la riga dei rifiuti del Profilo, altrimenti falsa).
+  `email.md` di E invariata (dice «come il login», ancora vero). `mkdocs build` strict e `check-links` verdi
+  (97 link). Nessun timbro di traduzione: debito reale su `admin/configuration`, `admin/cli_tools`,
+  `user/getting-started`, `user/settings/profile`.
+> **⚠️ Fuori pista**: (1) `_follow_variables()` di `bootstrap_admin_service.py` cambia l'indirizzo dell'admin in attesa
+> senza la regola 2. Non serve: l'admin in attesa esiste solo su un'istanza nata vuota, e ogni nome creato dopo è senza
+> `@` (la regola 1), quindi nessun nome può essere un indirizzo; annotato per la revisione di E. (2) `user create` non
+> controlla la lunghezza del nome (difetto vecchio, fuori perimetro) → **A-46** nel backlog.
+- `.env.example`: la riga di `LIBREFOLIO_ADMIN_USERNAME` dice «senza @».
+- **Badge della barra** (A8b, chiesto dal `test-author` E2E): `data-testid="tab-badge"` e `data-badge` sul distintivo
+  di `TabBar` al posto della lettura delle cifre; rossi 3 (`TabBar.test.ts`), verdi **41/41**; Vitest di
+  `features/settings` e della rotta: 1118 verdi, i soli 5 rossi sono quelli di A9 (`AboutTab.legal.test.ts`, non
+  tracciato).
+- **A8b.4 — E2E scritti** (`test-author`, niente eseguito): `fixtures/settings-tabs.ts` (`openSettingsTab`),
+  `settings/security-tab.spec.ts` (ASEC-E-01..03), `admin-users.spec.ts`, `settings.spec.ts` (clic col aiuto, G-15 sulle
+  due barre col controllo della sfumatura), runner `front-utility security-tab`; dei proprietari: `backup.spec.ts` (B),
+  `email-tab.spec.ts` (E), `scheduler.spec.ts` (Z), `gallery.spec.ts` (G, `openGlobalSettings`).
+- **Slot 1** riservato dal coordinatore (08:00) sulla revisione combinata: prima CHECKPOINT con tre liste, poi il merge
+  di dev (E-14, B-30, B-9, X-R43, Y-8, MF-D4), poi E2E + API.

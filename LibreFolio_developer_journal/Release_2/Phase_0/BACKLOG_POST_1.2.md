@@ -4131,6 +4131,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   `docs-writer` di A8a (17/10). La riga del router dice «Authentication (login, token refresh)»: non c'è nessun
   refresh, il cookie dura `session_ttl_hours` (`security.md` «Token Expiration»). Lasciata fuori da A8a perché
   estranea. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A8a.6».
+- **A-46 · `./dev.py user create` non controlla la lunghezza del nome (3–50)** — minimo; dal `docs-writer` di A-21a
+  (17/10). La riga di comando rifiuta la `@` (A-21a) ma non un nome di 2 caratteri o di 60, che la registrazione e il
+  profilo rifiutano. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-21a.5».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
