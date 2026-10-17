@@ -236,9 +236,9 @@ fill, and never cuts a point-derived warm-up that starts earlier
   whole call when any date is outside, before the call reads or writes anything (a call that
   fails both gets the digits' 400). The `DateOutOfRangeError` becomes a 422
   `{"code": "date_out_of_range", "message", "params": {"min", "max"}, "items", "count"}`
-  (`message`: *Dates must lie between 1900-01-01 and …: N do not*). `items` lists, in request
-  order, each asset with such dates as `{"asset_id", "dates"}`, its first ten dates (at most ten
-  assets); `count` is every date refused.
+  (`message`: *Dates must lie between 1900-01-01 and …: N do not*, or *1 does not*). `items`
+  lists, in request order, each asset with such dates as `{"asset_id", "dates"}`, its first ten
+  dates (at most ten assets); `count` is every date refused.
 - **Provider call**: the dates outside are dropped before any slice is written, like the
   unstorable ones: the call logs a warning, *Provider prices skipped: date out of range*, writes
   the other dates, and reports the dropped ones in the asset's result message (*rejected N
