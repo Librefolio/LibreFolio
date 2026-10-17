@@ -260,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dashboard: a split stored with an invalid ratio no longer breaks the portfolio report or the lots analysis; it is ignored and named in the data-quality warnings, so you can fix it in the asset's events.
 - A full disk when uploading an archive, or at the start of a backup or of a restore check, now says there is not enough free space instead of a generic error.
 - A portfolio report over a long range or many assets no longer freezes the server for other users while it is computed.
+- **The Δ columns of the Assets and FX lists (1D … 5Y) are computed by the server.** The browser counted the days in local time, so across a daylight-saving change a period could start one day early (a 1M change on 15 November compared with 15 October instead of 16 October). The server counts calendar days, so the figures no longer depend on the time zone; a one-day range now shows its 1D change too.
 
 #### 🔒 Security
 
@@ -297,7 +298,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The admin guide says what to do when LibreFolio has replaced a lost instance key: put your copy of `secrets/instance.key` back before anyone enters a plugin secret again.
 - Backups inside Docker are documented: `dev.py backup` works in the image, the archives go to `backups/` and, like `secrets/`, only LibreFolio's user can read them.
 - **A split with a ratio of 0 or below is refused when you save it.** Such a split was saved, and as soon as a transaction was linked to it the Dashboard failed to load. The events editor now names the split at fault; a provider's split with such a ratio is skipped.
-- **The Δ columns of the Assets and FX lists (1D … 5Y) are computed by the server.** The browser counted the days in local time, so across a daylight-saving change a period could start one day early (a 1M change on 15 November compared with 15 October instead of 16 October). The server counts calendar days, so the figures no longer depend on the time zone; a one-day range now shows its 1D change too.
 
 ### ⚠️ Breaking changes
 
