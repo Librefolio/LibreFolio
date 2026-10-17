@@ -4719,6 +4719,38 @@ non sposti il registro.
 > **Non eseguiti**: lo slot combinato del coordinatore (`login-throttle`, `security-checks`, `auth`, `registration`,
 > `users-admin` e i servizi di A8a e di E) e `all-backend`.
 
+#### E-13.3 — Slot combinato ✅ (2026-10-17, 07:11–07:20)
+> **Il via del coordinatore** (07:11): E-13 è committato (`bfa2729e9` fix, `aad2a2bbf` docs, `39fad6fd3` journal).
+> La base è aggiornata a `8c9550ec6` = A8a + N70 + E-13 + dev `4c767685f` (H-37, X-R47, J-43/SEC7-1, MF…), pulita.
+> Lo slot 1 è mio, corsia 6188, una invocazione alla volta. A rivede intanto la riga di `/auth/register`.
+>
+> **Esito** (`files/tools/e13_combined.sh`, 07:13–07:20, carico 24; servizi e utils in-process, `db populate --force`
+> sulla data-dir della corsia, API con `--no-shared-server`): **18 invocazioni su 18 verdi, 1 633 test, nessun
+> fallito.**
+>
+> | Invocazione | Passati |
+> |---|---|
+> | services `login-throttle` | 33 |
+> | services `accounts-checks` | 76 |
+> | services `config-audit` | 102 |
+> | services `client-address` | 360 |
+> | services `email-verification` | 127 |
+> | services `email-flows` | 149 |
+> | services `email-delivery` | 124 |
+> | utils `rate-window` | 39 |
+> | `db populate --force` | ✅ |
+> | api `email-verification` | 60 |
+> | api `email` | 168 |
+> | api `email-verification-hooks` | 26 |
+> | api `email-change-notice` | 14 |
+> | api `login-throttle` | 55 |
+> | api `security-checks` | 3 |
+> | api `auth` | 95 |
+> | api `registration` | 102 |
+> | api `users-admin` | 100 |
+>
+> Alla fine la porta 6188 è libera e l'albero è pulito: le suite non hanno toccato file tracciati.
+
 ### R13-SEC7 — Revisione di sicurezza di ciò che è entrato in dev dopo le mie revisioni (2026-10-17, 05:40–)
 > **Il compito del coordinatore** (05:3x), mentre aspetto H-36 e poi A8a più N70, cioè E-13, ed E-8 dopo A8b:
 > - in sola lettura, dagli oggetti git, su dev `1a937b93e`, solo in `backend/app/**`: rotte, parsing dell'input,
