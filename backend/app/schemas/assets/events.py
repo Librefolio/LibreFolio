@@ -26,6 +26,7 @@ from backend.app.schemas.common import (
     DateRangeModel,
     FxBackwardFillInfo,
     StrictModel,
+    iso_currency_code,
 )
 
 # ============================================================================
@@ -126,6 +127,16 @@ class FAEventUpsertPoint(FAAssetEventPoint):
     model_config = ConfigDict(from_attributes=True)
 
     id: Optional[int] = Field(None, description="Id of the stored manual event to edit in place; omit to match on (date, type) in an upsert item, or to add a new event in a create item")
+
+    @field_validator("value")
+    @classmethod
+    def value_in_an_iso_currency(cls, value: Currency) -> Currency:
+        """A manual event is written in an ISO 4217 alphabetic code, never a name or a number (E-18).
+
+        Here, not on ``FAAssetEventPoint``: the providers build that one, and the events read back keep their stored code.
+        """
+        iso_currency_code(value.code)
+        return value
 
 
 class FAEventUpsert(StrictModel):
