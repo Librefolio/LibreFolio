@@ -12,6 +12,7 @@ touch the real risk engine (which is separately reviewed and green).
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 import pytest_asyncio
@@ -387,12 +388,13 @@ class TestAssetDrawdown:
 
 class TestPortfolioAssetDrawdownSnapshot:
     def test_uses_canonical_episode_math_without_history_rows(self):
+        # Decimal closes, as `_observed_price_points` hands them over since MF-D2.
         row = _asset_drawdown_row(
             asset_id=7,
             points=(
-                (date(2024, 1, 1), 100.0),
-                (date(2024, 6, 1), 80.0),
-                (date(2024, 12, 31), 90.0),
+                (date(2024, 1, 1), Decimal("100")),
+                (date(2024, 6, 1), Decimal("80")),
+                (date(2024, 12, 31), Decimal("90")),
             ),
             scope=_portfolio_scope(),
             calculation_currency="EUR",
@@ -408,7 +410,7 @@ class TestPortfolioAssetDrawdownSnapshot:
     def test_sparse_asset_is_explicitly_unavailable(self):
         row = _asset_drawdown_row(
             asset_id=7,
-            points=((date(2024, 12, 31), 90.0),),
+            points=((date(2024, 12, 31), Decimal("90")),),
             scope=_portfolio_scope(),
             calculation_currency="EUR",
         )
@@ -474,7 +476,8 @@ class TestDrawdownCatalogWiring:
         ):
             spec = registry.get(component_id)
             assert spec.output_model is output_model
-            assert spec.version == 1
+            # MF-D2: a total loss keeps its section with remaining_to_peak_ratio null. Before MF-D2: 1.
+            assert spec.version == 2
             assert spec.dependencies == deps
 
     def test_drawdown_datasets_excluded_from_all_data(self):
