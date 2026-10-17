@@ -6071,3 +6071,51 @@ finale) nel mio HEAD.
 >   `LotsAnalysisPanel` +19, `page-busy.spec.ts` +11/+59, le liste di asset e FX). Aggiornati tutti e 34 con
 >   `files/scripts/xr59_pagebusy_refs.py` (sottostringhe esatte, una per riga, altrimenti si ferma), verificati riga per riga
 >   sul codice (`files/logs/xr59_pagebusy_refs_verify.log`). La frase sul `join` della Δ la scrive `docs-writer` `e7c6c482`.
+>
+> **Checkpoint e merge (17/10, 15:10–15:20)**. Committati dal coordinatore `53fea97f7` (codice e doc), `ef005d68e`
+> (test), `8c8025677` (giornale); `app-state.md` escluso, parcheggiato in `files/patches/xr59_app-state.patch` (dev
+> l'aveva cambiato: sporco avrebbe fermato la merge). Merge di dev `79d4ca239` (X-R64) aperta dal coordinatore: un solo
+> conflitto, `periodChanges.ts`. Risolto tenendo le righe di X (l'import di `sendBulkBatches`, l'invio a lotti con
+> `inBatches`, l'unione delle risposte) e le mie nel builder (`range_start`) e nel mapper (`range_change`), col terzo
+> parametro `rangeStart` e i due paragrafi dell'intestazione; nessun `ratioToPercent` doppio. Uniti da soli e riletti:
+> `periodChanges.test.ts` (rispetto a dev solo le mie due righe della lista vuota; i test dei lotti di X leggono le
+> chiavi una per una), le due `architecture.md` (solo i miei paragrafi; nessun «not yet» rimasto), il backlog (tutto dev
+> più Y-32, una sola `## MF ·`).
+> - Prove sulla revisione fusa: `api sync` rc 0; svelte-check 0/0; Prettier; `theme-roles --check`; Vitest **522/522** in
+>   8 file (`periodChanges` coi test dei lotti, `periodChanges.rangeChange`, `rangeChange`, `assetPriceDerived`,
+>   `fxStoreRegistry`, `assetDetailRangeChange`, `assetDetailLive`, `bulkBatches`); MkDocs strict rc 0, 0 WARNING;
+>   `check-links` 97. MERGE READY mandato alle 15:19.
+> - `app-state.md`: patch rimessa con `git apply` semplice (non `-3`, che mette nello stage), fuori dallo stage per il
+>   commit dopo. La merge non tocca nessuno dei file citati in `#page-busy`, quindi i riferimenti restano validi.
+> - **⚠️ Fuori pista**: `docs-writer` ha visto un terzo caso del limite del `join`. Sulla coppia FX, un cambio di coppia
+>   rilancia la Δ (`fx/[pair]/+page.svelte:324`) prima dell'`$effect` che apre `fx-detail-orientation` (`:735-753`);
+>   uno scambio della stessa coppia non la richiede (l'inverso si legge sul posto). Aggiunto alla frase del limite.
+>
+> **E2E sulla revisione fusa `3fda937e0` ✅ (17/10, 15:19–16:05; slot del coordinatore fino alle 16:15, corsia 6189,
+> `--workers 2`; `files/scripts/xr59_e2e.sh`, log `files/logs/xr59_e2e_*.log`)**: **244/245**.
+>
+> | Spec | Esito | Cosa copre |
+> |:--|:--|:--|
+> | `front-portfolio dashboard-cache` | 6/6 | glob allargata (`:100`); guardia d'allargamento |
+> | `front-asset asset-detail` | 38/39 | lotto B (4 nuovi), i 4 «Live price direction flash», chip del provider, C-66 |
+> | `front-fx fx-detail` | 22/22 | lotto A sulla coppia (5 nuovi) |
+> | `front-fx fx-list` | 22/22 | lotto A sulla lista FX (4 nuovi) |
+> | `front-asset asset-list` | 37/37 | lotto A sulle card (3 nuovi) |
+> | `front-portfolio page-busy` | 17/17 | il contratto del bottone, col `join` |
+> | `front-asset live-pause` | 12/12 | glob allargata (costante) |
+> | `front-portfolio price-refresh` | 8/8 | glob allargata (costante), Z-14 |
+> | `front-asset asset-data-editor` | 27/27 | glob allargata (`:605`) |
+> | `front-asset asset-modal` | 21/21 | glob allargata (`:656`) |
+> | `front-asset asset-mobile-layout` | 21/21 | glob allargata (`:629`) |
+> | `front-utility onboarding-guides [asset_detail_guide]` | 2/2 | glob allargata (`:293`) |
+> | `front-utility toolbar-width-sweep [assetDetail]` | 4/4 | glob allargata (`:380`) |
+> | `front-fx fx-bulk` | 7/7 | lista FX dopo il cambio di nome dei test id |
+>
+> - **Il rosso, `asset-detail:240` «edit button opens asset modal»**: `goToSeededAssetDetail()` aspetta 10 s la radice della
+>   pagina dopo il clic sulla card di Apple, ed è caduto ancora sulla lista (istantanea salvata in
+>   `files/logs/xr59_ad240_evidence/`: nessuna finestra aperta, card visibile con la sua Δ). Era tra i primi test, al picco di
+>   carico dopo la build. **Rilanciato da solo a carico normale: verde in 4,1 s**
+>   (`files/logs/xr59_e2e_rerun_ad240.log`); gli altri test con lo stesso aiuto sono passati. Verdetto (test-triage):
+>   un'assunzione di tempo sotto carico, non X-R59. Backlog **Y-33**.
+> - Dopo l'ultima frase di `docs-writer` (il terzo caso del limite): MkDocs strict rc 0, 0 WARNING; `check-links` 97.
+> - Porta 6189 libera alla fine.
