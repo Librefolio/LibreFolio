@@ -4129,6 +4129,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     queste quattro. A non ha scritto né codice né test per A-9.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5.2».
 - **A-10 · Debito di traduzione delle pagine toccate da A5** — basso; A, 15/10.
+  - 17/10, lotto A-11/A-16/A-40: in EN cambiano ancora `admin/cli_tools` (i punti 📏 e 🏁 su `user activate`) e
+    `admin/configuration` («When the Instance Is Full»: `user activate` senza avviso per chi tiene già il posto).
   - Le pagine EN di A5a e A5b sono nel lotto; IT, FR ed ES sono indietro su 6 pagine: `admin/configuration`,
     `admin/cli_tools`, `admin/settings`, `admin/service_exposure`, `community/faq`, `user/getting-started`.
   - Vanno tradotte insieme: si linkano con ancore esplicite nuove (`#accounts`, `#user-limit`, `#registration`,
@@ -4161,7 +4163,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     «Changing Your Email» (un punto cambiato, uno nuovo: le maiuscole).
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
-- **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
+- ✅ **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; chiusa il 17/10 (commit del
+  coordinatore): un tema salvato che l'app non conosce si mostra come il `default_theme` noto, altrimenti `auto`, con un
+  avviso nel log; la riga non si riscrive (SET-A11-01…07); trovata dal `test-author` di E (15/10),
   letta nel codice e non ancora provata; segnalata dal coordinatore.
   - Una riga di `user_settings` con un `theme` diverso da `light`, `dark` e `auto` farebbe rispondere 500 a
     `/auth/login` e a `/settings/user`.
@@ -4209,7 +4213,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Una riga, da mettere nel lotto piccolo di H su `ALLOWED_WHEN_BLOCKED`, o da A al prossimo aggiornamento di base.
   - **Girata ad H** dal coordinatore (15/10, 16:56).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
-- **A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`** — minimo; A (15/10, dal
+- ✅ **A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`** — minimo; chiusa il 17/10
+  (commit del coordinatore): 400 `{error_code: LAST_ADMIN, message}`, nel dialogo la chiave nuova
+  `settings.usersTab.errors.LAST_ADMIN_DELETION` (ACCDEL-002/003, AERR-15…19, ADEL-28/29); A (15/10, dal
   `test-author` V4 di A6b).
   - `DELETE /auth/users/me` risponde `400 "Cannot delete account: you are the only administrator"`: una frase
     inglese e nessun codice.
@@ -4299,7 +4305,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Cura approvata dal coordinatore (16/10): solo logica, nessuna classe; un helper `sameEmail` (A–Z come il backend),
     `emailNeedsPassword` e il blocco della password solo per un indirizzo diverso; rossi prima in `ProfileTab.test.ts`.
     Lotto subito dopo l'aggiornamento di base che porta IM, come commit a sé; poi una frase in `user/settings/profile`.
-- **A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico** — minimo; dal
+- ✅ **A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico** — minimo;
+  chiusa il 17/10 (commit del coordinatore): la chiave degli indici di `_shape` viene da `_index_list` (MIG005-A26-01…03,
+  anche un indice unico con due nomi); dal
   `test-author` di P18 (16/10).
   - In `test_migration_005_accounts.py`, la chiave `indexes` di `_shape` viene dall'inspector di SQLAlchemy, che salta gli
     indici su espressione da entrambe le parti (con un avviso). Gli insiemi unici li vede (riparazione di P18), ma un
@@ -4411,7 +4419,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   administrator's address changed: the setup link handed over before no longer works; …», e quelli dopo l'avviso di
   scadenza. Una frase, e la stessa nelle tre traduzioni. Dettagli: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2.2».
-- **A-40 · `user activate` sull'admin in attesa avvisa del limite di utenti anche se il suo posto è già contato** —
+- ✅ **A-40 · `user activate` sull'admin in attesa avvisa del limite di utenti anche se il suo posto è già contato** —
+  chiusa il 17/10 (commit del coordinatore): nessun avviso anche con `is_pending_admin` (IMG-030f);
   minimo; dal `docs-writer` di A7b-2, tramite il coordinatore (17/10); preesistente. A istanza piena il CLI scrive
   l'avviso del limite (che supera), ma l'admin in attesa era già contato fra i posti (D-A10): l'attivazione non ne
   occupa uno nuovo. Cura possibile: nel CLI, nessun avviso quando l'account era in attesa. Dettagli: [piano
@@ -4493,6 +4502,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   attivato senza `DEMOTE_FIRST`; in più la scheda annulla con lo stesso corpo di una disattivazione (una riga vecchia
   disattiva il proprietario nuovo), e `user deactivate` può disattivare l'unico admin. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-51».
+- **A-52 · L'eliminazione di sé conta gli admin attivi prima del lock di scrittura** — basso (classe A-51); A (17/10,
+  analisi del lotto A-11/A-16/A-40/A-26). `DELETE /auth/users/me` legge `count_active_superusers()` senza
+  `begin_writes`: gli ultimi due admin attivi che si eliminano nello stesso istante passerebbero entrambi, e l'istanza
+  resterebbe senza admin. `DELETE /users/{id}` e il PATCH decidono già sotto il lock. Cura: `begin_writes(session,
+  User)` e il conteggio ripetuto, rosso prima. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Lotto A-11/A-16/A-40/A-26».
+- **A-53 · `developer/api/curl-testing.md`: l'esempio «Update preferences» usa una rotta che non esiste** — minimo
+  (doc); dal `docs-writer` del lotto A-11/A-16/A-40 (17/10). `PATCH /api/v1/auth/users/me/preferences` con
+  `{language, currency}`: le preferenze sono `PUT /api/v1/settings/user` (`language`, `base_currency`, `theme`,
+  `avatar_url`). Pagina solo EN.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
