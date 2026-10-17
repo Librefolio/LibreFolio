@@ -291,6 +291,7 @@ pipenv run ./dev.py db currencies /path/to/copy/app.db
 - 🔎 Each line names the place (`transactions.currency`, `assets.currency`, the steps of an FX route, a provider's settings, a user's base currency…), the value, how many rows hold it, and the ISO code it stands for: `978` is `EUR`, `US DOLLAR` is `USD`.
 - ➖ A dash means there is no single code: a name two currencies share (`Bolívar Soberano`: `VED` or `VES`), a value that is no currency, or a code that counts cents rather than units (`GBX`, `ZAC`, `ILA`), which must never simply be renamed.
 - 🔤 A code in lower case or with spaces, such as `eur`, is listed too: the right currency, in a form that exact comparisons miss.
+- 🧱 A value saved as raw bytes rather than text, which only a damaged or hand-made database holds, is listed in SQLite's notation, such as `X'455552'`, with a dash: it is never a code.
 - 🚦 The command exits with `0` when every code is an ISO code, `1` when it lists some, and `2` when it cannot read the database.
 - 🐳 In Docker: `docker compose exec librefolio python dev.py db currencies`.
 
@@ -488,7 +489,7 @@ It shows the steps as it goes (`… decrypting` for a secure archive, `… check
     - `Ledger totals: recorded by another version of the method, not compared`;
     - `⚠️ Ledger totals: could not be read on the copy`.
 - 👑 The administrators, and what a restore will mean for everyone: `After a restore you sign in with one of them, with the password of then; every session open now ends.` and `Invitations and links sent before the restore will have expired: send them again if needed.`
-- ⚠️ The warnings, which let a restore go on: `The upgrade changed the rows of some tables (listed above)`, `The backup's database has broken references: they are kept as they are`, `The upgrade added broken references to the copy`, `The ledger's totals differ from those the backup recorded (listed above)` or `The ledger's totals could not be read on the copy`.
+- ⚠️ The warnings, which let a restore go on: `The upgrade changed the rows of some tables (listed above)`, `The backup's database has broken references: they are kept as they are`, `The upgrade added broken references to the copy`, `The ledger's totals differ from those the backup recorded (listed above)`, `The ledger's totals could not be read on the copy` or `Some currency codes in the backup are not ISO 4217 codes, names or numbers an earlier version saved: an edit of their rows is refused until they are corrected (./dev.py db currencies lists them after the restore)`, which [Currency Codes That Are Not ISO Codes](#currency-codes) explains.
 - ⛔ The blocker, which forbids it: `❌ The backup has no active administrator: after a restore nobody could manage the instance`.
 
 It ends with `✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed.` and exits with `0`. It exits with `1` when the archive is refused or the restore blocked. A refusal is one line, the reason followed by a code in parentheses, such as `❌ The file is not a LibreFolio backup (not_a_backup)`, and nothing of the copy is left.
