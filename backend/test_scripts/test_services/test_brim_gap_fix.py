@@ -42,6 +42,13 @@ before the fixture guards): the end of a day becomes an inclusive query
 raising OverflowError and counts every row through it, one dated that day
 included; ``compute_gap_fix`` answers a checkpoint or a verification dated that day.
 
+Added later, red-first as well: W-B74, a row that cannot be read (its own section, before the fixture guards). Since
+W-B58 a stored quantity or amount that is no number reads None, and the end of a day leaves such a row out in silence.
+``get_balances_at_end_of`` counts the broker's rows dated through ``as_of``, without the excluded ids, whose quantity or
+amount reads None, and raises ``UnreadableLedgerError(broker_id, count)`` (``services/transactions/unreadable_rows.py``);
+``compute_gap_fix`` answers it as a ``BRIMSetError`` of code ``ledger_unreadable``, status 409. A row after ``as_of``,
+among the excluded ids or of another broker is not counted.
+
 Every test gets a private in-memory SQLite database with the ORM schema
 (``db_session``), holding two brokers and three assets: never the shared test
 database. All data is synthetic. Amounts and quantities are compared as numbers,
@@ -68,7 +75,7 @@ from typing import Any, Dict, List, NoReturn, Optional, Tuple
 import pytest
 import pytest_asyncio
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
@@ -1698,6 +1705,151 @@ class TestCalendarsLastDay:
         assert (result.kind, result.proposals, result.todos, result.explanation.unexplained_cash) == ("gap", [], [], [])
         verification = _verified(response, LAST_EVE)
         assert (verification.ok, _cash_rows(verification)) == (True, _agreeing_cash_rows(FAR_CASH))
+
+
+# =============================================================================
+# W-B74 — A ROW THAT CANNOT BE READ, AT THE END OF A DAY
+# =============================================================================
+
+#: Where the cure puts ``UnreadableLedgerError``: matched by its module and name, since it does not exist before the cure.
+UNREADABLE_LEDGER_ERROR = "backend.app.services.transactions.unreadable_rows.UnreadableLedgerError"
+LEDGER_UNREADABLE_CODE = "ledger_unreadable"
+#: The day of the section 1 ledger's WITHDRAWAL of 100 EUR and SELL of 2 A, the rows W-B74 makes unreadable.
+WB74_DAY = date(2024, 4, 1)
+
+
+async def _make_unreadable(session: AsyncSession, row: Transaction, *columns: str) -> None:
+    """Overwrite ``columns`` of ``row`` with 'n/a' by raw SQL, as an older version or another tool can leave a value, and
+    check what the case rests on: SQLite keeps the text, and the row reads None there (``RealDecimal``, W-B58). The row is
+    expired, then re-read: every later load sees the 'n/a'."""
+    row_id = row.id
+    for column in columns:
+        await session.execute(text(f"UPDATE transactions SET {column} = 'n/a' WHERE id = :id"), {"id": row_id})
+    await session.commit()
+    kinds = tuple((await session.execute(text(f"SELECT {', '.join(f'typeof({column})' for column in columns)} FROM transactions WHERE id = :id"), {"id": row_id})).one())
+    assert kinds == ("text",) * len(columns), f"setup: row id={row_id} must hold 'n/a' as text in {columns}; typeof = {kinds}"
+    session.expire(row)
+    loaded = await session.get(Transaction, row_id, populate_existing=True)
+    read = {column: getattr(loaded, column) for column in columns}
+    assert read == dict.fromkeys(columns), f"setup: RealDecimal must read the 'n/a' of id={row_id} as None (W-B58); the row reads {read}"
+
+
+def _ledger_error(exc: BaseException) -> Tuple[str, Any, Any]:
+    """``(module.qualname, broker_id, count)`` of an exception: its attributes, or else its first two arguments."""
+    args = exc.args
+    return f"{type(exc).__module__}.{type(exc).__qualname__}", getattr(exc, "broker_id", args[0] if args else None), getattr(exc, "count", args[1] if len(args) > 1 else None)
+
+
+def _gap_fix_today(response: Any) -> str:
+    """What the gap-fix answered, for a failure message: each checkpoint's cash rows and proposals, each verification's
+    verdict."""
+    parts = []
+    for item in response.checkpoints:
+        proposed = [(proposal.type.value, proposal.cash.code if proposal.cash else None, proposal.cash.amount if proposal.cash else None) for proposal in item.proposals]
+        parts.append(f"a checkpoint of {item.as_of} comparing (bank, LibreFolio, difference) {_cash_rows(item)} and proposing {proposed}")
+    parts += [f"a verification of {item.as_of}, ok={item.ok}, comparing (bank, LibreFolio, difference) {_cash_rows(item)}" for item in response.verifications]
+    return "; ".join(parts) or "nothing"
+
+
+class TestWB74AnUnreadableRowAtTheEndOfADay:
+    """W-B74 — the end of a day refuses a ledger it cannot read: ``get_balances_at_end_of`` raises
+    ``UnreadableLedgerError(broker_id, count)``, and ``compute_gap_fix`` answers it as a ``BRIMSetError`` of code
+    ``ledger_unreadable``, status 409. RED until the cure, but for the guards."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("plants", "count", "today"),
+        [
+            pytest.param((("withdrawal", "amount"),), 1, "the WITHDRAWAL of 100 EUR left out: EUR 690 where the ledger holds 590", id="an-amount"),
+            pytest.param((("sell_a", "quantity"),), 1, "the SELL of 2 A left out: A 10 where the ledger holds 8", id="a-quantity"),
+            pytest.param((("withdrawal", "amount"), ("sell_a", "quantity")), 2, "both left out: EUR 690 and A 10 where the ledger holds 590 and 8", id="two-rows"),
+        ],
+    )
+    async def test_balances_at_the_end_of_a_day_refuse_a_row_they_cannot_read(self, db_session: AsyncSession, plants: Tuple[Tuple[str, str], ...], count: int, today: str) -> None:
+        """RED: the section 1 ledger, its rows of 2024-04-01 made unreadable — the WITHDRAWAL's amount, the SELL's quantity,
+        or both. At the end of that day ``get_balances_at_end_of`` raises ``UnreadableLedgerError`` with ``broker_id`` 42
+        and the count, 1 or 2. Today it answers balances that leave the rows out."""
+        at_end_of = _balances_at_end_of(db_session)
+        ledger = await _seed_ledger(db_session)
+        for name, column in plants:
+            await _make_unreadable(db_session, ledger[name], column)
+
+        try:
+            cash, assets = await at_end_of(BROKER_ID, WB74_DAY)
+        except Exception as exc:  # the cure's UnreadableLedgerError, matched below by its module and name
+            raised = exc
+        else:
+            pytest.fail(
+                f"W-B74: broker {BROKER_ID}'s rows through {WB74_DAY} hold {count} whose value reads None, so its balances at the end of that day cannot be known: get_balances_at_end_of must raise "
+                f"{UNREADABLE_LEDGER_ERROR}(broker_id={BROKER_ID}, count={count}); today it answers cash {_nonzero(cash)}, positions {_nonzero(assets)} — {today}",
+                pytrace=False,
+            )
+
+        assert _ledger_error(raised) == (UNREADABLE_LEDGER_ERROR, BROKER_ID, count), f"W-B74: get_balances_at_end_of must raise {UNREADABLE_LEDGER_ERROR}(broker_id={BROKER_ID}, count={count}); it raised {type(raised).__module__}.{type(raised).__qualname__}: {raised!r}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("truth", ["checkpoint", "verification"])
+    async def test_gap_fix_refuses_a_ledger_it_cannot_read(self, db_session: AsyncSession, truth: str) -> None:
+        """RED: through ``compute_gap_fix``, ``_state_at`` answers ``UnreadableLedgerError`` as a ``BRIMSetError`` of code
+        ``ledger_unreadable``, status 409 — what the route turns into ``{"code": "ledger_unreadable", "message": …}``. The
+        bank states the end of 2024-04-01 as it is, EUR 590 and USD 20; the ledger's WITHDRAWAL of 100 EUR reads None. Today
+        the gap-fix compares the bank with 690, the WITHDRAWAL left out: a checkpoint proposes to withdraw 100 EUR once
+        more, a duplicate of the row it cannot read; a verification fails."""
+        ledger = await _seed_ledger(db_session)
+        await _make_unreadable(db_session, ledger["withdrawal"], "amount")
+        bank_cash = [_truth("EUR", "590"), _truth("USD", "20")]
+        if truth == "checkpoint":
+            request: Dict[str, Any] = {"checkpoints": [_checkpoint(WB74_DAY, cash=bank_cash, positions=[_position(ASSET_A, "8"), _position(ASSET_B, "3")])]}
+        else:
+            request = {"verifications": [_verification(WB74_DAY, *bank_cash)]}
+
+        try:
+            response = await _run(db_session, **request)
+        except Exception as exc:  # the cure's BRIMSetError, checked below
+            raised = exc
+        else:
+            refusal = f"a BRIMSetError of code {LEDGER_UNREADABLE_CODE}, status 409"
+            pytest.fail(f"W-B74: broker {BROKER_ID}'s WITHDRAWAL of {WB74_DAY} reads None, so the gap-fix cannot know its state at the end of that day: compute_gap_fix must refuse with {refusal}; today it answers {_gap_fix_today(response)}", pytrace=False)
+
+        found = (isinstance(raised, brim_report_sets.BRIMSetError), getattr(raised, "code", None), getattr(raised, "status_code", None))
+        assert found == (True, LEDGER_UNREADABLE_CODE, 409), f"W-B74: compute_gap_fix must refuse with a BRIMSetError of code {LEDGER_UNREADABLE_CODE}, status 409; it raised {type(raised).__module__}.{type(raised).__qualname__} (BRIMSetError, code, status) = {found}: {raised!r}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("planted", "day", "excluded", "cash", "assets"),
+        [
+            pytest.param("withdrawal", "2024-03-31", False, {"EUR": "600", "USD": "20"}, {ASSET_A: "10", ASSET_B: "3"}, id="after-the-day"),
+            pytest.param("withdrawal", "2024-04-01", True, {"EUR": "690", "USD": "20"}, {ASSET_A: "8", ASSET_B: "3"}, id="among-the-excluded-ids"),
+            pytest.param("foreign_deposit", "2024-04-01", False, {"EUR": "590", "USD": "20"}, {ASSET_A: "8", ASSET_B: "3"}, id="of-another-broker"),
+        ],
+    )
+    async def test_guard_an_unreadable_row_the_sum_does_not_reach_is_not_counted(self, db_session: AsyncSession, planted: str, day: str, excluded: bool, cash: Dict[str, str], assets: Dict[int, str]) -> None:
+        """Guard (passes before and after W-B74): an unreadable amount the sum does not reach refuses nothing, and the
+        balances are the other rows': the WITHDRAWAL of 2024-04-01 at the end of 2024-03-31; the same WITHDRAWAL among the
+        excluded ids (the editor's pending deletes) at the end of its own day; the other broker's DEPOSIT."""
+        at_end_of = _balances_at_end_of(db_session)
+        ledger = await _seed_ledger(db_session)
+        planted_id = ledger[planted].id
+        await _make_unreadable(db_session, ledger[planted], "amount")
+
+        got_cash, got_assets = await at_end_of(BROKER_ID, _d(day), exclude_tx_ids=[planted_id] if excluded else ())
+
+        assert (_nonzero(got_cash), _nonzero(got_assets)) == (_decimals(cash), _decimals(assets)), f"W-B74: the unreadable {planted} id={planted_id} is outside the sum at the end of {day} (excluded: {excluded}), so it must count for nothing"
+
+    @pytest.mark.asyncio
+    async def test_guard_gap_fix_deleting_the_unreadable_row_answers(self, db_session: AsyncSession) -> None:
+        """Guard (passes before and after W-B74): the editor deletes the WITHDRAWAL whose amount reads None
+        (``pending_delete_tx_ids``), so the gap-fix leaves it out on purpose and counts nothing: a verification of
+        2024-04-01 with the bank's EUR 690 and USD 20 is ok."""
+        ledger = await _seed_ledger(db_session)
+        withdrawal_id = ledger["withdrawal"].id
+        await _make_unreadable(db_session, ledger["withdrawal"], "amount")
+        state = {"EUR": Decimal("690"), "USD": Decimal("20")}
+
+        response = await _run(db_session, verifications=[_verification(WB74_DAY, *_bank_cash(state))], pending_delete_tx_ids=[withdrawal_id])
+
+        verification = _verified(response, WB74_DAY)
+        assert (verification.ok, _cash_rows(verification)) == (True, _agreeing_cash_rows(state)), f"W-B74: the unreadable WITHDRAWAL id={withdrawal_id} is a pending delete, so the gap-fix must count nothing and agree with the bank: {_gap_fix_today(response)}"
 
 
 # =============================================================================

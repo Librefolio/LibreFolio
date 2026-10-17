@@ -722,7 +722,8 @@ counted at zero. An Auto cost averaged from that pool would be written on the ro
 wrong for good.
 
 So `_auto_cost()` (`auto_cost.py`, W-B69) first counts the unreadable rows of the
-pool with `_unreadable_pool_rows()`: the rows `compute_wac_iterative()` loads — same
+pool with `_unreadable_pool_rows()` — through `count_unreadable_rows()`
+(`unreadable_rows.py`), the count the balance replay makes too (W-B74): the rows `compute_wac_iterative()` loads — same
 broker and asset, a date up to the pool's date, a quantity not `NULL` and not zero —
 minus the excluded ids, whose quantity or amount reads `None`, or whose
 `cost_basis_override` is stored (not `NULL` in SQL) but reads `None`. A `NULL` cost
