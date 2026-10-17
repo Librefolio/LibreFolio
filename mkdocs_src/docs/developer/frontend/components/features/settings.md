@@ -1,6 +1,6 @@
 # ⚙️ Settings Components
 
-This section documents the components used for the Settings pages (User Preferences, Global Settings, Profile, Users).
+This section documents the components used for the Settings pages (User Preferences, Global Settings, Profile, Users, Security).
 
 <div class="lf-screenshot-carousel" data-carousel="settings-main" data-carousel-interval="3000" data-show-titles="true">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="settings" data-name="user-preferences" data-title="User Preferences">
@@ -15,92 +15,165 @@ The settings system uses a modular architecture based on a common layout and reu
 
 The tabs of the Settings page are a registry: `SETTINGS_TABS` in
 `lib/features/settings/settingsTabs.ts`. `routes/(app)/settings/+page.svelte` names no tab itself:
-it draws the bar and the active body from that list. Each entry is a `SettingsTab`:
+it draws its two bars and the active body from that list. Each entry is a `SettingsTab`:
 
 | Field | Role |
 |---|---|
 | `id` | The `?tab=` value that opens the tab, and the suffix of its `settings-tab-{id}` test id |
 | `labelKey` | Catalogue key of the label, drawn as `$_(labelKey)` on the tab and in the heading shown on a phone |
 | `icon` | Lucide icon of the tab button |
-| `order` | Position in the bar, left to right |
+| `order` | Position in the bar, left to right; for a member of a group, in the group's second bar |
 | `component` | The tab body |
 | `visible?(ctx)` | Who sees the tab; when absent, everyone does |
 | `props?(ctx)` | Props spread on the body |
-| `alignEnd?` | On a wide screen, starts the right-hand group: this tab and every tab after it sit on the right (`sm:ml-auto` on its button) |
+| `group?` | The `id` of the [group](#tab-groups) of `SETTINGS_TAB_GROUPS` the tab belongs to: the top bar shows the group as one entry, and a second bar lists its members |
+| `badge?(ctx)` | The number its button shows, none for `0`; a group's entry shows the sum of its visible members' |
+| `prefetch?(ctx)` | What the page starts loading before the tab is opened, so that `badge` can count: run when the page opens, and again when the context changes, for every visible tab that has one |
+| `alignEnd?` | On a wide screen, starts the right-hand side: this entry and every entry after it sit on the right (`sm:ml-auto` on its button). One tab or one group carries it: today the `administration` group, and no tab |
 
 `ctx` is a `SettingsTabContext`, `{isSuperuser}`, which the page derives from the auth store
-(`$auth.user?.is_superuser ?? false`). The registry holds eight tabs:
+(`$auth.user?.is_superuser ?? false`). The registry holds nine tabs:
 
-| `id` | `order` | Body | Visible to | Extras |
-|---|---|---|---|---|
-| `profile` | 10 | `ProfileTab` | everyone | — |
-| `preferences` | 20 | `PreferencesTab` | everyone | — |
-| `plugins` | 25 | `PluginSettingsTab` | everyone | — |
-| `about` | 30 | `AboutTab` | everyone | — |
-| `admin` | 100 | `GlobalSettingsTab` | everyone | `props: (ctx) => ({canEdit: ctx.isSuperuser})`, `alignEnd: true` |
-| `users` | 110 | [`UsersTab`](#userstab) | administrators | `visible: (ctx) => ctx.isSuperuser` |
-| `backup` | 120 | `BackupTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
-| `email` | 130 | `EmailSettingsTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
+| `id` | `order` | Body | Visible to | `group` | Extras |
+|---|---|---|---|---|---|
+| `profile` | 10 | `ProfileTab` | everyone | — | — |
+| `preferences` | 20 | `PreferencesTab` | everyone | — | — |
+| `plugins` | 25 | `PluginSettingsTab` | everyone | — | — |
+| `about` | 30 | `AboutTab` | everyone | — | — |
+| `admin` | 100 | `GlobalSettingsTab` | everyone | `administration` | Label `settings.globalSettings` (*Global Settings*), icon `Settings2`; `props: (ctx) => ({canEdit: ctx.isSuperuser})` |
+| `users` | 110 | [`UsersTab`](#userstab) | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser` |
+| `backup` | 120 | `BackupTab` | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser` |
+| `email` | 130 | `EmailSettingsTab` | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser` |
+| `security` | 140 | [`SecurityTab`](#securitytab) | administrators | `administration` | `visible: (ctx) => ctx.isSuperuser`; `badge: () => securityChecks.attentionCount`; `prefetch: (ctx) => { if (ctx.isSuperuser) void securityChecks.ensureLoaded(); }` |
 
-Five bodies are in `lib/features/settings/tabs/`. The Plugins tab's body,
-`lib/features/plugin-settings/PluginSettingsTab.svelte` (label `pluginSettings.tab.label`), the
-Backup tab's, `lib/features/backup/BackupTab.svelte` (label `backup.tab`), and the Email tab's,
+The `admin` id stays as it was, so `?tab=admin`, the link of the
+[open-registration warning](auth.md#open-registration-notice), still opens the global settings;
+lot A8b changed only its label and its icon, the group having taken the `Shield`, and removed the
+key `settings.admin` (*Admin*) from the catalogues. Five bodies are in `lib/features/settings/tabs/`,
+the Security tab's in `lib/features/settings/security/` ([SecurityTab](#securitytab)). The Plugins
+tab's body, `lib/features/plugin-settings/PluginSettingsTab.svelte` (label `pluginSettings.tab.label`),
+the Backup tab's, `lib/features/backup/BackupTab.svelte` (label `backup.tab`), and the Email tab's,
 `lib/features/email/EmailSettingsTab.svelte` (label `email.tab.label`), live with their features:
 for the Plugins tab see [Plugin Settings › The Interface](../../../architecture/patterns/plugin_settings.md#interface),
 for the Email tab [The Email Tab](../../../backend/email.md#email-tab). The Plugins tab takes no
 props: every user sees it, and the catalogue the API returns already says which fields this user may
 change.
 
+#### Groups {: #tab-groups }
+
+`SETTINGS_TAB_GROUPS`, in the same module, holds the groups of the top bar (decision P13 b), each a
+`SettingsTabGroup`, `{id, labelKey, icon, alignEnd?}`. There is one today, `administration`: label
+`settings.administration` (*Administration*), icon `Shield`, `alignEnd: true`. Its members are
+`admin`, `users`, `backup`, `email` and `security`; `profile`, `preferences`, `plugins` and `about`
+belong to no group. A group's `id` is a `?tab=` value and a test-id suffix too
+(`settings-tab-administration`): it is URL-safe, and no tab's `id`.
+
+`settingsBar(tabs, groups, ctx)` gives the entries of the top bar, `SettingsBarEntry[]`, as a new
+array, and leaves the lists it is given as they were: the tabs of `visibleSettingsTabs(tabs, ctx)`,
+by `order`, each a `{kind: 'tab', tab}` entry, except the visible members of a group, gathered into
+one `{kind: 'group', group, members}` entry placed where its first visible member would be,
+`members` being its visible members by `order`. A group without a visible member has no entry, and a
+tab whose `group` names none of `groups` stays a tab entry. A regular user's bar is `profile`,
+`preferences`, `plugins`, `about`, and `administration` with `admin` alone; an administrator's ends
+with `administration` and its five members.
+
+#### The page {: #settings-page }
+
 The page is the runtime of the registry, written in Svelte 5 runes:
 
-- **Bar**: `visibleSettingsTabs(SETTINGS_TABS, ctx)`, the tabs whose `visible(ctx)` is not false,
-  sorted by `order` into a new array (the registry itself is never reordered), handed to `TabBar`
-  with the labels hidden on a phone (`hideLabelOnMobile`). The bar is also `scrollable`: tabs that
-  do not fit the card (an administrator sees eight) scroll sideways instead of being clipped by its
-  `overflow-hidden`, and the active tab stays whole in view (see
+- **Top bar**: `settingsBar(SETTINGS_TABS, SETTINGS_TAB_GROUPS, ctx)`, handed to `TabBar` with the
+  labels hidden on a phone (`hideLabelOnMobile`). A tab entry is drawn as its tab
+  (`settings-tab-{id}`, its icon, `$_(labelKey)`); a group entry with the group's icon and label,
+  and the test id `settings-tab-{groupId}`. An entry whose tab or group has `alignEnd` gets
+  `sm:ml-auto`. The top bar selects the entry of the open tab: the tab itself, or the group of the
+  open member.
+- **Second bar**: while the open tab is a member of a group with at least two visible members, a
+  second `TabBar`, inside `data-testid="settings-subtabs"`, lists those members, each with its own
+  `settings-tab-{id}`, icon, label (hidden on a phone too) and badge, the open one selected. It
+  takes the same props (`hideLabelOnMobile`, `scrollable`) and the same colour roles as the top bar.
+  A regular user's `administration` has one visible member, so no second bar: the group's entry
+  opens `admin` directly, and `settings-tab-admin` is not drawn for them.
+- **Clicks** (`selectTop()`): a tab entry opens its tab; a group entry opens the group's first
+  visible member, unless one of its members is open already, which stays, its body not mounted
+  again. A member of the second bar opens that member.
+- **Both bars are `scrollable`**: entries that do not fit the card (French or Spanish on a narrow
+  screen) scroll sideways instead of being clipped by its `overflow-hidden`, the active one stays
+  whole in view, and the sides that hide entries fade (see
   [Scrollable tab bar](../core-ui/toolbar.md#tabbar-scrollable)).
 - **Body**: the active tab's `component` alone, with `props(ctx)` spread on it. The spread is live:
-  when the auth store changes, the body on screen receives the new props.
-- **Active tab**: the first visible tab, unless `?tab=<id>` names a visible one. The choice runs in
-  `$effect.pre`, so the tab that `?tab=` names is the first body mounted: the default body never
-  mounts, not even for an instant. Clicking a tab does not rewrite the URL, so a `?tab=` value is
-  applied once: a later page update that keeps it does not take back the tab the user picked, while
-  a new value is applied again. An unknown id, or the id of a tab this user cannot see, is ignored;
-  a `?tab=` naming a tab that becomes visible later (the user is promoted while on the page) is
-  applied when the tab appears. If the active tab stops being visible, the first visible tab opens.
+  when the auth store changes, the body on screen receives the new props. The heading shown on a
+  phone names the active tab, a member and never its group: *Global Settings*, not
+  *Administration*.
+- **Active tab**: always a tab, never a group. The first visible tab, unless `?tab=` names a visible
+  tab or a group: a member's `id` opens that member inside its group (with the second bar when the
+  group has two visible members or more), a group's `id` its first visible member
+  (`?tab=administration` opens `admin`). The choice runs in `$effect.pre`, so the tab that `?tab=`
+  names is the first body mounted: the default body never mounts, not even for an instant. Clicking
+  a tab does not rewrite the URL, so a `?tab=` value is applied once: a later page update that keeps
+  it does not take back the tab the user picked, while a new value is applied again. An unknown id,
+  or the id of a tab this user cannot see, is ignored; a `?tab=` naming a tab that becomes visible
+  later (the user is promoted while on the page) is applied when the tab appears, inside its group.
+  If the active tab stops being visible, the first visible tab opens.
+- **Badges**: a tab entry shows its `badge(ctx)`, a group entry the sum of its visible members',
+  and `TabBar` draws none for `0`. They are read while the bars are derived, so a badge follows the
+  reactive state it reads: a count that arrives after the first render shows at once.
+- **Prefetch**: an `$effect` calls the `prefetch(ctx)` of every visible tab that has one, when the
+  page mounts and again whenever the context changes (a promotion included, which prefetches the
+  tab that has just appeared); never for a tab this context does not show. The calls run inside
+  `untrack()`: a prefetch reads the state it fills (`ensureLoaded()` reads the security checks'
+  `status`), and a tracked read would run the effect again each time that state moves — after a
+  failure, a new request, in a loop. So nothing else prefetches again: not a change of tab, of group
+  or of `?tab=`, nor a change of the state a prefetch reads.
 
 **Adding a tab** takes one entry in `SETTINGS_TABS`, plus the import of its body. The `users`
-entry, a tab only administrators see, is a complete example:
+entry, a tab only administrators see, in the `administration` group, is a complete example:
 
 ```ts
-import {Info, Shield, Sliders, User, Users} from 'lucide-svelte';
+import {Users} from 'lucide-svelte';
 import UsersTab from '$lib/features/settings/tabs/UsersTab.svelte';
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
-    // profile (10), preferences (20), plugins (25), about (30), admin (100, alignEnd)
+    // profile (10), preferences (20), plugins (25), about (30), admin (100, administration)
     // Administrators only: the accounts and the open invitations (decision D-A10).
-    {id: 'users', labelKey: 'settings.users', icon: Users, order: 110, component: UsersTab, visible: (ctx) => ctx.isSuperuser},
+    {id: 'users', labelKey: 'settings.users', icon: Users, order: 110, component: UsersTab, visible: (ctx) => ctx.isSuperuser, group: 'administration'},
 ];
 ```
 
 - **`order`**: a free number between the neighbours. The orders leave gaps, so no other tab is
-  renumbered; 110 puts `users` after Admin, in the right-hand group, while a number between 30 and
-  100 would put a tab after About, in the left-hand group. Every `order` is unique.
-- **`visible`**: `(ctx) => ctx.isSuperuser` keeps the tab out of a regular user's bar altogether,
+  renumbered; 110 puts `users` after Global Settings (100) in the group's second bar. A tab without
+  a `group` and with an `order` between 30 and 100 lands after About, on the left; above 100, after
+  the group's entry, which sits where its first member (100) would be, so on the right. Every
+  `order` is unique.
+- **`visible`**: `(ctx) => ctx.isSuperuser` keeps the tab out of a regular user's bars altogether,
   and a `?tab=` naming it is ignored for them. Leave `visible` out for a tab everyone sees.
+- **`group`**: `'administration'` for a tab that looks after the instance: it has no button of its
+  own in the top bar, and shows in the group's second bar. Leave it out for a tab of the top bar.
 - **`props`**: only when the body depends on the context, as `admin` does for `canEdit`.
-- **`alignEnd`**: one tab carries it, today `admin`. A tab with a higher `order` (above 100) joins
-  the right-hand group, after Admin, as `users` (110), `backup` (120) and `email` (130) do.
-- **`id` and `labelKey`**: the `id` is unique, made of lowercase letters, digits and dashes, and
-  starts with a letter; the `labelKey` is a sentence in all four catalogues.
+- **`badge` and `prefetch`**: only for a tab whose button counts something, today `security` alone.
+  `badge` reads a reactive count synchronously, `0` until there is one; `prefetch` starts what the
+  count needs, does nothing for a context the tab is not for, and nothing again once loaded, as
+  `securityChecks.ensureLoaded()` does.
+- **`alignEnd`**: one tab or one group carries it, today the `administration` group; no tab does,
+  though the page still honours a tab's.
+- **`id` and `labelKey`**: the `id` is unique, made of lowercase letters, digits and dashes, starts
+  with a letter, and is no group's `id`; the `labelKey` is a sentence in all four catalogues.
 - **Tests**: `lib/features/settings/settingsTabs.test.ts` pins the content of the registry through
-  its `TODAY` table, so the new tab adds its row there in the same change, marked `adminOnly: true`
-  when only an administrator sees it, with a `vi.mock` of its body module like today's five; the
-  cases that list today's tabs by name follow it (`users` also has two cases of its own: STAB-01,
-  hidden from a regular user, and STAB-02, order 110 after `admin`). The same file checks the ids,
-  the orders and the labels in the four catalogues. `routes/(app)/settings/page.tabs.test.ts` tests
-  the page on a registry of its own; it only gains a no-op `vi.mock` of the new body module, as it
-  loads the real `settingsTabs` module (`importOriginal`), which imports every body.
+  its `TODAY` table, so the new tab adds its row there in the same change, its id to the `CONTEXTS`
+  and `BARS` lists of those who see it and, when it joins the group, to `ADMINISTRATION`, with a
+  `vi.mock` of its body module like the others; the cases that list today's tabs by name follow it
+  (`users` also has two cases of its own: STAB-01, hidden from a regular user, and STAB-02, order
+  110 after `admin`, both members of the group). The same file checks the ids, the orders and the
+  labels in the four catalogues, the group and what its tabs carry (STAB-03 to STAB-13: one group,
+  its label, icon and members, no tab with `alignEnd`, `security` the only tab with a badge and a
+  prefetch, the bar of each context), and `settingsBar()` on lists of its own (SBAR-01 to SBAR-05).
+  `routes/(app)/settings/page.tabs.test.ts` tests the page on a registry of its own, with two groups
+  (`crew`, and `office`, the stand-in for Administration) and counts in a reactive box (SPAGE-01 to
+  SPAGE-21: the top bar, the second bar and its clicks, `?tab=` naming a member or a group, the
+  badges and their sums, the prefetch at the start, again for a new context and never otherwise);
+  it only gains a no-op `vi.mock` of the new body module (and of a store the registry imports, as
+  `securityChecks` is), as it loads the real `settingsTabs` module (`importOriginal`), which
+  imports every body. `./dev.py test front-utility core-unit` runs `settingsTabs.test.ts`,
+  `./dev.py test front-utility component-unit` runs `page.tabs.test.ts`.
 
 ### 📐 SettingsLayout
 
@@ -238,17 +311,26 @@ Manages user profile information:
   row stays marked, the Saves are on, the new form is saved), but no password input appears and the
   request is `{email}` alone, without a `current_password` key (the server refuses an empty one).
   Letters outside A–Z compare as written: `émile@…` → `Émile@…` asks for the password
-- **Refusals**: `CURRENT_PASSWORD_REQUIRED` and `CURRENT_PASSWORD_INVALID` are worded by the tab
-  (`settings.currentPasswordRequired`, `settings.currentPasswordIncorrect`) and published on
-  `profile-error` as `data-error-code`; the typed email stays and only the password is emptied. Any
-  other refusal shows the server's `detail` when it is a sentence (*Email already registered*),
-  `settings.updateFailed` for any other `detail` (another code, a `422` list), and puts the field
-  back to the stored value. The banner clears after 5 seconds
+- **Refusals**: `CURRENT_PASSWORD_REQUIRED`, `CURRENT_PASSWORD_INVALID` and, since lot A8b (C11),
+  `TOO_MANY_ATTEMPTS`, the `429` of the
+  [failed sign-in limit](../../../architecture/security.md#login-limit), are worded by the tab
+  (`PASSWORD_REFUSALS`: `settings.currentPasswordRequired`, `settings.currentPasswordIncorrect`,
+  `settings.tooManyPasswordAttempts`, *Too many wrong passwords: wait a few minutes and try again.*)
+  and published on `profile-error` as `data-error-code`. The typed email stays; the password is
+  emptied after the first two, and kept after `TOO_MANY_ATTEMPTS`, since it may be right and waiting
+  is all there is to do. Any other refusal shows the server's `detail` when it is a sentence
+  (*Email already registered*), `settings.updateFailed` for any other `detail` (another code, a
+  `422` list), and puts the field back to the stored value. The banner clears after 5 seconds
 - **Password change**: opens `PasswordChangeModal` (`features/settings/PasswordChangeModal.svelte`):
   the current password, the new one with `PasswordStrength` under it, and the confirmation. The
   modal binds `PasswordStrength`'s `valid` (`bind:valid={passwordMeetsRules}`) and keeps no copy of
   the [password rules](../../../architecture/security.md#password-rules): `password-change-submit`
   stays disabled until the three fields are filled, the rules hold and the confirmation matches.
+  A refusal with status `429` whose `detail` is `{error_code: "TOO_MANY_ATTEMPTS", …}`, the
+  [failed sign-in limit](../../../architecture/security.md#login-limit), shows
+  `settings.tooManyPasswordAttempts` (lot A8b, C11), and the three fields keep what was typed; a
+  `429` with another code, with a sentence or with a proxy's page, and `TOO_MANY_ATTEMPTS` on
+  another status, go on to the cases below.
   A refusal whose `detail` is `{error_code: "PASSWORD_TOO_WEAK", …}` shows
   `auth.validation.passwordTooWeak`; the plain-string `detail`s of a wrong current password
   (*incorrect*) and of a new password equal to it (*different*) show
@@ -261,12 +343,16 @@ Manages user profile information:
   goes to `/`
 - Edit mode toggle to prevent accidental changes
 
-Tests of the email's password: `tabs/ProfileTab.test.ts` (`./dev.py test front-utility component-unit`),
-and the «A6e» block of `frontend/e2e/settings.spec.ts` (`./dev.py test front-utility settings`) on the
-lane's real backend, with a throwaway account and a second browser context signed in before the change,
-and signed out by it. The password change: `PasswordChangeModal.test.ts`, in the same
-`component-unit` action (what enables Save, what reaches the server, the refusals with
-`PASSWORD_TOO_WEAK` among them, the rules taken from `PasswordStrength`).
+Tests of the email's password: `tabs/ProfileTab.test.ts` (`./dev.py test front-utility component-unit`;
+since A8b also the limit's `TOO_MANY_ATTEMPTS` through the row's Save and through `profile-save-all`:
+the key and its code on the banner, the new email and the typed password kept, and three other
+`429`s worded as any other refusal), and the «A6e» block of `frontend/e2e/settings.spec.ts`
+(`./dev.py test front-utility settings`) on the lane's real backend, with a throwaway account and a
+second browser context signed in before the change, and signed out by it. The password change:
+`PasswordChangeModal.test.ts`, in the same `component-unit` action (what enables Save, what reaches
+the server, the refusals with `PASSWORD_TOO_WEAK` among them, the rules taken from
+`PasswordStrength`, and the limit's `429`: the key, never the server's sentence, the fields kept and
+usable, no success and no toast).
 
 ### 🌍 GlobalSettingsTab (read by everyone, edited by administrators) {: #globalsettingstab-admin-only }
 
@@ -283,10 +369,11 @@ System-wide configuration with lock toggle:
 - Other app-wide settings
 
 The Settings page shows this tab to every user, but only a superuser can change it: its entry in
-the [tab registry](#tab-registry) has no `visible` and passes `canEdit` through
-`props: (ctx) => ({canEdit: ctx.isSuperuser})`, and without `canEdit` the tab shows a read-only
-indicator (`settings-readonly-indicator`) instead of the lock toggle (`settings-lock-toggle`) and
-the bulk Save/Undo/Reset actions.
+the [tab registry](#tab-registry) (`admin`, labelled *Global Settings*) has no `visible` and passes
+`canEdit` through `props: (ctx) => ({canEdit: ctx.isSuperuser})`, and without `canEdit` the tab shows
+a read-only indicator (`settings-readonly-indicator`) instead of the lock toggle
+(`settings-lock-toggle`) and the bulk Save/Undo/Reset actions. It is the first member of the
+`administration` [group](#tab-groups), and the only one a regular user sees there.
 
 For the three *display* defaults (`default_language`, `default_currency`, `default_theme`) the
 tab reuses the **same shared `Setting*` wrappers as the PreferencesTab**, passing the
@@ -310,9 +397,9 @@ it from the [instance configuration](../../state/app-state.md#instance-config),
   `409` `SETTING_LOCKED_BY_ENV`; the tab shows `settings.lockedByEnv` with the `variable` of the
   answer.
 - **After a save that includes `registration_mode`**, alone or with **Save All**, the tab calls
-  `instanceConfig.load({force: true})`, so the login page's **Register here**, the `/invite` page and
-  the [open-registration warning](auth.md#open-registration-notice) follow the new mode on this page
-  load.
+  `instanceConfig.load({force: true})`, so the login page's **Register here**, the `/invite` page,
+  the [open-registration warning](auth.md#open-registration-notice) and the Security tab's
+  [finding](#securitytab) of the same name, with its badge, follow the new mode on this page load.
 
 ### 🧹 CachePanel
 
@@ -604,6 +691,116 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
   to `idle`); a deletion with its preview; sign out everywhere; the guides restarted. The deletion
   of one's own account through the Profile tab is `./dev.py test front-user account-deletion`
   (`frontend/e2e/brokers/account-deletion.spec.ts`).
+
+### 🛡️ SecurityTab {: #securitytab }
+
+`lib/features/settings/security/`, the registry's `security` entry (lot A8b): administrators only,
+no props, the only tab with a `badge` and a `prefetch`. It lists the
+[configuration checks](../../../architecture/security.md#configuration-checks) that
+[`GET /api/v1/security/checks`](../../../architecture/security.md#security-checks-endpoint)
+evaluates, and one check that only the browser can make, most severe first. Administrator side:
+«Security» in [Global Settings](../../../../admin/settings.md).
+
+| File | Role |
+|---|---|
+| `securityChecksApi.ts` | The seam over the generated client: `fetchSecurityChecks()` calls `list_security_checks_api_v1_security_checks_get` once and resolves to the `items` of the answer as they came, `SecurityCheck[]` (`{check_id, severity, i18n_key, detail}`, `severity` one of `ok`, `info`, `warning`, `error`); a refusal or a network error propagates |
+| `securityFindings.ts` | Pure: what the tab lists, from the server's checks and from what only the browser knows |
+| `securityChecks.svelte.ts` | The state: one read per page load, shared by the tab and the badges |
+| `SecurityTab.svelte` | The body |
+
+**The findings.** `securityFindings(checks, browser)`, where `browser` is
+`{registrationMode, registrationLocked, hostname}`, returns `{attention, passed}`, two lists of
+`SecurityFinding`, `{id, severity, messageKey, params, action?, source}`; it changes neither of its
+inputs.
+
+- `attention`: every check that is not `ok`, its `check_id` as `id`, its `i18n_key` as
+  `messageKey`, a copy of its `detail` as `params`, `source: 'server'`; sorted error → warning → info
+  by a stable sort, so that within a severity the server's order holds.
+- The browser's own check: `openRegistrationNoticeFor({isAdmin: true, ...browser})`
+  ([Open-Registration Warning](auth.md#open-registration-notice)), registration `open` reached
+  through a host that `isLocalHost()` does not call local. Its notice becomes a `warning` with the
+  notice's `id` (`accounts.openRegistration`), `messageKey`, `params` (`{}` today) and `action`,
+  `source: 'browser'`, and nothing else of it (no `dismissible`). Pushed after the server's findings,
+  the stable sort puts it after the server's warnings and before the infos. With the mode pinned by
+  `LIBREFOLIO_REGISTRATION` the notice is `auth.notices.openRegistrationLocked`, without an action.
+  The finding holds whether or not the notice was closed: the tab does not read the
+  [instance notices](../../state/app-state.md#instance-notices).
+- `passed`: the `ok` checks, in the server's order, with the severity `info` and never an action;
+  their message is the check's own `ok` sentence.
+- **Actions**, the in-app links where a setting of the app fixes the finding (`SERVER_ACTIONS`):
+  `email.smtp`, `email.smtp_encryption` and `email.links` → `settings.securityTab.openEmail`
+  (*Open the Email tab*), `/settings?tab=email`; `platform.plugin_secrets` →
+  `settings.securityTab.openPlugins` (*Open the plugin settings*), `/settings?tab=plugins`; the
+  browser's finding → its notice's action, `auth.notices.openRegistrationAction`
+  (*Change who can sign up*), `/settings?tab=admin`. The other checks are fixed in the server's
+  configuration: no link.
+- `attentionCount(findings)`: the errors and the warnings of `attention`, the browser's included,
+  never an info. It is the badge.
+
+**The state.** `createSecurityChecks({fetch?, browser?})` builds a store; `securityChecks` is the
+app's, created at import, asking nothing until it is told to. Its getters are reactive: `status`
+(`idle`, `loading`, `ready` or `error`), `checks`, `answered` (true once a read has succeeded),
+`findings` and `attentionCount`, which are `securityFindings(checks, browser())` and its count once
+`answered`, empty lists and `0` before.
+
+- `ensureLoaded()` reads once: nothing while a read is under way, whose promise concurrent calls
+  share, nor once `ready`; again after a failure. There is no retry of its own.
+- `reload()` always reads, sharing a read under way. The last checks stay listed meanwhile, and after
+  a failure, which only sets `status` to `error`.
+- The default `browser()` takes the registration from `instanceConfig.config.accounts` only once
+  `instanceConfig.loaded`: before, the configuration in force is the default one, whose mode is
+  `open`, and an invite-only instance would warn for nothing. The host is `window.location.hostname`.
+  As `findings` is computed on each read, the browser's finding follows `instanceConfig`: a save of
+  `registration_mode` in [GlobalSettingsTab](#globalsettingstab-admin-only), which reloads it, adds
+  or removes the finding, badge included, without a new request.
+- The default `fetch` is `fetchSecurityChecks()`.
+
+**The badge.** The registry's `security` entry reads `securityChecks.attentionCount` as its `badge`,
+summed on the `administration` entry, and its `prefetch` calls `securityChecks.ensureLoaded()` for an
+administrator, nothing for a user. The page runs the prefetch when it opens, so the number shows
+before the tab is opened; the tab's own `onMount` calls `ensureLoaded()` too, which reads nothing
+more once the prefetch's read has succeeded. The store lives as long as the page load: leaving
+Settings and coming back reads nothing again (unless the last read failed), «check again» or a
+reload of the page does.
+
+**The body.** `SecurityTab.svelte`, prop `checks`: the store to show, `securityChecks` unless a test
+hands its own. The root, `security-tab`, carries `data-status` (the store's `status`), and
+`data-busy` and `aria-busy`, true while a read runs.
+
+- **Header**: `settings.securityTab.title` (*Security checks*), `settings.securityTab.description`,
+  and **Check again** (`security-refresh`, `settings.securityTab.refresh`), which calls `reload()`,
+  disabled while a read runs, its icon spinning.
+- **Before the first answer** (`idle` or `loading`): `security-loading`, two pulsing placeholder rows.
+- **A failed read**: `security-load-error`, `role="alert"`, `settings.securityTab.loadError`
+  (*The security checks could not be loaded.*) with **Try again** (`security-retry`, `reload()`).
+  After a failed «check again», the last findings stay listed under it.
+- **The findings**: one `security-finding` per attention finding, with `data-check-id` and
+  `data-severity`: the severity's icon (`AlertCircle`, `AlertTriangle`, `Info`, hidden from screen
+  readers), the severity in words for screen readers only (`sr-only`,
+  `settings.securityTab.severity.error`, `.warning`, `.info`: *Error*, *Warning*, *Information*,
+  then a colon), the message `$_(messageKey, {values: params})`, and the action as a link
+  (`security-finding-action`).
+- **No finding**: `security-all-clear`, `settings.securityTab.allClear`
+  (*Nothing needs your attention.*). An info is a finding, so it is not all clear.
+- **The passed checks**: a closed `<details>`, `security-passed`, whose summary counts them
+  (a neutral chip and `settings.securityTab.passed`, an ICU plural: *1 check passed*,
+  *N checks passed*), with one `security-passed-check` (`data-check-id`) per `ok` check.
+- **Colours**: roles only, after the state convention of `STATUS_TONES` (`lib/theme/toneClasses.ts`),
+  written in the component: a tint per severity, `bg-lf-X-soft text-lf-X-on-soft border-lf-X-line`
+  with `X` `danger`, `warning` or `info` (`success` for the all-clear), and a neutral chip,
+  `bg-lf-neutral text-lf-secondary`, for the count of the passed checks.
+
+Tests: `./dev.py test front-utility core-unit` runs `security/securityChecksApi.test.ts` (one call
+of the generated client, its items as they came, an empty answer, a failure that propagates),
+`security/securityFindings.test.ts` (the order by severity and within one, the passed checks, which
+findings link where, the browser's finding against `openRegistrationNoticeFor()` for every mode, pin
+and host, the inputs left as they were, `attentionCount`) and `security/securityChecks.test.ts`
+(idle at creation, `ensureLoaded()` once and shared, `reload()` keeping the last checks, the
+failures, the findings following the browser's state, the reactive getters, the defaults: the
+generated client, `instanceConfig` and the page's host). `./dev.py test front-utility component-unit`
+runs `security/SecurityTab.test.ts` (the store it is given, the placeholder, the findings and their
+words, the links, the all-clear, the passed checks, «check again», the failures, colour roles only,
+every key a message of the four catalogues).
 
 ### ℹ️ AboutTab
 

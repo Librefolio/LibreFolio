@@ -124,6 +124,8 @@
     const PASSWORD_REFUSALS: Record<string, string> = {
         CURRENT_PASSWORD_INVALID: 'settings.currentPasswordIncorrect',
         CURRENT_PASSWORD_REQUIRED: 'settings.currentPasswordRequired',
+        // The server's limit on failed passwords (A8a)
+        TOO_MANY_ATTEMPTS: 'settings.tooManyPasswordAttempts',
     };
 
     /** A refusal as the tab shows it: a known code in words (with the code), the server's sentence, or a generic text. */
@@ -173,9 +175,10 @@
             error = refusal.text;
             errorCode = refusal.code;
             if (field === 'username') editedUsername = originalUsername;
-            // A wrong or missing password keeps the address typed, to try again; the password goes.
-            else if (refusal.code) emailPassword = '';
-            else editedEmail = originalEmail;
+            // A wrong or missing password keeps the address typed, to try again; the password goes. Too many failures
+            // keep both (A8b, C11): the password may be right, and waiting is all there is to do.
+            else if (refusal.code && refusal.code !== 'TOO_MANY_ATTEMPTS') emailPassword = '';
+            else if (!refusal.code) editedEmail = originalEmail;
             setTimeout(clearError, 5000);
         } finally {
             saving = false;
@@ -220,8 +223,8 @@
                     code: refusal.code,
                 });
                 if (field === 'username') editedUsername = originalUsername;
-                else if (refusal.code) emailPassword = '';
-                else editedEmail = originalEmail;
+                else if (refusal.code && refusal.code !== 'TOO_MANY_ATTEMPTS') emailPassword = '';
+                else if (!refusal.code) editedEmail = originalEmail;
             }
         }
 

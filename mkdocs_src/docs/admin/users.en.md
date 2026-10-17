@@ -1,15 +1,15 @@
 # 👥 Users & Invitations
 
-The **Users** tab of **Settings** is where an administrator looks after the accounts of the
-instance: who can sign in, who is an administrator, and who is invited to join. It works the same
-whether you host LibreFolio yourself or a hosting provider runs it for you.
+The **Users** tab of **Settings › Administration** is where an administrator looks after the
+accounts of the instance: who can sign in, who is an administrator, and who is invited to join. It
+works the same whether you host LibreFolio yourself or a hosting provider runs it for you.
 
 ---
 
 ## 🧭 Open the Tab {: #open-the-tab }
 
-Open **Settings** (gear icon in the sidebar), then the **Users** tab, next to **Admin**. Only
-administrators have this tab: everyone else does not see it.
+Open **Settings** (gear icon in the sidebar), then **Administration** and its **Users** tab, next to
+**Global Settings**. Only administrators have this tab: everyone else does not see it.
 
 The tab has three parts: the places taken, at the top; the **Accounts**; the **Open invitations**.
 After each change, the tab reloads its lists, so it always shows what the server holds.
