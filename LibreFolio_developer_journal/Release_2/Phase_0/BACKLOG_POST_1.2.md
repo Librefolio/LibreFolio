@@ -5624,11 +5624,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Era: con `subprocess.run` il server moriva di SIGKILL 0,25 s dopo il Ctrl+C, a metà del suo spegnimento (provato
   il 17/10 con un finto server: uscita a 0,29 s, server ucciso), e un SIGTERM a `dev.py` lasciava il server orfano.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-10».
-- **Z-11 · Lock dei job tra processi (flock) per più worker** — basso; coordinatore, 15/10 (D-Z3-3). Con `--workers`
-  i job girano solo nel worker leader: un altro worker che riceve `wake-sync` risponde `not_leader`, e la spinta del
-  ritorno aspetta il giro del leader, entro 60 s. Cura: un lock su file nella cartella dei dati, preso da chiunque
-  esegua i job, con lo stato riletto dentro il lock. Dettagli:
-  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z3 — scheduler».
+- ✅ **Z-11 · Lock dei job tra processi (flock) per più worker** — basso; coordinatore, 15/10 (D-Z3-3). **Chiusa il
+  17/10 col lotto Z-11** (il commit è del coordinatore; decisione notturna N71, da rivedere col developer).
+  - Dove c'è `fcntl`, ogni giro prende `<data_dir>/.scheduler.lock` (`scheduler/run_lock.py`) prima di leggere lo
+    stato, e qualunque worker esegue i job, uno alla volta. Chi aspetta rilegge lo stato e trova i job `not_due`.
+  - `wake-sync` funziona su ogni worker, e il ritorno parte subito nel worker che l'ha visto.
+  - Senza `fcntl` (Windows) resta il leader, con `not_leader`.
+  Era: con `--workers` i job giravano solo nel worker leader; un altro worker che riceveva `wake-sync` rispondeva
+  `not_leader`, e la spinta del ritorno aspettava il giro del leader, entro 60 s. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra processi:
+  analisi».
 - ✅ **Z-12 · `admin/filesystem`: il commento di `scheduler_state.json`** — minimo, doc; docs-writer di Z, 16/10
   (Z7c-2). **Chiusa il 16/10 col lotto Z-12** (il commit è del coordinatore): nelle quattro lingue, a mano e senza
   stamp, il commento dice l'ultima esecuzione e il nuovo tentativo previsto («Scheduled syncs: last run, pending
@@ -5723,6 +5728,19 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   passaggio sempre 1). Era: la faccia si iscriveva a `instanceBlockState` all'import, e a ogni aggiornamento a caldo
   del file la copia vecchia restava iscritta. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-22».
+- **Z-23 · Un aiuto comune per i lock su file (`flock`)** — basso, dopo la 1.3; Z, 17/10 (Z-11, N-Z11-4). Il modello
+  «`LOCK_EX|LOCK_NB`, `O_NOFOLLOW`, `0o600`, ripiego per processo senza `fcntl`» è ora in cinque posti:
+  `instance_backup/jobs.py` (`_RunLock`), `instance_backup/apply.py`, `db/post_migration`, `brim_provider.py` e
+  `scheduler/run_lock.py`. Un modulo comune li unirebbe; tocca file di più sessioni (fra cui B per il backup).
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra
+  processi: analisi».
+- **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — minimo, facoltativo; Z, 17/10
+  (Z-11, segnalato da test-author). `validate_test_data_dir` (`backend/app/config/__init__.py`, file di H) elenca i
+  percorsi gestiti che una cartella di test non può condividere con la produzione: c'è `scheduler_state.json`, non
+  il nuovo `.scheduler.lock`. Rischio basso: un symlink al suo posto è già rifiutato (`O_NOFOLLOW`), e un hardlink al
+  lock di produzione farebbe solo aspettare a turno i giri dei due server, senza toccare dati. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra processi:
+  analisi».
 
 ## B · Backup e Docker (fase 01)
 

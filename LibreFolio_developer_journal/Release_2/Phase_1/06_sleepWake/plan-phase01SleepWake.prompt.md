@@ -3769,3 +3769,104 @@ mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 sono ✅ nel backlog.
 - `flock` su un file system di rete: non è un vincolo nuovo, perché SQLite in WAL vuole già una cartella dati locale.
 
 **Stima:** S–M, mezza giornata con i test. Nessuno slot E2E: azioni `services` leggere (sotto 50) e `api system-wake`.
+
+> **Via** (coordinatore, 17/10 ~05:39): «**Z-11: go**, reds first (test-author), then code. N-Z11-1…4 adopted as
+> **night decision N71**, for review with the developer. **Runner**: OK for your 2 entries in
+> `_backend_services.py`, **in the scheduler block**. B has an uncommitted edit to the same file (the
+> `backup-staging` description, around line 2273): stay away from that region, add only, and don't reorder. Docs:
+> English only, no stamp. Lane 6186, light runs only (no slot needed); at the checkpoint, list the scheduler suites
+> with their counts plus `api system-wake`.» Base: HEAD `737972ef5`.
+
+**Contratto** (N71):
+- `scheduler/run_lock.py`, nuovo:
+  - `fcntl` importato con la guardia di B (`None` dove manca);
+  - `LOCK_FILE_NAME = ".scheduler.lock"` e `POLL_SECONDS = 0.2`;
+  - `cross_process_lock_available()`: vero se c'è `fcntl`;
+  - `run_lock_path()`: `get_data_dir() / LOCK_FILE_NAME`.
+- `scheduler_run_lock(path=None)`, un context manager asincrono:
+  - ogni tentativo apre il file (`O_RDWR|O_CREAT|O_NOFOLLOW`, `0o600`, cartella creata se manca) e prova
+    `LOCK_EX|LOCK_NB`, in un thread (`asyncio.to_thread`); tra un tentativo e l'altro `asyncio.sleep(POLL_SECONDS)`;
+  - il rilascio (`LOCK_UN` e chiusura) è nel `finally`, anche lui in un thread;
+  - un tentativo in volo quando l'attesa viene cancellata non lascia il lock preso: se lo prende, lo rilascia;
+  - un symlink al posto del file solleva `OSError`, e nessun file dietro il link viene creato o bloccato.
+- `_run_locked` controlla nell'ordine:
+  - spento → `disabled`; bloccata → `blocked`;
+  - senza `fcntl`, `am_i_leader()` (in un thread) → `not_leader`;
+  - le impostazioni → `disabled`;
+  - con `fcntl`, dentro `scheduler_run_lock()`: `load_state()`, l'ora letta dopo l'attesa, i job dovuti; senza
+    `fcntl`, lo stesso senza lock.
+  - Con `fcntl`, `am_i_leader()` non viene mai chiamata.
+- Un errore del lock risale come gli altri: il loop lo registra e continua; `wake-sync` risponde `status: "error"` col
+  nome della classe (`wake.py`, `_wake_run`).
+
+**Passi.**
+1. ✅ 17/10 05:41–06:22 — Rossi (test-author; due voci nel blocco dello scheduler del runner, solo aggiunte, lontano
+   dalla riga ~2273 di B):
+   - `test_scheduler_run_lock.py`, nuovo, RL-001…009: esclusione fra processi veri, SIGKILL, attesa cancellata,
+     eccezione nel blocco, `0o600` e symlink, nessuna chiamata sul thread del loop, costanti e percorso, un tentativo
+     in volo che prende il lock dopo la cancellazione, un interprete senza `fcntl`;
+   - `test_scheduler_multiprocess.py`, nuovo, MP-001 e MP-002: due processi veri, ogni job una volta sola, il secondo
+     `not_due`, nessun `not_leader` né `am_i_leader` chiamata, lo stato scritto una volta per job;
+   - adattati: `test_scheduler_catchup.py` (SCU-006, 011, 012 e 013 divisi fra lock e ripiego; nuovi SCU-033 e
+     SCU-034), `test_system_wake.py` (WAKE-029 nuovo; WAKE-024 intrappola anche il lock),
+     `test_scheduler_backoff.py` e `test_scheduler_price_refresh.py` (un lock finto);
+   - col codice di allora:
+     - `scheduler-run-lock` 0/9 (manca il modulo);
+     - `scheduler-multiprocess` 0/2 (ogni job girava due volte);
+     - `scheduler-catchup` 81 verdi e 12 rossi (i casi nuovi), `scheduler-backoff` 79, `scheduler-price-refresh`
+       44, `scheduler-leader` 8;
+     - `api system-wake` 75 verdi e 1 rosso (WAKE-029).
+     Nessun `.scheduler.lock` nella cartella della corsia; ruff e black puliti.
+   Domande di test-author, mie risposte: SCU-034 (l'errore del lock risale) resta, è il contratto; gli extra restano.
+2. ✅ 17/10 05:45–05:52 — Bozza del codice fuori dal repo (`files/z11-draft/run_lock.py`, `apply_z11.py`), provata
+   su una copia: applicazione, compilazione, black pulito, inverso esatto. Ruff segna I001 solo sulla copia: fuori
+   dal repo il nuovo import finisce in un'altra sezione, mentre l'ordine alfabetico è giusto. Da riprovare sul repo.
+   Prova funzionale con processi veri:
+   - A prende il lock subito e lo tiene 1,5 s;
+   - C, in attesa, cancellato dopo 0,5 s, non lascia nulla;
+   - B lo prende 1,42 s dopo, quando A lo lascia;
+   - il file è `-rw-------`;
+   - un symlink è rifiutato (`OSError` 62, `ELOOP`), e dietro il link non viene creato nulla.
+3. ✅ 17/10 05:53–06:07 — Doc (docs-writer, scritta sul contratto; da riverificare sul codice applicato):
+   - `admin/sleep_wake.en.md`:
+     - la riga `not_leader` della tabella: solo su Windows con più processi;
+     - «👥 Several Workers» `#wake-sync-workers` riscritta (qualunque processo esegue, uno alla volta; chi trova un
+       giro in corso aspetta e risponde coi job `not_due`; il 409 solo dal processo che fa già un risveglio; non
+       cancellare `.scheduler.lock`; Windows col leader);
+     - due frasi rese false dal cambio: il consiglio sul chiamante e il punto dei worker in «While Prices Catch Up».
+   - `developer/backend/scheduler.md`:
+     - lo schema, `#run-lock` (il lock fra processi), `#run-checks` (il passo 3 solo senza `fcntl`, il lock dopo i
+       controlli, lo stato e l'ora dentro);
+     - il rapporto (`not_leader` solo senza `fcntl`), il tracker (chi aspetta resta `starting`);
+     - la sezione `#leader-election`, che tiene l'ancora, ora «🔐 Several Workers»: il lock, il ripiego del leader,
+       quel che resta per processo.
+   - `developer/architecture/database/index.md#data-directory`: la riga di `.scheduler.lock`.
+   - Ancore nuove: `#cross-process-lock`, `#leader-election-fallback` e `#workers-per-process`.
+   - `mkdocs build` stretto senza avvisi (carico 43); `check-links` 97 validi.
+   - Nessuno stamp: `sleep_wake` non ha traduzioni, e le pagine di sviluppo sono solo in inglese.
+   - Lasciati di proposito: l'albero di `admin/filesystem` (quattro lingue; non dice di elencare ogni file) e la
+     voce del 1.2 nel `CHANGELOG`. Restano da aggiornare: la docstring del modulo `scheduler.py` (nel codice) e la
+     pagina `market-data-scheduler` della devWiki (dello storico).
+   - La docstring del modulo e quella di `run_due_jobs` le aggiorna il codice (passo 4). Riverificata sul codice
+     applicato la frase «chi aspetta resta `starting`»: un giro di recupero chiama `run_started` prima del lock, e
+     senza job lo stato è `starting` (`PriceRefreshTracker.snapshot`).
+4. ✅ 17/10 06:24 — Codice (`files/z11-draft/apply_z11.py <repo> apply`; impronta in
+   `files/z11-draft/z11_applied.md5`):
+   - `scheduler/run_lock.py`, nuovo;
+   - in `scheduler.py`: l'import, la docstring del modulo, `_run_locked` (il leader solo senza `fcntl`, il lock dopo
+     le impostazioni) e la funzione nuova `_run_due` (stato e ora letti dentro il lock), la docstring di
+     `run_due_jobs`.
+   Sul repo ruff e black puliti: l'I001 della copia era un effetto della cartella.
+5. ✅ 17/10 06:24–06:29 — Controlli, sotto 50, uno alla volta (`files/z11_light.sh green`):
+   - le due azioni nuove: `scheduler-run-lock` 9/9, `scheduler-multiprocess` 2/2;
+   - le altre `services scheduler-*`: `scheduler-catchup` 93/93, `scheduler-backoff` 79/79,
+     `scheduler-price-refresh` 44/44, `scheduler-leader` 8/8, `scheduler-state` 14/14, `scheduler-settings` 14/14,
+     `scheduler-settings-misc` 2/2, `scheduler-due` 25/25, `scheduler-loop` 5/5, `scheduler-jobs` 73/73,
+     `scheduler-joblog-builders` 16/16, `scheduler-joblog-misc` 2/2;
+   - `api system-wake` 76/76.
+   Nessun `.scheduler.lock` nella cartella della corsia né in `backend/data`; porta 6186 libera, nessun processo di
+   prova rimasto.
+6. ✅ 17/10 06:31 — Backlog: Z-11 ✅; nuove Z-23 (un aiuto comune per i lock su file, N-Z11-4) e Z-24
+   (`.scheduler.lock` in `validate_test_data_dir`, file di H, facoltativa). Checkpoint FROZEN al coordinatore.
+   In attesa del via da scrittore: la `desc` di `scheduler-catchup` (dice ancora «not_leader … SCU-001..032») e
+   quella di `system-wake` in `_backend_api.py` (non nomina WAKE-029).
