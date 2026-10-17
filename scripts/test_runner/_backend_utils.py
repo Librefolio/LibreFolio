@@ -555,7 +555,7 @@ Tests for utility modules and helper functions:
         "rate-window",
         utils_rate_window,
         name="Rate Window",
-        desc="SlidingWindowLimiter: a hit counts until exactly window_seconds later, peek never counts, a refused hit records nothing, retry_after waits for enough hits to leave (per-call limit too), independent keys with None among them, reset/clear/len, eviction at max_keys that spares the full keys (N70: the least recently used not full among eviction_scan, else the oldest; never refused, never unbounded), exactly N allowed under concurrent threads",
+        desc="SlidingWindowLimiter: a hit counts until exactly window_seconds later, peek never counts, a refused hit records nothing, retry_after waits for enough hits to leave (per-call limit too), independent keys with None among them, reset/clear, len = the keys with a hit still in the window, eviction at max_keys of the key with the fewest hits still in the window, the least recently used among them (E-14: exact expiry, so expired hits protect nothing even on a key read since; no limit enters the choice; no search, no eviction_scan; a spray of fresh keys never frees a heavier key, locked or a hit short of its limit; never refused, never unbounded, the private expiry heap at most 2·len+64 entries), exactly N allowed under concurrent threads",
         # PURE: no lane DB, no server, no environment read; an injected fake clock, threads of its own, no sleeps.
         isolation="pure",
     )
