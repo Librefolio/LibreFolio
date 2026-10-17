@@ -57,6 +57,19 @@ will go through it on a scheduled wake-up. The contract pinned here:
 (o) A ``scheduler_run_lock()`` that raises as it is entered — the lock cannot be taken — stops the run: its exception
     goes up out of ``run_due_jobs`` as any other (Z-11, N71), before the state is loaded; the span closes and the
     ``asyncio.Lock`` is free.
+(p) Z-26 (night decision N79): ``scheduler`` imports ``LOCK_WAIT_SECONDS`` (600.0) and ``SchedulerRunLockTimeout`` by
+    name from ``run_lock``. ``run_due_jobs(reason)``, after the settle, fixes one deadline, ``time_module.monotonic() +
+    LOCK_WAIT_SECONDS`` — its own names, read at the call; the time left of each wait read on that same clock —, which
+    bounds first the wait for the process's ``asyncio.Lock``, then, where ``cross_process_lock_available()``, the wait
+    for the lock across processes: ``scheduler_run_lock(deadline=<that same deadline>)``. The jobs are not bounded: a run
+    that holds both locks runs its jobs to the end, whatever the time.
+(q) A wait that reaches the deadline gives up: no job runs, the state is neither loaded nor saved, one WARNING "Scheduler
+    run gave up waiting for another run" is logged with ``reason``, ``lock`` — "process" for the process's lock,
+    "data_dir" for the one across processes —, ``waited_s`` and ``limit_s``, and the report is "not_leader" with
+    ``jobs == ()``. It closes as any run: its "scheduler" span ends, the process's lock is free — a later run goes through
+    once its holder is done —, and a catch-up reason's ``PRICE_REFRESH.run_finished()`` is called. The run that holds the
+    locks goes on untouched. Without ``fcntl`` only the process's lock is waited for, and ``scheduler_run_lock`` is never
+    entered.
 
 Pure: no database, no server, no lane port, no network. Every collaborator of ``run_due_jobs`` is a fake set on the module
 with ``monkeypatch``: the switches, the leader, the settings, a state store in memory, the two jobs, the due functions —
@@ -69,7 +82,13 @@ listeners and their calls. The loop
 tests put a recorder in place of ``run_due_jobs``, with ``FIRST_RUN_DELAY_SECONDS`` 0 and ``TICK_SECONDS`` 3600 — 0.05
 where a tick is the event awaited, the marker that the loop went back to waiting —, and wait for a run on an event with a
 bounded timeout. Nothing sleeps, and no assertion depends on a duration: the one bound of (b) is a timer of the loop,
-which never fires before the callbacks already due. The log is read with ``structlog.testing.capture_logs`` behind a
+which never fires before the callbacks already due. The cases of Z-26 put a counting tracker of their own in place of
+``PRICE_REFRESH`` and record what each entry of the lock across processes was given. Where the deadline's value is the
+subject (SCU-037), ``scheduler.time_module`` is a fake monotonic clock, started at the real one's reading, that moves
+only when the test or the settle recorder moves it. Elsewhere ``LOCK_WAIT_SECONDS`` is lowered — ``SHORT_LIMIT``,
+``JOB_LIMIT`` — and waited out on the real clock: a run that gives up at it, a job held past it. Those waits are bounded
+by ``WAIT_SECONDS``, and the one duration they assert, a ``waited_s`` of at least half the limit, is a lower bound that
+load can only lengthen. The log is read with ``structlog.testing.capture_logs`` behind a
 barrier: a canary logged through each module's own ``logger`` must reach the capture.
 
 Red until the code of Z3 exists: the new names are missing from the module, an ``AttributeError`` where a test or a
@@ -78,6 +97,11 @@ fixture sets or reads one; then the loop's exit needs ``Activity.remove_return_l
 ``_run_locked`` takes ``scheduler_run_lock()`` where ``cross_process_lock_available()``: before, it asks
 ``am_i_leader`` and never enters the lock. The stand-ins are set with ``raising=False``, so the cases of the fallback
 pass before and after.
+
+Red before Z-26 (N79): SCU-035, SCU-036 and SCU-039 at their first lines, on the names they need
+(``LOCK_WAIT_SECONDS``, ``SchedulerRunLockTimeout``); SCU-037 because ``scheduler_run_lock`` is entered without a
+deadline; SCU-038 because the run behind a run of its own process waits for it to its end, and is still waiting
+``WAIT_SECONDS`` later.
 """
 
 from __future__ import annotations
@@ -87,6 +111,7 @@ import copy
 import dataclasses
 import inspect
 import threading
+import time as time_module
 from collections import Counter, defaultdict
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from contextlib import AbstractContextManager, asynccontextmanager, contextmanager
@@ -97,7 +122,7 @@ from zoneinfo import ZoneInfo
 import pytest
 from structlog.testing import capture_logs
 
-from backend.app.services.platform.scheduler import scheduler
+from backend.app.services.platform.scheduler import run_lock, scheduler
 from backend.app.services.platform.scheduler.settings import SchedulerSettings
 from backend.app.services.platform.scheduler.state import JobState, SchedulerState
 from backend.app.services.platform.sleep_wake import activity as activity_module
@@ -150,6 +175,27 @@ REAL_DUE_HISTORY_SYNC = scheduler.due_history_sync
 LOCK_MODES = [pytest.param(True, id="cross-process-lock"), pytest.param(False, id="fallback-leader")]
 #: Where the wall clock is once the stand-in of the lock has made a run wait seven minutes for another worker's.
 AFTER_THE_WAIT = WALL_START + timedelta(minutes=7)
+#: Z-26 (N79), literals of the contract: the longest a run waits for another run, both of its waits together; the
+#: warning of a run that gives up; the catch-up reasons, those ``PRICE_REFRESH`` counts.
+LOCK_WAIT = 600.0
+GAVE_UP = "Scheduler run gave up waiting for another run"
+CATCH_UPS = ("startup", "return", "wake")
+#: ``LOCK_WAIT_SECONDS`` where a run waits it out and gives up at it, reporting a ``waited_s`` of at least half of it.
+SHORT_LIMIT = 1.0
+#: ``LOCK_WAIT_SECONDS`` where a job of a run that holds its locks runs past it.
+JOB_LIMIT = 0.2
+#: ``LOCK_WAIT_SECONDS`` on the fake monotonic clock: distinctive, so that a run reading 600 instead shows.
+DISTINCT_LIMIT = 900.0
+#: On the fake monotonic clock: what the settle of a "wake" run takes, and how long that run then waits for the process's
+#: lock.
+SETTLE_TOOK = 7.0
+WAITED_FOR_THE_FIRST = 300.0
+#: Turns of the event loop given to a run past its settle before the test moves the fake monotonic clock.
+LOOP_TURNS = 5
+#: How often the real monotonic clock is polled while a deadline is waited out.
+CLOCK_POLL = 0.02
+#: What ``_deadlines`` says of an entry of the lock across processes given no deadline.
+NO_DEADLINE = "<no deadline>"
 
 
 class ProviderExploded(Exception):
@@ -250,7 +296,8 @@ class World:
     ``("due", name)``, ``("job", name)``, ``("save",)`` —; the clock readings are kept apart, in ``wall.readings``. The
     state store keeps a deep copy of what was saved and hands out a deep copy of it, as a file would. A job is due when
     the state it is given says it never ran. ``lock_available`` is what ``cross_process_lock_available()`` answers:
-    true, as with ``fcntl``; false for the leader's fallback.
+    true, as with ``fcntl``; false for the leader's fallback. ``lock_calls`` keeps what each entry of the lock across
+    processes was given — its ``deadline`` among them since Z-26.
     """
 
     def __init__(self, activity: RecordingActivity) -> None:
@@ -282,6 +329,7 @@ class World:
         self.saved: list[SchedulerState] = []
         self.due_calls: list[tuple[str, datetime, SchedulerSettings, SchedulerState]] = []
         self.job_calls: list[tuple[str, SchedulerState, object]] = []
+        self.lock_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
 
     def ran_before(self, name: str, when: datetime) -> None:
         """The stored state says ``name`` ran at ``when``: it is not due."""
@@ -313,10 +361,11 @@ class World:
         return self.lock_available
 
     @asynccontextmanager
-    async def scheduler_run_lock(self, *_args: object, **_kwargs: object) -> AsyncIterator[None]:
-        """The lock across processes, stood in for: no file. Entered, it records ``("lock",)`` — "scheduler" listed or
-        not —, moves the wall clock on by ``lock_shift`` as a wait for another worker's run would, and raises
-        ``lock_failure`` when one is set; left, however, it records ``("unlock",)``."""
+    async def scheduler_run_lock(self, *args: object, **kwargs: object) -> AsyncIterator[None]:
+        """The lock across processes, stood in for: no file. Entered, it keeps what it was given in ``lock_calls``, records
+        ``("lock",)`` — "scheduler" listed or not —, moves the wall clock on by ``lock_shift`` as a wait for another
+        worker's run would, and raises ``lock_failure`` when one is set; left, however, it records ``("unlock",)``."""
+        self.lock_calls.append((args, dict(kwargs)))
         self.timeline.append(("lock",))
         self._listed("lock")
         self.wall.now += self.lock_shift
@@ -442,6 +491,48 @@ class RunRecorder:
         await _within(reached(), lambda: f"run #{count} {'ended' if ended else 'started'}? the runs so far: {self.reasons}")
 
 
+class MonotonicClock:
+    """``scheduler.time_module`` for a case of Z-26: the real ``time`` module but for ``monotonic()``, which reads a fake
+    clock that moves only when the test or the settle recorder moves it; each reading recorded."""
+
+    def __init__(self, start: float) -> None:
+        self.now = start
+        self.readings: list[float] = []
+
+    def monotonic(self) -> float:
+        self.readings.append(self.now)
+        return self.now
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(time_module, name)
+
+
+class CountingTracker(scheduler.PriceRefreshTracker):
+    """``PRICE_REFRESH`` for a case of Z-26: a tracker of the test's own, on a fixed clock, which also records each
+    ``run_started(reason)`` and ``run_finished()`` it is told of, in order."""
+
+    def __init__(self) -> None:
+        super().__init__(clock=lambda: WALL_START)
+        self.counted: list[str] = []
+
+    def run_started(self, reason: str) -> None:
+        self.counted.append(f"started:{reason}")
+        super().run_started(reason)
+
+    def run_finished(self) -> None:
+        self.counted.append("finished")
+        super().run_finished()
+
+
+@dataclasses.dataclass(frozen=True)
+class Held:
+    """A first run held inside its current_price job: it holds the process's lock — and, with ``fcntl``, the one across
+    processes — until the test sets ``release``."""
+
+    task: asyncio.Task[Any]
+    release: asyncio.Event
+
+
 # =============================================================================
 # FIXTURES AND HELPERS
 # =============================================================================
@@ -472,6 +563,15 @@ def runs(monkeypatch: pytest.MonkeyPatch, activity: RecordingActivity) -> RunRec
     monkeypatch.setattr(scheduler, "FIRST_RUN_DELAY_SECONDS", 0.0)
     monkeypatch.setattr(scheduler, "TICK_SECONDS", 3_600.0)
     return recorder
+
+
+@pytest.fixture
+def tracker(monkeypatch: pytest.MonkeyPatch) -> CountingTracker:
+    """A ``CountingTracker`` in place of the process's ``PRICE_REFRESH``, which ``run_due_jobs`` reads at the call: a case of
+    Z-26 never touches the process's."""
+    mine = CountingTracker()
+    monkeypatch.setattr(scheduler, "PRICE_REFRESH", mine)
+    return mine
 
 
 async def _within(awaitable: Awaitable[Any], what: str | Callable[[], str]) -> Any:
@@ -547,6 +647,114 @@ def _jobs_and_saves(world: World) -> list[tuple[str, ...]]:
 
 def _rome(year: int, month: int, day: int, hour: int, minute: int) -> datetime:
     return datetime(year, month, day, hour, minute, tzinfo=ROME)
+
+
+def _lock_timeout() -> type[BaseException]:
+    """``run_lock.SchedulerRunLockTimeout``, what the lock across processes raises at its deadline; a red naming it while
+    it does not exist (Z-26, N79)."""
+    timeout = getattr(run_lock, "SchedulerRunLockTimeout", None)
+    if not (isinstance(timeout, type) and issubclass(timeout, TimeoutError)):
+        pytest.fail(f"run_lock has no SchedulerRunLockTimeout, a TimeoutError: the bounded waits of Z-26 (night decision N79) are not written: {timeout!r}")
+    return timeout
+
+
+def _lowered_limit(monkeypatch: pytest.MonkeyPatch, seconds: float) -> None:
+    """``scheduler.LOCK_WAIT_SECONDS`` set to ``seconds`` — the name the scheduler imports from ``run_lock`` and reads at the
+    call (N79) —; a red at once while the scheduler has no such name."""
+    if not hasattr(scheduler, "LOCK_WAIT_SECONDS"):
+        pytest.fail("scheduler has no LOCK_WAIT_SECONDS: N79 imports it by name from run_lock, where a test sets it — the bounded waits of Z-26 are not written")
+    monkeypatch.setattr(scheduler, "LOCK_WAIT_SECONDS", seconds)
+
+
+def _limit_set(monkeypatch: pytest.MonkeyPatch, seconds: float) -> str:
+    """``scheduler.LOCK_WAIT_SECONDS`` set to ``seconds``, even where the scheduler has no such name yet, so that the case
+    reaches what the run does; what a red should add then."""
+    note = "" if hasattr(scheduler, "LOCK_WAIT_SECONDS") else "; the scheduler had no LOCK_WAIT_SECONDS of its own before this test set one (N79 imports it by name from run_lock)"
+    monkeypatch.setattr(scheduler, "LOCK_WAIT_SECONDS", seconds, raising=False)
+    return note
+
+
+async def _ended(task: asyncio.Task[Any], what: str | Callable[[], str]) -> asyncio.Task[Any]:
+    """``task``, done within ``WAIT_SECONDS``; else it is cancelled and the test fails naming ``what``. What it returned or
+    raised is read from it: a ``TimeoutError`` of its own — ``SchedulerRunLockTimeout`` is one — is never taken for the
+    test's deadline, as ``_within`` would take it."""
+    done, _ = await asyncio.wait({task}, timeout=WAIT_SECONDS)
+    if not done:
+        message = what() if callable(what) else what
+        task.cancel()
+        await asyncio.wait({task}, timeout=WAIT_SECONDS)
+        pytest.fail(f"{message}: still running {WAIT_SECONDS} s later")
+    return task
+
+
+def _report_of(task: asyncio.Task[Any], what: str) -> Any:
+    """What the run ``task`` returned; a red naming ``what`` if it was cancelled or raised."""
+    if task.cancelled():
+        pytest.fail(f"{what}: cancelled")
+    error = task.exception()
+    if error is not None:
+        pytest.fail(f"{what}: raised {type(error).__name__}: {error}")
+    return task.result()
+
+
+async def _run(reason: str, what: str) -> Any:
+    """``run_due_jobs(reason)`` to its end, within the deadline: its report; else a red naming ``what``."""
+    task = asyncio.create_task(scheduler.run_due_jobs(reason), name=f"{reason}-run")
+    return _report_of(await _ended(task, what), what)
+
+
+async def _wound_down(*tasks: asyncio.Task[Any]) -> None:
+    """Every task over: awaited within the deadline, else cancelled; what each raised retrieved, so that nothing is left
+    to the loop's teardown."""
+    pending = {task for task in tasks if not task.done()}
+    if pending:
+        _, still = await asyncio.wait(pending, timeout=WAIT_SECONDS)
+        for task in still:
+            task.cancel()
+        if still:
+            await asyncio.wait(still, timeout=WAIT_SECONDS)
+    for task in tasks:
+        if task.done() and not task.cancelled():
+            task.exception()
+
+
+@asynccontextmanager
+async def _a_run_held_in_its_job(world: World, reason: str = "tick") -> AsyncIterator[Held]:
+    """``run_due_jobs(reason)`` as a task, held inside its current_price job until the test sets ``release``; at the end
+    released and wound down. The gate and the events are created in the running loop."""
+    entered, release = asyncio.Event(), asyncio.Event()
+    world.gates["current_price"] = (entered, release)
+    task = asyncio.create_task(scheduler.run_due_jobs(reason), name="run-holding-the-locks")
+    try:
+        await _within(entered.wait(), "the first run never started its current_price job")
+        yield Held(task, release)
+    finally:
+        release.set()
+        await _wound_down(task)
+
+
+async def _past(instant: float) -> None:
+    """Until the real monotonic clock is past ``instant``, polled every ``CLOCK_POLL`` on a timer of the loop."""
+    while time_module.monotonic() <= instant:
+        await asyncio.sleep(CLOCK_POLL)
+
+
+def _deadlines(world: World) -> list[object]:
+    """The ``deadline`` each entry of the lock across processes was given, in order; ``NO_DEADLINE`` where none."""
+    return [kwargs.get("deadline", NO_DEADLINE) for _, kwargs in world.lock_calls]
+
+
+def _assert_gave_up(events: list[dict[str, Any]], reason: str, lock: str, limit: float, *, waited_at_least: float = 0.0) -> None:
+    """One WARNING "Scheduler run gave up waiting for another run" among ``events``, with its four fields: the run's
+    ``reason``, the ``lock`` it waited for, ``limit_s`` the limit in effect, ``waited_s`` the seconds it waited, at least
+    ``waited_at_least``."""
+    gave_up = [entry for entry in events if entry.get("event") == GAVE_UP]
+    assert len(gave_up) == 1, f"a run that gives up says so once, as a warning (Z-26, N79): {gave_up or events}"
+    (entry,) = gave_up
+    fields = {key: entry.get(key, "<missing>") for key in ("log_level", "reason", "lock", "limit_s")}
+    assert fields == {"log_level": "warning", "reason": reason, "lock": lock, "limit_s": limit}, f"the warning's fields: {entry}"
+    waited = entry.get("waited_s")
+    assert isinstance(waited, int | float) and not isinstance(waited, bool) and waited >= waited_at_least, f"waited_s, the seconds the run waited, at least {waited_at_least}: {entry}"
 
 
 # =============================================================================
@@ -1123,6 +1331,197 @@ async def test_a_cross_process_lock_that_cannot_be_taken_stops_the_run_before_th
     report = await _within(scheduler.run_due_jobs("tick"), "the next run: is the asyncio lock still held?")
     assert [(outcome.name, outcome.status) for outcome in report.jobs] == [("current_price", "ok"), ("history_sync", "ok")]
     print_success("raised before the state; the next run went through")
+
+
+# =============================================================================
+# (p), (q) THE DEADLINE OF THE WAITS (Z-26, N79)
+# =============================================================================
+
+
+def test_the_scheduler_imports_the_limit_and_the_timeout_by_name_from_run_lock() -> None:
+    """SCU-035 — contract (p), Z-26 (N79): ``run_lock.LOCK_WAIT_SECONDS`` is 600.0 and the scheduler's is that very object;
+    ``scheduler.SchedulerRunLockTimeout`` is ``run_lock.SchedulerRunLockTimeout``, a ``TimeoutError``: names imported by
+    name from ``run_lock``, so that a test sets them on the scheduler, where they are read.
+
+    Red before Z-26: neither module has them."""
+    print_section("SCU-035: LOCK_WAIT_SECONDS and SchedulerRunLockTimeout, imported by name")
+    names = ("LOCK_WAIT_SECONDS", "SchedulerRunLockTimeout")
+    present = {f"{module.__name__.rsplit('.', 1)[-1]}.{name}": hasattr(module, name) for module in (run_lock, scheduler) for name in names}
+
+    assert present == dict.fromkeys(present, True), f"the bounded waits of Z-26 (N79): {present}"
+    assert run_lock.LOCK_WAIT_SECONDS == LOCK_WAIT, f"LOCK_WAIT_SECONDS: {run_lock.LOCK_WAIT_SECONDS!r}"
+    assert scheduler.LOCK_WAIT_SECONDS is run_lock.LOCK_WAIT_SECONDS, "the scheduler's LOCK_WAIT_SECONDS is run_lock's, imported by name"
+    assert scheduler.SchedulerRunLockTimeout is run_lock.SchedulerRunLockTimeout and issubclass(run_lock.SchedulerRunLockTimeout, TimeoutError), "the scheduler's SchedulerRunLockTimeout is run_lock's, a TimeoutError"
+    print_success(f"{LOCK_WAIT:.0f} s and SchedulerRunLockTimeout, both run_lock's")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", REASONS)
+async def test_a_wait_for_the_cross_process_lock_that_reaches_the_deadline_gives_up_with_not_leader(world: World, activity: RecordingActivity, tracker: CountingTracker, reason: str) -> None:
+    """SCU-036 — contracts (p) and (q), Z-26 (N79): the lock across processes is stood in for by one that raises
+    ``SchedulerRunLockTimeout`` as it is entered — another worker held it past the deadline. The run entered it once,
+    after its settle, switches and settings, given ``deadline`` the monotonic clock of a moment of the run plus 600 s.
+    It answers "not_leader" with ``jobs == ()``, without loading or saving the state or running a job; one WARNING
+    "Scheduler run gave up waiting for another run" with its ``reason``, ``lock="data_dir"``, ``limit_s`` 600 and a
+    ``waited_s``; "scheduler" listed while it waited for the lock and no longer after; a catch-up — "startup", "return",
+    "wake" — counted then finished, a "tick" never counted. The next run goes through the process's lock and runs both
+    jobs.
+
+    Red before Z-26: ``run_lock`` has no ``SchedulerRunLockTimeout``."""
+    print_section(f"SCU-036: a {reason} run gives up at the lock across processes")
+    world.lock_failure = _lock_timeout()("provoked: another worker held the lock past the deadline")
+    before = time_module.monotonic()
+
+    with _captured_log() as events:
+        report = await _run(reason, f"the {reason} run whose wait for the lock across processes reached its deadline: SchedulerRunLockTimeout stops at the run, which answers not_leader (Z-26, N79)")
+    after = time_module.monotonic()
+
+    _assert_frame(report, reason)
+    assert (report.status, report.jobs) == ("not_leader", ()), report
+    settle = [("settle",)] if reason in SETTLING_REASONS else []
+    assert world.timeline == [*settle, ("disabled",), ("blocked",), ("settings",), ("lock",)], f"nothing past the lock across processes: no state loaded or saved, no job: {world.timeline}"
+    [deadline] = _deadlines(world)
+    assert isinstance(deadline, float) and before + LOCK_WAIT <= deadline <= after + LOCK_WAIT, f"scheduler_run_lock(deadline=<monotonic clock> + LOCK_WAIT_SECONDS), between {before + LOCK_WAIT} and {after + LOCK_WAIT}: {world.lock_calls}"
+    _assert_gave_up(events, reason, "data_dir", LOCK_WAIT)
+    assert (world.busy_seen["lock"], SCHEDULER_REASON in activity.busy_reasons(), activity.open_spans[SCHEDULER_REASON]) == ([True], False, 0), "busy while it waited for the lock, not after"
+    counted = [f"started:{reason}", "finished"] if reason in CATCH_UPS else []
+    assert (tracker.counted, tracker.snapshot().state) == (counted, "idle"), f"a catch-up that gave up is finished as any run's, a tick never counted: {tracker.counted}"
+    world.lock_failure = None
+    following = await _run("tick", "the next run: is the process's lock still held?")
+    assert [(outcome.name, outcome.status) for outcome in following.jobs] == [("current_price", "ok"), ("history_sync", "ok")], following
+    print_success(f"not_leader, data_dir, nothing loaded; counted {tracker.counted}; the next run went through")
+
+
+@pytest.mark.asyncio
+async def test_one_deadline_fixed_after_the_settle_bounds_both_waits(world: World, tracker: CountingTracker, monkeypatch: pytest.MonkeyPatch) -> None:
+    """SCU-037 — contract (p), Z-26 (N79): ``scheduler.time_module`` is a fake monotonic clock, started at the real one's
+    reading ``t``; ``LOCK_WAIT_SECONDS`` is 900, so that a run reading 600 instead shows. Run A, "tick", fixes its deadline
+    at ``t + 900`` and holds both locks inside its current_price job. Run B, "wake", settles — the settle takes 7 s on the
+    clock —, fixes its deadline at ``t + 907`` and waits for the process's lock; meanwhile the clock moves on by 300 s,
+    then A is released. Past the process's lock, B enters the lock across processes with that very deadline, ``t + 907``
+    — neither ``t + 900``, counted from before its settle, nor ``t + 1 207``, counted again after its wait —, as A entered
+    it with ``t + 900``. Both end "ok": A ran both jobs, B found them done, its catch-up counted and finished.
+
+    Red before Z-26: ``scheduler_run_lock`` is entered without a deadline."""
+    print_section("SCU-037: one deadline, fixed after the settle, for both waits")
+    start = time_module.monotonic()
+    clock = MonotonicClock(start)
+    monkeypatch.setattr(scheduler, "time_module", clock)
+    note = _limit_set(monkeypatch, DISTINCT_LIMIT)
+    settled = asyncio.Event()
+    readings_at_the_settle: list[int] = []
+
+    def settle() -> None:
+        clock.now += SETTLE_TOOK
+        readings_at_the_settle.append(len(clock.readings))
+        settled.set()
+
+    world.on_settle = settle
+    async with _a_run_held_in_its_job(world) as first:
+        second = asyncio.create_task(scheduler.run_due_jobs("wake"), name="run-b")
+        try:
+            await _within(settled.wait(), "run B never settled its clock")
+            for _ in range(LOOP_TURNS):
+                await asyncio.sleep(0)
+            read_by_b = clock.readings[readings_at_the_settle[0] :]
+            clock.now += WAITED_FOR_THE_FIRST
+            first.release.set()
+            second_report = _report_of(await _ended(second, "run B, once run A was released"), "run B")
+        finally:
+            first.release.set()
+            await _wound_down(second)
+        first_report = _report_of(await _ended(first.task, "run A, released"), "run A")
+
+    after_the_settle = start + SETTLE_TOOK
+    expected = [start + DISTINCT_LIMIT, after_the_settle + DISTINCT_LIMIT]
+    assert _deadlines(world) == expected, (
+        f"each run enters scheduler_run_lock(deadline=…) with the one deadline it fixed after its settle, its monotonic clock + LOCK_WAIT_SECONDS ({DISTINCT_LIMIT:.0f} here){note}: "
+        f"A {expected[0]}, B {expected[1]} — not {start + DISTINCT_LIMIT} (B, from before its settle), not {after_the_settle + WAITED_FOR_THE_FIRST + DISTINCT_LIMIT} (B, counted again after its wait for the process's lock); "
+        f"the entries {world.lock_calls}; B read the clock {read_by_b} between its settle and the clock's move"
+    )
+    assert [(outcome.name, outcome.status) for outcome in first_report.jobs] == [("current_price", "ok"), ("history_sync", "ok")], first_report
+    assert (second_report.status, second_report.jobs) == ("ok", (scheduler.JobOutcome("current_price", "not_due"), scheduler.JobOutcome("history_sync", "not_due"))), second_report
+    assert tracker.counted == ["started:wake", "finished"], tracker.counted
+    print_success(f"A t+{expected[0] - start:.0f}, B t+{expected[1] - start:.0f}: one deadline each, fixed after the settle")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("lock_available", LOCK_MODES)
+async def test_a_run_behind_a_run_of_its_own_process_gives_up_at_the_deadline_and_the_holder_goes_on(world: World, activity: RecordingActivity, tracker: CountingTracker, monkeypatch: pytest.MonkeyPatch, lock_available: bool) -> None:
+    """SCU-038 — contracts (p) and (q), Z-26 (N79): a "tick" run holds the process's lock inside its current_price job;
+    ``LOCK_WAIT_SECONDS`` lowered to ``SHORT_LIMIT``, a "wake" run behind it gives up at its deadline while the first
+    still runs: "not_leader", no job; nothing of it called past its settle — no switch, leader, settings,
+    ``scheduler_run_lock`` or state —; one WARNING with ``lock="process"``, ``limit_s`` the limit and ``waited_s`` at least
+    half of it; its span closed while the first's stays open; its catch-up counted, then finished. Released, the first
+    ends "ok" with both jobs, past its own deadline; a third run then goes through the process's lock and finds both jobs
+    done. Without ``fcntl`` the same, and no run enters ``scheduler_run_lock``.
+
+    Red before Z-26: the second run waits for the first to its end, and is still waiting when the test gives up on it,
+    ``WAIT_SECONDS`` later."""
+    print_section(f"SCU-038: a wake run behind a run of its own process gives up ({'cross-process lock' if lock_available else 'fallback'})")
+    world.lock_available = lock_available
+    note = _limit_set(monkeypatch, SHORT_LIMIT)
+
+    with _captured_log() as events:
+        async with _a_run_held_in_its_job(world) as first:
+            second = asyncio.create_task(scheduler.run_due_jobs("wake"), name="run-behind-the-first")
+            try:
+                await _ended(second, lambda: f"the wake run behind a run of its own process held inside a job was still waiting for the process's lock long after a limit of {SHORT_LIMIT} s: nothing bounds that wait (Z-26, N79){note}; the timeline {world.timeline}")
+                seen = (list(world.timeline), activity.open_spans[SCHEDULER_REASON], list(tracker.counted), tracker.snapshot().state, first.task.done(), len(world.lock_calls))
+            finally:
+                first.release.set()
+                await _wound_down(second)
+            second_report = _report_of(second, "the wake run that gave up")
+            first_report = _report_of(await _ended(first.task, "the first run, released"), "the first run")
+        third = await _run("tick", "a third run, once the first was over: is the process's lock still held?")
+
+    timeline, spans, counted, progress, first_done, entered = seen
+    _assert_frame(second_report, "wake")
+    assert (second_report.status, second_report.jobs) == ("not_leader", ()), second_report
+    assert timeline[timeline.index(("settle",)) + 1 :] == [], f"nothing of the run that gave up was called past its settle — no switch, leader, settings, lock across processes or state: {timeline}"
+    assert entered == (1 if lock_available else 0), f"only the first run entered the lock across processes, and only with fcntl: {world.lock_calls}"
+    assert (first_done, spans) == (False, 1), "the run holding the locks goes on untouched, its span open; the one that gave up closed its own"
+    assert (counted, progress) == (["started:wake", "finished"], "idle"), "the catch-up of the run that gave up is finished, as any run's"
+    _assert_gave_up(events, "wake", "process", SHORT_LIMIT, waited_at_least=SHORT_LIMIT / 2)
+    assert (first_report.status, [(outcome.name, outcome.status) for outcome in first_report.jobs]) == ("ok", [("current_price", "ok"), ("history_sync", "ok")]), first_report
+    assert third.jobs == (scheduler.JobOutcome("current_price", "not_due"), scheduler.JobOutcome("history_sync", "not_due")), third
+    assert (len(world.lock_calls), SCHEDULER_REASON in activity.busy_reasons(), activity.open_spans[SCHEDULER_REASON]) == ((2 if lock_available else 0), False, 0), world.lock_calls
+    print_success("not_leader at the process's lock; the holder went on; the next run went through")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("lock_available", LOCK_MODES)
+async def test_a_run_that_holds_its_locks_runs_its_jobs_to_the_end_past_its_deadline(world: World, activity: RecordingActivity, monkeypatch: pytest.MonkeyPatch, lock_available: bool) -> None:
+    """SCU-039 — contract (p), Z-26 (N79): ``LOCK_WAIT_SECONDS`` lowered to ``JOB_LIMIT`` and nothing contending, a "tick"
+    run takes its locks at once, and its current_price job is held until the run's deadline is past — the moment the job
+    was seen started, plus the limit —: the run is still on. Released, current_price ends "ok", and history_sync, started
+    past the deadline, runs and ends "ok" as well; both are saved, the run is "ok", and no run gave up.
+
+    Red before Z-26, on the name it lowers: nothing bounds today's runs, and the scheduler has no ``LOCK_WAIT_SECONDS``."""
+    print_section(f"SCU-039: the jobs of a run past its deadline ({'cross-process lock' if lock_available else 'fallback'})")
+    world.lock_available = lock_available
+    _lowered_limit(monkeypatch, JOB_LIMIT)
+    entered, release = asyncio.Event(), asyncio.Event()
+    world.gates["current_price"] = (entered, release)
+
+    with _captured_log() as events:
+        run = asyncio.create_task(scheduler.run_due_jobs("tick"), name="run-past-its-deadline")
+        try:
+            await _within(entered.wait(), "the run never started its current_price job")
+            await _within(_past(time_module.monotonic() + JOB_LIMIT), "the monotonic clock never passed the run's deadline")
+            held_past_the_deadline = not run.done()
+            release.set()
+            report = _report_of(await _ended(run, "the run whose job ran past its deadline"), "the run whose job ran past its deadline")
+        finally:
+            release.set()
+            await _wound_down(run)
+
+    assert held_past_the_deadline, "a job held past the run's deadline is never cut short"
+    assert (report.status, [(outcome.name, outcome.status) for outcome in report.jobs]) == ("ok", [("current_price", "ok"), ("history_sync", "ok")]), report
+    assert _jobs_and_saves(world) == [("job", "current_price"), ("save",), ("job", "history_sync"), ("save",)], world.timeline
+    assert [entry for entry in events if entry.get("event") == GAVE_UP] == [], "a run that holds its locks never gives up"
+    assert SCHEDULER_REASON not in activity.busy_reasons()
+    print_success("both jobs ran to their end past the deadline")
 
 
 # =============================================================================

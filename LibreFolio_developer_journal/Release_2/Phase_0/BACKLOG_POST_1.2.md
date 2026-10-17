@@ -6267,12 +6267,17 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     (`#bulk-request-limits`).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-25 — un tetto alle
   richieste di massa di prezzi e cambi: analisi».
-- **Z-26 · L'attesa del lock fra processi dello scheduler non ha un tempo massimo** — basso; E (R13-SEC8), via
-  coordinatore, 17/10. `scheduler_run_lock()` (`scheduler/run_lock.py:83-91`, Z-11) aspetta il lock senza limite. Un
-  job bloccato in un worker ferma i giri degli altri: lo scheduler resta occupato, e `wake-sync` risponde 409 a chi
-  arriva dopo, dove prima rispondevano `not_leader`. Dopo X-R55 e Z-25; prima un'analisi: quanto aspettare, e cosa
-  rispondere quando il tempo finisce. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
-  sezione «Z-11 — lock dei job tra processi: analisi».
+- ✅ **Z-26 · L'attesa del lock fra processi dello scheduler non ha un tempo massimo** — basso; E (R13-SEC8), via
+  coordinatore, 17/10. **Chiusa il 17/10 col lotto Z-26** (il commit è del coordinatore; decisione notturna N79, da
+  rivedere col developer).
+  - Un giro aspetta al più `LOCK_WAIT_SECONDS` (600 s, `scheduler/run_lock.py`): una sola scadenza, fissata dopo
+    l'assestamento dell'orologio, per le due attese, il lock del processo e quello fra processi; mai per i job.
+  - A scadenza: nessun job, stato non letto, un avviso nel log, e `not_leader`; il giro dopo riprova. Il
+    `wake-sync` dietro un giro fermo risponde così, e la sveglia seguente è accettata.
+  Era: `scheduler_run_lock()` (`run_lock.py:83-91`, Z-11) aspettava senza limite; un job bloccato in un worker
+  fermava i giri degli altri, e `wake-sync` rispondeva 409 a chi arrivava dopo. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-26 — l'attesa del lock fra
+  processi senza tempo massimo: analisi».
 - **Z-27 · Il web app manda una pagina intera in una richiesta di massa (per Y e X)** — basso, dopo Z-25; Z, 17/10
   (Z-25, N77; via coordinatore).
   - La lista asset (`fetchAllPriceData` in `routes/(app)/assets/+page.svelte`) manda una voce per asset in un solo
