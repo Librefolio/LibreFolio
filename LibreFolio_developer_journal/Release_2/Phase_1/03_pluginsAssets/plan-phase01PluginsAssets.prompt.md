@@ -5153,3 +5153,68 @@ portato avanti con un fast-forward. `instance_links.py` l'ha rivisto il coordina
 > - **Prove della doc**: `mkdocs build` stretto → 0 avvisi, nessuna riga INFO su ancore; `check-links` → 97;
 >   `git diff --check` pulito.
 > - **CHANGELOG**: niente, perché le tre variabili sono nuove della 1.3 e nessuna versione rilasciata è esposta.
+
+**X-R35 committato ed entrato** (coordinatore, 01:27): `4e06d78ff` e `59be85f21`, dev `67668f5ce`, il mio ramo portato
+avanti con un fast-forward. Il coordinatore ha rivisto le righe di A in `configuration.en.md` e passa a E la nota su
+`links.py`. W-B58 non è ancora in dev: prima O-8, poi X-R38 quando W-B58 entra.
+
+### O-8 — i messaggi del salvataggio nell'editor dei dati dell'asset ✅ (2026-10-17, 01:28–02:06; consegnato al coordinatore)
+
+**Via del coordinatore**: `AssetDataEditorSection.svelte` è libero (stanotte niente lotti dei colori lì). Le righe
+`step` di W (73–77 e 99) restano come sono: W le cambia nel C-97b, dopo W-B58.
+
+**Stato verificato** (su `67668f5ce`): oltre alle tre stringhe del backlog («Asset data:», «Failed to save:», «Save
+failed:»), il toast si costruisce con frammenti inglesi: `N prices saved`, `N prices deleted`, `N skipped (invalid)`,
+`N events saved`. Solo `events.deleteSuccess` passa dal catalogo. Il ripiego `'unknown error'` è inglese. Nessun test
+controlla questi testi, e il componente non ha un file di test.
+
+**Disegno**:
+- un modulo puro `assetDataSaveSummary.ts` (core-unit): i conteggi danno le parti non nulle, nell'ordine del
+  salvataggio, ognuna un plurale ICU del catalogo (`assets.dataEditor.{pricesSaved,pricesDeleted,pricesSkipped,
+  eventsSaved}` e `events.deleteSuccess`), unite da «, » dentro `assets.dataEditor.saved`; tutto a zero dà `null`;
+- il componente passa a `notify()`: `assets.data.saved` con i conteggi in `detail` (l'evento sempre, il toast solo
+  quando c'è qualcosa da dire); l'errore usa `dataEditor.saveFailed` (`{error}`) per il messaggio in linea e per il toast
+  (`assets.data.saveFailed`), con il ripiego `common.unknownError`;
+- le prove: il modulo puro con un `translate` finto e con il catalogo vero (EN e IT); l'E2E `asset-data-editor` legge
+  l'evento (`waitForEvent`) in uno scenario di salvataggio, mai il testo del toast.
+- Codice e chiavi pronti: `files/checks/o8_code.py` (le ancore corrispondono, verificato a secco),
+  `files/checks/o8_i18n.sh`.
+
+> **Note implementazione** (01:28–01:50):
+> - **Fine del congelamento dei segnali** (coordinatore, 01:33): il CP-10b di J è in dev `b36e3873f`; il runtime ora sta
+>   in `services/signals/{service,runtime,annotations,series,base,risk_adapters}.py`, e `risk/signal_helpers.py` non
+>   esiste più. `signals/service.py` resta di J fino all'ingresso del CP-10c. O-8 e X-R38 non toccano questi file.
+> - **I rossi** (test-author):
+>   - `assetDataSaveSummary.test.ts` (nuovo, core-unit), 32 casi:
+>     - un `translate` finto, per l'ordine delle parti e il separatore;
+>     - il catalogo vero in EN e in IT: le chiavi esistono, i plurali con 1 e 2, i riassunti interi confrontati con
+>       le parole del catalogo;
+>     - una guardia su `events.deleteSuccess`, che deve leggere `n`.
+>   - E2E `asset-data-editor.spec.ts`:
+>     - un test nuovo: un salvataggio di prezzi rifiutato da un 500 instradato, poi il nuovo tentativo, su un asset
+>       proprio, cancellato in ogni caso;
+>     - due test esistenti sugli eventi estesi: leggono l'evento con `waitForEvent`, mai il testo.
+>     - Nessuno scenario salvava prezzi, per questo il test è nuovo.
+>   - Lo chiede il test-author: `data-testid="asset-editor-error"` sul banner d'errore.
+> - **Rosso confermato** (01:45, carico 34): **30 rossi, 2 verdi (32)**. I due verdi sono la guardia su
+>   `events.deleteSuccess`, in EN e in IT.
+>   - Gli E2E rossi sono strutturali: né gli eventi né il testid esistono nel codice prima della modifica (verificato
+>     con grep). Non ho speso uno slot per vederli fallire.
+> - **Il codice**: `files/checks/o8_code.py`, con 1 + 10 sostituzioni contate, testid compreso. Nessun blocco del diff
+>   tocca le righe di W (73–77, 99).
+> - **Le chiavi**: `files/checks/o8_i18n.sh`, le 5 nuove `assets.dataEditor.*` più l'aggiornamento di
+>   `events.deleteSuccess`.
+>   - Diceva «{n} event(s) deleted»; ora è un plurale ICU vero, perché nel riassunto stava accanto agli altri plurali.
+>   - L'editor è il suo unico utente, e la chiave continua a leggere `n`.
+> - **Verde** (01:46–01:49): Vitest **32/32**; `i18n check`; colori puliti; `check-orphans`; `front check` → **0/0**.
+> - **Backlog**: le stranezze già presenti finiscono in **X-R39** (conteggi asimmetrici, scritture parziali, intervallo
+>   allargato dalle righe scartate, `onsave` non atteso, il banner dei cambi senza testid).
+> - **Slot 2** (01:57–02:03, con la ricostruzione): `front-asset asset-data-editor` → **27/27**, compresi il test
+>   nuovo (24: un salvataggio rifiutato, poi il nuovo tentativo) e i due test estesi sugli eventi. Porta 6183 libera.
+> - **CHANGELOG**: una riga 🐛 in coda a «Fixed» di `[Unreleased]`: i messaggi del salvataggio erano in inglese in ogni
+>   lingua (il difetto c'è nella 1.2).
+> - **Il congelamento FE8b** (coordinatore, 01:49): W cambia solo le righe d'import di `AssetDataEditorSection` (le sue
+>   righe 27 e 29) e di `_frontend_utility.py`. Le mie (22–23 e una riga del `core-unit`) sono separate: l'ho detto al
+>   coordinatore.
+> - **W-B58 entrato** (dev `4e9d1815f`): via libera a X-R38. Le mie due note alla revisione di `price_query.py` sono
+>   diventate **X-R40**. Ordine: O-8 → X-R38 → X-R40.

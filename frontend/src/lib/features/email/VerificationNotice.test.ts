@@ -15,6 +15,9 @@
  *     `email.verification.resent` with the language; refused: the outcome `failed`, worded by
  *     `resendFailureMessage($_, readResendFailure(error))`, drawn with `OUTCOME_CLASSES.failed`, and the event
  *     `email.verification.resendFailed` with the failure — the button usable again either way;
+ *   - on a blocked instance (lot E-11): the route's own 401 is coded `INVALID_CREDENTIALS` and says the credentials are
+ *     wrong; the plain 401 the block answers a caller without a session says the sign-in's `auth.instanceBlocked`, never
+ *     that the credentials are wrong, and the event carries `INSTANCE_BLOCKED`; the button stays, for once it is unblocked;
  *   - a new attempt clears the previous outcome; the outcome is rendered from state, so it follows a change of language.
  *
  * Mocks, all owned here: `./verificationApi`'s `resendEmailVerification` is a fake the test answers (deferred where the
@@ -72,6 +75,9 @@ const USERNAME = 'zq_alice';
 const PASSWORD = 'Verify-Pass-2026';
 
 const REQUEST = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
+
+/** What «resend» answers wrong credentials since lot E-11 (`api/v1/email.py`): its own 401, coded like E's other refusals. */
+const INVALID_CREDENTIALS_BODY = {detail: {error_code: 'INVALID_CREDENTIALS', message: 'Invalid credentials'}};
 
 /** What axios rejects with when the server answers `status` (lib/core/settle.js). */
 function axiosRefusal(status: number, data: unknown): AxiosError {
@@ -181,7 +187,7 @@ describe('VerificationNotice — sending the link again', () => {
     });
 
     it.each<{label: string; raise: () => unknown; failure: Record<string, unknown>; key: string; values?: Record<string, unknown>}>([
-        {label: '401 Invalid credentials', raise: () => axiosRefusal(401, {detail: 'Invalid credentials'}), failure: {errorCode: 'INVALID_CREDENTIALS'}, key: 'email.verification.resendErrors.INVALID_CREDENTIALS'},
+        {label: '401 INVALID_CREDENTIALS, the route’s own refusal', raise: () => axiosRefusal(401, INVALID_CREDENTIALS_BODY), failure: {errorCode: 'INVALID_CREDENTIALS'}, key: 'email.verification.resendErrors.INVALID_CREDENTIALS'},
         {
             label: '429 EMAIL_RATE_LIMITED',
             raise: () => axiosRefusal(429, {detail: {error_code: 'EMAIL_RATE_LIMITED', retry_after: 180, message: 'Too many requests: try again later'}}),
@@ -228,7 +234,7 @@ describe('VerificationNotice — sending the link again', () => {
 
     it('VNT-06: a new attempt clears the previous outcome while it runs', async () => {
         const second = deferred<string>();
-        fake.resendEmailVerification.mockRejectedValueOnce(axiosRefusal(401, {detail: 'Invalid credentials'})).mockReturnValueOnce(second.promise);
+        fake.resendEmailVerification.mockRejectedValueOnce(axiosRefusal(401, INVALID_CREDENTIALS_BODY)).mockReturnValueOnce(second.promise);
         render(VerificationNotice, {props: {username: USERNAME, password: PASSWORD}});
         await fireEvent.click(resendButton());
         await waitFor(() => expect(outcome()).toHaveAttribute('data-outcome', 'failed'));
@@ -253,5 +259,24 @@ describe('VerificationNotice — sending the link again', () => {
         await waitFor(() => expect(outcome()).toHaveTextContent(say('email.verification.resendErrors.EMAIL_RATE_LIMITED', {minutes: 4}, 'it')));
         expect(resendButton()).toHaveTextContent(say('email.verification.resend', undefined, 'it'));
         expect(fake.resendEmailVerification, 'no new request: the words changed, not the outcome').toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('VerificationNotice — on a blocked instance (lot E-11)', () => {
+    it('VNT-08: the plain 401 the block answers a caller without a session says the instance is blocked, never that the credentials are wrong', async () => {
+        fake.resendEmailVerification.mockRejectedValueOnce(axiosRefusal(401, {detail: 'Not authenticated'}));
+        render(VerificationNotice, {props: {username: USERNAME, password: PASSWORD}});
+
+        await fireEvent.click(resendButton());
+        await waitFor(() => expect(outcome()).not.toBeNull());
+        await idle();
+
+        expect(outcome()).toHaveAttribute('data-outcome', 'failed');
+        expect(outcome(), 'a 401 that is not the route’s own is the instance’s block: the sign-in’s own words for it').toHaveTextContent(say('auth.instanceBlocked'));
+        expect(outcome(), 'never «wrong username or password» on a blocked instance').not.toHaveTextContent(say('email.verification.resendErrors.INVALID_CREDENTIALS'));
+        expect(outcome()).toHaveAttribute('class', OUTCOME_CLASSES.failed);
+        expect(fake.notify).toHaveBeenCalledTimes(1);
+        expect(fake.notify, 'the event carries the failure the notice read').toHaveBeenCalledWith({name: 'email.verification.resendFailed', detail: {errorCode: 'INSTANCE_BLOCKED'}});
+        expect(resendButton(), 'the button stays: once the instance is unblocked, the click works').toBeEnabled();
     });
 });

@@ -798,7 +798,7 @@ valid session gets these answers:
 | Routes | Not blocked | Blocked |
 |--------|-------------|---------|
 | Protected routes outside the list | `401` | The same `401` |
-| Public routes outside the list: `POST /auth/register`, `POST /auth/setup` (the [initial administrator](access_control.md#initial-admin): a blocked instance stays blocked until the subscription is paid, P16), `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| Public routes outside the list: `POST /auth/register`, `POST /auth/setup` (the [initial administrator](access_control.md#initial-admin): a blocked instance stays blocked until the subscription is paid, P16), `POST /email/verification/confirm` ([spends a verification link](../backend/email.md#api-verification-confirm)), `POST /email/verification/resend` ([sends the verification email again](../backend/email.md#api-verification-resend), with the sign-in's credentials instead of a session), `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
@@ -1576,7 +1576,7 @@ CORS preflight or a 500; the policy read directive by directive, each directive 
 route's own header kept alone and the others added; the switches read when the middleware is built, never per request)
 and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
 the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
-`mime.types` file; a hidden file of the build outside `_app/` is not sampled, since the SPA catch-all never serves it,
+`mime.types` file; no hidden file of either tree is sampled, since no route serves one,
 see [Server Startup](overview.md#server-startup)). The switches' values per profile are tested with the profile defaults,
 `./dev.py test services profile-defaults` (see [Settings System](settings.md)).
 
