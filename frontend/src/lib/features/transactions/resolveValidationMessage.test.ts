@@ -9,6 +9,7 @@ vi.hoisted(() => {
 
 import {waitLocale} from 'svelte-i18n';
 import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {resolveIssueMessage, translateFieldName, type ResolvableIssue, type ResolverContext} from './resolveValidationMessage';
 
 /**
@@ -252,6 +253,45 @@ describe('resolveIssueMessage — the numbers in the interface language (M-18 CP
         expect(cashIn('it', 12345.5), 'control: the Italian notation differs from the English one').not.toBe(cashIn('en-US', 12345.5));
 
         expect(resolveIssueMessage({code: 'C', params: {balance: '12345.5', currency: 'USD'}}, t)).toBe(`cash=+${cashIn('it', 12345.5)} USD`);
+    });
+});
+
+/**
+ * C-97c-1 (decision D-C97c-1 of the coordinator, 17/10) — an asset balance loses no digit the database keeps.
+ *
+ * A balance with no `currency` is a quantity of an asset, and a quantity keeps ten decimals. The module writes it with
+ * `parseFloat` and `maximumFractionDigits: 6`, so a balance of -0.0000000123 reads `-0 📉`. The contract: up to ten
+ * decimals, exact — the decimal string as it is, never through a float — with the emoji by sign as today, 📈 from zero
+ * up, 📉 below. Red: a balance past the sixth decimal, and one past what a float holds. Guard: `5` stays `5 📈`. English
+ * on the en-US browser pinned at the top of the file, set through the store; the expectations are typed.
+ */
+describe('resolveIssueMessage — an asset balance keeps every decimal, up to ten, exact (C-97c-1)', () => {
+    const t = makeT({'transactions.errors.E': 'bal={balance}'});
+
+    /** The English UI, set as LanguageSelector sets it: on the en-US browser it is written en-US. */
+    async function english(): Promise<void> {
+        currentLanguage.set('en');
+        await waitLocale('en');
+        expect(uiLocale(), 'control: an English UI on the en-US browser is written en-US').toBe('en-US');
+    }
+
+    it('-0.0000000123 reads -0.0000000123 📉 — its ten decimals, not six', async () => {
+        await english();
+
+        expect(resolveIssueMessage({code: 'E', params: {balance: '-0.0000000123'}}, t)).toBe('bal=-0.0000000123 📉');
+    });
+
+    it('123456789.1234567891 reads 123,456,789.1234567891 📈 — the decimal string as it is, never through a float', async () => {
+        await english();
+        expect(String(Number('123456789.1234567891')), 'control: a float does not hold every digit').not.toBe('123456789.1234567891');
+
+        expect(resolveIssueMessage({code: 'E', params: {balance: '123456789.1234567891'}}, t)).toBe('bal=123,456,789.1234567891 📈');
+    });
+
+    it('guard: 5 reads 5 📈 — no forced decimals', async () => {
+        await english();
+
+        expect(resolveIssueMessage({code: 'E', params: {balance: '5'}}, t)).toBe('bal=5 📈');
     });
 });
 

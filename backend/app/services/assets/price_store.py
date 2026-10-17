@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import functools
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
@@ -59,7 +59,7 @@ def _reject_prices_over_the_limit(data: List[FAUpsert]) -> None:
     (``_unstorable_provider_point``).
 
     Raises:
-        ValueError: the router turns it into HTTP 400, as it does a currency mismatch.
+        ValueError: the router turns it into HTTP 400 (a currency mismatch of a manual call is a 422, X-R71).
     """
     for item in data:
         offending = [f"{price.date.isoformat()} ({name})" for price in item.prices for name in (*_PRICE_LIMIT_FIELDS, "volume") if _price_limit_issue(price, name) is not None]
@@ -90,6 +90,55 @@ def _reject_dates_out_of_range(data: List[FAUpsert], earliest: date, latest: dat
             count += len(dates)
     if items:
         raise DateOutOfRangeError(items=items, count=count, earliest=earliest, latest=latest)
+
+
+class PriceCurrencyMismatchError(Exception):
+    """A manual upsert holds prices in a currency other than their asset's: refused before anything is written (X-R71).
+
+    ``items``: one entry per item at fault, in the request's order; ``count``: every date at fault. A plain
+    ``Exception``, as ``DateOutOfRangeError``: the router answers a ``ValueError`` with 400, this with 422.
+    """
+
+    def __init__(self, items: list[dict], count: int):
+        super().__init__(f"{count} price date(s) in a currency other than their asset's")
+        self.items = items
+        self.count = count
+
+
+def price_currency_mismatch_detail(items: list[dict], count: int) -> dict:
+    """The ``detail`` of the 422 for a manual upsert with prices in a currency other than their asset's: at most 10
+    ``items``, and ``count`` the dates refused in all (X-R71)."""
+    return {"code": "price_currency_mismatch", "message": f"Prices must be in their asset's currency: {count} are not", "items": items[:10], "count": count}
+
+
+async def _reject_currency_mismatches(session: AsyncSession, data: List[FAUpsert]) -> None:
+    """Refuse a manual upsert holding a price in a currency other than its asset's, before anything is written (X-R71).
+
+    The currencies of every asset named are read first, in slices, and nothing else is done on the session. Then each
+    item, in the request's order: a point whose currency, when given, is not its asset's is at fault, the comparison of
+    the loop below. An item whose asset does not exist is left to the loop, which answers it «not found». One entry per
+    item at fault: its asset's currency (``expected``), the currencies given (``found``, first seen first) and at most
+    10 of its dates, in the request's order.
+
+    Raises:
+        PriceCurrencyMismatchError: the router turns it into HTTP 422 ``price_currency_mismatch``.
+    """
+    currencies: dict[int, str] = {}
+    for chunk in chunks(list(dict.fromkeys(item.asset_id for item in data))):
+        rows = await session.execute(select(Asset.id, Asset.currency).where(Asset.id.in_(chunk)))
+        currencies.update(rows.all())
+    items: list[dict] = []
+    count = 0
+    for item in data:
+        if item.asset_id not in currencies:
+            continue
+        expected = currencies[item.asset_id]
+        offending = [price for price in item.prices if (price.currency or expected) != expected]
+        if offending:
+            items.append({"asset_id": item.asset_id, "expected": expected, "found": list(dict.fromkeys(price.currency for price in offending)), "dates": [price.date.isoformat() for price in offending[:10]]})
+            count += len(offending)
+    if items:
+        raise PriceCurrencyMismatchError(items=items, count=count)
 
 
 def _unstorable_provider_point(price: FAPricePoint) -> Optional[str]:
@@ -198,13 +247,14 @@ class PriceStoreOperations:
             {inserted_count, updated_count, results: [{asset_id, count, message}, ...]}
 
         Raises:
-            ValueError: if any price point has a currency that doesn't match
-                ``asset.currency`` (I.2 — Supersedes E.3). The router translates
-                this into **HTTP 400** with the offending dates. This is the
-                definitive semantics after Block I — soft-skip with ``errors[]``
-                was dropped because, post-I.5/I.8, the DataEditor no longer
-                sends a per-point currency. See
-                ``plan-phase07-transaction-Part3_1_Closure.md`` §E.3.
+            ValueError: a manual price over its column's limits (``_reject_prices_over_the_limit``; the router answers
+                HTTP 400); under a provider's key, a point whose currency is not its asset's (I.2 — Supersedes E.3:
+                soft-skip with ``errors[]`` was dropped because, post-I.5/I.8, the DataEditor no longer sends a
+                per-point currency. See ``plan-phase07-transaction-Part3_1_Closure.md`` §E.3).
+            DateOutOfRangeError: a manual date outside ``stored_date_bounds()`` (X-R65, N83; HTTP 422).
+            PriceCurrencyMismatchError: a manual price in a currency other than its asset's, on any item of the call
+                (X-R71; HTTP 422 ``price_currency_mismatch``). The three refusals of a manual call come before anything
+                of it is written.
 
         Optimized: Batch operations per asset, minimize DB roundtrips.
         """
@@ -214,6 +264,7 @@ class PriceStoreOperations:
         if source_plugin_key == "MANUAL":
             _reject_prices_over_the_limit(data)
             _reject_dates_out_of_range(data, earliest, latest)
+            await _reject_currency_mismatches(session, data)
 
         total_inserted = 0
         results = []
@@ -243,11 +294,10 @@ class PriceStoreOperations:
             #   - field >= 0               → write the provided value
             # I.2 — Currency coherence validation (Supersedes E.3).
             # Hard reject (not per-item skip): if ANY point has a currency that doesn't
-            # match asset.currency, raise ValueError immediately so the router returns
-            # 400 with the offending dates. This is defensive — the frontend, after
-            # Block I, no longer sends a per-point currency (the column was dropped
-            # from the DataEditor), so reaching this branch means the client is buggy
-            # or someone is hitting the API directly.
+            # match asset.currency, raise ValueError. A manual call never gets here with
+            # one: _reject_currency_mismatches refused the whole call before any write
+            # (X-R71), and this stays as a safety net for an asset whose currency changed
+            # since. A provider's call holds one asset, checked here before its first slice.
             offending_dates: list[str] = []
             for price in prices:
                 effective_currency = price.currency or default_currency
@@ -431,76 +481,52 @@ class PriceStoreOperations:
         Bulk delete price ranges (PRIMARY bulk method).
 
         Args:
-            data: List of FAAssetDelete (asset_id + date_ranges)
+            data: List of FAAssetDelete (asset_id + date_ranges); each range is inclusive, ``end`` defaulting to ``start``
             session: Database session
 
         Returns:
-            FABulkDeleteResponse with results and deleted count
+            FABulkDeleteResponse: one result per item, its ``deleted_count`` the rows deleted for its asset; ``total_deleted``
+            the rows deleted in all
 
-        One COUNT per range (the per-asset counts), then one DELETE per chunk of ranges (``utils/sql_chunks``; MF-SEC9a),
-        in one transaction. The counts are up to ``MAX_BULK_WRITE_ITEMS`` awaited queries: slow, not a stall (MF-SEC9e).
-        Note: Cannot parallelize with gather - DB operations are sequential and interdependent
+        Each asset's ranges, from every item that names it, are merged into disjoint day intervals (MF-SEC9e): a row is
+        counted once however many ranges cover it, and an asset in two items is counted over both. The counts are one
+        grouped ``COUNT … GROUP BY asset_id`` per chunk of intervals, the deletion one ``DELETE`` per chunk
+        (``utils/sql_chunks``, MF-SEC9a), in one transaction: at the ``MAX_BULK_WRITE_ITEMS`` cap about forty statements,
+        where one ``COUNT`` per range made ten thousand. The counts per asset add up to ``total_deleted``.
         """
         if not data:
-            return FABulkDeleteResponse(deleted_count=0, results=[])
+            return FABulkDeleteResponse(results=[], success_count=0, total_deleted=0, errors=[])
 
-        # Build count per asset before deletion
-        asset_delete_counts = {}
-
+        # Each asset's ranges merged into disjoint intervals of days (inclusive bounds), adjacent days joined
+        ranges_by_asset: dict[int, list[tuple[date, date]]] = {}
         for item in data:
-            asset_id = item.asset_id
-            ranges = item.date_ranges
-            count = 0
-
-            for date_range in ranges:
-                start = date_range.start
-                end = date_range.end or start  # Single day if no end
-
-                # Count rows for this specific range
-                count_stmt = (
-                    select(func.count())
-                    .select_from(PriceHistory)
-                    .where(
-                        and_(
-                            PriceHistory.asset_id == asset_id,
-                            PriceHistory.date >= start,
-                            PriceHistory.date <= end,
-                        )
-                    )
-                )
-                result = await session.execute(count_stmt)
-                count += result.scalar()
-
-            asset_delete_counts[asset_id] = count
-
-        # Build complex OR conditions for all ranges
+            for date_range in item.date_ranges:
+                ranges_by_asset.setdefault(item.asset_id, []).append((date_range.start, date_range.end or date_range.start))
         conditions = []
-        for item in data:
-            asset_id = item.asset_id
-            ranges = item.date_ranges
+        for asset_id, ranges in ranges_by_asset.items():
+            merged: list[list[date]] = []
+            for start, end in sorted(ranges):
+                if merged and start <= merged[-1][1] + timedelta(days=1):
+                    merged[-1][1] = max(merged[-1][1], end)
+                else:
+                    merged.append([start, end])
+            conditions.extend(and_(PriceHistory.asset_id == asset_id, PriceHistory.date >= start, PriceHistory.date <= end) for start, end in merged)
 
-            for date_range in ranges:
-                start = date_range.start
-                end = date_range.end or start  # Single day if no end
-                conditions.append(
-                    and_(
-                        PriceHistory.asset_id == asset_id,
-                        PriceHistory.date >= start,
-                        PriceHistory.date <= end,
-                    )
-                )
+        # The rows each asset will lose: the intervals are disjoint, so no row is counted twice across chunks
+        asset_delete_counts: dict[int, int] = {}
+        for chunk in chunks(conditions):
+            counted = await session.execute(select(PriceHistory.asset_id, func.count()).where(or_(*chunk)).group_by(PriceHistory.asset_id))
+            for asset_id, count in counted.all():
+                asset_delete_counts[asset_id] = asset_delete_counts.get(asset_id, 0) + count
 
-        if not conditions:
-            return FABulkDeleteResponse(deleted_count=0, results=[])
-
-        # One DELETE per chunk of ranges, in one transaction (MF-SEC9a): SQLite refuses an OR of a thousand terms
+        # One DELETE per chunk of intervals, in one transaction (MF-SEC9a): SQLite refuses an OR of a thousand terms
         deleted_count = 0
         for chunk in chunks(conditions):
             result = await session.execute(delete(PriceHistory).where(or_(*chunk)))
             deleted_count += result.rowcount
         await session.commit()
 
-        # Build results per asset with exact counts
+        # One result per item, its asset's count
         results = [
             FAPriceDeleteResult(
                 asset_id=item.asset_id,
