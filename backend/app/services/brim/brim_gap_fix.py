@@ -36,7 +36,7 @@ from backend.app.schemas.brim import (
     BRIMTruthCash,
     is_fake_asset_id,
 )
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, is_canonical_iso_currency, shown_currency_text, suggested_iso_currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.brim.brim_report_sets import GAP_FIX_TAG, BRIMLedgerUnreadable, BRIMSetPluginNotFound
@@ -47,6 +47,8 @@ from backend.app.services.transactions.unreadable_rows import UnreadableLedgerEr
 # Differences at or below one cent are rounding, not a gap.
 CASH_TOLERANCE = Decimal("0.01")
 ZERO = Decimal("0")
+#: How many of a broker's non-ISO cash codes the refusal names (E-19a); the others are counted.
+NON_ISO_CODES_NAMED = 5
 
 
 def _plugin(plugin_code: str) -> BRIMProvider:
@@ -70,13 +72,35 @@ def _in_memory(items: Iterable[TXCreateItem], broker_id: int, as_of: date) -> Tu
     return cash, quantities
 
 
+async def _refuse_non_iso_cash(session: AsyncSession, request: BRIMGapFixRequest, as_of: date) -> None:
+    """Refuse the comparison when the broker's cash up to ``as_of`` is held in a code that is not a canonical ISO 4217
+    code (E-19a): a name or a number an earlier version saved as written (``978``, ``EURO``), or another case (``eur``).
+
+    Such a balance is a bucket of its own, which the bank's ``EUR`` never meets: compared anyway, the gap-fix would propose
+    a correction for money already there. The rows are the ones ``get_balances_at_end_of`` sums (dated up to ``as_of``,
+    without ``pending_delete_tx_ids``) and only their cash currency counts. The broker is the caller's own (its editor),
+    so the codes are named, at most ``NON_ISO_CODES_NAMED``, each with the code it stands for.
+    """
+    stmt = select(Transaction.currency).where(Transaction.broker_id == request.broker_id, Transaction.date <= as_of, Transaction.currency.isnot(None)).distinct()
+    if request.pending_delete_tx_ids:
+        stmt = stmt.where(Transaction.id.notin_(list(request.pending_delete_tx_ids)))
+    codes = sorted(code for code in (await session.execute(stmt)).scalars() if code and not is_canonical_iso_currency(code))
+    if not codes:
+        return
+    named = ", ".join(f"{shown_currency_text(code)!r} ({suggested_iso_currency(code) or 'no ISO code'})" for code in codes[:NON_ISO_CODES_NAMED])
+    more = f" and {len(codes) - NON_ISO_CODES_NAMED} more" if len(codes) > NON_ISO_CODES_NAMED else ""
+    raise BRIMLedgerUnreadable(f"LibreFolio's balances of this broker cannot be compared with the bank: its transactions hold currency codes that are not ISO 4217 codes: {named}{more}. Correct them first.")
+
+
 async def _state_at(session: AsyncSession, request: BRIMGapFixRequest, as_of: date, proposals: Sequence[TXCreateItem]) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
     """What LibreFolio will know at the end of ``as_of``; refused when the broker's transactions up to it hold a value that
-    is no number (W-B74): compared with the bank, a wrong balance would propose a wrong correction."""
+    is no number (W-B74), or a cash currency that is not an ISO 4217 code (E-19a): compared with the bank, a wrong balance
+    would propose a wrong correction."""
     try:
         db_cash, db_quantities = await TransactionService(session).get_balances_at_end_of(request.broker_id, as_of, exclude_tx_ids=request.pending_delete_tx_ids)
     except UnreadableLedgerError as exc:
         raise BRIMLedgerUnreadable(f"LibreFolio's balances of this broker cannot be compared with the bank: {exc.count} of its transactions hold a value that is not a number. Ask the administrator to repair them.") from exc
+    await _refuse_non_iso_cash(session, request, as_of)
     cash: Dict[str, Decimal] = defaultdict(lambda: ZERO, {code: Decimal(amount or 0) for code, amount in db_cash.items()})
     quantities: Dict[int, Decimal] = defaultdict(lambda: ZERO, {asset_id: Decimal(quantity or 0) for asset_id, quantity in db_quantities.items()})
     mem_cash, mem_quantities = _in_memory([*request.pending_creates, *request.selection, *proposals], request.broker_id, as_of)
