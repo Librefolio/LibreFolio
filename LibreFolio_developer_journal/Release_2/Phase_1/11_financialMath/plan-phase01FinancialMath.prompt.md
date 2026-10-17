@@ -3270,3 +3270,44 @@ posizioni è scritta in linea — `price_change_1d = ((corrente − precedente) 
 `|precedente| > 0,01` (`:759`) — accanto a `returns.price_return` e `returns.change_ratio`. Valori: `price_return` fa
 `fine/inizio − 1`, non `(fine − inizio)/inizio`; dopo il quantize a 4 decimali coincidono salvo un pareggio al bordo
 dell'arrotondamento (da provare con un corpus). Proposta: voce MF a sé, dopo J-14, se il coordinatore la vuole.
+
+#### A10 entrato (dev `4753b66f6`); J-14 — l'identità del periodo nella casa (17/10, 20:1x)
+- Coordinatore: A10 **entrato** (dev `4753b66f6`, miei `dddadd359` + `e80766d69`, CHANGELOG 🐛 `e6d3e61e0`); worktree a
+  `e6d3e61e0`, pulito. **GO per J-14**, poi MF-A12. Revisore post-ingresso di A10: J.
+- ✅ **Codice J-14** (nessun cambio di valore): `financial_math/portfolio/period.py` + `period_identity_residual(pnl,
+  ugl_delta, realized, income, fees_taxes, other_result)` (`pnl − (ugl_delta + realized + income − fees_taxes +
+  other_result)`, l'associazione dell'AI Export) e `is_reconciled(residual)` (`|residual| < CONVERSION_DUST`, importata da
+  `native_cash`: nessun ciclo). Chiamanti: `ai_export/components/portfolio_financial._build_portfolio_reconciliation`,
+  `broker_financial._build_broker_reconciliation` (l'import di `CONVERSION_DUST` sostituito da quello della casa), e
+  `portfolio_service.get_positions_contribution` chiama `period_math.period_other_result` (stesso ordine: identico al
+  bit). Versione dei componenti invariata: stesso valore, stessa bandiera calcolata allo stesso modo (devWiki
+  `ai-export-version-bump-once-per-release`, punto 1; approvato dal coordinatore). Doc sviluppatore:
+  `developer/backend/financial_math.md`, mappa del pacchetto (`period.py` … «e il suo residuo»). ruff (anche `I`), black,
+  import a freddo verdi.
+- In corso: test-author `j14-tests` (parità esatta con la copia di oggi, la ricerca d'un caso in cui l'associazione conta,
+  il bordo di `CONVERSION_DUST`, il componente legato alla casa).
+- ✅ **Test J-14** (test-author `j14-tests`): in `test_period_and_unit_costs.py` `TestPeriodIdentityResidual` (parità con la
+  copia di HEAD, `_same_decimal`, 144 casi brevi + 15 625 a molte cifre; l'identità si chiude col suo termine;
+  **l'associazione conta**: con conversioni per divisione — `/1,19533`, `/1,27229` — quattro raggruppamenti alternativi
+  danno `0E-23`, `1E-22`, `4E-23` o l'esponente diverso, dove oggi `6E-23`/`0E-23`: due casi fissati), `TestIsReconciled`
+  (bordo di `CONVERSION_DUST` sui due segni, parità, la costante è quella di `native_cash` e la funzione la segue) e
+  `TestPeriodOtherResultInPositionsContribution` (la copia in linea di `get_positions_contribution` a molte cifre: verde
+  su HEAD per costruzione); in `test_ai_export_components_portfolio_broker_financial.py`
+  `TestReconciliationFromTheHouse` (portafoglio e broker: residuo e bandiera della casa e di oggi su 4 casi a molte
+  cifre, sotto e alla soglia; il componente chiama la casa una volta per costruzione — guardia strutturale). Mutanti:
+  associazione scambiata, `<=`, soglia 1e-8, componente reinlineato (altra o stessa associazione), `period_other_result`
+  riordinato: tutti presi.
+- ✅ **Corsia** (20:23; prodotto tolto `period.py`, `portfolio_service.py`, i due componenti, sha `3e1965c5…` uguale dopo):
+  `financial-math test_period_and_unit_costs` rosso **18** / 26, `ai-export
+  test_ai_export_components_portfolio_broker_financial` rosso **10** / 132 (tutti `AttributeError` sui nomi nuovi di
+  `period`). Verdi: `financial-math` **1523**, quel file **142**, `roi-fifo-utils` **1450**, `portfolio-engine` 41,
+  `services ai-export` intera **1093**. ruff, black, diff-check, `mkdocs build` stretto, `check-links`. Porta libera.
+- **Fuori pista**: `services ai-export` intera lanciata a mano con il carico a 1 minuto a **66** (sopra 50: la regola delle
+  prove leggere); la corsa è passata, ma il controllo del carico andava fatto prima — d'ora in poi solo dagli script con
+  `wait_load`.
+- Backlog: J-14 sta nella sezione di J — non la tocco; al coordinatore la chiusura.
+- ✅ **Slot** (GO 20:32; HEAD `e6d3e61e0`): `api portfolio` **53** passati; porta 6190 libera. Il coordinatore chiude J-14
+  nella sezione di J all'ingresso. Revisione post-ingresso di Z-33 (`60170aae5`, `price_store.redate_provider_rows`):
+  OK; LOW — l'ordine «dal più recente» vale solo per bersagli in avanti (`target > stored`; l'unico chiamante lo
+  rispetta), da dire nella docstring o rifiutare; nit — un commento sul `flush()` per riga (la chiave unica fra gli
+  spostamenti). **CHECKPOINT READY** inviato, FROZEN.
