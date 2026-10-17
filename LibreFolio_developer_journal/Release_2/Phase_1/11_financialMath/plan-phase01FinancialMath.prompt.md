@@ -3028,3 +3028,25 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
 - ✅ **Slot** (17:29, GO col carico a 5 minuti < 50; HEAD `203197f5a`): `api portfolio` **52**. Porta libera. Riga 🐛
   approvata con i tre effetti. **CHECKPOINT READY** inviato, FROZEN. Dopo: J45d (le eccezioni vere ai seguaci,
   `_LeaderGone` solo per la cancellazione) + la nota di doc di J sull'intervallo esatto.
+
+#### MF-A5 entrato (dev `aa52a43f7`); MF-J45d — un errore della costruzione va subito a chi aspettava (17/10, 17:3x)
+- Coordinatore: MF-A5 **entrato** (dev `aa52a43f7`, merge `2b08c2647`, 🐛 `c5ff1f68d`); worktree a `c5ff1f68d`. J ha
+  rivisto J45b (OK) con due punti: (1) BASSO, una costruzione che fallisce sempre (dati corrotti) era ritentata dai
+  seguaci uno dopo l'altro — il k-esimo aspettava k costruzioni —; (2) nota di doc sull'intervallo esatto. Fatti qui (J45d).
+- ✅ **Codice** `engine.py`: `except Exception as error` → `flight.set_exception(error)` (+ `exception()` per segnarlo
+  letto) e `raise`; `else` → `set_result`; nel `finally` `_LeaderGone` resta solo per la cancellazione (una
+  `BaseException`): allora i seguaci ricostruiscono. Commenti e docstring di `_LeaderGone` allineati.
+- ✅ **Doc** `financial_math.md` `#single-flight`: chiave per intervallo **esatto** — la cache risponde anche a un inizio
+  più tardo, il volo no: una richiesta identica con un inizio più tardo costruisce da sé (nota di J); il fallimento va a
+  tutti subito, la cancellazione lascia ricostruire.
+- In corso: test-author `j45d-tests` (adattare `test_engine_single_flight.py`).
+- ✅ **Test J45d** (test-author `j45d-tests`, `test_engine_single_flight.py`): nuovo `TestTheLeaderFails` (un capo e 3
+  seguaci, la costruzione solleva: una sola costruzione, tutti e quattro sollevano lo **stesso** oggetto d'errore, un solo
+  volo chiuso con quell'errore e la sua chiave tolta a volo già chiuso; poi una richiesta identica ricostruisce e
+  riesce); la cancellazione invariata (i seguaci ricostruiscono); il volo «retrieved» anche per il fallimento. Mutanti:
+  `except BaseException`, niente `exception()`, `_LeaderGone` per i fallimenti, copia dell'errore — presi.
+  ⚠️ **Compromesso da dichiarare** (dal test-author): un errore **transitorio** del capo («database is locked»,
+  l'esecutore spento) ora fa fallire anche i seguaci, che prima ricostruivano e potevano riuscire.
+- ✅ **Corsia** (17:47; prodotto tolto `engine.py`, sha `383a938a…` uguale dopo): rosso **1** / 11 (`TestTheLeaderFails`);
+  verdi il file 11, `roi-fifo-utils` **1407**, `portfolio-engine` 41, `app-lifecycle` 53 (attese a carico 55–87). ruff,
+  black, diff-check, `mkdocs build` stretto, `check-links`. Porta libera.
