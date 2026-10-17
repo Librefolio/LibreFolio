@@ -2567,6 +2567,42 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     «Can't find it? Let us know».
 
   Dettagli: X-R32, nella sezione «X · Plugin, asset e ricerca (fase 01)» di questo file.
+- **G-22 · La scheda Security nella galleria, e il badge di «Amministrazione» da una fixture** — medio; coordinatore,
+  17/10 09:23, dopo A8b (`6e2b2c8b7`). Si programma dopo la run del punto 33.
+  - Con A8b la pagina Settings, appena si apre, legge `GET /api/v1/security/checks` (il `prefetch` della scheda
+    Security nel registro, `settingsTabs.ts`). Il gruppo «Amministrazione» porta un badge (`tab-badge`): il conto delle
+    voci in errore o in avviso (`attentionCount`, `securityFindings.ts`). Alle voci del server si aggiunge quella del
+    browser sulla registrazione aperta, quando l'istanza è raggiunta da un host fuori dalla rete locale.
+  - Oggi quel conto è della corsia, cioè della sua configurazione di test, non di una demo. Compare in ogni scatto
+    admin della pagina Settings, anche su Profilo, dove «Amministrazione» non è selezionata.
+  - **Decisione del coordinatore (17/10 09:23): sì alla fixture**, come per la Dashboard (`dashboard-report.json`) e per
+    la card del backup (`galleryBackup.ts`).
+    - Una risposta di `GET /api/v1/security/checks` con lo schema vero (`SecurityChecksResponse`: `items` di
+      `SecurityCheckRead`, cioè `check_id`, `severity`, `i18n_key`, `detail`) e valori realistici.
+    - Serve sia allo scatto nuovo della scheda Security sia al badge in tutti gli scatti admin: la galleria non dipende
+      più dalla configurazione della corsia.
+    - Da verificare scrivendola: la voce del browser dipende dalla modalità di registrazione della corsia e dall'host
+      della pagina; la fixture deve renderla fissa anche lei, o dire perché non compare.
+    - A rivede la fixture: è il proprietario di Security.
+  - Lo scatto: la scheda Security (`settings-tab-security`, `SecurityTab.svelte`) con le voci da guardare
+    (`security-finding`, con il collegamento `security-finding-action` dove c'è) e quelle superate (`security-passed`).
+  - Il test lo scrive test-author, nel perimetro di G: `gallery.spec.ts` e una fixture in
+    `frontend/e2e/fixtures/gallerySecurity.ts`. Poi un doppio a/b filtrato, e le righe di
+    `mkdocs_src/docs/gallery/*.en.md` scritte da docs-writer.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Dopo G-18», «Punto 33 della designer».
+- **G-23 · `settings/cache-panel` dipende dai test vicini** — basso; G, 17/10, dalla run del punto 33.
+  - Il pannello mostra le cache in memoria del server di test (`GET /api/v1/settings/cache/status`). Quante voci ha
+    ogni cache dipende da cosa hanno fatto prima, sullo stesso server, gli altri test della run.
+  - Nella run filtrata del 17/10 le due catture dello stesso commit, a e b, hanno dato una riga in meno in b. La pagina
+    era più corta di 31 px e l'inquadratura, presa dal fondo, è scesa: fino all'8,9 % dei pixel cambiati, in 16
+    varianti su 16. In G-13, su gallerie complete, lo scatto era `low`.
+  - Proposta: servire lo stato delle cache da una fixture con lo schema vero (`CacheStatusResponse`), come G-22 per i
+    controlli di sicurezza. Il test lo scrive test-author; la fixture la rivede il proprietario del pannello.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Dopo G-18», «Punto 33 della designer».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 

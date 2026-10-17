@@ -1253,6 +1253,22 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
       che vi scrive il test;
     - se l'avviso dell'admin sparisse, il banner chiuso direbbe la frase delle sole note (`dataQuality.headerInfoOnly`),
       nel tono informativo.
+  - **A8b**, entrato in `6e2b2c8b7` (17/10 09:10): cambiano tutti gli scatti della pagina Settings, nella struttura e
+    non nel colore. Misurato nella run del punto 33 (record più sotto):
+    - la barra in alto ha «Amministrazione» a destra, il gruppo di Impostazioni globali, Utenti, Backup, Email e
+      Security;
+    - aperto un membro, sotto c'è una seconda barra coi cinque membri (`settings-subtabs`). Su desktop gli scatti alti
+      quanto la pagina crescono: `global-settings` di 25 px, `users` di 54, `backup-ready` di 182–202 (anche per B4
+      dei backup). Quelli a schermo fisso (`email`, `cache-panel`, `scheduler-*`) restano di 720 px, col contenuto più
+      in basso;
+    - il badge su «Amministrazione» e su «Security» (`tab-badge`): oggi «1», il conto dei controlli della corsia, finché
+      G-22 non lo serve da una fixture;
+    - la sfumatura ai bordi (`data-fade`) non compare: a 1280 e a 430 px le barre ci stanno;
+    - nella vista del membro (`plugins`, e2e_test_user) «Amministrazione» prende il posto di Impostazioni globali, senza
+      seconda barra e senza badge;
+    - fuori dalla run cambiano allo stesso modo, nella barra in alto: `about`, `about-plugin-diagnostics`,
+      `about-tool-diagnostics`, `user-preferences`, `onboarding-replay`, `password-modal` e
+      `support/social-share-modal`, tutti aperti dall'admin sulla pagina Settings.
 - **`settings/backup-ready` per la 1.3 ✅, 16/10 22:54–23:11.** Commit `b89985a8b`: la punta, con B (`0cd910a7e`: B3
   ripristino, B5b, B5c). Due run identiche, `g-backup-a` e `g-backup-b`, sullo stesso build, 2 worker. Il filtro
   `-f "Settings backup ready \(admin\) - all languages and themes"` seleziona solo `gallery.spec.ts:2126`.
@@ -1353,3 +1369,46 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   - Allineato anche il commento del test dopo, `missing exchange rates`, che partiva dallo stesso presupposto sul DB.
   - Solo commenti: nessuna riga di codice cambia, nessuna run.
   - Note di Y R17/W8/P4 e J-43 qui sopra, nella «Nota per la prossima galleria completa».
+- **Punto 33 della designer ✅, 17/10 09:24–09:46.** La barra delle schede nella vista admin di Settings, dopo A8b
+  (`6e2b2c8b7`: il gruppo «Amministrazione», la seconda barra, la sfumatura ai bordi, il badge). Chiesta dal
+  coordinatore alle 09:13; via alle 09:23, nello slot lasciato libero dalla spike di B. Commit `e58be67fe`.
+  - **La modifica di A alla spec**, letta prima della run: `openGlobalSettings` chiama `openSettingsTab(page, 'admin')`
+    (`fixtures/settings-tabs.ts`), che apre il gruppo e poi Impostazioni globali nella seconda barra; restano
+    `aria-selected` e l'attesa su `data-busy`. È corretta: i quattro chiamanti entrano come TEST_ADMIN, e gli altri
+    membri si aprono con `?tab=`, che la pagina instrada nel gruppo. La run la prova: 4 dei 9 test ci passano.
+  - **Il filtro:** 9 test su 123, verificato sull'HEAD. La base di A (Impostazioni globali, le due modali dello
+    scheduler, il pannello della cache), più i membri Email, Backup e Utenti, `profile` (la barra in alto, col gruppo
+    non selezionato) e `plugins` (la vista del membro). 144 immagini per cattura.
+  - **Doppio a/b sullo stesso build**, 4 worker. Regola del coordinatore sul carico: si parte sotto 50, e dopo 5 minuti
+    di attesa ci si ferma invece di partire (`LOAD_STRICT`).
+    - a: 09:24:27–09:37:15, carico 36. Build da capo: il frontend, poi MkDocs in 131 s. 18 test su 18 verdi, 144 PNG.
+    - b: 09:37:16–09:45:42, carico 31, lo stesso build (5 s). 18 su 18 verdi, 144 PNG.
+    - Nessun rosso, quindi nessun fill. Nessun prezzo live. Misti G-18: 0 e 0.
+  - **a↔b: 75 immagini identiche, 69 cambiate, nessuna nelle barre.**
+    - **Le barre sono ripetibili.** Nelle 88 immagini in cui si vedono, 81 sono identiche e 7 differiscono di al più 2
+      livelli in 1–15 pixel (antialiasing). Nelle altre 56 l'inquadratura è sotto le barre.
+    - `cache-panel`, 16 su 16, fino all'8,9 % dei pixel: stato condiviso (ipotesi 3 di `test-triage`). Il pannello
+      mostra le cache in memoria del server di test. In a `portfolio_blob` e `portfolio_layer2` avevano un elemento,
+      scritto da un test vicino; in b no. La tabella di b ha una riga in meno e la pagina è più corta di 31 px (1122
+      contro 1153), quindi l'inquadratura, presa dal fondo, scende. → G-23.
+    - `scheduler-config`, 16 su 16: l'ora del server nella modale («Server UTC: 07:34» contro «07:40»).
+      `scheduler-log`, 8 su 16: gli orari del log. `global-settings`, 16 su 16: «Last updated», l'ora del popolamento
+      del DB (9:24:45 contro 9:37:31). È il rumore già misurato in G-13 per questi scatti (`low`).
+    - `email` 5 su 16 e `profile` 7 su 16: al più 2 livelli. `users` 1 su 16: 15 pixel del logo della barra laterale.
+      Invisibili.
+  - **Cosa mostrano le barre:**
+    - su desktop, in francese e in spagnolo, la barra in alto ha a sinistra le quattro schede comuni (in francese
+      Profil, Préférences, Plugins, À propos) e a destra «Administration»; la seconda barra mostra i cinque membri
+      interi («Paramètres Globaux … Sécurité», «Configuración Global … Seguridad»);
+    - nessuna barra scorre, quindi la sfumatura non compare. Su mobile le schede sono solo icone, e ci stanno;
+    - la sfumatura si vedrebbe solo a larghezze intermedie, che la galleria non fotografa;
+    - il badge «1» compare su «Amministrazione» in ogni scatto admin, anche su Profilo, e su «Security» nella seconda
+      barra: è il conto dei controlli della corsia. → G-22, con la decisione del coordinatore (una fixture).
+  - **Il foglio per la designer:** `LibreFolio_visual_review/sheets/p33-2026-10-17/index.html`.
+    - In testa i fatti; poi francese e spagnolo su desktop, inglese e italiano, mobile, e in fondo la vista del membro.
+    - Ogni immagine ha accanto la stessa del 16/10, con l'etichetta «giorno diverso» e senza diff di pixel (G-13). Per
+      email, backup e plugins sono le coppie di G-15 della sera del 16/10.
+    - Ogni immagine porta il segno a = b o a ≠ b. WebP lossless, 288 immagini, 20 MB.
+  - **Kit di sessione**, `files/p33/`: `p33.sh` (preflight, pair, status), `reds.py`, `sheet.py`. In più
+    `runs/filtered.sh` ora passa gli argomenti in più (`--desktop-only`), e con `LOAD_STRICT` si ferma invece di
+    partire col carico alto.
