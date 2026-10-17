@@ -2775,6 +2775,23 @@ describe('canonical overlay axis and reference helpers', () => {
             }
         });
 
+        /** `code` without its comments: a comment that names a call is not the call. Cut at `//`, so it assumes no string holds one. Shared by 47-1 and Y-25. */
+        function withoutComments(code: string): string {
+            return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+        }
+
+        /**
+         * The code of `function fn(…) {…}` in `source`, comments removed. The body is the first block after the name, braces
+         * balanced by `blockAfter` (further down this describe), which holds while the signature carries no brace: none of the
+         * functions read here takes or returns an object type. Throws, naming the chart, when the declaration is missing.
+         * Shared by 47-1 and Y-25.
+         */
+        function functionCode(source: string, chart: string, fn: string): string {
+            const body = blockAfter(source, `function ${fn}(`, '{');
+            if (body === undefined) throw new Error(`${chart}: function ${fn}() not found`);
+            return withoutComments(body);
+        }
+
         describe('the zoomable category charts re-space their labels on the zoomed window (47-1)', () => {
             // 47-1: the compact label `interval` was computed on every point and no dataZoom path recomputed it, so a chart zoomed in
             // on a phone kept the step of its whole axis and showed only its two forced edge labels. These pins hold each link of the
@@ -2793,22 +2810,6 @@ describe('canonical overlay axis and reference helpers', () => {
             /** `import {…, name, …} from '…responsiveXAxis'`, whatever the other names and their order. */
             function importsFromResponsiveXAxis(name: string): RegExp {
                 return new RegExp(`import\\s+\\{[^}]*\\b${name}\\b[^}]*\\}\\s+from\\s+['"][^'"]*responsiveXAxis['"]`);
-            }
-
-            /** `code` without its comments: a comment that names a call is not the call. Cut at `//`, so it assumes no string holds one. */
-            function withoutComments(code: string): string {
-                return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-            }
-
-            /**
-             * The code of `function fn(…) {…}` in `source`, comments removed. The body is the first block after the name, braces
-             * balanced by `blockAfter` (further down this describe), which holds while the signature carries no brace: none of the
-             * functions read here takes or returns an object type. Throws, naming the chart, when the declaration is missing.
-             */
-            function functionCode(source: string, chart: string, fn: string): string {
-                const body = blockAfter(source, `function ${fn}(`, '{');
-                if (body === undefined) throw new Error(`${chart}: function ${fn}() not found`);
-                return withoutComments(body);
             }
 
             /** The chart's `on('dataZoom', (…) => {…})` handler: the name of its parameter ('' when it takes none) and its code. */
@@ -2924,6 +2925,132 @@ describe('canonical overlay axis and reference helpers', () => {
                 ] as const) {
                     expect(code, `${name}: ${fn} reads no getOption()`).not.toMatch(GET_OPTION_CALL);
                 }
+            });
+        });
+
+        describe('the arrows are re-aimed once a resize settles, and only on a chart that has some (Y-25)', () => {
+            // Y-25: what is left of updateArrowRotations()'s cost after Y-8 — each call reads getOption(), a deep copy of the whole
+            // option, and writes every series back. (b) The ResizeObserver paths re-aimed the arrows on every callback: LineChart's
+            // and CandlestickChart's re-arm their settle instead (scheduleZoomedAxisLabels(lastZoomEvent), whose timer re-aims, Y-8),
+            // PriceChartFull's leaves them to the resolution debounce it already arms (its kept-resolution branch re-aims, Y-8).
+            // (d) Each full render notes whether its option has an arrow, so a chart without one is not read for them:
+            // noteArrowMarkers(chartInstance, option) right after chartInstance.setOption(option, true). These pins hold the wiring,
+            // chart by chart; LineChart.test.ts and PriceChartFull.test.ts drive the behaviour, lineChartHelpers.test.ts the helper.
+
+            /** The three charts that draw arrow markers and re-aim them. */
+            const ARROW_CHARTS = [
+                ['LineChart', new URL('./LineChart.svelte', import.meta.url)],
+                ['CandlestickChart', new URL('./CandlestickChart.svelte', import.meta.url)],
+                ['PriceChartFull', new URL('./PriceChartFull.svelte', import.meta.url)],
+            ] as const;
+
+            /** An `updateArrowRotations(` call: a getOption() copy, and every series written back. */
+            const ARROW_REAIM = /\bupdateArrowRotations\s*\(/;
+
+            /** The settle re-armed on the window last zoomed to. */
+            const REARMED_SETTLE = /\bscheduleZoomedAxisLabels\(\s*lastZoomEvent\s*\)/;
+
+            /** The settle's timer re-aims the arrows, once no tick has come for its delay (Y-8). */
+            const SETTLE_REAIMS = /\bzoomLabelTimer\s*=\s*setTimeout\(\s*\(\)\s*=>\s*\{[^}]*\bupdateArrowRotations\(\s*chartInstance\s*\)/;
+
+            /** The full render: the one `setOption` that replaces the option, series and all. */
+            const FULL_RENDER = /^\.setOption\(\s*option\s*,\s*true\s*\)$/;
+
+            /** The ResizeObserver callback a chart creates in `renderChart()`, comments removed. */
+            function resizeCallback(source: string, chart: string): string {
+                const callback = blockAfter(source, 'resizeObserver = new ResizeObserver(', '=> {');
+                if (callback === undefined) throw new Error(`${chart}: the ResizeObserver callback not found (resizeObserver = new ResizeObserver(() => {…}))`);
+                return withoutComments(callback);
+            }
+
+            /** The call that starts at `at` — `.setOption(` — up to its balanced closing parenthesis. */
+            function callText(code: string, at: number): string {
+                const open = code.indexOf('(', at);
+                for (let index = open, depth = 0; index >= 0 && index < code.length; index++) {
+                    if (code[index] === '(') depth++;
+                    else if (code[index] === ')' && --depth === 0) return code.slice(at, index + 1);
+                }
+                return code.slice(at);
+            }
+
+            it('LineChart: resizeChartOnly() — the ResizeObserver’s work — re-arms the settle instead of re-aiming the arrows at once', () => {
+                const name = 'LineChart';
+                const source = readFileSync(new URL('./LineChart.svelte', import.meta.url), 'utf8');
+                const callback = resizeCallback(source, name);
+                const resize = functionCode(source, name, 'resizeChartOnly');
+                const compact = functionCode(source, name, 'handleCompactResize');
+                const schedule = functionCode(source, name, 'scheduleZoomedAxisLabels');
+
+                // Positive controls: the scans read the code they are about, and the settle they point to re-aims.
+                expect(callback, `${name}: the ResizeObserver callback hands a full-size chart’s resize to resizeChartOnly()`).toMatch(/\bresizeChartOnly\(\)/);
+                expect(compact, `${name}: a compact chart that keeps its resolution goes through resizeChartOnly() too`).toMatch(/\bresizeChartOnly\(\)/);
+                expect(resize, `${name}: resizeChartOnly() resizes the chart`).toMatch(/\bchartInstance\??\.resize\(\)/);
+                expect(schedule, `${name}: the settle’s timer re-aims the arrows (Y-8)`).toMatch(SETTLE_REAIMS);
+
+                expect(
+                    {callbackReaims: ARROW_REAIM.test(callback), compactReaims: ARROW_REAIM.test(compact), resizeReaims: ARROW_REAIM.test(resize), resizeRearmsSettle: REARMED_SETTLE.test(resize)},
+                    `Y-25: ${name}’s resizeChartOnly() re-aims the arrows at once — a getOption() copy, and every series written back, on each ResizeObserver callback — instead of re-arming the settle with scheduleZoomedAxisLabels(lastZoomEvent)`,
+                ).toEqual({callbackReaims: false, compactReaims: false, resizeReaims: false, resizeRearmsSettle: true});
+            });
+
+            it('CandlestickChart: the ResizeObserver callback re-arms the settle instead of re-aiming the arrows at once', () => {
+                const name = 'CandlestickChart';
+                const source = readFileSync(new URL('./CandlestickChart.svelte', import.meta.url), 'utf8');
+                const callback = resizeCallback(source, name);
+                const schedule = functionCode(source, name, 'scheduleZoomedAxisLabels');
+
+                expect(callback, `${name}: the ResizeObserver callback resizes the chart`).toMatch(/\bchartInstance\??\.resize\(\)/);
+                expect(schedule, `${name}: the settle’s timer re-aims the arrows (Y-8)`).toMatch(SETTLE_REAIMS);
+
+                expect(
+                    {reaims: ARROW_REAIM.test(callback), rearmsSettle: REARMED_SETTLE.test(callback)},
+                    `Y-25: ${name}’s ResizeObserver callback re-aims the arrows at once — a getOption() copy, and every series written back, on each callback — instead of re-arming the settle with scheduleZoomedAxisLabels(lastZoomEvent)`,
+                ).toEqual({reaims: false, rearmsSettle: true});
+            });
+
+            it('PriceChartFull: the ResizeObserver callback leaves the arrows to the resolution debounce it arms, whose kept-resolution branch re-aims them', () => {
+                const name = 'PriceChartFull';
+                const source = readFileSync(new URL('./PriceChartFull.svelte', import.meta.url), 'utf8');
+                const callback = resizeCallback(source, name);
+                const recompute = functionCode(source, name, 'scheduleResolutionRecompute');
+                const keptResolution = blockAfter(recompute, 'if (nextResolution !== resolution)', '} else {');
+                if (keptResolution === undefined) throw new Error(`${name}: scheduleResolutionRecompute() has no branch for a kept resolution (if (nextResolution !== resolution) {…} else {…})`);
+
+                expect(callback, `${name}: the ResizeObserver callback resizes the chart`).toMatch(/\bchartInstance\??\.resize\(\)/);
+                expect(callback, `${name}: the ResizeObserver callback arms the resolution debounce`).toMatch(/\bscheduleResolutionRecompute\(\)/);
+                expect(keptResolution, `${name}: the debounce’s kept-resolution branch re-aims the arrows (Y-8)`).toMatch(/\bupdateArrowRotations\(\s*chartInstance\s*\)/);
+
+                expect(ARROW_REAIM.test(callback), `Y-25: ${name}’s ResizeObserver callback re-aims the arrows at once — a getOption() copy, and every series written back, on each callback — though the resolution debounce it arms re-aims them once the resize settles`).toBe(false);
+            });
+
+            it.each(ARROW_CHARTS)('%s notes, right after its full render, whether its option has an arrow (noteArrowMarkers)', (name, path) => {
+                const source = readFileSync(path, 'utf8');
+                const render = functionCode(source, name, 'renderChart');
+                const fullRenders = sitesOf(render, /\bchartInstance\.setOption\(\s*option\s*,\s*true\s*\)/g);
+                // Positive control: «right after the full render» is also true of no full render at all.
+                expect(fullRenders.length, `${name}: the full render — chartInstance.setOption(option, true) — in renderChart()`).toBe(1);
+
+                expect(
+                    {imported: /import\s+\{[^}]*\bnoteArrowMarkers\b[^}]*\}\s+from\s+['"]\.\/lineChartHelpers['"]/.test(source), rightAfterTheFullRender: lineAfterCall(render, fullRenders[0])},
+                    `Y-25: ${name} does not import noteArrowMarkers from ./lineChartHelpers and call noteArrowMarkers(chartInstance, option); right after chartInstance.setOption(option, true); — no statement between`,
+                ).toEqual({imported: true, rightAfterTheFullRender: expect.stringMatching(/^noteArrowMarkers\(\s*chartInstance\s*,\s*option\s*\);/)});
+            });
+
+            it.each(ARROW_CHARTS)('%s sets its series only in its full render, so the arrows noted there stay the chart’s until the next one (guard)', (name, path) => {
+                // The premise of noteArrowMarkers: it is taken at the full render, so a setOption that brought series anywhere else
+                // could give the chart an arrow the note does not know of — skipped, and never aimed.
+                const code = withoutComments(readFileSync(path, 'utf8'));
+                const calls = sitesOf(code, /\.setOption\(/g).map((at) => callText(code, at));
+                // Positive control: the scan sees the calls it is about.
+                expect(
+                    calls.filter((call) => FULL_RENDER.test(call)),
+                    `${name}: the full render among its setOption calls`,
+                ).toHaveLength(1);
+
+                expect(
+                    calls.filter((call) => !FULL_RENDER.test(call) && /\bseries\b/.test(call)),
+                    `${name}: a setOption besides the full render carries series — the arrows noted at the full render may no longer be the chart’s: note them there too`,
+                ).toEqual([]);
             });
         });
 

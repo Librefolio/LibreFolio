@@ -26,7 +26,7 @@
     import {_ as t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {LineDataPoint} from './LineChart.svelte';
-    import {COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
     import {toRgba} from '$lib/theme/colorAlpha';
     import {signalLabelToHtml} from '$lib/charts/signalLabel';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
@@ -271,7 +271,9 @@
                                 renderChart();
                             }
                         }
-                        if (chartInstance) updateArrowRotations(chartInstance);
+                        // Re-aimed once the resize settles, by the settle that re-spaces the labels, never on each callback: a re-aim
+                        // deep-copies the whole option (Y-25)
+                        scheduleZoomedAxisLabels(lastZoomEvent);
                     } catch (_) {
                         /* ignore coord errors during resize */
                     }
@@ -620,6 +622,7 @@
         }
 
         chartInstance.setOption(option, true);
+        noteArrowMarkers(chartInstance, option);
         chartOptionSet = true;
         lastRenderedResolution = resolution;
         if (savedZoom) {
