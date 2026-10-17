@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
+- `./dev.py db currencies` lists stored currency codes that are not ISO codes (names or numbers saved by earlier versions), and the server warns about them at every start.
 - `GET /api/v1/transactions` accepts `asset_event_id` and lists the transactions linked to that asset event, within the brokers you can see.
 - `./dev.py user create … --role user` creates a regular account; without `--role`, the command still creates an administrator.
 - Secrets can be read from files: `JWT_SECRET_FILE`, `LIBREFOLIO_INSTANCE_KEY_FILE` and `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`, as Docker and Kubernetes secrets mount them.
@@ -85,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- A user's base currency is saved only as an ISO 4217 code, and a refused currency now names the ISO code it stands for (`'840'`: USD).
 - Requests that save a currency accept only ISO 4217 alphabetic codes; names such as "Euro" or numeric codes such as "978" are refused (422). Stored data is read as before.
 - After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
 - The Dashboard warns when transactions are dated before 1900: they still count, but the history starts on 1 January 1900.
@@ -301,6 +303,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A manual price upload for several assets is refused as a whole when one of its prices is in a currency other than its asset's: before, the assets before it were already saved. The refusal (422 `price_currency_mismatch`) names every asset at fault.
 - `./dev.py user create` now refuses a username shorter than 3 or longer than 50 characters, as registration does.
 - Settings › Administration › Users: cancelling the setup link of an administrator who completed its setup in the meantime no longer deactivates it: the tab says so and nothing changes.
+- The import's gap-fix refuses to compare a broker whose transactions hold currency codes that are not ISO codes, instead of proposing corrections for money already there.
 - `dev.py user deactivate`/`demote` run at the very moment of an administrator's setup no longer leave the instance without an active administrator.
 - A number pasted in scientific notation, like `1e-8` copied from a spreadsheet, is now read exactly instead of turning into another number; one that can't be read, or that has an exponent beyond ±100, is shown in red with an explanation. Pasting a very long text into a number field no longer freezes the page.
 - Dividends and other events that a price provider reports with more than 6 decimals are now stored as they are read back, cut to 6 decimals like prices, instead of being read back rounded differently from what was written.
