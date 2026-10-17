@@ -455,6 +455,7 @@
 | [[problems/ai-export-cash-fx-valuation-basis-mismatch]] | Invalid equality between transaction-date engine cash and snapshot-date native-cash exposure caused Portfolio AI Export 503; currency allocation now uses its declared own denominator | resolved | backend, ai-export, portfolio, cash, fx |
 | [[problems/import-wizard-fake-id-collision]] | Multi-file import merged fake asset-ids from different files onto one asset — namespaced per-file + clone txs | resolved | frontend, brim, import, data-integrity |
 | [[problems/datatable-net-columns-hidden-override-model]] | DataTable visibility snapshot couldn't react to dynamic hasNetCosts default — switched to override model | resolved | frontend, datatable, fifo |
+| [[problems/datatable-pruned-preferences-of-absent-columns]] | DataTable pruned the saved order, visibility and width of columns absent at the first render; the backend-listed Δ columns lost them on every load (Y-27) | resolved | frontend, datatable, preferences |
 | [[problems/transaction-update-bypassed-sign-validation]] | Transaction UPDATE could persist positive FEE/TAX — CREATE validated, PATCH didn't | resolved | backend, validation, transactions |
 | [[problems/fifo-income-silently-dropped-after-full-close]] | Pre-v4 income allocator silently skipped income when no lot was open — now becomes asset_orphan_income | resolved | backend, fifo, dividend, data-quality |
 | [[problems/event-loop-blocking]] | yfinance sync calls in async handlers freeze entire app | resolved | backend, async, performance |
