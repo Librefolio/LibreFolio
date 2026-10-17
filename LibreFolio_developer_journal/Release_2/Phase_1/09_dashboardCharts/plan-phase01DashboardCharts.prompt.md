@@ -5564,3 +5564,49 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >
 > 11 file tracciati, nessuno nuovo; `git diff --check` pulito; nessun server. T-U8 (sezione T) lo riconcilia il coordinatore:
 > con V11 e P5 il suo inventario è chiuso.
+>
+> **Entrato**: `10345abac` + `c97b0c5ee` → dev `d4ecfb692`; HEAD avanzato. T-U8 lo riconcilia il coordinatore nella sezione T.
+
+## Y-29 · il gate delle eccezioni: un segnalino «annualizza» per voce (dalle 11:00; HEAD `d4ecfb692`)
+
+> **Via del coordinatore** (10:59): rossi prima, prove leggere; dopo, mi passa lavoro da un'altra sezione mentre le voci del
+> developer aspettano.
+>
+> **Stato reale**: la regola (C) del gate (`financialMathExceptions.gate.test.ts`, «annualization by exponent only where
+> declared») filtra i colpi con `!DECLARED_FILES.has(hit.file)`: ogni file dichiarato è esente. Oggi alzano a un esponente
+> con 365 solo `MeasureSignal.ts` (`Math.pow(growth, 365 / days)`, il Δ%/anno del righello) e `CompoundSignal.ts`
+> (`Math.pow(1 + rate, 1 / 365)`, il fattore giornaliero della curva composta); `LinearSignal.ts` ha `days / 365` (nessun
+> esponente), `SineSignal.ts` niente, e i tre moduli dei lotti di D-MF6(b) sommano, mediano e ribasano.
+>
+> **Scelta** (tutta nel file del gate, quindi `test-author` `c23643d5` fa rosso e cura): (1) il filtro di (C) in una funzione
+> pura, senza cambi; (2) il rosso, un colpo sintetico in un modulo dei lotti che deve contare come trasgressore; (3) un
+> segnalino obbligatorio `annualizes: boolean` per voce, vero solo per `MeasureSignal.ts` e `CompoundSignal.ts`; (C) ammette
+> esponenti solo lì; docblock e messaggi aggiornati; un controllo che anche il colpo vero di `MeasureSignal` venga trovato.
+>
+> **Documentazione**: `financial_math.md` descrive (C) in due punti («outside the listed files»: la frase del gate nella
+> regola 6, `:478-479`, e il terzo punto della sezione del gate, `:629`); chiesto al coordinatore se toccarli ora (MF ha la
+> pagina aperta).
+>
+> **Fatto ✅** (`test-author` `c23643d5`, 11:00–11:14; solo il gate, +90 −30):
+> - base 17/17; **passo 1**, il filtro in `annualizationOffenders(hits, allowedFiles)` e l'insieme `ANNUALIZING_FILES` (per
+>   ora uguale a `DECLARED_FILES`): 17/17; **passo 2**, il rosso: un controllo (D) che fa produrre allo scanner del gate un
+>   esponente con 365 in un file non dichiarato, nei tre moduli dei lotti, in `MeasureSignal` e in `CompoundSignal`, e vuole
+>   trasgressori i primi quattro → 1 rosso («Y-29: being declared does not exempt a file from (C)…»: venivano segnalati solo
+>   il file non dichiarato, non i tre moduli); **passo 3**, la cura: `annualizes: boolean` obbligatorio in ogni voce, vero
+>   solo per `MeasureSignal.ts` e `CompoundSignal.ts`; `ANNUALIZING_FILES` costruito dal segnalino; titolo e messaggio di (C)
+>   aggiornati; docblock ((C), (D), «Adding an exception», «Completeness»); una guardia nuova (i due file sono nell'insieme,
+>   e ogni file dell'insieme ha un esponente vero) → **19/19**.
+> - Prove che la guardia morde, poi ripristinate col checksum: `LinearSignal` a `true` → rossa la sola guardia; `MeasureSignal`
+>   a `false` → tre rossi, e la regola (C) nomina l'esponente vero di `MeasureSignal.ts:56`.
+> - Osservazioni: prima di Y-29 il verdetto di (C) non aveva un controllo positivo (un filtro che non segnalava niente
+>   sarebbe passato): il controllo del passo 2 lo copre; la concessione resta per file (una seconda annualizzazione dentro
+>   `MeasureSignal` passerebbe), ora scritto in «Completeness».
+> - **Documentazione** (`docs-writer` `bc90fe07`, via del coordinatore per le sole due righe): `financial_math.md:479-480`
+>   («outside the listed files that annualize») e `:630-631` (il segnalino `annualizes: true`, il righello e la curva
+>   composta); `git diff` di due blocchi, +4 −2.
+> - **Prove leggere** (`files/scripts/y29_light.sh` e `y29_docs_check.sh`, 11:14–11:18): il gate **19/19**; svelte-check 0/0
+>   (il campo obbligatorio è controllato); Prettier pulito; `theme-roles --check` pulito; `git diff --check` pulito;
+>   `mkdocs build` (strict) rc 0, 0 WARNING; `check-links` 97.
+> - **Backlog**: Y-29 ✅. Nessun E2E: cambia solo un test e una pagina per sviluppatori.
+>
+> ### Y-29 — checkpoint 🧊 FROZEN (11:1x)
