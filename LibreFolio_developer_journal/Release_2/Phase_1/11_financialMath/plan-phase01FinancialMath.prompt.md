@@ -3078,3 +3078,32 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
   1.3 come prossimo lotto (analisi inviata: solo le righe senza valore iniziale, base `end_cost + Σ(V_a − C_a)` quando la
   riga non ha uscite nel periodo — esatto —, altrimenti il costo alla fine com'è, limite dichiarato: il trasferimento non
   porta la quantità). Revisione Z-32 (c) `QUOTE_IN_MINOR_UNIT`: OK, nessun rilievo. **CHECKPOINT READY** inviato, FROZEN.
+
+#### A8 entrato (dev `bc466d969`); MF-A9 — la riga ricevente aperta (17/10, 18:2x)
+- Coordinatore: A8 **entrato** (dev `bc466d969`, merge `4f9f29e8e`, clausola 🐛 `770928213`); worktree a `770928213`.
+- **MF-A9** ✅ codice: `annualized_period_return(..., moved_in=None)` — senza valore iniziale la base di ricaduta è
+  `end_cost` (≠ 0, com'era) o, con `moved_in`, `end_cost + moved_in` (> 0); `get_positions_contribution` calcola
+  `row_exits` una volta e passa `moved_in` solo se `row_exits == 0` (tutte le unità ricevute ancora tenute: esatto).
+  Limite dichiarato: con uscite nel periodo la base resta il costo alla fine (il trasferimento non porta la quantità).
+  Doc: `net-annualized-return.en.md` (la ricaduta della base: + Σ(V_a − C_a), il limite). Backlog: A8 chiusa, A9 in corso.
+- ✅ **Test A9** (test-author `a9-tests`): in `test_portfolio_contributions.py` la guardia
+  `TestAnnualizedPeriodReturnWithoutMovedInUnchanged` (copia di HEAD, 11 casi) e `TestAnnualizedPeriodReturnMovedIn`
+  (C 5/645 = 0,0078 contro 5/500; arrivo in perdita base 400; al costo; base ≤ 0 → `None`; il valore iniziale vince;
+  `moved_in=None` = HEAD); in `test_positions_contribution_engine.py` `TestOpenPositionMovedInBase` (report e autonomo):
+  la catena di A8 letta fino al 16/05 (`_passed_through_held_longer`, chiusura 130) — sul periodo di A8 la finestra di C
+  è 28 giorni, sotto i 30 dell'annualizzazione, `None` prima e dopo —, C **0,066576** (5/645, 44 giorni) contro HEAD
+  0,086045; guardie: un BUY a 645 dà lo stesso numero, e la riga ricevente poi venduta in parte resta sul costo alla fine
+  (1,370355, il limite dichiarato). Mutanti presi tutti. Note: `moved_in=0` con costo alla fine negativo → `None`
+  (prima un numero; coerente con `> 0` di `closed_position_base`, lo tengo); la riga tenuta all'inizio e ricevente ha
+  solo test puri (vince il valore iniziale).
+- ✅ **Corsia** (18:33; prodotto tolto `contributions.py` + `portfolio_service.py`, sha `a751853b…` uguale dopo):
+  `financial-math contributions` rosso **32** / 164 (tutti `TypeError … 'moved_in'`); `roi-fifo-utils
+  test_positions_contribution_engine` rosso **2** / 88 (C 0,086045 ≠ 0,066576, entrambi i percorsi). Verdi:
+  `financial-math` **1430**, `roi-fifo-utils` **1433**, `portfolio-engine` 41. ruff, black, diff-check; `mkdocs build`
+  stretto e `check-links` verdi (dopo la doc). Porta libera. Slot chiesto (`files/a9.sh slot`: `api portfolio`).
+- ✅ **Slot** (GO 18:37; partito 18:38, HEAD `770928213`): `api portfolio` **53** passati; porta 6190 libera.
+  Coordinatore: il `> 0` resta; il caso «costo alla fine negativo con `moved_in` → «—»» va solo qui, senza clausola
+  CHANGELOG. Revisione J di MF-A8: OK; nit doc preso: in `net-annualized-return.en.md`, dopo il termine $V_a − C_a$, la
+  frase «CostOut non è solo costo storico: per le unità ricevute la base tiene il loro valore all'arrivo». `mkdocs
+  build` stretto + `check-links` verdi dopo il nit. Rinomina CP-10d (`series_preparation` → `market_series`): A9 non
+  importa nessuno dei due. **CHECKPOINT READY** inviato, FROZEN.

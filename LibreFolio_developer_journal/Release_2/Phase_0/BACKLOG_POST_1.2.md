@@ -8211,12 +8211,14 @@ punto di partenza, l'audit dello stesso giorno:
   25 %, il giusto ~12,5 %. Cura: la regola chiusa solo se ogni unità è uscita con una cessione che il Realizzato conta,
   altrimenti la ricaduta (o il costo uscito nella base). Rossi prima. Con la nota di doc di `net-annualized-return`
   («scesa alla soglia della polvere o sotto»). Dettagli: piano MF, «MF-A5».
-- **MF-A8 · Il lato ricevente della base delle posizioni chiuse** — medio-basso, numeri, nella 1.3; J, 17/10 (revisione
+- ✅ **MF-A8 · Il lato ricevente della base delle posizioni chiuse** — medio-basso, numeri, nella 1.3; J, 17/10 (revisione
+  **chiusa il 17/10**: Σ(V_arrivo − C_spostato) dei tratti ricevuti nella base, dev `bc466d969`.
   di MF-A5). Una riga che riceve unità da un tratto contato misura il suo P&L dal loro valore all'arrivo (−tratto), ma
   la sua base (il costo delle vendite) resta il costo storico. Esempio: comprato a 500 da A, spostato a B quando vale
   600, venduto da B a 660: +60 su 500 = 12 %, il giusto 60/600 = 10 %. **In corso (17/10)**: Σ(V_arrivo − C_spostato)
   dei tratti ricevuti nella base (la scelta preferita da J). Dettagli: piano MF, «MF-A8».
-- **MF-A9 · Una riga ricevente ancora aperta annualizza sul costo storico** — basso, numeri (proposta); test-author di
+- **MF-A9 · Una riga ricevente ancora aperta annualizza sul costo storico** — basso, numeri (proposta);
+  **Pronto (17/10, CHECKPOINT READY)**, nella 1.3 (coordinatore): solo righe senza valore iniziale e senza uscite nel periodo.
   MF, 17/10 (MF-A8). Una posizione aperta nel periodo che ha ricevuto unità da un tratto contato e le tiene alla fine è
   annualizzata sul costo alla fine (storico), mentre il suo risultato le conta dal valore all'arrivo: nella catena
   A→B→C la riga di C dà 5/500 invece di 5/645. Cura possibile, il rovescio di MF-A8 sul costo alla fine:
