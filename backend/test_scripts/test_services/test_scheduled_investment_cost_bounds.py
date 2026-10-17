@@ -8,24 +8,29 @@ user) could keep a thread busy past its 15 s timeout and cache ~0.7 GB per sched
 
 Now:
     - COMPOUND late interest is the closed form ``V · compound_growth(...)``: grace days at the last period's rate, the
-      days after at the late rate (``_late_compound_growth``);
-    - the late history (``_late_interest_values``) grows COMPOUND from one emitted date to the next: one pass; SIMPLE
-      stays closed-form per date;
+      days after at the late rate (``_late_compound_growth``). ``compound_growth`` is O(1) in its span and memoized:
+      ACT/ACT one power for the whole common years and one for the leap years, 30/360 step counts as differences of
+      prefixes (``_thirty_360_steps_up_to``, at most 12 months per date);
+    - the late history (``_late_interest_values``) values every late date by its closed form,
+      ``_compute_late_interest_value``, in constant time per date; SIMPLE and COMPOUND alike value only the emitted
+      dates and the last late date (the settlement's);
     - late interest is emitted up to 2200-12-31 (``SCHEDULE_MAX_DATE``) at most, and a schedule with late interest whose
       maturity is that day emits nothing after it (the flat line of a schedule without late interest is not drawn);
     - ``_generate_schedule_values`` does not store a result of more than 3 660 points (``_CACHE_MAX_POINTS``) in
       ``_CACHE``;
-    - ACT/ACT across years sums the whole years once per (start, end year), memoized (``interest._act_act_years_before``),
-      with the same additions as before, so SIMPLE late interest, closed form per date from maturity, no longer looks up
-      every year since maturity on every date;
-    - COMPOUND late interest is valued over the whole late grid from maturity, so a date's value does not depend on the
-      window it is read in, and the late ``MATURITY_SETTLEMENT`` is the last late price itself.
+    - the ACT/ACT fraction across years is still the year-by-year sum, with the same additions as before: the whole
+      years before the end's are a memoized prefix per (start, end year) (``interest._act_act_years_before``), then the
+      last year's days are added; so SIMPLE late interest, closed form per date from maturity, no longer looks up every
+      year since maturity on every date;
+    - a late date's value is the closed form of that date, so it does not depend on the window it is read in, and the
+      history's close, the current value (``get_current_value``) and the late ``MATURITY_SETTLEMENT`` (the last late
+      price itself) read the same digits for one day (J's review note: ``test_scheduled_investment_late_alignment.py``).
 
 Sections:
     C. Parity (Guard: green before and after). The closed form equals the old day-by-day loop, ported here as the oracle
        (``_day_by_day_late_compound``, the body ``git show`` gives for the COMPOUND branch before the fix), within a
        relative 1e-22: it is more exact than the loop, not the same digits. The late history equals
-       ``_compute_late_interest_value`` called on each date, within 1e-22.
+       ``_compute_late_interest_value`` called on each date, within 1e-22 (now digit for digit: it is that call).
     D. Cost (Red). Deterministic, never wall-clock: the calls of ``calculate_day_count_fraction`` the plugin makes, counted
        through the name the plugin reads. Before: ~n²/2 for the late history; the counter stops the walk at the budget, so
        the red arrives in a fraction of a second instead of after ~3·10⁸ calls. For SIMPLE ACT/ACT, the calls of
@@ -33,15 +38,17 @@ Sections:
        before, one per year between maturity and each date.
     E. Cache cap (Red for the schedule over the cap).
     F. Horizon (Red): no price point nor event after 2200-12-31, also when maturity is that day.
-    G. Settlement (Guard: green before the fix, which computed both from maturity day by day; it guards the one-pass
-       history, whose first version settled on a closed form that differed from the last price in the last digits).
-    H. Window independence (Guard: green before the fix, which valued each date from maturity; it guards the one-pass
-       history, whose first version grew from the first date of the window and so gave a date other last digits in
-       another window).
+    G. Settlement (Guard: green before the fix, which computed both from maturity day by day, and on every history since:
+       the one-pass history that first replaced it, whose first version settled on a closed form that differed from the
+       last price in the last digits, and the closed form per date that replaced the one pass).
+    H. Window independence (Guard: green before the fix, which valued each date from maturity, and on every history
+       since: a first version of the one pass grew from the first date of the window and so gave a date other last
+       digits in another window; the closed form per date reads no window at all).
 
-``get_history_value`` is given the schedule's first start, not ``"min"``: with ``"min"`` this provider raises
-``CALCULATION_ERROR`` before and after the fix (it compares the literal with dates), a defect apart from R13-SEC7-2.
-For a schedule, ``"min"`` resolves to that same first start.
+``get_history_value`` is given the schedule's first start, not ``"min"``: before MF-SI1 ``"min"`` raised
+``CALCULATION_ERROR`` (the provider compared the literal with dates), a defect apart from R13-SEC7-2. For these schedules,
+which have no manual event before their start, ``"min"`` now resolves to that same first start
+(``test_scheduled_investment_min_start.py``).
 
 Every test that runs the schedule deletes its ``_CACHE`` entry before (cold) and after (no leftovers).
 
@@ -112,7 +119,7 @@ def _own_cache_entry(schedule: FAScheduledInvestmentSchedule) -> Iterator[str]:
 
 async def _history(schedule: FAScheduledInvestmentSchedule, end: date, start: date | None = None):
     """The provider's history of ``schedule`` from ``start`` — by default its first start, what ``"min"`` means for
-    it — to ``end``."""
+    a schedule without a manual event before it — to ``end``."""
     params = schedule.model_dump(mode="json")
     return await ScheduledInvestmentProvider().get_history_value("r13-sec7-2", IdentifierType.OTHER, params, start or schedule.schedule[0].start_date, end)
 
@@ -240,7 +247,8 @@ def _expected_late_dates(maturity: date, end: date, frequency: MaturationFrequen
 async def test_late_history_equals_the_value_on_each_date(day_count, late_type, late_frequency):
     """Guard: every late point of ``get_history_value`` is ``_compute_late_interest_value`` on its date, within 1e-22.
 
-    COMPOUND is grown from one emitted date to the next (MONTHLY: a month per step); SIMPLE is per date as before.
+    Every late date is now the closed form of that date, SIMPLE and COMPOUND alike, so the two agree digit for digit
+    (``test_scheduled_investment_late_alignment.py`` pins it by ``str``); the tolerance is the one-pass history's, kept.
     """
     schedule = _history_schedule(day_count, late_type, late_frequency)
     maturity = schedule.schedule[-1].end_date

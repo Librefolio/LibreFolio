@@ -1934,3 +1934,109 @@ Quattro commit, uno per lotto che cambia numeri:
   schedule»). `mkdocs build` stretto exit 0 (anche dopo il mio ritocco), `check-links` exit 0. **Debito di traduzione**
   it/fr/es della pagina utente: una nota in più (`admonition-count`, `admonition-type`, link `#late-interest`).
 - ruff/black (11 file) puliti, `git diff --check` pulito, porta libera.
+
+#### SEC7-2 entrato; MF-SI1 + la nota di J (17/10, 06:46)
+- Coordinatore: SEC7-2 committato `db5486ae9` + giornale `d6927b129`, base `bda5c80d6` (dev `0dc58c70b`); combinata
+  leggera verde (`financial-math` 1076, `synthetic-yield` 24, `synthetic-yield-integration` 15, `cost-bounds` 63,
+  `scheduled-investment-bounds` 18, `day-count` 43, `mkdocs build` stretto 0) → **entrato** dev `7198d8028`, CHANGELOG
+  `c8ea9ddd4`, HEAD ff **`c8ea9ddd4`**. N73 adottata per la revisione; il 422 sulla sonda non serve (`INVALID_PARAMS` è
+  il contratto). J: golden accettato; **nota non bloccante**: la storia COMPOUND della mora (prodotto lungo la griglia) e
+  la data singola (forma chiusa) differiscono nelle ultime cifre per lo stesso giorno → allinearle se costa poco, nel
+  lotto di MF-SI1. E: chiuso; note sotto soglia (tetto opzionale su `asset_events`, la sonda senza limite per utente) al
+  mio backlog. Prossimi: **MF-SI1**, poi analisi in sola lettura di **SEC7-1b** (il motore fuori dal ciclo degli eventi;
+  nessuna modifica a `engine.py`, di J).
+- ✅ **MF-SI1 — codice**: `get_history_value` — `effective_start` per `"min"` = il più presto fra il primo valore e il primo
+  evento manuale (altrimenti `end_date`); i due confronti col letterale (l'ancora del valore iniziale, i tre filtri degli
+  eventi) usano `effective_start`. ⚠️ **Fuori pista — più largo del previsto**: `refresh.py:164` passa `"min"` quando
+  l'asset non ha prezzi, quindi **la prima sincronizzazione di ogni nuovo asset Scheduled Investment falliva**
+  (`CALCULATION_ERROR`). Decisione mia: `"min"` arriva al primo evento manuale anche se precede il piano (letto una sola
+  volta, alla prima sincronizzazione: un evento prima sarebbe perso per sempre); prima del piano l'ancora del valore
+  iniziale, come una partenza esplicita anticipata.
+- ✅ **La nota di J — allineamento esatto**: invece di portare la data singola sulla griglia, `compound_growth` diventa
+  **O(1)** nell'intervallo e la storia usa la stessa forma chiusa data per data: storia, valore corrente e chiusura
+  coincidono (`str` uguali, misurato sulle 4 convenzioni); l'indipendenza dalla finestra vale per costruzione; sparisce
+  il passaggio lungo la griglia. ACT/ACT: primo anno, una potenza per gli anni comuni interi e una per i bisestili,
+  ultimo anno (identico a HEAD con ≤ 1 anno intero; 9 su 12 000 intervalli ≤ 800 giorni a 1,1·10⁻²⁷); 30/360: conteggi
+  dei passi come differenze di conteggi in forma chiusa fino a ciascuna data (interi: identici al ciclo per mese su
+  30 000 intervalli). `_compound_growth` in `lru_cache(4096)` con la tariffa **come scritta** nella chiave (`0.05` e
+  `0.050` sono Decimal uguali con cifre diverse: con tasso 0 `1.000…` contro `1`), e precisione/arrotondamento.
+- **Misure** (mora DAILY COMPOUND da una scadenza nel 1900): finestra di 7 giorni 40–130 ms (HEAD 120–270 ms, il
+  passaggio lungo la griglia); storia intera fino al 2200 (≈110 000 punti) 1,9 s ACT/365, 2,9 s ACT/ACT, 3,9 s 30/360
+  (HEAD 1,5–1,7 s); valore corrente 1–2 ms; il timeout della storia nella sincronizzazione è 55 s. Il segmento della
+  grazia, uguale per ogni data dopo, viene dal memo.
+- Suite esistenti verdi sull'albero (06:53–06:55): `scheduled-investment-bounds` 18, `schemas assets` 70,
+  `financial-math` 1076, `cost-bounds` 63, `synthetic-yield` **24 (golden intatto)**, `synthetic-yield-integration` 15,
+  `param-change` 3, `day-count` 43, `provider-core-cache` 46.
+- Test: test-author `mf-si1-tests` — `test_scheduled_investment_min_start.py` (8 casi; 4 rossi su HEAD per il
+  `TypeError`; mutazioni sbagliate prese), in corso l'adeguamento a «primo evento» e i test dell'allineamento, dell'O(1) e
+  della chiave del memo. Riga del runner aggiunta (dichiarata): `scheduled-investment-min-start` (pura). Doc:
+  docs-writer `sec7-2-docs`, secondo seguito.
+
+#### SEC7-1b — analisi in sola lettura: il motore fuori dal ciclo degli eventi (17/10, ~07:1x; nessuna modifica)
+- **Il reperto** (E, R13-SEC7 reperto 1, `08_email/plan-phase01Email.prompt.md` ~:4720): `builder.build()` gira sul ciclo
+  degli eventi (`financial_math/portfolio/engine.py:424`), CPU pura; J taglia la fine dell'intervallo (SEC7-1), qui la
+  seconda metà: spostare il calcolo in un thread. `engine.py` è di J: niente modifiche mie.
+- **Che cosa riceve il costruttore** (`engine.py:402-423`): `classified_txs` (`ClassifiedTransaction` con **istanze ORM
+  `Transaction` vive**, `tx` e `paired_tx`), `in_transit_intervals` (gambe ORM), `price_map`/`ohlc_map`/`fx_rate_map`
+  (tuple e dict già caricati), `average_costs` (dataclass), `native_cash` (`NativeCash`: movimenti e tassi già convertiti
+  da un solo `convert_bulk`, nessuna sessione dentro), `mark_series` (costruite sul ciclo da `build_asset_price_series`,
+  osservazioni normalizzate), `split_history` (tuple). Tutto è caricato **prima**; il costruttore non fa I/O.
+- **Attributi ORM pigri**: il costruttore legge solo **colonne** (`tx.id, amount, quantity, broker_id, type, asset_id,
+  date, currency, cost_basis_override, cost_basis_currency`, `paired_tx.id`, `departure_leg.currency`,
+  `arrival_leg.date`); nessuna relazione (`related_transaction` è la sola, pigra, mai letta: il classificatore usa la
+  colonna `related_transaction_id`); nessuna colonna `deferred`. Le sessioni nascono con `expire_on_commit=False`
+  (`db/session.py:173`), nessun `rollback`/`expire`/`refresh` nei percorsi del motore. Quindi leggere quelle istanze da
+  un altro thread non tocca la sessione. **Il rischio residuo**: un attributo scaduto o una relazione letta in futuro
+  farebbe un caricamento pigro dal thread → `MissingGreenlet`. Guardia proposta: un test che costruisce col sessione
+  chiusa e le istanze `expunge`-ate (un caricamento pigro solleverebbe `DetachedInstanceError`), oppure `raiseload` sulla
+  relazione nei test.
+- **Sessioni**: la sessione non entra nel thread (tutte le `await self.db.execute` sono prima e dopo); nessun chiamante
+  usa la stessa sessione in concorrenza (`gather`/`create_task` assenti in `portfolio_service.py`, `risk/`,
+  `ai_export/`, `pac_allocator/source/distribution.py`): mentre il thread lavora la coroutine della richiesta è sospesa
+  e nessun'altra tocca quelle istanze.
+- **Stato condiviso**: nel percorso del costruttore solo costanti (`classifier.py` insiemi di tipi) e le `lru_cache` di
+  `interest.py` (thread-safe; chiave con contesto Decimal e tariffa scritta, SEC7-2); la cache dei blob
+  (`_portfolio_blob_cache`) si scrive sul ciclo dopo l'`await`. Il contesto `decimal` è per thread: l'app non cambia mai
+  il contesto globale (nessun `getcontext().prec =`/`setcontext`), quindi il thread ha lo stesso 28/HALF_EVEN; da tenere
+  così (un test di parità lo fisserebbe).
+- **Costo e comportamento**: `to_thread` costa decine di µs, niente rispetto al calcolo; il GIL resta (Python puro),
+  quindi nessun parallelismo, ma il ciclo riprende il GIL ogni 5 ms (intervallo di commutazione) → le altre richieste
+  rallentano invece di fermarsi. Un thread non si cancella: con il client disconnesso il calcolo finisce comunque e il
+  risultato si butta (la scrittura in cache è dopo l'`await`, non avviene) — con il tetto della durata di SEC7-1 è
+  limitato. L'esecutore predefinito (`min(32, cpu+4)` thread) è condiviso da ~75 `to_thread`: tanti report pesanti
+  insieme lo occuperebbero.
+- **Proposta per J** (scrittore di `engine.py`):
+  1. `result = await loop.run_in_executor(_ENGINE_EXECUTOR, builder.build)` con un **esecutore dedicato** piccolo
+     (`ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")`): limita la concorrenza dei calcoli
+     pesanti e non affama gli altri `to_thread`; in alternativa `asyncio.to_thread(builder.build)` (minimo).
+  2. Test (rossi prima, test-author): il costruttore gira fuori dal thread del ciclo (nome del thread o un ticker che
+     avanza durante un calcolo lungo); golden `native_cash_guard` identico; la guardia degli attributi pigri sopra.
+  3. Fuori perimetro ma simile: i post-calcoli di `portfolio_service` (viste derivate, contributi) e il replay del
+     rischio restano sul ciclo; col tetto della durata sono limitati: da misurare prima di spostarli.
+- **Coordinatore** (06:59): analisi buona. Dopo l'ingresso di J-43/SEC7-1 **`engine.py` passa a me** (J va su F5/J-44 nel
+  frontend), unico scrittore, in quest'ordine: (1) **MF-D4** (rapporto non valido = split mancante +
+  `INVALID_SPLIT_RATIO`, come concordato con J); (2) **SEC7-1b = J-45** (passata a me): esecutore dedicato
+  `ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")` e i 3 rossi (costruzione fuori dal thread
+  del ciclo, golden identico, guardia degli attributi pigri); rivedono J ed E. Prima: chiudere MF-SI1 → checkpoint.
+- ✅ **Test MF-SI1 + allineamento** (test-author `mf-si1-tests`, due giri): `test_scheduled_investment_min_start.py` (10
+  casi: «min» = la chiamata esplicita a `min(primo inizio, primo evento)`, l'evento prima del piano con l'ancora alla sua
+  data, piano vuoto con e senza eventi, parità delle partenze esplicite); `test_scheduled_investment_late_alignment.py`
+  (32: valore corrente il giorno D = chiusura della storia su D, per `str`, 4 convenzioni × DAILY/MONTHLY × 3 finestre;
+  la chiusura di mora = ultima chiusura = forma chiusa); `test_financial_math/test_compound_growth_span_cost.py` (costo
+  indipendente dall'intervallo: ≤ 48 chiamate di `calendar`, 46 col 30/360 in dicembre; conteggi 30/360 = ciclo per mese
+  di HEAD esatti; ACT/ACT = prodotto per anno ≤ 1e-26 su intervalli corti, ≤ 1e-22 dal prodotto a 60 cifre su quelli
+  lunghi; il memo tiene `0.000` e `0` distinti e il contesto). Mutazioni: sei rotture, tutte prese. Docstring di
+  `test_scheduled_investment_cost_bounds.py` e di `min_start` allineati.
+- **Riga del runner** (dichiarata): `scheduled-investment-late-alignment` (pura), oltre a `scheduled-investment-min-start`;
+  descrizione di `scheduled-investment-cost-bounds` corretta («closed form per date, bounded day counts»).
+- ✅ **Rossi** (`files/si1.sh red`, 07:05, patch prodotto `367626ec…` = `interest.py` + plugin, rimessa con lo stesso sha):
+  `scheduled-investment-min-start` **6 failed / 4 passed** (`CALCULATION_ERROR`); `scheduled-investment-late-alignment`
+  **32 failed** (la storia a griglia di HEAD: …726649 contro …726644); `financial-math test_compound_growth_span_cost`
+  **2 failed / 33 passed** (ACT/ACT 251, 30/360 6 001 chiamate).
+- ✅ **Verdi** (07:05–07:07): `min-start` 10, `late-alignment` 32, `financial-math` **1111**, `cost-bounds` 63,
+  `synthetic-yield` **24 (golden intatto, byte per byte)**, `synthetic-yield-integration` 15, `param-change` 3,
+  `scheduled-investment-bounds` 18, `day-count` 43, `provider-core-cache` 46, `asset-source-refresh` 18. ruff/black puliti,
+  `git diff --check` pulito, porta libera.
+- ✅ **Doc** (docs-writer, terzo giro): `provider_scheduled_investment.md` L51, L74 («History range»: `"min"`), L141–155
+  (forma chiusa per data), L171–180 (tempi), L220–226 (`compound_growth` O(1) e i memo); `financial_math.md` L71,
+  L517–527. `mkdocs build` stretto 0, `check-links` 0. Pagina utente invariata.

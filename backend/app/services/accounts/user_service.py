@@ -13,6 +13,7 @@ from typing import Optional
 import structlog
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from backend.app.db.models import AccountTokenPurpose, Broker, BrokerUserAccess, Transaction, User, UserRole, UserSettings
 from backend.app.services.accounts import token_service
@@ -81,12 +82,20 @@ class AccountDeletionResult:
 logger = structlog.get_logger(__name__)
 
 
-def end_sessions(user: User) -> None:
+async def end_sessions(session: AsyncSession, user: User) -> None:
     """Raise the account's session version: every session token issued before it is refused at its next request.
 
-    Not committed: the caller commits it together with the change that asks for it.
+    One increment in SQL (A-34): two changes that end the sessions at the same time raise it by two, so a session cookie
+    issued between them does not survive the second. A Core statement on the session's own connection, in the caller's
+    transaction: nothing the caller changed on ``user`` is flushed before its commit, and ``user`` then carries the new
+    value without being marked as changed. Not committed: the caller commits it together with the change that asks for
+    it.
     """
-    user.session_version += 1
+    users = User.__table__  # type: ignore[attr-defined]
+    statement = users.update().where(users.c.id == user.id).values(session_version=users.c.session_version + 1).returning(users.c.session_version)
+    connection = await session.connection()
+    version = (await connection.execute(statement)).scalar_one()
+    set_committed_value(user, "session_version", version)
 
 
 _ASCII_FOLD = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
@@ -281,7 +290,7 @@ async def reset_password(
 
     # bcrypt is slow on purpose: it runs off the event loop.
     user.hashed_password = await asyncio.to_thread(hash_password, new_password)
-    end_sessions(user)
+    await end_sessions(session, user)
     # The live password-reset links of the account die with the old password (A-27), in the same commit; a setup link
     # of the initial administrator is retired: given a password another way, the account is set up (A-32).
     await token_service.revoke_tokens(session, user_id=user_id, purpose=AccountTokenPurpose.PASSWORD_RESET)
@@ -320,7 +329,7 @@ async def complete_password_reset(session: AsyncSession, token: str, new_passwor
         return None
     # bcrypt is slow on purpose: it runs off the event loop.
     user.hashed_password = await asyncio.to_thread(hash_password, new_password)
-    end_sessions(user)
+    await end_sessions(session, user)
     user.updated_at = utcnow()
     session.add(user)
     await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET, now=now)
@@ -367,7 +376,7 @@ async def update_user_status(
         user.is_superuser = is_superuser
         changed = True
     if deactivate or demote:
-        end_sessions(user)
+        await end_sessions(session, user)
     if changed:
         user.updated_at = utcnow()
         session.add(user)
@@ -411,7 +420,7 @@ async def set_user_active(
 
     user.is_active = active
     if not active:
-        end_sessions(user)
+        await end_sessions(session, user)
     await token_service.revoke_tokens(session, user_id=user_id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION)
     if active:
         # Activated another way, the initial administrator is set up: its setup link is retired (A-32)
@@ -461,7 +470,7 @@ async def set_user_admin(
 
     user.is_superuser = is_admin
     if not is_admin:
-        end_sessions(user)
+        await end_sessions(session, user)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
@@ -518,7 +527,7 @@ async def update_profile(
         # password-reset link (A-27: whoever holds the old mailbox cannot use one asked for before): committed below,
         # together with the address.
         user.email_verified_at = None
-        end_sessions(user)
+        await end_sessions(session, user)
         await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
         # The setup link of the waiting initial administrator went to the old address too: revoked, it waits for a new one (A-33)
         await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)

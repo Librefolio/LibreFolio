@@ -53,6 +53,7 @@ from backend.app.services.financial_math.portfolio.data_quality import build_dat
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, MarkSource, build_asset_price_series
 from backend.app.services.financial_math.splits import load_split_links
 from backend.app.services.financial_math.valuation import normalize_quote_base_quantity
+from backend.app.utils.datetime_utils import latest_range_end
 
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,
@@ -95,7 +96,8 @@ class LotsAnalysisService:
             raise ValueError("requested_analyses must not be empty")
 
         target_currency = target_currency or await self._get_base_currency(user_id)
-        actual_to = date_to or date_type.today()
+        # R13-SEC7-1: the histories walk every day to actual_to, so it ends by latest_range_end()
+        actual_to = min(date_to or date_type.today(), latest_range_end())
         asset = await self.db.get(Asset, asset_id)
         if asset is None:
             raise ValueError(f"Asset {asset_id} not found")

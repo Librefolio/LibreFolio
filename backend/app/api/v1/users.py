@@ -255,8 +255,7 @@ async def create_password_reset_link(user_id: int, admin: Annotated[User, Depend
 async def revoke_account_sessions(user_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> Response:
     """End every session of the account: each device is signed out at its next request."""
     user = await _user_or_404(session, user_id)
-    user_service.end_sessions(user)
-    session.add(user)
+    await user_service.end_sessions(session, user)
     await session.commit()
     logger.info("Sessions ended by an administrator", user_id=user.id, admin_id=admin.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

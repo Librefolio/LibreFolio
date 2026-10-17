@@ -499,6 +499,8 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         Path("broker_reports/failed"),
         Path("logs"),
         Path("scheduler_state.json"),
+        # The scheduler's lock across worker processes (workstream Z, Z-11: run_lock.LOCK_FILE_NAME)
+        Path(".scheduler.lock"),
         Path("scenario_catalog"),
         Path("secrets"),
         Path("secrets/instance.key"),

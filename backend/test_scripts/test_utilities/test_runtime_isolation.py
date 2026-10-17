@@ -8,6 +8,9 @@ shared-backend ownership, the ``exec_unmasked`` spawn wrapper,
 frontend build's staleness probe (``check_frontend_needs_build``): what it
 counts as an input, and the listing of the Tool codegen inputs a successful
 build records, which it compares instead of the folders' mtimes (H-24r).
+Among the production guards, a managed path of a test root (the scheduler's
+state and lock files included, Z-24) is refused when a symlink sends it out of
+the root or a hard link makes it the production file itself.
 Every test is PURE — no server, no database, no network — using ``tmp_path``,
 in-memory fakes, and (only where a real signal is the subject) short-lived
 subprocesses that just print or wait.
@@ -16,6 +19,7 @@ subprocesses that just print or wait.
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import json
 import os
@@ -363,6 +367,10 @@ def validation_refusal(test_root: Path, production_root: Path) -> ValueError:
 
 
 class TestDataDirResolution:
+    #: The scheduler's lock across processes (Z-11), in the data directory beside ``scheduler_state.json``: spelled here,
+    #: never read from its module, and pinned to ``run_lock.LOCK_FILE_NAME`` by a barrier test of this class (Z-24).
+    SCHEDULER_LOCK = ".scheduler.lock"
+
     @pytest.mark.parametrize("resolver", ["backend", "cli"])
     @pytest.mark.parametrize("override", ["/isolated/lane-test-data", "runtime/lane-test-data", None], ids=["absolute", "relative", "default"])
     def test_test_data_dir_resolves_and_ignores_the_production_override(self, runtime_env, resolver, override):
@@ -460,7 +468,7 @@ class TestDataDirResolution:
 
         assert not production_dir.exists() and not candidate.exists()
 
-    @pytest.mark.parametrize("managed_relative", ["sqlite", "sqlite/app.db", "secrets", "secrets/instance.key", "backups", ".restore"])
+    @pytest.mark.parametrize("managed_relative", ["sqlite", "sqlite/app.db", "secrets", "secrets/instance.key", "backups", ".restore", "scheduler_state.json", SCHEDULER_LOCK])
     def test_managed_symlink_escaping_into_another_root_is_rejected_before_mutation(self, runtime_env, tmp_path, managed_relative):
         # Both roots are synthetic: the only thing under test is whether the guard
         # resolves symlinks instead of comparing unresolved path strings.
@@ -478,6 +486,49 @@ class TestDataDirResolution:
             cli_base.configure_test_runtime(port=6199, data_dir=str(test_root))
 
         assert runtime_state() == before
+
+    @pytest.mark.parametrize("managed_file", ["sqlite/app.db", "secrets/instance.key", "scheduler_state.json", SCHEDULER_LOCK])
+    def test_a_managed_file_hardlinked_to_production_is_rejected_before_mutation(self, runtime_env, tmp_path, managed_file):
+        # A hard link resolves to itself, so it never escapes its root: only the identity check (samefile) sees that the
+        # test file is the production one. Both roots are synthetic, and the folders above the file are distinct real
+        # folders in each, so the file is the one aliased path and the refusal must name it.
+        production_root, test_root, relative = tmp_path / "synthetic-production-data", tmp_path / "synthetic-test-data", Path(managed_file)
+        production_file, test_file = production_root / relative, test_root / relative
+        production_file.parent.mkdir(parents=True, exist_ok=True)
+        production_file.write_bytes(b"")
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.link(production_file, test_file)
+        except OSError as refused:
+            pytest.skip(f"this filesystem refuses hard links ({refused}): there is no aliased file to refuse")
+        runtime_env.setenv("LIBREFOLIO_DATA_DIR", str(production_root))
+        runtime_env.setenv("PORT", "6198")
+        before = runtime_state()
+        with pytest.raises(ValueError, match=f"^{re.escape(f'Test data path aliases production data: {relative}')}$"):
+            cli_base.configure_test_runtime(port=6199, data_dir=str(test_root))
+
+        assert runtime_state() == before
+
+    def test_the_scheduler_lock_named_here_is_the_one_the_scheduler_takes(self):
+        # The cases above and the guard's managed paths spell Z-11's lock file: were its constant to move, they would
+        # guard a file nobody locks, and leave the real lock unguarded. The constant is read from the module's source
+        # text, never imported: the import runs the scheduler package's __init__, which loads its loop and the DB models,
+        # over a thousand modules, into this pure unit.
+        relative = Path("backend/app/services/platform/scheduler/run_lock.py")
+        module = ast.parse((backend_config.PROJECT_ROOT / relative).read_text(encoding="utf-8"), filename=str(relative))
+        values = [
+            statement.value
+            for statement in module.body
+            if (isinstance(statement, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "LOCK_FILE_NAME" for target in statement.targets))
+            or (isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name) and statement.target.id == "LOCK_FILE_NAME" and statement.value is not None)
+        ]
+        if not values:
+            pytest.fail(f"{relative} has no top-level assignment of LOCK_FILE_NAME, plain or annotated: there is no name of the scheduler's lock file to compare")
+        name = values[-1]  # run top to bottom, the module keeps the last one
+        if not (isinstance(name, ast.Constant) and isinstance(name.value, str)):
+            pytest.fail(f"{relative} assigns LOCK_FILE_NAME = {ast.unparse(name)}, not a string literal: the barrier reads the source and never runs it")
+
+        assert name.value == self.SCHEDULER_LOCK, f"{relative} now names the scheduler's lock {name.value!r}: the guard's managed paths and the cases of this class must name it instead of {self.SCHEDULER_LOCK!r}"
 
     @needs_permission_denial
     @pytest.mark.parametrize("managed_file", ["sqlite/app.db", "secrets/instance.key"], ids=["sqlite", "secrets"])

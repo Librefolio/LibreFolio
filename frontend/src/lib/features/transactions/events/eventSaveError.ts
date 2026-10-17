@@ -6,6 +6,7 @@
  * This module reads them: `existingEvents()` for «+ New event», `eventSaveErrorMessage()` for one
  * sentence in the interface language that names the event at fault.
  */
+import {formatExactDecimal} from '$lib/utils/core/formatFixed';
 
 /** An event already on the date and type a create item wanted, as `EVENT_EXISTS` lists it. */
 export interface ExistingEvent {
@@ -124,6 +125,15 @@ export function eventSaveErrorMessage(err: unknown, t: Translate, sent: SentEven
                         integer: text(p.max_integer_digits),
                         more: Math.max(events.length - 1, 0),
                     },
+                });
+            }
+            case 'EVENT_INVALID_SPLIT_RATIO': {
+                // X-R47: a split's ratio is its value, a number above 0; the server refuses any other, naming each split.
+                // The ratio comes as the request sent it, a decimal string: written the way the interface writes numbers.
+                const events = Array.isArray(p.events) ? (p.events as Array<Record<string, unknown>>) : [];
+                const first = events[0] ?? {};
+                return t('events.saveError.invalidSplitRatio', {
+                    values: {date: dateLabel(text(first.date)), type: typeLabel(text(first.type)), ratio: formatExactDecimal(text(first.ratio)), more: Math.max(events.length - 1, 0)},
                 });
             }
         }

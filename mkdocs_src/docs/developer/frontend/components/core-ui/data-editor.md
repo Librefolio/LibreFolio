@@ -102,8 +102,10 @@ Asset only:
   `EVENT_CURRENCY_MISMATCH`, the number of linked transactions for `EVENT_IN_USE`, the three
   maxima of `params` (decimal places, significant digits, digits before the decimal point) for
   `EVENT_TOO_MANY_DIGITS` (`events.saveError.tooManyDigits`: the first event at fault, and how many
-  more), and the value typed for a 422 on a type (`EVENT_NOT_EDITABLE`, `EVENT_NOT_DELETABLE` and
-  `EVENT_ASSET_NOT_FOUND` ask for a reload instead). It shows as a *Save failed: …* toast and a
+  more), the split's ratio for `EVENT_INVALID_SPLIT_RATIO` (`events.saveError.invalidSplitRatio`:
+  the first split at fault, and how many more), and the value typed for a 422 on a type
+  (`EVENT_NOT_EDITABLE`, `EVENT_NOT_DELETABLE` and `EVENT_ASSET_NOT_FOUND` ask for a reload
+  instead). It shows as a *Save failed: …* toast and a
   banner above the tabs, and `onsave` is not called: the editor stays open with the pending rows.
   Prices are sent before events, so the prices of that save may already be stored.
 - **Refresh while editing**: a `chartData` or `events` refresh that lands while a tab has dirty

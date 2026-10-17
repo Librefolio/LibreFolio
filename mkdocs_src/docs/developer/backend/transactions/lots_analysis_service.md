@@ -391,6 +391,10 @@ history_dates = list(_date_range(computed_from, actual_to))
 at_cost_until = last_day_without_observation(price_series, history_dates)
 ```
 
+`actual_to` is the requested `date_to` (today when it is not given), never later than `latest_range_end()` (tomorrow,
+`utils/datetime_utils.py`): the histories walk every day of that range, and an end far in the future held the instance
+(R13-SEC7-1). The response's `requested_date_to` and `computed_date_to` carry that bounded end.
+
 `last_day_without_observation()` (`financial_math/lots/prices.py`) returns the last of the ascending days whose `price_series.resolve()` is `MISSING`: the day before the first observation, `actual_to` when the asset has none, `None` when the first transaction's day already has one — a quote before it included. The days valued at cost are `[computed_from, at_cost_until]`, whether or not the asset is priced later:
 
 | Reader | What it does with `at_cost_until` |

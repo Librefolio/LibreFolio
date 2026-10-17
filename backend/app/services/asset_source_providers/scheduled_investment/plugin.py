@@ -374,17 +374,9 @@ def _late_compound_growth(schedule: FAScheduledInvestmentSchedule, start: date_t
 
 
 def _late_interest_values(schedule: FAScheduledInvestmentSchedule, dates: list[date_type], last_scheduled_value: Decimal, maturity_date: date_type) -> dict[date_type, Decimal]:
-    """The late-interest value on each of ``dates`` (sorted, after maturity): COMPOUND grows from one date to the next,
-    so a long DAILY history is one pass, never a walk from maturity per date; SIMPLE is closed-form on each."""
-    if schedule.late_interest is None or schedule.late_interest.interest_type != InterestType.COMPOUND:
-        return {day: _compute_late_interest_value(schedule, day, last_scheduled_value, maturity_date) for day in dates}
-    values: dict[date_type, Decimal] = {}
-    previous_day, value = maturity_date, last_scheduled_value
-    for day in dates:
-        value *= _late_compound_growth(schedule, previous_day, day, maturity_date)
-        values[day] = value
-        previous_day = day
-    return values
+    """The late-interest value on each of ``dates``: the closed form of each date, in constant time (``compound_growth``),
+    so the history, the current value and the settlement read the same digits for a day, whatever window is read."""
+    return {day: _compute_late_interest_value(schedule, day, last_scheduled_value, maturity_date) for day in dates}
 
 
 def _compute_late_interest_value(
@@ -628,7 +620,12 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             # Destructure cached tuple (values, auto_events)
             cached, cached_auto_events = _generate_schedule_values(schedule)
             maturity_date = max(cached.keys()) if cached else None
-            effective_start = min(cached.keys()) if start_date == "min" and cached else start_date
+            # "min" is the earliest available point: the schedule's first value or its first manual event, whichever comes
+            # first (a refresh reads "min" once, on the first sync, so an earlier event would never be read again); with
+            # neither, end_date (MF-SI1).
+            effective_start = start_date
+            if start_date == "min":
+                effective_start = min([*cached.keys(), *(event.date for event in schedule.asset_events)], default=end_date)
 
             # Check for MATURITY_SETTLEMENT in cached events
             settlement_evt = next((e for e in cached_auto_events if e.type == "MATURITY_SETTLEMENT"), None)
@@ -657,11 +654,7 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                 last_late_date = sorted_late_dates[-1] if sorted_late_dates else None
                 valued_dates = [d for d in sorted_late_dates if not (settlement_date and d > settlement_date)]
                 emitted_dates = [d for d in valued_dates if late_start <= d <= late_end]
-                # COMPOUND grows over the whole late grid from maturity, so a date's value never depends on the window it
-                # is read in; SIMPLE is closed-form per date, so only the emitted dates and the last one are valued.
-                if li.interest_type != InterestType.COMPOUND:
-                    valued_dates = sorted({*emitted_dates, *valued_dates[-1:]})
-                late_values = _late_interest_values(schedule, valued_dates, cached[maturity_date], maturity_date)
+                late_values = _late_interest_values(schedule, sorted({*emitted_dates, *valued_dates[-1:]}), cached[maturity_date], maturity_date)
 
                 for d in emitted_dates:
                     value = late_values[d]
@@ -708,16 +701,16 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     prices.append(FAPricePoint(date=end_date, close=settlement_evt.value.amount, currency=currency))
 
             # If start_date is before schedule, emit initial_value as anchor
-            if cached and start_date < min(cached.keys()):
-                prices.insert(0, FAPricePoint(date=start_date, close=principal, currency=currency))
+            if cached and effective_start < min(cached.keys()):
+                prices.insert(0, FAPricePoint(date=effective_start, close=principal, currency=currency))
 
             # Sort by date (in case late interest dates interleave)
             prices.sort(key=lambda p: p.date)
 
             # Merge cached auto-events + late auto-events + manual events, filtered to range
-            all_events = [e for e in cached_auto_events if start_date <= e.date <= end_date]
-            all_events += [e for e in late_auto_events if start_date <= e.date <= end_date]
-            all_events += [e for e in schedule.asset_events if start_date <= e.date <= end_date]
+            all_events = [e for e in cached_auto_events if effective_start <= e.date <= end_date]
+            all_events += [e for e in late_auto_events if effective_start <= e.date <= end_date]
+            all_events += [e for e in schedule.asset_events if effective_start <= e.date <= end_date]
             all_events.sort(key=lambda e: e.date)
 
             return FAHistoricalData(

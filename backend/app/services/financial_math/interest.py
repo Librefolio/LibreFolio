@@ -10,7 +10,7 @@ accrual on them: a day's interest is the simple interest of one day, on the prin
 from __future__ import annotations
 
 import calendar
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal, getcontext
 from functools import lru_cache
 
@@ -140,17 +140,21 @@ def compound_growth(start_date: date, end_date: date, annual_rate: Decimal, conv
     """
     if end_date <= start_date:
         return Decimal(1)
+    context = getcontext()
+    return _compound_growth(start_date, end_date, annual_rate, str(annual_rate), convention, context.prec, context.rounding)
+
+
+@lru_cache(maxsize=4096)
+def _compound_growth(start_date: date, end_date: date, annual_rate: Decimal, rate_text: str, convention: DayCountConvention, precision: int, rounding: str) -> Decimal:
+    """``compound_growth`` of a non-empty span, memoized: a late-interest history multiplies the same grace-period span
+    into every date after it. The key holds the rate as written (``0.05`` and ``0.050`` are equal Decimals with other
+    digits) and the caller's ``precision`` and ``rounding``."""
     if convention == DayCountConvention.ACT_365:
         return (1 + annual_rate / 365) ** (end_date - start_date).days
     if convention == DayCountConvention.ACT_360:
         return (1 + annual_rate / 360) ** (end_date - start_date).days
     if convention == DayCountConvention.ACT_ACT:
-        growth = Decimal(1)
-        for year in range(start_date.year, end_date.year + 1):
-            steps = (min(end_date, date(year + 1, 1, 1)) - max(start_date, date(year, 1, 1))).days
-            if steps > 0:
-                growth *= (1 + annual_rate / (366 if calendar.isleap(year) else 365)) ** steps
-        return growth
+        return _act_act_growth(start_date, end_date, annual_rate)
     if convention == DayCountConvention.THIRTY_360:
         steps_by_days = _thirty_360_daily_steps(start_date, end_date)
         growth = Decimal(1)
@@ -161,30 +165,65 @@ def compound_growth(start_date: date, end_date: date, annual_rate: Decimal, conv
     raise ValueError(f"Unsupported day count convention: {convention}")
 
 
+def _act_act_growth(start_date: date, end_date: date, annual_rate: Decimal) -> Decimal:
+    """ACT/ACT daily compounding over a non-empty span: the first year's days, the whole years between (one power for the
+    common years, one for the leap ones), the last year's days — a long span costs what a short one does (R13-SEC7-2)."""
+    if start_date.year == end_date.year:
+        return (1 + annual_rate / _year_length(start_date.year)) ** (end_date - start_date).days
+    growth = (1 + annual_rate / _year_length(start_date.year)) ** (date(start_date.year + 1, 1, 1) - start_date).days
+    leap_years = _leap_years_before(end_date.year) - _leap_years_before(start_date.year + 1)
+    common_years = end_date.year - start_date.year - 1 - leap_years
+    if common_years:
+        growth *= (1 + annual_rate / 365) ** (365 * common_years)
+    if leap_years:
+        growth *= (1 + annual_rate / 366) ** (366 * leap_years)
+    last_days = (end_date - date(end_date.year, 1, 1)).days
+    if last_days:
+        growth *= (1 + annual_rate / _year_length(end_date.year)) ** last_days
+    return growth
+
+
 def _thirty_360_daily_steps(start_date: date, end_date: date) -> dict[int, int]:
     """How many one-day steps (d − 1 → d, d in (start, end]) count 0, 1, 2 or 3 days under 30/360.
 
     Inside a month a step counts 1, except the step onto the 31st (30 → 31 counts 0). The step onto the 1st counts
     30 − the previous month's last day, capped at 30, plus 1: 1 after a 31- or 30-day month, 2 after 29, 3 after 28.
+    The counts of (start, end] are the counts up to end minus those up to start: integers, so exact.
     """
-    counts = {0: 0, 1: 0, 2: 0, 3: 0}
-    first_day = start_date + timedelta(days=1)
-    year, month = first_day.year, first_day.month
-    while date(year, month, 1) <= end_date:
-        month_length = calendar.monthrange(year, month)[1]
-        low = max(first_day, date(year, month, 1))
-        high = min(end_date, date(year, month, month_length))
-        if low <= high:
-            if low.day == 1:
-                previous_length = calendar.monthrange(year - 1, 12)[1] if month == 1 else calendar.monthrange(year, month - 1)[1]
-                counts[31 - min(previous_length, 30)] += 1
-                low_inner = 2
-            else:
-                low_inner = low.day
-            inner = high.day - low_inner + 1
-            if inner > 0:
-                onto_31 = 1 if high.day == 31 else 0
-                counts[1] += inner - onto_31
-                counts[0] += onto_31
-        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    up_to_end = _thirty_360_steps_up_to(end_date)
+    up_to_start = _thirty_360_steps_up_to(start_date)
+    return {days: up_to_end[days] - up_to_start[days] for days in (0, 1, 2, 3)}
+
+
+def _thirty_360_steps_up_to(day: date) -> dict[int, int]:
+    """The 30/360 one-day steps onto every date from 1 January of year 1 to ``day``, by the days they count.
+
+    A whole year has 7 steps of 0 (onto the seven 31sts), one of 3 onto 1 March of a common year or of 2 in a leap
+    year, and the rest of 1: computed per year in closed form, per month in the last one.
+    """
+    whole_years = day.year - 1
+    leap_years = _leap_years_before(day.year)
+    counts = {0: 7 * whole_years, 1: 0, 2: leap_years, 3: whole_years - leap_years}
+    counts[1] = (date(day.year, 1, 1) - date(1, 1, 1)).days - counts[0] - counts[2] - counts[3]
+    for month in range(1, day.month + 1):
+        month_length = calendar.monthrange(day.year, month)[1]
+        last = day.day if month == day.month else month_length
+        if month > 1:  # the step onto 1 January is in the whole years (or is the start, in year 1)
+            previous_length = calendar.monthrange(day.year, month - 1)[1]
+            counts[31 - min(previous_length, 30)] += 1
+        inner = last - 1
+        if inner > 0:
+            onto_31 = 1 if last == 31 else 0
+            counts[1] += inner - onto_31
+            counts[0] += onto_31
     return counts
+
+
+def _year_length(year: int) -> int:
+    return 366 if calendar.isleap(year) else 365
+
+
+def _leap_years_before(year: int) -> int:
+    """The leap years from year 1 to ``year − 1``."""
+    previous = year - 1
+    return previous // 4 - previous // 100 + previous // 400

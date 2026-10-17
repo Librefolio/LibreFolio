@@ -15,7 +15,11 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
 (b) A check never puts a secret in its result: recognisable values for ``JWT_SECRET``, the instance key and the content
     of the secret files appear in no field of any result, in no log record and in no startup error.
 (c) A check changes nothing: ``run_config_checks`` evaluates every check in the order of ``CONFIG_CHECKS``, leaves the
-    environment as it was and generates no key file.
+    environment as it was and generates no key file. ``CONFIG_CHECKS`` is the platform's checks, then workstream B's
+    ``BACKUP_CONFIG_CHECKS``, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it; it holds no
+    check without an id here (a new check comes with its tests), and each result carries the id of its check. [updated
+    in A8a (accounts check, H reviews): A's checks are imported by that one test, red until lot A8a lands them; every
+    other test runs without them.]
 (d) ``log_configuration_audit``: a ``JWT_SECRET_FILE`` that cannot be read stops the start (``SecretFileError``), and so
     does a configured instance key that cannot be used (``InstanceKeyError``), since the admin asked for that source and
     the server must not start without it; nothing is logged first, and a blank ``NAME`` beside the file hides nothing. A
@@ -49,16 +53,18 @@ in ``tmp_path`` (``LIBREFOLIO_TEST_MODE=0``): in test mode the guard of test roo
 from __future__ import annotations
 
 import errno
+import importlib  # updated in A8a (accounts check, H reviews)
 import os
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType  # updated in A8a (accounts check, H reviews)
 
 import pytest
 
 from backend.app.config import SECRET_FILE_MAX_BYTES, SecretFileError
-from backend.app.services.email.checks import check_email_links, check_smtp_configuration, check_smtp_encryption
+from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS, check_email_links, check_smtp_configuration, check_smtp_encryption  # updated in A8a (accounts check, H reviews)
 from backend.app.services.platform import config_audit
 from backend.app.services.platform.client_address import PUBLIC_FORWARDING_SUMMARY, UNTRUSTED_PROXY_SUMMARY, _untrusted_forwarding
 from backend.app.services.platform.config_audit import (
@@ -113,6 +119,11 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_panel_token: "backup.panel_token",
     check_upload_limit: "backup.upload_limit",
 }
+# updated in A8a (accounts check, H reviews): workstream A's checks, right before E's three in CONFIG_CHECKS, and their
+# ids by function name. Their module is imported only by the test that pins CONFIG_CHECKS whole (``_accounts_checks``):
+# until lot A8a lands it, that test alone is red. There CHECK_IDS learns them.
+ACCOUNTS_CHECKS_MODULE = "backend.app.services.accounts.checks"
+ACCOUNTS_CHECK_IDS: dict[str, str] = {"check_login_limit": "accounts.login_limit"}
 SEVERITIES = ("ok", "info", "warning", "error")
 I18N_PREFIX = "instance.checks."
 
@@ -168,6 +179,9 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
     # Workstream B: no panel token and no upload limit whatever the environment holds, so its two checks are ok
     for variable in ("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN", "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"):
         monkeypatch.delenv(variable, raising=False)
+    # updated in A8a (accounts check, H reviews): workstream A's login limit on whatever the environment holds (the lane's
+    # server runs with it off), so its check is ok and the variable cannot stop the audit
+    monkeypatch.delenv("LIBREFOLIO_LOGIN_LIMIT", raising=False)
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "0" if production else "1")
     monkeypatch.setenv("LIBREFOLIO_DATA_DIR" if production else "LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "auto")
@@ -222,6 +236,21 @@ def _assert_check(result: ConfigCheck, check: Callable[[], ConfigCheck], severit
     assert all(isinstance(value, str | int) for value in result.detail.values()), f"the parameters of an i18n message are strings or integers: {result.detail}"
     if severity != "ok":
         assert result.summary.strip(), f"{check.__name__}() is {severity} without a summary for the log"
+
+
+# updated in A8a (accounts check, H reviews)
+def _accounts_checks() -> ModuleType:
+    """Workstream A's checks module, holding ``ACCOUNTS_CONFIG_CHECKS`` and every check ``ACCOUNTS_CHECK_IDS`` names; else a red of lot A8a naming what is missing. A module that exists and cannot be imported raises as it is."""
+    try:
+        module = importlib.import_module(ACCOUNTS_CHECKS_MODULE)
+    except ModuleNotFoundError as exc:
+        if exc.name != ACCOUNTS_CHECKS_MODULE:
+            raise
+        pytest.fail(f"red until A8a: {ACCOUNTS_CHECKS_MODULE} does not exist; CONFIG_CHECKS must hold its ACCOUNTS_CONFIG_CHECKS right before E's three email checks", pytrace=False)
+    missing = [name for name in ("ACCOUNTS_CONFIG_CHECKS", *ACCOUNTS_CHECK_IDS) if not hasattr(module, name)]
+    if missing:
+        pytest.fail(f"red until A8a: {ACCOUNTS_CHECKS_MODULE} has no {', '.join(missing)}", pytrace=False)
+    return module
 
 
 # =============================================================================
@@ -491,19 +520,39 @@ def test_no_secret_value_reaches_a_result_a_log_record_or_a_startup_error(config
 
 
 def test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing(configuration):
-    """(c) The order of CONFIG_CHECKS, each result what the check alone returns; no variable changed, no key generated."""
+    """(c) The order of CONFIG_CHECKS, each result what the check alone returns; no variable changed, no key generated. Which checks CONFIG_CHECKS holds, where, with which ids: the next test."""
     print_section("Configuration checks: run_config_checks")
     environment = dict(os.environ)
 
     results = run_config_checks()
 
-    assert [result.check_id for result in results] == [CHECK_IDS[check] for check in CONFIG_CHECKS], f"run_config_checks must follow CONFIG_CHECKS: {[result.check_id for result in results]}"
-    assert set(CONFIG_CHECKS) == set(CHECK_IDS), f"CONFIG_CHECKS changed: {[check.__name__ for check in CONFIG_CHECKS]}: give every check its tests"
-    assert results == [check() for check in CONFIG_CHECKS], "run_config_checks must return what each check returns on its own"
+    # updated in A8a (accounts check, H reviews): the ids and the membership of CONFIG_CHECKS moved to the next test, the
+    # one that needs workstream A's checks; what needs nobody's checks stays here, green whatever the state of lot A8a
+    assert results == [check() for check in CONFIG_CHECKS], "run_config_checks must return what each check returns on its own, in the order of CONFIG_CHECKS"
     assert all(result.severity in SEVERITIES for result in results), f"unknown severity in {results}"
     assert dict(os.environ) == environment, "a configuration check changed the environment"
     assert not configuration.data_dir.exists(), f"a configuration check created files: {list(configuration.data_dir.rglob('*'))}"
     print_success(f"{len(results)} checks in order, nothing changed")
+
+
+# updated in A8a (accounts check, H reviews): red until A8a, the one test of this file that needs workstream A's checks
+def test_config_checks_holds_every_check_in_its_place_with_its_id(configuration):
+    """(c) ``CONFIG_CHECKS`` is the platform's checks, then workstream B's two backup checks, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it (``test_email_checks.py``, EMK-010); it holds every check with an id here, A's ``check_login_limit`` (``accounts.login_limit``) included, and no other — a new check comes with its tests —; ``run_config_checks`` gives each result the id of its check."""
+    print_section("Configuration checks: CONFIG_CHECKS whole")
+    accounts = _accounts_checks()
+    check_ids = {**CHECK_IDS, **{getattr(accounts, name): check_id for name, check_id in ACCOUNTS_CHECK_IDS.items()}}
+    backup = (check_panel_token, check_upload_limit)
+    platform = tuple(check for check in CHECK_IDS if check not in EMAIL_CONFIG_CHECKS and check not in backup)
+
+    results = run_config_checks()
+
+    names = [check.__name__ for check in CONFIG_CHECKS]
+    assert tuple(CONFIG_CHECKS) == (*platform, *backup, *accounts.ACCOUNTS_CONFIG_CHECKS, *EMAIL_CONFIG_CHECKS), f"CONFIG_CHECKS must be the platform's checks, then B's two backup checks, then ACCOUNTS_CONFIG_CHECKS, then E's three email checks: {names}"
+    missing = [check.__name__ for check in check_ids if check not in CONFIG_CHECKS]
+    untested = [check.__name__ for check in CONFIG_CHECKS if check not in check_ids]
+    assert (missing, untested) == ([], []), f"CONFIG_CHECKS must hold every check with an id here and no other: missing {missing}; without an id here, give it its tests: {untested}"
+    assert [result.check_id for result in results] == [check_ids[check] for check in CONFIG_CHECKS], f"each result must carry the id of its check: {[result.check_id for result in results]}"
+    print_success(f"{len(results)} checks in their places: {', '.join(names)}")
 
 
 # =============================================================================
