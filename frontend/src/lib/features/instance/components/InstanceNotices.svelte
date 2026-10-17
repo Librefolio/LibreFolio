@@ -21,6 +21,12 @@
         danger: 'mt-0.5 h-4 w-4 shrink-0 text-lf-danger',
     };
 
+    /** The dismiss button's hover, a step down the family (designer, round 3: no opacity on it). */
+    const DISMISS_CLASSES: Record<InstanceNoticeSeverity, string> = {
+        info: 'hover:bg-lf-info-line',
+        warning: 'hover:bg-lf-warning-line',
+        danger: 'hover:bg-lf-danger-line',
+    };
     const ICONS = {info: Info, warning: AlertTriangle, danger: AlertCircle};
 </script>
 
@@ -33,11 +39,17 @@
                 <p class="flex-1">
                     {$_(notice.messageKey, {values: notice.params})}
                     {#if notice.action}
-                        <a href={notice.action.href} class="ml-1 font-medium underline" data-testid="instance-notice-action">{$_(notice.action.labelKey)}</a>
+                        <a href={notice.action.href} class="ml-1 font-medium text-lf-link underline" data-testid="instance-notice-action">{$_(notice.action.labelKey)}</a>
                     {/if}
                 </p>
                 {#if notice.dismissible}
-                    <button type="button" class="shrink-0 rounded p-0.5 hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lf-focus" aria-label={$_('common.close')} data-testid="instance-notice-dismiss" onclick={() => instanceNotices.dismiss(notice.id)}>
+                    <button
+                        type="button"
+                        class="shrink-0 rounded p-0.5 {DISMISS_CLASSES[notice.severity]} focus-visible:outline focus-visible:outline-2 focus-visible:outline-lf-focus"
+                        aria-label={$_('common.close')}
+                        data-testid="instance-notice-dismiss"
+                        onclick={() => instanceNotices.dismiss(notice.id)}
+                    >
                         <X class="h-4 w-4" aria-hidden="true" />
                     </button>
                 {/if}

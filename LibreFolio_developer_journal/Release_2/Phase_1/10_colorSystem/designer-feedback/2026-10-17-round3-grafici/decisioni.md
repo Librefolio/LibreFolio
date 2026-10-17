@@ -111,9 +111,11 @@ stessa mappatura.
 ### 1.7 PAC, KPI ed effetto tempi
 
 - **PAC, «Esposizioni ideale vs reale»:**
-  - ideale in grigio neutro, chiaro `#8B929E` (P1-a: 3,0:1 sulla card, era `#9CA3AF` a 2,45:1), scuro `#858E9B`;
+  - ideale in grigio neutro, chiaro `#8C929E` (P1-a′: 3,0:1 sulla card, era `#9CA3AF` a 2,45:1), scuro `#868594`
+    (P2-c, era `#858E9B`, a ΔE00 4,1 dal «Non classificato» scuro: scelto alle 23:30);
   - reale nel colore della categoria della riga, lo stesso della Dashboard.
-  - In chiaro l'ideale dista ΔE00 8,6 dal tipo più vicino: il test dei 10 ne registra l'eccezione.
+  - L'ideale dista ΔE00 8,0 dal «Non classificato» e 8,7 da Altro in chiaro, 10,1 e 14,0 in scuro: il test dei 10
+    registra le due eccezioni del chiaro.
 - **KPI con segno:** verde e rosso semantici (`--lf-gain`/`--lf-loss` e i token di segno).
 - **Effetto tempi:** gli stessi token dei KPI, senza una funzione che generi un verde suo.
 - **Card del patrimonio della Dashboard:**

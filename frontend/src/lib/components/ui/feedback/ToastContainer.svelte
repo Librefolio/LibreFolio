@@ -14,7 +14,7 @@
     import {AlertCircle, AlertTriangle, CheckCircle, Info, X} from 'lucide-svelte';
     import {STATUS_TONES} from '$lib/theme/toneClasses';
 
-    const variantStyles: Record<ToastVariant, string> = STATUS_TONES.toast;
+    const variantStyles: Record<ToastVariant, (typeof STATUS_TONES.toast)[ToastVariant]> = STATUS_TONES.toast;
 
     const variantIcons: Record<ToastVariant, typeof AlertTriangle> = {
         success: CheckCircle,
@@ -77,8 +77,9 @@
     <div class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 max-w-sm pointer-events-none">
         {#each toasts.items as toast (toast.id)}
             {@const Icon = variantIcons[toast.variant]}
+            {@const styles = variantStyles[toast.variant]}
             <div
-                class="pointer-events-auto relative rounded-lg shadow-lg overflow-hidden touch-pan-y select-none {variantStyles[toast.variant]}"
+                class="pointer-events-auto relative rounded-lg shadow-lg overflow-hidden touch-pan-y select-none border {styles.container}"
                 data-testid="toast-{toast.variant}"
                 onpointercancel={(e) => onPointerUp(e, toast.id)}
                 onpointerdown={(e) => onPointerDown(e, toast.id)}
@@ -89,16 +90,16 @@
             >
                 <div class="flex flex-col items-center gap-1 px-4 py-3 text-sm leading-snug text-center">
                     <div class="flex items-start gap-1.5">
-                        <Icon size={15} class="shrink-0 mt-0.5" />
+                        <Icon size={15} class="shrink-0 mt-0.5 {styles.icon}" />
                         <span class="flex-1 whitespace-pre-line text-left">{@html sanitizeHtml(toast.message)}</span>
                     </div>
-                    <button class="shrink-0 p-0.5 rounded hover:bg-lf-on-status/20 transition-colors absolute top-1.5 right-1.5" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss" data-testid="toast-dismiss">
+                    <button class="shrink-0 p-0.5 rounded transition-colors absolute top-1.5 right-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lf-focus {styles.dismiss}" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss" data-testid="toast-dismiss">
                         <X size={12} />
                     </button>
                 </div>
                 {#if toast.duration > 0}
-                    <div class="h-0.5 w-full bg-lf-on-status/15">
-                        <div class="h-full bg-lf-on-status/40 toast-countdown-bar" style="animation-duration: {toast.duration}ms"></div>
+                    <div class="h-0.5 w-full {styles.track}">
+                        <div class="h-full toast-countdown-bar {styles.bar}" style="animation-duration: {toast.duration}ms"></div>
                     </div>
                 {/if}
             </div>
