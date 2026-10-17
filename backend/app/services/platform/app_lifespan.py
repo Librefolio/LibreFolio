@@ -42,6 +42,7 @@ from backend.app.services.platform.plugin_secrets_check import log_plugin_secret
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.platform.shutdown_budget import child_processes_step, install_shutdown_watchdog, shutdown_deadline
 from backend.app.services.platform.sleep_wake.idle_monitor import start_idle_monitor, stop_idle_monitor
+from backend.app.services.platform.stored_currencies import log_stored_currency_audit
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
@@ -230,6 +231,8 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup)),
     # Then the lone giving TRANSFER legs older deletions left, at their Auto cost, which the fixes cannot compute (decision 47)
     Step("lone-transfer-legs", lambda: convert_lone_giving_legs_at_startup()),
+    # Then, after both repairs, one warning when stored currency codes are not ISO 4217 codes (E-19a): read-only, never a stop
+    Step("stored-currencies", lambda: asyncio.to_thread(log_stored_currency_audit)),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
     # The initial administrator of LIBREFOLIO_ADMIN_EMAIL (F02, workstream A), once the settings exist

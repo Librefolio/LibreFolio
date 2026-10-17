@@ -22,6 +22,7 @@ import {addMessages, waitLocale} from 'svelte-i18n';
 import {render, screen, fireEvent, setupI18n, waitFor, within} from '$test/component';
 import {_ as translate} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import DataEditor from './DataEditor.svelte';
 import type {ColumnDef, DataRow} from './DataEditorTypes';
 import CsvEditor from './CsvEditor.svelte';
@@ -1540,5 +1541,68 @@ describe('DataEditor — the date column and the numbers in the interface langua
         const titled = [...cellOf(container, STALE, 'date').querySelectorAll('[title]')];
         expect(titled, 'the stale row’s date cell carries one titled marker').toHaveLength(1);
         expect(titled[0].getAttribute('title')).toBe(expected);
+    });
+});
+
+/**
+ * C-97c-1 (decision D-C97c-1 of the coordinator, 17/10) — a readonly row's number keeps the digits a price needs.
+ *
+ * The number cell of a readonly row (in the app, an event a provider generated: its amount per share) is written with
+ * `Number(value).toLocaleString(uiLocale(), {maximumFractionDigits: 4})`, so a value of 0.000003457312 reads `0`. The
+ * contract: `formatPrice(Number(value), {minDecimals: 0, floorDecimals: 4})` — up to four decimals as today, more when
+ * the first four significant digits need them, never padded. Red: 0.000003457312 reads 0.000003457. Guards, green today
+ * and after: 1.5 reads 1.5, 1.23456 reads 1.2346.
+ *
+ * A cell is found by its header's position, as the blocks above do. English UI, set through the store: jsdom's browser
+ * is en-US, so the expectations are typed.
+ */
+describe('DataEditor — a readonly row’s number keeps the digits a price needs (C-97c-1, D-C97c-1)', () => {
+    /** One readonly row per value of the editable `rate` column. */
+    const TINY = '2026-02-02';
+    const ONE_DECIMAL = '2026-02-03';
+    const FIVE_DECIMALS = '2026-02-04';
+    const squash = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
+
+    /** DataTable marks the header, not the cell: the header's position names the cell of a row. */
+    function cellOf(container: HTMLElement, rowId: string, columnId: string): Element {
+        const header = container.querySelector(`th[data-testid="dt-header-${columnId}"]`);
+        const tr = container.querySelector(`tr[data-row-id="${rowId}"]`);
+        if (!header?.parentElement || !tr) throw new Error(`no ${columnId} header, or no row ${rowId}`);
+        const cell = tr.children[[...header.parentElement.children].indexOf(header)];
+        if (cell?.tagName !== 'TD') throw new Error(`no ${columnId} cell in row ${rowId}`);
+        return cell;
+    }
+
+    /** The English UI, set as LanguageSelector sets it: on jsdom's en-US browser it is written en-US. */
+    async function english(): Promise<void> {
+        currentLanguage.set('en');
+        await waitLocale('en');
+        await tick();
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    }
+
+    /** The rate cell of each readonly row, once the three rows are drawn. */
+    async function readonlyRates(): Promise<Record<string, string>> {
+        const {container} = mount([row(TINY, 0.000003457312, {readonly: true}), row(ONE_DECIMAL, 1.5, {readonly: true}), row(FIVE_DECIMALS, 1.23456, {readonly: true})]);
+        await waitFor(() => [TINY, ONE_DECIMAL, FIVE_DECIMALS].forEach((rowId) => cellOf(container, rowId, 'rate')));
+        return Object.fromEntries([TINY, ONE_DECIMAL, FIVE_DECIMALS].map((rowId) => [rowId, squash(cellOf(container, rowId, 'rate').textContent)]));
+    }
+
+    it('0.000003457312 reads 0.000003457 — four significant digits, not 0', async () => {
+        await english();
+
+        expect((await readonlyRates())[TINY]).toBe('0.000003457');
+    });
+
+    it('guard: 1.5 reads 1.5 — no padding', async () => {
+        await english();
+
+        expect((await readonlyRates())[ONE_DECIMAL]).toBe('1.5');
+    });
+
+    it('guard: 1.23456 reads 1.2346 — four decimals, rounded', async () => {
+        await english();
+
+        expect((await readonlyRates())[FIVE_DECIMALS]).toBe('1.2346');
     });
 });

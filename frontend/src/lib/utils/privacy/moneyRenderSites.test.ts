@@ -211,7 +211,7 @@ const REGISTRY: Site[] = [
     },
     {
         file: 'lib/features/transactions/events/EventCreateMiniModal.svelte',
-        snippet: '`${formatFixed(amt, 2)} ${assetCurrency}`',
+        snippet: '`${formatExactDecimal(amountText, {minFrac: 2, maxFrac: 6})} ${assetCurrency}`',
         status: 'public',
         why: "The success toast for a created asset event. Asset events are asset-level, not the user's (backend/app/db/models.py, class AssetEvent: «Events are NOT transactions — they describe what happens to the asset globally, not what happens in a user's portfolio»), so the amount is public under the 2026-09-22 rule. It was registered as unmasked until that rule existed.",
     },

@@ -1020,9 +1020,9 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
 def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) -> bool:
     """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
     print_section("Services: Bulk Reads Chunked (MF-SEC9a)")
-    print_info("Testing: services/brim/brim_provider.py (search_asset_candidates_bulk vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows)")
+    print_info("Testing: services/brim/brim_provider.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows)")
     print_info(
-        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term"
+        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term; MF-SEC9g: classification off the loop (thread + loop handshake), compiles ≤ needles and dumps ≤ assets, 300×1 011 parity guard, exact-hit order guard"
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_reads_chunked.py", test_names)
     return run_command(cmd, "Bulk reads chunked tests", verbose=verbose)
@@ -1141,6 +1141,15 @@ def services_market_data_wipe_split_guard(verbose: bool = False, test_names: lis
     print_info("Tests: the wipe refused with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409) naming each such split by date and only the caller's adjustments, nothing written; with a cost, an outgoing row, no link or a dry run the wipe is as before")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_split_guard.py", test_names)
     return run_command(cmd, "Market data wipe split guard tests", verbose=verbose)
+
+
+def services_routes_generic_500(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R74: the asset and FX routes answer a generic 500, the error logged, never echoed."""
+    print_section("Services: Routes Generic 500")
+    print_info("Testing: backend/app/api/v1/assets/{providers,crud,events,market_data}.py, backend/app/api/v1/fx/{providers,currencies}.py")
+    print_info("Tests: each of the 26 failure paths answers 500 with a message naming no error, the error logged with its exception; the authored refusals unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_routes_generic_500.py", test_names)
+    return run_command(cmd, "Routes generic 500 tests", verbose=verbose)
 
 
 def services_provider_wipe_split_guard(verbose: bool = False, test_names: list = None) -> bool:
@@ -1334,6 +1343,22 @@ def services_config_audit(verbose: bool = False, test_names: list = None) -> boo
     print_info("Testing: backend/app/services/platform/config_audit.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_audit.py", test_names)
     return run_command(cmd, "Configuration checks tests", verbose=verbose)
+
+
+def services_stored_currencies(verbose: bool = False, test_names: list = None) -> bool:
+    """E-19a: the stored currency codes that are not ISO 4217 codes, found read-only, logged at startup, listed by the CLI."""
+    print_section("Services: Stored Currencies (E-19a)")
+    print_info("Testing: backend/app/services/platform/stored_currencies.py (14 places, findings, summary, startup warning, CLI)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_stored_currency_audit.py", test_names)
+    return run_command(cmd, "Stored currencies tests", verbose=verbose)
+
+
+def services_gap_fix_currency_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """E-19a: the gap-fix refuses a broker whose cash is held in codes that are not ISO 4217 codes."""
+    print_section("Services: Gap-fix Currency Guard (E-19a)")
+    print_info("Testing: backend/app/services/brim/brim_gap_fix.py (_refuse_non_iso_cash)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_gap_fix_currency_guard.py", test_names)
+    return run_command(cmd, "Gap-fix currency guard tests", verbose=verbose)
 
 
 def services_plugin_secrets_check(verbose: bool = False, test_names: list = None) -> bool:
@@ -2329,6 +2354,15 @@ Note: No backend server required.
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base defaults + text-encoding fallback")
     add_test(cat, "brim-report-sets", services_brim_report_sets, name="BRIM Report Sets", desc="Report-set schemas, contract defaults, combined-file storage")
     add_test(cat, "brim-gap-fix", services_brim_gap_fix, name="BRIM Gap-fix", desc="Gap-fix: bank truth points vs LibreFolio state, proposals and verifications")
+    add_test(
+        cat,
+        "gap-fix-currency-guard",
+        services_gap_fix_currency_guard,
+        name="Gap-fix Currency Guard",
+        desc="E-19a: the gap-fix refuses (409 ledger_unreadable) a broker whose cash up to the checkpoint holds non-ISO codes, naming them",
+        # PURE: a private in-memory SQLite per test, as test_brim_gap_fix.py does; never the lane's database.
+        isolation="pure",
+    )
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(
         cat,
@@ -2388,7 +2422,7 @@ Note: No backend server required.
         "bulk-reads-chunked",
         services_bulk_reads_chunked,
         name="Bulk Reads Chunked (MF-SEC9a)",
-        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted",
+        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted; MF-SEC9g: the candidate classification's LIKE matching runs off the event loop's thread and the loop answers a coroutine mid-classification (100 generic names × 300 funds); ≤ 1 LIKE compile per needle and ≤ 1 identifier_other dump per stored asset (counted, not timed); 300 extractions over 1 011 assets == search_asset_candidates (wildcard bond names, codes stored in either case, duplicate holders); exact ISIN/ticker hits in display-name order",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no service replaced.
         isolation="pure",
     )
@@ -2397,7 +2431,7 @@ Note: No backend server required.
         "bulk-writes-chunked",
         services_bulk_writes_chunked,
         name="Bulk Writes Chunked (MF-SEC9a)",
-        desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused; delete_rates_bulk matches by bisection (≤ 4⌈log₂(D+1)⌉ counted comparisons per deletion, 2 000 × 2 000) and equals a brute-force scan on random requests (overlaps, end < start, missing pair, single days); MF-SEC9e bulk_delete_prices: a row in two ranges counted once, an asset in two items answers its total over both in each result, per-asset counts sum to total_deleted; empty request → empty response, DELETE /assets/prices 200; 2 000 ranges send ≤ ⌈intervals/500⌉+2 SELECTs and DELETEs (engine statement count, not 1 per range); brute-force reference on random overlapping requests; guards: inclusive bounds, end=start, adjacent and disjoint random ranges",
+        desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused; delete_rates_bulk matches by bisection (≤ 4⌈log₂(D+1)⌉ counted comparisons per deletion, 2 000 × 2 000) and equals a brute-force scan on random requests (overlaps, end < start, missing pair, single days); MF-SEC9e bulk_delete_prices: a row in two ranges counted once, an asset in two items answers its total over both in each result, per-asset counts sum to total_deleted; empty request → empty response, DELETE /assets/prices 200; 2 000 ranges send ≤ ⌈intervals/500⌉+2 SELECTs and DELETEs (engine statement count, not 1 per range); brute-force reference on random overlapping requests; guards: inclusive bounds, end=start, adjacent and disjoint random ranges; guard: POST /assets/prices answers a service ValueError (the digits refusal) 400 with its own message",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; services, the FX provider lookup
         # and route loggers replaced by monkeypatch; the cap/failure cases hand the routes stand-in sessions.
         isolation="pure",
@@ -2449,9 +2483,9 @@ Note: No backend server required.
         "asset-source-guards",
         services_asset_source_guards,
         name="Asset Source Guards",
-        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion; X-R65 (N83): a manual price outside [1900-01-01, tomorrow] refuses the whole upsert before any statement (DateOutOfRangeError: items per asset, count), a provider's is dropped, named and logged, the others stored",
+        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion; X-R65 (N83): a manual price outside [1900-01-01, tomorrow] refuses the whole upsert before any statement (DateOutOfRangeError: items per asset, count), a provider's is dropped, named and logged, the others stored; X-R71: a manual currency mismatch refuses the whole upsert after one SELECT of the assets' currencies, nothing written (PriceCurrencyMismatchError, no ValueError: items per asset at fault with expected, found first seen, ten dates at most; count every date; the 422 detail keeps ten items), the dates checked first, a provider's mismatch still a ValueError",
         # WRITE_GLOBAL: Asset, PriceHistory and AssetEvent carry no user_id, so the
-        # assets this unit creates (one for the module, a second for one X-R65 test)
+        # assets this unit creates (one for the module, a second for one X-R65 test, twelve for one X-R71 test)
         # and every price/event row written against them are visible to all
         # concurrent tests. Rows are uniquely named and dropped in teardown, but the
         # tables themselves are shared surfaces.
@@ -2509,6 +2543,15 @@ Note: No backend server required.
         desc="X-R48: POST /assets/{id}/market-data/wipe refused before any write with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a SPLIT of the asset, manual or provider, has linked incoming ADJUSTMENTs without a purchase cost; details list every such SPLIT by date then id with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller); a cost of 0, an outgoing row, a SPLIT without links, another asset's SPLIT and the dry run leave the wipe as before",
         # WRITE-SCOPED, the category default: every row is this unit's own (assets, brokers, users and accesses under a
         # unique marker), wiped by asset and broker id; the route runs in process on an app of the call's own.
+    )
+    add_test(
+        cat,
+        "routes-generic-500",
+        services_routes_generic_500,
+        name="Routes Generic 500",
+        desc="X-R74 (R13-SEC9-3's rule): every failure path of the asset and FX routes that answered 500 with the error's text (26 sites in assets/providers, crud, events, market_data and fx/providers, currencies) answers a fixed message naming no error, the error logged with its exception; the authored 400/404/409/502 refusals unchanged",
+        # PURE: the route functions are called in process, their services replaced through monkeypatch and their sessions
+        # by doubles that raise; nothing reaches the database, the lane server or the network.
     )
     add_test(
         cat,
@@ -2641,6 +2684,15 @@ Note: No backend server required.
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(
         cat,
+        "stored-currencies",
+        services_stored_currencies,
+        name="Stored Currencies",
+        desc="E-19a: stored currency codes that are not ISO 4217 codes in 14 places, read-only; the startup warning and the CLI listing",
+        # PURE: each test builds its own SQLite file under tmp_path (and one subprocess reads it); never the lane's database.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "plugin-secrets-check",
         services_plugin_secrets_check,
         name="Plugin Secrets Check",
@@ -2762,7 +2814,7 @@ Note: No backend server required.
         "backup-staging",
         services_backup_staging,
         name="Instance Backup Staging",
-        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy; B-35 (m): stage_archive(max_unpacked=) checks an archive at or under the cap on its declared total, refuses one above it unpacked_too_large before the free space and before a byte is written (no data/, progress never past checking), a secure archive decrypted first, None unchanged; B-37 (l): the post-migration fixes' connection to the copy recorded too, trusted_schema=OFF first like every other",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy; B-35 (m): stage_archive(max_unpacked=) checks an archive at or under the cap on its declared total, refuses one above it unpacked_too_large before the free space and before a byte is written (no data/, progress never past checking), a secure archive decrypted first, None unchanged; B-37 (l): the post-migration fixes' connection to the copy recorded too, trusted_schema=OFF first like every other; B-43 (n): a function the reader lacks in an index, a generated column or a CHECK ends the check with database_damaged (the CHECK past the read-only description, which finds it intact), never a raw sqlite3 error, the copy removed and the live data untouched, one warning with the error's class and sqlite_errorname, its name in no message nor log line; a CHECK on abs() checked as usual; B-43 part 1 (n): an index or a generated column calling regexp or floor, which the server's connections register (deterministic, never innocuous) with trusted_schema off, refused database_damaged where the copy's schema is first read with stand-ins, before describe_database opens the copy, the same one warning, no line naming the function; this LibreFolio's own lower(email) index read with the stand-ins, its backup checked as usual",
         # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
         # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
         # directory of the test configured (which must stay absent). No lane DB, no server, no network.

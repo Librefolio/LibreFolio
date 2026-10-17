@@ -84,6 +84,11 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     archive is refused. Managed, unset, an upload limit of 1 MB: a limit of 8 MB, an archive declaring more refused, one
     declaring less checked as today. The archives are the staging tests' data directory (its files 2.5 MiB and a bit),
     plus, for the one over 8 MB, a file of zeros that deflate shrinks a thousandfold: small to upload, big to unpack.
+(j) B-43 (red until it lands): ``restore ARCHIVE --dry-run`` of an archive whose database holds an index on an
+    expression calling a function this LibreFolio does not have (``test_backup_staging``'s ``archive_calling`` with its
+    ``IN_AN_INDEX``, on this module's database at the head): SQLite fails the copy's integrity check, «unknown function».
+    Exactly one ❌ line, after the 🔎 line, ending in ``(database_damaged)``, exit 1, no traceback; no copy left, the live
+    data untouched, the function's name (the archive's text) on neither output.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -126,6 +131,7 @@ from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, 
 from backend.app.services.platform.instance_backup.staging import read_report
 from backend.app.services.platform.instance_key import instance_key_status
 from backend.test_scripts.test_services import test_backup_secure as secure_cases
+from backend.test_scripts.test_services import test_backup_staging as staging_cases
 from backend.test_scripts.test_utilities import test_backup_cli as cli
 from backend.test_scripts.test_utilities import test_backup_cli_secure as secure_cli
 from backend.test_scripts.test_utils import print_section, print_success
@@ -1395,3 +1401,29 @@ def test_the_managed_profile_limits_a_restore_to_8_times_its_upload_limit(tmp_pa
     assert code == 0 and cli.RESTORABLE_LINE in lines and refusals(lines) == [], f"under 8 MB: checked as today: exit {code}: {lines}"
     assert cli.stages_left(root) == [], f"the dry run's copy removed: {cli.stages_left(root)}"
     print_success("managed, upload 1 MB → a limit of 8 MB: over refused, under checked")
+
+
+# =============================================================================
+# (j) B-43 — a function the reader lacks
+# =============================================================================
+
+
+def test_a_dry_run_of_an_archive_whose_index_calls_a_function_this_librefolio_lacks_says_database_damaged(tmp_path, monkeypatch, capsys, head_database):
+    """(j) B-43: the database of the archive holds an index on an expression calling a function this LibreFolio does not
+    have; SQLite fails the copy's integrity check, «unknown function». Exactly one ❌ line, after the 🔎 line, ending in
+    ``(database_damaged)``, exit 1, no traceback (red before B-43: the ``sqlite3.OperationalError`` escapes the command,
+    which ``_check_on_a_copy`` does not catch). No copy left, the live data untouched, the function's name on neither
+    output."""
+    print_section("B-43: a function the reader lacks")
+    archive = staging_cases.archive_calling(tmp_path / "b43", head_database, staging_cases.IN_AN_INDEX)
+    root = instance(tmp_path, monkeypatch)
+    before = live(root)
+    code = run("restore", str(archive), "--dry-run")
+    captured = capsys.readouterr()
+    lines = captured.out.splitlines()
+    found = refusals(lines)
+    assert code == 1 and len(found) == 1 and found[0].endswith("(database_damaged)") and checking(lines), f"exit 1 and exactly one ❌ line ending in (database_damaged), after the 🔎 line: exit {code}: {lines}"
+    assert "Traceback" not in captured.out + captured.err, f"no traceback: {captured.out[-cli.TAIL:]}{captured.err[-cli.TAIL:]}"
+    assert staging_cases.B43_FUNCTION not in captured.out + captured.err, f"the function's name, the archive's text, on neither output: {lines}"
+    assert (cli.stages_left(root), live(root)) == ([], before), f"no copy left, the live data untouched: {cli.stages_left(root)}"
+    print_success("restore --dry-run: ❌ … (database_damaged), exit 1, no traceback")

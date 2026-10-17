@@ -81,13 +81,15 @@ from backend.app.services.financial_math.average_cost import (
     determine_target_currency,
     movement_unit_costs,
 )
-from backend.app.services.financial_math.holding_window import closed_position_window, oldest_open_lot_date, quantity_moves
+from backend.app.services.financial_math.holding_window import closed_position_window, exits_in, oldest_open_lot_date, quantity_moves
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST, NativeCash, cash_movement_from_transaction, compute_native_cash, effective_share
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.portfolio.contributions import (
     annualized_period_return,
     closed_position_annualized,
+    closed_position_base,
     period_return_on_start,
+    transfer_costs_moved_out,
     transfer_tract_adjustments,
     window_start,
 )
@@ -1591,6 +1593,7 @@ class PortfolioService:
         # Per-position accumulators
         per_realized: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
         per_cost_sold: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
+        per_sales: dict[tuple[int, int], int] = defaultdict(int)
 
         # ── Income / Fees with asset_id attribution: the period's cash flows of the native
         # cash (financial_math.native_cash), the same the summary's period income and fees
@@ -1639,6 +1642,7 @@ class PortfolioService:
             pos_key = (sale.broker_id, sale.asset_id)
             per_realized[pos_key] += gain
             per_cost_sold[pos_key] += sale.cost
+            per_sales[pos_key] += 1
 
         # ── Unrealized change per position, from the engine's values at the period's boundaries ──
         # The positions held at the end of the period's start day and at its end, valued as the portfolio values them
@@ -1648,6 +1652,7 @@ class PortfolioService:
         start_states = {(ps.broker_id, ps.asset_id): ps for ps in engine_result.position_states_start} if date_from is not None else {}
         end_states = {(ps.broker_id, ps.asset_id): ps for ps in engine_result.position_states_end}
         tract_adjustments = transfer_tract_adjustments(engine_result.internal_asset_transfers, date_from, effective_end)
+        moved_out = transfer_costs_moved_out(engine_result.internal_asset_transfers, date_from, effective_end)
 
         lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
         lot_moves = {key: quantity_moves(txns, lot_split_ids) for key, txns in lot_txns_by_key.items()}
@@ -1710,7 +1715,10 @@ class PortfolioService:
             period_annualized = annualized_period_return(period_pnl, start_value, cb_end, window_from=window_start(date_from, oldest_open_lot_dates.get(pos_key)), end=effective_end)
             if is_fully_sold:
                 opened, closed = closed_position_window(lot_moves.get(pos_key, []))
-                closed_annualized = closed_position_annualized(period_pnl, per_cost_sold.get(pos_key), opened, closed, date_from)
+                # MF-A5: the base is the cost of every unit that left, sold or moved by a counted tract; a unit that left
+                # another way leaves no base, and the general rule stands
+                base = closed_position_base(per_cost_sold.get(pos_key, Decimal("0")), per_sales.get(pos_key, 0), moved_out.get(pos_key), exits_in(lot_moves.get(pos_key, []), date_from, effective_end))
+                closed_annualized = closed_position_annualized(period_pnl, base, opened, closed, date_from)
                 if closed_annualized is not None:
                     period_annualized = closed_annualized
 

@@ -200,18 +200,25 @@ Requested/effective/available periods, coverage, and insufficient-history warnin
 remain outside the omitted rows and must stay visible.
 
 Columns have their own rule: a compact table removes a column that is empty or `null`
-in every row (see [Snapshot Data Tables](ai_export_composition.md#snapshot-data-tables)).
-The renderer reports:
+in every row, and names the removed columns that held a `null` on an
+`omitted_null_columns=` line right after the table (see
+[Snapshot Data Tables](ai_export_composition.md#snapshot-data-tables)). The renderer
+reports:
 
 - `empty_columns_removed`, every removed column;
 - `empty_parent_columns_removed`, the removed columns that were the parent of nested
-  columns (counted in both).
+  columns (counted in both);
+- `null_columns_declared`, the names written on `omitted_null_columns` lines.
 
-A `null` therefore stays visible only next to a row with a value; a fact that every
-row could lose belongs in a SUMMARY field, as `unavailable_amount_lot_count` does for
-lot amounts without an FX rate. Both counters are part of each prompt's
-`format_diagnostics`, and the public table audit rejects a prompt that still contains
-an all-empty column.
+A column `null` in every row is therefore named even though no row shows it; a fact to
+be counted belongs in a SUMMARY field, as `unavailable_amount_lot_count` does for lot
+amounts without an FX rate. The counters are part of each prompt's
+`format_diagnostics`, and the public table audit, which reads only `|…|` rows, still
+rejects a prompt that contains an all-empty column. When reading a prompt, check that
+each `omitted_null_columns` line names fields the payload really leaves unavailable,
+and that no column the scope does not apply to is named — neither an `undefined` one nor
+one whose `null` means "none" (`NULL_MEANS_NONE_COLUMNS`, such as an open lot's
+`closing_date`).
 
 ## 🏦 Broker Universe Diagnostics
 
