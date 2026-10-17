@@ -4391,7 +4391,10 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   (`emailLinks.ts`, di E) «irraggiungibile»: col codice nuovo i due posti possono dire «questa istanza non può
   verificare gli indirizzi: vedi i controlli di configurazione». Condivisa con E. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Revisione di H-19».
-- **A-50 · Dopo un annullamento, l'avvio dice «scaduto»** — minimo; da A-43 (A, 17/10). Annullato il link dell'admin in
+- ✅ **A-50 · Dopo un annullamento, l'avvio dice «scaduto»** — minimo; chiusa il 17/10 (commit del coordinatore), con il
+  lotto del helper del profilo; da A-43 (A, 17/10). Cura: `_latest_setup_withdrawn()`; se l'ultimo link di setup è
+  revocato e mai consumato, il WARNING dice «…was withdrawn (cancelled, or its address changed)…» (A50-001…004).
+  Annullato il link dell'admin in
   attesa, un riavvio con lo **stesso** `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` giustamente non lo riarma (il valore è noto),
   ma `_keep_pending_admin` avvisa «The initial administrator's setup link has expired»: il rimedio è giusto, la causa
   no. Cura: leggere l'ultimo link di setup e dire «cancelled» quando è revocato. Dettagli:
