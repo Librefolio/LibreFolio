@@ -6592,3 +6592,214 @@ server parte. E lo vede nella revisione del checkpoint.
 - **Controlli** (`files/runs/b35note.sh`):
   - `services config-audit` 220; ruff e black puliti;
   - `mkdocs build` stretto pulito, 97 link validi, `git diff --check` pulito; porta libera.
+
+### Review allargata di A9 (frontend, test, doc) (2026-10-17, 13:25) — ✅ OK, un appunto
+
+- Verificato:
+  - `Header` e `HelpMenu`: le donazioni dentro `{#if donationsVisible()}`, con le classi spostate identiche;
+  - `ChangelogModal`: «Check for updates» solo dopo una risposta `selfhosted`; `checkForNewerRelease()` aspetta lo
+    store e non fa nessuna richiesta senza quella risposta (`security.md#container-image-check` lo dice, esatto);
+  - `ChangelogModal.test.ts`: lo store vero, senza mock del modulo;
+  - `Sidebar`: `LegalLinks`; le chiavi `legal.*` nelle 4 lingue, `legal` in `app/prefixes.txt`;
+  - `test_system_api.py` (mio): `legal` fra i campi dichiarati;
+  - `architecture/settings.md`: cinque campi e i due runner del `legal`.
+- **Appunto, fix-forward facoltativo, di A**: la regola `instanceConfig.loaded && profile === 'selfhosted'` è scritta tre
+  volte (`donationsVisible()`, `ChangelogModal`, `checkForNewerRelease`). Un helper solo nello store dell'istanza.
+
+### Lotto «X-R62: togliere il provider rifiutato con un 409 se un suo evento ha una transazione collegata» (presa dalla coda di X, 2026-10-17) — analisi
+
+> Dal coordinatore (13:20), con le note di J:
+> - «No Provider» (`DELETE /api/v1/assets/provider`, «nessun provider» della modale) cancella l'assegnazione, i cui
+>   eventi vanno in CASCADE; una transazione collegata a uno di loro fa fallire il RESTRICT, e la risposta è un 500
+>   grezzo con `detail=str(e)`, cioè il testo SQL;
+> - succede a ogni piano i cui eventi generati hanno una transazione collegata (un INTEREST su una cedola generata),
+>   non solo agli SPLIT.
+>
+> Cura, come proposta da J: rifiutare **prima** della cancellazione con un 409 con codice, che nomina le righe
+> collegate che il chiamante può vedere (lo schema di X-R48/X-R49, la vista del chiamante di `split_guard`), più una
+> cattura nel passo 2 di `AssetModal.saveEdit` con una frase tradotta. OK di scrittura sulla logica di
+> `AssetModal.svelte` (niente markup né classi). X rivede.
+
+**Analisi** (sola lettura, HEAD `c7f414827`):
+1. **Il percorso**:
+   - `remove_providers_bulk` (`api/v1/assets/providers.py`, `DELETE ""` con `asset_ids` in query) chiama
+     `AssetSourceManager.bulk_remove_providers(asset_ids, session)` e trasforma ogni eccezione in un 500 con
+     `detail=str(e)`;
+   - `bulk_remove_providers` (`services/assets/provider_management.py`): un solo `DELETE … WHERE asset_id IN (…)`, poi
+     il commit. Nessun chiamante passato, nessun controllo;
+   - le chiavi (`db/models.py`): `asset_events.provider_assignment_id` → `ON DELETE CASCADE`;
+     `transactions.asset_event_id` → `ON DELETE RESTRICT` (r. 964), e SQLite le applica;
+   - gli eventi manuali (`provider_assignment_id IS NULL`) non si cancellano, quindi non bloccano.
+2. **L'asimmetria da dire a X**: cambiare provider (Policy D, R3-3, `bulk_assign_providers` r. ~215-245)
+   **scollega** le transazioni (`SET asset_event_id = NULL`) e cancella gli eventi; rifiuta solo il caso di X-R49
+   (SPLIT con rettifiche senza costo). Togliere il provider, con la cura decisa, **rifiuta**. È la decisione del
+   coordinatore e di J; X può chiedere la simmetria più avanti.
+3. **Il modello da seguire**, X-R49 (`589f15607`):
+   - la guardia prima di ogni scrittura: `AssetSourceError(message, code, details)`;
+   - la rotta: 409 con `detail = {"error_code", "message", "params": jsonable_encoder(details)}`;
+   - la vista del chiamante (`split_guard.py`): gli id delle transazioni su un broker con un `BrokerUserAccess` del
+     chiamante, gli altri contati; senza chiamante nessuno è nominato;
+   - il frontend: `currencyChangeErrors.ts` (`wipeRefusalMessage`, codice → chiave, `params.splits`) e la cattura nel
+     ramo di assegnazione di `saveEdit`.
+4. **Il frontend**:
+   - l'unico chiamante della rimozione è `AssetModal.svelte` r. ~1387 (passo 2, `providerNoProvider`), senza `try`:
+     l'errore risale e la modale mostra la frase generica;
+   - il ramo di assegnazione, subito sotto, prende già il 409 di X-R49 con `wipeRefusalMessage`.
+5. **I test di X-R49**: `test_services/test_provider_wipe_split_guard.py` (`services provider-wipe-split-guard`,
+   scritture con nomi unici, la rotta in processo con `ASGITransport`). Niente slot.
+6. **La doc di X-R49**: `developer/backend/assets/events.md` (r. ~317-337) e `architecture.md` (la tabella delle
+   rotte, r. ~608).
+
+**Proposta**:
+- **Backend** (file di X):
+  - un modulo nuovo, `services/assets/event_links.py`:
+    - `visible_transaction_ids(session, ids, current_user_id)`: la regola della vista del chiamante (R13-SEC7), che oggi
+      sta dentro `split_guard.py` e che `split_guard` importerà: cambiano 3 righe, con lo stesso comportamento, che i
+      test di X-R49 sorvegliano;
+    - `events_with_linked_transactions(session, events, current_user_id)`: gli eventi con almeno una transazione
+      collegata, per (data, id). Ciascuno `{"event_id", "date", "type", "transaction_ids", "hidden_transactions_count"}`;
+  - `bulk_remove_providers(asset_ids, session, *, current_user_id=None)`:
+    - prima del `DELETE`, nell'ordine della richiesta, per l'assegnazione di ogni asset: gli eventi generati che hanno
+      una transazione collegata;
+    - al primo asset che ne ha, `AssetSourceError` con il codice **`PROVIDER_REMOVAL_LINKED_TRANSACTIONS`**, `details`
+      `{"asset_id", "item_index", "events": [...]}`, e un messaggio che dà solo i totali;
+    - niente si scrive, neanche per gli asset prima di quello;
+  - la rotta passa `current_user_id` e risponde 409 con `{error_code, message, params}`; tutto il resto come oggi, e
+    la docstring lo documenta.
+- **Frontend**:
+  - `currencyChangeErrors.ts`, il modulo dei rifiuti dei wipe: il codice nuovo dà la chiave
+    `assets.modal.providerRemovalLinkedTransactions`, letta da `params.events`. I valori: il tipo del primo evento
+    (`assetDetail.eventType.<TYPE>`, prefisso dinamico protetto), la data, quante transazioni ha e quante non si
+    vedono, quanti altri eventi;
+  - `AssetModal.svelte`, passo 2: un `try` attorno alla rimozione. Un rifiuto va in `formError`, la modale resta
+    aperta come nel ramo di assegnazione; ogni altro errore risale. Solo logica;
+  - i18n: una chiave nelle 4 lingue (sottosistema `assets`).
+- **Test** (test-author):
+  - backend, un file nuovo `test_services/test_provider_removal_link_guard.py` (come quello di X-R49):
+    - un evento del provider con una transazione collegata (dividendo); una cedola del piano con un INTEREST (il caso
+      di J); uno SPLIT;
+    - la vista del chiamante; due asset, il secondo bloccato: nessuno dei due rimosso, `item_index` 1;
+    - nessun collegamento: la rimozione passa e gli eventi vanno in cascata;
+    - un evento manuale collegato non blocca;
+    - il 409 della rotta, esatto, senza testo SQL;
+  - frontend: casi in `currencyChangeErrors.test.ts` e in `AssetModal.providerLifecycle.test.ts`.
+- **Doc** (docs-writer): `developer/backend/assets/events.md`, accanto a X-R49, e la riga del `DELETE` in
+  `architecture.md`.
+- **CHANGELOG** 🐛: «Removing an asset's provider no longer ends in a server error when an event it generated is
+  linked to a transaction: it is refused, naming the transactions.»
+- **Selettori** (nessuno slot):
+  - `services provider-removal-link-guard` (nuovo) e `provider-wipe-split-guard` (X-R49, per lo spostamento della
+    vista);
+  - Vitest dei due file;
+  - `utils gate-i18n-catalog` e `gate-i18n-usage`;
+  - `front check`.
+- **Residuo**: una transazione collegata fra la guardia e il `DELETE` darebbe ancora il 500, ed è raro. Facoltativo:
+  prendere anche l'`IntegrityError` della cancellazione come 409 generico.
+- **Da confermare**:
+  - l'OK di scrittura sui file di X: `providers.py`, `provider_management.py`, `split_guard.py` (3 righe), il modulo
+    nuovo, `currencyChangeErrors.ts` e i due test del frontend;
+  - un `add_test` nel runner (`_backend_services.py`, accanto a `provider-wipe-split-guard`);
+  - la doc di X.
+
+> **Conferme del coordinatore** (13:35):
+> 1. OK di scrittura sui file di X elencati: il lavoro aperto di X (X-R60) non ne tocca nessuno;
+> 2. l'`add_test` in `_backend_services.py`, accanto a `provider-wipe-split-guard`;
+> 3. sì: l'`IntegrityError` della cancellazione diventa un 409 generico con codice, **`PROVIDER_REMOVAL_CONFLICT`**,
+>    senza SQL nel corpo.
+>
+> L'asimmetria (cambiare scollega, togliere rifiuta) va nel checkpoint come nota per X.
+
+**Passi**:
+
+1. ✅ (2026-10-17, 13:56) **Rossi**: due test-author in parallelo; nessuno ha eseguito nulla.
+   - **Backend**: `test_services/test_provider_removal_link_guard.py`, nuovo, 20 casi: 13 rossi e 7 guardie verdi.
+     - Riusa i lettori e due barriere di X-R49, importati da `test_provider_wipe_split_guard`: nel repo ci sono 13
+       precedenti di import fra moduli di test.
+     - Gli asset sono inattivi, così lo scheduler della corsia non li tocca. Le date sono del 1984.
+     - Le assegnazioni si riscrivono a ogni test: la tabella non ha AUTOINCREMENT, quindi un id cancellato può tornare.
+   - **Frontend**:
+     - `currencyChangeErrors.test.ts`: +56 casi. 50 rossi, perché il modulo risponde `null` ai due codici; 17 di
+       questi sono di catalogo;
+     - `AssetModal.providerLifecycle.test.ts`: +6 casi. 3 rossi, perché il banner dice «nome duplicato»; 3 guardie;
+     - fissato dai test:
+       - il nome del tipo si chiede per primo, con la sola chiave;
+       - un tipo che non è una stringa diventa `''`;
+       - il conflitto si chiede senza valori;
+       - ogni codice legge la sua lista, `events` o `splits`;
+       - la modale passa `(err, $t, iso => formatDay(iso))`, come X-R49.
+   - **Runner**: `services provider-removal-link-guard`, WRITE-SCOPED. È stato applicato prima dei rossi
+     (`files/xr62/apply_runner.py`, `cmp` OK).
+   - **Evidenza** (`files/runs/xr62-reds.sh`):
+     - Prettier, ruff e black puliti sui test e sul runner;
+     - services: 13 failed, 7 passed. Tutti FAILED con il messaggio «oggi», nessun ERROR;
+     - Vitest: 50 failed / 84 passed e 3 failed / 50 passed;
+     - esattamente le previsioni dei test-author.
+   > **Note implementazione**: le osservazioni dei test-author da riportare nel checkpoint.
+   > - SQLite fa scattare il RESTRICT già sul `DELETE`: il ramo «fallisce il commit» qui non si raggiunge.
+   > - Il messaggio conta solo gli eventi collegati; quelli non collegati vanno comunque in cascata.
+   > - Un 409 non riconosciuto sulla rimozione si legge ancora «nome duplicato», come oggi.
+
+2. ✅ (2026-10-17, 14:06) **Cura e verdi**.
+   - **Applicazione**: `files/xr62/apply_backend.py` e `apply_frontend.py`, prima a secco poi `--apply`; `cmp` OK sui
+     6 file. Poi `files/xr62/i18n.sh`: due chiavi in `assets/<lang>.json`, nelle 4 lingue; `i18n check` stretto.
+   - **Backend**:
+     - `services/assets/event_links.py`, nuovo: `visible_transaction_ids` (la regola di R13-SEC7, tolta da
+       `split_guard`) e `events_with_linked_transactions`;
+     - `split_guard.py`: importa `visible_transaction_ids`. Cinque righe diventano una, con lo stesso comportamento;
+     - `provider_management.py`: `_reject_removals_of_linked_events` prima dell'unica scrittura;
+       `bulk_remove_providers(..., *, current_user_id=None)`; l'`IntegrityError` del `DELETE` porta a `rollback`, a un
+       avviso nel log del server e a `PROVIDER_REMOVAL_CONFLICT`, senza SQL;
+     - `providers.py`: la rotta passa il chiamante e risponde 409 ai due codici; la docstring li documenta.
+   - **Frontend**:
+     - `currencyChangeErrors.ts`: i due codici in `SENTENCE_KEYS`. La rimozione legge `params.events` e chiede prima il
+       nome del tipo; il conflitto si chiede senza valori. X-R48 e X-R49 restano con `{date, n, hidden, more}`;
+     - `AssetModal.svelte`, passo 2: un `try/catch` attorno alla rimozione, come il catch di X-R49. Solo logica.
+   - **Evidenza** (`files/runs/xr62-greens.sh`, poi `xr62-sync.sh`):
+     - ruff, black e Prettier puliti (Prettier anche sui 4 sorgenti i18n);
+     - services: `provider-removal-link-guard` 20 passed, `provider-wipe-split-guard` 12, `market-data-wipe-split-guard`
+       13, `asset-source` 61;
+     - Vitest: `currencyChangeErrors` 134, `AssetModal.providerLifecycle` 53, `AssetModal` 42,
+       `AssetCurrencyChangeModal` 23, `currencyBlocker` 7;
+     - gate: `gate-i18n-catalog` 176, `gate-i18n-usage` 195;
+     - `front check`: 0 errori dopo `api sync`.
+   - **Non eseguiti** (serve uno slot): `api assets-provider` e `api assets-crud`. Tolgono un'assegnazione senza
+     transazioni collegate, il caso coperto dalle guardie di rotta del test nuovo.
+   > **⚠️ Fuori pista**: il primo `front check` ha dato 2 errori in `features/legal/` (A): `legal` mancava in
+   > `InstanceConfigResponse`. Il client generato, ignorato da git, era delle 10:20, prima del fast-forward che ha portato
+   > il campo di A9. `api sync` lo ha rigenerato, senza toccare file tracciati; il secondo `front check` dà 0 errori. Non
+   > è un difetto del prodotto.
+
+3. ✅ (2026-10-17, 14:11) **Doc** (docs-writer, solo lettura e scrittura del Markdown; build e link li ho fatti io).
+   - `developer/backend/assets/events.md`: la sezione nuova «🗑️ Provider Removal» (`#provider-removal`), dopo X-R49:
+     - cosa cancella il `DELETE`, e il 500 di prima;
+     - il controllo, il 409, la vista del chiamante, il conflitto;
+     - l'asimmetria, detta come decisione;
+     - il frontend e i test;
+     - in più, un paragrafo in «Auto-Generated Events».
+   - `architecture.md`:
+     - la riga del `DELETE` nella tabella delle rotte;
+     - nella tabella dei moduli, la riga di `provider_management.py` e una riga nuova per `event_links.py`.
+   - Verificato da me sul testo: ogni affermazione corrisponde al codice. docs-writer ha ristretto due punti:
+     - l'asimmetria vale per i provider parametrici: un cambio fra provider di mercato non cancella nulla;
+     - «Policy D» è tolto, perché nella doc non è definito.
+   - **Evidenza** (`files/runs/xr62-docs.sh`): `mkdocs build` stretto rc 0, nessun avviso; `check-links` 97 link
+     validi; `git diff --check` pulito.
+   > **Note implementazione**: proposte di docs-writer fuori dal mio perimetro, da girare al coordinatore senza
+   > modificarle:
+   > - `user/assets/create-edit.en.md` dopo r. 180, pagina tradotta;
+   > - `developer/backend/transactions/wac.md` r. 602-617, una frase;
+   > - `user/assets/detail/events.en.md` r. 39, facoltativa, tradotta;
+   > - `provider_policy.py` manca nella tabella dei moduli. Non riguarda X-R62.
+
+4. ✅ (2026-10-17, 14:12) **Checkpoint**.
+   - Previsione di merge con `dev_release2` (`f078b766c`): tre file cambiati anche su dev, `providers.py` (MF-SI2,
+     il limite delle sonde), `_backend_services.py` e `architecture.md`. `git merge-file` dà 0 conflitti, anche dopo la
+     doc. Dev non ha toccato gli helper di X-R49 che il test nuovo importa.
+   - Commit proposti:
+     - `fix(assets): coded 409 on linked provider removal`: codice, test, i18n, runner;
+     - `docs(assets): X-R62 provider removal refusal`: MkDocs e piano.
+   - CHANGELOG 🐛, proposta: «Removing an asset's provider (No Provider) no longer fails with a server error showing
+     database text when a transaction is linked to an event the provider generated: the removal is refused, and the
+     form names the event and how many transactions to unlink first.»
+   - Nota per X: cambiare un piano scollega le transazioni, togliere il provider le rifiuta. X può chiedere la simmetria.
+   - La riga X-R62 sta nella sezione di X del backlog: la chiude il coordinatore.
