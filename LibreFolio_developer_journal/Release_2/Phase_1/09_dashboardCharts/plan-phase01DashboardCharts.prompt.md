@@ -4433,3 +4433,472 @@ vengono dal catalogo generato alle 18:27.
 > - **Prove leggere finali** (00:29): svelte-check 0/0 (`files/logs/y22_front-check.log`); Prettier pulito sulla spec
 >   e sui due test; `git diff --check` pulito.
 > - **Y-22 ✅, Y-23 ✅** nel backlog. Checkpoint di seguito mandato al coordinatore.
+
+## Y11 — il lotto `assets`: `assets/[id]`, `onmerged`, «Reload All» di Correlation (analisi 17/10, 00:35–00:50; HEAD `d7f3a49c3`)
+
+> **Base**: HEAD `d7f3a49c3` = dev, pulito, con dentro il lotto A di Z, A7b e FE8b. `api sync` a rc 0.
+> `y11_docrefs.py check`: 46/48. Si spostano `files/+page.svelte` 784→783 e `assets/+page.svelte` 1642→1644; li
+> correggo alla fine del lotto, perché `assets/+page.svelte` cambia ancora.
+
+### Stato reale
+
+- **`assets/[id]/+page.svelte`** (2 770 righe) non ha nessun gettone.
+  - Le chiamate che partono dall'utente, o dalla pagina per sé:
+    - `onMount` → `reloadPage()` (`:1106`);
+    - `$effect` sul cambio di `data.assetId` → `reloadPage()` (`:1114`);
+    - `$effect` sul cambio di valuta → `loadChartData().then(maybeLoadComparison)` (`:1166`);
+    - `handleDateRangeChange` (`:1750`);
+    - `handleSignalsChange` (`:1822`);
+    - `retryBackendSignals` (`:1043`);
+    - Refresh → `onrefresh={() => handleRefresh()}` (`:2269`).
+  - **`handleRefresh` ha 6 chiamanti**:
+    - il pulsante (`:2269`);
+    - dopo un sync: `handlePageSyncComplete` (`:1708`) e `handleFxPairCreationSynced` (`:1735`);
+    - dopo un salvataggio in un modale: `handleAssetUpdated` (`:2117`), `handleFxPairCreated` (`:1728`) e `onsave` del
+      modale dell'intervallo (`:2632`).
+    - Dentro c'è `riskRefreshVersion += 1` (`:1639`).
+  - Il poller dal vivo (`AssetDetailLive`) chiama `loadChartData` direttamente: resta senza gettone.
+- **`AssetDetailToolbarActions.svelte`** (`components/assets/detail/`, area AF; la usa solo la pagina): il pulsante
+  `asset-detail-refresh-btn` ha `disabled={loading}`, la rotazione su `loading` e nessun `data-busy`. La prop
+  `loading` serve solo a quel pulsante.
+- **`assets/+page.svelte`**:
+  - `onmerged` (`:1911`) fa `invalidateAfterMutation` più `loadAssets()` senza gettone, mentre `onupdated`, accanto
+    (`:1897`), ha già `assets-reload`;
+  - `risk-reload-button` (`:1581-1593`, solo nella scheda Correlation, al posto del pulsante della lista) ha
+    `disabled={!labPanel}`, nessun `data-busy` e nessuna rotazione.
+- **`AssetSetRiskPanel.reload()`** (`features/risk`, `:224`) fa `invalidateRisk()` e `syncGeneration += 1`. Ogni
+  sezione riceve quel numero come `refreshVersion` e ha il suo `createRiskPanelController`, quindi **i gettoni
+  `risk-refresh` e `risk-load` ci sono già**. Manca solo il contratto del pulsante.
+- **Il precedente della Dashboard** per il Rischio dopo un sync: i sync del banner della qualità dei dati (`:389`,
+  `:465`) portano `refreshVersion`, «as after Aggiorna». Il report della pagina si ricarica senza gettone, i pannelli
+  con il loro. Quindi sulla pagina dell'asset `riskRefreshVersion` resta in `handleRefresh`.
+  - Dopo un sync, con la scheda Rischio aperta, il pulsante gira mentre il Rischio si ricarica, come sulla Dashboard.
+  - È una sfumatura di P3, già in dev dalla 1.3 per la Dashboard: va nella revisione con il developer, con N55.
+
+### Cosa cambia
+
+1. `assets/[id]/+page.svelte`, gettoni sui punti che fanno partire, come nel dettaglio del cambio (passo 3):
+   - `asset-first-load` (`onMount`), `asset-change` (cambio di asset), `asset-currency` (cambio di valuta);
+   - `asset-period` (`handleDateRangeChange`), `asset-signals` e `asset-comparison` (`handleSignalsChange`),
+     `asset-signals-retry`;
+   - `asset-refresh` sul pulsante: `onrefresh={() => void pageBusy.track('asset-refresh', () => handleRefresh())}`;
+   - `asset-reload` dopo un salvataggio in un modale: `handleAssetUpdated`, `handleFxPairCreated`, `onsave`, come
+     `assets-reload` della lista;
+   - senza gettone dopo un sync (P3): `handlePageSyncComplete`, `handleFxPairCreationSynced`.
+2. `AssetDetailToolbarActions.svelte`: la prop `loading` diventa `busy`, con `disabled={busy}`,
+   `data-busy={busy ? 'true' : 'false'}` e la rotazione su `busy`. La pagina passa `busy={pageBusy.busy}`; il
+   componente resta di sola presentazione.
+3. `assets/+page.svelte`:
+   - `onmerged` → `await pageBusy.track('assets-reload', () => loadAssets())`, dopo `invalidateAfterMutation`;
+   - `risk-reload-button` → `disabled={!labPanel || pageBusy.busy}`, `data-busy` e la rotazione.
+4. Test (`test-author`):
+   - in `page-busy.spec.ts` i casi nuovi:
+     - dettaglio asset: Refresh e periodo aspettano; dopo un sync della pagina, con la scheda grafico aperta, il
+       pulsante non aspetta, con il suo controllo;
+     - Correlation: «Reload All» è disabilitato mentre le sezioni rileggono;
+   - da rivedere: `risk-lab.spec.ts:7049` (`toBeEnabled()` subito dopo che le richieste sono partite),
+     `fx-detail.spec.ts:1461` (`activateByKeyboard` sul pulsante), `asset-detail.spec.ts:232/532/2362`,
+     `asset-mobile-layout.spec.ts:386/416`.
+5. Documentazione: la tabella dei pulsanti e dei punti che fanno partire in `app-state.md#page-busy` (dettaglio asset,
+   Correlation), più i 2 riferimenti spostati.
+6. **E2E** nello slot: `page-busy`, `front-asset` (`asset-detail`, `asset-mobile-layout`, la lista), `fx-detail`,
+   `risk-lab`, `risk`. È una corsa lunga, da chiedere.
+7. Poi la **chiusura di Y11**: le righe del CHANGELOG del kit, la documentazione utente con la parola di Y-15, il
+   backlog.
+
+### Lotto `assets` · via e preparazione (17/10, 00:50–01:05)
+
+> **Note implementazione**.
+> - **Coordinatore**: FE5a (`components/assets/*` → `features/assets/`) non è nella coda di X stanotte e verrà dopo
+>   questo lotto. Prima i test e la documentazione; lo slot E2E (~40 min) dopo la risposta dei colori e il codice.
+> - **Il via dei colori su tutti e 3 i `.svelte`**:
+>   - nessuna classe di palette: la rotazione è solo `animate-spin` e l'icona prende il colore del testo del pulsante;
+>   - `theme-roles --check` entra nelle prove leggere;
+>   - le 42 classi storiche della pagina dell'asset (gli interruttori delle barre del grafico, AF-1) aspettano il
+>     designer, quindi non si toccano.
+> - **`test-author` (`09f0c986`)** scrive in `page-busy.spec.ts` i casi rossi:
+>   - dettaglio asset: Refresh, periodo, e P3 dopo il sync della pagina, con il suo controllo;
+>   - Correlation: «Reload All»;
+>   - facoltativo, `onmerged`.
+>   - Rivede anche le attese di `risk-lab:7049`, `fx-detail:1461`, `asset-detail` e `asset-mobile-layout`.
+> - **Il codice è pronto da applicare**: `files/scripts/y11_assets_apply.py`, 19 sostituzioni esatte, ciascuna unica
+>   (prova a secco verde).
+>   - In più rispetto all'analisi: il pulsante di `AssetDetailToolbarActions` prende
+>     `disabled:opacity-50 disabled:cursor-not-allowed`, come il pulsante Modifica dello stesso componente. Senza, il
+>     pulsante sarebbe «disabilitato ma non grigio», contro il contratto. Non sono classi di palette.
+>   - Un commento d'una riga ai due chiamanti dopo un sync, «no pageBusy token … (P3)», così nessuno ne aggiunge uno.
+> - **Ordine**:
+>   1. i rossi su oggi, con `page-busy` in uno slot breve;
+>   2. `--apply`;
+>   3. prove leggere: svelte-check, `theme-roles --check`, Prettier, `check-orphans`, e
+>      `onboarding-component-unit` se tocco il layout (non lo tocco);
+>   4. lo slot E2E lungo;
+>   5. la documentazione `#page-busy`: le righe del dettaglio asset e di Correlation, più i 2 riferimenti, con le righe
+>      vere dopo il codice.
+> - **I test sono scritti** (`test-author`, 01:05). È girato solo Prettier, che è pulito.
+>   - `page-busy.spec.ts` +373 righe, con un blocco nuovo «Page busy on the asset pages…» e i casi:
+>     - (a) Refresh;
+>     - (b) il preset 6M;
+>     - (c) P3 dopo il Sync della pagina, con il controllo;
+>     - (d) «Reload All» di Correlation.
+>   - Ogni caso controlla per primo che il pulsante pubblichi `data-busy`, quindi oggi va rosso in circa 3 s.
+>   - Nessuna scrittura e nessun fornitore: il Sync è stubbato nel browser e il poll dal vivo è rifiutato.
+>   - (d) gira sul motore del rischio vero, che legge e basta.
+>   - (e), `onmerged`, è saltato: l'aiuto per creare la coppia è privato di `asset-merge.spec.ts`, e un merge è
+>     irreversibile.
+>   - Altre attese:
+>     - `risk-lab.spec.ts:~7045`: `toBeEnabled({timeout: 15_000})` prima dei conteggi;
+>     - `fx-detail.spec.ts:~1459`: `toBeEnabled({timeout: 10_000})` prima di `activateByKeyboard`;
+>     - `asset-detail.spec.ts:7256`: tolto un `toBeDisabled()` che, con il cambio di finestra senza gettone, misurava
+>       solo la coda;
+>     - gli altri circa 40 usi sono invariati, con i verdetti nella risposta.
+> - **Trovati da `test-author`, decisi dal coordinatore** (01:15):
+>   - **tre scenari del test lungo di `asset-detail.spec.ts`** (`:3405/3412`, `:3907/3908`, `:7494`) premono Refresh
+>     mentre una richiesta grande è trattenuta. Col contratto il pulsante è disabilitato, quindi **si riscrivono**: la
+>     prima richiesta parte dal Sync della pagina, senza gettone, oppure prima si rilascia. Riscrittura affidata a
+>     `test-author` (01:16);
+>   - **N64** (decisione notturna, da rivedere con N55): `setPrimaryMode` → `asset-mode`, e
+>     `setCalendarPreset`/`setCalendarCustom` → `asset-calendar-window`. Sono già nelle 23 sostituzioni.
+> - **Slot breve per i rossi**: slot 2, dopo H (al suo via). Script `files/scripts/y11a_reds.sh`.
+> - **I rossi** (slot 1, 01:27–01:37; HEAD `d7f3a49c3` senza codice; carico 40–49): `files/scripts/y11a_reds.sh`, cioè
+>   `front-portfolio page-busy`, 16 test. Risultato: **4 rossi, i casi nuovi a–d, e 12 verdi**, quelli di prima.
+>   - Tutti e quattro per la ragione giusta: «…publishes no data-busy: it does not follow the big requests of its page
+>     (Y11)», con `Received string: ""`.
+>   - Il pulsante è `asset-detail-refresh-btn` per a–c e il `risk-reload-button` di Correlation per d.
+>   - Durata 14–18 s; log in `files/logs/y11a_reds_page-busy.log`.
+>   - La build di quella corsa lancia svelte-check solo come diagnostica, senza guardarne l'esito (`dev.py:677-678`), e
+>     Playwright carica solo `page-busy.spec.ts`. Quindi le modifiche in corso di `test-author` su
+>     `asset-detail.spec.ts` non toccavano la corsa.
+> - **Codice applicato** (01:38): `y11_assets_apply.py --apply`, 23 sostituzioni in 3 file (+36/−27).
+>   - `theme-roles --check` pulito: «0 files dropped below their record».
+>   - **⚠️ Fuori pista**: Prettier segnalava 2 file, che a HEAD erano puliti, per le mie righe. Con `--write`: la catena
+>     `.then` di `asset-change` va a capo, e gli attributi del pulsante di `AssetDetailToolbarActions` vanno uno per
+>     riga. Il diff di Prettier tocca solo quelle righe.
+> - **Poi**: la riscrittura dei 3 scenari (`test-author`, in corso), svelte-check, Prettier su tutti i file,
+>   `theme-roles --check` di nuovo, lo slot lungo, la documentazione.
+> - **I 3 scenari riscritti** (`test-author`, 01:5x), in `asset-detail.spec.ts`:
+>   - un aiuto nuovo, `refreshThroughPageSync()` (2622–2685): il Sync della pagina con ogni voce `skipped`, quindi
+>     niente accettato e niente scritto;
+>   - **scenario 1** (3449–3523): la prima generazione parte dal ricaricamento del Sync, senza gettone, e poi Refresh la
+>     sostituisce. È la mossa concordata;
+>   - **scenari 2 (3960–4031) e 3 (7544–7640)**: la richiesta più vecchia in volo viene da azioni sempre tracciate (il
+>     cambio del termine di confronto; MAX più due ritorni a Price). Quindi è il Sync che fa partire il refresh sotto
+>     prova, e le asserzioni restano tutte.
+>     - Rilasciare prima avrebbe perso l'intento: i dati che arrivano a metà refresh, e le risposte tardive, cioè il
+>       successore e il 503 provvisorio.
+>     - Il pulsante resta coperto dagli altri 29 clic del test e da `page-busy`. **Accettato**: rientra nel via del
+>       coordinatore («la prima richiesta parte dal Sync della pagina»);
+>   - 3405–3418: riordino precauzionale (attesa di Refresh abilitato, poi il cancello);
+>   - 7335–7337: torna il `toBeDisabled()` che con N64 ha di nuovo senso;
+>   - una rotta nuova nella fixture: `GET /api/v1/fx/providers` → lista vuota, che toglie anche una chiamata vera verso
+>     ECB e SNB.
+> - **Prove leggere sul tutto** (02:0x; carico 40–45): svelte-check 0/0 (`files/logs/y11a_front-check.log`); Prettier
+>   pulito sui 7 file di codice e di test; `theme-roles --check` pulito; `git diff --check` pulito.
+>   - `check-orphans` non serve: nessun file di test nuovo.
+> - **Slot lungo** da chiedere, con `files/scripts/y11a_e2e.sh`: `page-busy`, `asset-detail`, `asset-mobile-layout`,
+>   `asset-list`, `fx-detail`, `risk-lab`, `risk`.
+> - **Documentazione e runner** (02:1x, prima dello slot lungo, così la build del sito della corsa le comprende):
+>   `files/scripts/y11a_docs_apply.py`, 15 sostituzioni uniche.
+>   - `app-state.md#page-busy`, la tabella dei punti che fanno partire:
+>     - `asset-first-load`;
+>     - `asset-refresh` su `onrefresh`, con il perché: `handleRefresh()` gira anche dopo un sync;
+>     - `asset-period`, `asset-currency`, `asset-mode`, `asset-calendar-window`;
+>     - una riga nuova, «A reload after a save in a window» (`assets-reload` ×3, `asset-reload` ×3);
+>     - Correlation (`AssetSetRiskPanel.reload()` → `refreshVersion` delle sezioni).
+>   - «Never for»: il ricaricamento dopo un sync della pagina dell'asset, più la sfumatura scritta come comportamento.
+>     Un sync fa ancora aspettare un pannello aperto, attraverso `refreshVersion` e `riskRefreshVersion`.
+>   - Tabella dei pulsanti: le righe nuove «Asset detail» e «Assets list, Correlation tab»; File 784 → 783 e lista
+>     degli asset 1642 → 1645.
+>   - Test: i riferimenti di `page-busy.spec.ts` spostati dall'intestazione nuova (178, 214, 220/226, 338, 368,
+>     679–691), più il punto 6 sui casi delle pagine degli asset (l.1184).
+>   - `_frontend_portfolio.py`: la descrizione di `page-busy` nomina le pagine degli asset.
+>   - `y11_docrefs.py` ora tiene 69 riferimenti, ricatturati e controllati a occhio
+>     (`files/logs/y11_docrefs_capture3.log`).
+>   - Solo codice in linea, nessun link nuovo. Il WARNING della build va controllato nel log dello slot lungo.
+> - **Ordine nuovo del coordinatore** (01:54). DV è entrato in dev `323c61b73` con i neutri di tutti i grafici: 25 file in
+>   `components/charts/`, `features/dashboard/`, `CorrelationHeatmap`, `features/brokers/lots/`, più `chartTheme.ts` e
+>   `roleColors.ts`. Quindi la corsa lunga deve provare la revisione **combinata**:
+>   1. checkpoint FROZEN subito, con il lotto com'è;
+>   2. commit e fusione con dev;
+>   3. la corsa lunga, nello slot 2 dopo X.
+>   - **Checkpoint mandato alle 01:5x**: 10 percorsi, nessuno toccato da dev dopo `d7f3a49c3`. Le liste per lo stage
+>     sono `files/y11a_stage_{feat,tests,docs,journal}.txt`.
+>   - La documentazione era già fatta e verificata: va nel checkpoint come commit a parte. Lasciarla non committata
+>     avrebbe rischiato di fermare la fusione, perché `app-state.md` cambia spesso in dev.
+>   - **⚠️ Fuori pista**: nel controllo prima dell'handoff c'era un `git fetch -q` inutile (`dev_release2` è un ramo
+>     locale condiviso). Restava appeso, credo per la rete o l'autenticazione, e l'ho fermato dopo 30 s: nessun
+>     processo rimasto, nessun ref cambiato che importi. Non lo rifaccio.
+
+### Lotto `assets` · committato e base aggiornata (17/10, 01:56–01:59)
+
+> **Note implementazione**.
+> - **Commit del coordinatore**: `37bfeebb9` (feat), `fcd435668` (tests), `e42d1d75d` (docs), `1cfbd913e` (journal).
+> - **Fusione** con dev `323c61b73`, che contiene DV con i neutri di tutti i grafici: **`2cd430a5e`**, pulita.
+> - Verifiche con `files/scripts/y21_after_merge.sh`:
+>   - i genitori `1cfbd913e` e `323c61b73`;
+>   - `api sync` a rc 0;
+>   - `y11_docrefs.py check` **69/69 invariati**: DV non sposta nessuna riga citata.
+> - **Prove leggere sulla revisione combinata** (carico 31): svelte-check 0/0
+>   (`files/logs/y11a_front-check_merged.log`); `theme-roles --check` pulito.
+> - **Poi**: la corsa lunga `files/scripts/y11a_e2e.sh`, nello slot 2 dopo X, al via del coordinatore.
+> - **Corsa lunga avviata e poi fermata** (slot 2, 02:04–02:2x, su `2cd430a5e`): `files/scripts/y11a_e2e.sh`.
+>   - Il coordinatore l'ha fermata alle 02:2x: la galleria dei colori gira fino alle 03:30 circa e il carico era a 159–170,
+>     quindi i timeout da carico andrebbero solo rifatti.
+>   - Arrivata fin qui: **`page-busy` 16/16 verdi** (2,4 min), compresi i 4 casi nuovi a–d; `asset-detail` partito, 3
+>     verdi, poi fermato; il resto non partito.
+>   - Fermata con `stop_bash`: porta 6189 libera, nessun mio processo rimasto.
+>   - **Ripresa dopo le 03:30**, prima in coda, con `files/scripts/y11a_e2e2.sh`: da `asset-detail` in poi, senza
+>     `page-busy`, già verde su questa revisione.
+
+## R17 · W8 · P4 — analisi lato frontend (17/10, 02:00–02:30; sola lettura; HEAD `2cd430a5e`, MF-P in dev `536501541`)
+
+Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo completo, in inglese, è in
+`files/r17_w8_analysis.md` della sessione.
+
+- **Backend** (MF-P, `f191dfbf9`, solo backend; nessun file frontend cambiato in dev). In `PortfolioSummary`, tutte
+  frazioni:
+  - `timing_effect_percent` = MWRR cumulativo − TWRR, null se manca uno dei due;
+  - `pnl_change_1d` (Currency): il P&L totale da **D−1 di calendario** a D, null per un portafoglio nato in D;
+  - `pnl_change_1d_vs_total_pnl_percent` e `…_vs_nav_percent`: Δ/|base di D−1|, col segno di Δ, null con base 0;
+  - `holding_groups: [{broker_id, asset_type|null, gain_loss, gain_loss_percent}]`, dove contano solo i titoli con
+    valore e G/L noti.
+- **R17**, `features/dashboard/KpiSection.svelte`, usato dalla Dashboard (`:1012`) e dalla pagina del broker (`:647`):
+  - via `prevHistoryPoint` (`:78`), il Δ dagli ultimi due punti della `history` (`:80-85`), `dayChangePct`
+    (`:93-96`), le due percentuali (`:99-102` sul NAV, `:131-134` sul P&L totale) e `mwrr − twrr` (`:243`);
+  - al loro posto, letture dei 4 campi. Resta solo il ×100 di presentazione, come `returnPct()`. Le scale del colore
+    del timing (`:244-249`) restano;
+  - per l'utente: con una serie campionata, il «giorno» di oggi confronta due punti lontani; il backend usa D−1 di
+    calendario, che è già quello che dice la documentazione utente («from yesterday to today»).
+- **W8**, `ExposureTreemap.svelte` + `PositionsPanel.svelte`:
+  - via le somme del G/L di gruppo (`:423-424`) e `aggregateGlPct` (`:449`, usato a `:471` e `:487`). È lì il 🐛: un
+    titolo con G/L ignoto metteva il suo valore nel costo;
+  - una prop nuova, `holdingGroups`, con la ricerca per `(broker_id, asset_type|null)` sulle stesse chiavi della treemap
+    (`:373-376`); un gruppo assente si legge «—»;
+  - `PositionsPanel` (`:205`) ha già `summary`, quindi passa `summary.holding_groups`. Le pagine non cambiano;
+  - le somme di valore e peso restano: non sono W8;
+  - differenza accettata con MF: la treemap disegna solo valore > 0 (`:371`).
+- **P4**, `PerformanceChart.svelte`:
+  - il netto (l'etichetta della barra `:252` e la riga del tooltip `:545`) passa a `period_pnl_percent` (`:47`, che
+    arriva già e non viene letto);
+  - le componenti del tooltip (`:548`): **MF sceglie (a)** (02:03). Arrivano 4 campi in `AssetPeriodContribution`:
+    `period_unrealized_delta_percent`, `period_realized_gain_loss_percent`, `period_income_percent`,
+    `period_fees_taxes_percent`.
+    - Sono arrotondati a 4 decimali: non si somma per rifare il totale. Null con un inizio 0 o null.
+    - `fees_taxes` è positivo e si mostra come costo.
+    - In dev entro la mattina del 17/10; MF manda lo SHA.
+    - Le componenti si cablano solo quando la fusione di MF è nella mia base, così non spariscono nel frattempo.
+- **Colori**: i 4 file sono già sui ruoli (KpiSection `a694d8fb2`, ExposureTreemap `38e17c2a5` DV B4, PositionsPanel
+  `45f582eeb`, PerformanceChart `38e17c2a5`). Cambiano solo gli script, più una prop nel template di PositionsPanel.
+  **Prima di scrivere lo dico al coordinatore**, che avvisa i colori, anche per la cifra delle KPI nella galleria.
+- **Test** (`test-author`, rossi prima):
+  - `KpiSection.test.ts`: una `history` i cui ultimi due punti darebbero cifre diverse dai campi; i null;
+  - `ExposureTreemap.test.ts`: un gruppo con un titolo dal G/L nullo;
+  - `PerformanceChart.test.ts`: `period_pnl_percent '0.07'` contro 50/1000 → «+7.0%»;
+  - i tre file sono già registrati.
+  - E2E: nessuna spec legge questi valori. Slot breve: `dashboard`, `front-broker detail`, `privacy-masking`.
+- **Documentazione e CHANGELOG**:
+  - una frase in `kpi-cards.en.md` (il giorno di calendario prima, anche con punti settimanali), che è debito di
+    traduzione;
+  - due righe 🐛 al coordinatore: il Δ del giorno su D−1 di calendario; il G/L % dei gruppi della treemap.
+- **Ordine**:
+  1. dopo l'ingresso del lotto `assets`, l'aggiornamento della base con MF-P e `api sync`;
+  2. i rossi Vitest;
+  3. l'avviso al coordinatore, poi il codice;
+  4. le prove leggere;
+  5. lo slot breve.
+  - Costo: 2,5–3 ore con P4.
+> - **Correzione** (coordinatore, 02:18): MF-P **è già** nella mia base. Verificato: `536501541` è antenato di
+>   `2cd430a5e`, e il client generato ha `pnl_change_1d*`, `timing_effect_percent`, `holding_groups` e
+>   `HoldingGroupGainLoss`. Prima l'avevo creduto più tardo. Quindi niente aggiornamento della base per R17/W8: i rossi
+>   Vitest si scrivono subito, **solo file di test**; il codice dopo la corsa lunga, perché la build deve restare quella
+>   del lotto `assets`.
+>   - `test-author` (`59152098`): `KpiSection.test.ts` (R17), `ExposureTreemap.test.ts` (W8), `PerformanceChart.test.ts`
+>     (P4, solo il netto).
+>   - **Le componenti di P4 no**: un caso scritto ora resterebbe rosso anche dopo il codice di questo lotto, finché
+>     non arrivano i campi di MF, e un rosso non deve entrare in dev. Vengono dopo, con lo SHA di MF.
+>   - Rossi da lanciare con il carico sotto 50, file per file, con `frontend/node_modules/.bin/vitest run <file>`.
+> - **I rossi sono scritti** (`test-author`, 02:4x): 15 casi nuovi.
+>   - KpiSection: il Δ del giorno con le sue due quote e il timing dal riassunto; i null e gli assenti, perché un
+>     report in cache da prima di MF-P non ha i campi.
+>   - ExposureTreemap: il gruppo del backend, «—» per un gruppo assente, nessuna cifra per un gruppo con i valori a
+>     null.
+>   - PerformanceChart: `period_pnl_percent` sul netto, nell'etichetta e nel tooltip; null e assente.
+>   - Circa 27 casi esistenti leggevano gli ingressi di prima. Ora le loro fixture portano anche i campi nuovi
+>     coerenti, così restano verdi prima e dopo; nessuna asserzione cambiata. V2 verifica solo che la scheda scriva le
+>     quote che riceve: la regola del segno ora la prova il backend.
+>   - Prettier pulito. Nessun file di prodotto o del runner toccato.
+> - **⚠️ Fuori pista: la fixture della galleria** (`frontend/e2e/dashboard-report.json`, un'istantanea vera) non ha i
+>   campi di MF-P.
+>   - Dopo il codice di R17/W8, nella galleria sparirebbe la riga del giorno, e timing e G/L dei gruppi leggerebbero
+>     «—».
+>   - Per la regola 12 (`test-author.agent.md:242`) un'istantanea non si tocca a mano. Mandate al coordinatore, per il
+>     developer: (a) una cattura nuova, poi `normalize-dashboard-fixture`; (b) derivare i campi con le funzioni del
+>     backend, come `a26051686`; (c) «—» fino ad (a).
+>   - Propongo (a), e (c) nel frattempo. Il codice va avanti comunque, perché cambia solo la galleria.
+> - **I rossi** restano da lanciare con il carico sotto 50 (alle 02:45 era 88).
+> - **Decisione sulla fixture** (coordinatore, 02:46): **(c) fino ad (a)**. È fra le domande del developer, e i colori
+>   sono avvisati.
+> - **I rossi, lanciati** (02:47–02:50, carico 44; `files/scripts/r17w8_reds.sh`, `node_modules/.bin/vitest run`, file
+>   per file): **15 rossi, come previsto**, tutti su asserzioni:
+>   - `KpiSection` 9 rossi su 51: `-100.00 EUR` della history contro `+12.34 EUR` del riassunto;
+>   - `ExposureTreemap` 3 su 7: `-2.78%` della somma contro `-3.23%` del gruppo; `7.14%` contro `11.11%`; il bond
+>     `-200.00 EUR -9.09%` contro nessuna cifra;
+>   - `PerformanceChart` 3 su 20: `+5.0%` contro `+7.0%`; null e assente.
+>   - Nessun errore d'import o di setup; gli altri 63 sono verdi. Log in `files/logs/r17w8_red_*.log`.
+> - **Preferenza dei colori** (02:50): R17/W8 entra **dopo le 04:45**, la fine della cattura «after» della galleria,
+>   così il foglio del developer mostra solo i colori. Non è un blocco; il mio ordine ci arriva comunque.
+> - **Il codice R17/W8/P4 (netto) è pronto, non applicato** (02:5x–03:0x): `files/scripts/r17w8_apply.py`, 23
+>   sostituzioni esatte e uniche, prova a secco verde. Si applica dopo la corsa lunga di `assets`.
+>   - **KpiSection**:
+>     - via `prevHistoryPoint` e `dayChangePct`;
+>     - `pnlDeltaDay` ← `safeCurrency(summary.pnl_change_1d)`;
+>     - le due quote ← `returnPct(…_vs_nav_percent / …_vs_total_pnl_percent)`;
+>     - `timingEffectVal` ← `returnPct(summary.timing_effect_percent)`.
+>   - **ExposureTreemap**:
+>     - una prop `holdingGroups` (tipo locale `HoldingGroupFigures`);
+>     - via le somme `gl` e `aggregateGlPct`;
+>     - `groupGainLoss(brokerId, assetType)` con la chiave `JSON.stringify([broker_id, asset_type])`;
+>     - un gruppo assente o null non mostra cifre: il tooltip salta già le righe con `gl`/`glPct` null.
+>   - **PositionsPanel**: `holdingGroups={summary?.holding_groups ?? []}`.
+>   - **PerformanceChart**:
+>     - `AssetRow.netPct` ← `safeDecimal(position.period_pnl_percent)`;
+>     - `netReturnSuffix` e `netReturnPlainSuffix` (frazione ×100), per l'etichetta della barra e la riga «Period
+>       P&L» del tooltip;
+>     - le componenti restano su `openingPctSuffix` finché non arrivano i campi di MF;
+>     - via `openingPctPlainSuffix`, che dopo il cambio non ha più chiamanti.
+> - **Il blocco della galleria dalle 03:50 alle 04:45** (coordinatore, 03:06): la corsa lunga di `assets` parte
+>   **subito dopo le 04:45**, prima in coda. Gli ho corretto un equivoco: l'`all-backend` sulla porta 6182 non è mio,
+>   perché la 6189 è libera.
+> - **devWiki** (03:1x, skill `wiki-file`), tre pagine:
+>   - `wiki/concepts/page-busy-refresh-button.md`: il contratto di P3, le regole, il pulsante e lo schema E2E. Nella
+>     wiki non c'era niente su `pageBusy`;
+>   - `wiki/problems/e2e-chained-waits-outlast-the-test-budget.md`: Y-21 e Y-22;
+>   - `wiki/problems/direct-playwright-run-in-a-test-lane.md`: `LF_SETUP_DONE`, la guardia della corsia, lo script
+>     modificato mentre bash lo eseguiva.
+>   - Più le righe in `index.md` e la voce in `log.md`.
+>   - `check_source_paths.py`: 7 mancanti, tutti di prima, nessuno su queste pagine (4128 citati).
+>   - Il grafo non è aggiornato: graphify non c'è in questo worktree.
+> - **Nel worktree, non committato**: i 3 file di test di R17/W8 (i rossi), da non committare prima del loro codice
+>   per non portare 15 rossi in dev; il journal; la devWiki.
+> - **MF-P4b entrato in dev** (`d93de2899`, commit `5e30d875e`, solo backend; coordinatore, 03:40). I 4 campi sono in
+>   `AssetPeriodContribution`: frazioni arrotondate a 4 decimali, null con un inizio 0 o null, `fees_taxes` positivo.
+>   Arrivano nella mia base con l'aggiornamento dopo il lotto `assets`. Quindi **le componenti di P4 entrano nello
+>   stesso lotto di R17/W8**.
+>   - `r17w8_apply.py`: la parte di PerformanceChart è riscritta, **27 sostituzioni**, prova a secco verde; la copia
+>     di prima è in `r17w8_apply.py.bak_netonly`.
+>     - Un solo `returnSuffix(fraction)`, con la variante semplice, e `signedMoneyWithReturnHtml` per il netto e le
+>       componenti.
+>     - `AssetRow.netPct` e `componentPcts`, e i 4 campi nell'interfaccia locale.
+>     - I costi negati per la presentazione, come il denaro.
+>     - Via `openingPctSuffix`, `openingPctPlainSuffix` e `signedMoneyWithOpeningPct(Html)`, che restano senza
+>       chiamanti.
+>   - `test-author`, un agente nuovo: il precedente, `59152098`, non era più disponibile. Scrive i casi rossi delle componenti, più i 4 campi nelle fixture
+>     `EUR_ASSET`/`CHF_ASSET`, così i casi esistenti stampano lo stesso a un decimale.
+> - **Previsione della fusione per l'aggiornamento della base**, verificata dal merge-base `323c61b73`:
+>   - fra i miei percorsi non committati, dev ha cambiato solo `LibreFolio_devWiki/log.md`: un'aggiunta di 5 righe
+>     dopo la 3702, mentre la mia è in coda, dopo la 3715. Non sono adiacenti, quindi la fusione è pulita;
+>   - il mio piano, `index.md`, i 3 file di test e i 4 file di prodotto non sono cambiati in dev. Il «differs» del
+>     piano era solo il mio commit di journal non ancora entrato;
+>   - nessun blocco previsto, con o senza i miei file non committati.
+> - **I rossi delle componenti di P4 sono scritti** (`test-author` `77e23d11`, 03:46–04:00; solo `PerformanceChart.test.ts`,
+>   Prettier pulito).
+>   - Fixture `EUR_ASSET`/`CHF_ASSET`: i 4 campi con `componentReturn()`, cioè `periodReturn`, `toFixed(4)`, costi
+>     positivi. Controllato a mano che a un decimale stampino lo stesso di oggi: EUR +28,6 / +18,3 / +7,4 / −1,1 %, CHF
+>     −19,0 % e 0,0 %; nessun confine d'arrotondamento.
+>   - In un describe annidato «component returns from their own fractions (MF-P4b)», tre casi rossi e un controllo:
+>     - le frazioni proprie, con i costi negati, contro la divisione: `(+3.0%) (-1.1%) (+0.9%) (-0.4%)` contro
+>       `(+2.0%) (-0.7%) (+0.5%) (-0.2%)`;
+>     - una frazione null o assente → nessun ritorno su quella riga (×2);
+>     - il controllo: inizio 0 e frazioni null, nessun ritorno, verde prima e dopo.
+>   - Ogni riga si legge «tutto quello che segue l'importo», quindi un `(—)` o un `(0.0%)` fa rosso.
+>   - **Rinforzato** anche il caso di prima, quello del netto null o assente: ora nel tooltip, dopo l'importo, non deve
+>     esserci niente. Prima un `(—)` sarebbe passato.
+> - **Rossi non lanciati**: il carico era a 143 alle 03:58, per il blocco della galleria. Si lanciano dopo
+>   l'aggiornamento della base, prima del codice. Resta una corsa rossa valida, perché dev non ha toccato i 4 file di
+>   prodotto.
+> - **Da tenere fuori dal checkpoint di `assets`**: i 3 file di test di R17/W8/P4 (18 rossi su oggi), che entrano solo
+>   insieme al loro codice.
+> - **Rossi lanciati di nuovo, con le componenti** (04:01–04:04; il carico è sceso a 44 durante il blocco della
+>   galleria; `files/scripts/r17w8_reds.sh`, invariato): **18 rossi, tutti su asserzioni**.
+>   - `KpiSection` 9/51;
+>   - `ExposureTreemap` 3/7;
+>   - `PerformanceChart` 6/24: i 3 del netto, più i 3 delle componenti, cioè `(+2.0%)` della divisione contro
+>     `(+3.0%)` della frazione e il null/assente. Il controllo, con inizio 0, è verde.
+>   - Gli altri 64 sono verdi; nessun errore d'import o di setup. Log in `files/logs/r17w8_red_*.log`.
+> - **Resta, dopo la corsa lunga e l'ingresso di `assets`**: l'aggiornamento della base (con MF-P4b) e `api sync`, poi
+>   l'avviso al coordinatore per i file DV e il suo via; `r17w8_apply.py --apply`; i verdi Vitest dei 3 file;
+>   svelte-check, `theme-roles --check` e Prettier; lo slot breve.
+
+### Lotto `assets` · corsa lunga sulla revisione combinata ✅ (slot 2, 04:31–04:47; HEAD `2cd430a5e`; carico 24–35)
+
+> **Note implementazione**.
+> - **Comando**: `files/scripts/y11a_e2e2.sh`, la ripresa dopo il blocco della galleria. Sequenziale, `--workers 2`,
+>   porta 6189, `/tmp/librefolio-r13-y`.
+> - **Risultato: tutto verde.**
+>   - `front-asset asset-detail` 35/35 (2,8 min), con i 3 scenari riscritti e il `toBeDisabled` ripristinato;
+>   - `asset-mobile-layout` 21/21;
+>   - `asset-list` 30/30;
+>   - `front-fx fx-detail` 17/17;
+>   - `front-portfolio risk-lab` 44/44;
+>   - `risk` 38/38.
+>   - Con `page-busy` 16/16 della prima corsa (02:04, stessa revisione), fanno **201/201**.
+>   - Log in `files/logs/y11a_e2e2_*.log` e `y11a_e2e_front-portfolio_page-busy.log`.
+> - **Documentazione**: il sito della prima corsa comprende `e42d1d75d`: 0 WARNING, costruito in 155,9 s.
+> - Porta 6189 libera, nessun processo rimasto.
+> - **Il lotto `assets` è pronto per l'ingresso**: `37bfeebb9`, `fcd435668`, `e42d1d75d`, `1cfbd913e`, più la fusione
+>   `2cd430a5e`. Con questo **Y11 è completo nel codice**: tutte le pagine e la scheda Correlation. Restano per la
+>   chiusura le righe del CHANGELOG e la documentazione utente del kit (`files/y11_closing/`), che aspettano la parola di
+>   Y-15 dal developer.
+
+## R17 · W8 · P4 — implementazione (17/10, dalle 04:48; HEAD `d32d0f3d9`, il lotto `assets` entrato, MF-P4b dentro)
+
+> **Note implementazione**.
+> - **Base**: `d32d0f3d9` = dev, con dentro il lotto `assets` (`aa95cc86d` journal, `1e93d8046` wiki) e MF-P4b.
+>   - `api sync` a rc 0: il client ha i 4 campi `period_*_percent`;
+>   - i 4 file di prodotto non sono cambiati da `2cd430a5e`;
+>   - la prova a secco dà ancora 27 sostituzioni; `y11_docrefs.py` 69/69;
+>   - svelte-check prima del codice 0/0, con i 3 test trattenuti.
+> - **Via dei colori** sui 4 file DV (coordinatore, 04:5x).
+>   - Le regole: non toccare le 4 classi di palette delle barre di `KpiSection`, che sono nella baseline e aspettano
+>     il designer; i colori di segno solo dagli aiuti esistenti; un aiuto nuovo nei file del tema solo con il loro via;
+>     `theme-roles --check` fra le prove leggere.
+>   - Rispettate tutte: nessun attributo `class` cambiato (controllato sul diff), nessun colore e nessun aiuto nuovo.
+> - **Applicato** `r17w8_apply.py --apply`: 27 sostituzioni in 4 file (+71/−74). Prettier pulito.
+> - **⚠️ Fuori pista, due correzioni a mano in `ExposureTreemap.svelte`**, trovate dalle prove:
+>   1. **Il rosso del gruppo assente.** Il caso chiede «—», come diceva il mio brief, ma il tooltip saltava le righe
+>      con `gl` null.
+>      - Ora le tessere di tipo e di broker scrivono «Unrealized P&L: —» quando il backend non dà una cifra (gruppo
+>        assente o null); le tessere degli asset restano come prima.
+>      - È la regola «null → «—»» concordata con MF.
+>   2. **svelte-check, 3 errori.** Un `gl: 0` rimasto nell'inizializzazione della tessera di tipo, e il mio tipo locale
+>      `HoldingGroupFigures` che non combaciava con il tipo generato, dove ogni campo ammette anche array.
+>      - Ora il tipo è `NonNullable<PortfolioSummary['holding_groups']>[number]`, dallo store, come usano già
+>        `PositionsPanel` e il test.
+>      - Le letture passano per `safeString`, `safeCurrency` e `safeDecimal` di `$lib/types`. A runtime è equivalente.
+> - **Prove** (carico 31–56):
+>   - Vitest: `KpiSection` 51/51, `ExposureTreemap` 7/7 (dopo la correzione 1), `PerformanceChart` 24/24,
+>     `AllocationPanel` 3/3;
+>   - **`front-utility core-unit` 7941/7941** (200 file, con i gate di HTML e denaro) e **`component-unit`
+>     4468/4468** (166 file). Sono girati prima della correzione 2, che cambia solo tipi e letture equivalenti; dopo
+>     ho rilanciato il file della treemap;
+>   - svelte-check 0/0 dopo la correzione 2; `theme-roles --check` pulito; `git diff --check` pulito.
+>   - Log in `files/logs/r17w8_green*_*.log`, `r17w8_core-unit.log`, `r17w8_component-unit.log` e
+>     `r17w8_front-check_post2.log`.
+> - **Documentazione per sviluppatori**: `pages/index.md:120-123` descriveva ancora il calcolo nel browser (gli ultimi
+>   due punti della history, `mwrr − twrr`). Affidata a `docs-writer`. Nessuna pagina utente cambia:
+>   `kpi-cards.en.md` dice già «from yesterday to today».
+> - **Slot breve** pronto: `files/scripts/r17w8_e2e.sh` (`front-portfolio dashboard`, `privacy-masking`,
+>   `front-broker detail`).
+> - **E2E breve** (slot 1, 05:11–05:25; `files/scripts/r17w8_e2e.sh`): `front-portfolio dashboard` 27/27,
+>   `privacy-masking` 18/18, `front-broker detail` 38/38: **83/83**. Porta 6189 libera, nessun processo rimasto.
+> - **Documentazione** (`docs-writer`):
+>   - `developer/frontend/pages/index.md` (+23/−5): i punti del Δ del giorno e del timing dicono ora che si leggono i
+>     campi del backend; due punti nuovi per i gruppi della treemap e per i ritorni di `PerformanceChart`;
+>   - `user/dashboard/kpi-cards.en.md`, due frasi: «It needs two days of history» era fuorviante. Ora la riga manca
+>     solo quando il periodo finisce nel primo giorno del portafoglio, e di lunedì copre il fine settimana.
+>     **Debito di traduzione**: it/fr/es hanno ancora la frase vecchia, senza stamp.
+>   - Durante la corsa E2E `docs-writer` non ha lanciato build: due build scriverebbero sullo stesso `mkdocs_src/site`.
+>     Le ho lanciate io dopo, con `files/scripts/r17w8_docs_check.sh`: build stretta rc 0 e 0 WARNING (53,7 s);
+>     `check-links` con 97 collegamenti validi.
+> - **Backlog**: T-U8 («il frontend solo di presentazione») sta nella sezione T, che non è mia. Lo segnalo al
+>   coordinatore: con Y12a e questo lotto restano solo V11 e P5, che aspettano MF-E e il CP-7b di J.

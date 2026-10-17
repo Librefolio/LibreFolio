@@ -422,7 +422,8 @@ of a configuration), would let that user test guesses of it.
   `locked` and `problem`, and leaves `value` and `default` empty.
 - A write sends it in `secret_value` (a `SecretStr`, `format: password`), and no response or
   validation message repeats it. The router drops the `input` that FastAPI echoes in a 422
-  (`_NoInputEchoRoute`), so even a malformed request does not send the secret back.
+  (`NoInputEchoRoute`, `backend/app/api/no_echo.py`, shared with the backup routes that receive a
+  password), so even a malformed request does not send the secret back.
 - The log records who wrote which fields, never a value.
 
 **At rest** (`crypto.py`):

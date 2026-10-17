@@ -74,9 +74,22 @@ vi.mock('$lib/api', () => {
     return {zodiosApi, schemas: {}, axiosInstance: {}, ApiError: class ApiError extends Error {}};
 });
 
+// B4: the rules of a secure archive's password, as this file's server answers `GET /backup/instance/options` — A's
+// five with twelve characters, in an order of their own, so that a card drawing rules of its own would be seen.
+const b4 = vi.hoisted(() => ({
+    options: {password_rules: [{code: 'special'}, {code: 'digit'}, {code: 'lowercase'}, {code: 'uppercase'}, {code: 'min_length', value: 12}]},
+}));
+
 vi.mock('./backupApi', async () => {
     const actual = await vi.importActual<typeof import('./backupApi')>('./backupApi');
-    return {...actual, startInstanceBackup: vi.fn(), getInstanceBackupJob: vi.fn(), deleteInstanceBackupJob: vi.fn()};
+    return {
+        ...actual,
+        startInstanceBackup: vi.fn(),
+        getInstanceBackupJob: vi.fn(),
+        deleteInstanceBackupJob: vi.fn(),
+        // B4: the card may read the options as soon as it mounts: every case of this file gets the same answer.
+        getInstanceBackupOptions: vi.fn(() => Promise.resolve(b4.options)),
+    };
 });
 
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
@@ -98,7 +111,10 @@ const POLL_MS = 1000;
 /** Five failed reads in a row (the default) come after 1 + 2 + 3 + 4 + 5 pauses. */
 const POLLING_GIVES_UP_AFTER = 15 * POLL_MS;
 
-function job(overrides: Partial<InstanceBackupJob> = {}): InstanceBackupJob {
+/** B4 (§4): every job says whether its archive is encrypted. Written out until the client is generated again from the B4 backend. */
+type Job = InstanceBackupJob & {encrypted: boolean};
+
+function job(overrides: Partial<Job> = {}): Job {
     return {
         job_id: JOB_ID,
         status: 'running',
@@ -111,13 +127,14 @@ function job(overrides: Partial<InstanceBackupJob> = {}): InstanceBackupJob {
         file_size: null,
         warnings: [],
         error_code: null,
+        encrypted: false,
         ...overrides,
     };
 }
 
-const running = (overrides: Partial<InstanceBackupJob> = {}) => job({status: 'running', ...overrides});
+const running = (overrides: Partial<Job> = {}) => job({status: 'running', ...overrides});
 
-const done = (overrides: Partial<InstanceBackupJob> = {}) => job({status: 'done', phase: null, done_bytes: FILE_SIZE, total_bytes: FILE_SIZE, finished_at: '2026-10-15T12:03:00Z', file_name: FILE_NAME, file_size: FILE_SIZE, ...overrides});
+const done = (overrides: Partial<Job> = {}) => job({status: 'done', phase: null, done_bytes: FILE_SIZE, total_bytes: FILE_SIZE, finished_at: '2026-10-15T12:03:00Z', file_name: FILE_NAME, file_size: FILE_SIZE, ...overrides});
 
 const failedJob = (errorCode: InstanceBackupJob['error_code']) => job({status: 'failed', phase: null, finished_at: '2026-10-15T12:03:00Z', error_code: errorCode});
 
@@ -323,7 +340,7 @@ describe('BackupDownloadCard — creating a backup', () => {
         expect(screen.getByTestId('backup-create')).toHaveTextContent(exactly('backup.download.createAgain'));
         expect(sessionStorage.getItem(KEY), 'a reload must find the archive again').toBe(JOB_ID);
 
-        expect(events()).toEqual([{name: 'backup.created', detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings: []}}]);
+        expect(events()).toEqual([{name: 'backup.created', detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings: [], encrypted: false}}]);
         expect(events()[0].toast, 'the archive is on the card: no toast is owed').toBeUndefined();
     });
 
@@ -345,7 +362,7 @@ describe('BackupDownloadCard — creating a backup', () => {
         expect(events()).toEqual([
             {
                 name: 'backup.created',
-                detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings},
+                detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings, encrypted: false},
                 toast: {variant: 'warning', message: 'backup.download.toast.warnings'},
             },
         ]);
@@ -506,7 +523,7 @@ describe('BackupDownloadCard — failures', () => {
         expect(events(), 'J was seen running here: its end is announced, once').toEqual([
             {name: 'backup.failed', detail: {code: 'network', what: 'read', job_id: JOB_ID}, toast: {variant: 'error', message: 'backup.download.errors.network'}},
             {name: 'backup.failed', detail: {code, what: 'start', job_id: null}, toast: {variant: 'error', message: `backup.download.errors.${code}`}},
-            {name: 'backup.created', detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings: []}},
+            {name: 'backup.created', detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings: [], encrypted: false}},
         ]);
     });
 
@@ -537,7 +554,7 @@ describe('BackupDownloadCard — failures', () => {
         expect(card()).toHaveAttribute('data-state', 'done');
         expect(screen.queryByTestId('backup-loading')).toBeNull();
         expect(screen.getByTestId('backup-download-link')).toBeInTheDocument();
-        expect(events(), 'a job seen running here that ended meanwhile is news: announced, once').toEqual([{name: 'backup.created', detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings: []}}]);
+        expect(events(), 'a job seen running here that ended meanwhile is news: announced, once').toEqual([{name: 'backup.created', detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings: [], encrypted: false}}]);
     });
 
     it.each<[string, InstanceBackupJob, 'done' | 'failed']>([
@@ -749,7 +766,7 @@ describe('BackupDownloadCard — the job of a previous page (sessionStorage)', (
         await elapse(POLL_MS);
 
         expect(card()).toHaveAttribute('data-state', 'done');
-        expect(events()).toEqual([{name: 'backup.created', detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings: []}}]);
+        expect(events()).toEqual([{name: 'backup.created', detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings: [], encrypted: false}}]);
     });
 
     it('a job the server no longer has: idle and forgotten, silently', async () => {
@@ -835,5 +852,266 @@ describe('BackupTab', () => {
         const tab = screen.getByTestId('backup-tab');
         expect(tab).toHaveTextContent('backup.intro');
         expect(within(tab).getByTestId('backup-download-card')).toHaveAttribute('data-state', 'idle');
+    });
+});
+
+// =====================================================================================================================
+// B4 — the «secure» backup: clear or secure, the password of a secure archive (workstream B, lot B4; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract (B4 brief §7, decisions 38 and 39, P12):
+ *   - a radio group: `backup-mode-clear`, checked by default, and `backup-mode-secure`, each with its description
+ *     (`backup-mode-clear-description`, `backup-mode-secure-description`); clear asks for nothing and creates the backup
+ *     of before, with no password;
+ *   - secure: `backup-password` and `backup-password-confirm` (type password), and the strength meter with the rules of
+ *     `GET /backup/instance/options` — the meter's `password-rule-<key>` rows, in the options' order (this file's server
+ *     answers them in an order of its own, mocked above); `backup-password-mismatch` when both fields are filled and
+ *     differ; `backup-create` disabled while the password is empty, short of the rules, or not repeated alike;
+ *   - create sends `startInstanceBackup(password)`, and the two fields are emptied once the job has started;
+ *   - the phase `encrypting` has its label (`backup.download.phase.encrypting`); a start refused as `password_too_weak`
+ *     has its sentence (`backup.download.errors.password_too_weak`); `backup.created` says `encrypted`.
+ *
+ * The meter (PasswordStrength) is the real one; the instance's rules it would read without the options are the app's
+ * defaults here (eight characters): a card that gave it no rules would accept eleven characters. With B4 every job
+ * carries `encrypted`: the fixture `job()` says `false`, and the details of `backup.created` expected above say it too.
+ *
+ * Red today: the card has no mode, no password field, no label for `encrypting` and no sentence for
+ * `password_too_weak`, and `backup.created` does not say `encrypted`.
+ */
+
+/** A password that meets the archive's rules: twenty-three characters, upper and lower case, a digit, a symbol. */
+const PASSWORD = 'Correct-Horse-Battery-9';
+/** Every class in eleven characters: one short of the archive's twelve, enough for the instance's eight. */
+const ELEVEN = 'Str0ng!pass';
+/** The same and one more digit: twelve. */
+const TWELVE = 'Str0ng!pass1';
+const SECURE_FILE_NAME = 'librefolio-backup-20261016-230000.lfbk';
+/** B4's new phase: the generated client does not know it yet. */
+const ENCRYPTING = 'encrypting' as string as NonNullable<InstanceBackupJob['phase']>;
+
+const modeClear = () => screen.getByTestId('backup-mode-clear');
+const modeSecure = () => screen.getByTestId('backup-mode-secure');
+const passwordField = () => screen.getByTestId('backup-password');
+const confirmField = () => screen.getByTestId('backup-password-confirm');
+const createButton = () => screen.getByTestId('backup-create');
+
+/** Choose the secure mode — a radio: choosing it when it is already chosen keeps it chosen — and let the options land. */
+async function chooseSecure(): Promise<void> {
+    await fireEvent.click(modeSecure());
+    await settle();
+    expect(modeSecure(), 'precondition: the secure mode is chosen').toBeChecked();
+}
+
+/** Type the password, then its repetition. */
+async function typePasswords(password: string, repeated: string = password): Promise<void> {
+    await fireEvent.input(passwordField(), {target: {value: password}});
+    await fireEvent.input(confirmField(), {target: {value: repeated}});
+    await settle();
+}
+
+/** Secure, `PASSWORD` typed twice, create pressed. */
+async function startSecure(): Promise<void> {
+    await chooseSecure();
+    await typePasswords(PASSWORD);
+    expect(createButton(), 'precondition: the password is accepted').toBeEnabled();
+    await clickCreate();
+}
+
+/** Every argument the request that starts a backup was given, `undefined` set aside. */
+const startArguments = (call = 0): unknown[] => (api.start.mock.calls[call] as unknown[]).filter((argument) => argument !== undefined);
+
+describe('B4 — BackupDownloadCard: clear or secure', () => {
+    it('idle: the two modes, one radio group, clear checked by default, each with its description; no password asked', () => {
+        render(BackupDownloadCard);
+
+        expect(modeClear()).toBeChecked();
+        expect(modeSecure()).not.toBeChecked();
+        for (const radio of [modeClear(), modeSecure()]) expect(radio).toHaveAttribute('type', 'radio');
+        expect(modeClear().getAttribute('name'), 'the two modes are one group').toBeTruthy();
+        expect(modeSecure().getAttribute('name'), 'the two modes are one group').toBe(modeClear().getAttribute('name'));
+        expect(screen.getByTestId('backup-mode-clear-description')).toHaveTextContent(exactly('backup.download.mode.clearDescription'));
+        expect(screen.getByTestId('backup-mode-secure-description')).toHaveTextContent(exactly('backup.download.mode.secureDescription'));
+        for (const absent of ['backup-password', 'backup-password-confirm', 'backup-password-mismatch', 'password-strength-meter']) {
+            expect(screen.queryByTestId(absent), `${absent} while clear is chosen`).toBeNull();
+        }
+        expect(createButton()).toBeEnabled();
+    });
+
+    it('clear, the default: create sends no password — the backup of before', async () => {
+        api.start.mockResolvedValueOnce(running());
+        render(BackupDownloadCard);
+        expect(modeClear(), 'precondition: clear is the default').toBeChecked();
+
+        await clickCreate();
+
+        expect(api.start).toHaveBeenCalledTimes(1);
+        expect(startArguments(), 'a clear backup sent a password').toEqual([]);
+        expect(card()).toHaveAttribute('data-state', 'running');
+    });
+
+    it("secure: two password fields, and the meter with the rules of GET /backup/instance/options — their rows, their order, twelve characters and not the instance's eight", async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+
+        expect(modeClear()).not.toBeChecked();
+        expect(passwordField()).toHaveAttribute('type', 'password');
+        expect(confirmField()).toHaveAttribute('type', 'password');
+
+        await typePasswords(ELEVEN, '');
+
+        expect(screen.getByTestId('password-strength-meter')).toBeInTheDocument();
+        expect(
+            screen.getAllByTestId(/^password-rule-/).map((rule) => rule.getAttribute('data-testid')),
+            "the options' rules, in their order",
+        ).toEqual(['password-rule-hasSpecial', 'password-rule-hasNumber', 'password-rule-hasLowercase', 'password-rule-hasUppercase', 'password-rule-minLength']);
+        expect(screen.getByTestId('password-rule-minLength'), "eleven characters: one short of the archive's twelve").toHaveAttribute('data-passed', 'false');
+        for (const key of ['hasSpecial', 'hasNumber', 'hasLowercase', 'hasUppercase']) {
+            expect(screen.getByTestId(`password-rule-${key}`)).toHaveAttribute('data-passed', 'true');
+        }
+
+        await typePasswords(TWELVE, '');
+
+        expect(screen.getByTestId('password-rule-minLength'), 'twelve characters').toHaveAttribute('data-passed', 'true');
+    });
+
+    it('create disabled while the password is empty, short of the rules, or not repeated alike; the mismatch shown only when both fields are filled and differ', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+
+        expect(createButton(), 'nothing typed').toBeDisabled();
+        expect(screen.queryByTestId('backup-password-mismatch')).toBeNull();
+
+        await typePasswords(ELEVEN);
+        expect(createButton(), 'the same eleven characters twice: short of the rules').toBeDisabled();
+        expect(screen.queryByTestId('backup-password-mismatch'), 'the two fields agree').toBeNull();
+
+        await typePasswords(PASSWORD, '');
+        expect(createButton(), 'not repeated yet').toBeDisabled();
+        expect(screen.queryByTestId('backup-password-mismatch'), 'one field empty: nothing to compare yet').toBeNull();
+
+        await typePasswords(PASSWORD, `${PASSWORD}x`);
+        expect(createButton(), 'repeated differently').toBeDisabled();
+        expect(screen.getByTestId('backup-password-mismatch')).toHaveTextContent(exactly('backup.download.password.mismatch'));
+
+        await typePasswords(PASSWORD);
+        expect(screen.queryByTestId('backup-password-mismatch')).toBeNull();
+        expect(createButton(), 'valid, and repeated alike').toBeEnabled();
+        expect(api.start, 'nothing was sent on the way').not.toHaveBeenCalled();
+    });
+
+    it('valid and repeated alike: create sends that password; once the job has started no field holds it, and the next secure backup starts from empty fields', async () => {
+        api.start.mockResolvedValueOnce(running({phase: 'database'}));
+        api.get.mockResolvedValueOnce(done({file_name: SECURE_FILE_NAME, encrypted: true}));
+        render(BackupDownloadCard);
+
+        await startSecure();
+
+        expect(api.start.mock.calls, 'the password typed, sent once').toEqual([[PASSWORD]]);
+        expect(card()).toHaveAttribute('data-state', 'running');
+        expect(
+            [...card().querySelectorAll('input')].filter((input) => input.value.includes(PASSWORD)).map((input) => input.getAttribute('data-testid')),
+            'a field still holds the password once the job has started',
+        ).toEqual([]);
+
+        await elapse(POLL_MS);
+        expect(card(), 'precondition: the archive is ready').toHaveAttribute('data-state', 'done');
+        await chooseSecure();
+
+        expect(passwordField()).toHaveValue('');
+        expect(confirmField()).toHaveValue('');
+        expect(createButton(), 'a new secure backup asks for the password again').toBeDisabled();
+    });
+
+    it('back to clear after typing a password: create sends none — the archive is the clear one', async () => {
+        api.start.mockResolvedValueOnce(running());
+        render(BackupDownloadCard);
+        await chooseSecure();
+        await typePasswords(PASSWORD);
+        expect(createButton(), 'precondition: the password would be accepted').toBeEnabled();
+
+        await fireEvent.click(modeClear());
+        await settle();
+
+        expect(modeClear()).toBeChecked();
+        expect(screen.queryByTestId('backup-password'), 'clear asks for no password').toBeNull();
+        expect(createButton()).toBeEnabled();
+
+        await clickCreate();
+
+        expect(api.start).toHaveBeenCalledTimes(1);
+        expect(startArguments(), 'a clear backup sent the password typed before').toEqual([]);
+    });
+
+    it('the phase encrypting: data-phase encrypting and its own label, with the share encrypted so far', async () => {
+        api.start.mockResolvedValueOnce(running({phase: ENCRYPTING, done_bytes: 300, total_bytes: 1200}));
+        render(BackupDownloadCard);
+
+        await startSecure();
+
+        const progress = screen.getByTestId('backup-progress');
+        expect(progress).toHaveAttribute('data-phase', 'encrypting');
+        expect(progress).toHaveTextContent('backup.download.phase.encrypting');
+        expect(progressBar()).toHaveAttribute('aria-valuenow', '25');
+    });
+
+    it('a start refused as password_too_weak (the rules of the server): backup-error with its code and its own sentence, backup.failed with an error toast', async () => {
+        api.start.mockRejectedValueOnce({
+            isAxiosError: true,
+            message: 'Request failed with status code 400',
+            response: {status: 400, data: {detail: {code: 'password_too_weak', message: 'refused: password_too_weak', rules: ['min_length']}}},
+        });
+        render(BackupDownloadCard);
+
+        await startSecure();
+
+        expect(card()).toHaveAttribute('data-state', 'failed');
+        expect(card()).toHaveAttribute('data-error-code', 'password_too_weak');
+        const error = screen.getByTestId('backup-error');
+        expect(error).toHaveAttribute('data-error-code', 'password_too_weak');
+        expect(error).toHaveTextContent(exactly('backup.download.errors.password_too_weak'));
+        expect(events()).toEqual([{name: 'backup.failed', detail: {code: 'password_too_weak', what: 'start', job_id: null}, toast: {variant: 'error', message: 'backup.download.errors.password_too_weak'}}]);
+    });
+
+    it.each<[string, boolean, () => Promise<void>]>([
+        ['clear', false, clickCreate],
+        ['secure', true, startSecure],
+    ])('a %s archive ready: backup.created says encrypted: %s', async (_mode, encrypted, start) => {
+        const fileName = encrypted ? SECURE_FILE_NAME : FILE_NAME;
+        api.start.mockResolvedValueOnce(running());
+        api.get.mockResolvedValueOnce(done({file_name: fileName, encrypted}));
+        render(BackupDownloadCard);
+
+        await start();
+        await elapse(POLL_MS);
+
+        expect(card()).toHaveAttribute('data-state', 'done');
+        expect(screen.getByTestId('backup-download-link')).toHaveAttribute('download', fileName);
+        expect(events()).toEqual([{name: 'backup.created', detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings: [], encrypted}}]);
+    });
+});
+
+// =====================================================================================================================
+// B4b — the password of a secure backup is a new password (B-25; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract (B4b brief §3, frontend): both password fields of a secure backup say `autocomplete="new-password"`, so
+ * that a password manager offers to make a new password there and never fills in the account's own. `off` does not
+ * say so: password managers commonly ignore it on a password field. Red today: both fields say `off`.
+ */
+
+describe('B4b — BackupDownloadCard: the password fields of a secure backup are new-password fields (B-25)', () => {
+    it('backup-password and backup-password-confirm say autocomplete="new-password": a password manager fills in no account password there', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+        const fields = [passwordField(), confirmField()];
+
+        expect(
+            fields.map((field) => field.getAttribute('type')),
+            'precondition: the two password fields of a secure backup',
+        ).toEqual(['password', 'password']);
+        // One object, so that a red shows both fields at once.
+        expect(Object.fromEntries(fields.map((field) => [field.getAttribute('data-testid'), field.getAttribute('autocomplete')])), "new passwords, never the account's").toEqual({'backup-password': 'new-password', 'backup-password-confirm': 'new-password'});
     });
 });

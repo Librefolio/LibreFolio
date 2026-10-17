@@ -242,6 +242,7 @@ const CODE_LISTS: Array<[string, string[]]> = [
             'no_space',
             'stage_failed',
             'database_damaged',
+            'database_foreign_objects',
             'manifest_mismatch',
             'head_unknown',
             'revision_missing',
@@ -289,5 +290,84 @@ describe('every code §5 lists has its message', () => {
             const missing = english.filter((key) => !keys.has(key));
             expect(missing, `${language}: the messages of ${code} that en has`).toEqual([]);
         }
+    });
+});
+
+// =====================================================================================================================
+// B4 — the keys of the «secure» backup (B4 brief §7; written red first)
+// =====================================================================================================================
+
+/*
+ * Every key B4 adds is a message of the four catalogues (`frontend/src/lib/i18n/backup/{en,it,fr,es}.json`, built into
+ * the catalogues read here), naming the same placeholders in each. The names are this file's choice, made beside the
+ * keys of today — `backup.download.phase.<phase>` and `backup.restore.phase.<phase>` as the phase maps of the two cards
+ * build them, `backup.download.errors.<code>` and `backup.restore.errors.<code>` as their error maps do — and they are
+ * the names the component tests of B4 read (BackupDownloadCard.test.ts, RestoreCard.test.ts,
+ * RestoreReportModal.test.ts). The two lines of the report name one placeholder, `{count}`, the number they show.
+ *
+ * Red today: none of these keys exists. Two guards, green today: the download card and restoreText.ts — which holds
+ * the restore's error keys, outside the sources scanned above — name no key missing from the four catalogues, so a
+ * key B4 adds there and this list forgot is caught too.
+ */
+
+const B4_KEYS: Array<[string, string[]]> = [
+    ['the two modes of the download card, and what each one means (decision 39)', ['backup.download.mode.clear', 'backup.download.mode.clearDescription', 'backup.download.mode.secure', 'backup.download.mode.secureDescription']],
+    ['the password of a secure archive, asked twice', ['backup.download.password.label', 'backup.download.password.confirmLabel', 'backup.download.password.mismatch']],
+    ['the phase that encrypts the archive', ['backup.download.phase.encrypting']],
+    ['a password the server refuses for an archive', ['backup.download.errors.password_too_weak']],
+    ['the password of an envelope to restore', ['backup.restore.password.label', 'backup.restore.password.submit', 'backup.restore.password.cancel']],
+    ['the phase that decrypts the envelope on the server', ['backup.restore.phase.decrypting']],
+    ['the refusals of an envelope', ['backup.restore.errors.wrong_password', 'backup.restore.errors.password_required', 'backup.restore.errors.envelope_damaged', 'backup.restore.errors.envelope_unsupported']],
+    ['the plugin secrets of the checked copy', ['backup.restore.report.secretsRekeyed', 'backup.restore.report.secretsUnreadable']],
+];
+
+/** The two lines of the report and the one placeholder each names: the count it shows. */
+const B4_COUNTED = ['backup.restore.report.secretsRekeyed', 'backup.restore.report.secretsUnreadable'];
+
+/** The sources B4 adds keys to that the scan above does not read, and the names of events they hold: dotted like keys, and not keys. */
+const B4_SOURCES = ['BackupDownloadCard.svelte', 'restoreText.ts'];
+const DOWNLOAD_EVENT_NAMES = new Set(['backup.created', 'backup.failed', 'backup.delete.failed', 'backup.deleted', 'backup.download.started']);
+
+describe('B4 — the keys of the secure backup', () => {
+    it.each(B4_KEYS.flatMap(([what, keys]) => keys.map((key): [string, string] => [what, key])))('%s: %s is a message of the four catalogues, with the same placeholders in each', (_what, key) => {
+        expectMessage(key);
+    });
+
+    it.each(B4_COUNTED)('%s names one placeholder, {count}, in the four catalogues', (key) => {
+        expectMessage(key);
+
+        expect(placeholdersOf(messageOf(en, key) as string)).toEqual(['count']);
+    });
+
+    it.each(B4_SOURCES)('%s: every key it names is a message of the four catalogues, with the same placeholders in each (green today: the guard)', (file) => {
+        const keys = namedKeys(source(file)).keys.filter((key) => !DOWNLOAD_EVENT_NAMES.has(key));
+
+        for (const key of keys) {
+            if (isGroup(messageOf(en, key))) expectGroup(key);
+            else expectMessage(key);
+        }
+    });
+
+    it.each<[string, string]>([
+        ['BackupDownloadCard.svelte', 'backup.download.phase.preparing'],
+        ['restoreText.ts', 'backup.restore.errors.unexpected'],
+    ])('positive control: the scan finds in %s a key of today, %s', (file, key) => {
+        expect(namedKeys(source(file)).keys).toContain(key);
+    });
+});
+
+// =====================================================================================================================
+// B-28 — a database holding objects LibreFolio never creates is refused (written red first)
+// =====================================================================================================================
+
+/*
+ * The check refuses an archive whose database holds triggers, views or other schema objects LibreFolio never creates:
+ * `database_foreign_objects` (B-28 brief §1, §3), worded by restoreText.ts with `backup.restore.errors.<code>`, as every
+ * error of the check. The lists above are written out, not derived from the generated `RestoreErrorCode`: the key is
+ * required here by name. Red today: it does not exist.
+ */
+describe('B-28 — the refusal of a database holding objects LibreFolio never creates', () => {
+    it('backup.restore.errors.database_foreign_objects is a message of the four catalogues, with the same placeholders in each', () => {
+        expectMessage('backup.restore.errors.database_foreign_objects');
     });
 });

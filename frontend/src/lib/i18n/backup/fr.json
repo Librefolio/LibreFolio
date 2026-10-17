@@ -4,8 +4,20 @@
     "intro": "Les données de ce LibreFolio dans une seule archive, à conserver en lieu sûr ou à transférer vers une autre installation.",
     "download": {
       "title": "Sauvegarder l'instance",
-      "description": "Une archive avec la base de données, les fichiers téléversés, les relevés des courtiers et les scénarios de risque. Les journaux et la clé de l'instance ne sont pas inclus.",
+      "description": "Une archive avec la base de données, les fichiers téléversés, les relevés des courtiers et les scénarios de risque. Les journaux ne sont jamais inclus ; la clé de l'instance seulement dans une sauvegarde sécurisée.",
       "privacy": "L'archive contient les données de tous les utilisateurs et n'est pas chiffrée : conservez-la en lieu sûr.",
+      "mode": {
+        "legend": "Type de sauvegarde",
+        "clear": "En clair",
+        "clearDescription": "Un simple .zip : qui possède le fichier voit toutes les données, et sur une autre instance les clés des fournisseurs de données doivent être saisies à nouveau.",
+        "secure": "Sécurisée",
+        "secureDescription": "Un .lfbk chiffré avec un mot de passe que vous choisissez : seul ce mot de passe l'ouvre, et un mot de passe perdu ne peut pas être récupéré. Il emporte aussi les clés des fournisseurs de données."
+      },
+      "password": {
+        "label": "Mot de passe de la sauvegarde",
+        "confirmLabel": "Le même mot de passe, à nouveau",
+        "mismatch": "Les deux mots de passe sont différents."
+      },
       "create": "Créer une sauvegarde",
       "createAgain": "Créer une nouvelle sauvegarde",
       "creating": "Création de la sauvegarde…",
@@ -14,11 +26,13 @@
         "preparing": "Préparation",
         "database": "Copie de la base de données",
         "files": "Ajout des fichiers",
-        "finalizing": "Finalisation"
+        "finalizing": "Finalisation",
+        "encrypting": "Chiffrement avec votre mot de passe"
       },
       "progress": "{done} sur {total}",
       "ready": "Sauvegarde prête",
       "readyDetails": "{name}, {size}, créée le {date}",
+      "readyEncrypted": "Chiffrée avec votre mot de passe : conservez-le bien, LibreFolio ne peut pas le récupérer.",
       "download": "Télécharger",
       "delete": "Supprimer du serveur",
       "deleting": "Suppression de la sauvegarde…",
@@ -29,7 +43,8 @@
       "warnings": {
         "database_integrity": "La base de données a échoué au contrôle d'intégrité : elle a été archivée telle quelle.",
         "foreign_key_violations": "La base de données contient des références invalides entre tables : elle a été archivée telle quelle.",
-        "files_skipped": "Certains fichiers ont été exclus : liens, fichiers spéciaux, fichiers ou dossiers illisibles, ou fichiers supprimés pendant la sauvegarde."
+        "files_skipped": "Certains fichiers ont été exclus : liens, fichiers spéciaux, fichiers ou dossiers illisibles, ou fichiers supprimés pendant la sauvegarde.",
+        "instance_key_unusable": "La clé de l'instance est inutilisable : la sauvegarde a été faite sans elle, il faudra donc saisir à nouveau les clés des fournisseurs de données après une restauration."
       },
       "errors": {
         "backup_busy": "Une autre sauvegarde est en cours : réessayez quand elle sera terminée.",
@@ -39,7 +54,8 @@
         "backup_interrupted": "La sauvegarde a été interrompue, par exemple par un redémarrage : créez-en une nouvelle.",
         "backup_job_not_found": "Cette sauvegarde n'est plus sur le serveur : créez-en une nouvelle.",
         "network": "Le serveur ne répond pas.",
-        "unexpected": "Le serveur a répondu par une erreur : rechargez la page et réessayez."
+        "unexpected": "Le serveur a répondu par une erreur : rechargez la page et réessayez.",
+        "password_too_weak": "Le mot de passe ne respecte pas les règles du mot de passe d'une sauvegarde."
       },
       "toast": {
         "warnings": "Sauvegarde prête, avec des avertissements : vérifiez-les avant de vous y fier."
@@ -57,6 +73,7 @@
       "progress": "{done} sur {total}",
       "cancelUpload": "Arrêter l'envoi",
       "phase": {
+        "decrypting": "Déchiffrement de la sauvegarde",
         "checking": "Vérification de l'archive",
         "unpacking": "Extraction sur une copie",
         "upgrading": "Mise à jour de la base de données de la copie",
@@ -104,8 +121,10 @@
         "fixes": "Corrections appliquées à la copie : {fixes}.",
         "contents": "{files, plural, one {# fichier} other {# fichiers}} ({filesSize}) ; base de données {databaseSize}.",
         "tablesChanged": "Tables dont la mise à jour a changé les lignes :",
-        "keyIncluded": "La clé de l'instance est incluse.",
+        "keyIncluded": "La sauvegarde emporte la clé de l'instance d'où elle vient : ce LibreFolio garde la sienne.",
         "keyNotIncluded": "La clé de l'instance n'est pas incluse : ce LibreFolio garde la sienne.",
+        "secretsRekeyed": "{count, plural, one {# clé enregistrée d'un fournisseur de données est rechiffrée avec la clé de cette instance.} many {# clés enregistrées de fournisseurs de données sont rechiffrées avec la clé de cette instance.} other {# clés enregistrées de fournisseurs de données sont rechiffrées avec la clé de cette instance.}}",
+        "secretsUnreadable": "{count, plural, one {# clé enregistrée d'un fournisseur de données ne peut pas être lue avec la clé de cette instance : saisissez-la à nouveau après la restauration.} many {# clés enregistrées de fournisseurs de données ne peuvent pas être lues avec la clé de cette instance : saisissez-les à nouveau après la restauration.} other {# clés enregistrées de fournisseurs de données ne peuvent pas être lues avec la clé de cette instance : saisissez-les à nouveau après la restauration.}}",
         "totals": {
           "same": "Totaux du registre : identiques à ceux du moment de la sauvegarde.",
           "changed": "Les totaux du registre diffèrent de ceux de la sauvegarde sur {count, plural, one {# ligne} other {# lignes}} :",
@@ -177,6 +196,7 @@
         "no_space": "Pas assez d'espace libre sur le serveur pour vérifier l'archive.",
         "stage_failed": "La copie n'a pas pu être écrite : le journal du serveur donne la cause.",
         "database_damaged": "La base de données de la sauvegarde est endommagée : elle ne peut pas être restaurée.",
+        "database_foreign_objects": "La base de données de la sauvegarde contient des déclencheurs, des vues ou d'autres objets que LibreFolio ne crée jamais : elle ne vient pas de LibreFolio, ou elle a été modifiée, et elle ne peut pas être restaurée.",
         "manifest_mismatch": "La base de données de la sauvegarde n'est pas celle que sa description indique.",
         "head_unknown": "Ce LibreFolio ne peut pas lire ses propres migrations : le journal du serveur donne la cause.",
         "revision_missing": "La base de données de la sauvegarde n'a pas de version.",
@@ -191,7 +211,17 @@
         "restore_not_pending": "Aucune restauration n'attend le prochain démarrage.",
         "restore_pending": "Une restauration attend d'appliquer cette copie : annulez-la d'abord.",
         "network": "Le serveur ne répond pas : vérifiez la connexion et réessayez.",
-        "unexpected": "Le serveur a répondu par une erreur : le journal du serveur donne la cause."
+        "unexpected": "Le serveur a répondu par une erreur : le journal du serveur donne la cause.",
+        "wrong_password": "Mot de passe erroné, ou le fichier a été modifié : saisissez à nouveau le mot de passe.",
+        "password_required": "C'est une sauvegarde sécurisée : saisissez son mot de passe.",
+        "envelope_damaged": "La sauvegarde sécurisée est endommagée ou a été modifiée : elle ne peut pas être ouverte.",
+        "envelope_unsupported": "La sauvegarde sécurisée provient d'un LibreFolio plus récent : mettez d'abord LibreFolio à jour."
+      },
+      "password": {
+        "intro": "Une sauvegarde sécurisée : saisissez le mot de passe avec lequel elle a été faite.",
+        "label": "Mot de passe de la sauvegarde",
+        "submit": "Vérifier la sauvegarde",
+        "cancel": "Annuler"
       }
     }
   }

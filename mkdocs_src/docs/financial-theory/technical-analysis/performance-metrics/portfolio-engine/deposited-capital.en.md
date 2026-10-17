@@ -226,7 +226,7 @@ $$
 
     - $\mathrm{CapitalBaseline}$ = historical sum of cash and in-kind capital flows. $\sum K_b$ = how much current cash is external capital. They diverge after BUY/SELL.
     - A BUY on broker $b_1$ only consumes $R_{b_1}$, never $R_{b_2}$.
-    - Cash transfers between brokers move $R$ and $K$ from source to destination without touching $W$.
+    - Cash transfers between brokers and currency conversions move $R$ and $K$ from source to destination without touching $W$: the departure leaves returns first, and the arrival brings back what it took from capital and returns; any gap between the two legs — another currency, another day's rate, another ownership share — is a result.
     - An exchange result on cash a broker holds in another currency goes to $R_b$; a loss larger than $R_b$ comes out of $K_b$, as a FEE does. $\mathrm{CapitalBaseline}$ does not move ([Portfolio Engine — §6](index.md#exchange-result-on-foreign-cash)).
 
 🔗 Full per-broker update rules: **[Portfolio Engine — §6 Three-Pool Model](index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)**

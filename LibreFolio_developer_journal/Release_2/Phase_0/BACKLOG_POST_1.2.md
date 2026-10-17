@@ -75,7 +75,7 @@
 | [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
 | [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
 | [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
-| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: il 93,9 % delle classi sui ruoli (m1 697 nel target), il resto aspetta la designer |
+| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: il 93,9 % delle classi sui ruoli (m1 697 nel target), il resto aspetta la designer; 17/10 notte: m1 674, token di componente letterali 583 → 6, i neutri dei grafici sui ruoli (B4), `drawnColors` sui ruoli |
 | [Gallery deterministica](../Phase_1/10_colorSystem/G-galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10; ora in `10_colorSystem/G-galleryDeterminism` (era la 56) |
 | [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
@@ -706,7 +706,7 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 - **T-U6 · Finestre di detenzione dal FIFO** — medio; T, 11/10. Comprende L1 e L2 di I e T-B4. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezioni «2.5» e «7.1».
 - **T-U7 · Pesi e concentrazione** — medio; T, 11/10. Comprende W1 (l'allocazione senza il valore in viaggio). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.8» e «7.1».
-- **T-U8 · Il frontend solo di presentazione: Δ, KPI, lotti** — medio-alto; T, 11/10. Comprende il valore d'apertura
+- **T-U8 · Il frontend solo di presentazione: Δ, KPI, lotti** — medio-alto; T, 11/10. **Stato al 17/10 (coordinatore)**: con Y12a, MF-P e il lotto R17/W8/P4 di Y (dev `1565b6bbb`) restano solo V11 e P5, legati a MF-E e a CP-7b di J; la dichiarazione delle misure è coperta per `MeasureSignal.ts` da CP-14b. Comprende il valore d'apertura
   che il modale della custodia ricalcola come quantità × prezzo d'apertura (`LotCustodyModal.svelte`) invece di
   leggere `original_cost`, trovato in B3b, e la dichiarazione nel codice delle misure interattive che la regola
   ammette (`MeasureSignal.ts`, `CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`; docs-writer di T-1). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «7.1».
@@ -716,7 +716,7 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   cambia il contratto, quindi la v2. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «7.1» e «C-55 — analisi».
 - **T-U10 · Interessi e convenzioni di calendario (`interest.py`)** — basso-medio; T, 11/10, decisione D-8. Dettagli:
   [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezioni «2.10» e «7.1».
-- **T-D9 · MeasureSignal: la soglia dei 30 giorni sull'annualizzato** — minimo; T, 11/10, decisione D-9. Dettagli:
+- ✅ **T-D9 · MeasureSignal: la soglia dei 30 giorni sull'annualizzato** — **chiusa il 17/10 da CP-14b di J** (dev `4111239a7`): `MIN_ANNUALIZATION_DAYS = 30` in `MeasureSignal.ts`, `—` sotto i 30 giorni e su un inizio a 0 (N65). Era: minimo; T, 11/10, decisione D-9. Dettagli:
   [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «2.1», riga R18.
 - **P-5 (di P) · Migrare `roi_utils` e `valuation_utils` in `financial_math`** — basso, refactor; decisione D1 del
   developer, registrata da P (09/10). Coperta da T-1 e BU1 se entrano nella 1.2. Dettagli:
@@ -2526,8 +2526,14 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     2. la conferma con la parola da digitare (`restore-confirm-word`, `restore-confirm-input`, `restore-confirm`);
     3. l'overlay del riavvio (`restart-overlay`, `restart-detail`);
     4. l'esito. Il fallimento ha la sua schermata: l'overlay con `data-outcome="rolled_back"` e il motivo (es.
-       `first_start_failed`), poi l'avviso `restore-last-result` sulla card. Il successo (`committed`) no: la pagina
-       passa all'accesso senza dire niente (FBKP-107). Cosa fotografare per il successo va chiarito con la 1.3.
+       `first_start_failed`), poi l'avviso `restore-last-result` sulla card. Il successo (`committed`) no, per scelta
+       (P8): la pagina passa all'accesso e la card non dice niente (FBKP-107; confermato da B il 17/10).
+  - **Il successo resta muto, per scelta: decisione P8 del developer** (16/10), «successo senza messaggio, se ha
+    funzionato lo vedi».
+    - Nella notte del 17/10 la 1.3 aveva deciso B-27, un avviso «applied on …» sulla card, con la N67. Li ha ritirati
+      alle 04:53 (coordinatore), perché contraddicevano P8.
+    - Per G-20 si fotografano solo l'overlay di fallimento (`rolled_back`) e l'avviso `restore-last-result`. Per il
+      successo nessuno scatto.
   - B ha già simulato il flusso in `frontend/e2e/settings/backup.spec.ts` (`0cd910a7e`). La fixture `restoreTest`,
     con la sua `lane`, risponde sempre nella pagina al riavvio (`POST /api/v1/backup/restore/restart`). Quando il caso
     lo chiede, risponde anche a upload, controllo, esito, stato e `GET /api/v1/system/ready`.
@@ -2538,14 +2544,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Proposta (test-author, perimetro G): gli scatti nel test di Settings, gli aiuti in
     `frontend/e2e/fixtures/galleryBackup.ts`, che già finge la card del backup. Solo intercept finti, come in
     FBKP-102…105: nessun archivio caricato, nessun ripristino in attesa sul server della corsia, nessun riavvio.
-  - Da decidere anche l'inquadratura mobile di `settings/backup-ready`. Con B la card del ripristino sta sotto quella
-    del backup, e su mobile resta tutta sotto il bordo dello schermo (`dh` en 1167 su 740): non si vede. Su desktop lo
-    schermo si allunga e mostra le due card intere.
+  - L'inquadratura mobile di `settings/backup-ready`. Con B la card del ripristino sta sotto quella del backup, e su
+    mobile resta tutta sotto il bordo dello schermo (`dh` en 1167 su 740): non si vede. Su desktop lo schermo si
+    allunga e mostra le due card intere.
+    - Decisione della 1.3 (coordinatore, 16/10 sera): uno scatto mobile a parte, scorso fino alla card del ripristino.
+    - Con B4 dei backup (`df1f0d52c`, 17/10) la card del backup si allunga ancora: c'è la scelta «Kind of backup».
   - Poi: un doppio lancio a/b filtrato, come per `settings/plugins` ed `email`, e le righe di
     `mkdocs_src/docs/gallery/*.en.md` scritte da docs-writer.
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Dopo G-18», `settings/backup-ready` per la 1.3.
+- **G-21 · Uno scatto delle sezioni premium della ricerca degli asset** — basso; 1.3 tramite il coordinatore, 16/10
+  notte. Non è per subito.
+  - La definizione di fatto del piano di X chiede uno scatto della ricerca con le sezioni premium (X-R32).
+  - Serve un provider premium instradato, come fa l'E2E `asset-modal.spec.ts` («Asset search — premium first…»).
+  - Si programma con G; lo scatto lo scrive test-author. Nel frattempo gli scatti degli import mostrano già la riga
+    «Can't find it? Let us know».
+
+  Dettagli: X-R32, nella sezione «X · Plugin, asset e ricerca (fase 01)» di questo file.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -3040,7 +3056,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > **Stato al 16/10, 18:30:** area migrata, tutto nel target (`c179a5144`): m1 da 1.946 a 170, m2 da 6 a 0. Restano
 > solo classi annotate: AF-1 (aspetta la designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T); da
 > chiudere AF-8 (conferma) e AF-10 (ruolo di T). La sera del 16/10 il lotto dei component tokens di file, media e menu
-> contestuale (piano AF, passo 16) lascia AF-11; il suo slot pesante segnala AF-12 e AF-13.
+> contestuale (piano AF, passo 16) lascia AF-11; il suo slot pesante segnala AF-12 e AF-13. Nella notte del 17/10
+> `lib/theme/drawnColors.ts` passa ai ruoli (piano AF, passo 17) e lascia AF-14.
 > Il piano: `../Phase_1/10_colorSystem/AF-assetFxColors/`. Gli ID di questa sezione sono `AF-n`.
 
 - **AF-1 · Accenti degli strumenti della barra del grafico** — basso; AF, 16/10. Restano legacy, perché sono tinte che
@@ -3109,6 +3126,12 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   compresi: un `.DS_Store` toccato da macOS ha fatto rifare la build a metà di uno slot (circa 7 minuti col carico a
   160). Va escluso, insieme agli altri file nascosti; tocca al proprietario del runner. Dettagli: piano AF, passo 16.4.
   Si è ripetuto nello slot di recupero (23:52, una build in più all'avvio di `asset-list`; piano AF, passo 16.6).
+- **AF-14 · Il foglio di calcolo in chiaro resta sul tema della libreria** — minimo; AF, 17/10. Con `drawnColors.ts` sui
+  ruoli, l'anteprima dei fogli (`FilePreviewModal`, cheetah-grid) disegna il tema scuro tutto dai ruoli, mentre in chiaro
+  tiene `MATERIAL_DESIGN` della libreria (fondo, testo, selezione blu) con i soli due bordi sui ruoli: una scelta
+  provvisoria, nel punto 35 della raccolta per la designer, insieme alla riga indicata su `mark` e all'iniziale degli
+  avatar con `readableText`. Un tema unico dai ruoli per i due temi è la sua decisione (riga 10 del rapporto di L).
+  Dettagli: piano AF, passo 17.
 
 ---
 
@@ -3555,6 +3578,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura proposta: la stessa regola di `_hidden_in_build()` nei due percorsi, con un test ciascuno.
 
   Dettagli: piano H, §14, «Residuo di H-24 e H-28».
+  - Cura fatta il 17/10 (lotto «H-29 e H-30», piano H §14).
+    - `ImmutableStaticFiles.get_response()` dà a un nome nascosto il 404 di un file mancante;
+    - `mkdocs_static()` gli dà il 404 della documentazione, attraverso `_hidden_below()`, che usa anche il catch-all.
 - **H-30 · `python -m scripts.test_runner --log-file` non fotografa il DB se il corpo alza un'eccezione** — basso,
   runner; H (test-author di H-26), 17/10.
   - Nel ramo `--log-file` di `main()` (`scripts/test_runner/_cli.py`), `_snapshot_log_dir_db()` segue
@@ -3563,6 +3589,62 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura proposta: lo stesso `try/finally`, con un test.
 
   Dettagli: piano H, §14, «Residuo di H-24 e H-28».
+  - Cura fatta il 17/10 (lotto «H-29 e H-30»): il `try/finally` dentro il `with` di `tee_output`, come in
+    `_dispatch_test_command`.
+- **H-31 · `blocked` nel pubblico `/system/instance`** — basso, facoltativo; E (E-11) e coordinatore, 17/10.
+  - Le pagine anonime dei link (A7b) deducono il blocco dal 401 di una rotta pubblica fuori lista. Un booleano
+    `blocked` in `GET /system/instance`, che è permesso a istanza bloccata, lo direbbe senza deduzioni e senza
+    dettagli: la data di cancellazione resta dietro login in `/system/block`.
+  - Non serve per E-11: E lo risolve nei suoi file, con il 401 `INVALID_CREDENTIALS` della sola `resend`.
+  - Scelto (a) invece di (b), un codice nel 401 anonimo del blocco: con (b) una rotta protetta non risponderebbe più
+    allo stesso modo con o senza blocco.
+
+  Dettagli: piano H, §14, lotto «H-29 e H-30».
+- **H-32 · Un `float` nel corpo di una richiesta accetta `1E+400`** — basso, API; A (A-35), via coordinatore, 17/10.
+  - Pydantic accetta `inf` e `nan` di default (`allow_inf_nan=True`): la richiesta riceve 200. Se una rotta
+    restituisce il valore così com'è, il renderer di Starlette (`allow_nan=False`) fallisce con un 500.
+  - Direzione: un inventario dei campi `float` degli schemi dei corpi; poi forse `allow_inf_nan=False` nel modello
+    base, o `Decimal` dove sono soldi.
+
+  Dettagli: piano H, §14, lotto «H-29 e H-30».
+  - Cura fatta il 17/10 (lotto «H-32», piano H §14).
+    - Inventario sull'app vera: 6 `float` raggiungibili da una richiesta. 5 erano già finiti (i segnali,
+      `FiniteFloat`); il sesto, `PluginSettingPlainValue` di X, ora ha `AllowInfNan(False)`.
+    - Niente nella base `StrictModel`, che regge anche le risposte e i modelli interni.
+    - Guardia `services request-float-inputs`: percorre tutte le rotte con barriere.
+    - Il 500 di A vale solo per le rotte senza `response_model`: con FastAPI 0.141 quelle con `response_model`
+      rispondono `null`.
+    - Trovato strada facendo: con il gestore standard dei 422, un valore non finito su un campo già finito dà un 500,
+      perché l'errore ripete l'`input`. Lo cura il gestore globale di A7b-2, che toglie l'`input`.
+- **H-33 · Senza un gestore di `ResponseValidationError`, il log del server contiene la risposta** — basso,
+  sicurezza (log); E (R13-SEC4), via coordinatore, 17/10.
+  - Quando una risposta non passa il suo `response_model`, FastAPI alza `ResponseValidationError`. Nessuno la gestisce,
+    quindi il traceback che uvicorn scrive nel log porta l'`input`: la risposta stessa, con i dati che conteneva.
+  - Cura proposta: un gestore, accanto a quello globale dei 422 di A (A-35, lotto A7b-2), che registra la rotta e gli
+    errori senza il valore e risponde 500.
+
+  Dettagli: piano H, §14, lotto «H-29 e H-30».
+  - Cura fatta il 17/10 (lotto «H-33», piano H §14).
+    - `backend/app/api/response_validation.py`, installato da `main.py` subito dopo il gestore dei 422 di A.
+    - Un solo evento di log: metodo, percorso modello completo (`exc.endpoint_path`), endpoint, e per ogni errore
+      `type` e `loc`. Mai l'`input`, il `msg` o il traceback.
+    - La risposta è lo stesso 500 in testo semplice.
+    - Resto latente: un endpoint generatore tipizzato (streaming di FastAPI) fallirebbe la convalida a risposta già
+      iniziata, e Starlette scriverebbe ancora `str(exc)` nel traceback. Oggi LibreFolio non ne ha.
+- **H-34 · Il JSON libero di una richiesta accetta `Infinity` e `NaN` al suo interno** — basso, API; H (residuo di
+  H-32, dal test-author e dal docs-writer), 17/10.
+  - La regola di H-32 riguarda i campi `float`. I campi `Any` o `JsonValue` raggiungibili da una richiesta accettano
+    numeri non finiti al loro interno:
+    - `FAProviderAssignmentItem.provider_params` e `FAProviderProbeRequest.provider_params` (`dict[str, Any]`, X:
+      `POST /assets/provider` e `/assets/provider/probe`);
+    - `RiskAnalyticRequest.parameters` (`JsonValue`, J: `POST /risk/query`), senza validatore.
+    - `ToolComputeItem.parameters` sta in un modello con `allow_inf_nan=False`: da verificare che valga anche dentro
+      `JsonValue`.
+    - `SignalRequest.params` è già protetto (`ensure_json_safe`).
+  - Cura proposta, a ciascun proprietario: un validatore come `ensure_json_safe` sui campi liberi; la guardia di H-32
+    potrebbe poi elencarli.
+
+  Dettagli: piano H, §14, lotto «H-32».
 
 ## A · Account e accessi (fase 01)
 
@@ -3863,6 +3945,59 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   Oggi l'admin iniziale in attesa riceve un link nuovo solo da `dev.py user setup-link` (o dal pannello di chi ospita):
   la scheda Utenti mostra il suggerimento, nessun pulsante. Dettagli: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b — Analisi e contratto».
+- **A-31 · Il ripristino revoca il link di setup che l'avvio ha appena riarmato** — basso, non è un difetto della 1.3;
+  da B tramite il coordinatore (16/10); A e B insieme.
+  - Il caso: un archivio con l'admin iniziale ancora in attesa **e** un altro admin attivo, ripristinato su
+    un'istanza con `LIBREFOLIO_ADMIN_EMAIL` e un token mai visto. Con l'ordine d'avvio della decisione N57
+    (`global-settings` → `admin-bootstrap` → `restore-commit` → `plugin-secrets-check`) il bootstrap riarma il link di
+    setup e il commit del ripristino, che revoca ogni link vivo di qualunque scopo, lo revoca subito: serve
+    `./dev.py user setup-link`, e il log dell'avvio successivo lo dice.
+  - Cura possibile (B): nel commit, risparmiare i link emessi dall'avvio in corso.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Dopo A7b — A-31».
+- ✅ **A-32 · Un admin iniziale disattivato si riattiva con il suo vecchio link di setup** — medio (sicurezza, confidenza
+  5/10); chiusa il 17/10 in A7b-2 (commit del coordinatore); dalla revisione di sicurezza di E («R13-SEC»), tramite il
+  coordinatore (16/10).
+  - Cura (N60): `token_service.retire_tokens` (revocato e consumato insieme) a ogni attivazione e a ogni password data,
+    e nel rifiuto di `complete_admin_setup`; per ogni account con un link di setup.
+  - `complete_admin_setup` rifiuta solo un account attivo; le altre attivazioni (PATCH dell'admin, `user activate`) e
+    gli altri modi di dare una password (`user reset`, link di reset, cambio password) non toccano i link
+    `ADMIN_SETUP`: attivato per altra via e poi disattivato entro le 72 h, l'account torna «in attesa» e chi ha il link
+    (anche dal log) lo riattiva con una password sua.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- ✅ **A-33 · Cambiare l'indirizzo dell'admin in attesa non revoca il link già mandato al vecchio** — basso (sicurezza,
+  confidenza 5/10); chiusa il 17/10 in A7b-2 (commit del coordinatore); dalla revisione di E («R13-SEC»), tramite il
+  coordinatore (16/10). Cura: un cambio vero dell'indirizzo revoca i link di setup (`_follow_variables`,
+  `update_profile`); l'account resta in attesa.
+  - `_follow_variables` cambia l'email dell'account in attesa quando cambia `LIBREFOLIO_ADMIN_EMAIL`, ma il link di
+    setup già consegnato al vecchio indirizzo resta buono; lo stesso per `user set-email` sull'account in attesa.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- **A-34 · `end_sessions` incrementa la copia in memoria: due incrementi concorrenti ne contano uno** — basso;
+  dalla revisione di E («R13-SEC»), tramite il coordinatore (16/10). Valutata in A7b-2 e lasciata: non costa poco
+  (`test_session_version.py` ne fissa la forma sincrona, contratto 5; 9 chiamate da rendere asincrone). Con A8.
+  - `user_service.end_sessions` fa `user.session_version += 1` sull'oggetto: due richieste quasi simultanee
+    scrivono lo stesso valore, e un cookie riemesso fra le due (cambio password) sopravvive alla seconda. Finestra
+    sotto il secondo. Cura: l'incremento in SQL (`session_version = session_version + 1`), 9 chiamate.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- ✅ **A-35 · Una risposta 422 rimanda indietro la password** — medio (sicurezza); chiusa il 17/10 in A7b-2 (commit del
+  coordinatore); dal coordinatore (16/10). Cura (D2): `api/validation_errors.py`, `install_validation_error_handler`
+  in `main.py`, toglie `input` da ogni errore del 422 di tutta l'app.
+  - Il gestore predefinito di FastAPI mette `input` in ogni errore di validazione: un campo troppo corto rimanda il suo
+    valore, e un campo **mancante** rimanda tutto il corpo, password e token compresi (provato in processo con
+    FastAPI 0.141.1). Vale per login, registrazione, cambio password, reset, setup, profilo, eliminazione dell'account,
+    e per le rotte degli altri con segreti nel corpo. Le impostazioni dei plugin lo evitano già con una `route_class`
+    propria (`_NoInputEchoRoute` in `api/v1/plugin_settings.py`).
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- **A-37 · Togliere `NoInputEchoRoute` dopo l'ingresso di B4 e di A7b-2** — minimo; dal coordinatore (17/10).
+  B4 sposta la `route_class` delle impostazioni dei plugin in `backend/app/api/no_echo.py` (`NoInputEchoRoute`, con
+  `test_no_echo_route.py`); il gestore globale di A-35 (`api/validation_errors.py`) la rende un doppione. Quando sono
+  dentro entrambi: togliere la classe e il suo uso in `api/v1/plugin_settings.py`, adattare `test_no_echo_route.py`,
+  aggiornare `developer/architecture/patterns/plugin_settings.md` (riga sulla classe). Il test di
+  `test_plugin_settings_api.py` resta: passa dal server vero. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Decisioni del coordinatore».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -4135,7 +4270,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     ridisegnare lo stato della pagina (una classe o uno store `.svelte.ts` con le richieste e le loro generazioni), con
     rischio alto e conflitti con J, Y e Z.
   - **Cura**: un lotto dopo la 1.3, con le E2E della pagina come rete. Dettagli: piano 03, sezione «FE5c», pezzo 9.
-- **X-R24 · La ricerca senza `providers` interroga anche il provider dei test** — basso, API; X, 16/10 (test-author di
+- ✅ **X-R24 · La ricerca senza `providers` interroga anche il provider dei test** (chiusa il 17/10: `e22251856`, entrata in dev `fd6886bb0`) — basso, API; X, 16/10 (test-author di
   F21, in lettura). `AssetSearchService.search` e `search_stream` (`services/assets/search.py`), quando la richiesta non
   dice quali provider, prendono tutto `AssetProviderRegistry.list_providers()`, compreso `mockprov`, che è `test_only` e
   sa cercare.
@@ -4146,7 +4281,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Collegato, minimo**: la docstring di `services/assets/__init__.py` dice che `AssetSourceProvider` e
     `AssetSourceError` stanno in `core.py`, ma sono in `base.py`.
   - Dettagli: piano 03, sezione «CP13», F21.
-- **X-R25 · `test_complete_e2e_flow_justetf` va in timeout alla ricerca quando un fornitore esterno è lento** — basso,
+- ✅ **X-R25 · `test_complete_e2e_flow_justetf` va in timeout alla ricerca quando un fornitore esterno è lento** (chiusa il 17/10: `e22251856`, entrata in dev `fd6886bb0`) — basso,
   test; trovato da J in `all-backend`, girato a X dal coordinatore il 16/10.
   - **Il caso**: `backend/test_scripts/test_e2e/test_search_to_prices.py`, step 1, chiede
     `/assets/provider/search?q=iShares Core MSCI World` **senza `providers`**, con `TIMEOUT = 30.0`. Da solo passa 3/3
@@ -4242,7 +4377,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Fa `route.fulfill({response, json})` e così tiene `content-encoding: gzip` della risposta vera. Se quella risposta
     arrivasse a 1 KB, il browser proverebbe a decomprimere un JSON in chiaro.
   - Cura: togliere `content-encoding` e `content-length`, come fanno `fixtures/instance-config.ts` e il blocco F21/P20.
-- **X-R34 · Doc: `asset_plugin_guide.md` «How It Works» dice che il frontend chiama `GET …/search`** — basso; X, 17/10
+- ✅ **X-R34 · Doc: `asset_plugin_guide.md` «How It Works» dice che il frontend chiama `GET …/search`** (chiusa il 17/10 con X-R24: `e22251856`, entrata in dev `fd6886bb0`) — basso; X, 17/10
   (trovato dal docs-writer).
   - In realtà il frontend usa prima lo streaming (`…/search/stream`), e il REST solo come ripiego.
 - ✅ **X-R35 · `env_url` accetta `user:pass@` e lo pubblica** (chiusa il 17/10: `4e06d78ff`, entrata in dev
@@ -4265,7 +4400,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   3. Un `support_url` con `user:pass@` (`url.username` o `url.password`) conta come mancante.
   4. `create-edit.en.md`: in modifica il rapporto porta anche gli identificativi dell'asset (ISIN, ticker…). Dirlo.
   - Se il punto 2 cambia quello che vede un utente `managed`, va ritoccata la riga del CHANGELOG.
-- **X-R38 · Cambi: un tasso enorme si salva come infinito, e il suo inverso come zero** — medio, **dopo X-R35**; il lato
+- ✅ **X-R38 · Cambi: un tasso enorme si salva come infinito, e il suo inverso come zero** (chiusa il 17/10: `80f5c65ff`, entrata in dev `fd6886bb0`) — medio, **dopo X-R35**; il lato
   FX dello stesso buco di W-B58 (W lo chiude per transazioni e prezzi). W l'ha annotato come **W-B61**; girato a X dal
   coordinatore il 17/10.
   - Un tasso manuale `1E+400` si salva come `inf`, e il suo inverso come `0`; `truncate_fx_rate` solleva un'eccezione
@@ -4283,7 +4418,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     (`expandedRange` legge tutte le righe `appended`).
   - `onsave` non è atteso: un errore nel ricaricamento della pagina dopo il salvataggio non viene mai mostrato.
   - Il banner d'errore dell'editor dei cambi non ha un `data-testid` (quello degli asset l'ha avuto con O-8).
-- **X-R40 · Prezzo corrente: la quotazione rifiutata torna lo stesso come prezzo dal vivo** — basso, **dopo X-R38**; X,
+- ✅ **X-R40 · Prezzo corrente: la quotazione rifiutata torna lo stesso come prezzo dal vivo** (chiusa il 17/10 insieme a W-B62: `a7b572ce2`, entrata in dev `fd6886bb0`; resta il seguito X-R51) — basso, **dopo X-R38**; X,
   17/10 (le mie due note alla revisione di W-B58, accettate dal coordinatore).
   - `services/assets/price_query.py` ~862–866: una quotazione che `storable_price` non può tenere non si salva, ma la
     risposta la restituisce (`FACurrentPriceItem.value`, sorgente `provider:…`): un 1E+60 compare nella UI come prezzo
@@ -4291,6 +4426,113 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - ~865: l'avviso si ripete a ogni interrogazione della stessa quotazione (lo scheduler ogni 10 minuti, più ogni pagina
     aperta). Cura: una volta per (asset, valore) per processo (`functools.cache`, come `_report_invalid`), oppure
     `info`.
+- **X-R41 · `POST /fx/currencies/convert` con importo 0 dà un 500** — basso; X, 17/10 (trovato dal test-author di
+  X-R38, girato nel backlog dal coordinatore).
+  - L'endpoint divide per l'importo di partenza: convertire 0 fra due valute solleva un'eccezione invece di rispondere 0.
+- **X-R42 · Due fixture dei test FX lasciano righe committate** — basso, test; X, 17/10 (dal test-author di X-R38).
+  - `test_upsert_multiple_pairs` e la fixture di modulo di `test_fx_conversion` committano tassi che non tolgono mai.
+  - Inoltre le ragioni `exclusive_because` di `fx-core` e `fx-sync-service` nel runner descrivono ancora il troncamento
+    di tutta la tabella, mentre le due fixture ora sono limitate alle loro righe.
+- **X-R43 · Impostazioni dei plugin: un intero di 401 cifre in `value` dà un 500** — basso, solo admin o proprietario; X,
+  17/10 (trovato con H-32, girato nel backlog dal coordinatore).
+  - `fields.py:324` passa il valore a `math.isfinite()`, che con un `int` più grande di un double solleva
+    `OverflowError`. `service.py:255` cattura solo `SettingValueError`, quindi `PATCH /settings/plugins/bulk` risponde 500
+    invece dell'esito per voce `INVALID_VALUE`.
+  - Cura: in `validate_value`, un intero fuori dall'intervallo di un double (o qualunque `OverflowError`) diventa
+    `SettingValueError`; un rosso con un intero di 401 cifre.
+- **X-R44 · `mockprov` si può nominare e assegnare a un asset anche in produzione** — piccolo, **prima del rilascio,
+  dopo X-R38**; X, 17/10 (revisione R13-SEC5 di E su X-R24/25, girata dal coordinatore).
+  - `mockprov` è nell'immagine di produzione e sempre registrato. Con X-R24 la ricerca senza `providers` lo salta, ma
+    chiunque può nominarlo in una ricerca e **assegnarlo a un asset** con `POST /assets/provider`, che non controlla né
+    il registro né `test_only`: una serie finta a 100 USD al giorno su un asset globale, condiviso fra gli utenti.
+  - Direzione: fuori dalla modalità di test, rifiutare i codici `test_only` in `configured_provider` e nell'assegnazione.
+  - Per F05, quando arriva: l'elenco dei fornitori permessi deve chiudere anche il percorso di un fornitore *nominato*
+    (`configured_provider`/`get_plugin`), non solo l'elenco e il default.
+- **X-R45 · Cambi: chi legge `fx_rates` direttamente non salta i tassi vecchi inutilizzabili** — basso; X, 17/10 (da
+  X-R38).
+  - Con X-R38 nessuna scrittura salva più un tasso fuori dai limiti, e `convert_bulk` e `compute_chain_rate` saltano quelli
+    vecchi (`inf`, 0, 20 cifre intere: una 1.2 poteva salvarli, per esempio un manuale `1E-11`, che si rilegge 0).
+  - Diversi moduli però leggono la tabella per conto loro: `financial_math/portfolio/engine.py:99`, `financial_math/lots/*`,
+    `financial_math/price_marks.py`, `pac_allocator/source/{wac,fx_quotes}.py`, i componenti FX dell'AI Export,
+    `api/v1/backup/exports.py`. Con uno 0 vecchio, chi divide solleva un'eccezione; con un `inf`, gli importi diventano
+    assurdi.
+  - Due strade, da decidere:
+    - (a) una migrazione di dati che toglie, o mette da parte, le righe con `rate < 1E-10` o `rate >= 1E+14`: richiede
+      il via del developer, perché tocca dati dell'utente;
+    - (b) lo stesso filtro, `usable_fx_rate_bounds()`, in ogni lettore: molti file di J e dell'AI Export.
+- **X-R46 · Editor dei cambi: i rifiuti del server non si vedono** — basso-medio, **subito dopo X-R38**; X, 17/10
+  (trovato dal docs-writer di X-R38).
+  - `FxDataEditorSection.svelte`, `handleSave()`, quando tutti i tassi sono rifiutati (400): il toast e il banner mostrano
+    «Request failed with status code 400» di Axios, non il `detail` del backend (coppia, data, limiti). L'editor resta
+    aperto con le modifiche.
+  - Quando un tasso è rifiutato fra altri validi (200 con `errors`): l'editor ignora `errors`, conta il rifiutato in «FX
+    rates: N saved» e ricarica. Il tasso manca, in silenzio.
+  - Con X-R38 l'editor raggiunge questi rifiuti (più di 14 cifre intere, o sotto `1E-10` una volta salvato). Prima il
+    tasso si salvava sbagliato; ora si scarta, ma la UI dice che è salvato.
+  - Cura: mostrare il `detail` del 400 e gli `errors` del 200 (per data), contarli a parte. Prove: Vitest e
+    `front-fx fx-editor`. Poi la frase della pagina utente (`user/fx/detail/data-editor.en.md`) può dire «con un messaggio
+    che nomina la data».
+- **X-R47 · Il rapporto di uno SPLIT non è mai validato** — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
+  V-4 di CP-14a, F4, girato dal coordinatore).
+  - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
+    il report della Dashboard risponde 500.
+  - Cura: validare il rapporto alla scrittura dell'evento. Al via, verificare col coordinatore chi possiede i file degli
+    eventi (consegnati a W dopo CP2b).
+- **X-R48 · `market-data/wipe` cancella gli SPLIT collegati a rettifiche senza costo** — **prima del rilascio, dopo
+  l'ingresso di CP-14a di J**; X, 17/10 (J, F1, girato dal coordinatore).
+  - `POST /assets/{id}/market-data/wipe` (il flusso del cambio di valuta, ma si può chiamare anche da solo) scollega ogni
+    transazione dagli eventi dell'asset e li cancella tutti, SPLIT compresi (`currency_change.py:131-137`). Una
+    rettifica +q collegata a uno SPLIT, senza costo, diventa `MISSING_COST_BASIS`.
+  - **Deciso**: una guardia come quella di P-10, cioè un rifiuto 409 con i dettagli (evento, data, transazioni), tramite
+    `financial_math.splits.costless_incoming_split_adjustments`, che arriva con CP-14a.
+- **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** — basso; X, 17/10 (J, F2,
+  girato dal coordinatore).
+  - `provider_management.py:212-221`: vale solo se un utente ha scritto uno SPLIT fra gli eventi del piano.
+  - Ordine deciso dal coordinatore dopo X-R40/W-B62: X-R47 → X-R48 → X-R44 → X-R49.
+- ✅ **X-R50 · Seguito di X-R38: tre note della revisione R13-SEC5 di E** (chiusa il 17/10: `243ab6150`, entrata in dev `fd6886bb0`; ECB a parte, X-R52) — piccolo, **nel lotto di X-R40/W-B62**; X, 17/10
+  (E, girato dal coordinatore).
+  1. Limite del double: un tasso a meno di 0,008 da `1E+14` ha 14 cifre intere e passa, risposto «inserted», ma SQLite lo
+     salva come `1e14`, e ogni conversione lo salta. `storable_fx_rate` deve chiedere anche `float(v) < 1E+14`.
+  2. Underflow: `normalize_storable_rate` può restituire zero quando l'inverso va in underflow, contro la sua docstring.
+     Dopo l'inversione, chiedere `> 0`.
+  3. BOE e SNB: `Decimal(str)` solleva `InvalidOperation`, che il loro `except` non cattura; un valore ostile fa fallire
+     tutto il fetch di quel provider (solo disponibilità). FED ha lo stesso buco
+     (`except (ValueError, IndexError, ZeroDivisionError)`): lo chiudo insieme.
+  - Inoltre E ha classato MEDIUM 8/10 le scritture dei cambi da parte di qualunque utente (profilo gestito): va al
+    developer insieme a D-SEC2-1, non a X.
+- ✅ **X-R51 · Il refresh non dice più perché ha scartato il valore corrente** (chiusa il 17/10: `ce798e36a`, entrata in dev `b3cae6e0e`) — piccolo, **subito dopo l'ingresso di
+  X-R40/W-B62**; X, 17/10 (trovato dal docs-writer di X-R40).
+  - Con X-R40/W-B62 una quotazione corrente che nessuna colonna tiene si scarta prima dell'upsert. Il risultato del
+    refresh perde così il motivo («rejected … no price column can keep»): con lo storico è OK senza messaggio, senza
+    storico è FAILED con «No price data available from provider». Il motivo resta solo nel log, una volta.
+  - Cura pronta (`files/checks/xr51_code.py` della sessione X): una nota in `_FetchedRefreshData` che finisce negli
+    `errors`, quindi PARTIAL col motivo, oppure FAILED col motivo. Rossi pronti in `files/drafts/`. Docs da ritoccare:
+    il paragrafo del refresh in `backend/assets/architecture.md`.
+  - Nello stesso lotto, due ritocchi trovati dal docs-writer di X-R50:
+    - `fx_rate_limits_text()` non nomina la regola del double: un `99999999999999.995` manuale si sente dire «al
+      massimo 14 cifre prima della virgola», ma ne ha 14. Aggiungere «sotto 100000000000000». I test cercano solo i
+      numeri 14 e 10, e la frase va aggiornata anche in `backend/fx/configuration.md`;
+    - la docstring di `_collect_leg_rates()` (`sync.py`) nomina solo l'overflow, non l'underflow.
+- ✅ **X-R52 · ECB: un valore che non è un numero fa perdere tutta la valuta** (consegnata il 17/10, 05:35; SHA all'ingresso) — piccolo, disponibilità; X, 17/10 (trovato dal
+  docs-writer di X-R50).
+  - `ecb/plugin.py` non ha un `try` per osservazione, e il suo `except (KeyError, IndexError, ValueError)` non cattura
+    `InvalidOperation`: un valore ostile fa uscire l'eccezione grezza invece di `FXServiceError`, e si perde la valuta,
+    forse tutto il fetch di ECB. ECB è il fornitore principale dei cambi.
+  - Cura: saltare l'osservazione (`ArithmeticError`), come BOE, SNB e FED con X-R50. Un rosso in `test_fx_parse_errors.py`.
+- **X-R53 · Usare il campo dei periodi fissi (1D, 1W…) che MF porta nel backend** — medio, **quando MF manda il
+  contratto**; X, 17/10 (coordinatore).
+  - Oggi la tabella dei periodi fissi di asset e cambi si calcola nel frontend (`lib/utils/assetPriceDerived.ts:193`,
+    `AssetTable.svelte:239`, `routes/(app)/fx/+page.svelte:236`). MF, nel lotto MF-P, crea il campo nel backend.
+  - Da fare: leggerlo da lì nei miei file, quando MF scrive col contratto. Non ora.
+  - Accordo con MF (17/10, 05:25), detto al coordinatore:
+    - endpoint dedicati: `POST /assets/prices/period-changes` e `POST /fx/currencies/period-changes`;
+    - `as_of` = la fine dell'intervallo, come oggi: le serie sono giornaliere e riempite all'indietro, quindi i numeri
+      non cambiano, compreso un 1D a 0 % nel fine settimana;
+    - resta la regola di oggi, che mostra le colonne fino all'intervallo scelto, quindi niente cambia a vista. Mostrare
+      tutti i periodi che hanno un valore va proposto al developer;
+    - `target_currency` col cambio di ogni giorno;
+    - MF scrive il backend (moduli nuovi, rotte e schemi aggiunti nei miei file) e io lo rivedo; il frontend è mio, dopo
+      l'ingresso di MF.
 
 ## W · Import e transazioni (fase 01)
 
@@ -5230,7 +5472,9 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `translate-validate` (16/10): da 882 a 891 errori strutturali, tutti in `fifo-lot-analysis`: 24 righe nuove e 15
   sparite. Sono l'ammonimento nuovo, che sposta il tipo dei seguenti, e il link nuovo ad `adjustment`. La pagina aveva
   già debito (J-25, J-29, J-32): tradurla in un giro solo. Dettagli: piano J, §10 «CP-7b — codice».
-- **J-37 · Il testo del catalogo di `lots-analysis-pure` non dice più cosa prova l'unità** — minimo, test; J, 16/10
+- ✅ **J-37 · Il testo del catalogo di `lots-analysis-pure` non dice più cosa prova l'unità** — minimo, test; J, 16/10
+  ✅ 17/10, dentro il checkpoint di CP-14a (commit a parte): `print_info`, `desc` e commento d'isolamento di
+  `lots-analysis-pure`, più la stringa di `risk-oracle` (`signal_helpers.py` → `signals/risk_adapters.py`).
   (test-author di CP-7b).
   - Dove: `scripts/test_runner/_backend_services.py`, unità `lots-analysis-pure`. Tre testi descrivono ancora i test di
     prima: `print_info` (~:893), `desc` (~:1894) e il commento di `isolation="pure"` (~:1897-1898), che parla solo dei
@@ -5268,6 +5512,86 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     known price, a carried quote or a trade price»; «no price on or before the opening day — the relative return uses
     the lot's own price, when it has one»), e il prezzo convertito con la sua valuta; quattro lingue.
   - Dettagli: piano J, §10 «CP-7b — codice».
+- **J-38 · La guida dei plugin dei segnali descrive male l'ordine del taglio e il piano** — minimo, documentazione; J,
+  17/10 (docs-writer di CP-10c). Pagina `developer/architecture/patterns/signal_plugin_guide.md`, solo inglese.
+  - Il diagramma di sequenza del grafico disegna «Slice to visible range and assign status» dopo le annotazioni. Nel
+    codice, prima e dopo CP-10c, taglio e stato avvengono per ogni calcolo dentro `execute_planned_signal`; le
+    annotazioni si attaccano dopo, sulle serie intere tenute da parte. Il testo «3. Annotations» («before output is
+    sliced») è impreciso allo stesso modo.
+  - La sezione del piano non dice che un lotto incoerente solleva `SignalRequestValidationError` e ferma tutto il lotto,
+    a differenza dei fallimenti preliminari, che restano per istanza.
+  - Preesistenti, non legati al taglio. Dettagli: piano J, §10 «CP-10c».
+- **J-39 · Investimento programmato: l'ultima cedola contata due volte, e la mora che parte dal valore prima della
+  cedola** — medio, numeri; J, 17/10 (docs-writer di CP-14a, verificata da J in memoria). Preesistente: viene da
+  I-bis #26, che emette alle date di maturazione il valore prima dell'azzeramento della cedola, giusto per il grafico.
+  Lo stesso valore finisce però in due consumatori che vogliono quello dopo:
+  - **Liquidazione**: `_generate_schedule_values` mette in `MATURITY_SETTLEMENT` `values[last_end]`, il valore prima
+    della cedola. Un titolo da 10 000 al 5 % con cedola annuale a scadenza e senza mora dà INTEREST 498,63 **e**
+    MATURITY_SETTLEMENT 10 498,63: 10 997,26 incassati, e l'ultima cedola è contata due volte. La liquidazione giusta
+    è il valore dopo la cedola, qui 10 000.
+  - **Mora**: `_compute_late_interest_value` riceve `cached[maturity]`, ancora il valore prima della cedola. Con mora
+    SIMPLE al 10 %, il giorno dopo la scadenza dà 10 501,37 invece di 10 002,74: la cedola è pagata e insieme ancora
+    dovuta.
+  - Da decidere (developer, perché è modellazione): se c'è mora, la cedola di scadenza è pagata (base = capitale) o
+    no (niente evento INTEREST a scadenza, base con la cedola)? Oggi il codice fa tutte e due le cose.
+  - **Dopo la scadenza, con la mora** (verificato da J nel codice il 17/10, ~04:05):
+    - la liquidazione della mora nasce solo in `get_history_value`, all'ultima data di maturazione della mora ≤ la
+      `end_date` della richiesta: si sposta con la finestra. `get_current_value` intanto continua a maturare senza
+      fine;
+    - le cedole della mora (`li.generate_interest`) valgono ciascuna `value − principal`, senza azzeramento dopo:
+      ogni pagamento riconta tutti quelli prima.
+    - Senza mora le due strade concordano (tutte e due leggono la liquidazione): la cura di CP-14b le corregge
+      insieme.
+  - La rete dorata di CP-14a (`accrual_golden.json`, casi s2 e s4) fissa i valori di oggi: la cura li cambia,
+    dichiarati, col rosso prima.
+  - **Decisione del coordinatore (17/10, notte)**:
+    - la liquidazione senza mora va in **CP-14b**, coi valori dichiarati, il rosso prima e una riga 🐛;
+    - la parte della mora aspetta il developer (la domanda è nella lista del mattino);
+    - `get_current_value` contro `get_history_value` dopo la scadenza si verifica nell'analisi di CP-14b.
+  - **Liquidazione senza mora: curata in CP-14b (17/10)** — è il capitale quando l'ultima cedola cade alla scadenza,
+    altrimenti il valore del giorno; `get_current_value` e `get_history_value` dopo la scadenza la seguono. Rosso prima,
+    8 punti della rete dichiarati (le liquidazioni di `s4_annual_settlement` al capitale). **Resta aperta la parte
+    della mora**: base, liquidazione che si sposta con `end_date`, cedole della mora senza azzeramento (developer).
+  - Dettagli: piano J, §10 «CP-14a» e «CP-14b».
+- **J-40 · Lo svuotamento dei dati di mercato toglie gli SPLIT e lascia rettifiche senza costo (il buco di P-10 dal
+  lato asset)** — medio, numeri, da decidere; test-author di J (CP-14a, V-4), 17/10, letto nel codice. Area di X.
+  - `POST /assets/{id}/market-data/wipe` (`market_data.py:46-71`) è il flusso del cambio di valuta
+    (`AssetCurrencyChangeModal.svelte:103-109`), ma si può chiamare anche da solo.
+  - Stacca ogni transazione dagli eventi dell'asset e li cancella tutti, SPLIT compresi (`currency_change.py:131-137`).
+  - Una rettifica +q legata a uno SPLIT e salvata senza costo (Auto) diventa un'acquisizione di costo sconosciuto,
+    cioè `MISSING_COST_BASIS`: lo stesso esito che P-10 rifiuta.
+  - Il pannello di conferma mostra solo il numero delle transazioni legate.
+  - **Deciso dal coordinatore (17/10, notte): un rifiuto come P-10** (lo svuotamento risponde 409 coi dettagli),
+    coerente con la decisione 27 A. **→ X** (anche il parente minore).
+  - Parente minore: il cambio dei parametri di un investimento programmato stacca e cancella gli eventi del provider
+    (`provider_management.py:212-221`). Conta solo se l'utente ha scritto uno SPLIT negli eventi del calendario.
+- **J-41 · Il costo Auto può finire sulla riga sbagliata** — medio, numeri; test-author di J, 17/10, letto nel codice,
+  **da provare con un rosso**. Area di W.
+  - Senza legame, `_find_created_tx_for_wac` (`auto_cost.py:158-183`) prende la riga più recente con stesso broker,
+    asset, data e tipo.
+  - Due rettifiche Auto dello stesso asset, nello stesso giorno, sullo stesso broker e nello stesso lotto: la prima non
+    riceve mai un costo. Essendo Auto salta il controllo del costo (`batch_costs.py:154-155`), e resta senza.
+  - Varianti: una riga Auto seguita da una Manuale con la stessa chiave sovrascrive il costo Manuale; dal modale bulk
+    (`{amount: "0"}`, `TransactionBulkModal.svelte:1099`) la riga mancata resta a 0 in silenzio.
+  - **→ W** (coordinatore, 17/10).
+- **J-42 · Il rapporto di uno SPLIT non è mai validato** — basso, numeri; test-author di J, 17/10, letto nel codice.
+  Area di X. Un rapporto 0 o negativo si salva (P-10 lascia passare la modifica, il tipo non cambia). Quando una
+  transazione lo lega, il motore solleva `ValueError` (`engine.py:226-227`) e il rapporto della Dashboard risponde
+  500. `is_valid_split_ratio` della casa (`splits.py`) esiste già. **→ X** (coordinatore, 17/10).
+- **J-43 · L'avviso delle quote diverse fra le due gambe di un trasferimento tace se cadono lo stesso giorno** —
+  minimo, qualità dei dati; MF (MF-J4), assegnata a J dal coordinatore il 17/10, dopo CP-14b.
+  - In `financial_math/portfolio/classifier.py:131-149` l'avviso `share mismatch` sta dentro il ramo
+    `if pair_key not in processed_pairs and tx.date != paired.date:`, quello che costruisce l'intervallo in transito.
+  - Due gambe collegate dello stesso giorno, fra broker con quote di proprietà diverse, non producono nessun avviso
+    (`share_mismatch_warnings`, `schemas/portfolio.py:239`).
+  - Cura: l'avviso esce dal ramo delle date diverse e resta una volta per coppia. Prima il rosso.
+- **J-44 · Il Δ% del tooltip del grafico dà 0 % quando il primo valore è 0** — minimo, numeri; J, 17/10, letto nel
+  codice durante CP-14b. `components/charts/priceChartHelpers.ts::buildDeltaHtml` calcola il Δ% dal primo valore del
+  grafico e, per scelta scritta nel suo JSDoc, dà 0 % su un primo valore 0. È lo stesso numero sbagliato che la
+  decisione N65 toglie al righello (CP-14b: `—`), in una seconda copia del Δ% nel frontend (regola 10: va segnalata).
+  Da instradare: il file ha storia dei colori (lotto B) e di X (helper della pagina asset). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «CP-14b».
+  - 17/10, coordinatore: **a J**, dopo F5, riusando `changePct` di `MeasureSignal.ts` (stessa regola di N65); X rivede in sola lettura, nessuna classe di colore toccata.
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -5335,15 +5659,17 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 
   Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
   l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-9».
-- **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b), letto nel
-  codice e non provato. `run_command_live` (`scripts/cli_base.py:455`) usa `subprocess.run`, che a un
-  `KeyboardInterrupt` aspetta il figlio 0,25 s e poi lo uccide con SIGKILL. Con `--no-reload` o `--workers` il figlio è
-  il server stesso, che muore senza il suo spegnimento: niente budget, worker BRIM orfani, scritture tagliate. Con
-  `--reload` muore solo il supervisore, e il server vero ha già ricevuto il suo SIGINT dal terminale. Docker e il
-  runner non c'entrano. Cura possibile: in `run_command_live`, un `Popen` che dopo il Ctrl+C aspetta il figlio fino al
-  budget più un margine. Superficie del coordinatore. Dettagli:
-  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z6b — spegnimento con un tempo
-  massimo».
+- ✅ **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b).
+  **Chiusa il 17/10 col lotto Z-10** (il commit è del coordinatore; via da scrittore su `cli_base.py`, `dev.py:448` e
+  tre test di H e L). `dev.py server` lancia il server con `run_server_live` (`scripts/cli_base.py`):
+  - al Ctrl+C non inoltra nulla (il server ha già il SIGINT del terminale) e aspetta il suo spegnimento fino al
+    budget più 2 s;
+  - un SIGTERM a `dev.py` lo inoltra al server, con la stessa attesa;
+  - un secondo segnale, o la grazia finita, lo uccide; codici 130 e 143.
+  I gestori registrano i segnali senza sollevare eccezioni, e `run_command_live` resta com'è per gli altri comandi.
+  Era: con `subprocess.run` il server moriva di SIGKILL 0,25 s dopo il Ctrl+C, a metà del suo spegnimento (provato
+  il 17/10 con un finto server: uscita a 0,29 s, server ucciso), e un SIGTERM a `dev.py` lasciava il server orfano.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-10».
 - **Z-11 · Lock dei job tra processi (flock) per più worker** — basso; coordinatore, 15/10 (D-Z3-3). Con `--workers`
   i job girano solo nel worker leader: un altro worker che riceve `wake-sync` risponde `not_leader`, e la spinta del
   ritorno aspetta il giro del leader, entro 60 s. Cura: un lock su file nella cartella dei dati, preso da chiunque
@@ -5389,12 +5715,13 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   finché non si ricaricano. Da decidere con Y dopo Y11: per esempio i pannelli si ricaricano da soli su
   `{kind: 'prices'}`, fuori da `pageBusy`. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-13», passo 6.
-- **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). In
-  `filesystem.es.md` gli altri nove commenti dell'albero sono ancora in inglese, e gli alberi IT, FR ed ES non hanno le
-  tre righe aggiunte dopo in inglese (`backups/`, `secrets/` e `instance.key`). La pagina ha già debito di traduzione
-  (la cache di Aphra è del 10/10, l'inglese è cambiato dopo), quindi niente stamp: da chiudere col prossimo giro di
-  traduzione, verificando che i commenti dell'albero spagnolo vengano tradotti, oppure a mano in un lotto di doc.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-12».
+- ✅ **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). **Chiusa il
+  17/10 a mano** (il commit è del coordinatore; via del 17/10 ~05:32, senza stamp): gli alberi IT, FR ed ES hanno le
+  tre righe (`backups/`, `secrets/`, `instance.key`), con la colonna dei commenti allineata all'inglese, e i nove
+  commenti dello spagnolo sono tradotti. La pagina resta con il suo debito di traduzione fuori dall'albero (la cache
+  di Aphra è del 10/10): il prossimo giro lo chiude. Era: in `filesystem.es.md` nove commenti in inglese, e i tre
+  alberi senza le tre righe aggiunte in inglese. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-16».
 - ✅ **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc;
   docs-writer di Z, 16/10 (Z-5). **Chiusa il 16/10 col mini-lotto Z-17** (il commit è del coordinatore): la frase dice
   ora che `PATCH /api/v1/settings/global/bulk` controlla ogni valore con `validate_global_setting_value()` contro
@@ -5418,23 +5745,30 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   SDB-032 tolto). `Cooldowns.reset(key)` resta, eccezione di N58 scritta nel docstring: nessun metodo pubblico dà a
   PCD-011 lo stesso stato pulito. `lint --dead-code` non segnala più le due funzioni.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A», decisione N-ZA-6.
-- **Z-20 · Disaccoppiare `zodios-client` dai moduli con le rune** — basso; coordinatore, 16/10 (riga J-26, assegnata
-  a Z). Il ponte della sonda dell'AI Export (`frontend/scripts/run-ai-export-render-prompt-probe.mjs`) carica il
-  renderer fuori da SvelteKit; la sonda importa `$lib/api`, quindi `lib/api/zodios-client.ts`, che importa
-  `priceRefresh.ts` (Z5, `3b016dd4e`, 16/10 11:18) e con lui `instanceNotices.svelte.ts`, un modulo con le rune: il
-  ponte moriva con `rune_outside_svelte`. J l'ha corretto in `985b10cbd` compilando le rune nel ponte
-  (`@sveltejs/vite-plugin-svelte`). Cura: il client non importa moduli con le rune, così il ponte può fare a meno del
-  plugin; per esempio `priceRefresh` riceve l'area degli avvisi da chi la registra all'avvio dell'app. Attenzione
-  (letto nel codice, non provato): sullo stesso percorso c'è `instanceBlock.svelte.ts` di H, con `$state` al primo
-  livello, importato da `zodios-client.ts` dal 15/10 (`cb34327e9`), sulla riga dopo `priceRefresh`: disaccoppiare
-  il solo `instanceNotices` non basta a togliere il plugin, serve anche H. Dettagli:
-  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Wiki-file di Z-3 e Z-20/Z-21».
+- ✅ **Z-20 · Disaccoppiare `zodios-client` dai moduli con le rune** — basso; coordinatore, 16/10 (riga J-26, assegnata
+  a Z). **Chiusa il 17/10 col lotto Z-20** (il commit è del coordinatore; H e J hanno scelto): il client delle API e
+  l'ingresso della sonda non importano più moduli con le rune. `instanceBlock` è diviso in `instanceBlockState.ts`
+  (semplice: le costanti, `isInstanceBlockedError`, il segnale, il reset di sessione), che il client segna, e
+  `instanceBlock.svelte.ts`, la faccia reattiva del layout, allineata in modo sincrono (opzione A di H, con le sue
+  quattro condizioni); il pozzo degli avvisi di `priceRefresh` carica `instanceNotices.svelte` al primo uso. Il ponte
+  della sonda non ha più il plugin di Svelte (sì di J) e il cancello `apiClientRuneFree.gate.test.ts` (`core-unit`) lo
+  tiene vero, da `$lib/api` e dall'ingresso della sonda. Era: dal 16/10 11:18 (Z5) il ponte moriva con
+  `rune_outside_svelte`, e J l'aveva riparato compilando le rune (`985b10cbd`). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-20 — analisi».
 - ✅ **Z-21 · N58: altre quattro funzioni di Z usate solo dai test** — basso; Z, 16/10 (lotto A, `lint --dead-code`).
   **Chiusa il 17/10 col lotto Z-21** (il commit è del coordinatore): tolte `cooldown_snapshot()`, la proprietà
   `ShutdownWatchdog.armed_at`, `current_shutdown_watchdog()` e `Activity.is_busy()`, con le due menzioni del runner. I
   test leggono l'istanza in uso, il `deadline`, `shutdown_budget._watchdog` e `busy_reasons()`; nessun caso tolto.
   `lint --dead-code` non le segnala più. Nata come Z-20, rinominata il 16/10 (il numero era già di J-26). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-21».
+- ✅ **Z-22 · `instanceBlock.svelte.ts`: un ascoltatore in più a ogni aggiornamento a caldo** — basso, solo sviluppo;
+  H, 17/10 (revisione di Z-20). **Chiusa il 17/10 col lotto Z-22** (il commit è del coordinatore): ogni copia della
+  faccia ferma la precedente passandosi la funzione per `import.meta.hot.data`; la build toglie il blocco. La riga
+  proposta, `import.meta.hot?.dispose(stop)`, qui non scatta: Vite chiama `dispose()` solo sul modulo attraverso cui
+  l'aggiornamento è accettato, cioè il layout (provato col Vite del repo: 1→4 ascoltatori in tre modifiche, col
+  passaggio sempre 1). Era: la faccia si iscriveva a `instanceBlockState` all'import, e a ogni aggiornamento a caldo
+  del file la copia vecchia restava iscritta. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-22».
 
 ## B · Backup e Docker (fase 01)
 
@@ -5573,6 +5907,121 @@ sulla base `23f6578f3`.
   `security.md`), e la scheda smette di chiamare `dropCheck` (i suoi casi tornano «nessuna cancellazione della
   copia»). Da fare insieme al biglietto dell'esito (B5c, se scelto): toccano la stessa API. Dettagli: piano 07, §13,
   «B5b».
+- **B-18 · `restore --instance-key-file`: ricifrare i segreti di un archivio in chiaro con la copia della chiave
+  vecchia** — piccolo; B, 16/10 (analisi di B4, d'accordo il coordinatore: backlog). Un archivio in chiaro non porta la
+  chiave d'istanza, e i segreti dei plugin restano «impostati ma illeggibili». Chi ha conservato la chiave vecchia (la
+  copia di `secrets/instance.key`, o il vecchio `LIBREFOLIO_INSTANCE_KEY`, per esempio consegnato dal pannello all'uscita
+  dal cloud) potrebbe darla alla CLI, che la usa per il rekey come quella di un backup sicuro (`derive_key_from`, la
+  strada già descritta nella docstring di H). Solo CLI, mai un upload della chiave dalla UI. Dettagli: piano 07, «B4 —
+  analisi sulla base nuova».
+- **B-19 · `backup decrypt` lanciato da root scrive uno zip di root** — minimo; B, 17/10 (docs-writer, B4). Gli altri
+  comandi di `dev.py backup` lavorano come il proprietario della cartella dei dati (`_drop_root_privileges`); `decrypt`
+  non legge la cartella dei dati, quindi con `docker compose exec` lo zip appartiene a root. La guida lo dice. Proposta:
+  se la cartella dei dati esiste, `decrypt` passa al suo proprietario come gli altri; senza, resta l'utente che lo
+  lancia (per decifrare su un portatile). Dettagli: piano 07, «B4 — analisi sulla base nuova» e seguenti.
+- **B-20 · knip segnala `RESTORE_TICKET_HEADER` come export inutilizzato** — minimo; B, 17/10 (controlli statici di
+  B4). L'export è di B5c (`frontend/src/lib/features/backup/backupApi.ts`). Il suo test lo legge con un cast sul modulo,
+  scritto quando era ancora rosso, e knip non lo conta come uso. Correzione: il test lo importa per nome. Non è un
+  gate: `lint --dead-code` era già rosso prima, per voci di altri. Dettagli: piano 07, «B4 — analisi sulla base nuova»
+  e seguenti.
+- ✅ **B-21 · Le due rotte del ripristino non prendono `ProfileDefaultError`** — minimo; H tramite il coordinatore, 17/10
+  (H-27, dev `bfdc1f72c`). `profile_default()` ora solleva `ProfileDefaultError`, un `TypeError`, quando la tabella dei
+  profili dà un valore del tipo sbagliato. `backup_max_upload_mb()` la chiama, e le sue due sole chiamate, in
+  `api/v1/backup/restore.py`, prendono solo `BackupConfigError`:
+  - `_upload_limit()` (`PUT /restore/upload`) risponderebbe 500 invece del 503 `backup_upload_unavailable`;
+  - `_readable_limit_mb()` (`GET /restore/status`) risponderebbe 500 invece di `upload_limit_mb: null`, e la scheda non
+    leggerebbe più lo stato del ripristino.
+
+  Correzione: prendere anche `ProfileDefaultError` nei due punti, con un caso per rotta. Si fa dopo l'ingresso di
+  H-27 nel ramo di B. Il test di guardia H-17 mette `123`, un intero: resta compatibile. Dettagli: piano 07, «B4
+  committato; validazione combinata…».
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): le due rotte prendono anche `ProfileDefaultError`: l'upload
+  risponde 503 `backup_upload_unavailable`, lo stato 200 con `upload_limit_mb: null`. 8 casi in
+  `test_backup_restore.py`, rossi e poi verdi nello slot delle 04:44.
+- ✅ **B-22 · `totals.py` ripete la regola degli importi «testo decimale semplice» di J** — minimo; J tramite il
+  coordinatore, 17/10 (J-27). J-27 è già nella base di B: `7336722ad`, entrato con `e221a0544`.
+  `ledger_totals._as_amount` (la casa) rifiuta ogni testo che non sia decimale semplice prima di `Decimal()`, con la
+  stessa regola (precisione 60). Così `_plain` e `_PLAIN_AMOUNT` in `instance_backup/totals.py` sono un doppione, e anche
+  i loro controlli di struttura (righe che non sono una lista, una riga che non è un oggetto) finiscono in un
+  `ValueError` di `from_json`. **Decisione di B: si tolgono** («una regola, una casa»). Lo stato resta `absent` in ogni
+  caso. Da adattare: i casi di `test_backup_totals.py` che fissano «deciso prima che `from_json` veda il documento»
+  diventano «rifiutato da J»; il fixture `j_reads` resta la difesa contro l'espansione nel test. Nel lotto B4b, dopo
+  l'ingresso di B4. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): via `_plain` e `_PLAIN_AMOUNT` da `totals.py`: decide
+  `ControlTotals.from_json` di J. Il test capovolto è
+  `test_what_is_not_plain_text_in_lines_of_objects_is_refused_by_j_and_absent`.
+- ✅ **B-23 · Dopo un crash restano file in chiaro, e nessuno li toglie all'avvio** — piccolo; E (R13-SEC4, piano 08 in
+  dev `110125350`), 17/10, più il punto (c) di B. Oggi la pulizia gira solo quando parte un nuovo controllo
+  (`restore_jobs.prune` in `start_check`) o un nuovo backup (`remove_expired_jobs` in `_prepare`):
+  - (a) `.restore/stage/<id>/archive.zip`, l'archivio decifrato con la chiave di origine, se il server muore fra la
+    decifratura e lo spacchettamento;
+  - (b) le cartelle `backups/.decrypt-*` di un `inspect` interrotto: il server non le toglie mai, la CLI solo al prossimo
+    `inspect`. Chi sincronizza `backups/` altrove si porta dietro il chiaro;
+  - (c) i file di lavoro di un job di backup interrotto, cioè lo zip in chiaro di un backup sicuro e la copia del DB in
+    `backups/.jobs/<id>/`: `get_job` segna `backup_interrupted` ma non li toglie.
+
+  Direzione: una pulizia all'avvio di (a), (b) e (c), con le regole della pulizia di B4: solo cartelle vere, mai un link;
+  per `.decrypt-*` la regola dell'ora, perché un `inspect` può girare mentre il server parte; lo stato del job resta.
+  Tocca la lista condivisa `STARTUP_STEPS` (`app_lifespan.py`, e i passi in `overview.md`): un passo nuovo dopo
+  `restore-commit`, o dentro il suo. Lotto B4b. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): il passo `backup-leftovers` (N66) e il modulo
+  `instance_backup/leftovers.py`. La revisione delle 03:58 aggiunge `archive.zip.part`, i link su due livelli e
+  `checks_interrupted`; `get_job()` toglie anche i file di lavoro. 44 casi in `test_backup_leftovers.py`.
+- ✅ **B-24 · Il messaggio di `backup decrypt` non dice che lo zip apre anche le chiavi salvate** — minimo; E (R13-SEC4),
+  17/10. Oggi dice: «It holds every user's data in clear». Uno zip decifrato di un backup che portava la chiave
+  d'istanza contiene anche quella chiave, che apre ogni chiave dei fornitori salvata. Da aggiungere al messaggio e alla
+  guida (`admin/backup_restore.en.md`, sezione `backup decrypt`). Lotto B4b.
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): dopo `decrypt` c'è la riga 🔑 quando il manifesto annuncia la
+  chiave.
+- ✅ **B-25 · `--password-stdin` su un terminale mostra la password; i campi della creazione hanno `autocomplete="off"`** —
+  minimo; E (R13-SEC4), 17/10. `--password-stdin` legge con `sys.stdin.readline()` (`scripts/backup_cli.py:100`) anche
+  quando lo standard input è un terminale, e lì la password si vede mentre la si scrive: con `isatty()` va letta con
+  `getpass`. Da decidere nell'analisi: alla creazione una o due volte. Nella scheda, i due campi della password di un
+  backup sicuro passano a `autocomplete="new-password"`: i gestori delle password ignorano spesso `off` e proporrebbero
+  quella dell'account. Lotto B4b.
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): `--password-stdin` a un terminale prende la strada di
+  `getpass` (due volte per `create`), e i due campi del backup sicuro sono `new-password`.
+- ✅ **B-26 · Un file della chiave oltre 4096 byte si esporta, poi ogni ripristino lo rifiuta** — minimo; E (R13-SEC4),
+  17/10. La creazione legge `secrets/instance.key` con `read_secret_file` (fino a 64 KiB); la lettura dall'archivio si
+  ferma a `INSTANCE_KEY_MAX_BYTES` (4096, `archive.py`). Va rifiutato già all'esportazione: chiave non inclusa e avviso
+  `instance_key_unusable`, come per le altre chiavi inutilizzabili. Lotto B4b.
+
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): `exportable_instance_key()` e `generated_key_unusable()` usano
+  il limite di 4096 byte in UTF-8 (`INSTANCE_KEY_MAX_BYTES`).
+- ✅ **B-27 · Dopo un ripristino riuscito la scheda Backup non dice nulla** — piccolo; G (G-20) tramite il coordinatore,
+  17/10, decisione notturna N67 (la rivede il developer). Dopo un ripristino `committed` la pagina va al login senza
+  dire niente (FBKP-107), e al rientro la scheda tace: `restore-last-result` c'è solo per `rolled_back`
+  (`RestoreCard.svelte:64`). Si aggiunge l'avviso «applied on {date}, backup of {date} (LibreFolio {version}),
+  confirmed by {user}», in un ruolo info. Resta fino al ripristino seguente, come `rolled_back`. Solo frontend:
+  `GET /restore/status` dà già `finished_at`, `backup_created_at`, `backup_app_version` e `confirmed_by`. Con i casi
+  Vitest, una chiave i18n in 4 lingue, un E2E su uno stato finto (come FBKP-103, e dà la foto a G) e una riga nella
+  guida. Dopo B4b. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
+
+  ✅ **Chiusa il 17/10, non da fare** (coordinatore, 05:00): N67 è ritirato e resta la decisione P8 del developer
+  (16/10, 11:25): un ripristino riuscito non dice nulla, «se ha funzionato lo vedi». Nell'elenco del developer va solo
+  come nota. L'analisi è pronta nel piano 07, «B-27», se un giorno servisse.
+- ✅ **B-28 · I trigger del DB caricato girano nel processo del server, senza limite di tempo** — basso (un DoS fuori dal
+  perimetro: serve un admin che carichi l'archivio); E (revisione di sicurezza di B3) tramite il coordinatore, 17/10.
+  Il coordinatore lo chiamava «B-19», ma quell'ID è già usato: un DB caricato può portare trigger propri, e scattano
+  quando il controllo scrive sulla copia. Succede con l'`alembic upgrade` di un archivio più vecchio, con le correzioni
+  post-migrazione (`_post_migration_fixes`, `staging.py`) e col rekey dei segreti. Una CTE ricorsiva in un trigger:
+  - tiene `.stage.lock` fino al riavvio, quindi nessun altro controllo parte;
+  - sul profilo `managed` tiene l'istanza sveglia, perché `backup_in_progress` vale vero.
+
+  Direzione: un limite di tempo sulle scritture della copia (`set_progress_handler` di sqlite3, o un sottoprocesso con
+  un tempo massimo), più `PRAGMA trusted_schema=OFF` sulle connessioni della copia. Dopo B4. Dettagli: piano 07, «B-27».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 05:50), con la strada (B) decisa dal coordinatore. Subito dopo lo
+  spacchettamento, il controllo legge `sqlite_master` in sola lettura e classifica ogni oggetto dal suo testo SQL. Un
+  trigger, una vista o una tabella virtuale, che LibreFolio non crea mai, fanno rifiutare l'archivio con
+  `database_foreign_objects` prima di ogni altro accesso; uno schema che SQLite non legge dà `database_damaged`. In
+  più `trusted_schema=OFF` sulle cinque connessioni di B alla copia. L'`alembic upgrade` girava già in un processo a
+  sé, col suo tempo massimo.
 
 ## E · Email (fase 01)
 
@@ -5681,7 +6130,8 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Resta giusta anche se H darà un codice al rifiuto anonimo del blocco.
     - EVA-017 fissa `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`.
     - Dettagli: piano 08, «E-11.0» e seguenti.
-- **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
+    - Commit `18d945d2e` (codice), `f2b459ebe` (docs), `fdd4acc6d` (journal); in `dev_release2` col merge `bca4bd6d3`.
+- ✅ **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
   `mailbox_budget_key()` unisce gli alias `+tag` e i punti di Gmail. Restano due casi:
   - un dominio catch-all, dove ogni parte locale arriva alla stessa casella;
   - gli indirizzi a sottodominio di Fastmail (`qualsiasi@utente.fastmail.com`).
@@ -5689,6 +6139,18 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   In questi casi ogni parte locale è una chiave nuova, e li limita solo il budget orario dell'istanza. Un limite per
   dominio colpirebbe i grandi provider condivisi, quindi servirebbe un elenco di domini o un'altra idea. Dettagli:
   [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-9.0», «Resti fuori da E-9».
+  - 17/10, coordinatore: chiusa, il limite è accettato. Nessun codice.
+    - Una regola Fastmail nella chiave non può essere completa: l'indirizzamento a sottodominio vale su tutti i domini
+      di Fastmail, che sono decine, e sui domini personali dei clienti. Il catch-all resterebbe comunque.
+    - Un limite per dominio destinatario vorrebbe un elenco di provider esenti, mai completo, oppure una variabile
+      nuova: una scelta di prodotto per poco guadagno.
+    - Dopo N62 queste email non portano testo dell'attaccante, e il budget orario dell'istanza le limita. La doc lo
+      dice da E-9.
+    - La leva vera è la registrazione aperta: la domanda anti-abuso **D-E9-1** (captcha o proof-of-work, limiti alla
+      registrazione) è al developer.
+    - Se il codice servirà, la strada è `LIBREFOLIO_SMTP_MAX_PER_DOMAIN`, spenta di default, con un default per il
+      profilo `managed`, in un lotto suo.
+    - Dettagli: piano 08, «E-12.0» ed «E-12.1».
 
 ## Y · Cruscotto e grafici (fase 01)
 
@@ -5967,3 +6429,23 @@ punto di partenza, l'audit dello stesso giorno:
   annualizza sul costo venduto e sul suo tempo di volo; `portfolio-engine/index` §5 definisce il non realizzato come
   NAV − Book (transito incluso) mentre il periodo usa valore di mercato − costo aperto (§7 ora lo dice). Dettagli:
   piano MF, sezione «MF-A — codice».
+- **MF-J3 · Un trasferimento di cassa che attraversa il confine del perimetro non tocca i pool K/R** — basso-medio,
+  numeri (proposta, da decidere); test-author e docs-writer di MF, 17/10 (J2), provato con una sonda su HEAD e su J2.
+  Una gamba `linked_external_inflow`/`_outflow` (l'altra gamba è in un broker fuori dal perimetro scelto) entra nel
+  capitale di riferimento come un versamento o un prelievo (`deposited-capital`, riga 33), ma `_apply_pool_rule` non la
+  tratta: la cassa si muove, i pool no. Con il perimetro {B} e 650 in arrivo da A, la scomposizione dice versato 0 /
+  generato 650 (capitale di riferimento 650); con B che aveva già K 100 e R 100, 425 / 425 invece di 750 / 100.
+  Proposta: la gamba esterna in entrata come un DEPOSIT in K (senza il recupero di W, che è globale), in uscita come un
+  WITHDRAWAL (K prima, poi R → W); da verificare anche le gambe orfane. Rossi prima; serve l'ok del developer (cambia
+  la scomposizione della cassa nelle viste filtrate per broker). Dettagli: piano MF, sezione «MF-J2 — codice e misura».
+- **MF-J4 · L'avviso di quote diverse non scatta per una coppia dello stesso giorno** — minimo, qualità dei dati;
+  test-author di MF, 17/10 (J2). In `classifier.py` l'avviso «share mismatch» d'una coppia interna fra broker posseduti
+  a quote diverse sta dentro il ramo `tx.date != paired.date`: una coppia dello stesso giorno non lo produce. Il divario
+  è un risultato nel P&L (J2), l'avviso spiega perché. Da vedere con chi possiede la qualità dei dati (J). Dettagli:
+  piano MF, sezione «MF-J2 — codice e misura».
+- **MF-D3 · Il fattore d'annualizzazione riscritto nei validatori degli schemi del rischio** — minimo, nessun numero;
+  MF, 17/10 (MF-D resto). `schemas/risk.py:514` e `:595` ricalcolano `n_observations * 365 / calendar_days` per
+  controllare l'invariante del contratto, accanto alla funzione della casa `returns.observed_annualization`. Gli
+  schemi non importano servizi per scelta: oggi è un controllo dichiarato, non una seconda implementazione. Da
+  decidere se resta così (riga nella pagina dev) o se la formula scende in un modulo che entrambi possono leggere.
+  Dettagli: piano MF, sezione «MF-D resto».

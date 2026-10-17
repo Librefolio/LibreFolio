@@ -34,6 +34,7 @@ from backend.app.schemas.risk import (
     RiskStressMethod,
     RiskWarning,
 )
+from backend.app.services.financial_math.returns import observed_annualization
 from backend.app.services.risk.base import (
     RiskComputation,
     RiskExecutionContext,
@@ -45,7 +46,6 @@ from backend.app.services.risk.metrics import (
 )
 from backend.app.services.risk.plan import AnalyticPlan, is_hypothetical_plan, reads_the_twrr_alone
 from backend.app.services.risk.scope import ScopeInputs, scope_exclusions, scope_reference
-from backend.app.services.series_preparation import observed_annualization
 
 # What the scope says about its per-asset composition: the assets left without a series, and a
 # zero-return residual that includes value in transit. Neither enters the portfolio TWRR.

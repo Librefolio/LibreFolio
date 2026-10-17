@@ -172,13 +172,13 @@ perform blocking I/O directly on the application's main event loop.
 
 ## 🔎 Asset Search
 
-The `search(query)` method allows users to **discover assets** by name, ticker, or ISIN across all providers simultaneously.
+The `search(query)` method allows users to **discover assets** by name, ticker, or ISIN across several providers simultaneously.
 
 ### ⚙️ How It Works
 
 1. User types a query in the UI (e.g., "Apple", "MSCI World", "IE00B4L5Y983")
-2. Frontend calls `GET /api/v1/assets/provider/search?q=Apple`
-3. Backend queries **all providers in parallel** via `AssetSearchService.search()` (`asyncio.gather`)
+2. Frontend calls the streaming endpoint `GET /api/v1/assets/provider/search/stream?q=Apple&providers=…` with the providers selected in the dialog; the batch `GET /api/v1/assets/provider/search` only as a fallback when the stream is unavailable
+3. Backend queries **the requested providers in parallel** via `AssetSearchService.search_stream()` (batch: `AssetSearchService.search()`, `asyncio.gather`); without `providers` (a direct API call), every registered provider but the test-only ones (`_default_search_codes()`)
 4. Providers that don't implement search (default raises `NOT_SUPPORTED`) are silently skipped
 5. Results are aggregated and returned to the user, provider by provider, in the [search order](#search-order)
 

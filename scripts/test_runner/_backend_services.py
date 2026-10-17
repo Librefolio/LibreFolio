@@ -45,6 +45,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
 # the shared DB) so the unit can honestly declare PURE isolation and run beside
 # anything.
 AI_EXPORT_PURE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_components_drawdown_total_loss.py",
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_int_validation.py",
@@ -53,7 +54,7 @@ AI_EXPORT_PURE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_temporal_aggregator_invariants.py",
 )
 
-# Provider error paths: what the four price/FX providers do when the source
+# Provider error paths: what the price and FX providers do when the source
 # misbehaves. Every HTTP client is doubled, so these never leave the machine —
 # which is also the only way the assertions can be exact rather than "something
 # arrived". No session and no server either, hence PURE and its own unit: folding
@@ -61,6 +62,7 @@ AI_EXPORT_PURE_TEST_PATHS = (
 # waste the parallelism on tests that touch nothing.
 PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
+    "backend/test_scripts/test_services/test_fx_parse_errors.py",
     "backend/test_scripts/test_services/test_justetf_errors.py",
     "backend/test_scripts/test_services/test_snb_errors.py",
     "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
@@ -261,7 +263,7 @@ def services_risk_workers(verbose: bool = False, test_names: list = None) -> boo
 def services_risk_oracle(verbose: bool = False, test_names: list = None) -> bool:
     """Pin hand-written risk mathematics against riskfolio, NumPy and SciPy."""
     print_section("Services: Risk Metrics Oracle")
-    print_info("Testing: metrics.py and signal_helpers.py against independent references")
+    print_info("Testing: risk/metrics.py and signals/risk_adapters.py against independent references")
     print_info("Guards: the four name traps, undefined-window semantics, matrix/scalar consistency")
     print_info("Note: riskfolio is imported here and only here — never in the web process")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_risk_metrics_oracle.py", test_names)
@@ -394,7 +396,7 @@ def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> 
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
     print_info("Testing: SCHEDULED_YIELD asset valuation (ACT/365 SIMPLE interest)")
-    print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration")
+    print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration, the accrual golden (33 schedules, every number)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_synthetic_yield.py", test_names)
     return run_command(cmd, "Synthetic yield tests", verbose=verbose)
 
@@ -920,7 +922,7 @@ def services_lots_analysis_pure(verbose: bool = False, test_names: list = None) 
     """Run the pure lots-analysis builders (no DB, no server, no network)."""
     print_section("Services: Lots Analysis Pure Builders")
     print_info("Testing: backend/app/services/financial_math/lots/ and lots_analysis_service.py (sync, argument-driven builders)")
-    print_info("Tests: SHORT lots, estimated_mode, price-series gaps, ADJUSTMENT cost basis, transfer scope")
+    print_info("Tests: SHORT lots, estimated_mode, price-series gaps, ADJUSTMENT cost basis, transfer scope, the reference price and the days at cost")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_lots_analysis_pure.py", test_names)
     return run_command(cmd, "Lots Analysis pure builder tests", verbose=verbose)
 
@@ -952,11 +954,20 @@ def services_asset_digit_limits(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Asset digit limit tests", verbose=verbose)
 
 
+def services_current_price_storable(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R40 + W-B62: the current price and the price refresh serve, cache and announce only what the database can keep."""
+    print_section("Services: Current Price Storable")
+    print_info("Testing: backend/app/services/assets/price_query.py (get_current_prices_bulk), refresh.py (bulk_refresh_prices)")
+    print_info("Tests: an unstorable quote never served nor cached (database fallback) and logged once per value, a valid one served and cached as the database keeps it, a refresh's changed_points and current-value cache limited to what is stored, a fallback past an unreadable close")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_price_storable.py", test_names)
+    return run_command(cmd, "Current price storable tests", verbose=verbose)
+
+
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
     print_info("Testing: backend/app/services/financial_math/portfolio/daily_state.py (DailyStateBuilder)")
-    print_info("Tests: inline WAC, last_buy_price fallback, 3-pool K/R/W, position snapshots, period accumulators, pre-frame/frame")
+    print_info("Tests: inline WAC, last_buy_price fallback, 3-pool K/R/W, position snapshots, period accumulators, one replay with states from date_from")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_portfolio_engine_vnext.py", test_names)
     return run_command(cmd, "Portfolio Engine vNext tests", verbose=verbose)
@@ -1128,6 +1139,22 @@ def services_profile_defaults(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Profile defaults tests", verbose=verbose)
 
 
+def services_request_float_inputs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that every float a request can carry refuses infinity and NaN in its schema (H-32)."""
+    print_section("Services: Request Float Inputs")
+    print_info("Testing: every route of backend.app.main (iter_route_contexts): bodies, nested models, query, path, header and cookie parameters")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_request_float_inputs.py", test_names)
+    return run_command(cmd, "Request float inputs tests", verbose=verbose)
+
+
+def services_response_validation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a response breaking its model is logged without its content, and answered 500 (H-33)."""
+    print_section("Services: Response Validation")
+    print_info("Testing: backend/app/api/response_validation.py (install_response_validation_handler) and its install in backend/app/main.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_response_validation.py", test_names)
+    return run_command(cmd, "Response validation tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -1270,6 +1297,38 @@ def services_backup_totals(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: backend/app/services/platform/instance_backup/totals.py (ledger_totals_of, compare_totals)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_totals.py", test_names)
     return run_command(cmd, "Instance backup ledger totals tests", verbose=verbose)
+
+
+def services_backup_envelope(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the envelope of a secure backup (.lfbk): scrypt and AES-256-GCM in chunks, its header, every tampering."""
+    print_section("Services: Secure Backup Envelope")
+    print_info("Testing: backend/app/services/platform/instance_backup/envelope.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_envelope.py", test_names)
+    return run_command(cmd, "Secure backup envelope tests", verbose=verbose)
+
+
+def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the rules of a secure backup: its password (the accounts' rules, at least 12 characters) and the key it carries."""
+    print_section("Services: Secure Backup Rules")
+    print_info("Testing: backend/app/services/platform/instance_backup/secure.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_secure_rules.py", test_names)
+    return run_command(cmd, "Secure backup rules tests", verbose=verbose)
+
+
+def services_backup_secure(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a secure backup through the services: the job that encrypts it with the key, the check of an envelope, the secrets re-encrypted."""
+    print_section("Services: Secure Backup")
+    print_info("Testing: backend/app/services/platform/instance_backup/jobs.py, archive.py, staging.py, restore_jobs.py (lot B4)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_secure.py", test_names)
+    return run_command(cmd, "Secure backup tests", verbose=verbose)
+
+
+def services_backup_leftovers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the startup cleanup of what killed runs left in clear (lot B4b, B-23, decision N66)."""
+    print_section("Services: Backup Leftovers")
+    print_info("Testing: backend/app/services/platform/instance_backup/leftovers.py, restore_jobs.py, jobs.py (lot B4b)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_leftovers.py", test_names)
+    return run_command(cmd, "Backup leftovers tests", verbose=verbose)
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
@@ -1619,7 +1678,7 @@ Note: No backend server required.
         # provider_policy sees and core.configured_provider are replaced by stand-ins; each search runs a query of its own.
         isolation="pure",
     )
-    add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
+    add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(
@@ -1684,7 +1743,7 @@ Note: No backend server required.
         "password-policy",
         services_password_policy,
         name="Password Policy",
-        desc="the five rules of a new password in one place: published in order (GET /system/instance), failed_rules in the policy's order, Unicode classes Lu/Ll/Nd and symbols, length in code points",
+        desc="the five rules of a new password in one place: published in order (GET /system/instance), failed_rules in the policy's order, Unicode classes Lu/Ll/Nd and symbols, length in code points; lists made from them (rules=, rules_with_minimum_length: a minimum raised, never lowered, the rules read at each call), as a secure backup's password takes them",
         # PURE: a module of plain functions; no database, no server, no environment variable.
         isolation="pure",
     )
@@ -1947,7 +2006,7 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost, native cash, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer",
+        desc="Average cost, native cash, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home",
         # PURE: each module's only I/O is convert_bulk, which every test replaces on its
         # module with a double; the session handed to it is None or a sentinel, or, for the
         # ledger control totals, one on a private SQLite file under tmp_path that no other
@@ -1988,12 +2047,13 @@ Note: No backend server required.
         "lots-analysis-pure",
         services_lots_analysis_pure,
         name="Lots Analysis Pure Builders",
-        desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver",
-        # PURE: every helper under test is a sync method that takes all of its
-        # inputs as arguments and never touches self.db, so the service is built
-        # with db=None. The two async cases stub convert_bulk instead of opening a
-        # session. Kept out of the DB-backed lots units on purpose: folding it in
-        # would declass it to the category default (write-scoped).
+        desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver, reference price and days at cost",
+        # PURE: no database, server or network. The builders under test are sync methods that take all
+        # of their inputs as arguments, so the service is built with db=None; the async cases stub
+        # convert_bulk, and the reference-price and at-cost cases drive get_lots_analysis on loader
+        # doubles and a session double, all in EUR, so no rate is asked and nothing reaches a database.
+        # Kept out of the DB-backed lots units on purpose: folding it in would declass it to the
+        # category default (write-scoped).
         isolation="pure",
     )
     add_test(
@@ -2013,7 +2073,7 @@ Note: No backend server required.
         "asset-event-store",
         services_asset_event_store,
         name="Asset Event Store",
-        desc="Manual events: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset",
+        desc="Manual events: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset, a SPLIT retype refused while a linked incoming adjustment has no cost (P-10)",
         # WRITE_GLOBAL: Asset and AssetEvent carry no user_id (nor do the AssetProviderAssignment,
         # Broker and Transaction written beside them), so the two assets this unit creates and
         # every event and transaction written against them are visible to all concurrent tests.
@@ -2030,7 +2090,19 @@ Note: No backend server required.
         # created under a unique name, and only their prices and events, written, read and wiped by asset id.
         # Nothing here counts or reads a row it did not write.
     )
-    add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
+    add_test(
+        cat,
+        "current-price-storable",
+        services_current_price_storable,
+        name="Current Price Storable",
+        desc="X-R40 + W-B62: a current quote no price column keeps (storable_price None: 1E+50000000, 1E+60, 1E-13, a float inf) never served nor cached -- the item falls back to the latest stored close that reads a number (db:last_known) or to an error, the next call asks the provider again -- and its refusal logged once per (asset, provider, value), never at every poll; a valid quote served and cached as the database keeps it (65432.1234567890999 -> 65432.123456789), one that already fits served in its own form; a refresh leaves out of changed_points a date no column keeps, and neither caches nor stores nor announces an unstorable current value, while it caches a valid one as stored; the database fallback passes over a close that reads None and never raises",
+        # WRITE-SCOPED, the category default, as asset-digit-limits: every row is this unit's own -- two assets
+        # created under a unique name, and only their prices, events and provider assignment, written, read and
+        # wiped by asset id. The provider codes are unique per test, so the current-value cache entries and the
+        # log-once keys are the test's own; the cache's set is patched for one test only (monkeypatch).
+        # Nothing here counts or reads a row it did not write.
+    )
+    add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, one replay from the first movement")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
     add_test(
@@ -2123,6 +2195,25 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "request-float-inputs",
+        services_request_float_inputs,
+        name="Request Float Inputs",
+        desc="H-32: every float a request can carry (body, nested model, query, path, header, cookie) refuses inf, -inf, NaN and 1E+400 in its schema; barriers on the number of routes walked",
+        # The app is imported, never served: its routes are walked with iter_route_contexts and each float judged with a
+        # TypeAdapter. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "response-validation",
+        services_response_validation,
+        name="Response Validation",
+        desc="H-33: a response that breaks its response_model is logged with its route, endpoint, error types and locations, never its content, and answered 500 in plain text",
+        # Fresh FastAPI apps in process, and the real app's handler table; logs captured with structlog. No DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "client-address",
         services_client_address,
         name="Client Address",
@@ -2203,7 +2294,7 @@ Note: No backend server required.
         "backup-staging",
         services_backup_staging,
         name="Instance Backup Staging",
-        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy",
         # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
         # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
         # directory of the test configured (which must stay absent). No lane DB, no server, no network.
@@ -2234,10 +2325,48 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "backup-envelope",
+        services_backup_envelope,
+        name="Secure Backup Envelope",
+        desc="The .lfbk envelope (lot B4, decisions 38 and P12): its constants; round trips at the chunk edges; the 52-byte header at its offsets; known answers built with cryptography's Scrypt and AESGCM; bounds refused before any derivation (envelope_unsupported), too short or not ours (envelope_damaged); wrong_password, also for changed key parameters; every tampering of the chunks (a byte, a tag, truncations, an appended, swapped, dropped or repeated chunk) envelope_damaged with nothing left; NFC, not NFKC; no overwrite, 0600, .part only while writing, progress; the key never in its repr; constant memory",
+        # PURE: files under tmp_path only. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-secure-rules",
+        services_backup_secure_rules,
+        name="Secure Backup Rules",
+        desc="The rules of a secure backup (lot B4, P12, decision 39): the password's, the accounts' rules with at least 12 characters and up to 1024, following a longer minimum of the accounts; the instance key a backup may carry, the generated one only, as its text, never a configured one, never an unusable one, never created",
+        # PURE: data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables. No DB, no server, no
+        # network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-secure",
+        services_backup_secure,
+        name="Secure Backup",
+        desc="A secure backup through the services (lot B4): run_backup with a password writes an .lfbk (encrypting phase; no clear zip, part or password left; the envelope's size and hash), the generated instance key inside (never a configured, missing or unusable one: instance_key_unusable), its failures (backup_no_space, backup_failed); the check of an envelope (decrypting first, the same report as its zip's, no archive.zip or secrets/ left), password_required and envelope_damaged, start_check keeping the upload on a missing or wrong password; the key entry's rules; the plugin secrets re-encrypted with this instance's key, or counted unreadable",
+        # PURE: data directories, databases and archives under tmp_path. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-leftovers",
+        services_backup_leftovers,
+        name="Backup Leftovers",
+        desc="The startup cleanup of what runs killed outright left in clear (lot B4b, B-23, decision N66): a check its server left running ended (restore_interrupted, copy and upload removed); a decrypted archive.zip left in a copy removed while no check runs, never a link, the rest of the copy kept; the inspect folders .decrypt-* older than an hour removed, younger ones, links and files kept; a backup that died with its process ended (backup_interrupted) with its work files removed, also by get_job; nothing touched under a held lock; expired jobs removed; a part that fails logged while the others still run, never raised; quiet on a clean data directory; the step backup-leftovers",
+        # PURE: data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables. No lane DB, no server,
+        # no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "backup-totals",
         services_backup_totals,
         name="Instance Backup Ledger Totals",
-        desc="Lot B-13 (contract §7). ledger_totals_of: J's JSON of a real database's ledger, equal to J's control_totals of the same rows read with sqlite3, no line for an empty ledger; read as immutable (bytes, mtime, nothing created beside it, in rollback-journal mode, in WAL mode, with an empty -wal and its -shm); a -wal still holding frames never read past (None, PendingWriteAheadLog); the path a name, never a URI (spaces, accents, #, ?, &, %41); never raises (missing, folder, not a database, empty, truncated, no ledger table, a decimal trap, a running event loop): None and one error with the exception's type only. compare_totals: the decision order (absent; other_version before reading; absent for amounts that are not plain text, lines not lists of objects, decided before J's from_json, never expanding 1E+999999999, and for what from_json refuses, a version that is not an int included; unreadable; then the lines as maps, canonical text, zero lines dropped: same without a difference, reordered or zero lines included, changed with one line at least); differences cash first, by broker, currency or asset, canonical text, None for an absent line, the first 20 kept and all counted, none for another status; frozen; the documents given unchanged",
+        desc="Lot B-13 (contract §7). ledger_totals_of: J's JSON of a real database's ledger, equal to J's control_totals of the same rows read with sqlite3, no line for an empty ledger; read as immutable (bytes, mtime, nothing created beside it, in rollback-journal mode, in WAL mode, with an empty -wal and its -shm); a -wal still holding frames never read past (None, PendingWriteAheadLog); the path a name, never a URI (spaces, accents, #, ?, &, %41); never raises (missing, folder, not a database, empty, truncated, no ledger table, a decimal trap, a running event loop): None and one error with the exception's type only. compare_totals: the decision order (absent; other_version before reading; absent for amounts that are not plain text and lines not lists of objects, refused by J's from_json (one rule, J's home since J-27; never expanding 1E+999999999), and for the rest from_json refuses, a version that is not an int included; unreadable; then the lines as maps, canonical text, zero lines dropped: same without a difference, reordered or zero lines included, changed with one line at least); differences cash first, by broker, currency or asset, canonical text, None for an absent line, the first 20 kept and all counted, none for another status; frozen; the documents given unchanged",
         # PURE: one alembic process makes the module's database on a tmp_path file; every file read is a copy under
         # tmp_path, with a production data directory of the test configured (which must stay absent). No lane DB, no
         # server, no network.
@@ -2284,7 +2413,7 @@ Note: No backend server required.
         "provider-errors",
         services_provider_errors,
         name="Provider Error Paths",
-        desc="justETF, Borsa Italiana, Yahoo Finance and SNB when the source misbehaves or refuses for too many requests (every client doubled)",
+        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52)",
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")

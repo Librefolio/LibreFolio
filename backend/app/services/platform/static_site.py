@@ -4,8 +4,9 @@ Owner: workstream H (platform). Moved out of ``main.py`` as it was (CP2b), path 
 ``install_static_site(app)`` registers, in this order: ``/mkdocs`` and its files; ``/``, the web app or the API's name
 when the app is not built; the build's chunks under ``/_app``, when the build exists; last, the SPA catch-all, which
 must stay the last route of the app. The handlers read ``FRONTEND_BUILD_DIR`` and ``SITE_DIR`` when a request comes, so
-a test can point them elsewhere. The catch-all never serves a hidden file of the build, a name starting with ``.`` such
-as the build's own markers: it gets the SPA fallback, like a path outside the build (H-28).
+a test can point them elsewhere. No route serves a hidden file, a name starting with ``.`` such as the build's own
+markers: the catch-all answers the SPA fallback, like a path outside the build (H-28); ``/_app`` and ``/mkdocs`` answer
+their 404, like a missing file (H-29).
 
 Caching: the chunks under ``_app/immutable/`` are cached for a year (their names change with their content); every
 other file of ``_app`` (``env.js``, ``version.json``) and every HTML document is revalidated (F28).
@@ -16,6 +17,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app.config import API_V1_PREFIX, PROJECT_NAME, PROJECT_ROOT, get_version
 from backend.app.services.platform.security_headers import register_served_types
@@ -38,6 +40,15 @@ REVALIDATE_HTML = {"Cache-Control": "no-cache, must-revalidate"}
 def _revalidated_file(path: Path) -> FileResponse:
     """A file of a build, told to revalidate when it is an HTML document."""
     return FileResponse(path, headers=REVALIDATE_HTML if path.suffix == ".html" else None)
+
+
+def _hidden_below(root: Path, target: Path) -> bool:
+    """Whether ``target``, a path ``confined_path`` resolved below ``root``, is hidden: some name starts with ``.``.
+
+    A folder swapped since ``confined_path`` resolved the path counts as hidden too: a refusal, never a 500.
+    """
+    base = root.resolve()
+    return not target.is_relative_to(base) or any(part.startswith(".") for part in target.relative_to(base).parts)
 
 
 def frontend_available() -> bool:
@@ -73,7 +84,8 @@ def mkdocs_static(path: str):  # pragma: no cover
 
     requested_path = path.strip("/")
     target = confined_path(SITE_DIR, requested_path)
-    if target is None:
+    # A path leaving the site, or a hidden file of it (H-29), is not found
+    if target is None or _hidden_below(SITE_DIR, target):
         return HTMLResponse("<h1>Documentation file not found</h1>", status_code=404)
     if target.is_dir():
         target = target / "index.html"
@@ -107,6 +119,15 @@ IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
 # Mount _app directory for SvelteKit assets: the immutable chunks (JS/CSS), and a few files whose names do not change
 # with their content (env.js, version.json), which must be revalidated like the HTML that names them.
 class ImmutableStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        """A hidden file of ``_app/`` is never served, as by the catch-all: the 404 of a missing file (H-29).
+
+        ``path`` comes from ``get_path``, already normalised: no ``..`` is left to read as a hidden name.
+        """
+        if any(part.startswith(".") for part in Path(path).parts):
+            raise StarletteHTTPException(status_code=404)
+        return await super().get_response(path, scope)
+
     def file_response(self, full_path, stat_result, scope, status_code=200):
         resp = super().file_response(full_path, stat_result, scope, status_code)
         # Also on a 304: it tells the browser how long its copy may now be reused
@@ -123,8 +144,7 @@ def _hidden_in_build(target: Path) -> bool:
     (``.cache_manifest.json`` of the fonts) are never the app's. A ``.well-known`` file would need an exception here. A
     build folder swapped since ``confined_path`` resolved it counts as hidden too: the fallback, never a 500.
     """
-    build = FRONTEND_BUILD_DIR.resolve()
-    return not target.is_relative_to(build) or any(part.startswith(".") for part in target.relative_to(build).parts)
+    return _hidden_below(FRONTEND_BUILD_DIR, target)
 
 
 # Catch-all for frontend routes (SPA support) - ALWAYS registered

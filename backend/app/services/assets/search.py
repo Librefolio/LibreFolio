@@ -22,6 +22,13 @@ from backend.app.services.assets.registry import AssetProviderRegistry
 logger = structlog.get_logger(__name__)
 
 
+def _default_search_codes() -> list[str]:
+    """The providers a search asks when the request names none: every registered one but the test-only ones (X-R24),
+    as ``GET /assets/provider`` lists them. A provider named in the request is asked whatever its flag, and a code the
+    registry does not know counts as not test-only."""
+    return [p["code"] for p in AssetProviderRegistry.list_providers() if not getattr(AssetProviderRegistry.get_plugin(p["code"]), "test_only", False)]
+
+
 class AssetSearchService:
     """
     Service for searching assets across multiple providers.
@@ -202,8 +209,7 @@ class AssetSearchService:
         """
         # Get provider codes to query
         if not provider_codes:
-            all_providers = AssetProviderRegistry.list_providers()
-            provider_codes = [p["code"] for p in all_providers]
+            provider_codes = _default_search_codes()
 
         # Filter to valid providers that support search
         valid_providers: list[tuple[str, AssetSourceProvider]] = []
@@ -363,8 +369,7 @@ class AssetSearchService:
         """
         # Resolve providers
         if not provider_codes:
-            all_providers = AssetProviderRegistry.list_providers()
-            provider_codes = [p["code"] for p in all_providers]
+            provider_codes = _default_search_codes()
 
         valid_providers: list[tuple[str, AssetSourceProvider]] = []
         for code in provider_codes:

@@ -3,13 +3,14 @@
 A split redistributes a position's existing cost over a new quantity: its ADJUSTMENT rows never add or remove cost or
 capital. Every reader of the ledger that must recognise them — the portfolio engine, the lots analysis, Yield on Cost,
 the average-cost replays of the WAC preview, the broker summary and the auto cost — loads them here, with one query,
-and judges a ratio with one rule. A named point where the layer reads the database (rule 1 of
-``financial-math.instructions.md``): the rows of the given transactions, nothing else.
+and judges a ratio with one rule. The event store asks here which incoming adjustments of a SPLIT have no cost, before
+it lets the SPLIT change type. A named point where the layer reads the database (rule 1 of
+``financial-math.instructions.md``): the rows of the given transactions, or linked to the given events, nothing else.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import date as date_type
 from decimal import Decimal
@@ -102,3 +103,28 @@ async def split_linked_ids(db: AsyncSession, transactions: Sequence[Transaction]
     never the event's ratio, so no ratio is judged here.
     """
     return {link.transaction_id for link in await load_split_links(db, transactions)}
+
+
+async def costless_incoming_split_adjustments(db: AsyncSession, event_ids: Collection[int]) -> dict[int, list[int]]:
+    """The incoming ADJUSTMENTs without a cost linked to the SPLITs among ``event_ids``: event id → transaction ids, sorted.
+
+    Linked to a SPLIT, such a row only rescales the position, so it needs no cost of its own (the Auto mode stores
+    none). The same row with its event no longer a SPLIT would be an acquisition of unknown cost: the event store
+    refuses that retype while one exists (P-10, decision 27). An outgoing row is not listed: without the SPLIT it is a
+    reduction at average cost, which needs no cost; nor is an event that is not a SPLIT. {} without candidates.
+    """
+    if not event_ids:
+        return {}
+    stmt = (
+        select(Transaction.asset_event_id, Transaction.id)
+        .join(AssetEvent, Transaction.asset_event_id == AssetEvent.id)
+        .where(AssetEvent.id.in_(list(event_ids)))
+        .where(AssetEvent.type == AssetEventType.SPLIT)
+        .where(Transaction.type == TransactionType.ADJUSTMENT)
+        .where(Transaction.quantity > 0)
+        .where(Transaction.cost_basis_override.is_(None))
+    )
+    costless: dict[int, list[int]] = {}
+    for event_id, transaction_id in (await db.execute(stmt)).all():
+        costless.setdefault(event_id, []).append(transaction_id)
+    return {event_id: sorted(transaction_ids) for event_id, transaction_ids in costless.items()}

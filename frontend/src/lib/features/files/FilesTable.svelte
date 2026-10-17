@@ -23,7 +23,9 @@
     // Generate a consistent color based on broker id for visual distinction
     // Uses shared golden-ratio color utility
     import {getIndexColor, getStringColor} from '$lib/utils/colors';
-    import {FILE_AVATAR_INITIAL_COLOR} from '$lib/theme/drawnColors';
+    import {fileAvatarInitialColor} from '$lib/theme/drawnColors';
+    import {chartRoles} from '$lib/theme/roleColors';
+    import {isDarkTheme} from '$lib/theme/themeMode';
     import {getBrokerIconCandidates} from '$lib/utils/broker/brokerHelpers';
     import {canPreviewFileData} from '$lib/utils/files/filePreview';
     import {getCachedPreview} from '$lib/stores/files/imagePreviewCache';
@@ -185,7 +187,9 @@
     function buildAvatarDataUrl(label: string, seed: string): string {
         const initial = (label.trim().charAt(0) || '?').toUpperCase();
         const bg = getStringColor(seed).text;
-        const fg = FILE_AVATAR_INITIAL_COLOR;
+        // An SVG data URL cannot follow a `var()`: the initial is the role that reads best on this disc, read when the
+        // avatar is built. Its two candidates are near-black and near-white in both themes.
+        const fg = fileAvatarInitialColor(chartRoles(isDarkTheme()), bg);
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="16" fill="${bg}"/><text x="16" y="21" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700" fill="${fg}">${escapeHtml(initial)}</text></svg>`;
         return `data:image/svg+xml,${encodeURIComponent(svg)}`;
     }

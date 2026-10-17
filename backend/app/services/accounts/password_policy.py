@@ -3,7 +3,8 @@
 The five rules of release 1.3 — a minimum length and one character of each class — are checked here for registration,
 password changes, reset links and the command line. ``GET /system/instance`` publishes them, so the app draws and checks
 the same list (``PasswordStrength``), and a change made here reaches the interface without a change of its own. A stored
-password is never checked again: the rules apply only when a new one is chosen.
+password is never checked again: the rules apply only when a new one is chosen. A password that protects more than an
+account, such as a backup's (workstream B, P12), takes the same rules with a longer minimum (``rules_with_minimum_length``).
 
 The character classes are Unicode, the same the app's regular expressions use: uppercase ``Lu``, lowercase ``Ll``, digit
 ``Nd``, and a symbol is any character that is not a letter, a number or whitespace. So an uppercase «É» counts, and an
@@ -11,6 +12,7 @@ Arabic-Indic digit does too. Length counts characters (code points).
 """
 
 import unicodedata
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -52,11 +54,37 @@ _CHECKS: dict[str, Callable[[str, PasswordRule], bool]] = {
 }
 
 
-def failed_rules(password: str) -> list[str]:
-    """The codes of the rules ``password`` does not meet, in the rules' order; empty when it meets them all."""
-    return [rule.code for rule in PASSWORD_RULES if not _CHECKS[rule.code](password, rule)]
+def failed_rules(password: str, rules: Sequence[PasswordRule] | None = None) -> list[str]:
+    """The codes of the rules ``password`` does not meet, in the rules' order; empty when it meets them all.
+
+    ``rules``: a list made from these rules (``rules_with_minimum_length``); by default the accounts' own.
+    """
+    return [rule.code for rule in _rules(rules) if not _CHECKS[rule.code](password, rule)]
 
 
-def password_rules_public() -> list[dict]:
-    """The rules as ``GET /system/instance`` publishes them: ``code``, and ``value`` for the rule that has one."""
-    return [{"code": rule.code, "value": rule.value} for rule in PASSWORD_RULES]
+def password_rules_public(rules: Sequence[PasswordRule] | None = None) -> list[dict]:
+    """The rules as ``GET /system/instance`` publishes them: ``code``, and ``value`` for the rule that has one.
+
+    ``rules``: as for ``failed_rules``.
+    """
+    return [{"code": rule.code, "value": rule.value} for rule in _rules(rules)]
+
+
+def rules_with_minimum_length(minimum: int, rules: Sequence[PasswordRule] | None = None) -> tuple[PasswordRule, ...]:
+    """The rules with a minimum length of at least ``minimum`` characters: raised where it is lower, never lowered.
+
+    The other rules and their order stay; a list without a minimum length gains one, first. ``rules``: by default the
+    accounts' own, read at each call, so that a change of these rules reaches every list made from them. ``ValueError``
+    for a minimum below 1.
+    """
+    if minimum < 1:
+        raise ValueError(f"A minimum length is at least 1, not {minimum}")
+    current = _rules(rules)
+    if not any(rule.code == "min_length" for rule in current):
+        return (PasswordRule("min_length", minimum), *current)
+    return tuple(PasswordRule(rule.code, max(rule.value or 0, minimum)) if rule.code == "min_length" else rule for rule in current)
+
+
+def _rules(rules: Sequence[PasswordRule] | None) -> tuple[PasswordRule, ...]:
+    """The given rules, or the accounts' own as they are now."""
+    return PASSWORD_RULES if rules is None else tuple(rules)

@@ -4,8 +4,20 @@
     "intro": "The data of this LibreFolio in one archive, to keep somewhere safe or to move to another installation.",
     "download": {
       "title": "Back up the instance",
-      "description": "One archive with the database, the uploaded files, the broker reports and the risk scenarios. The logs and the instance key are not included.",
+      "description": "One archive with the database, the uploaded files, the broker reports and the risk scenarios. The logs are never included; the instance key only in a secure backup.",
       "privacy": "The archive holds every user's data and is not encrypted: store it somewhere private.",
+      "mode": {
+        "legend": "Kind of backup",
+        "clear": "Clear",
+        "clearDescription": "A plain .zip: whoever has the file sees all the data, and on another instance the keys of the data providers must be entered again.",
+        "secure": "Secure",
+        "secureDescription": "An .lfbk encrypted with a password you choose: only that password opens it, and a lost password cannot be recovered. It also carries the keys of the data providers."
+      },
+      "password": {
+        "label": "Password of the backup",
+        "confirmLabel": "The same password again",
+        "mismatch": "The two passwords differ."
+      },
       "create": "Create backup",
       "createAgain": "Create a new backup",
       "creating": "Creating the backup…",
@@ -14,11 +26,13 @@
         "preparing": "Preparing",
         "database": "Copying the database",
         "files": "Adding the files",
-        "finalizing": "Finishing"
+        "finalizing": "Finishing",
+        "encrypting": "Encrypting with your password"
       },
       "progress": "{done} of {total}",
       "ready": "Backup ready",
       "readyDetails": "{name}, {size}, created on {date}",
+      "readyEncrypted": "Encrypted with your password: keep it safe, LibreFolio cannot recover it.",
       "download": "Download",
       "delete": "Delete from the server",
       "deleting": "Deleting the backup…",
@@ -29,7 +43,8 @@
       "warnings": {
         "database_integrity": "The database failed its integrity check: it was archived as it is.",
         "foreign_key_violations": "The database has broken references between tables: it was archived as it is.",
-        "files_skipped": "Some files were left out: links, special files, files or folders that could not be read, or files removed during the backup."
+        "files_skipped": "Some files were left out: links, special files, files or folders that could not be read, or files removed during the backup.",
+        "instance_key_unusable": "The instance key cannot be used: the backup was made without it, so the keys of the data providers must be entered again after a restore."
       },
       "errors": {
         "backup_busy": "Another backup is running: try again when it ends.",
@@ -39,7 +54,8 @@
         "backup_interrupted": "The backup was interrupted, for example by a restart: create a new one.",
         "backup_job_not_found": "This backup is no longer on the server: create a new one.",
         "network": "The server could not be reached.",
-        "unexpected": "The server answered with an error: reload the page and try again."
+        "unexpected": "The server answered with an error: reload the page and try again.",
+        "password_too_weak": "The password does not meet the rules of a backup's password."
       },
       "toast": {
         "warnings": "Backup ready, with warnings: check them before you rely on it."
@@ -57,6 +73,7 @@
       "progress": "{done} of {total}",
       "cancelUpload": "Stop sending",
       "phase": {
+        "decrypting": "Decrypting the backup",
         "checking": "Checking the archive",
         "unpacking": "Unpacking it on a copy",
         "upgrading": "Updating the copy's database",
@@ -104,8 +121,10 @@
         "fixes": "Fixes applied to the copy: {fixes}.",
         "contents": "{files, plural, one {# file} other {# files}} ({filesSize}); database {databaseSize}.",
         "tablesChanged": "Tables whose rows the update changed:",
-        "keyIncluded": "The instance key is included.",
+        "keyIncluded": "The backup carries the key of the instance it comes from: this LibreFolio keeps its own.",
         "keyNotIncluded": "The instance key is not included: this LibreFolio keeps its own.",
+        "secretsRekeyed": "{count, plural, one {# saved key of a data provider is re-encrypted with this instance's key.} other {# saved keys of data providers are re-encrypted with this instance's key.}}",
+        "secretsUnreadable": "{count, plural, one {# saved key of a data provider cannot be read with this instance's key: enter it again after the restore.} other {# saved keys of data providers cannot be read with this instance's key: enter them again after the restore.}}",
         "totals": {
           "same": "Ledger totals: the same as when the backup was made.",
           "changed": "Ledger totals differ from the backup's on {count, plural, one {# line} other {# lines}}:",
@@ -177,6 +196,7 @@
         "no_space": "Not enough free space on the server to check the archive.",
         "stage_failed": "The copy could not be written: the server's log has the cause.",
         "database_damaged": "The backup's database is damaged: it cannot be restored.",
+        "database_foreign_objects": "The backup's database holds triggers, views or other objects LibreFolio never creates: it was not made by LibreFolio, or it was changed, and it cannot be restored.",
         "manifest_mismatch": "The backup's database is not the one its description lists.",
         "head_unknown": "This LibreFolio cannot read its own migrations: the server's log has the cause.",
         "revision_missing": "The backup's database has no version.",
@@ -191,7 +211,17 @@
         "restore_not_pending": "No restore waits for the next start.",
         "restore_pending": "A restore waits to apply this copy: cancel it first.",
         "network": "The server does not answer: check the connection and try again.",
-        "unexpected": "The server answered with an error: the server's log has the cause."
+        "unexpected": "The server answered with an error: the server's log has the cause.",
+        "wrong_password": "Wrong password, or the file was changed: type the password again.",
+        "password_required": "This is a secure backup: type its password.",
+        "envelope_damaged": "The secure backup is damaged or was changed: it cannot be opened.",
+        "envelope_unsupported": "The secure backup comes from a newer LibreFolio: update LibreFolio first."
+      },
+      "password": {
+        "intro": "A secure backup: type the password it was made with.",
+        "label": "Password of the backup",
+        "submit": "Check the backup",
+        "cancel": "Cancel"
       }
     }
   }

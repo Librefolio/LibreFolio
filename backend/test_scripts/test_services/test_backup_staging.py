@@ -44,15 +44,32 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     method; ``unreadable``, warned ``control_totals_unreadable``, when they cannot be read on the copy. Never a blocker:
     ``restorable`` and ``blockers`` as they would be without them. ``_report`` without a comparison says ``absent``,
     with one carries it; a ``report.json`` written before lot B-13 still reads, its totals ``absent``.
+(l) The database's own schema objects (lot B-28): LibreFolio never creates a trigger, a view or a virtual table, so a
+    backup whose database holds one — a trigger on an app table, a view whose recursive CTE never ends, an fts5 virtual
+    table, a trigger whose SQL hides its kind behind a comment (``CREATE/**/TRIGGER``), or all four at once — is
+    refused ``database_foreign_objects`` once unpacked, before anything else opens the copy (``describe_database``, as
+    ``staging`` imports it, fails the test if it is reached). Nothing of the copy is left; one warning gives the count
+    and the kinds, and no line of the log nor the message names an object or quotes its SQL. A schema SQLite refuses
+    to read — a trigger whose row claims ``type = 'table'`` (revision 05:30 of the contract: «malformed database
+    schema»), a row whose SQL does not parse — is ``database_damaged``, also before anything else opens the copy. This
+    LibreFolio's own schema, the head made by alembic, holds only tables and indexes, which the refusal lets through.
+    Every connection a check opens on its copy through ``staging``, ``snapshot`` and ``totals`` turns ``trusted_schema``
+    off before any other statement; the first of them reads the schema, read only, and runs nothing of it.
 
 Real databases: two, made once for the module by ``alembic upgrade`` in a process of their own (at the head, and at
 ``OLDER``), then copied for every data directory and given accounts by SQL. Two more ``alembic`` processes
-are the product's: the upgrade of a copy that succeeds, and one that fails on the copy (a trigger refuses any change of
-its revision). Every other failure is simulated in this process, for one test: ``staging.subprocess`` (an ``alembic``
-that ends badly, times out or cannot start), ``staging._upgrade``, ``staging.run_post_migration_fixes``, ``staging.os``
-(files that fail to write), ``staging.shutil`` (a disk with little room), ``staging.ALEMBIC_INI``,
+are the product's: the upgrade of a copy that succeeds, and one that fails on the copy (an index already holds the name
+of the table a pending migration creates, so its ``CREATE TABLE`` fails). Every other failure is simulated in this
+process, for one test: ``staging.subprocess`` (an ``alembic`` that ends badly, times out or cannot start),
+``staging._upgrade``, ``staging.run_post_migration_fixes``, ``staging.os`` (files that fail to write), ``staging.shutil``
+(a disk with little room), ``staging.ALEMBIC_INI``,
 ``staging.MAX_ENTRIES`` and ``ledger_totals_of`` (as ``staging`` and ``totals`` name it). ``instance_backup.totals`` is
 imported by the tests that need it, never at collection: until lot B-13 writes it, each of them fails on its own.
+(l) replaces ``describe_database`` as ``staging`` imports it with a function that fails the test, and wraps ``connect``
+where ``staging`` and ``snapshot`` look up ``sqlite3`` and ``totals`` looks up ``aiosqlite``, to record the statements
+of each connection from its very first (a trace set as the connection is made). Two of its archives are a real backup
+whose database was then edited through ``writable_schema``: SQLite refuses their schema, so no backup is made of them.
+``staging._refuse_foreign_objects`` is looked up by the test that needs it, never at collection.
 
 Pure: every data directory, database and archive lives in ``tmp_path``. This process and every process it starts are
 configured with a production data directory of the test (``LIBREFOLIO_TEST_*`` removed, ``LIBREFOLIO_DATA_DIR`` set and
@@ -80,20 +97,23 @@ import threading
 import unicodedata
 import warnings
 import zipfile
-from collections.abc import Iterator
-from contextlib import closing
-from dataclasses import dataclass, replace
+from collections.abc import Callable, Iterator
+from contextlib import closing, contextmanager
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import Any
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import pytest
+from structlog.testing import capture_logs
 
 from backend.app.config import get_data_dir
 from backend.app.db.post_migration.base import PostMigrationReport
 from backend.app.services.financial_math.ledger_totals import CONTROL_TOTALS_VERSION, control_totals
-from backend.app.services.platform.instance_backup import staging
+from backend.app.services.platform.instance_backup import snapshot, staging
 from backend.app.services.platform.instance_backup.archive import BuiltArchive, build_archive
 from backend.app.services.platform.instance_backup.jobs import _RunLock
 from backend.app.services.platform.instance_backup.manifest import MANIFEST_MAX_BYTES, BackupManifest, ManifestDatabase, ManifestFile
@@ -1599,12 +1619,25 @@ def test_an_upgrade_that_fails_ends_late_or_cannot_start_is_refused(instance, ol
     print_success(f"{type(outcome).__name__}: upgrade_failed")
 
 
+#: The migration every older backup of this module still has to run that creates a table, and that table. It creates the
+#: tables it does not find among the tables: an index holding that name is not one, and refuses its ``CREATE TABLE``.
+PENDING_MIGRATION = "007_plugin_settings"
+PENDING_TABLE = "plugin_system_settings"
+
+
 def test_an_upgrade_that_fails_in_alembic_is_refused_and_leaves_nothing(instance, databases, tmp_path):
-    """(e) For real: an older backup whose database refuses any change of its revision (a trigger). ``alembic`` fails in
-    its own process, on the copy, whatever the migration; the check says ``upgrade_failed`` and removes the copy."""
+    """(e) For real: an older backup whose database holds an index under the name of the table ``007_plugin_settings``
+    creates. That migration sees no such table, and its ``op.create_table`` fails («there is already an index named»)
+    in alembic's own process, on the copy; the check says ``upgrade_failed`` and removes the copy. Tables and indexes
+    only, as LibreFolio makes them: lot B-28 lets the archive through to its upgrade."""
+    assert PENDING_MIGRATION in [migration.revision for migration in AFTER_OLDER], f"precondition: {PENDING_MIGRATION} is still to run on a backup at {OLDER}"
     data = make_data_dir(tmp_path / "data", databases.older)
-    execute(data / DATABASE_ENTRY, "CREATE TRIGGER refuse_every_upgrade BEFORE UPDATE ON alembic_version BEGIN SELECT RAISE(ABORT, 'this database refuses every upgrade'); END")
+    execute(data / DATABASE_ENTRY, f"CREATE INDEX {PENDING_TABLE} ON users (username)")
     archive = build_into(data, tmp_path / "work").path
+    rows = rows_of(database_of(archive, tmp_path / "archived.db"), "SELECT type, name, sql FROM sqlite_master")
+    foreign = [(kind, name, schema_kind(sql)) for kind, name, sql in rows if kind not in ("table", "index") or schema_kind(sql) not in ALLOWED_KINDS]
+    assert not foreign, f"precondition: the backup's database holds no trigger, view or virtual table, so lot B-28 lets it through: {foreign}"
+    assert ("index", PENDING_TABLE) in {(kind, name) for kind, name, _sql in rows}, f"precondition: the backup carries the index named {PENDING_TABLE}"
     error, progress = refused(archive, instance)
     assert (error.code, progress.phases) == ("upgrade_failed", ["checking", "unpacking", "upgrading"]), f"alembic exited with an error: {error.code}, {progress.phases}"
     print_success("alembic failed on the copy: upgrade_failed, copy removed")
@@ -2126,3 +2159,441 @@ def test_a_fix_that_reclassifies_lone_pair_halves_changes_no_total(instance, dat
     assert totals_in(report) == ("same", [], 0), f"reclassified rows change no total: {totals_in(report)}"
     assert report.warnings == [], f"nothing to warn: {report.warnings}"
     print_success("orphan_pair_halves applied: same")
+
+
+# =============================================================================
+# (l) The database's own schema objects (lot B-28)
+# =============================================================================
+#
+# An archive brings the schema of its database: SQLite builds every object from the SQL text of its row in
+# ``sqlite_master``. LibreFolio's migrations create tables and indexes only, so a trigger, a view or a virtual table
+# means a database LibreFolio did not make, or one changed since: the check refuses it before any of it can run. Every
+# name written below holds ``UNTRUSTED``: a line of the log or a message that holds it names an object of the archive
+# or quotes its SQL.
+
+#: What every name of an object this section writes into a database holds: the archive's own text, untrusted.
+UNTRUSTED = "b28_untrusted"
+#: The one warning a refusal of foreign objects logs (§1 of the contract), with their count and their kinds.
+FOREIGN_OBJECTS_EVENT = "A backup's database holds schema objects LibreFolio never creates"
+#: Logged through ``staging``'s own logger before a check: the capture must see it, or «no line names an object» proves
+#: nothing.
+LOG_CANARY = "b28 staging test: a canary through staging's own logger"
+#: ``PRAGMA trusted_schema=OFF`` however a check writes it: any case and spacing, ``OFF`` as ``0``, ``false`` or ``no``.
+TRUSTED_SCHEMA_OFF = re.compile(r"\s*pragma\s+trusted_schema\s*(?:=\s*(?:off|0|false|no)|\(\s*(?:off|0|false|no)\s*\))\s*;?\s*", re.IGNORECASE)
+#: How far a check goes before it refuses what the database of its copy holds: the copy must be written to be read.
+UNPACKED = ["checking", "unpacking"]
+#: The rows of a schema a restore lets through, read by their SQL: tables, indexes, the indexes SQLite makes (no SQL).
+ALLOWED_KINDS = ("table", "index", "automatic index")
+#: The keywords after ``CREATE`` and the kind they make, as §1 of the contract reads a row; anything else is ``other``.
+_KEYWORD_KINDS = {("TABLE",): "table", ("INDEX",): "index", ("UNIQUE", "INDEX"): "index", ("TRIGGER",): "trigger", ("VIEW",): "view", ("VIRTUAL", "TABLE"): "virtual"}
+#: What may stand between two keywords: spaces, ``-- …`` to the end of the line, ``/* … */`` (unclosed: to the end).
+_SQL_GAP = re.compile(r"(?:\s+|--[^\n]*|/\*.*?(?:\*/|\Z))*", re.DOTALL)
+_SQL_WORD = re.compile(r"[A-Za-z_]+")
+
+
+@dataclass(frozen=True)
+class SchemaObject:
+    """An object LibreFolio never creates: its name, the SQL that makes it, its kind as the refusal counts it. Its row in
+    ``sqlite_master``: ``row_type``, and the SQL itself, or ``stored`` when the test writes another text in its place
+    through ``writable_schema`` (SQLite stores the text of what it creates in a form of its own)."""
+
+    name: str
+    sql: str
+    row_type: str
+    kind: str
+    stored: str | None = None
+
+    @property
+    def row(self) -> tuple[str, str]:
+        return self.row_type, self.stored or self.sql
+
+    def add_to(self, database: Path) -> None:
+        execute(database, self.sql)
+        if self.stored is not None:
+            rewrite_schema(database, "UPDATE sqlite_schema SET sql = ? WHERE name = ?", self.stored, self.name)
+
+
+#: A trigger on an app table the check writes (the post-migration fixes, the rekey): it would make an account an
+#: administrator of the restored instance.
+TRIGGER = SchemaObject(
+    name="b28_untrusted_promote",
+    sql="CREATE TRIGGER b28_untrusted_promote AFTER UPDATE ON users BEGIN UPDATE users SET is_superuser = 1, is_active = 1 WHERE username = 'bob_user'; END",
+    row_type="trigger",
+    kind="trigger",
+)
+#: A view whose recursive CTE never ends: whatever read it would hold the lock of the checks until a restart.
+ENDLESS_VIEW = SchemaObject(
+    name="b28_untrusted_endless",
+    sql="CREATE VIEW b28_untrusted_endless AS WITH RECURSIVE b28_untrusted_n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM b28_untrusted_n) SELECT i FROM b28_untrusted_n",
+    row_type="view",
+    kind="view",
+)
+#: An fts5 virtual table: code of its module runs whenever it is read. Its shadow tables are plain tables, let through.
+VIRTUAL_TABLE = SchemaObject(name="b28_untrusted_search", sql="CREATE VIRTUAL TABLE b28_untrusted_search USING fts5(body)", row_type="table", kind="virtual")
+_COMMENTED = "CREATE TRIGGER b28_untrusted_commented AFTER UPDATE ON users BEGIN UPDATE users SET is_superuser = 1 WHERE username = 'bob_user'; END"
+#: A trigger whose SQL hides its kind behind a comment between the keywords. SQLite stores ``CREATE TRIGGER`` for any
+#: trigger it creates, so the comment is written in its place through ``writable_schema``; SQLite loads it all the same.
+COMMENTED_TRIGGER = SchemaObject(name="b28_untrusted_commented", sql=_COMMENTED, row_type="trigger", kind="trigger", stored=_COMMENTED.replace("CREATE TRIGGER", "CREATE/**/TRIGGER", 1))
+
+FOREIGN_OBJECTS = [
+    pytest.param((TRIGGER,), id="trigger"),
+    pytest.param((ENDLESS_VIEW,), id="recursive-cte-view"),
+    pytest.param((VIRTUAL_TABLE,), id="fts5-virtual-table"),
+    pytest.param((COMMENTED_TRIGGER,), id="comment-between-the-keywords"),
+    pytest.param((TRIGGER, ENDLESS_VIEW, VIRTUAL_TABLE, COMMENTED_TRIGGER), id="all-four-at-once"),
+]
+
+
+@dataclass(frozen=True)
+class SchemaDamage:
+    """A schema SQLite refuses to read. ``sql`` makes the object ``name`` before the backup; ``edit`` then changes its
+    row, through ``writable_schema``, in the database of the archive. No backup is made of such a database (its
+    snapshot's description fails: SQLite refuses the schema), so only a hand puts one in an archive."""
+
+    name: str
+    sql: str
+    edit: str
+
+
+#: A trigger whose row claims ``type = 'table'``, its rootpage left at 0 as SQLite wrote it. SQLite 3.54 then refuses
+#: the whole schema («malformed database schema»), as for ``index`` or ``view`` and whatever the rootpage: a trigger
+#: only loads as ``type = 'trigger'`` (revision 05:30 of the contract) — unless the connection turned
+#: ``writable_schema`` on, as ``VACUUM`` does inside: then SQLite loads it, and it fires. Nothing of the app turns it on.
+DISGUISED_TRIGGER = SchemaDamage(
+    name="b28_untrusted_disguised",
+    sql="CREATE TRIGGER b28_untrusted_disguised AFTER UPDATE ON users BEGIN UPDATE users SET is_superuser = 1 WHERE username = 'bob_user'; END",
+    edit="UPDATE sqlite_schema SET type = 'table' WHERE name = 'b28_untrusted_disguised'",
+)
+#: A table whose SQL does not parse: its closing parenthesis gone.
+UNPARSABLE = SchemaDamage(
+    name="b28_untrusted_unparsable",
+    sql="CREATE TABLE b28_untrusted_unparsable (body TEXT)",
+    edit="UPDATE sqlite_schema SET sql = 'CREATE TABLE b28_untrusted_unparsable (body TEXT' WHERE name = 'b28_untrusted_unparsable'",
+)
+
+DAMAGED_SCHEMAS = [pytest.param(DISGUISED_TRIGGER, id="trigger-whose-row-claims-type-table"), pytest.param(UNPARSABLE, id="row-whose-sql-does-not-parse")]
+
+
+def rewrite_schema(database: Path, statement: str, *parameters: object) -> None:
+    """Run ``statement`` on ``sqlite_schema`` itself (``PRAGMA writable_schema``) and commit: what neither the app nor
+    SQLite's own ``CREATE`` writes."""
+    with closing(sqlite3.connect(database)) as conn:
+        conn.execute("PRAGMA writable_schema = ON")
+        with conn:
+            conn.execute(statement, parameters)
+
+
+def database_of(archive: Path, target: Path) -> Path:
+    """The database ``archive`` holds, written out at ``target``."""
+    with zipfile.ZipFile(archive) as zf:
+        target.write_bytes(zf.read(DATABASE_ENTRY))
+    return target
+
+
+def schema_rows(database: Path, names: set[str]) -> dict[str, tuple[str, str | None]]:
+    """The rows of ``sqlite_master`` named in ``names``: their type and their SQL, by name."""
+    return {name: (kind, sql) for kind, name, sql in rows_of(database, "SELECT type, name, sql FROM sqlite_master") if name in names}
+
+
+def sqlite_refusal(database: Path) -> str:
+    """What SQLite answers when the schema of ``database`` is read: its error, or nothing when it reads it."""
+    try:
+        rows_of(database, "SELECT name, sql FROM sqlite_master")
+    except sqlite3.DatabaseError as exc:
+        return str(exc)
+    return ""
+
+
+def archive_holding(tmp: Path, databases: Databases, objects: tuple[SchemaObject, ...]) -> Path:
+    """A real backup of a data directory at the head whose database got ``objects`` before it was archived. Checked: the
+    database of the archive keeps the row of each, as written."""
+    data = make_data_dir(tmp / "data", databases.head)
+    for item in objects:
+        item.add_to(data / DATABASE_ENTRY)
+    archive = build_into(data, tmp / "work").path
+    held = schema_rows(database_of(archive, tmp / "archived.db"), {item.name for item in objects})
+    assert held == {item.name: item.row for item in objects}, f"precondition: the backup carries every object as written: {held}"
+    return archive
+
+
+def archive_damaged_after_the_backup(tmp: Path, databases: Databases, damage: SchemaDamage) -> Path:
+    """A real backup of a data directory at the head whose database got ``damage.sql``; then its database edited by
+    ``damage.edit`` and put back in its place, the manifest listing its new bytes: only the database itself tells.
+    Checked: SQLite refuses the edited schema, for that very row, on a connection as the app opens one."""
+    data = make_data_dir(tmp / "data", databases.head)
+    execute(data / DATABASE_ENTRY, damage.sql)
+    built = build_into(data, tmp / "work")
+    database = database_of(built.path, tmp / "edited.db")
+    rewrite_schema(database, damage.edit)
+    refusal = sqlite_refusal(database)
+    assert refusal.startswith("malformed database schema") and damage.name in refusal, f"precondition: SQLite refuses the schema of the edited database, for {damage.name}: {refusal!r}"
+    raw = database.read_bytes()
+    entries = [replace(entry, data=raw) if entry.name == DATABASE_ENTRY else entry for entry in entries_of(built)]
+    files = [listed(DATABASE_ENTRY, raw) if entry.path == DATABASE_ENTRY else entry for entry in built.manifest.files]
+    return pack(tmp / "damaged.zip", entries, built.manifest.model_copy(update={"files": files}))
+
+
+def never_described(patch: pytest.MonkeyPatch) -> list[Path]:
+    """``describe_database`` as ``staging`` imports it, failing the test when a check reaches it: what the database of
+    the copy holds is refused before anything else opens it (§1 of the contract). The calls, kept."""
+    calls: list[Path] = []
+
+    def describe(path: Path) -> DatabaseDescription:
+        calls.append(Path(path))
+        pytest.fail("describe_database (as staging imports it) ran on the copy: the check opened it before refusing what its database holds (B-28)")
+
+    patch.setattr(staging, "describe_database", describe)
+    return calls
+
+
+@contextmanager
+def staging_logs() -> Iterator[list[dict[str, Any]]]:
+    """What is logged inside the block, behind a barrier: a warning through ``staging``'s own logger must reach the
+    capture, or «no line names an object» would prove nothing either way."""
+    with capture_logs() as events:
+        staging.logger.warning(LOG_CANARY)
+        assert any(event.get("event") == LOG_CANARY for event in events), f"barrier: staging's logger does not reach capture_logs: {events}"
+        yield events
+
+
+def words_of(value: object) -> set[str]:
+    """The words a logged value holds: the items of a list, a tuple or a set, the keys of a mapping, the words of a text."""
+    if isinstance(value, str):
+        return set(re.findall(r"[a-z]+", value.lower()))
+    if isinstance(value, dict):
+        return {str(key) for key in value}
+    if isinstance(value, list | tuple | set | frozenset):
+        return {str(item) for item in value}
+    return set()
+
+
+def leading_keywords(sql: str, count: int) -> list[str]:
+    """The first ``count`` words of ``sql``, in capitals, spaces and comments skipped before each."""
+    words: list[str] = []
+    position = 0
+    while len(words) < count:
+        gap = _SQL_GAP.match(sql, position)
+        word = _SQL_WORD.match(sql, gap.end() if gap else position)
+        if word is None:
+            break
+        words.append(word.group().upper())
+        position = word.end()
+    return words
+
+
+def schema_kind(sql: str | None) -> str:
+    """The kind of a row of a schema, read by its SQL as SQLite builds it whatever its ``type`` says (§1 of the
+    contract): ``table``, ``index``, ``automatic index`` (no SQL), or what a restore refuses: ``trigger``, ``view``,
+    ``virtual``, ``other``."""
+    if sql is None:
+        return "automatic index"
+    words = leading_keywords(sql, 3)
+    if words[:1] == ["CREATE"]:
+        for keywords, kind in _KEYWORD_KINDS.items():
+            if tuple(words[1 : 1 + len(keywords)]) == keywords:
+                return kind
+    return "other"
+
+
+def staging_function(name: str) -> Callable[..., Any]:
+    """A function lot B-28 adds to ``staging``, looked up when a test needs it, never at collection: until it exists,
+    each test that needs it fails on its own."""
+    function = getattr(staging, name, None)
+    if function is None:
+        pytest.fail(f"[new] staging.{name} does not exist: lot B-28 is not written yet")
+    return function
+
+
+@dataclass
+class Opened:
+    """A connection opened through a lookup this section wraps: ``by`` the module that looked ``connect`` up
+    (``staging``, ``snapshot`` or ``totals``), what it was asked to open and how, and every statement SQLite ran on it,
+    in order, from its very first."""
+
+    by: str
+    target: str
+    uri: bool
+    statements: list[str] = field(default_factory=list)
+
+    @property
+    def path(self) -> Path:
+        """The file it opened: a path, or a ``file:`` URI, its query left out and its escapes undone."""
+        if self.target.startswith("file:"):
+            return Path(unquote(urlsplit(self.target).path)).resolve()
+        return Path(self.target).resolve()
+
+    @property
+    def opened_read_only(self) -> bool:
+        """Opened as a ``file:`` URI with ``mode=ro``, read as a URI."""
+        split = urlsplit(self.target)
+        return self.uri and split.scheme == "file" and parse_qs(split.query).get("mode") == ["ro"]
+
+
+def traced_connection(base: type[sqlite3.Connection], statements: list[str]) -> type[sqlite3.Connection]:
+    """A connection class that puts every statement SQLite runs on it into ``statements``: the trace is set as the
+    connection is made, before whoever opened it can run anything."""
+
+    class Traced(base):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.set_trace_callback(statements.append)
+
+    return Traced
+
+
+class RecordingConnect:
+    """``sqlite3`` or ``aiosqlite`` as a module of the product looks it up: ``connect`` records each connection it opens
+    in ``opened``, traced; every other name is the module's own."""
+
+    def __init__(self, module: ModuleType, by: str, opened: list[Opened]) -> None:
+        self._module = module
+        self._by = by
+        self._opened = opened
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._module, name)
+
+    def connect(self, database: Any, *args: Any, **kwargs: Any) -> Any:
+        record = Opened(by=self._by, target=str(database), uri=bool(kwargs.get("uri")))
+        self._opened.append(record)
+        # aiosqlite hands its keywords to sqlite3.connect, in the thread that makes the connection.
+        kwargs["factory"] = traced_connection(kwargs.get("factory", sqlite3.Connection), record.statements)
+        return self._module.connect(database, *args, **kwargs)
+
+
+def recorded_connections(patch: pytest.MonkeyPatch) -> list[Opened]:
+    """Every connection opened through ``connect`` where ``staging`` and ``snapshot`` look up ``sqlite3`` and ``totals``
+    looks up ``aiosqlite``, in the order they open. The post-migration fixes and the upgrade connect on their own, which
+    §2 of the contract leaves out: not recorded."""
+    opened: list[Opened] = []
+    totals = totals_module()
+    patch.setattr(staging, "sqlite3", RecordingConnect(sqlite3, "staging", opened))
+    patch.setattr(snapshot, "sqlite3", RecordingConnect(sqlite3, "snapshot", opened))
+    patch.setattr(totals, "aiosqlite", RecordingConnect(totals.aiosqlite, "totals", opened))
+    return opened
+
+
+def on_the_copy(opened: list[Opened], root: Path, stage_id: str) -> list[Opened]:
+    """The connections opened on the database of the copy of stage ``stage_id``, in their order."""
+    copy = (stage_dir(root, stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY).resolve()
+    return [record for record in opened if record.path == copy]
+
+
+def turns_trust_off_first(record: Opened) -> bool:
+    """Whether ``PRAGMA trusted_schema=OFF`` is the first statement SQLite ran on the connection."""
+    return bool(record.statements) and TRUSTED_SCHEMA_OFF.fullmatch(record.statements[0]) is not None
+
+
+def first_statements(records: list[Opened]) -> list[tuple[str, list[str]]]:
+    """Who opened each connection, and its first two statements: what a failure shows."""
+    return [(record.by, record.statements[:2]) for record in records]
+
+
+@pytest.mark.parametrize("objects", FOREIGN_OBJECTS)
+def test_a_database_holding_what_librefolio_never_creates_is_refused_before_anything_else_opens_its_copy(instance, databases, tmp_path, monkeypatch, objects):
+    """(l) §1 Refused once unpacked, before any other connection to the copy: ``describe_database`` (its integrity
+    check, its counts), the upgrade, the fixes and all that follows never see it. Nothing of the copy left, the lock
+    free, the archive unchanged; the message names no object and quotes no SQL."""
+    print_section("B-28: the database's own schema objects")
+    archive = archive_holding(tmp_path, databases, objects)
+    original = sha256(archive.read_bytes())
+    described = never_described(monkeypatch)
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    error, progress = refused(archive, instance)
+    assert described == [], f"refused before describe_database opened the copy: {described}"
+    assert (error.code, progress.phases) == ("database_foreign_objects", UNPACKED), f"refused for what the database holds, once unpacked: {error.code}, {progress.phases}: {error}"
+    assert sha256(archive.read_bytes()) == original, "the archive is only read"
+    assert UNTRUSTED not in str(error), f"the message names no object of the archive and quotes none of its SQL: {error}"
+    print_success(f"{len(objects)} object(s), {sorted({item.kind for item in objects})}: database_foreign_objects")
+
+
+@pytest.mark.parametrize("objects", FOREIGN_OBJECTS)
+def test_the_refusal_warns_once_with_the_count_and_the_kinds_never_a_name_nor_its_sql(instance, databases, tmp_path, monkeypatch, objects):
+    """(l) §1 One warning, «A backup's database holds schema objects LibreFolio never creates», with how many objects and
+    their kinds (``trigger``, ``view``, ``virtual``, ``other``). Their names and their SQL are the archive's untrusted
+    text: no line of the log holds them."""
+    archive = archive_holding(tmp_path, databases, objects)
+    never_described(monkeypatch)
+    kinds = {item.kind for item in objects}
+    with staging_logs() as events:
+        error, _progress = refused(archive, instance)
+    assert error.code == "database_foreign_objects", f"precondition: refused for what the database holds: {error.code}: {error}"
+    lines = [event for event in events if event.get("event") != LOG_CANARY]
+    warned = [event for event in lines if event.get("log_level") in ("warning", "error", "critical")]
+    assert [(event.get("log_level"), event.get("event")) for event in warned] == [("warning", FOREIGN_OBJECTS_EVENT)], f"one warning, and only that one: {[(event.get('log_level'), event.get('event')) for event in lines]}"
+    fields = {key: value for key, value in warned[0].items() if key not in ("event", "log_level")}
+    assert any(type(value) is int and value == len(objects) for value in fields.values()), f"the warning gives the count, {len(objects)}: {fields}"
+    assert any(words_of(value) == kinds for value in fields.values()), f"the warning gives the kinds, {sorted(kinds)}: {fields}"
+    leaked = [event for event in lines if UNTRUSTED in repr(event)]
+    assert not leaked, f"no line of the log names an object of the archive or quotes its SQL: {leaked}"
+    print_success(f"warned: {len(objects)}, {sorted(kinds)}")
+
+
+@pytest.mark.parametrize("damage", DAMAGED_SCHEMAS)
+def test_a_schema_sqlite_refuses_to_read_is_refused_as_damaged_before_anything_else_opens_the_copy(instance, databases, tmp_path, monkeypatch, damage):
+    """(l) §1 A ``sqlite3.DatabaseError`` while the schema is read: ``database_damaged``, the code of the integrity check,
+    and still before any other connection to the copy. Nothing of the copy left, the lock free, the archive unchanged."""
+    archive = archive_damaged_after_the_backup(tmp_path, databases, damage)
+    original = sha256(archive.read_bytes())
+    described = never_described(monkeypatch)
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    error, progress = refused(archive, instance)
+    assert described == [], f"refused before describe_database opened the copy: {described}"
+    assert (error.code, progress.phases) == ("database_damaged", UNPACKED), f"refused as damaged, once unpacked: {error.code}, {progress.phases}: {error}"
+    assert sha256(archive.read_bytes()) == original, "the archive is only read"
+    print_success(f"{damage.name}: database_damaged")
+
+
+def test_this_librefolio_s_own_schema_holds_only_tables_and_indexes_which_the_refusal_lets_through(databases, tmp_path):
+    """(l) The guard. Every row of the schema of the head made by alembic, read by its SQL as §1 reads it, is a table or
+    an index, and ``_refuse_foreign_objects`` lets it through. The day a migration creates a trigger, a view or a virtual
+    table, this test says so: no backup of that LibreFolio could be restored."""
+    for item in (TRIGGER, ENDLESS_VIEW, VIRTUAL_TABLE, COMMENTED_TRIGGER):
+        assert schema_kind(item.row[1]) == item.kind, f"precondition: this test reads {item.name} as a {item.kind}, not a {schema_kind(item.row[1])}"
+    readings = [(sql, schema_kind(sql)) for sql in ("CREATE TABLE t (a)", "create  /* a */ unique -- b\n index i ON t (a)", "CREATE INDEX i ON t (a)", "CREATE TEMP TABLE t (a)", None)]
+    assert [kind for _sql, kind in readings] == ["table", "index", "index", "other", "automatic index"], f"precondition: this test reads SQL as §1 does: {readings}"
+    rows = rows_of(databases.head, "SELECT type, name, sql FROM sqlite_master ORDER BY rowid")
+    foreign = [(schema_kind(sql), name) for _type, name, sql in rows if schema_kind(sql) not in ALLOWED_KINDS]
+    assert rows and not foreign, f"this LibreFolio's own schema holds {foreign}: a migration created what a restore refuses as foreign, so no backup of this LibreFolio could be restored; staging._refuse_foreign_objects must learn the app's own objects (an allow-list) before that migration ships"
+    copy = tmp_path / "head.db"
+    shutil.copyfile(databases.head, copy)
+    refuse = staging_function("_refuse_foreign_objects")
+    try:
+        refuse(copy)
+    except StagingError as exc:
+        pytest.fail(f"_refuse_foreign_objects refuses this LibreFolio's own schema ({exc.code}: {exc}): it must learn the app's own objects (an allow-list)")
+    print_success(f"{len(rows)} rows of the head's schema: tables and indexes, let through")
+
+
+def test_every_connection_a_check_opens_on_its_copy_turns_trusted_schema_off_before_anything_else(instance, older_archive, monkeypatch):
+    """(l) §2 A whole check of an older backup, every phase run (its upgrade simulated, as in (c): the upgrade's own
+    process is not this lot's). Every connection opened on the copy where ``staging`` and ``snapshot`` look up
+    ``sqlite3`` and ``totals`` looks up ``aiosqlite`` runs ``PRAGMA trusted_schema=OFF`` before any other statement: the
+    copy's schema (its views, triggers, checks, defaults) can reach no function or virtual table that is not harmless."""
+    opened = recorded_connections(monkeypatch)
+    monkeypatch.setattr(staging, "_upgrade", stamp_head)
+    stage_id = new_stage_id()
+    progress = Progress()
+    report = stage_archive(older_archive.path, instance.root, stage_id=stage_id, progress=progress)
+    assert (report.action, progress.phases, report.control_totals) == ("upgrade", PHASES, "same"), f"precondition: a whole check, the totals read on the copy: {report.action}, {progress.phases}, {report.control_totals}"
+    on_copy = on_the_copy(opened, instance.root, stage_id)
+    silent = {"staging", "snapshot", "totals"} - {record.by for record in on_copy}
+    assert not silent, f"precondition: each of the three opens the copy during a check, yet {sorted(silent)} opened nothing recorded: {first_statements(opened)}"
+    trusting = [record for record in on_copy if not turns_trust_off_first(record)]
+    assert not trusting, f"every connection to the copy turns trusted_schema off first: {len(trusting)} of {len(on_copy)} did not: {first_statements(trusting)}"
+    print_success(f"{len(on_copy)} connections to the copy, each trusted_schema=OFF first")
+
+
+def test_a_check_first_reads_the_schema_of_its_copy_read_only_and_runs_nothing_of_it(instance, head_archive, monkeypatch):
+    """(l) §1 The first connection a check opens on its copy is ``staging``'s read of the schema: a ``file:`` URI with
+    ``mode=ro``, ``trusted_schema`` off, then reads only. It runs no statement of the archive and writes nothing."""
+    opened = recorded_connections(monkeypatch)
+    stage_id = new_stage_id()
+    report = stage_archive(head_archive.path, instance.root, stage_id=stage_id)
+    on_copy = on_the_copy(opened, instance.root, stage_id)
+    assert report.restorable and on_copy, f"precondition: a genuine archive checked, its copy opened: {report.blockers}, {first_statements(opened)}"
+    first = on_copy[0]
+    assert first.by == "staging", f"the first connection to the copy is staging's read of its schema, not {first.by}'s: {first_statements(on_copy)}"
+    assert first.opened_read_only, f"read only: a file: URI with mode=ro, opened as a URI: {first.target!r}, uri={first.uri}"
+    assert turns_trust_off_first(first) and all(statement.lstrip().upper().startswith("SELECT") for statement in first.statements[1:]), f"trusted_schema off, then reads only: {first.statements}"
+    print_success(f"first on the copy: {first.statements}")

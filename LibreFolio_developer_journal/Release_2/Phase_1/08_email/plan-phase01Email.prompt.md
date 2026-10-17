@@ -4091,3 +4091,446 @@ il testo inglese.
 > WARNING; `check-links` 97 validi; `git diff --check` pulito; porta 6188 libera.
 >
 > **Checkpoint mandato al coordinatore** (02:5x). FROZEN.
+
+> **E-11 committato ed entrato** (coordinatore, 02:50):
+> - `18d945d2e` (fix), `f2b459ebe` (docs), `fdd4acc6d` (journal), in dev col merge `bca4bd6d3`;
+> - la riga 🐛 del CHANGELOG in `2818924b7`;
+> - il mio HEAD portato avanti con un fast-forward a `2818924b7`;
+> - la nota su `security.md` è andata ad H.
+
+### R13-SEC4 — Revisione di sicurezza di B4 (backup sicuri) e di A7b-2, prima dell'ingresso (2026-10-17, 02:51–)
+> **Il compito del coordinatore** (02:50): in sola lettura, nel formato di prima; i reperti a lui, nessuna correzione.
+> 1. **B4, i backup sicuri** (B, `6c72f0efe..97037bb2e`), **con priorità**:
+>    - l'involucro `.lfbk`: scrypt più AES-256-GCM a blocchi, i limiti dell'intestazione, la malleabilità e il
+>      troncamento;
+>    - l'esportazione della chiave d'istanza: solo quando è generata, mai dall'ambiente;
+>    - le cartelle `backups/.decrypt-*` e la loro pulizia;
+>    - `--password-file` e `--password-stdin`;
+>    - `NoInputEchoRoute` sulle rotte del backup;
+>    - `GET /backup/instance/options` su un'istanza bloccata.
+> 2. **A7b-2** (A, `ec73a49c1..f5a42a00e`): il ritiro dei link di setup e il gestore globale dei 422 senza `input`.
+>
+> **Dove si legge**: dagli oggetti git, mai dal worktree di B, che le regole vietano.
+> - Fra la fine di ogni intervallo e la punta del ramo ci sono solo merge di dev, e i file in revisione sono identici.
+> - Quindi rivedo le punte, cioè ciò che entra: B4 a `33275d9a6`, A7b-2 a `c9cb27e4c`.
+>
+> **Tre revisioni in parallelo** (la lezione di R13-SEC: B4 è grande, 320 righe di involucro, 662 di staging e 879 di
+> CLI):
+> - B4-cripto: involucro, chiave e creazione;
+> - B4-ripristino: staging, rotte, CLI e frontend;
+> - A7b-2.
+>
+> **Esito: nessun reperto sopra la soglia in B4 né in A7b-2** (03:05–03:17, tre `security-review` in background;
+> carico sopra 50, quindi uno snippet solo, quello del cripto, eseguito a carico 43).
+
+> **B4, cripto** (`envelope.py`, `secure.py`, la chiave, la creazione), tutto **sano**:
+> - **KDF**: i parametri si leggono prima di qualunque scrypt e sono limitati: log2 N fra 14 e 16, r ≤ 8, p ≤ 2,
+>   blocchi da 64 KiB a 16 MiB.
+>   - Provato su `envelope.py` preso da git, senza importare l'app: N=2^30, r=255, p=255 e blocchi da 0 o 2^31 danno
+>     `envelope_unsupported` in circa 0,0 s; il costo più alto ammesso prende 0,37 s.
+>   - `cryptography` non ha un `maxmem` pratico, quindi questi limiti sono la vera guardia.
+> - **Sale e nonce**: sale (16 B) e prefisso del nonce (7 B) vengono da `secrets.token_bytes`, freschi a ogni file.
+> - **Nonce**: prefisso, indice e flag dell'ultimo blocco; oltre 2^32 blocchi è un rifiuto.
+> - **STREAM**: l'intestazione di 52 B è l'AAD di ogni blocco, e sono provati troncamento, riordino, duplicazione,
+>   aggiunta in coda e modifica dell'intestazione.
+> - **Il chiaro**: va in `.part` (O_EXCL, O_NOFOLLOW, 0600) e si rinomina solo dopo l'ultimo blocco autenticato.
+> - **La chiave**: esportata solo con `source == "generated"`; l'ambiente vince sempre, e il `.zip` in chiaro non la
+>   porta mai.
+> - **La ricifratura al ripristino**: avviene in un SAVEPOINT, e il chiaro resta in memoria.
+>
+> Note:
+> 1. Lo scrypt scrive a 2^15, contro il 2^17 di OWASP e del piano §3.5: è la scelta P12 del developer. Chi legge si
+>    ferma a 2^16, quindi alzare il costo chiede prima un lettore nuovo.
+> 2. **Gestito**: con la chiave generata, l'admin che fa un backup sicuro riceve la chiave e può decifrare offline i
+>    segreti dei plugin di ogni utente (decisione 39). Niente obbliga il pannello a mettere
+>    `LIBREFOLIO_INSTANCE_KEY(_FILE)`.
+> 3. L'output di `backup decrypt` porta la chiave, e l'avviso (`backup_cli.py:765`) non dice che sblocca ogni chiave di
+>    provider salvata.
+> 4. Lo staging accetta la chiave anche da un `.zip` in chiaro (`staging.py:373-381`). È innocuo: la chiave decifra
+>    solo le righe della copia.
+> 5. Lo zip in chiaro, con la chiave, resta nella cartella del job fino alla pulizia; dopo un crollo, fino al backup
+>    successivo, un'ora dopo (`jobs.py:241-249`). Accettato in P12.
+> 6. Un file della chiave oltre 4096 B viene esportato, ma ogni ripristino poi lo rifiuta (`checksum_mismatch`).
+>    Succede solo con un file modificato a mano.
+> 7. Il rollback, cioè rimettere un `.lfbk` vecchio con la stessa password, è inerente al disegno.
+> 8. Un `check` modificato si legge come `wrong_password`: cosmetico.
+
+> **B4, ripristino, rotte, CLI e frontend**, tutto **sano**:
+> - **La password**: solo `SecretStr` in JSON (`extra=forbid`, al più 1024); l'upload è un octet-stream senza password.
+> - **`NoInputEchoRoute`** su tutti e due i router.
+> - **Nessun log, stato o risposta** con la password; i traceback sono senza variabili locali.
+> - **La cartella di stage**: 0700, e il file si pubblica solo autenticato.
+> - **Il decifrato** passa per gli stessi controlli di uno zip in chiaro; la voce della chiave è limitata e
+>   controllata, e non viene mai spacchettata.
+> - **`GET /backup/instance/options`**: `require_admin`, rende solo le regole della password, e l'elenco dei permessi
+>   la confronta per funzione.
+> - **La CLI**:
+>   - `--password-file` passa da `read_secret_file`;
+>   - non c'è nessuna sorgente in argv o nell'ambiente;
+>   - `inspect` lavora in un `mkdtemp` tolto nel `finally`.
+> - **Le regole degli account** non cambiano.
+> - **Il frontend**: la password vive solo nello stato del componente; nessun `{@html}`.
+>
+> Note:
+> 1. Nessuna pulizia all'avvio per `.restore/stage/<id>/archive.zip`, che porta la chiave d'origine, se il server muore
+>    fra la decifratura e l'unpack.
+> 2. Le cartelle `.decrypt-*` della CLI lasciate da un `inspect` interrotto restano in `backups/` fino a un `inspect`
+>    di almeno un'ora dopo, e il server non le toglie mai. Un operatore che sincronizza `backups/` altrove spedirebbe il
+>    chiaro.
+> 3. `autocomplete="off"` sui campi della password: i browser lo ignorano; `new-password` per i campi di creazione.
+> 4. `--password-stdin` usa `readline`, quindi su un terminale mostra la password mentre la si scrive: con `isatty`
+>    servirebbe `getpass`.
+
+> **A7b-2**: **nessun reperto sopra la soglia**. Le tre note delle mie revisioni precedenti sono **chiuse**.
+> - **A-31**: ogni attivazione e ogni password scritta ritirano i link di setup nella stessa transazione.
+>   - Le strade: `set_user_active`, `update_user_status`, `reset_password` (con `reset` e `reset-password` della CLI),
+>     `complete_password_reset`, `change_password`.
+>   - Un link ritirato ha `consumed_at` e `revoked_at`, e diventa `TOKEN_INVALID`.
+> - **LOW-2**: un link ritirato conta come consumato, quindi l'admin esce dall'«attesa»; il PATCH passa e
+>   `setup-link` dice che non c'è nessuno in attesa.
+> - **LOW-3**: `_follow_variables` revoca a un cambio vero e tiene i link a un cambio di sole maiuscole; `set-email` va
+>   per `update_profile`.
+> - **Il 422**: un gestore unico, installato prima dei router. Confermato su FastAPI 0.141.1 e pydantic 2.13.5.
+>
+> Note:
+> 1. **LOW, una corsa**: `issue_setup_link`, o il riarmo all'avvio, decidono «in attesa» da una lettura fatta prima
+>    del BEGIN differito. Se `/auth/setup` si chiude in quel millisecondo, resta un link vivo. La direzione: rifiutare
+>    se un altro link di setup dell'account è già consumato.
+> 2. **LOW**: la disattivazione non ritira. È sicuro perché ritirano le attivazioni, ma ritirare anche alla
+>    disattivazione coprirebbe i DB delle build 1.3 precedenti.
+> 3. **Gestito**: un admin aggira il 409 `PENDING_SETUP`: crea un link di reset per l'admin in attesa, lo spende (che
+>    ritira i link di setup), poi attiva col PATCH. Conta quando `account_protection` protegge l'admin che paga.
+> 4. **Il 422** toglie solo `input`. `msg` e `ctx` portano pezzi del valore dove un validatore lo formatta
+>    (`common.py:98`, `settings.py:434-459`, `refresh.py`, i motivi di `EmailStr`, `uuid_parsing`). Nessuno sta su
+>    credenziali oggi; servirebbe un test di regressione sulle rotte delle credenziali.
+> 5. Già prima di questo lotto (F02): il link di setup generato va nel log a WARNING, quindi chi legge il log prima
+>    dell'operatore prende l'admin iniziale. Non succede col token del pannello.
+> 6. Un admin che non ha mai finito il setup non si annulla: il PATCH inattivo lascia vivo il link, e un admin in
+>    attesa retrocesso si attiva lo stesso. Un vuoto d'intenzione, solo per gli admin.
+> 7. Fuori dal lotto: senza un gestore di `ResponseValidationError`, il traceback di uvicorn scrive l'`input` di ogni
+>    errore nel log del server.
+
+> **Al coordinatore**: l'esito, le note per B (cripto 2–3, ripristino 1–4) e per A (1–4, 6), le domande del cloud
+> (cripto 2, A7b-2 nota 3) e la nota 7 per chi tiene i gestori. Nessuna correzione da parte mia.
+
+> **R13-SEC4 committato ed entrato** (coordinatore, 03:08; dev `110125350`; HEAD portato avanti con un fast-forward).
+> Lo smistamento:
+> - B (B4b): i resti dopo un crollo, l'avviso di `decrypt`, `getpass`, `autocomplete`;
+> - A: la corsa, la disattivazione, il `msg` del 422, l'admin in attesa;
+> - H: `ResponseValidationError`, che diventa H-33;
+> - le 2 domande del cloud vanno al developer.
+
+### E-12 — Catch-all e sottodomini di Fastmail
+
+#### E-12.0 — Analisi ✅ (2026-10-17, 03:10–03:20)
+> **Il compito del coordinatore** (03:08): E-12, poi in attesa per R13-SEC5 (X-R38, C-97b, Z-20, J CP-10c).
+
+**Stato reale**: dopo E-9, `delivery.mailbox_budget_key()` unisce `+tag`, i punti di Gmail e `googlemail.com`. Restano
+due casi in cui ogni parte locale è una chiave nuova, e li limita solo il budget orario dell'istanza (50/h per
+processo):
+- **un dominio catch-all**, dove tutto `*@dominio` arriva a una casella;
+- **l'indirizzamento a sottodominio di Fastmail**: `qualsiasi@utente.fastmail.com` arriva a `utente@fastmail.com`.
+  - Una ricerca web lo conferma: vale per **tutti** i domini di Fastmail (`fastmail.com`, `fastmail.fm`,
+    `fastmail.co.uk`… sono decine) e per i domini personali dei clienti, con il DNS a posto.
+
+**Le strade**
+1. **Una regola Fastmail nella chiave** (`x@u.fastmail.com` → `u@fastmail.com`). È piccola, ma non si può fare
+   completa: decine di domini e i domini personali. Il catch-all resta. ✗
+2. **Un limite per dominio destinatario**, che coprirebbe catch-all e Fastmail insieme (`x@u.fastmail.com` ha dominio
+   `u.fastmail.com`). Ma su `gmail.com` unirebbe tutti gli utenti, e allora:
+   - (2a) un elenco di grandi provider esenti, che non è mai completo: un'istanza self-hosted pubblica con molti utenti
+     di un provider non in elenco verrebbe frenata;
+   - (2b) una variabile nuova, per esempio `LIBREFOLIO_SMTP_MAX_PER_DOMAIN`.
+     - Spenta di default, come chiede la regola della specifica.
+     - Il profilo `managed` avrebbe un default, per esempio 20/h, che sta largo sopra il traffico legittimo di
+       un'istanza piccola (`max_users`).
+     - È una scelta di prodotto, ed è un lotto piccolo-medio: variabile, controllo di configurazione, tre punti di
+       chiamata, test e docs con la riga di C-99.
+3. **Accettare il resto e chiudere E-12**, senza codice.
+
+**Proposta: (3).**
+- Dopo N62 queste email non portano testo dell'attaccante: sono messaggi di LibreFolio innocui, e il budget d'istanza
+  li limita.
+- Chi ha un catch-all è un utente tecnico, e il caso è raro.
+- La leva vera dell'abuso è la registrazione aperta. La domanda del cloud sul DoS del budget, già al developer
+  (captcha o proof-of-work, limiti alla registrazione), copre lo stesso terreno con una cura migliore.
+- La doc lo dice già, da E-9: in `admin/email.en.md`, «One mailbox, however its address is written», i catch-all e
+  Fastmail sono frenati solo dal limite orario.
+- **Se il coordinatore o il developer vogliono il codice**, la strada è la (2b), in un lotto suo.
+
+#### E-12.1 — Chiusa come accettata ✅ (2026-10-17, 03:10)
+> **Decisione del coordinatore** (03:10): chiudere E-12 come accettata, con la ragione nel backlog e un rimando a
+> **D-E9-1**, la domanda anti-abuso sulla registrazione aperta, che è col developer. Nessun codice. Il checkpoint del
+> journal lo committa lui al prossimo passaggio.
+>
+> **Fatto**: E-12 ✅ nel backlog, con le ragioni di «E-12.0», il rimando a D-E9-1 e la strada (2b) se il codice servirà.
+>
+> **Dopo**: in attesa degli SHA di R13-SEC5, verso le 04:00, a slot dopo il freeze finiti.
+>
+> **E-12 committato ed entrato** (coordinatore, 03:10; dev `dfb1fcafd`; HEAD portato avanti con un fast-forward).
+
+### R13-SEC5 — Revisione di sicurezza: C-97b, X-R24/25, poi X-R38 (2026-10-17, 03:11–)
+> **Il compito del coordinatore** (03:10): sui lotti già committati nei loro rami, letti dagli oggetti git e mai dai
+> worktree:
+> 1. **C-97b** (W, `24aa1d69b` più `527306638` del journal): l'input decimale, `ExactDecimalInput`, la grandezza nel
+>    Bulk, la mini-modale degli eventi. Solo frontend.
+> 2. **X-R24/25** (X, `e22251856`): i provider di default della ricerca, senza quelli di test.
+>
+> X-R38, i limiti FX, viene quando X lo committa. Due revisioni in parallelo, una per lotto.
+>
+> **C-97b** (`24aa1d69b`, 03:11–03:21): **nessun reperto sopra la soglia.**
+> - **Sano**:
+>   - il messaggio di `EVENT_TOO_MANY_DIGITS` usa solo `date` e `type`, validati, e la mini-modale lo mostra come testo;
+>   - il Form ha 10 decimali come la colonna `RealDecimal(22,10)`, e il payload nasce da stringhe esatte;
+>   - la mini-modale manda la stringa normalizzata, senza `parseFloat`;
+>   - la «grandezza» nel Bulk toglie solo gli zeri finali, ed `exactDecimalEqual` evita un diff falso;
+>   - le regex dell'input sono lineari, e il backend rifiuta sempre: il frontend aggiunge solo rifiuti;
+>   - le stringhe i18n sono testo.
+> - **In più, il lotto chiude un pozzo `{@html}`**: nel Bulk una quantità non numerica finiva cruda in `{@html}`
+>   (`DataTableCellContent.svelte:202`); ora la quantità è escapata.
+> - Note, minime, tutte self-DoS o di visualizzazione:
+>   - un `1e-8` incollato diventa `18`: si vede, e c'era già;
+>   - la cassa del Bulk e l'editor dell'asset passano ancora da `Number`, esatto dentro i limiti del backend;
+>   - una regex quadratica nella cella del Bulk;
+>   - un incolla enorme fa calcolare `10n ** places` quando ci sono `min` e `max`;
+>   - il toast di successo mostra 2 decimali.
+
+> **X-R24/25** (`e22251856`, 03:11–03:15): **nessun reperto sopra la soglia.** Il commit restringe solo l'insieme di
+> default della ricerca.
+> - **Sano**:
+>   - l'insieme di default è uguale a `GET /assets/provider`;
+>   - `NOT_CONFIGURED` si riporta, non si aggira;
+>   - i nomi dei provider si confrontano esatti col registro;
+>   - gli errori portano solo i codici.
+> - Note per X:
+>   1. **`mockprov` è nell'immagine di produzione, sempre registrato.** Ogni utente lo nomina in una ricerca
+>      (`search.py:216-217`) e lo assegna a un asset con `POST /assets/provider`, che non controlla né il registro né
+>      `test_only` (`schemas/provider.py:282`): un asset prende così una serie finta di 100 USD al giorno.
+>      - Non dà poteri nuovi, perché è la classe di D-SEC2-1: gli asset sono globali e chiunque ne cambia il provider.
+>      - L'irrobustimento costa poco: rifiutare i codici `test_only` fuori dalla modalità test, in
+>        `core.configured_provider` e nell'assegnazione.
+>   2. **F05 non c'è ancora a questo commit**: `registry.py` non ha `is_allowed`. Quando entra, deve chiudere anche la
+>      strada del provider nominato (`configured_provider` / `get_plugin`), non solo l'elenco e il default.
+>   3. Minima: `_default_search_codes` tratta un codice sconosciuto come permesso, mentre FX lo rifiuta. Qui è innocuo.
+>
+> **X-R38** (`80f5c65ff`, 03:44–03:58): **nessun reperto sopra la soglia nel diff.**
+> - **Sano**:
+>   - **gli scrittori**: i quattro insert in `fx_rates` (`storage.py:165`, `sync.py:366, 773, 848`) passano tutti dalla
+>     normalizzazione e da `storable_fx_rate`, col controllo sul valore **invertito**, e il ripristino è solo per gli
+>     admin;
+>   - **la colonna** è `Numeric(24,10) NOT NULL`, quindi NaN non entra. Il limite vuole un valore finito, con al più 14
+>     cifre intere e un troncamento non nullo; zero e negativi sono rifiutati;
+>   - **i casi limite**, provati in processo con pydantic 2.13.5:
+>     - NaN, sNaN, -Infinity, `1e400`, `0`, `-1` e `"0x10"` danno 422;
+>     - `1E+1000000` e `1E-1000000` danno 400 in O(1);
+>     - un MB di cifre dà 400 in 2 ms;
+>   - **i messaggi** di rifiuto non portano il valore;
+>   - **la sync** salta senza interrompersi e avvisa una volta per coppia, al più 10 date, senza valori;
+>   - **`convert_bulk`**: limiti come parametri legati; ±inf, 0 e 1e-11 sono esclusi, e il salto si riporta come
+>     backward fill.
+> - **Fuori dal diff, ma sopra la soglia per il profilo gestito: MEDIUM 8/10**, la classe di D-SEC2-1.
+>   - Le scritture FX chiedono solo il login: `POST` e `DELETE /fx/rate`, `POST /fx/sync`, le rotte dei provider
+>     (`currencies.py:45, 95, 167`, `providers.py:171, 352`).
+>   - Ogni utente può:
+>     - sovrascrivere un tasso con un valore falso ma nel limite;
+>     - cancellare lo storico di una coppia;
+>     - scrivere un `source` libero, senza limite di lunghezza, anche «ECB», che l'AI Export chiama «authoritative».
+>   - Va aggiunto alla domanda D-SEC2-1 del developer: solo admin o un interruttore d'istanza, e un `source` vincolato.
+> - Note:
+>   1. **X-R45**, già nel backlog: alcuni lettori interrogano `fx_rates` senza il filtro: `fx_quotes.py:100` accetta
+>      `Infinity`, gli export del backup danno le righe crude, lo scheduler conta come fresca una riga inutilizzabile.
+>      Vale solo per le righe vecchie.
+>   2. **Un doppio limite**: un tasso a meno di 0,008 da 1E+14 passa, e SQLite lo tiene come 1e14, che la conversione
+>      salta. Inganna solo chi l'ha scritto. La direzione: richiedere anche `float(v) < 1E+14`.
+>   3. **`normalize_storable_rate`** può rendere zero quando l'inverso va in underflow, contro la sua docstring. I
+>      chiamanti di oggi lo ricontrollano; la direzione: `> 0` dopo l'inversione.
+>   4. **I tassi manuali** si salvano senza troncamento, quelli della sync troncati; l'eco cresce in modo lineare, non
+>      come J-27.
+>   5. **BOE e SNB**: `Decimal(str)` non prende `InvalidOperation`, quindi un valore ostile fa fallire il fetch di quel
+>      provider. È solo disponibilità.
+>   6. A `80f5c65ff` il gestore globale dei 422 di A non c'è ancora: l'eco dell'`input` è solo il payload di chi
+>      chiama. Senza effetto.
+>
+> **R13-SEC5 chiusa**: nessun reperto sopra la soglia nei quattro lotti. Il punto fuori diff sulle scritture FX va al
+> coordinatore per la domanda D-SEC2-1.
+>
+> **R13-SEC5 committato ed entrato** (coordinatore, 03:58; dev `7d3012e3b`; HEAD portato avanti con un
+> fast-forward). Le note sono andate a X; le scritture FX sono aggiunte alla domanda D-SEC2-1 del developer.
+
+### E-8 — La lingua dell'invito spedito per email
+
+#### E-8.0 — Analisi in sola lettura ✅ (2026-10-17, 04:00–04:10)
+> **Il compito del coordinatore** (03:58): l'analisi di E-8 in sola lettura. Il codice viene dopo A8b, perché A
+> riordina le schede di Impostazioni. Prima arriva R13-SEC6 su A8a, appena A lo consegna.
+
+**Stato reale** (HEAD `7d3012e3b`)
+- **Il backend è pronto.**
+  - `POST /email/links` accetta `language: "en" | "it" | "fr" | "es"`, solo per l'invito (`schemas/email.py:74`).
+  - Senza lingua decide `default_language` dell'istanza; il reset va sempre nella lingua dell'account
+    (`flows.send_link_email`, `:138-160`).
+  - La risposta dice in che lingua è partita (`EmailLinkResponse.language`).
+- **Il frontend non la passa.**
+  - `sendLinkApi.sendLinkByEmail({purpose, token, to})` non manda `language` (`:39-41`).
+  - `SendLinkByEmail.svelte` (80 righe, di E, a ruoli) ha per l'invito solo il campo «a chi» e il pulsante. È montato
+    da `LINK_SHARE_ACTIONS` (`features/settings/users/linkShareActions.ts`, di A), che A8b può spostare.
+- **Cosa c'è da riusare**:
+  - `LANGUAGE_OPTIONS` in `lib/i18n/index.ts:56`: codice, bandiera e nome nella sua lingua, «per i selettori»;
+  - `default_language` in `stores/app/globalSettings.ts`.
+
+**Disegno proposto**
+1. In `SendLinkByEmail`, solo per `purpose === 'invite'`, un `<select>` nativo «Language of the email».
+   - La prima voce è **«The instance's language»**, il default: nessun `language` nella richiesta, quindi il
+     comportamento di oggi non cambia e decide il backend.
+   - Poi le 4 lingue di `LANGUAGE_OPTIONS`, con bandiera e nome.
+   - I colori del campo nativo seguono la regola di T: `text-lf-primary` e i ruoli del campo accanto.
+2. `sendLinkByEmail({purpose, token, to, language})` manda `language` solo per l'invito, e solo se scelta.
+3. L'esito dice anche la lingua in cui è partita, da `answer.language`: «Sent to x@y, in Italiano».
+4. **i18n**: due chiavi nella sorgente `lib/i18n/email/`, nelle 4 lingue: l'etichetta e «la lingua dell'istanza».
+5. **Test**:
+   - i Vitest di `SendLinkByEmail`: il selettore c'è solo per l'invito; il default non manda `language`; una scelta
+     arriva nel payload; il reset non cambia;
+   - `sendLinkApi`;
+   - eventualmente un caso nella spec E2E `email-send-link`.
+6. **Docs**: `admin/email.en.md` («Send by email») e `developer/backend/email.md`. Poi E-8 ✅ nel backlog.
+
+**Decisioni** (consiglio in grassetto)
+- **D-E8-1, il default**: **«la lingua dell'istanza»**, cioè invariato. In alternativa, la lingua dell'interfaccia
+  dell'admin.
+- **D-E8-2, il perimetro**: **solo la lingua dell'email**.
+  - Farla diventare anche la lingua dell'account che si registra con l'invito chiederebbe di salvarla nel token
+    (`AccountToken`) e di leggerla alla registrazione.
+  - È codice di A, e merita una riga di backlog per A se la si vuole.
+- **D-E8-3**: **la lingua nell'esito**, sì.
+
+**Peso**: piccolo. 1 file `.svelte` di E, 1 file `.ts`, 2 chiavi i18n, Vitest e docs; nessun file di A, salvo che A8b
+non sposti il registro.
+
+**Quando**: dopo A8b, su una base che lo contiene.
+
+#### E-8.1 — Decisione N69 ✅ (2026-10-17, 04:00)
+> **Il coordinatore** (04:00) adotta le tre raccomandazioni come **decisione notturna N69**, da rivedere col
+> developer:
+> - **D-E8-1**: il default è la lingua dell'istanza, cioè invariato;
+> - **D-E8-2**: solo la lingua dell'email. Salvarla nel token per la registrazione è una riga di backlog di A, non ora;
+> - **D-E8-3**: la lingua compare nell'esito.
+>
+> Il codice viene dopo A8b, su una base che lo contiene. Questa analisi va col prossimo checkpoint del journal.
+
+### R13-SEC6 — A8a (il limite dei login falliti, `security/checks`) e i miei file (2026-10-17, 05:03–)
+> **Il compito del coordinatore** (05:02): A8a, cioè il codice `66873b0c9`, le docs `4a93f1f54` e il merge di dev
+> `125c19f0e`, con E-11 in `email.md`. Letto dagli oggetti git, mai dal worktree di A. Due parti:
+> - **i miei file**, che rivedo io;
+> - **la sicurezza** del limite, che va a un `security-review` in background: `login_throttle.py`, `security.py`,
+>   `checks.py`, `end_sessions` in SQL, le chiamate in `auth.py`.
+
+> **I miei file** (05:03–05:15, in sola lettura): **corretti**.
+> - **`verification.py`**: l'integrazione segue le indicazioni che avevo dato.
+>   - `refusal()` sta dopo `RESEND_BY_ADDRESS` e prima della ricerca dell'account.
+>   - `record_failure()` sta nel ramo unico che copre account sconosciuto e password sbagliata, col commento sul perché:
+>     nessun oracolo d'esistenza, perché il conteggio non distingue.
+>   - `record_success()` viene subito dopo, prima dei controlli di stato.
+>   - Il rifiuto diventa `EmailRateLimitedError(refused.retry_after)`, con un `RateDecision` in secondi che
+>     `_rate_limited` arrotonda per eccesso: il 429 `EMAIL_RATE_LIMITED` e l'avviso «fra N minuti» non cambiano, e il
+>     frontend nemmeno.
+> - **`api/v1/email.py`**: solo la docstring del 429; rispetta la regola dei testi del client OpenAPI (niente `${` né
+>   `\`).
+> - **Le docs**:
+>   - `developer/backend/email.md`: il paragrafo fra i passi 1 e 2, la riga della tabella dei limiti, il 401 «contato
+>     come login fallito», il 429, il paragrafo «due 429 prima della password», `#rate-window` e la riga di
+>     `emailText.ts` con «il limite dei login falliti» fra i 429. Tutto vero contro il codice: `login_throttle` usa
+>     davvero `SlidingWindowLimiter`.
+>   - `admin/email.en.md`: la riga nella tabella dei limiti, col link `configuration.md` nello stile della pagina.
+> - **Il merge `125c19f0e` è pulito sui miei file**:
+>   - fra la punta di dev e `125c19f0e` ci sono solo gli hunk di A8a;
+>   - E-9 (`mailbox_budget_key`, i costruttori senza username) ed E-11 (il 401 codificato, la docstring) sono intatti;
+>   - dev non ha più toccato i miei file da `fd6886bb0`.
+> - **I test**: i miei non sono stati toccati.
+>   - `conftest.py` spegne il limite per ogni processo di test (`setdefault`, quindi un valore esplicito vince ancora), e
+>     `dev.py` lo spegne solo nel ramo `--test` del server.
+>   - Il resend sotto il limite lo fissano LT-API-16…19 di A, che controllano gli stati e non il corpo del 401: quindi
+>     compatibili col 401 codificato di E-11.
+> - **⚠️ La revisione combinata non ha girato le mie suite.**
+>   - Il codice di A8a (04:54) non conteneva E-11: alla sua base mancava EVA-017. Il merge con dev è arrivato dopo
+>     (05:02), mentre lo slot API di A (A8a.8, 04:38–04:53) era prima.
+>   - Infatti A registra `services email-verification` **125**, che è il conteggio di prima di E-9 (oggi 127), e `api
+>     email-verification` **49**, di prima di E-11 (oggi 50).
+>   - All'ingresso servono, sulla revisione combinata:
+>     - `services email-verification` (127), `api email-verification` (50), `api email`, `api email-change-notice`;
+>     - LT-API-16…19.
+
+> **La sicurezza di A8a** (05:20–05:40).
+>
+> **⚠️ Fuori pista: l'agente `security-review` è fallito** prima di leggere qualsiasi cosa: «400 The requested model is
+> not supported», un errore dell'infrastruttura. Rilanciarlo avrebbe dato lo stesso errore. Il diff di sicurezza è
+> piccolo (circa 270 righe), quindi la revisione l'ho fatta io, in sola lettura dagli oggetti git a `125c19f0e`.
+>
+> **Reperto 1 — MEDIUM, confidenza 8/10: dietro un reverse proxy non configurato, 50 tentativi sbagliati di chiunque
+> bloccano il login di tutti.**
+> - **Il codice**: `refusal()` (`login_throttle.py:34-46`) rifiuta **prima** della password se è pieno il conteggio
+>   dell'identificativo **o** quello dell'indirizzo (`client_rate_key(client_address(request))`). Il rifiuto blocca
+>   anche la password giusta, e non si conta.
+> - **Il default**: l'immagine avvia `uvicorn … --host 0.0.0.0 --port 6040` senza `--forwarded-allow-ips`
+>   (`Dockerfile:164`), e uvicorn si fida solo di `127.0.0.1`. `LIBREFOLIO_CLIENT_IP_HEADER` è vuoto, e nessun
+>   profilo lo imposta (`client_address.py`, docstring); il cloud lo mette dal pannello (P17).
+> - **Il proxy è la norma**: l'HTTPS è compito di un reverse proxy, per disegno (`security.md:21`). Dietro un proxy in
+>   un altro container, o sull'host verso la porta di Docker, il container vede l'indirizzo del proxy o del gateway
+>   del bridge per **tutti** i visitatori.
+> - **Lo sfruttamento**, da anonimo:
+>   - 50 password sbagliate in 15 minuti, e da lì ogni login dell'istanza è rifiutato (429 `TOO_MANY_ATTEMPTS`), come
+>     il cambio password, il cambio email e il mio «resend»;
+>   - lo tiene così con circa una richiesta al secondo: quelle rifiutate costano poco (niente bcrypt) e non si contano,
+>     e ogni volta che si libera un posto la sua richiesta successiva lo riprende. Chi accede davvero quasi mai lo
+>     trova libero.
+> - **Prima di A8a**, la stessa configurazione rallentava solo i limiti per indirizzo secondari, quelli di E e di H:
+>   ora spegne il login.
+> - **Già documentato, ma non dove guarda l'operatore**: la pagina developer lo dice (`security.md:427-428`, «its 50
+>   failures lock every sign-in through it»). La sezione admin «Failed Sign-ins» (`configuration.en.md:504-526`) non
+>   nomina il proxy, e nessun controllo della scheda Security se ne accorge.
+> - **La direzione**:
+>   1. un controllo nella scheda Security e all'avvio, di H in `client_address`: richieste con `X-Forwarded-For` o
+>      `Forwarded` da un peer di cui uvicorn non si fida, quindi «i visitatori condividono un indirizzo; imposta
+>      `LIBREFOLIO_CLIENT_IP_HEADER` o `FORWARDED_ALLOW_IPS`». Coprirebbe anche i limiti per indirizzo di E;
+>   2. contro il blocco, i *device cookie* di OWASP: un browser che ha già fatto login con quell'identificativo resta
+>      fuori dal limite per indirizzo e da quello per identificativo. Oppure un ritardo progressivo invece del rifiuto
+>      secco;
+>   3. l'avviso del proxy nella sezione admin «Failed Sign-ins» e nella guida d'installazione.
+>
+> **Note sotto la soglia**:
+> 1. **Il blocco di un nome utente noto**: 10 errori in 15 minuti, da qualsiasi indirizzo, bloccano l'identificativo,
+>    password giusta compresa.
+>    - Si tiene bloccato con una richiesta al secondo.
+>    - Il titolare può entrare con l'email, che è un'altra chiave. Il link di reset non aiuta: anche la password nuova
+>      viene rifiutata finché la chiave è piena.
+>    - È il compromesso di D-A5; per il cloud vale anche per l'admin pagante. La cura dei device cookie del reperto 1
+>      copre anche questo.
+> 2. **Lo sfratto LRU**: `LOGIN_BY_IDENTIFIER` ha `max_keys` 10 000 col default di `SlidingWindowLimiter`.
+>    - Una pioggia di 10 000 identificativi sconosciuti sbagliati sfratta il contatore di un identificativo bloccato e
+>      gli ridà 10 tentativi.
+>    - Costa 10 000 bcrypt per ogni 10 tentativi, e con un /48 IPv6 il limite per indirizzo non la ferma.
+>    - La direzione: non sfrattare le chiavi piene, o un `max_keys` più alto per questo limitatore.
+> 3. **I tentativi per account**: il conteggio va per identificativo scritto, quindi chi conosce username ed email ha
+>    20 tentativi ogni 15 minuti. Contare per account darebbe un oracolo d'esistenza, quindi è voluto.
+>    - Il cambio password, con un cookie rubato, conta sotto lo username: chi ruba il cookie può bloccare il login per
+>      username del titolare, che può comunque entrare con l'email.
+> 4. **Già prima, nel mio dominio**: i limiti per indirizzo di E (`RESEND_BY_ADDRESS`, `FORGOT_BY_ADDRESS`,
+>    `REGISTRATION_EMAILS_BY_ADDRESS`) hanno la stessa dipendenza dal proxy. Dietro un proxy non configurato,
+>    «resend» e «dimenticata» si spengono per tutti con 10 richieste; la doc lo dice (`admin/email.en.md:417-421`).
+>    Il controllo del reperto 1, direzione 1, li coprirebbe.
+>
+> **Sani**:
+> - **L'ordine**: il rifiuto arriva prima della ricerca e di bcrypt al login (`auth.py:155-157`), al cambio password,
+>   al profilo e nel mio «resend». I rifiuti sono veloci allo stesso modo per account noti e ignoti.
+> - **Nessun oracolo**: `record_failure` sta nel ramo unico (login `:167`, resend `:384`); il 429 ha lo stesso corpo;
+>   `Retry-After` dice solo quando scade il più vecchio errore di quella chiave.
+> - **Le pieghe**: la chiave è `email_fold(identifier.strip())`, solo A–Z. La ricerca (`user_service.py:161`) confronta
+>   lo username esatto e l'email con `lower()` di SQLite, cioè A–Z: la chiave non piega mai meno della ricerca, quindi
+>   nessun N× per maiuscole o spazi. NFC e alias non trovano l'account.
+> - **Il successo**: `record_success` azzera solo l'identificativo scritto e mai l'indirizzo, e solo dopo il cookie
+>   (`auth.py:191`). I 403 (disattivato, non verificato) non contano né azzerano.
+> - **`end_sessions`**: atomico, `UPDATE … SET session_version = session_version + 1 RETURNING` sulla connessione della
+>   sessione, nella transazione del chiamante; poi `set_committed_value`, quindi il cookie nuovo porta la versione
+>   giusta (A-34 chiuso).
+> - **L'interruttore**: `LIBREFOLIO_LOGIN_LIMIT` è acceso di default; un valore non valido ferma l'avvio; spento, dà un
+>   avviso. `dev.py` lo spegne solo nel ramo `--test`, `conftest.py` solo per i test (`setdefault`).
+> - **`GET /security/checks`**: `require_admin`; rende id, gravità, chiave i18n e parametri. Il controllo del limite
+>   mette nei parametri solo il valore non valido della variabile, che non è un segreto.

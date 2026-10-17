@@ -217,7 +217,7 @@ class SignalPlugin(ABC):
         """Optional plugin-owned semantic output validation.
 
         Runs alongside the central output contract validation
-        (`SignalService._validate_plugin_output`), after `compute()`.
+        (`backend.app.services.signals.validation.validate_plugin_output`), after `compute()`.
         Default is a no-op. Same exception-handling contract as
         `validate_input`.
         """

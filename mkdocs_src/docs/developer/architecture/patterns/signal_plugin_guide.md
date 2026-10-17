@@ -70,8 +70,13 @@ flowchart TB
 | `signals/base.py` | Define the plugin contract and build static catalog metadata. |
 | `signals/registry.py` | `SignalPluginRegistry`: validate definitions and reject duplicate codes. |
 | `provider_registry.py` | Discover plugin folders (shared by every plugin registry). |
-| `signals/service.py` | Plan batches, calculate required history, check coverage, execute plugins, isolate failures, and slice output. |
-| `signals/annotations.py` | Derive line crossovers and threshold crossings from extended canonical data. |
+| `signals/service.py` | `SignalService`, the façade: plan a batch through `prepare_plan()`, run it in one worker thread (`asyncio.to_thread`) through `execute()`, or do both with `compute()`. |
+| `signals/planning.py` | `prepare_signal_plan`: validate the batch and its annotation requests (`SignalRequestValidationError`), resolve plugins, validate their parameters, deduplicate identical computations, size the history and inputs to load (`SignalExecutionPlan`), and record preflight failures before any price is read. |
+| `signals/execution.py` | `execute_signal_plan`: per planned computation, derive a prepared-series plugin's input, risk metadata, and data-quality warnings from the `SignalPreparedSeriesBundle`, check coverage and availability, select the quote days, call the plugin, slice its visible output, and isolate failures so that one never aborts the batch. |
+| `signals/validation.py` | Normalize a plugin's output (`NaN` becomes a missing value, infinity an error), check its series count and metadata against `output_specs` and its dates against the input, rewrite an availability as unavailable or partial, and build a failure's details. |
+| `signals/annotations.py` | Derive line crossovers and threshold crossings from extended canonical data, and attach them, with their warnings, to the target results (`attach_annotations`). |
+| `signals/series.py` | Provide the pure helpers that planning and execution use: the calendar days loaded per warm-up session (`SESSION_WARMUP_DAY_MULTIPLIER`), quote-day selection (`is_quote_day()`), field and date coverage (`SignalInputCoverage`), the input segment the data policy allows, event filtering, the availability decision and its warnings, and the check and slice of the visible output. |
+| `signals/risk_adapters.py` | Provide the helpers the prepared-series risk plugins share: read the prepared returns and the annualization factor from the execution context, compute rolling volatility, Sharpe, and beta with vectorised pandas passes (the loop versions stay as the reference that `test_risk_metrics_oracle.py` checks them against), warn about mathematically undefined windows (`undefined_metric_window`), and build a line or area output from its `SignalOutputSpec`. |
 | Chart Asset/FX adapters | Load chart-domain data, perform currency conversion, and map it into neutral points. |
 | AI Export runtime/components | Compose selected datasets, share request-scoped resources, and call the same `SignalService` for curated technical components. |
 

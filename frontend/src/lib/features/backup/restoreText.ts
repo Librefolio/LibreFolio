@@ -70,6 +70,7 @@ export const ERROR_KEYS: Record<string, string> = {
     no_space: 'backup.restore.errors.no_space',
     stage_failed: 'backup.restore.errors.stage_failed',
     database_damaged: 'backup.restore.errors.database_damaged',
+    database_foreign_objects: 'backup.restore.errors.database_foreign_objects',
     manifest_mismatch: 'backup.restore.errors.manifest_mismatch',
     head_unknown: 'backup.restore.errors.head_unknown',
     revision_missing: 'backup.restore.errors.revision_missing',
@@ -77,6 +78,11 @@ export const ERROR_KEYS: Record<string, string> = {
     upgrade_failed: 'backup.restore.errors.upgrade_failed',
     post_migration_failed: 'backup.restore.errors.post_migration_failed',
     restore_interrupted: 'backup.restore.errors.restore_interrupted',
+    // A secure backup (lot B4): its password, or an envelope that cannot be opened
+    wrong_password: 'backup.restore.errors.wrong_password',
+    password_required: 'backup.restore.errors.password_required',
+    envelope_damaged: 'backup.restore.errors.envelope_damaged',
+    envelope_unsupported: 'backup.restore.errors.envelope_unsupported',
     // The confirmation, the cancellation, the restart
     restore_stage_expired: 'backup.restore.errors.restore_stage_expired',
     restore_stage_outdated: 'backup.restore.errors.restore_stage_outdated',

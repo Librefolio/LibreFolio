@@ -43,6 +43,9 @@ $$
 \Delta\%_{yr} = \left(\frac{P_{end}}{P_{start}}\right)^{365/d} - 1
 $$
 
+Compare da 30 giorni in su: un intervallo più breve mostra `—`, come in tutto LibreFolio. Una linea che parte
+da 0 mostra `—` per **Δ %** e **Δ%/anno**.
+
 Vedi [Rendimenti e tassi di crescita — Teoria finanziaria](../../../financial-theory/fundamentals/returns.md)
 per i rendimenti logaritmici e la capitalizzazione composta.
 
@@ -59,5 +62,5 @@ finché non lasci la pagina.
 
 - 🔍 **Ingrandisci** prima di fare clic, per individuare i punti esatti.
 - 📰 Confronta il movimento **prima e dopo un evento**, come un annuncio di una banca centrale.
-- ⚠️ Leggi **Δ%/anno** con attenzione sui periodi brevi: un movimento dell'1% in 7 giorni equivale a circa il 68% su base annua.
-  È più significativo su periodi di almeno 30 giorni.
+- ⚠️ **Δ%/anno** aspetta 30 giorni perché la capitalizzazione gonfia i movimenti brevi: l'1% in 7 giorni
+  diventerebbe circa il 68% su base annua.
