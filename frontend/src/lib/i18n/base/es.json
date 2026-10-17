@@ -129,6 +129,23 @@
       "suggestion": "{value} no es un código ISO: equivale a {suggestion}",
       "candidates": "{value} no es un código ISO: puede equivaler a {candidates}",
       "unknown": "{value} no es un código de divisa ISO"
+    },
+    "writeRefusal": {
+      "dateOutOfRange": "{count, plural, one {# fecha está} other {# fechas están}} fuera del intervalo {min} – {max}: {dates}. No se ha guardado nada.",
+      "currencyMismatch": "{count, plural, one {# precio está} other {# precios están}} en {found}, no en la moneda del activo {expected}: {dates}. No se ha guardado nada.",
+      "notSaved": "{count, plural, one {# valor no se ha guardado} other {# valores no se han guardado}}: {items}",
+      "more": "y {n} más",
+      "reason": {
+        "ohlc_inconsistent": "cierre fuera de mínimo–máximo",
+        "date_out_of_range": "fecha fuera de rango",
+        "value_not_storable": "valor demasiado grande o demasiado pequeño para guardarlo",
+        "rate_not_storable": "tipo demasiado grande o demasiado pequeño para guardarlo",
+        "same_currency": "la misma moneda en ambos lados",
+        "invalid_rate": "tipo no válido",
+        "internal_error": "error del servidor",
+        "other": "rechazado por el servidor"
+      },
+      "tooManyItems": "No se ha guardado nada: el servidor acepta como máximo {max, number} valores por guardado, y este contenía {count, number}. Guárdalos en varias partes."
     }
   },
   "csvImport": {

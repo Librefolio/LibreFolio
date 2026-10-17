@@ -965,9 +965,9 @@ def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> boo
 
 
 def services_brim_create_transaction(verbose: bool = False, test_names: list = None) -> bool:
-    """Test BRIMProvider._create_transaction and _loc_to_field."""
+    """Test BRIMProvider._create_transaction: its issues through the shared rule of utils/pydantic_errors.py (W-B70)."""
     print_section("Services: BRIM Create Transaction")
-    print_info("Testing: BRIMProvider._create_transaction + BRIMProvider._loc_to_field")
+    print_info("Testing: BRIMProvider._create_transaction (issues: field and params by utils.pydantic_errors)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_create_transaction.py", test_names)
     return run_command(cmd, "BRIM create-transaction tests", verbose=verbose)
@@ -2391,7 +2391,7 @@ Note: No backend server required.
         # PURE: a private in-memory SQLite per test, as test_brim_gap_fix.py does; never the lane's database.
         isolation="pure",
     )
-    add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
+    add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction: its issues' field and params (utils.pydantic_errors)")
     add_test(
         cat,
         "financial-math",

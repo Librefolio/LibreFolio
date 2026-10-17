@@ -19,7 +19,7 @@
     import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {fxProvidersVersion} from '$lib/stores/currencyGraphStore';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
@@ -120,7 +120,7 @@
 
     function formatDelta(val: number | null, suffix: string = ''): string {
         if (val === null) return '—';
-        return `${formatFixed(val, 4, {signed: true})}${suffix}`;
+        return `${formatPrice(val, {minDecimals: 4, signed: true})}${suffix}`;
     }
 
     function formatDeltaPct(val: number | null): string {
@@ -191,7 +191,7 @@
                 header: $t('fx.rate'),
                 cell: (row) => {
                     const r = getRate(row);
-                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${formatFixed(r, 4)}</span>`} : {type: 'html', html: `<span data-fx-rate-state="missing" class="text-lf-muted">${$t('fx.rateNotAvailable')}</span>`};
+                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${formatPrice(r, {minDecimals: 4})}</span>`} : {type: 'html', html: `<span data-fx-rate-state="missing" class="text-lf-muted">${$t('fx.rateNotAvailable')}</span>`};
                 },
                 type: 'number',
                 getValue: (row) => getRate(row),

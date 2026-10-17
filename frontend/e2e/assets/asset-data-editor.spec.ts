@@ -14,6 +14,9 @@
  *   counts, a refused one as `assets.data.saveFailed` with its cause. The toast's
  *   words are translated, so a test reads the event, the toast variant and the
  *   editor's error state (`asset-editor-error`), never a message
+ * - What a refused price save says (X-R46): the server's facts — the day refused,
+ *   the bounds, the currencies — never Axios's sentence; a save taken in part counts
+ *   what the server kept, and is told as a warning
  *
  * Prerequisites:
  * - Test server running (./dev.py server --test)
@@ -583,7 +586,214 @@ test.describe('Asset Data Editor', () => {
         // The page closes the editor only once every write has been answered.
         await expect(panel).toBeHidden({timeout: 15_000});
         const saved = await waitForEvent(page, 'assets.data.saved', {since: beforeRetry, timeout: 5_000});
-        expect(saved.detail, 'the imported close saved, the first stored one deleted, the blank row skipped').toEqual({pricesSaved: 1, pricesDeleted: 1, pricesSkipped: 1, eventsDeleted: 0, eventsSaved: 0});
+        expect(saved.detail, 'the imported close saved, the first stored one deleted, the blank row skipped, none refused').toEqual({pricesSaved: 1, pricesDeleted: 1, pricesSkipped: 1, pricesRefused: 0, eventsDeleted: 0, eventsSaved: 0});
+    });
+
+    // ========================================================================
+    // What a refused price save says (X-R46)
+    // ========================================================================
+    /**
+     * X-R46, the asset side of the FX editor's defect:
+     * - a price save the server refuses (a 422) put Axios's generic `e.message` — «Request
+     *   failed with status code 422» — in the editor's error state and in its toast, instead of
+     *   what the server answered: which day it refused, and why;
+     * - a save the server takes in part (a 200 whose `results[0].rejected` lists a day) counted
+     *   every row sent as saved: `results[0].count` was never read, and the success toast
+     *   announced the refused day as saved.
+     *
+     * Each test owns an asset with two stored closes, imports its lines through the CSV modal
+     * and answers the price save (POST on this exact path) at the network edge with what the
+     * server answers to those prices: nothing is written, and the asset goes afterwards. The
+     * answers carry the refused day only where the editor must read it (`items`, `rejected`).
+     *
+     * Read without words: the error state by `asset-editor-error`, a toast by its variant, the
+     * save by its events; text only for ISO days, currency codes and the absence of Axios's
+     * sentence, which is English whatever the interface language.
+     */
+    test.describe('server refusals (X-R46)', () => {
+        // A red lists every missing fact at once (soft assertions, two seconds each, behind a
+        // barrier): the budget is for that report — green, a test takes a fraction of it.
+        test.describe.configure({timeout: 60_000});
+
+        const PRICES_PATH = `${API_BASE}/assets/prices`;
+        /** Axios's own sentence for any answer outside 2xx: English, and none of the server's facts in it. */
+        const AXIOS_GENERIC = 'Request failed with status code';
+        /** The first day a price may carry (`stored_date_bounds()`); the last, in the answers below, is tomorrow. */
+        const MIN_DATE = '1900-01-01';
+
+        /** The prices of each asset, as the editor sends them. */
+        type SentPrices = Array<{asset_id: number; prices: Array<{date: string}>}>;
+
+        /**
+         * An asset of the test's own with closes on D and D+1, its price editor open on them, and
+         * `lines` (`[day, 'currency;close;open;high;low;volume']`) imported through the CSV modal.
+         */
+        async function editorWithImported(page: Page, label: string, lines: Array<[string, string]>): Promise<{assetId: number; panel: Locator}> {
+            const [d0, d1] = [daysAgoIso(20), daysAgoIso(19)];
+            const asset = await createOwnedAsset(page, owned, {
+                label,
+                closes: [
+                    {date: d0, close: 10},
+                    {date: d1, close: 11},
+                ],
+            });
+            // The page polls POST /assets/prices/current, which may ask live providers and write
+            // today's price into the shared database. Nothing here is about live prices.
+            await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+            const panel = await openOwnPricesEditor(page, asset.id, d0, d1);
+            await expect.poll(() => priceRowIds(panel), {message: 'the two stored closes', timeout: 10_000}).toEqual([d0, d1]);
+
+            await panel.getByTestId('fx-data-import-btn').click();
+            const modal = page.getByTestId('data-import-modal');
+            await expect(modal).toBeVisible();
+            const csv = ['date;currency;close;open;high;low;volume', ...lines.map(([day, rest]) => `${day};${rest}`)].join('\n');
+            const input = modal.getByTestId('csv-editor-input');
+            await input.fill(csv);
+            await expect(input).toHaveValue(csv);
+            const confirm = modal.getByTestId('data-import-confirm');
+            await expect(confirm, 'every line is a valid price row').toHaveAttribute('data-valid-rows', String(lines.length));
+            await confirm.click();
+            await expect(modal).toBeHidden();
+            await expect.poll(() => priceRowIds(panel), {message: 'the stored closes and the imported days', timeout: 10_000}).toEqual([d0, d1, ...lines.map(([day]) => day)].sort());
+            return {assetId: asset.id, panel};
+        }
+
+        /**
+         * Answer every price save (POST on this exact path) of the page with `answer(sent)` — the
+         * server's answer to the prices sent — and keep what each save sent. No save reaches the
+         * server; the delete, which shares the path, and every other request do.
+         */
+        async function answerSaves(page: Page, answer: (sent: SentPrices) => {status: number; json: unknown}): Promise<SentPrices[]> {
+            const saves: SentPrices[] = [];
+            const isPricesPath = (url: URL) => url.pathname === PRICES_PATH;
+            await page.route(isPricesPath, async (route: Route) => {
+                if (route.request().method() !== 'POST') {
+                    await route.fallback();
+                    return;
+                }
+                const sent = route.request().postDataJSON() as SentPrices;
+                saves.push(sent);
+                await route.fulfill(answer(sent));
+            });
+            return saves;
+        }
+
+        /** What each save sent: per asset, its days, sorted. */
+        function sentPrices(saves: SentPrices[]): Array<Array<{asset_id: number; dates: string[]}>> {
+            return saves.map((sent) => sent.map((item) => ({asset_id: item.asset_id, dates: item.prices.map((price) => price.date).sort()})));
+        }
+
+        /** Click Save; return the status of the answer once the save has been answered, and the event counter read before the click. */
+        async function save(page: Page, panel: Locator): Promise<{status: number; since: number}> {
+            const saveButton = panel.getByTestId('asset-editor-save-btn');
+            await expect(saveButton).toBeEnabled();
+            const answered = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === PRICES_PATH, {timeout: 15_000});
+            const since = await eventSeq(page);
+            await saveButton.click();
+            return {status: (await answered).status(), since};
+        }
+
+        /**
+         * `told` — a toast, or the error state — is shown, holds every one of `facts` and not
+         * Axios's sentence. Soft, so a red lists every missing fact; the wait is short, the text
+         * being final once `told` is shown.
+         */
+        async function expectTold(told: Locator, what: string, facts: string[]): Promise<void> {
+            await expect(told, `${what} is shown`).toBeVisible();
+            for (const fact of facts) await expect.soft(told, `${what} holds ${fact}`).toContainText(fact, {timeout: 2_000});
+            await expect.soft(told, `${what} says what the server said, not Axios's sentence`).not.toContainText(AXIOS_GENERIC, {timeout: 2_000});
+        }
+
+        test("a price dated after the last storable day is told refused with that day and the bounds, not with Axios's sentence", async ({page}) => {
+            // Pins: a 422 `date_out_of_range` is told, by the error state and by the error toast,
+            // with the day refused and the bounds the server gave, in ISO; the save is published as
+            // a failure alone, and the editor stays open on the price, ready to be corrected.
+            // Red on HEAD: the error state and the toast read «… Request failed with status code 422».
+            const refused = daysAgoIso(-30);
+            const max = daysAgoIso(-1);
+            const {assetId, panel} = await editorWithImported(page, 'E2E price out of range', [[refused, 'USD;12;;;;']]);
+            // The server's answer to a day after tomorrow (X-R65): the whole save refused. Its
+            // message says the bounds, never the day — that is in `items`.
+            const saves = await answerSaves(page, () => ({
+                status: 422,
+                json: {detail: {code: 'date_out_of_range', message: `Dates must lie between ${MIN_DATE} and ${max}: 1 does not`, params: {min: MIN_DATE, max}, items: [{asset_id: assetId, dates: [refused]}], count: 1}},
+            }));
+
+            const {status, since} = await save(page, panel);
+            expect(status, 'the save reached the refusal').toBe(422);
+            expect(sentPrices(saves), 'one save, of the imported price alone').toEqual([[{asset_id: assetId, dates: [refused]}]]);
+
+            // The barrier: the failure is published in the step that sets the error state and raises the toast.
+            await waitForEvent(page, 'assets.data.saveFailed', {since, timeout: 5_000});
+            await expectTold(panel.getByTestId('asset-editor-error'), 'the error state', [refused, MIN_DATE, max]);
+            await expectTold(page.getByTestId('toast-error'), 'the error toast', [refused, MIN_DATE]);
+            expect(await eventNamesSince(page, since), 'a refused save is not also published as saved').not.toContain('assets.data.saved');
+            // Nothing is lost: the editor stays open on the imported price, ready to save again.
+            await expect(panel).toBeVisible();
+            await expect(panel.getByTestId('asset-editor-save-btn')).toBeEnabled();
+        });
+
+        test("a price in a currency other than the asset's is told refused with the day and both currencies, not with Axios's sentence", async ({page}) => {
+            // Pins: a 422 `price_currency_mismatch` is told by the error state with the day refused,
+            // the asset's currency and the one found, as ISO codes, and by the toast without
+            // Axios's sentence; the editor stays open.
+            // Red on HEAD: the error state and the toast read «… Request failed with status code 422».
+            const refused = daysAgoIso(22);
+            // A line written in EUR, for an asset in USD: the server refuses the whole save (X-R71).
+            const {assetId, panel} = await editorWithImported(page, 'E2E price currency', [[refused, 'EUR;12;;;;']]);
+            // The server's message names neither the day nor a currency: they are in `items`.
+            const saves = await answerSaves(page, () => ({
+                status: 422,
+                json: {detail: {code: 'price_currency_mismatch', message: "Prices must be in their asset's currency: 1 are not", items: [{asset_id: assetId, expected: 'USD', found: ['EUR'], dates: [refused]}], count: 1}},
+            }));
+
+            const {status, since} = await save(page, panel);
+            expect(status, 'the save reached the refusal').toBe(422);
+            expect(sentPrices(saves), 'one save, of the imported price alone').toEqual([[{asset_id: assetId, dates: [refused]}]]);
+
+            await waitForEvent(page, 'assets.data.saveFailed', {since, timeout: 5_000});
+            await expectTold(panel.getByTestId('asset-editor-error'), 'the error state', [refused, 'USD', 'EUR']);
+            await expectTold(page.getByTestId('toast-error'), 'the error toast', []);
+            await expect(panel).toBeVisible();
+        });
+
+        test('a save the server takes in part counts only the prices it kept, and is told as a warning naming the refused day', async ({page}) => {
+            // Pins: a 200 whose `results[0].rejected` lists a day is no full success:
+            // `assets.data.saved` counts the `results[0].count` prices the server kept, and the
+            // toast is a warning naming the day refused, in ISO.
+            // Red on HEAD: `results[0].count` is never read — both prices are counted as saved —
+            // and the toast is a success, announcing the refused day as saved.
+            const [kept, refused] = [daysAgoIso(22), daysAgoIso(21)];
+            // The second line closes above its high: the server keeps the first and refuses the second.
+            const {assetId, panel} = await editorWithImported(page, 'E2E price partial', [
+                [kept, 'USD;12;;;;'],
+                [refused, 'USD;13;;12;11;'],
+            ]);
+            // The server's message lists the day too; this one stops short of it, or a toast
+            // echoing the message would pass for one built from `rejected`.
+            const saves = await answerSaves(page, () => ({
+                status: 200,
+                json: {
+                    results: [{asset_id: assetId, count: 1, message: 'Upserted 1 prices; rejected 1 date(s) with impossible OHLC (close outside [low, high])', rejected: [{date: refused, reason: 'ohlc_inconsistent'}]}],
+                    success_count: 1,
+                    errors: [],
+                    inserted_count: 1,
+                    updated_count: 0,
+                },
+            }));
+
+            const {status, since} = await save(page, panel);
+            expect(status, 'the save was answered').toBe(200);
+            expect(sentPrices(saves), 'one save, of the two imported prices').toEqual([[{asset_id: assetId, dates: [kept, refused].sort()}]]);
+
+            // The barrier: the save is published in the step that raises its toast.
+            const saved = await waitForEvent(page, 'assets.data.saved', {since, timeout: 5_000});
+            expect.soft(saved.detail?.pricesSaved, `the prices counted as saved are those the server kept: ${JSON.stringify(saved.detail)}`).toBe(1);
+            const toast = page.getByTestId(/^toast-(success|warning|error|info)$/);
+            await expect(toast, 'the save is told').toBeVisible();
+            await expect.soft(toast, 'as a warning, not as a success: one of the two days was refused').toHaveAttribute('data-testid', 'toast-warning', {timeout: 2_000});
+            await expect.soft(toast, `naming the day refused, ${refused}`).toContainText(refused, {timeout: 2_000});
+        });
     });
 
     // ========================================================================
@@ -699,7 +909,7 @@ test.describe('Asset Data Editor', () => {
                 // O-8: the save is published with what it did, in counts — the toast's words are
                 // translated, never read. Having something to report, it tells the user too.
                 const saved = await waitForEvent(page, 'assets.data.saved', {since: beforeSave, timeout: 5_000});
-                expect(saved.detail, 'one event saved, nothing else').toEqual({pricesSaved: 0, pricesDeleted: 0, pricesSkipped: 0, eventsDeleted: 0, eventsSaved: 1});
+                expect(saved.detail, 'one event saved, nothing else').toEqual({pricesSaved: 0, pricesDeleted: 0, pricesSkipped: 0, pricesRefused: 0, eventsDeleted: 0, eventsSaved: 1});
                 await expect(page.getByTestId('toast-success'), 'a save with something to report is told').toBeVisible();
 
                 const stored = (await markerEvents(page, assetId, date, marker)).map(({id, type}) => ({id, type})).sort((a, b) => a.id - b.id);
@@ -825,7 +1035,7 @@ test.describe('Asset Data Editor', () => {
                 // the blank row is no event, the deleted one was never saved — and raises no toast.
                 // The event is the barrier: once it is recorded, the toast has been decided.
                 const saved = await waitForEvent(page, 'assets.data.saved', {since: beforeSave, timeout: 5_000});
-                expect(saved.detail, 'nothing saved, deleted or skipped').toEqual({pricesSaved: 0, pricesDeleted: 0, pricesSkipped: 0, eventsDeleted: 0, eventsSaved: 0});
+                expect(saved.detail, 'nothing saved, deleted, skipped or refused').toEqual({pricesSaved: 0, pricesDeleted: 0, pricesSkipped: 0, pricesRefused: 0, eventsDeleted: 0, eventsSaved: 0});
                 await expect(page.getByTestId('toast-success'), 'nothing to report: no success toast').toHaveCount(0);
             } finally {
                 await page.unroute(isApi, handler);

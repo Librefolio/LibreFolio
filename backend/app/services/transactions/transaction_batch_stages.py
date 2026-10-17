@@ -23,39 +23,10 @@ from backend.app.services.transactions.transaction_batch_context import (
     rule_values,
 )
 from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, today_date
+from backend.app.utils.pydantic_errors import error_params, loc_to_field
 
 if TYPE_CHECKING:
     from backend.app.services.transactions.transaction_service import TransactionService
-
-
-def _loc_to_field(loc: tuple | list) -> Optional[str]:
-    """Convert a Pydantic location tuple to a dotted field path.
-
-    A promotion's merged value is named by its own field — ``resolved_fields.date`` is ``date`` (H-41) — so the issue
-    carries that field's label.
-    """
-    parts = [str(part) for part in loc if not isinstance(part, int)]
-    if len(parts) > 1 and parts[0] == "resolved_fields":
-        parts = parts[1:]
-    return ".".join(parts) if parts else None
-
-
-# What a lone error's context may hold to become its params: a business rule's ``{type, qty, …}``. pydantic's
-# ``value_error`` holds the exception itself, which no response can carry.
-_PLAIN_PARAM_TYPES = (str, int, float, bool, type(None))
-
-
-def _lone_error_params(error: dict) -> Optional[dict]:
-    """The ``params`` of an error the parse meets alone: the context of a model-level error, when it is plain data.
-
-    ``TXCreateItem`` raises a single business-rule error as it is and packs several (``multipleBusinessRuleErrors``),
-    whose sub-errors keep their context; a lone one kept none, so its message lost its ``{type}`` (W-B72). A field's
-    error — pydantic's own, ``string_too_long``, ``value_error`` — keeps ``None``: its field names it.
-    """
-    context = error.get("ctx")
-    if error.get("loc") or not context or not all(isinstance(value, _PLAIN_PARAM_TYPES) for value in context.values()):
-        return None
-    return dict(context)
 
 
 def _parse_lenient(
@@ -65,8 +36,8 @@ def _parse_lenient(
 ) -> Tuple[list[tuple[int, Any]], list[TXValidationIssue]]:
     """Validate each raw row independently and retain every row-level issue.
 
-    A business-rule error keeps its context as ``params``, packed (``multipleBusinessRuleErrors``) or alone
-    (``_lone_error_params``, W-B72)."""
+    Every error keeps its plain context as ``params`` (``error_params``): a business rule, packed
+    (``multipleBusinessRuleErrors``) or alone (W-B72), and a field's constraint, ``{max_length}`` or ``{gt}`` (W-B70)."""
     parsed: list[tuple[int, Any]] = []
     issues: list[TXValidationIssue] = []
     for idx, raw in enumerate(raw_list):
@@ -83,7 +54,7 @@ def _parse_lenient(
                                 index=idx,
                                 error=sub_error.get("msg", ""),
                                 code=sub_error.get("code"),
-                                params=sub_error.get("ctx") or None,
+                                params=error_params(sub_error),
                                 field=None,
                             )
                         )
@@ -94,8 +65,8 @@ def _parse_lenient(
                         index=idx,
                         error=error.get("msg", str(error)),
                         code=error.get("type"),
-                        params=_lone_error_params(error),
-                        field=_loc_to_field(error.get("loc", ())),
+                        params=error_params(error),
+                        field=loc_to_field(error.get("loc", ())),
                     )
                 )
     return parsed, issues
