@@ -3674,8 +3674,12 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - In più, dal test-author di H-36: `_configure` deve svuotare le note di `client_address._untrusted_forwarding`. Così
     una nota lasciata da un altro file nello stesso processo non rompe i test che vogliono ogni controllo `ok`.
   - Si fa dopo l'ingresso di A8a e l'avanzamento del ramo di H.
+  - Cura fatta il 17/10, dopo A8a e B-9 (lotto «H-35», piano H §14):
+    - le due docstring di `config_audit.py`;
+    - in `test_config_audit.py`, via l'impalcatura di A8a e di B-9, e `CHECK_IDS` nell'ordine di `CONFIG_CHECKS`;
+    - `_configure` svuota le note di H-36, con un test che prima era rosso.
 
-  Dettagli: piano H, §14, «Review di A8a» e lotto «H-36».
+  Dettagli: piano H, §14, «Review di A8a» e lotti «H-36» e «H-35».
 - **H-36 · Dietro un proxy che uvicorn non considera fidato, i limiti per indirizzo contano tutti i visitatori
   insieme** — medio, sicurezza; E (R13-SEC6), via coordinatore, 17/10. Decisione notturna N70.
   - L'immagine Docker avvia uvicorn con i suoi default, che seguono `X-Forwarded-For` solo da `127.0.0.1`. Un proxy
