@@ -289,8 +289,8 @@ Then:
   the network's name, shows both). Trust only addresses your proxy alone uses. Set either variable
   in `.env` or in the container's environment, then restart, as above: with Docker,
   `docker compose up -d`. No proxy of yours in front of LibreFolio? Then a visitor on your own
-  network or VPN sent the header, or, with Docker Desktop exposed directly, any visitor
-  ([Limits](#limits)): list nothing.
+  network or VPN sent the header, or, with Docker Desktop exposed directly, any visitor, or any
+  IPv6 visitor that Docker's proxy passes on ([Limits](#limits)): list nothing.
 
 **Forwarding headers from a public address** only get an `info`, in the log once per server process,
 `Forwarding headers from a public address were ignored: if a proxy on a public address forwards the requests, list it in FORWARDED_ALLOW_IPS`,
@@ -325,9 +325,15 @@ deployment.
 **It cannot always see where visitors are.** With Docker Desktop exposed directly, or behind a
 proxy that does not pass the visitor's address in `X-Forwarded-For`, the server sees every visitor
 as local: `lan`, or `loopback` for a proxy on the same machine. Plain HTTP from the internet then
-shows **Connection: local network**, as unclear, instead of **Connection: not secure**. Docker
-Engine on Linux keeps the visitor's address. HTTPS addresses are not affected: they show
-**Connection: secure** either way.
+shows **Connection: local network**, as unclear, instead of **Connection: not secure**. HTTPS
+addresses are not affected: they show **Connection: secure** either way. Docker Engine on Linux
+keeps the visitor's address over IPv4; over IPv6, unless the container has an IPv6 address of its
+own, IPv6 visitors arrive through Docker's proxy, from the gateway of the container's network, so
+all of them share that one local address, for the indicator and for the limits per visitor's
+address, which then count them together. Docker's proxy adds no forwarding header, so LibreFolio
+cannot notice it: its warning about a proxy it does not trust needs one. A reverse proxy in front
+that sees each visitor's own address, set up as [The Visitor's Address](#client-address) explains,
+avoids it.
 
 **It does not check certificates.** A self-signed certificate that a user accepted in the browser
 shows **Connection: secure**: the traffic is encrypted, but nobody vouches that the server is really
