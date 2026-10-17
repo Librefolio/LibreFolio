@@ -93,6 +93,13 @@
       "openRegistrationLocked": "Registration is open, set by LIBREFOLIO_REGISTRATION, and this instance is reachable from outside your local network: anyone who finds it can create an account. Change the variable to close it.",
       "openRegistrationAction": "Change who can sign up"
     },
-    "instanceBlocked": "This instance is blocked by its hosting provider: try again once it is unblocked."
+    "instanceBlocked": "This instance is blocked by its hosting provider: try again once it is unblocked.",
+    "checks": {
+      "loginLimit": {
+        "ok": "Failed sign-ins are limited: after 10 in 15 minutes for one user name or email, or 50 from one address, the sign-in waits.",
+        "off": "The limit on failed sign-ins is off (LIBREFOLIO_LOGIN_LIMIT=off): passwords can be tried without pause. Turn it back on unless this is a test instance.",
+        "invalid": "LIBREFOLIO_LOGIN_LIMIT is set to «{value}», which is neither on nor off: the server will not start with it."
+      }
+    }
   }
 }

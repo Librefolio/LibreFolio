@@ -1706,11 +1706,13 @@ test.describe('Gallery Screenshots', () => {
         test('dashboard data-quality banner (mocked issues) - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
 
-            // The populated DB produces no data-quality issues deterministically, so inject
-            // two synthetic ones into the served snapshot (same helper as the other dashboard
-            // shots): one warning with CTA + one info row. Only `issues` is written —
-            // data_quality_status stays the snapshot's own: the backend derives it from the
-            // other fields (a computed field it rejects as input), never from the issues.
+            // The banner is the served snapshot's, never the lane's: setupDashboardMockReport answers every
+            // POST /api/v1/portfolio/report with dashboard-report.json, so the issues the populated DB gives the admin
+            // (it has some, an info row among them for a transfer between brokers held at different shares) never
+            // reach this shot. The snapshot carries no issue, so the two the shot is for are written into the served
+            // copy: one warning with a CTA and one info row. Only `issues` is written — data_quality_status stays the
+            // snapshot's own: the backend derives it from the other fields (a computed field it rejects as input),
+            // never from the issues.
             await setupDashboardMockReport(page, (report) => {
                 report.summary.data_quality = {
                     ...report.summary.data_quality,
@@ -1769,9 +1771,9 @@ test.describe('Gallery Screenshots', () => {
             // stray press fail closed, and the end of the test proves none happened.
             const guard = await guardReadOnly(page);
 
-            // The populated DB holds every rate the dashboard asks for, so the backend never reports one missing: the
-            // issue is written into the served snapshot, with the helper and the flow of the shot above, whose content
-            // stays as it is. Its shape is the one portfolio_engine.py builds for configured pairs that have a provider:
+            // The served snapshot reports no missing rate, and the backend's own report is never asked (as above): the
+            // issue is written into the snapshot, with the helper and the flow of the shot above, whose content stays
+            // as it is. Its shape is the one portfolio_engine.py builds for configured pairs that have a provider:
             // the pairs in its sorted order, the first one the target of Sync rates, and the dates they lack — three
             // days inside the default range, before the pairs' first stored rate (a date is missing only when no rate
             // exists on or before it). Only `issues` is written, as above.

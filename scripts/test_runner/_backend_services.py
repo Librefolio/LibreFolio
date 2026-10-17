@@ -516,6 +516,26 @@ def services_account_tokens(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Account token service tests", verbose=verbose)
 
 
+def services_login_throttle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the limit on failed sign-ins (F15): per identifier and per address, its switch."""
+    print_section("Services: Login Throttle")
+    print_info("Testing: backend/app/services/accounts/login_throttle.py")
+    print_info("Tests: 10 failures per identifier and 50 per address in 15 minutes, a refusal not counted, a success forgets the identifier, LIBREFOLIO_LOGIN_LIMIT=off")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_login_throttle.py", test_names)
+    return run_command(cmd, "Login throttle service tests", verbose=verbose)
+
+
+def services_accounts_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the accounts' configuration check and its switch: LIBREFOLIO_LOGIN_LIMIT."""
+    print_section("Services: Accounts Configuration Checks")
+    print_info("Testing: backend/app/config/accounts.py (login_limit_enabled), backend/app/services/accounts/checks.py")
+    print_info("Tests: on/off/invalid, the check in CONFIG_CHECKS, the startup audit stopping on an invalid value")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_accounts_checks.py", test_names)
+    return run_command(cmd, "Accounts configuration check tests", verbose=verbose)
+
+
 def services_registration(verbose: bool = False, test_names: list = None) -> bool:
     """Test who may create an account: registration modes, invitations, the user limit, and their variables."""
     print_section("Services: Registration")
@@ -1395,6 +1415,14 @@ def services_backup_leftovers(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Backup leftovers tests", verbose=verbose)
 
 
+def services_backup_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the backup's configuration checks: the hosting panel's token and the restore's upload limit (lot B-9)."""
+    print_section("Services: Backup Configuration Checks")
+    print_info("Testing: backend/app/services/platform/instance_backup/checks.py, config_audit.py (BACKUP_CONFIG_CHECKS)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_checks.py", test_names)
+    return run_command(cmd, "Backup configuration checks tests", verbose=verbose)
+
+
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger and closing the handlers it removes."""
     print_section("Services: Credentials in uvicorn's Request Lines")
@@ -1786,6 +1814,25 @@ Note: No backend server required.
         desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs; the pages of token_path are the API client's LINK_PAGES (A7b)",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The concurrency test races two connections on that private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "login-throttle",
+        services_login_throttle,
+        name="Login Throttle",
+        desc="F15 (A8a): 10 failed sign-ins per identifier (A–Z folded) and 50 per address (IPv6 by /64) in 15 minutes; a refusal is not counted, a success forgets the identifier only, the longer wait wins; LIBREFOLIO_LOGIN_LIMIT=off records and refuses nothing",
+        # PURE: module limiters replaced by fresh ones on an injected clock; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "accounts-checks",
+        services_accounts_checks,
+        name="Accounts Configuration Checks",
+        desc="LIBREFOLIO_LOGIN_LIMIT (A8a): unset/on/off, any other value a ValueError; accounts.login_limit ok/warning/error in CONFIG_CHECKS; the startup audit stops on an invalid value before logging anything",
+        # PURE: environment through monkeypatch, the audit's logger recorded; three fresh interpreters check the import
+        # order, as email-checks does. No DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -2490,6 +2537,15 @@ Note: No backend server required.
         # PURE: one alembic process makes the module's database on a tmp_path file; every file read is a copy under
         # tmp_path, with a production data directory of the test configured (which must stay absent). No lane DB, no
         # server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-checks",
+        services_backup_checks,
+        name="Backup Configuration Checks",
+        desc="Lot B-9 (instance_backup/checks.py, in the platform's CONFIG_CHECKS). check_panel_token, backup.panel_token: unset or blank ok .off (a default start logs nothing new), usable (32 characters included) ok, 31 characters tooShort {minimum: 32}, a space, a tab or a letter outside ASCII notVisibleAscii, a _FILE missing, blank or not UTF-8 unreadable with the reader's error as reason, the variable winning over its broken file. check_upload_limit, backup.upload_limit: 0 or unset self-hosted unlimited, a number or the managed 500 limited {limit_mb}, letters, negative or decimal invalid, H's managed entry of another type or removed profileTable (H-27, H-37), self-hosted reading no entry, the variable winning over a wrong table. Never raises on each documented error of its reader; no token in any result, record or event of the startup audit (canary); BACKUP_CONFIG_CHECKS in order, in CONFIG_CHECKS together before the email checks; either module imported first in a fresh interpreter; the startup audit logs an unusable configuration as one ERROR and goes on, a default start logs nothing about them; the nine messages in the four backup catalogues with their placeholders",
+        # PURE: variables through monkeypatch, secret files under tmp_path. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
