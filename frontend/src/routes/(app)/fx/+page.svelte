@@ -32,6 +32,7 @@
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {extractDaysBack} from '$lib/utils/assetPriceDerived';
     import {fetchFxPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
@@ -178,6 +179,16 @@
     let periodDeltas = $state<Map<string, {direct: PeriodDeltas; inverse: PeriodDeltas}>>(new Map());
     let periodChangesLoading = $state(false);
     const periodChangesLedger = new PeriodChangesLedger<string>();
+    // The Δ over the whole range (the table's Δ Abs and Δ %, the card's), both ways, comes in the same answer (X-R59),
+    // kept by a ledger of its own: it belongs to the range's first day too, so a failed request keeps only the values
+    // of the same range (`rangeKey`).
+    let rangeDeltas = $state<Map<string, {direct: RangeDelta; inverse: RangeDelta}>>(new Map());
+    const rangeDeltaLedger = new PeriodChangesLedger<string>();
+
+    /** The identity of a range for the range-Δ ledger: both its days. */
+    function rangeKey(start: string, end: string): string {
+        return `${start}…${end}`;
+    }
 
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(visiblePeriodColumns(periodSpecs, dateStart, dateEnd));
@@ -229,6 +240,7 @@
                 manualOnly: p.config.providers.length === 1 && p.config.providers[0].providerCode === 'MANUAL',
                 providers: p.config.providers,
                 deltas,
+                rangeDeltas: rangeDeltas.get(`${p.config.base}/${p.config.quote}`) ?? null,
             };
         }),
     );
@@ -396,39 +408,48 @@
         await Promise.all([fetchAllPairSeries(propagateError), loadPeriodChanges()]);
     }
 
-    /** The Δ columns of every configured pair up to the end of the range, both ways, from the backend (X-R53). */
+    /** The Δ columns of every configured pair up to the end of the range, and each pair's Δ over the range, both ways, from the backend (X-R53, X-R59). */
     async function loadPeriodChanges() {
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || pairs.length === 0) return;
         const ticket = periodChangesLedger.begin(dateEnd, true);
-        periodChangesLoading = periodChangesLedger.busy;
+        const rangeStart = dateStart;
+        const rangeTicket = rangeDeltaLedger.begin(rangeKey(rangeStart, ticket.asOf), true);
+        periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
         try {
             const result = await fetchFxPeriodChanges(
                 pairs.map((pair) => ({base: pair.config.base, quote: pair.config.quote})),
                 ticket.asOf,
+                rangeStart,
             );
             if (!current()) return;
+            const nextRange = rangeDeltaLedger.settle(rangeTicket, rangeDeltas, result.rangeDeltasByPair);
+            if (nextRange !== null) rangeDeltas = nextRange;
             const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByPair);
             if (next === null) return;
             if (result.periods.length > 0) periodSpecs = result.periods;
             periodDeltas = next;
         } catch (requestError) {
             if (!current()) return;
-            // The Δ computed up to the same day stay: only those of another range go (X-R60).
+            // The Δ computed up to the same day stay: only those of another range go (X-R60); the range's Δ, only for the same range.
+            const nextRange = rangeDeltaLedger.fail(rangeTicket, rangeDeltas);
+            if (nextRange !== null) rangeDeltas = nextRange;
             const next = periodChangesLedger.fail(ticket, periodDeltas);
             if (next === null) return;
             console.error('Failed to fetch FX period changes:', requestError);
             periodDeltas = next;
         } finally {
             periodChangesLedger.end(ticket);
-            periodChangesLoading = periodChangesLedger.busy;
+            rangeDeltaLedger.end(rangeTicket);
+            periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
         }
     }
 
     /**
-     * One pair's Δ columns from the backend, merged into the others' (after its sync, or once added). The page stays busy
-     * while it is in flight, and a full answer asked before it can no longer overwrite the pair (X-R60).
+     * One pair's Δ columns and Δ over the range from the backend, merged into the others' (after its sync, or once
+     * added). The page stays busy while it is in flight, and a full answer asked before it can no longer overwrite the
+     * pair (X-R60).
      */
     async function loadPairPeriodChanges(index: number) {
         const pair = pairs[index];
@@ -436,10 +457,14 @@
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         const ticket = periodChangesLedger.begin(dateEnd, false);
-        periodChangesLoading = periodChangesLedger.busy;
+        const rangeStart = dateStart;
+        const rangeTicket = rangeDeltaLedger.begin(rangeKey(rangeStart, ticket.asOf), false);
+        periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
         try {
-            const result = await fetchFxPeriodChanges([{base: pair.config.base, quote: pair.config.quote}], ticket.asOf);
+            const result = await fetchFxPeriodChanges([{base: pair.config.base, quote: pair.config.quote}], ticket.asOf, rangeStart);
             if (!current()) return;
+            const nextRange = rangeDeltaLedger.settle(rangeTicket, rangeDeltas, result.rangeDeltasByPair);
+            if (nextRange !== null) rangeDeltas = nextRange;
             const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByPair);
             if (next === null) return;
             if (result.periods.length > 0) periodSpecs = result.periods;
@@ -448,7 +473,8 @@
             if (current()) console.error(`Failed to fetch the period changes of ${pair.config.slug}:`, requestError);
         } finally {
             periodChangesLedger.end(ticket);
-            periodChangesLoading = periodChangesLedger.busy;
+            rangeDeltaLedger.end(rangeTicket);
+            periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
         }
     }
 
@@ -1201,6 +1227,7 @@
                     quote={pair.config.quote}
                     slug={pair.config.slug}
                     data={pair.data}
+                    rangeDeltas={rangeDeltas.get(`${pair.config.base}/${pair.config.quote}`) ?? null}
                     loading={pair.loading}
                     dateStart={urlDateStart}
                     dateEnd={urlDateEnd}
