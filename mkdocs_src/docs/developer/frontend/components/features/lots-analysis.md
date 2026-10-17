@@ -125,7 +125,7 @@ The parent is intentionally thin in business logic and heavy in orchestration:
     - `LotWacPriceChart` draws only the WAC lines (no market price, bubbles or markers); `LotGanttChart`, `UnifiedLotsTable` and `LotComparisonChart` are not rendered;
     - `partitionLotIssues(issues, failed)` sends the issues flagged `message_params.fails_analysis === true` to `LotAnalysisFailedNotice`, rendered first, and leaves the others to `LotDataQualityBanner`, rendered after it — on a `FAILED` answer, the WAC lines' gaps (missing rates, `MISSING_COST_BASIS`). The backend flag decides: the frontend keeps no copy of `_QUANTITATIVE_FAILURE_CODES`;
     - `LotAnalysisFailedNotice` (red, `role="alert"`, `lots-analysis-panel-failed`) explains the failure (`brokers.lots.analysisFailed`), then lists the rows of `buildFailureRows` under `brokers.lots.analysisFailedFix`: one per (code, `transaction_id`), the first occurrence winning, ordered by `transaction_date` (undated last), then transaction id (none last), then code — all read from `message_params`;
-    - a row shows the day, the broker named from the panel's `brokers` through `resolveBrokerName` (whose `#<id>` default only covers a broker outside that list), the message, and a **Go to transaction** button to `/transactions?highlight=<id>` (`handleGotoTransaction`) when the issue names a transaction. `related_transaction_id` is never offered: it may name a partner leg the user cannot see. `missing_quantity` is written as a lot quantity (`formatExactDecimal`, up to 8 decimals) and masked under privacy (`maskableQuantity`), following the toggle in place; `dataQuality.shortTransferNotSupported`, `shortAdjustmentNotSupported` and `fifoSourceQuantityMissing` no longer print `(broker {broker_id})`.
+    - a row shows the day, the broker named from the panel's `brokers` through `resolveBrokerName` (whose `#<id>` default only covers a broker outside that list), the message, and a **Go to transaction** button to `/transactions?highlight=<id>` (`handleGotoTransaction`) when the issue names a transaction. `related_transaction_id` is never offered: it may name a partner leg the user cannot see. `missing_quantity` is written as a lot quantity (`formatExactDecimal` on the backend's decimal string, up to the 10 decimals of its column) and masked under privacy (`maskableQuantity`), following the toggle in place; `dataQuality.shortTransferNotSupported`, `shortAdjustmentNotSupported` and `fifoSourceQuantityMissing` no longer print `(broker {broker_id})`.
 
 ### `LotWacPriceChart`
 
@@ -181,6 +181,24 @@ also renders a **net breakdown** block: gross total P&L → `− fees` → `− 
 **net return**, the net figures shown as `—` when `net_metrics_status` is `UNAVAILABLE`. Only the numeric
 breakdown is shown today; the cost provenance (pool / rule / source transactions) is available in the DTO but
 not yet surfaced here.
+
+### Quantities and prices
+
+- **Quantities.** Every lot quantity on screen is written with `LOT_QUANTITY_FRACTION_DIGITS` (`lotChartShared.ts`),
+  the 10 decimals a quantity keeps, through `Intl`, so a lot of 10 satoshis reads `0.0000001`, never `1e-7` or `0`
+  (C-97c).
+    - `formatLotQuantity` (`unifiedLotsTableHelpers.ts`) writes the quantities of the table, of the WAC chart
+      (`formatQuantityValue`) and of the custody modal.
+    - The Gantt's `formatQuantity` (`lotGanttChartHelpers.ts`) writes the same digits.
+    - `quantityPluralCount` counts those same digits, so a tooltip's noun follows the figure it shows: «1.0000001
+      shares», «1 share».
+    - `LotAnalysisFailedNotice` writes the backend's decimal string exactly (`formatExactDecimal`, up to 10 decimals).
+- **Prices per unit.** These are public: the modal's opening and closing price, and the unit, sale, previous and next
+  prices of the WAC chart's transaction markers. Each keeps the decimals its first 4 significant digits need, and
+  never fewer than 2 (`priceFractionDigits`, `lib/utils/core/formatFixed.ts`), so a price of 0.000003457 is not
+  `0.00`.
+- **Unchanged:** totals stay money (`formatCurrencyAmountPlain`, masked under privacy), split ratios keep up to 8
+  decimals, and axis labels stay compact.
 
 ---
 

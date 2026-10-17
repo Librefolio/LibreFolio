@@ -217,7 +217,8 @@ def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = 
     ``unpacked_too_large`` before anything is unpacked.
 
     The copy and its report stay in ``.restore/stage/<stage id>/``; on any refusal nothing of them is left. One archive
-    is checked at a time: ``StagingBusyError`` while another is. ``StagingError`` says why an archive is refused.
+    is checked at a time: ``StagingBusyError`` while another is. ``StagingError`` says why an archive is refused; an
+    ``sqlite3`` error while the copy's database is read or checked is ``database_damaged`` (B-43), never raised as such.
     ``lock``: the lock of the checks, already held by the caller (``restore_jobs``, which takes it in the request and
     checks in a thread). The caller keeps it and releases it itself, once the check's end is recorded: until then, a
     reader must find it held. Without one, the lock is taken and released here.
@@ -311,25 +312,35 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
         archive_path.unlink(missing_ok=True)
 
     database = data_root / DATABASE_ENTRY
-    _refuse_foreign_objects(database)
-    before = describe_database(database)
-    _check_against_manifest(before, manifest)
-    action, migrations, head = _revision_plan(manifest.alembic_revision)
-    if action == "upgrade":
-        progress("upgrading", 0, len(migrations))
-        _upgrade(database)
-        progress("upgrading", len(migrations), len(migrations))
-    fixes = _post_migration_fixes(database, data_root)
-    rekeyed, unreadable = _plugin_secrets(database, archive_key)
+    try:
+        _refuse_foreign_objects(database)
+        before = describe_database(database)
+        _check_against_manifest(before, manifest)
+        action, migrations, head = _revision_plan(manifest.alembic_revision)
+        if action == "upgrade":
+            progress("upgrading", 0, len(migrations))
+            _upgrade(database)
+            progress("upgrading", len(migrations), len(migrations))
+        fixes = _post_migration_fixes(database, data_root)
+        rekeyed, unreadable = _plugin_secrets(database, archive_key)
 
-    progress("verifying", 0, 0)
-    after = describe_database(database)
-    if after.integrity_check != "ok":
-        raise StagingError("database_damaged", "The copy of the backup's database fails its integrity check after its upgrade")
-    if after.alembic_revision != head:
-        raise StagingError("upgrade_failed", "The copy of the backup's database did not reach this LibreFolio's revision")
-    totals = compare_totals(manifest.database.control_totals, ledger_totals_of(database))
-    report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, _administrators(database), totals, encrypted=encrypted, secrets_rekeyed=rekeyed, secrets_unreadable=unreadable)
+        progress("verifying", 0, 0)
+        after = describe_database(database)
+        if after.integrity_check != "ok":
+            raise StagingError("database_damaged", "The copy of the backup's database fails its integrity check after its upgrade")
+        if after.alembic_revision != head:
+            raise StagingError("upgrade_failed", "The copy of the backup's database did not reach this LibreFolio's revision")
+        totals = compare_totals(manifest.database.control_totals, ledger_totals_of(database))
+        report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, _administrators(database), totals, encrypted=encrypted, secrets_rekeyed=rekeyed, secrets_unreadable=unreadable)
+    except sqlite3.ProgrammingError:
+        raise
+    except sqlite3.DatabaseError as exc:
+        # What reads or checks the copy's database failed (B-43): its schema may call a function this reader lacks, in
+        # an index or a generated column (``integrity_check`` fails even read-only) or in a CHECK (the first
+        # read-write check: the post-migration fixes), or the file is no database. The message may name the
+        # archive's function, archive text: the class and SQLite's error name only (B-28).
+        logger.warning("A backup's database could not be read or checked on its copy", error=type(exc).__name__, sqlite_error=getattr(exc, "sqlite_errorname", None))
+        raise StagingError("database_damaged", "The backup's database cannot be read or checked: it cannot be restored") from None
     _write_report(root, report)
     return report
 
@@ -623,18 +634,41 @@ def _schema_object_kind(sql: object) -> str:
 def _refuse_foreign_objects(database: Path) -> None:
     """Refuse a database holding a trigger, a view or a virtual table (lot B-28): LibreFolio never creates one, and its SQL
     would run as soon as the check writes or reads the copy, and in the server after a restore, a recursive one for
-    ever. Read from ``sqlite_master`` alone, read only, by each object's SQL; nothing of the archive runs."""
-    try:
-        with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
-            conn.execute("PRAGMA trusted_schema=OFF")
-            rows = conn.execute("SELECT sql FROM sqlite_master").fetchall()
-    except sqlite3.DatabaseError:
-        raise StagingError("database_damaged", "The backup's database cannot be read: it cannot be restored") from None
+    ever. Read from ``sqlite_master`` alone, read only, by each object's SQL; nothing of the archive runs.
+
+    The schema is read as the server's connections read it: ``trusted_schema`` off, with the functions SQLAlchemy
+    registers there as stand-ins (``_register_server_functions``). A schema that calls one in an index or a generated
+    column cannot be read there since H-51, and every connection of the server would fail: it cannot be read here
+    either. A schema SQLite refuses to read is ``database_damaged``, as ``_stage`` answers every ``sqlite3`` error of the
+    copy's database (B-43)."""
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        conn.execute("PRAGMA trusted_schema=OFF")
+        _register_server_functions(conn)
+        rows = conn.execute("SELECT sql FROM sqlite_master").fetchall()
     foreign = Counter(kind for (sql,) in rows if (kind := _schema_object_kind(sql)) not in _OWN_KINDS)
     if foreign:
         # The kinds only: the names and the SQL are the archive's text.
         logger.warning("A backup's database holds schema objects LibreFolio never creates", objects=sum(foreign.values()), kinds=sorted(foreign))
         raise StagingError("database_foreign_objects", "The backup's database holds triggers, views or other objects LibreFolio never creates: it cannot be restored")
+
+
+#: The Python functions SQLAlchemy's SQLite dialect registers on every connection of the server, deterministic (SQLAlchemy
+#: 2.0.52, ``SQLiteDialect_pysqlite.on_connect()``): name and number of arguments. ``floor`` replaces SQLite's own.
+_SERVER_FUNCTIONS = (("regexp", 2), ("floor", 1))
+
+
+def _register_server_functions(conn: sqlite3.Connection) -> None:
+    """Stand-ins for the server's own functions, registered as SQLAlchemy registers them and never run: with
+    ``trusted_schema`` off, a schema that calls one in an index or a generated column cannot be read, as on the
+    server's connections since H-51 (B-43)."""
+    for name, arguments in _SERVER_FUNCTIONS:
+        conn.create_function(name, arguments, _stand_in, deterministic=True)
+
+
+def _stand_in(*_arguments: object) -> None:
+    """What a stand-in of the server's functions answers, were it ever called: nothing. Only the schema could call it,
+    and with ``trusted_schema`` off SQLite refuses that before any call."""
+    return None
 
 
 def _plugin_secrets(database: Path, archive_key: str | None) -> tuple[int, SecretCounts]:

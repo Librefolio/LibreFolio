@@ -8,7 +8,7 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
-    import {formatExactDecimal} from '$lib/utils/core/formatFixed';
+    import {formatExactDecimal, priceFractionDigits} from '$lib/utils/core/formatFixed';
     import {maskableQuantity} from '$lib/utils/privacy/maskable';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
     import {safeDecimal} from '$lib/types';
@@ -17,6 +17,7 @@
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {closureValueLabelKey, compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
     import {isUnknownOrNonZero} from './lotChartShared';
+    import {formatLotQuantity} from './unifiedLotsTableHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
@@ -75,7 +76,8 @@
         if (parsed == null) return '—';
         const abs = Math.abs(parsed);
         const sign = opts.signed ? (parsed > 0 ? '+' : parsed < 0 ? '-' : '') : '';
-        return `${sign}${maskableQuantity(formatExactDecimal(abs, {minFrac: 0, maxFrac: 8}))}${assetUnitLabel ? ` ${assetUnitLabel}` : ''}`;
+        // C-97c: the lots' shared formatter, up to 10 decimals and never `1e-7` (formatExactDecimal wrote a number through String())
+        return `${sign}${maskableQuantity(formatLotQuantity(abs))}${assetUnitLabel ? ` ${assetUnitLabel}` : ''}`;
     }
 
     function formatPrice(value: string | number | null | undefined): string {
@@ -90,7 +92,10 @@
      */
     function formatUnitPrice(value: unknown): string {
         const parsed = parseNumber(value);
-        return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency, {sensitivity: 'public'});
+        if (parsed == null) return '—';
+        // C-97c: a price under a cent keeps 4 significant digits instead of reading 0.00.
+        const {min, max} = priceFractionDigits(parsed);
+        return formatCurrencyAmountPlain(parsed, currency, {minFraction: min, maxFraction: max, sensitivity: 'public'});
     }
 
     function formatSignedCurrency(value: string | number | null | undefined): string {

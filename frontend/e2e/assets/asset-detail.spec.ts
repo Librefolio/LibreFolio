@@ -18,6 +18,7 @@ import {goToAssetDetailPage, goToAssetsPage} from './assets-helpers';
 import {t} from '../fixtures/i18n-data';
 import {schemas} from '../../src/lib/api/generated';
 import {daysAgoIso} from '../fixtures/dates';
+import {optionsClosed} from '../fixtures/probe';
 import {overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
 
 test.describe('Shared chart settings source contracts', () => {
@@ -2334,7 +2335,7 @@ test.describe('Asset Detail Page', () => {
             const responseItems = deferred?.outcome === 'i60h-main-omitted' ? items.filter((item) => item.asset_id !== assetId) : deferred?.outcome === 'i60h-ready-peer-omitted' ? items.filter((item) => item.asset_id !== readyPeer.id) : items;
             await route.fulfill({json: {items: responseItems}});
         });
-        await page.route('**/api/v1/assets/prices/current', async (route) => {
+        await page.route('**/api/v1/assets/prices/current*', async (route) => {
             await route.fulfill({json: {results: [], success_count: 0, errors: []}});
         });
 
@@ -8230,7 +8231,7 @@ test.describe('Live price direction flash', () => {
      * the mock stays correct regardless of call count/order.
      */
     async function mockCurrentPrice(page: import('@playwright/test').Page, price: {value: number}) {
-        await page.route('**/api/v1/assets/prices/current', async (route) => {
+        await page.route('**/api/v1/assets/prices/current*', async (route) => {
             const ids = (route.request().postDataJSON() as number[] | null) ?? [];
             const today = new Date().toISOString().slice(0, 10);
             await route.fulfill({
@@ -8444,7 +8445,7 @@ async function mockCacheHitEventsAsset(page: Page, assetId: number) {
     await page.route('**/api/v1/assets/query*', async (route) => {
         await route.fulfill({json: [asset]});
     });
-    await page.route('**/api/v1/assets/prices/current', async (route) => {
+    await page.route('**/api/v1/assets/prices/current*', async (route) => {
         await route.fulfill({json: {results: [], success_count: 0, errors: []}});
     });
     await page.route('**/api/v1/assets/prices/query', async (route) => {
@@ -8696,7 +8697,7 @@ test.describe('Provider chip names the provider once its catalogue arrives', () 
             await route.continue();
         };
         // Answered here: the real poll asks the provider and upserts today's row on the shared asset.
-        const livePrice = '**/api/v1/assets/prices/current';
+        const livePrice = '**/api/v1/assets/prices/current*';
         const answerLivePrice: Parameters<Page['route']>[1] = (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}});
         await page.route(isCatalogue, holdCatalogue);
         await page.route(livePrice, answerLivePrice);
@@ -8761,7 +8762,7 @@ test.describe('Asset detail — the page sync dialog warns before replacing stor
         // poll would ask the provider and write the fresh quote as today's price of the shared asset: answered here,
         // empty, so that «no provider is called, nothing is written» does not rest on the period's arithmetic. The
         // warning reads the stored prices.
-        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+        await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
     });
 
     test('the assets section counts this asset when its period holds stored prices', async ({page}) => {
@@ -8800,5 +8801,435 @@ test.describe('Asset detail — the page sync dialog warns before replacing stor
         await modal.getByTestId('sync-modal-close').click();
         await expect(modal).toBeHidden();
         expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
+    });
+});
+
+// ============================================================================
+// X-R59, lot B — the price summary's Δ over the range comes from the backend
+// ============================================================================
+// Beside the date range the summary shows the change from the first point of the range to the price it shows: a
+// percent (`asset-price-summary-range-delta`) and an absolute change in parentheses (`asset-price-summary-range-delta-abs`).
+// The browser computes neither any more (`assetDetailRangeChange.ts`, `assetDetailLive.svelte.ts`):
+//   · the stored series' Δ is asked with `POST /assets/prices/period-changes`, one item {asset_id, as_of: the last day
+//     of the range, range_start: its first day, target_currency only when the chart is converted} — on load, on a
+//     change of range or display currency, and after a Refresh;
+//   · the live quote's Δ comes with the live poll, `POST /assets/prices/current?range_start=…` (with
+//     `&target_currency=` only when the summary converts the quote), and is the one shown whenever the summary shows
+//     the live price — never the series' beside a live price.
+//
+// Observed and answered through the network, on the synthetic EUR asset of `mockCacheHitEventsAsset` (600 daily closes
+// ending today; no provider, unless a test assigns it MOCKASSET): the period changes are fetched from the backend and
+// only this asset's `range_change` is replaced, with figures its closes could never give (they climb 0.10 a day, about
+// +4 % over the ranges used here) — so a Δ on screen comes from an answer or from nowhere. The live quote never reaches
+// the backend, which would store today's candle: it is answered here. Every route matches its path rather than a glob:
+// the poll now carries a query string, which an anchored glob such as `**/api/v1/assets/prices/current` does not
+// match. Nothing is written to the database, so there is nothing to clean up.
+//
+// Red before the cure: the summary's Δ carried no test id and was computed in the browser from the chart's points.
+// ============================================================================
+test.describe('Asset detail — the price summary shows the backend’s Δ over the range (X-R59, lot B)', () => {
+    // A ceiling, never a delay: a sign-in, a page load and the round trips each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** A change the routes answer (`change_ratio` a fraction, `change_abs` in the price's unit), and the figures the summary must show for it. */
+    type Figures = {changeRatio: string; changeAbs: string; percent: string; abs: string};
+    /** One item of a period-changes request as the page sent it (`FAPeriodChangesQueryItem`); a key it did not send reads null. */
+    type SeriesAsk = {assetId: number | null; asOf: string | null; rangeStart: string | null; targetCurrency: string | null};
+    /** One live poll as the page sent it: the asset ids of its body and the two parameters of its query. */
+    type LiveAsk = {assetIds: number[]; rangeStart: string | null; targetCurrency: string | null};
+    /** What this test's routes saw and answered. A handler records its errors: nobody awaits a route callback. */
+    type RangeDeltaTraffic = {seriesAsked: SeriesAsk[][]; seriesAnswered: number; liveAsked: LiveAsk[]; liveAnswered: number; failures: string[]};
+    type DayRange = {start: string; end: string};
+
+    /** The stored series' Δ the period changes are answered with: +42.42 % and (+12.34). */
+    const SERIES: Figures = {changeRatio: '0.4242', changeAbs: '12.34', percent: '+42.42', abs: '+12.34'};
+    /** The live quote's Δ in the asset's own currency: −13.13 % and (−7.77). */
+    const LIVE: Figures = {changeRatio: '-0.1313', changeAbs: '-7.77', percent: '-13.13', abs: '-7.77'};
+    /** The live quote's Δ in GBP, when the poll asks for it in GBP: +27.27 % and (+5.55). */
+    const LIVE_IN_GBP: Figures = {changeRatio: '0.2727', changeAbs: '5.55', percent: '+27.27', abs: '+5.55'};
+    /** The live quote, in the asset's EUR. */
+    const LIVE_PRICE = '123.45';
+    /** The same quote converted to GBP, at the rate of 2 `routeLiveConversion` answers. */
+    const LIVE_PRICE_IN_GBP = '246.90';
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    /** The backend's `range_change` for `figures`, measured from `referenceDate`; for none, all null — the backend's «no usable price». */
+    function rangeChangeOf(figures: Figures | null, referenceDate: string) {
+        return figures ? {reference_date: referenceDate, change_abs: figures.changeAbs, change_ratio: figures.changeRatio} : {reference_date: null, change_abs: null, change_ratio: null};
+    }
+
+    /** The live quote's Δ for the currency the poll asks it in: the asset's own (none asked), GBP, and none for any other. */
+    function liveFiguresFor(targetCurrency: string | null): Figures | null {
+        if (targetCurrency === null) return LIVE;
+        return targetCurrency === 'GBP' ? LIVE_IN_GBP : null;
+    }
+
+    /** A signed decimal such as `+12.34` as any of the four languages writes it: `+12.34` (English), `+12,34`; a minus may be `-` or `−`. */
+    function signedFigure(figure: string): string {
+        const parts = /^([+-])(\d+)\.(\d+)$/.exec(figure);
+        if (!parts) throw new Error(`signedFigure: ${figure} is not a signed decimal such as +12.34`);
+        return `${parts[1] === '+' ? '\\+' : '[-\\u2212]'}${parts[2]}[.,]${parts[3]}`;
+    }
+
+    /** The summary's percent, matched whole: `+42.42%` (English; Italian with a comma), `+42,42 %` (French, Spanish: a no-break space before the sign). */
+    function percentShown(figure: string): RegExp {
+        return new RegExp(`^\\s*${signedFigure(figure)}\\s?%\\s*$`);
+    }
+
+    /** The summary's absolute change, matched whole: `(+12.34)`, `(+12,34)`. */
+    function absShown(figure: string): RegExp {
+        return new RegExp(`^\\s*\\(${signedFigure(figure)}\\)\\s*$`);
+    }
+
+    /** The summary's price, matched whole: `123.45`, `123,45`. */
+    function priceShown(figure: string): RegExp {
+        const parts = /^(\d+)\.(\d+)$/.exec(figure);
+        if (!parts) throw new Error(`priceShown: ${figure} is not a decimal such as 123.45`);
+        return new RegExp(`^\\s*${parts[1]}[.,]${parts[2]}\\s*$`);
+    }
+
+    /** The price summary beside the date range: the price it shows, and the two halves of its Δ. */
+    function priceSummary(page: Page) {
+        return {
+            price: page.getByTestId('asset-detail-live-price'),
+            percent: page.getByTestId('asset-price-summary-range-delta'),
+            abs: page.getByTestId('asset-price-summary-range-delta-abs'),
+        };
+    }
+
+    /** The period-changes item the page owes `range`: its last day as `as_of`, its first as `range_start`, in `targetCurrency` or natively. */
+    function seriesAsk(assetId: number, range: DayRange, targetCurrency: string | null = null): SeriesAsk {
+        return {assetId, asOf: range.end, rangeStart: range.start, targetCurrency};
+    }
+
+    /** The live poll the page owes `range`: this asset, the first day of the range, in `targetCurrency` or natively. */
+    function liveAsk(assetId: number, range: DayRange, targetCurrency: string | null = null): LiveAsk {
+        return {assetIds: [assetId], rangeStart: range.start, targetCurrency};
+    }
+
+    /** The items of a period-changes request; an unreadable body reads as none. */
+    function seriesAsksOf(request: Request): SeriesAsk[] {
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        if (!Array.isArray(body)) return [];
+        return body.map((raw: unknown) => {
+            const item = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+            return {
+                assetId: typeof item.asset_id === 'number' ? item.asset_id : null,
+                asOf: typeof item.as_of === 'string' ? item.as_of : null,
+                rangeStart: typeof item.range_start === 'string' ? item.range_start : null,
+                targetCurrency: typeof item.target_currency === 'string' ? item.target_currency : null,
+            };
+        });
+    }
+
+    /** A live poll's asset ids (its body) and its `range_start` and `target_currency` (its query). */
+    function liveAskOf(request: Request): LiveAsk {
+        const query = new URL(request.url()).searchParams;
+        let body: unknown = null;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            body = null;
+        }
+        const assetIds = Array.isArray(body) ? body.filter((id: unknown): id is number => typeof id === 'number') : [];
+        return {assetIds, rangeStart: query.get('range_start'), targetCurrency: query.get('target_currency')};
+    }
+
+    /**
+     * Records and answers the two requests the summary's Δ comes from:
+     * - `POST /assets/prices/period-changes`: the backend's own answer, with this asset's `range_change` replaced by
+     *   `series()` — read when the request comes, so a test can change it between two requests;
+     * - `POST /assets/prices/current`: answered here and never sent on — the backend would store today's candle — with
+     *   the quote `LIVE_PRICE` and, when the poll asks a `range_start`, the Δ of `liveFiguresFor` its currency.
+     */
+    async function routeRangeDeltas(page: Page, assetId: number, series: () => Figures | null): Promise<RangeDeltaTraffic> {
+        const traffic: RangeDeltaTraffic = {seriesAsked: [], seriesAnswered: 0, liveAsked: [], liveAnswered: 0, failures: []};
+        await page.route(
+            (url) => url.pathname === '/api/v1/assets/prices/period-changes',
+            async (route) => {
+                try {
+                    const asks = seriesAsksOf(route.request());
+                    traffic.seriesAsked.push(asks);
+                    const response = await route.fetch();
+                    if (!response.ok()) {
+                        traffic.failures.push(`POST /assets/prices/period-changes: HTTP ${response.status()}: ${await response.text()}`);
+                        await route.fulfill({response});
+                        return;
+                    }
+                    const answer = (await response.json()) as {items?: Array<{asset_id?: number}>};
+                    const items = answer.items ?? [];
+                    if (!items.some((item) => item.asset_id === assetId)) {
+                        traffic.failures.push(`POST /assets/prices/period-changes: the answer holds no item for asset ${assetId}: ${JSON.stringify(answer)}`);
+                        await route.fulfill({response});
+                        return;
+                    }
+                    // A range_change answers a range_start: without one asked, the backend's answer is passed on as it is.
+                    const rangeStart = asks.find((ask) => ask.assetId === assetId)?.rangeStart;
+                    const answered = rangeStart ? items.map((item) => (item.asset_id === assetId ? {...item, range_change: rangeChangeOf(series(), rangeStart)} : item)) : items;
+                    await route.fulfill({response, json: {...answer, items: answered}});
+                } catch (error) {
+                    traffic.failures.push(`POST /assets/prices/period-changes: ${String(error)}`);
+                    await route.continue().catch(() => undefined);
+                } finally {
+                    traffic.seriesAnswered += 1;
+                }
+            },
+        );
+        await page.route(
+            (url) => url.pathname === '/api/v1/assets/prices/current',
+            async (route) => {
+                try {
+                    const ask = liveAskOf(route.request());
+                    traffic.liveAsked.push(ask);
+                    const rangeStart = ask.rangeStart;
+                    const today = daysAgoIso(0);
+                    await route.fulfill({
+                        json: {
+                            results: ask.assetIds.map((id) => ({
+                                asset_id: id,
+                                value: LIVE_PRICE,
+                                currency: 'EUR',
+                                as_of_date: today,
+                                source: 'mock',
+                                error: null,
+                                ...(rangeStart ? {range_change: rangeChangeOf(liveFiguresFor(ask.targetCurrency), rangeStart)} : {}),
+                            })),
+                            success_count: ask.assetIds.length,
+                        },
+                    });
+                } catch (error) {
+                    traffic.failures.push(`POST /assets/prices/current: ${String(error)}`);
+                    // Never sent on, even now: the backend would store today's candle.
+                    await route.fulfill({json: {results: [], success_count: 0, errors: []}}).catch(() => undefined);
+                } finally {
+                    traffic.liveAnswered += 1;
+                }
+            },
+        );
+        return traffic;
+    }
+
+    /**
+     * The provider assignment the page reads before it polls (Z-8): MOCKASSET, so the live poll runs whenever the range
+     * reaches today. The asset's list row keeps no provider code: the poll reads the assignment alone.
+     */
+    async function routeMockAssetAssignment(page: Page, assetId: number): Promise<void> {
+        await page.route(
+            (url) => url.pathname === '/api/v1/assets/provider/assignments',
+            async (route) => {
+                if (route.request().method() !== 'GET') {
+                    await route.fallback();
+                    return;
+                }
+                await route.fulfill({json: [{asset_id: assetId, provider_code: 'MOCKASSET', identifier: `SYNTH-${assetId}`, identifier_type: 'TICKER', provider_params: {}, last_fetch_at: null}]});
+            },
+        );
+    }
+
+    /**
+     * The configured FX routes (`GET /fx/providers/routes`), read by the page and by its currency selector: EUR-GBP, so
+     * the asset's EUR converts to GBP, and GBP-JPY, so that JPY is offered while EUR-JPY is not configured. The shared
+     * routes are neither read nor written.
+     */
+    async function routeFxRoutes(page: Page, traffic: RangeDeltaTraffic): Promise<void> {
+        const configured = (base: string, quote: string) => ({base, quote, priority: 1, chain_steps: [{from: base, to: quote, provider: 'MOCKFX'}], is_chain: false, providers_used: ['MOCKFX']});
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/providers/routes',
+            async (route) => {
+                if (route.request().method() !== 'GET') {
+                    traffic.failures.push(`${route.request().method()} /fx/providers/routes: the shared FX routes are not this test's to write`);
+                    await route.fulfill({status: 500, json: {detail: 'X-R59: no FX route is written here'}});
+                    return;
+                }
+                await route.fulfill({json: {items: [configured('EUR', 'GBP'), configured('GBP', 'JPY')]}});
+            },
+        );
+    }
+
+    /**
+     * The live quote's conversion to GBP (`POST /fx/currencies/convert`, one EUR amount on one day), at the rate of 2.
+     * Any other conversion goes on to the backend, which only reads its stored rates.
+     */
+    async function routeLiveConversion(page: Page): Promise<void> {
+        type ConvertAsk = {from_amount?: {code?: string; amount?: string}; to?: string; date_range?: {start?: string; end?: string}};
+        await page.route(
+            (url) => url.pathname === '/api/v1/fx/currencies/convert',
+            async (route) => {
+                let asks: ConvertAsk[] = [];
+                try {
+                    const body: unknown = route.request().postDataJSON();
+                    asks = Array.isArray(body) ? (body as ConvertAsk[]) : [];
+                } catch {
+                    asks = [];
+                }
+                const ask = asks.length === 1 ? asks[0] : undefined;
+                const day = ask?.date_range?.start;
+                const amount = ask?.from_amount?.amount;
+                if (ask?.from_amount?.code !== 'EUR' || ask.to !== 'GBP' || typeof day !== 'string' || ask.date_range?.end !== day || typeof amount !== 'string') {
+                    await route.fallback();
+                    return;
+                }
+                await route.fulfill({json: {results: [{from_amount: {code: 'EUR', amount}, to_amount: {code: 'GBP', amount: (Number(amount) * 2).toFixed(2)}, conversion_date: day, rate: '2'}], success_count: 1}});
+            },
+        );
+    }
+
+    /**
+     * Every period-changes request sent so far — at least `atLeast` — has been answered, and the page holds no big
+     * request any more: the series' Δ is loaded under `pageBusy`, which the Refresh button publishes as `data-busy`.
+     * The last answer is then the one on screen.
+     */
+    async function seriesAnswersApplied(page: Page, traffic: RangeDeltaTraffic, atLeast: number): Promise<void> {
+        await expect.poll(() => traffic.seriesAnswered, {message: `the page asks POST /assets/prices/period-changes (${atLeast} answered at least)`, timeout: 15_000}).toBeGreaterThanOrEqual(atLeast);
+        await expect.poll(() => traffic.seriesAsked.length - traffic.seriesAnswered, {message: 'every period-changes request the page sent has been answered', timeout: 15_000}).toBe(0);
+        await waitForSettled(page.getByTestId('asset-detail-refresh-btn'), 20_000);
+    }
+
+    /** Picks `code` in the summary's display-currency selector; returns once the selector shows it, closed. */
+    async function chooseDisplayCurrency(page: Page, code: string): Promise<void> {
+        // AssetPriceSummary passes its selector no test id: it is the only combobox of the filter row (PageToolbar draws
+        // the summary inside it), which is checked here rather than assumed.
+        const trigger = page.getByTestId('asset-detail-filter-bar').getByRole('combobox');
+        await expect(trigger, 'the display-currency selector is the only combobox of the filter row').toHaveCount(1);
+        await expect(trigger).toBeEnabled({timeout: 10_000});
+        // Every SearchSelect names its options `search-select-option-*`: none may be on screen before this one opens.
+        await optionsClosed(page);
+        await expect(async () => {
+            if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.press('ArrowDown');
+            expect(await trigger.getAttribute('aria-expanded')).toBe('true');
+        }).toPass({timeout: 5_000});
+        const option = page.getByTestId(`search-select-option-${code}`);
+        await expect(option, `${code} is offered: an end of a configured FX route`).toBeVisible({timeout: 5_000});
+        await option.click();
+        await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        await expect(trigger).toContainText(code);
+        await optionsClosed(page);
+    }
+
+    test('X-R59 a range ending before today: the summary shows the period-changes Δ, asked from the range start on screen', async ({page}) => {
+        const assetId = 920_591;
+        // About two months ending ten days ago, seeded through the URL: the range on screen.
+        const range: DayRange = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        await mockCacheHitEventsAsset(page, assetId);
+        // A provider, so that the range alone keeps the live quote away: a poll would be answered with a quote and its own Δ.
+        await routeMockAssetAssignment(page, assetId);
+        const traffic = await routeRangeDeltas(page, assetId, () => SERIES);
+
+        await goToAssetDetailPage(page, String(assetId), range);
+        await seriesAnswersApplied(page, traffic, 1);
+        expect(traffic.failures, 'the routes answered every request they saw').toEqual([]);
+        expect(traffic.seriesAsked, 'each period-changes request asks this asset from the first day of the range on screen to its last, in its own currency').toEqual(traffic.seriesAsked.map(() => [seriesAsk(assetId, range)]));
+        expect(traffic.liveAsked, 'a range ending before today asks no live quote').toEqual([]);
+
+        const summary = priceSummary(page);
+        await expect(summary.price, 'the summary shows the last close of the range').toBeVisible();
+        await expect(summary.percent, 'change_ratio 0.4242, as a percent').toHaveText(percentShown(SERIES.percent), {timeout: 10_000});
+        await expect(summary.abs, 'change_abs 12.34').toHaveText(absShown(SERIES.abs), {timeout: 10_000});
+    });
+
+    test('X-R59 an asset without a provider: the summary shows the series Δ, and none once a Refresh is answered with a range_change all null', async ({page}) => {
+        const assetId = 920_592;
+        // Ending today, but without a provider (the backend holds no assignment for a synthetic asset): no live quote, so
+        // the Δ beside the price is the series'.
+        const range: DayRange = {start: daysAgoIso(60), end: daysAgoIso(0)};
+        let series: Figures | null = SERIES;
+        await mockCacheHitEventsAsset(page, assetId);
+        const traffic = await routeRangeDeltas(page, assetId, () => series);
+        const summary = priceSummary(page);
+        const refresh = page.getByTestId('asset-detail-refresh-btn');
+
+        await goToAssetDetailPage(page, String(assetId), range);
+        await seriesAnswersApplied(page, traffic, 1);
+        // Presence first: the Δ is drawn from an answer, so its absence below is an answer's doing, not a page that has not
+        // drawn it yet.
+        await expect(summary.price).toBeVisible();
+        await expect(summary.percent, 'change_ratio 0.4242, as a percent').toHaveText(percentShown(SERIES.percent), {timeout: 10_000});
+        await expect(summary.abs, 'change_abs 12.34').toHaveText(absShown(SERIES.abs), {timeout: 10_000});
+
+        // The Refresh asks again for the same asset, range and currency: the Δ on screen stays until the answer replaces it.
+        series = null;
+        const answeredBefore = traffic.seriesAnswered;
+        await expect(refresh).toBeEnabled({timeout: 10_000});
+        await refresh.click();
+        await seriesAnswersApplied(page, traffic, answeredBefore + 1);
+        expect(traffic.failures, 'the routes answered every request they saw').toEqual([]);
+        expect(traffic.seriesAsked, 'the load and the Refresh ask this asset over the range on screen, in its own currency').toEqual(traffic.seriesAsked.map(() => [seriesAsk(assetId, range)]));
+        expect(traffic.liveAsked, 'an asset without a provider asks no live quote').toEqual([]);
+
+        await expect(summary.price, 'the price stays').toBeVisible();
+        await expect(summary.percent, 'change_ratio null: no percent beside the price').toHaveCount(0);
+        await expect(summary.abs, 'change_abs null: no absolute change beside the price').toHaveCount(0);
+    });
+
+    test('X-R59 a range ending today with a live quote: the poll asks range_start, and the summary shows the quote’s Δ, not the series’', async ({page}) => {
+        const assetId = 920_593;
+        const range: DayRange = {start: daysAgoIso(60), end: daysAgoIso(0)};
+        await mockCacheHitEventsAsset(page, assetId);
+        await routeMockAssetAssignment(page, assetId);
+        const traffic = await routeRangeDeltas(page, assetId, () => SERIES);
+        const summary = priceSummary(page);
+
+        await goToAssetDetailPage(page, String(assetId), range);
+        // Both answers in, the series' applied: the page holds a Δ of each kind, and must show the quote's.
+        await seriesAnswersApplied(page, traffic, 1);
+        await expect.poll(() => traffic.liveAnswered, {message: 'the page polls the live quote of an asset with a provider, over a range ending today', timeout: 15_000}).toBeGreaterThan(0);
+        expect(traffic.failures, 'the routes answered every request they saw').toEqual([]);
+        expect(traffic.seriesAsked, 'the series’ Δ is asked as well, over the range on screen').toEqual(traffic.seriesAsked.map(() => [seriesAsk(assetId, range)]));
+        expect(traffic.liveAsked, 'every live poll asks the Δ from the first day of the range on screen, in the asset’s own currency').toEqual(traffic.liveAsked.map(() => liveAsk(assetId, range)));
+
+        await expect(summary.price, 'the summary shows the live quote').toHaveText(priceShown(LIVE_PRICE), {timeout: 10_000});
+        await expect(summary.percent, 'the quote’s change_ratio -0.1313, not the series’ 0.4242').toHaveText(percentShown(LIVE.percent), {timeout: 10_000});
+        await expect(summary.abs, 'the quote’s change_abs -7.77, not the series’ 12.34').toHaveText(absShown(LIVE.abs), {timeout: 10_000});
+    });
+
+    test('X-R59 another display currency: both requests ask the Δ in it when its FX pair is configured, neither when it is not', async ({page}) => {
+        // A ceiling, never a delay: two currency switches, each awaited through its own round trips.
+        test.setTimeout(90_000);
+        const assetId = 920_594;
+        const range: DayRange = {start: daysAgoIso(60), end: daysAgoIso(0)};
+        await mockCacheHitEventsAsset(page, assetId);
+        await routeMockAssetAssignment(page, assetId);
+        const traffic = await routeRangeDeltas(page, assetId, () => SERIES);
+        await routeFxRoutes(page, traffic);
+        await routeLiveConversion(page);
+        const summary = priceSummary(page);
+        const lastSeriesAsk = () => traffic.seriesAsked.at(-1) ?? null;
+        const lastLiveAsk = () => traffic.liveAsked.at(-1) ?? null;
+
+        // In the asset's own EUR first: neither request names a currency.
+        await goToAssetDetailPage(page, String(assetId), range);
+        await seriesAnswersApplied(page, traffic, 1);
+        expect(lastSeriesAsk(), 'in EUR the series’ Δ is asked natively').toEqual([seriesAsk(assetId, range)]);
+        await expect.poll(lastLiveAsk, {message: 'in EUR the live quote is asked natively', timeout: 15_000}).toEqual(liveAsk(assetId, range));
+        await expect(summary.percent, 'the quote’s own Δ').toHaveText(percentShown(LIVE.percent), {timeout: 10_000});
+
+        // GBP: the EUR-GBP pair is configured, so the chart is converted and the summary converts the quote.
+        await chooseDisplayCurrency(page, 'GBP');
+        await expect.poll(lastSeriesAsk, {message: 'in GBP the series’ Δ is asked in GBP', timeout: 15_000}).toEqual([seriesAsk(assetId, range, 'GBP')]);
+        await expect.poll(lastLiveAsk, {message: 'in GBP the live quote’s Δ is asked in GBP', timeout: 15_000}).toEqual(liveAsk(assetId, range, 'GBP'));
+        await seriesAnswersApplied(page, traffic, traffic.seriesAsked.length);
+        expect(traffic.failures, 'the routes answered every request they saw').toEqual([]);
+        await expect(summary.price, 'the quote converted to GBP').toHaveText(priceShown(LIVE_PRICE_IN_GBP), {timeout: 10_000});
+        await expect(summary.percent, 'the Δ answered in GBP').toHaveText(percentShown(LIVE_IN_GBP.percent), {timeout: 10_000});
+        await expect(summary.abs).toHaveText(absShown(LIVE_IN_GBP.abs), {timeout: 10_000});
+
+        // JPY: offered (an end of the GBP-JPY route), but EUR-JPY is not configured: nothing is converted, and neither
+        // request names a currency.
+        await chooseDisplayCurrency(page, 'JPY');
+        await expect.poll(lastSeriesAsk, {message: 'without the EUR-JPY pair the series’ Δ is asked natively', timeout: 15_000}).toEqual([seriesAsk(assetId, range)]);
+        await expect.poll(lastLiveAsk, {message: 'without the EUR-JPY pair the live quote’s Δ is asked natively', timeout: 15_000}).toEqual(liveAsk(assetId, range));
+        await seriesAnswersApplied(page, traffic, traffic.seriesAsked.length);
+        expect(traffic.failures, 'the routes answered every request they saw').toEqual([]);
+        await expect(summary.price, 'the quote left in EUR').toHaveText(priceShown(LIVE_PRICE), {timeout: 10_000});
+        await expect(summary.percent, 'the Δ answered natively').toHaveText(percentShown(LIVE.percent), {timeout: 10_000});
+        await expect(summary.abs).toHaveText(absShown(LIVE.abs), {timeout: 10_000});
     });
 });

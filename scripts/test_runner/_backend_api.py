@@ -475,7 +475,7 @@ def api_current_price_persistence(verbose: bool = False, test_names: list = None
 def api_prices_currency_coherence(verbose: bool = False, test_names: list = None) -> bool:
     """Run currency-mismatch hard-reject tests."""
     print_section("Prices Currency Coherence (I.2) API Tests")
-    print_info("Testing hard-400 on FAPricePoint.currency != asset.currency")
+    print_info("Testing the hard reject on FAPricePoint.currency != asset.currency: 422 price_currency_mismatch, the whole upload (X-R71)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_prices_currency_coherence.py", test_names)
     return run_command(cmd, "Prices currency coherence tests", verbose=verbose)
@@ -689,6 +689,15 @@ def api_settings(verbose: bool = False, test_names: list[str] | None = None) -> 
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_settings_api.py", test_names)
     return run_command(cmd, "Settings API tests", verbose=verbose)
+
+
+def api_settings_currency_strict(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the E-19a settings currency tests: a user's base_currency strict, the 422 naming the code it stands for."""
+    print_section("Settings Currency Strict API Tests (E-19a)")
+    print_info("Tests: PUT /settings/user and the welcome flow refuse a non-ISO base_currency; an E-18 route's 422 names the ISO code")
+    print_info("Note: Server will be automatically started and stopped by test")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_settings_currency_strict_api.py", test_names)
+    return run_command(cmd, "Settings currency strict API tests", verbose=verbose)
 
 
 def api_plugin_settings(verbose: bool = False, test_names: list[str] | None = None) -> bool:
@@ -998,7 +1007,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
-    add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range")
+    add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range; X-R71 422 price_currency_mismatch")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
     add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of, as_of ≥ 1900")
     add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
@@ -1130,7 +1139,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "assets-patch-fields", api_assets_patch_fields, name="Assets Patch Fields", desc="PATCH /assets/{id} field-level updates")
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="Sentinel rules on POST /assets/prices")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")
-    add_test(api, "prices-currency-coherence", api_prices_currency_coherence, name="Prices Currency Coherence", desc="Hard-400 on currency mismatch")
+    add_test(api, "prices-currency-coherence", api_prices_currency_coherence, name="Prices Currency Coherence", desc="Hard reject on currency mismatch; X-R71: 422 price_currency_mismatch (items per asset at fault, count), the whole upload refused, no asset written; an unknown asset still reported")
     add_test(api, "asset-currency-change", api_asset_currency_change, name="Asset Currency Change", desc="409 blocked, wipe + retry")
     add_test(api, "asset-prices-export", api_asset_prices_export, name="Asset Prices Export", desc="CSV/JSON export + round-trip")
     add_test(api, "prices-sync-delta", api_prices_sync_delta, name="Prices Sync Delta", desc="changed_points payload")
@@ -1188,6 +1197,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "users-admin", api_users_admin, name="Users Admin API", desc="Invitations, accounts and usage, PATCH with the last-admin and limit guards, reset links, sessions revoke, onboarding reset, token-free logs")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
+    add_test(api, "settings-currency-strict", api_settings_currency_strict, name="Settings Currency Strict API", desc="E-19a: base_currency strict on PUT /settings/user and the welcome flow; the 422 names the ISO code")
     add_test(
         api,
         "plugin-settings",

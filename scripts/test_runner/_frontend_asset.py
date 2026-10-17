@@ -9,7 +9,9 @@ from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ens
 
 def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Asset unit tests (Vitest) — price store, price/chart derived-state, local
-    signal regression, chart aggregation, and worker-pool infra."""
+    signal regression, chart aggregation, and worker-pool infra; the whole-range Δ read
+    from the backend (X-R59: rangeChange, the period-changes fetchers' range_start, the
+    asset detail page's summary Δ)."""
     cmd = [
         "npx",
         "vitest",
@@ -17,6 +19,9 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/stores/__tests__/assetPriceStoreRegistry.test.ts",
         "src/lib/utils/__tests__/assetPriceDerived.test.ts",
         "src/lib/utils/__tests__/periodChanges.test.ts",
+        "src/lib/utils/__tests__/periodChanges.rangeChange.test.ts",
+        "src/lib/utils/__tests__/rangeChange.test.ts",
+        "src/lib/components/assets/detail/assetDetailRangeChange.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregationGolden.test.ts",
         "src/lib/components/charts/__tests__/lineChartHelpers.test.ts",
@@ -220,7 +225,7 @@ def populate_registry(registry: dict) -> None:
     cat = make_category(
         help_text="Frontend Asset E2E & unit tests (list, detail, modal, classification)",
         description="""Frontend Asset Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, chart aggregation (incl. the pre-refactor golden corpus pinning the four groupPointsByBucket consumers), local signals, worker pool, asset identity engine, an explicit emoji for every asset type in the historical allocation chart, the GrowthChart ladder-axis planner (labels, month separators, sparse anchor) against an independent oracle, and the GrowthChart ladder's calendar periods (Monday weeks, months from the 1st, quarters, halves and years, fixed 3D and 2W blocks that never move), a period that is over and cut by the series marked partial and the one still running left whole", tests="vitest")
+    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, the whole-range Δ read from the backend (X-R59), chart aggregation (incl. the pre-refactor golden corpus pinning the four groupPointsByBucket consumers), local signals, worker pool, asset identity engine, an explicit emoji for every asset type in the historical allocation chart, the GrowthChart ladder-axis planner (labels, month separators, sparse anchor) against an independent oracle, and the GrowthChart ladder's calendar periods (Monday weeks, months from the 1st, quarters, halves and years, fixed 3D and 2W blocks that never move), a period that is over and cut by the series marked partial and the one still running left whole", tests="vitest")
     add_test(cat, "growth-chart-memo", front_growth_chart_memo, test_names=False, name="GrowthChart Component Tests (Vitest + jsdom)", desc="Mounts the real dashboard GrowthChart with ECharts swapped for a recorder. Arrival-order regression for the per-resolution aggregation memo: the component is mounted with a lazily fetched input absent, the memo is populated in that state, the input then lands, and the rebuilt series must carry real values instead of the cached gap sentinels. Parameterised over the whole late-arriving class — pnlCandles, brokerPnlHistory, incomeHistory, costHistory, depositHistory, acquisitionFunding. Also: privacy masking of axis and tooltip amounts (and privacy-off parity), one form for every signed tooltip amount with the locale's own sign (D23, D23b), the persisted mode/submode restore with its fallbacks, the candle caption, the grid's left inset, and the Candles/Income ladder x axis (S7): end-anchored buckets on a category axis, the planner's labels and separators, the short oldest bucket drawn translucent and explained in its tooltip (escaped), and the zoom window kept across rung changes and redraws, and the money axis ticks (S7b): exact, distinct labels (D18), the locale's minus (D23), the auto-scaled lower edge unlabelled while Income keeps ECharts' zero-based defaults (D25), and the Income purchase value (S8): both halves named as the book value in the full build and the partial update, one legend entry, the bold total over its two ↳ shares and their sum, new capital in the KPI blue (R11, D26), and the P&L line rebuilt whole when its set of brokers changes (one leaves, one is swapped, one joins), so it draws and lists exactly the brokers in scope, while new amounts for the same brokers stay a partial update (plan 47, C2)", tests="src/lib/features/dashboard/GrowthChart.test.ts")
     add_test(cat, "asset-list", front_asset_list, name="Asset List Page", desc="List page navigation, cards/table, filters, the sync dialog's overwrite warning (C-66: sync all counts stored prices; the selection's sync over a past weekend filled backward does not warn, a control that stores a price does), the Δ columns from the backend (X-R53)", tests="assets/asset-list.spec.ts")
     add_test(cat, "asset-detail", front_asset_detail, name="Asset Detail Page", desc="Detail chart, panels, sync, edit, page sync overwrite warning counting this asset (C-66)", tests="assets/asset-detail.spec.ts")

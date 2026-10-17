@@ -407,4 +407,19 @@ Sono tutti locali: la push la fa il developer.
 | 315 | 17/10 15:19 | J-49 range seam check | `e2e883136` |
 | 316 | 17/10 15:39 | Z-30 full-history load floored at 1900 | `fb514073b` |
 | 317 | 17/10 15:40 | risk Intl guard (J) | `b13ed7944` |
+| 318 | 17/10 15:47 | MF-SEC9e exact delete counts, A2 docs | `4507f7507` |
+| 319 | 17/10 15:48 | H-51 untrusted schema on every connection | `70ab2fcc6` |
+| 320 | 17/10 15:55 | H-47 design and B-37 clause | `13b6cfde1` |
+| 321 | 17/10 15:57 | Z-30 follow-up (plural, comments) | `80cef0e43` |
+| 322 | 17/10 16:01 | X-R58 bulk refusal toasts | `1bef78be1` |
+| 323 | 17/10 16:01 | X-R71 manual upload currency all-or-nothing (B) | `1c7937984` |
+| 324 | 17/10 16:04 | H backlog reconciliation | `c3600c247` |
+| 325 | 17/10 16:04 | C-97c-1 price and quantity digits | `f1bfa1e31` |
+| 326 | 17/10 16:05 | A-51 setup cancel under the lock, A-45 | `180be0ff1` |
+| 327 | 17/10 16:15 | E-19a stored currency audit and guards | `c7c6f94f0` |
+| 328 | 17/10 16:16 | T-B7 all-null columns named (J) | `36d24e7d2` |
+| 329 | 17/10 16:17 | docs(journal): close T-B7 | `81e177e45` |
+| 330 | 17/10 16:21 | X-R59 lots A/B range change from backend (Y) | `f317e3a9f` |
+| 331 | 17/10 16:28 | MF-J45b single-flight, A4 docs | `a228b9d30` |
+| 332 | 17/10 16:41 | B-43/B-44 unreadable copy refused | `fc4d5eab4` |
 | — | 17/10 00:05–00:45 | Colori: AF file, media e menu `9d3607eb6`; T `CompactCashCell` `b58108665` | — |

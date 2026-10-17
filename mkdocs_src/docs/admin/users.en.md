@@ -191,10 +191,18 @@ On the server, `user deactivate` on this account cancels its link the same way. 
 **Protected** account cannot have its link cancelled from this tab: **Cancel setup link** is off,
 with the reason of a protected account ([When an Action Is Off](#action-off)).
 
+If the administrator completed its setup after your list was loaded, there is nothing left to
+cancel: LibreFolio changes nothing and says *This administrator completed its setup in the
+meantime: nothing was changed.* The tab reloads, and the row now shows an active administrator,
+with **Deactivate** in place of **Cancel setup link**. The account stays active and its owner
+signed in.
+
 To remove the account instead, click **Delete** ([Delete an Account](#delete)), with no
 **Remove administrator** first. The account goes with its setup links, its place is freed, and
 nobody waits for a setup any more: `user setup-link` finds nobody, and the `LIBREFOLIO_ADMIN_*`
-variables create nothing at the next starts, since the instance has accounts.
+variables create nothing at the next starts, since the instance has accounts. If the setup was
+completed in the meantime there too, nothing is deleted: the dialog says *An administrator must be
+demoted before it can be deleted.*, since the account is now an active administrator.
 
 ### 🔤 Usernames with an @ {: #usernames-with-at }
 

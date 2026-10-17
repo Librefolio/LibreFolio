@@ -193,8 +193,9 @@ BRIM plugins may set `cost_basis_override` directly when the source report alrea
 
 The `currency` field in `transactions` is an **ISO 4217 string** (e.g., `EUR`, `USD`, `JPY`). There is **no foreign key** to an FX table — currencies are standard codes, validated with `pycountry` at the application layer:
 
-- **What a request writes** — a transaction's cash or cost basis, an asset's currency, a manual event, a manual FX rate or conversion route, a BRIM import — must be an ISO 4217 alphabetic code (`iso_currency_code()` in `schemas/common.py`, E-18). Case and surrounding spaces do not matter (` eur ` is stored as `EUR`); a currency name (`Euro`), a numeric code (`978`) or a crypto ticker (`BTC`) is refused with a 422.
+- **What a request writes** — a transaction's cash or cost basis, an asset's currency, a manual event, a manual FX rate or conversion route, a BRIM import, a user's base currency (E-19a) — must be an ISO 4217 alphabetic code (`iso_currency_code()` in `schemas/common.py`, E-18). Case and surrounding spaces do not matter (` eur ` is stored as `EUR`); a currency name (`Euro`), a numeric code (`978`) or a crypto ticker (`BTC`) is refused with a 422, which names the code the text stands for when there is one (`'840'`: USD; E-19a, `suggested_iso_currency()`).
 - **What is read back** is not checked again (`Currency.validate_code`, the lenient rule): a value stored by an earlier version still loads, lists and can be deleted.
+- **What is stored and not canonical** is reported, never changed (E-19a): a warning at every start and `./dev.py db currencies` ([admin guide](../../../admin/cli_tools.md), «Currency Codes That Are Not ISO Codes»; `services/platform/stored_currencies.py`, 14 places), and the BRIM gap-fix refuses to compare a broker whose cash holds such a code ([guide](../patterns/brim_plugin_guide.md)).
 
 The dotted line in the ER diagram represents a **logical relationship**, not a relational one:
 

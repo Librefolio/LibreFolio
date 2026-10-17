@@ -15,7 +15,7 @@
 import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
 import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
-import {uiLocale} from '$lib/stores/app/uiLocale';
+import {formatExactDecimal} from '$lib/utils/core/formatFixed';
 
 /**
  * Mapping of Pydantic built-in error types to i18n keys.
@@ -198,13 +198,10 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
         enriched.formattedBalance = escapeHtml(formatCurrencyAmountPlain(parseFloat(rawParams.balance), rawParams.currency, {showSign: true, minFraction: 2, maxFraction: 2}));
     } else if (rawParams.balance != null) {
         const num = parseFloat(rawParams.balance);
-        // Asset balances: no forced decimals (show "5" not "5.00"), emoji 📈/📉 after number
+        // Asset balances: no forced decimals (show "5" not "5.00"), exact and up to the 10 decimals a quantity keeps (C-97c),
+        // emoji 📈/📉 after number
         const emoji = num >= 0 ? '📈' : '📉';
-        const formatted = num.toLocaleString(uiLocale(), {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 6,
-        });
-        enriched.balance = `${formatted} ${emoji}`;
+        enriched.balance = `${escapeHtml(formatExactDecimal(rawParams.balance, {maxFrac: 10}))} ${emoji}`;
     }
 
     // Resolve currency code → rich HTML with symbol + flag (e.g. "$ 🇺🇸 USD")

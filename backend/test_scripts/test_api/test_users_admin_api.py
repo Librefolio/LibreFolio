@@ -111,6 +111,20 @@ Lot A-42 + A-43 (the setup link's lifecycle; contract approved by the coordinato
     setup link or set up before — is still 409 ``DEMOTE_FIRST``, nothing deleted; and a protected account is still 409
     ``ACCOUNT_PROTECTED`` before any other answer (point 12), the waiting administrator included.
 
+Lot A-51 (the setup completed while the Users tab acts; cure approved by the coordinator, 17/10) adds:
+
+18. ``PATCH /users/{user_id}`` takes an optional ``cancel_setup: bool``, false by default, allowed only beside
+    ``is_active: false``: with ``is_active`` absent, null or true it is a 422 that changes nothing. ``{is_active: false,
+    cancel_setup: true}`` is point 16's cancellation and nothing else: on the account still waiting for its setup, 200
+    with its row (``pending_setup: true``), its setup link revoked, the account still waiting; on an account that no
+    longer waits — set up since the tab listed it, or in the very window between the route's reads and its first write
+    — 409 ``{error_code: SETUP_COMPLETED, message}``, and nothing changes: the administrator active, an administrator,
+    its sessions alive. A plain ``{is_active: false}`` keeps its meaning, a deactivation, decided on what the database
+    holds under SQLite's write lock: in that window it deactivates the administrator just set up — the caller, another
+    active administrator, keeps it from being the last —, its sessions end, and its answer is what the database holds.
+    ``DELETE /users/{user_id}`` reads «waiting» again under the same lock before point 17's direct deletion: in that
+    window, 409 ``DEMOTE_FIRST``, nothing deleted.
+
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` gives ``ACCOUNT_DISABLED`` and
 ``test_registration_api.py`` reads; the administrator's ``USER_LIMIT_REACHED`` carries ``limit``, ``used`` and
 ``billing_url`` in the same ``detail``.
@@ -185,6 +199,17 @@ administrator must still be demoted first, and the hook of lot A7 still answers 
 cancellation of the setup link of a pending administrator the hook protects, 200 today and its link revoked: the route
 asks the hook about an active account's deactivation only — is red too (added 17/10, after the review); its positive
 control is UADM-074 (``patch-by-root``), the same ``PATCH`` on the pending administrator nobody protects.
+
+Red until A-51 (label ``# red until A-51``; point 18): A51-001 to A51-003 — ``cancel_setup`` is no field today, 422 —,
+A51-005 — in the window the plain ``{is_active: false}`` answers 200 with the account inactive, as the route loaded it
+before the setup, while the database holds it active: a stale answer, nothing deactivated — and A51-006 — in the window
+the ``DELETE`` deletes the administrator just set up, 204. A51-004 is their guard, green today (no such field) and after
+(the validation): ``cancel_setup`` without ``is_active: false`` is refused whole. They run in-process, as A-43's; the
+deletion on ``private_head``, as UADM-076. The window is played without threads (``_setup_lands_after_the_first_read``):
+the route's first ``registration_service.is_pending_admin`` reads the account still waiting, then the setup completes
+on another connection — ``complete_admin_setup``, what ``POST /auth/setup`` runs, committed — before the route goes on;
+every later reading, the service's included, reads afresh. The cancellation and the deletion of an administrator still
+waiting keep their guards, unchanged: UADM-062 and UADM-074 (``{is_active: false}``), UADM-076 (``DELETE``).
 """
 
 import ast
@@ -226,7 +251,7 @@ from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.brokers import BRDeleteItem
 from backend.app.schemas.users import AdminUserRead
 from backend.app.services.accounts import auth_service, registration_service, user_service
-from backend.app.services.accounts.bootstrap_admin_service import BootstrapAction, issue_setup_link, run_admin_bootstrap
+from backend.app.services.accounts.bootstrap_admin_service import BootstrapAction, complete_admin_setup, issue_setup_link, run_admin_bootstrap
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, hash_token, inspect_token, issue_token, revoke_tokens
@@ -3201,3 +3226,218 @@ class TestDeletingThePendingAdministrator:
         _expect(violations, user_id in await _pending_admin_ids(private_head), "the pending administrator must still wait for its setup")
         assert not violations, f"The hook must still answer first, for the pending administrator too:{_verdict(violations)}"
         print_success("409 ACCOUNT_PROTECTED, nothing deleted, still waiting")
+
+
+# ============================================================================
+# IN-PROCESS: THE SETUP COMPLETED WHILE THE USERS TAB ACTS (lot A-51)
+# ============================================================================
+
+
+#: The Users tab's cancellation of a setup (A-51): the deactivation of the account waiting for its setup, and nothing else.
+CANCEL_SETUP = {"is_active": False, "cancel_setup": True}
+#: Bodies asking ``cancel_setup`` without ``is_active: false`` (A51-004): refused whole, 422, whatever else they ask.
+CANCEL_SETUP_WITHOUT_A_DEACTIVATION = [
+    pytest.param({"cancel_setup": True}, id="is-active-absent"),
+    pytest.param({"cancel_setup": True, "is_active": None}, id="is-active-null"),
+    pytest.param({"cancel_setup": True, "is_superuser": False}, id="is-active-absent-beside-a-demotion"),
+    pytest.param({"cancel_setup": True, "is_active": True}, id="beside-an-activation"),
+]
+#: The database as the rival's setup left it, appended once that setup committed (``_setup_completed_meanwhile``): what a refused request must leave as it is.
+Landed = list[dict[str, list[dict[str, Any]]]]
+
+
+async def _setup_completed_meanwhile(private: _Private, token: str, landed: Landed) -> None:
+    """The rival of A-51: the pending administrator's setup completed through ``token`` with SETUP_PASSWORD — ``complete_admin_setup``, what POST /auth/setup runs — on a connection of its own, as another worker serves it, committed; the database as it leaves it appended to ``landed``."""
+    async with AsyncSession(private.engine, expire_on_commit=False) as session:
+        user = await complete_admin_setup(session, token, SETUP_PASSWORD)
+    assert user is not None and user.is_active, f"Setup: the rival's setup must complete: {user!r}"
+    landed.append(await _private_snapshot(private))
+
+
+def _setup_lands_after_the_first_read(monkeypatch: pytest.MonkeyPatch, private: _Private, token: str, landed: Landed) -> list[bool]:
+    """The window of A-51, played without threads: ``registration_service.is_pending_admin`` replaced. Its first call reads the database — the account still waits: True —, then the setup lands (``_setup_completed_meanwhile``) before the call answers what it read; every later call reads afresh. What each call answered, in order: the barrier.
+
+    The route loads the account and reads whether it waits before its first write, and pysqlite defers BEGIN to that
+    write: nothing holds the account meanwhile. The setup landing right after those reads leaves the route an account it
+    loaded inactive and «waiting» true, while the database holds the administrator active. The service's reading is a
+    later call: ``user_service._is_pending_admin`` imports the function when it runs. The rival writes on its own
+    connection while the request holds no lock: the cure keeps the route's first reading before the lock, and reads
+    «waiting» again under it (the coordinator's contract, 17/10).
+    """
+    real = registration_service.is_pending_admin
+    answers: list[bool] = []
+
+    async def is_pending_admin(session: AsyncSession, user: User) -> bool:
+        answer = await real(session, user)
+        answers.append(answer)
+        if len(answers) == 1:
+            await _setup_completed_meanwhile(private, token, landed)
+        return answer
+
+    monkeypatch.setattr(registration_service, "is_pending_admin", is_pending_admin)
+    return answers
+
+
+def _account_row(snapshot: dict[str, list[dict[str, Any]]], user_id: int) -> Optional[dict[str, Any]]:
+    """The ``users`` row of ``user_id`` in a ``_private_snapshot``; None when it is not there."""
+    return next((row for row in snapshot["users"] if row["id"] == user_id), None)
+
+
+class TestTheSetupCompletedWhileTheUsersTabActs:
+    """Lot A-51 (cure approved by the coordinator, 17/10): the Users tab acts on the account waiting for its setup while that setup completes — the tab's row stale for minutes, or the very window between the route's reads and its first write. ``cancel_setup`` cancels a setup still waiting and nothing else, refused 409 SETUP_COMPLETED once the setup is done; a plain deactivation answers what the database holds; a deletion asks to demote first. In-process only, as A-43's: a pending administrator never enters the lane's database; the deletion on the migrated schema (``private_head``), as UADM-076. The guards of the cancellation and the deletion of an administrator still waiting are UADM-062 and UADM-074 (``{is_active: false}``), UADM-076 (``DELETE``): not repeated here."""
+
+    # red until A-51
+    @pytest.mark.asyncio
+    async def test_a_stale_tab_does_not_cancel_a_setup_completed_since(self, private: _Private) -> None:
+        """A51-001 — NEW, red until A-51 (today 422: ``cancel_setup`` is no field; the tab's {is_active: false} alone deactivates the new owner): GET /users listed the pending administrator pending_setup true, then the administrator completed its setup through its link (POST /auth/setup: 200, signed in) — the tab's row is stale. Root cancels from it, PATCH {is_active: false, cancel_setup: true} → 409 SETUP_COMPLETED, and nothing changes: every row of users and account_tokens as it was — the administrator active, an administrator, its session version —; its own session still answers GET /auth/me; GET /users lists it active, pending_setup false, exactly its nine fields."""
+        print_section("A51-001: the cancellation from a stale tab, the setup completed since")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+        stale_row = (await _private_listed(private, cookie)).get(user_id)
+        assert stale_row is not None and stale_row.get("pending_setup") is True, f"Setup: the tab's row offers the cancellation — listed pending_setup true before the setup: {stale_row}"
+        setup = await _setup_with(private, pending.token)
+        owner_cookie = _session_cookie(setup)
+        assert setup.status_code == 200 and owner_cookie, f"Setup: the administrator completes its setup through its link, and is signed in: {setup.status_code} {setup.text}"
+        before = await _private_snapshot(private)
+
+        response = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json=CANCEL_SETUP)
+
+        changes = _snapshot_changes(before, await _private_snapshot(private))
+        me = _answer(await _call(private, "GET", "/auth/me", cookie=owner_cookie))
+        listed = (await _private_listed(private, cookie)).get(user_id)
+        violations: list[str] = []
+        _expect(violations, _refusal(response) == (409, "SETUP_COMPLETED"), f"red until A-51: the setup was completed since the tab listed it, so its cancellation must be refused, 409 SETUP_COMPLETED: got {response.status_code} {response.text}")
+        _expect(violations, changes == {}, f"a refused cancellation must change nothing, all or nothing — rows that changed: {changes}")
+        _expect(violations, me[0] == 200 and me[1]["user"]["id"] == user_id, f"the administrator's own session must still be valid: GET /auth/me with the cookie its setup gave answered {me}")
+        violations += [f"listed after the refusal: {violation}" for violation in _user_item_violations(listed, pending.account, active=True, superuser=True)]
+        assert not violations, f"A stale tab must not cancel a setup completed since:{_verdict(violations)}"
+        print_success("409 SETUP_COMPLETED; nothing changed; the new owner still signed in")
+
+    # red until A-51
+    @pytest.mark.asyncio
+    async def test_the_cancellation_refuses_a_setup_completed_in_its_window(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A51-002 — NEW, red until A-51 (today 422: ``cancel_setup`` is no field; the same window with {is_active: false} alone is A51-005): root cancels the pending administrator's setup, PATCH {is_active: false, cancel_setup: true}, and the setup completes in the request's window — after the route read the account waiting, before its first write (``_setup_lands_after_the_first_read``). The cancellation is decided under the lock: → 409 SETUP_COMPLETED, and nothing changes since the setup landed — every row of users and account_tokens as the setup left them: the administrator active, an administrator, its session version, so its sessions alive.
+
+        Barrier: the route's first reading answered True, and the setup landed once, in the window.
+        """
+        print_section("A51-002: the cancellation, the setup completed in the request's window")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+        landed: Landed = []
+        answers = _setup_lands_after_the_first_read(monkeypatch, private, pending.token, landed)
+
+        response = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json=CANCEL_SETUP)
+
+        changes = _snapshot_changes(landed[0], await _private_snapshot(private)) if landed else "the setup never landed"
+        state = (await _private_user(private, user_id))[:2]
+        violations: list[str] = []
+        _expect(violations, _refusal(response) == (409, "SETUP_COMPLETED"), f"red until A-51: the setup completed between the route's reading and its first write, so the cancellation must be refused under the lock, 409 SETUP_COMPLETED: got {response.status_code} {response.text}")
+        _expect(violations, answers[:1] == [True] and len(landed) == 1, f"barrier: the route must read the account waiting, then the setup land once — the window of A-51: is_pending_admin answered {answers}, the setup landed {len(landed)} time(s)")
+        _expect(violations, changes == {}, f"a refused cancellation must change nothing since the setup landed, all or nothing — rows that changed: {changes}")
+        _expect(violations, state == (True, True), f"the administrator just set up must stay active, an administrator: (is_active, is_superuser) {state}")
+        assert not violations, f"The cancellation must refuse a setup completed in its window, and change nothing:{_verdict(violations)}"
+        print_success("409 SETUP_COMPLETED; nothing changed since the setup")
+
+    # red until A-51
+    @pytest.mark.asyncio
+    async def test_cancel_setup_cancels_the_setup_of_the_pending_administrator(self, private: _Private) -> None:
+        """A51-003 — NEW, red until A-51 (today 422: ``cancel_setup`` is no field): on the pending administrator, still waiting, PATCH {is_active: false, cancel_setup: true} is the cancellation of A-43, as {is_active: false} is (UADM-062, UADM-074): 200 with its row — inactive, an administrator, pending_setup true, exactly its nine fields —; its setup link revoked — inspected, revoked and nothing more —; and the account still waits — the filter selects it —, inactive, an administrator."""
+        print_section("A51-003: cancel_setup on the pending administrator, still waiting")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+
+        response = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json=CANCEL_SETUP)
+
+        inspected = _inspected(await _inspect_setup_link(private, pending.token))
+        waiting = user_id in await _pending_admin_ids(private)
+        state = (await _private_user(private, user_id))[:2]
+        violations: list[str] = []
+        _expect(violations, response.status_code == 200, f"red until A-51: {{is_active: false, cancel_setup: true}} on the administrator still waiting is the cancellation of A-43: expected 200, got {response.status_code} {response.text}")
+        if response.status_code == 200:
+            violations += [f"the PATCH's answer: {violation}" for violation in _user_item_violations(response.json(), pending.account, active=False, superuser=True, pending_setup=True)]
+        _expect(violations, inspected == INSPECTED_REVOKED, f"the cancellation must revoke its setup link: inspected, {INSPECTED_REVOKED}; got {inspected}")
+        _expect(violations, waiting and state == (False, True), f"the account must still wait for its setup, inactive, an administrator: the filter selects it {waiting}; (is_active, is_superuser) {state}")
+        assert not violations, f"cancel_setup must cancel the setup of the administrator still waiting:{_verdict(violations)}"
+        print_success("200; its link revoked; still waiting")
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("body", CANCEL_SETUP_WITHOUT_A_DEACTIVATION)
+    async def test_cancel_setup_without_a_deactivation_is_refused_whole(self, private: _Private, body: dict[str, Any]) -> None:
+        """A51-004 — GUARD, green today (``cancel_setup`` is no field) and after (allowed only beside is_active: false): PATCH /users/{the pending administrator} with cancel_setup: true and ``is_active`` absent, null or true — alone, beside a demotion, beside an activation — → 422, and nothing changes: every row of users and account_tokens as it was, its setup link still valid."""
+        print_section(f"A51-004: PATCH {body} on the pending administrator")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+        before = await _private_snapshot(private)
+
+        response = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json=body)
+
+        changes = _snapshot_changes(before, await _private_snapshot(private))
+        status, shown = _inspected(await _inspect_setup_link(private, pending.token))
+        violations: list[str] = []
+        _expect(violations, response.status_code == 422, f"PATCH {body}: cancel_setup goes only beside is_active: false — expected 422, got {response.status_code} {response.text}")
+        _expect(violations, changes == {}, f"a refused PATCH must change nothing — rows that changed: {changes}")
+        _expect(violations, (status, shown.get("status")) == (200, "valid"), f"its setup link must stay valid: {status} {shown}")
+        assert not violations, f"cancel_setup without is_active: false must be refused whole:{_verdict(violations)}"
+        print_success("422; nothing changed")
+
+    # red until A-51
+    @pytest.mark.asyncio
+    async def test_a_deactivation_in_the_setups_window_answers_what_the_database_holds(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A51-005 — NEW, red until A-51 (today 200 with the account inactive — as the route loaded it, before the setup — beside a fresh pending_setup false, while the database holds it active: a stale answer, nothing deactivated): root's plain PATCH {is_active: false} on the pending administrator, the setup completing in the request's window (A51-002's). A plain deactivation keeps its meaning, decided on what the database holds under the lock: → 200; the answer's is_active and pending_setup are the database's right after; the account is active no more — deactivated, still an administrator —, and its sessions ended: its session version above the one the setup left. Root, another active administrator, keeps it from being the last.
+
+        Barrier: the route's first reading answered True, and the setup landed once, in the window.
+        """
+        print_section("A51-005: a plain deactivation, the setup completed in the request's window")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+        landed: Landed = []
+        answers = _setup_lands_after_the_first_read(monkeypatch, private, pending.token, landed)
+
+        response = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json={"is_active": False})
+
+        state = await _private_user(private, user_id)
+        held = {"is_active": state[0], "pending_setup": user_id in await _pending_admin_ids(private)}
+        answer = response.json() if response.status_code == 200 else {}
+        told = {key: answer.get(key) for key in held}
+        set_up = _account_row(landed[0], user_id) if landed else None
+        violations: list[str] = []
+        _expect(violations, response.status_code == 200, f"a plain deactivation must still answer 200: got {response.status_code} {response.text}")
+        _expect(violations, told == held, f"red until A-51: the answer must be what the database holds right after — it answered {told}, the database holds {held}: {answer}")
+        _expect(violations, state[:2] == (False, True), f"red until A-51: decided on what the database holds, the deactivation must deactivate the administrator just set up — root keeps it from being the last —, still an administrator: (is_active, is_superuser) {state[:2]}")
+        _expect(violations, set_up is not None and state[2] > set_up["session_version"], f"a deactivation must end its sessions: its session version must rise above the one its setup left ({set_up['session_version'] if set_up else None}): {state[2]}")
+        _expect(violations, answers[:1] == [True] and len(landed) == 1, f"barrier: the route must read the account waiting, then the setup land once — the window of A-51: is_pending_admin answered {answers}, the setup landed {len(landed)} time(s)")
+        assert not violations, f"A deactivation in the setup's window must answer what the database holds:{_verdict(violations)}"
+        print_success("200, the answer the database's: deactivated, its sessions ended")
+
+    # red until A-51
+    @pytest.mark.asyncio
+    async def test_a_deletion_in_the_setups_window_asks_to_demote_first(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A51-006 — NEW, red until A-51 (today 204: the route read «waiting» before the deletion's writes, so it deletes the administrator just set up, never asked to demote it first): root deletes the pending administrator, DELETE /users/{it}, and the setup completes in the request's window (A51-002's). The route reads «waiting» again under the lock: → 409 DEMOTE_FIRST, and nothing deleted — every row of users and account_tokens as the setup left them: the account there, active, an administrator. On the migrated schema, as UADM-076: a deletion relies on its cascades.
+
+        Barrier: the route's first reading answered True, and the setup landed once, in the window.
+        """
+        print_section("A51-006: the deletion, the setup completed in the request's window")
+        pending = await _bootstrap_pending_admin(private_head)
+        _, cookie = await _admin(private_head)
+        user_id = pending.account.user_id
+        landed: Landed = []
+        answers = _setup_lands_after_the_first_read(monkeypatch, private_head, pending.token, landed)
+
+        response = await _call(private_head, "DELETE", f"/users/{user_id}", cookie=cookie)
+
+        after = await _private_snapshot(private_head)
+        changes = _snapshot_changes(landed[0], after) if landed else "the setup never landed"
+        row = _account_row(after, user_id)
+        violations: list[str] = []
+        _expect(violations, _refusal(response) == (409, "DEMOTE_FIRST"), f"red until A-51: the setup completed between the route's reading and the deletion's first write, so the administrator just set up must be demoted first, 409 DEMOTE_FIRST: got {response.status_code} {response.text}")
+        _expect(violations, changes == {}, f"a refused deletion must delete nothing: every row of users and account_tokens as the setup left them — rows that changed: {changes}")
+        _expect(violations, row is not None and (row["is_active"], row["is_superuser"]) == (True, True), f"the account must be there, active, an administrator: {row}")
+        _expect(violations, answers[:1] == [True] and len(landed) == 1, f"barrier: the route must read the account waiting, then the setup land once — the window of A-51: is_pending_admin answered {answers}, the setup landed {len(landed)} time(s)")
+        assert not violations, f"A deletion in the setup's window must ask to demote first, and delete nothing:{_verdict(violations)}"
+        print_success("409 DEMOTE_FIRST; nothing deleted")

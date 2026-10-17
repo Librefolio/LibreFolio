@@ -45,6 +45,8 @@ vi.mock('$lib/stores/app/toastStore.svelte', () => ({
 vi.mock('$lib/stores/app/language', () => ({currentLanguage: writable('en')}));
 
 import EventCreateMiniModal from './EventCreateMiniModal.svelte';
+import {toasts} from '$lib/stores/app/toastStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 const ASSET_ID = 7;
 const SAVED_EVENT_ID = 901;
@@ -159,5 +161,68 @@ describe('EventCreateMiniModal — the amount keeps its decimals (C-97b)', () =>
 
         expect(amount, 'the suggestion keeps its four decimals').toHaveValue('0.2345');
         expectNoDigitsError();
+    });
+});
+
+/**
+ * C-97c-1 (decision D-C97c-1 of the coordinator, 17/10) — the toast of a save shows the value saved, exactly.
+ *
+ * After a save the modal raises a success toast describing the event: its type, its date and its value. The value is
+ * written with `formatFixed(parseFloat(amount), 2)`, so an event of 0.123456 USD — six decimals, all of them kept by
+ * `AssetEvent.value` and sent as typed — is announced as 0.12. The contract: the value as saved, at least two decimals
+ * and up to six, never through a float. Red: 0.123456. Guard, green today and after: 1.5 is announced 1.50.
+ *
+ * The toast store is the spy above; the toast must be a success, raised once; its message is read for the value alone,
+ * as a whole number token — no digit, decimal mark or separator glued to either side — never for the words around it,
+ * which are translated. The language store is the `writable('en')` above, so on jsdom's en-US browser the value is
+ * written en-US: the expected digits are typed.
+ */
+describe('EventCreateMiniModal — the save toast shows the value exactly, two to six decimals (C-97c-1)', () => {
+    const success = vi.mocked(toasts.success);
+
+    /** `digits` as a whole number in a text: no digit, decimal mark or group separator glued to either side. */
+    function numberToken(digits: string): RegExp {
+        return new RegExp(`(?<![\\d.,])${digits.replace(/\./g, '\\.')}(?![.,]?\\d)`);
+    }
+
+    /** Type `typed`, leave the field, save; the message of the one success toast the save raised. */
+    async function savedToast(typed: string): Promise<string> {
+        const {oncreated} = mount();
+        const amount = await seededAmount();
+        await fireEvent.input(amount, {target: {value: typed}});
+        await fireEvent.blur(amount);
+        const shown = amount.value;
+        await fireEvent.click(screen.getByTestId('event-create-submit'));
+
+        await waitFor(() => expect(oncreated, 'premise: the save went through').toHaveBeenCalledWith(SAVED_EVENT_ID));
+        const sent = upsert.mock.calls[0]?.[0]?.[0]?.events?.[0]?.value.amount;
+        expect(String(sent), 'control: the save sends the value the field shows').toBe(shown);
+        expect(success, 'one success toast for the save').toHaveBeenCalledTimes(1);
+        return String(success.mock.calls[0]?.[0]);
+    }
+
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        upsert.mockResolvedValue(SAVED);
+    });
+
+    afterEach(() => {
+        cleanup();
+    });
+
+    it('0.123456 is announced 0.123456 — its six decimals, not 0.12', async () => {
+        expect(uiLocale(), 'control: the English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+
+        expect(await savedToast('0.123456')).toMatch(numberToken('0.123456'));
+    });
+
+    it('guard: 1.5 is announced 1.50 — two decimals at least', async () => {
+        expect(uiLocale(), 'control: the English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+
+        expect(await savedToast('1.5')).toMatch(numberToken('1.50'));
     });
 });

@@ -252,8 +252,15 @@ the FX pages (X-R59, decision N80); its limits are in the **Request** bullet abo
 
 The change is on this endpoint, not on `POST /api/v1/fx/currencies/convert`: the FX store composes a pair's series
 from the gaps it loads separately (`ensureFxRangeLoaded()`), so a change attached to a series response would not be
-the visible range's. The web app is to send `range_start` and read `range_change`; until then it computes the Δ in the
-browser (`displayFxDelta()`).
+the visible range's. The web app sends it: `fetchFxPeriodChanges(pairs, asOf, rangeStart)`
+(`frontend/src/lib/utils/periodChanges.ts`) gives each item the first day of the range on screen, raised
+to 1 January 1900 by `rangeStartFor()` (`frontend/src/lib/utils/rangeChange.ts`), none for a day the backend would
+refuse (after `as_of`, or not a calendar day), and reads `range_change` both ways with `fxRangeDeltas()`. The FX table's
+Δ Abs and Δ % columns, the FX card's Δ % and the pair page's summary show it, from the `inverse_*` fields for a pair
+shown the other way round; the browser no longer computes it (`displayFxDelta()` is gone). The FX list keeps those
+values with a `PeriodChangesLedger` of their own, which marks each request with the whole range rather than its last
+day, so a failed request keeps only the values of the same range; the pair page asks for its one pair on load, on a
+range change and after a refresh (a sync ends with one).
 
 The FX list calls the endpoint through `fetchFxPeriodChanges()` (`frontend/src/lib/utils/periodChanges.ts`): one
 request for every configured pair, with `as_of` the end of the selected range, and one for a single pair when that pair

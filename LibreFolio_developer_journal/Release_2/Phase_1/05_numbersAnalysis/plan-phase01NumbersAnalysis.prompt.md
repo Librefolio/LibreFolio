@@ -6222,6 +6222,8 @@ prossimo checkpoint.
 - ✅ **Verdi (15:35–15:37)**: `front-utility core-unit` intero **8 605** (209 file); `front check` 0 errori e 0
   avvisi; prettier pulito sui due file. Porta 6185 libera.
 - ⏳ **Checkpoint della guardia `Intl`** (FROZEN).
+- ✅ **Checkpoint della guardia `Intl`** (2026-10-17): entrato (dev `b13ed7944`), CHANGELOG 🐛 `826f99f17`; worktree in
+  fast-forward. Prossimo: i rossi di T-B7.
 
 #### T-B7 — dichiarare le colonne tolte perché nulle in ogni riga (analisi 17/10 ~15:40, sola lettura; base `e2e883136`)
 
@@ -6281,3 +6283,58 @@ prossimo checkpoint.
     nominano. La distinzione è il punto: i rossi fissano tutti e due i lati.
   - Sonda mirata nella lista del developer.
   - Prossimo: i rossi, dopo il checkpoint della guardia `Intl`.
+- ⏳ **Rossi** (test-author, brief 15:5x; base `826f99f17`). Il contratto del brief:
+  - A, la riga dopo l'ultima riga della tabella;
+  - B, chi si nomina;
+  - C, SERIES;
+  - D, il preambolo e le etichette `_v2`;
+  - E, il contatore `null_columns_declared`;
+  - F, le attese esistenti che cambiano (`:1758`, `:1305` e quelle che il test-author trova);
+  - G, l'equivalenza UI/sonda invariata.
+  > **⚠️ Fuori pista (estensione dichiarata)**: la riga SERIES di `renderContinuousSeries` (`:623`) costruisce
+  > `latest_value` con `values.latest_close ?? values.latest_rate` (e `currency` con `?? quote_currency`). `??` fa di un
+  > `null` esplicito un `undefined`, cioè di un «non disponibile» un «non si applica»: proprio la distinzione chiesta dal
+  > coordinatore. Con la cura vince la prima chiave che il payload porta, `null` compreso (`firstPresent`). Valore che
+  > cambia: con due serie, una delle quali ha `latest_close: null`, quella cella stampa `null` invece di vuoto. È l'unica
+  > catena del genere in una riga di tabella: le altre (`:470-482`) costruiscono la directory.
+- Patch pronte, non applicate, nella sessione: `files/j/tb7/apply_fix.py` (9 ancore: contatore, etichette e regola del
+  preambolo, `pipeTable`, renderer generico, `firstPresent`) e `apply_docs.py` (2 pagine). Prova a secco OK.
+- ✅ **Rossi (16:0x)** del test-author, sul codice vecchio (`826f99f17`): **24 rossi / 613 verdi** (637), in 2 file su 24.
+  Ognuno cade sull'asserzione del suo soggetto: la riga, l'etichetta, il contatore, il `null` di SERIES. I controlli
+  SERIES (FX col solo `latest_rate`, Asset col solo `latest_close`) sono verdi.
+  - Nuovo `describe` di 21 test in `snapshotDataRenderer.test.ts` (`:2464–2955`), aiuti condivisi a `:85–103`.
+  - Attese cambiate:
+    - `removes all-empty generic columns…`: la riga esatta `omitted_null_columns=empty_metric`, il genitore non
+      nominato, i contatori 2/1/1;
+    - `…its only lot unknown…` (×3): i nomi degli importi dopo `TABLE lots`;
+    - `promptRenderer.test.ts:199–201`: le due etichette `_v2`.
+  - In più rispetto al brief: `currency: null`, `broker_id`→`broker_ref` nel caso dei nomi pubblici, una terza fixture
+    «niente da nominare» (solo `''`), una tabella senza righe.
+- ✅ **Codice (16:09)**: le due patch applicate dopo il rosso.
+- ✅ **Verdi (16:10–16:13)**:
+  - `front-ai-export unit` **637** (24 file);
+  - `utils ai-export-probe-helpers` **73**;
+  - prettier pulito sui 4 file;
+  - `front check` 0 errori e 0 avvisi;
+  - `mkdocs build` stretto ✓, check-links ✓ (97).
+
+  Porta 6185 libera; nessun backend avviato (solo Vitest).
+- **Effetti reali dichiarati** (letti nel backend; la sonda mirata li mostrerà sui dati):
+  - `model_dump(mode="json")` senza `exclude_none`: ogni `None` arriva `null`. Quindi si nominano anche campi dove `null`
+    vuol dire «nessuno»:
+    - ogni OUTPUT DEFINITIONS di un segnale senza limiti nomina `component,minimum,maximum`, perché
+      `IndicatorOutputColumn` li scrive sempre e `includeBounds` controlla `!== undefined`;
+    - una tabella di lotti tutti aperti nomina `closing_date`;
+    - righe tutte senza problemi nominano `reason_code`.
+
+    Era già così in una tabella mista (`null=explicitly unavailable`): **J-54**, nella sezione J, con tre cure possibili.
+  - `firstPresent` cambia solo un Asset con `latest_close: null`: i payload Asset (`currency`, `latest_close`) e FX
+    (`quote_currency`, `latest_rate`) non condividono chiavi (`technical_payloads.py`).
+- **Limiti noti** (nessun test li fissa):
+  - una virgola in un nome non è escapata: i nomi sono campi dei modelli Pydantic o chiavi dei plugin, identificatori di
+    codice;
+  - una colonna `''` in una riga e assente in un'altra si nomina, perché la seconda avrebbe stampato `null` (regola B);
+  - una SUMMARY coi valori tutti nulli nominerebbe `value`. È raro e corretto.
+- **devWiki**: `decisions/ai-export-versioned-snapshot-boundary.md` (un punto nella «Decision», data, fonti), indice,
+  registro. Il grafo non è aggiornato: graphify non c'è in questo worktree.
+- ⏳ **Checkpoint T-B7** (FROZEN).

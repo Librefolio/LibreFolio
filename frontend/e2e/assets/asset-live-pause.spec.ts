@@ -112,7 +112,7 @@ const ACTIVE_STEP_MS = 90_000;
 /** (g) runs 35 minutes of page clock in steps of at most 90 s: some forty clock steps where the others take a dozen. */
 const LONG_TEST_TIMEOUT_MS = 150_000;
 
-const LIVE_PRICES_ROUTE = '**/api/v1/assets/prices/current';
+const LIVE_PRICES_ROUTE = '**/api/v1/assets/prices/current*';
 const LIVE_PRICES_PATH = '/api/v1/assets/prices/current';
 /** The suite's known asset with a provider (populate_mock_data.populate_assets), found by name and provider, never by position. */
 const SEEDED_PRICED_ASSET = {displayName: 'Apple Inc.', providerCode: 'yfinance'};

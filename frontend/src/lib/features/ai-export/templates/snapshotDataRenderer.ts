@@ -27,6 +27,7 @@ export interface SnapshotFormatDiagnostics {
     readonly already_scaled_percent_values: number;
     readonly empty_columns_removed: number;
     readonly empty_parent_columns_removed: number;
+    readonly null_columns_declared: number;
     readonly semantic_duplicate_columns_detected: number;
     readonly empty_temporal_rows_detected: number;
     readonly empty_temporal_rows_omitted: number;
@@ -50,16 +51,19 @@ export interface SnapshotSignalMetric {
 }
 
 const COMPONENT_SEPARATOR = '\n\n';
+/** The key of the line that names, right after a table, the columns left out because they were null in every row (T-B7). */
+const OMITTED_NULL_COLUMNS_KEY = 'omitted_null_columns';
 const BASE_FORMAT_PREAMBLE_LINES = [
     'SNAPSHOT DATA FORMAT',
-    'technical_components=compact_pipe_tables_v1',
-    'other_components=generic_pipe_tables_v1',
+    'technical_components=compact_pipe_tables_v2',
+    'other_components=generic_pipe_tables_v2',
     'unknown_versions=yaml_fallback_v1',
     'entity_refs=resolve through ENTITY DIRECTORY',
     'user_facing_rule=never use refs or numeric IDs as names; use display names or clear shortened names',
     'numeric_display=remove trailing zeros, round fractional precision to 4 significant digits after leading zeros, and suppress only semantically identified floating-point noise; backend calculations remain full precision',
     'normalized_weights=shown directly as percentages; no user or model conversion required',
     'null=explicitly unavailable',
+    `${OMITTED_NULL_COLUMNS_KEY}=a column null in every row is left out of its table and named on the ${OMITTED_NULL_COLUMNS_KEY} line right after that table`,
     'dated_scalar=value@date',
     'range=f:first;l:last;n:min;x:max;c:observation_count',
     'history_date_refs=s:row start;e:row end;+N:N calendar days after row start',
@@ -79,6 +83,7 @@ interface MutableSnapshotFormatDiagnostics {
     already_scaled_percent_values: number;
     empty_columns_removed: number;
     empty_parent_columns_removed: number;
+    null_columns_declared: number;
     semantic_duplicate_columns_detected: number;
     empty_temporal_rows_detected: number;
     empty_temporal_rows_omitted: number;
@@ -104,6 +109,7 @@ function createFormatDiagnostics(): MutableSnapshotFormatDiagnostics {
         already_scaled_percent_values: 0,
         empty_columns_removed: 0,
         empty_parent_columns_removed: 0,
+        null_columns_declared: 0,
         semantic_duplicate_columns_detected: 0,
         empty_temporal_rows_detected: 0,
         empty_temporal_rows_omitted: 0,
@@ -315,7 +321,28 @@ function pipeTable(headers: readonly string[], rows: readonly (readonly unknown[
     if (diagnostics) diagnostics.empty_columns_removed += headers.length - includedIndexes.length;
     const includedHeaders = includedIndexes.map((index) => headers[index]);
     const includedRows = rows.map((row) => includedIndexes.map((index) => row[index]));
-    return [pipeRow(includedHeaders), ...includedRows.map(pipeRow)].join('\n');
+    const table = [pipeRow(includedHeaders), ...includedRows.map(pipeRow)].join('\n');
+    // Named only when a cell said null, the backend's "unavailable". A column of undefined or '' cells is one the
+    // renderer has nothing for in this scope ("not applicable"): it goes silently, as before (T-B7).
+    const included = new Set(includedIndexes);
+    const nullColumns = headers.filter((_header, index) => !included.has(index) && rows.some((row) => isExplicitNull(row[index])));
+    return nullColumns.length ? `${table}\n${omittedNullColumnsLine(nullColumns, diagnostics)}` : table;
+}
+
+function isExplicitNull(value: unknown): boolean {
+    return value === null || value === 'null';
+}
+
+/** The columns a table left out because they were null in every row, named as their header cells would have been. */
+function omittedNullColumnsLine(columns: readonly string[], diagnostics?: MutableSnapshotFormatDiagnostics): string {
+    if (diagnostics) diagnostics.null_columns_declared += columns.length;
+    return `${OMITTED_NULL_COLUMNS_KEY}=${columns.map(tableCell).join(',')}`;
+}
+
+/** The value of the first of `keys` that `record` carries, `null` included: `??` would read an explicit null as absent. */
+function firstPresent(record: JsonRecord, ...keys: readonly string[]): unknown {
+    for (const key of keys) if (Object.hasOwn(record, key)) return record[key];
+    return undefined;
 }
 
 function valueMap(value: unknown, boundsByKey?: JsonRecord, diagnostics?: MutableSnapshotFormatDiagnostics): string {
@@ -620,7 +647,7 @@ function technicalSeries(payload: JsonRecord, directory: EntityDirectory): {read
 function renderContinuousSeries(payload: JsonRecord, directory: EntityDirectory, diagnostics: MutableSnapshotFormatDiagnostics): string | undefined {
     const series = technicalSeries(payload, directory);
     if (!series) return undefined;
-    const summaryRows = series.map(({entity, portfolioWeightRatio, values}) => [entity, normalizedRatioPercent(portfolioWeightRatio, diagnostics), values.currency ?? values.quote_currency, values.latest_close ?? values.latest_rate, values.latest_date]);
+    const summaryRows = series.map(({entity, portfolioWeightRatio, values}) => [entity, normalizedRatioPercent(portfolioWeightRatio, diagnostics), firstPresent(values, 'currency', 'quote_currency'), firstPresent(values, 'latest_close', 'latest_rate'), values.latest_date]);
     const bucketRows: unknown[][] = [];
     for (const {entity, values} of series) {
         const buckets = records(values.buckets);
@@ -1390,8 +1417,12 @@ function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, d
         }
         const columns = discoveredColumns.filter((column) => flattenedRows.some((row) => !isEmptyPublicCell(row.get(column))));
         const removedColumns = discoveredColumns.filter((column) => !columns.includes(column));
+        const parentColumns = new Set(removedColumns.filter((column) => discoveredColumns.some((candidate) => candidate.startsWith(`${column}.`))));
         diagnostics.empty_columns_removed += removedColumns.length;
-        diagnostics.empty_parent_columns_removed += removedColumns.filter((column) => discoveredColumns.some((candidate) => candidate.startsWith(`${column}.`))).length;
+        diagnostics.empty_parent_columns_removed += parentColumns.size;
+        // Named when it would have printed null in a row: a parent's values live on in its `parent.child` columns,
+        // and a column of empty strings says nothing (T-B7).
+        const nullColumns = removedColumns.filter((column) => !parentColumns.has(column) && flattenedRows.some((row) => isExplicitNull(row.get(column) ?? 'null')));
         blocks.push(
             `TABLE ${array.path}`,
             pipeTable(
@@ -1399,6 +1430,7 @@ function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, d
                 flattenedRows.map((row, index) => [index + 1, ...columns.map((column) => row.get(column) ?? 'null')]),
                 diagnostics,
             ),
+            ...(nullColumns.length ? [omittedNullColumnsLine(nullColumns, diagnostics)] : []),
         );
     }
     return blocks.length ? blocks.join('\n') : 'SUMMARY\n|field|value|\n|payload|{}|';
