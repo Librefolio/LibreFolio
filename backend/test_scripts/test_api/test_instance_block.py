@@ -137,6 +137,7 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.auth.delete_own_account": ("DELETE", "/api/v1/auth/users/me"),
     "backend.app.api.v1.auth.preview_own_account_deletion": ("GET", "/api/v1/auth/users/me/deletion-preview"),
     "backend.app.api.v1.backup.instance.start_instance_backup": ("POST", "/api/v1/backup/instance"),
+    "backend.app.api.v1.backup.instance.get_instance_backup_options": ("GET", "/api/v1/backup/instance/options"),
     "backend.app.api.v1.backup.instance.get_instance_backup_job": ("GET", "/api/v1/backup/instance/jobs/{job_id}"),
     "backend.app.api.v1.backup.instance.download_instance_backup": ("GET", "/api/v1/backup/instance/jobs/{job_id}/file"),
     "backend.app.api.v1.backup.instance.delete_instance_backup_job": ("DELETE", "/api/v1/backup/instance/jobs/{job_id}"),
@@ -817,7 +818,7 @@ def _replace_the_backup_service(monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
         if asked != job_id:
             raise jobs.BackupJobNotFoundError("No such backup job")
 
-    def start_backup(*, origin: str = "ui", data_dir: Path | None = None) -> jobs.BackupJob:
+    def start_backup(*, origin: str = "ui", data_dir: Path | None = None, password: str | None = None) -> jobs.BackupJob:
         fake.calls.append(("start_backup", origin))
         return first
 

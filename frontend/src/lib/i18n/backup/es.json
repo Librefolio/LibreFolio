@@ -4,8 +4,20 @@
     "intro": "Los datos de este LibreFolio en un solo archivo, para guardarlo en un lugar seguro o llevarlo a otra instalación.",
     "download": {
       "title": "Copia de seguridad de la instancia",
-      "description": "Un archivo con la base de datos, los archivos subidos, los informes de los brókers y los escenarios de riesgo. No incluye los registros ni la clave de la instancia.",
+      "description": "Un archivo con la base de datos, los archivos subidos, los informes de los brókers y los escenarios de riesgo. Nunca incluye los registros; la clave de la instancia, solo en una copia segura.",
       "privacy": "El archivo contiene los datos de todos los usuarios y no está cifrado: guárdalo en un lugar privado.",
+      "mode": {
+        "legend": "Tipo de copia",
+        "clear": "Sin cifrar",
+        "clearDescription": "Un .zip normal: quien tenga el archivo ve todos los datos, y en otra instancia hay que volver a introducir las claves de los proveedores de datos.",
+        "secure": "Segura",
+        "secureDescription": "Un .lfbk cifrado con una contraseña que eliges tú: solo esa contraseña lo abre, y una contraseña perdida no se puede recuperar. También lleva las claves de los proveedores de datos."
+      },
+      "password": {
+        "label": "Contraseña de la copia",
+        "confirmLabel": "Repite la contraseña",
+        "mismatch": "Las dos contraseñas no coinciden."
+      },
       "create": "Crear copia de seguridad",
       "createAgain": "Crear una nueva copia",
       "creating": "Creando la copia de seguridad…",
@@ -14,11 +26,13 @@
         "preparing": "Preparando",
         "database": "Copiando la base de datos",
         "files": "Añadiendo los archivos",
-        "finalizing": "Finalizando"
+        "finalizing": "Finalizando",
+        "encrypting": "Cifrando con tu contraseña"
       },
       "progress": "{done} de {total}",
       "ready": "Copia de seguridad lista",
       "readyDetails": "{name}, {size}, creada el {date}",
+      "readyEncrypted": "Cifrada con tu contraseña: guárdala bien, LibreFolio no puede recuperarla.",
       "download": "Descargar",
       "delete": "Eliminar del servidor",
       "deleting": "Eliminando la copia de seguridad…",
@@ -29,7 +43,8 @@
       "warnings": {
         "database_integrity": "La base de datos no superó la comprobación de integridad: se archivó tal cual.",
         "foreign_key_violations": "La base de datos tiene referencias no válidas entre tablas: se archivó tal cual.",
-        "files_skipped": "Se omitieron algunos archivos: enlaces, archivos especiales, archivos o carpetas que no se pudieron leer, o archivos eliminados durante la copia."
+        "files_skipped": "Se omitieron algunos archivos: enlaces, archivos especiales, archivos o carpetas que no se pudieron leer, o archivos eliminados durante la copia.",
+        "instance_key_unusable": "La clave de la instancia no se puede usar: la copia se hizo sin ella, así que tras una restauración habrá que volver a introducir las claves de los proveedores de datos."
       },
       "errors": {
         "backup_busy": "Ya hay otra copia de seguridad en curso: inténtalo de nuevo cuando termine.",
@@ -39,7 +54,8 @@
         "backup_interrupted": "La copia de seguridad se interrumpió, por ejemplo por un reinicio: crea una nueva.",
         "backup_job_not_found": "Esta copia de seguridad ya no está en el servidor: crea una nueva.",
         "network": "El servidor no responde.",
-        "unexpected": "El servidor respondió con un error: recarga la página e inténtalo de nuevo."
+        "unexpected": "El servidor respondió con un error: recarga la página e inténtalo de nuevo.",
+        "password_too_weak": "La contraseña no cumple las reglas de la contraseña de una copia."
       },
       "toast": {
         "warnings": "Copia de seguridad lista, con avisos: revísalos antes de confiar en ella."
@@ -57,6 +73,7 @@
       "progress": "{done} de {total}",
       "cancelUpload": "Detener el envío",
       "phase": {
+        "decrypting": "Descifrando la copia",
         "checking": "Comprobando el archivo",
         "unpacking": "Extrayéndolo en una copia",
         "upgrading": "Actualizando la base de datos de la copia",
@@ -104,8 +121,10 @@
         "fixes": "Correcciones aplicadas a la copia: {fixes}.",
         "contents": "{files, plural, one {# fichero} other {# ficheros}} ({filesSize}); base de datos {databaseSize}.",
         "tablesChanged": "Tablas cuyas filas cambió la actualización:",
-        "keyIncluded": "La clave de la instancia está incluida.",
+        "keyIncluded": "La copia lleva la clave de la instancia de la que viene: este LibreFolio conserva la suya.",
         "keyNotIncluded": "La clave de la instancia no está incluida: este LibreFolio conserva la suya.",
+        "secretsRekeyed": "{count, plural, one {# clave guardada de un proveedor de datos se vuelve a cifrar con la clave de esta instancia.} other {# claves guardadas de proveedores de datos se vuelven a cifrar con la clave de esta instancia.}}",
+        "secretsUnreadable": "{count, plural, one {# clave guardada de un proveedor de datos no se puede leer con la clave de esta instancia: vuelve a introducirla tras la restauración.} other {# claves guardadas de proveedores de datos no se pueden leer con la clave de esta instancia: vuelve a introducirlas tras la restauración.}}",
         "totals": {
           "same": "Totales del registro: iguales que cuando se hizo la copia de seguridad.",
           "changed": "Los totales del registro difieren de los de la copia de seguridad en {count, plural, one {# línea} other {# líneas}}:",
@@ -191,7 +210,17 @@
         "restore_not_pending": "Ninguna restauración espera el próximo inicio.",
         "restore_pending": "Una restauración espera aplicar esta copia: cancélala primero.",
         "network": "El servidor no responde: comprueba la conexión e inténtalo de nuevo.",
-        "unexpected": "El servidor respondió con un error: el registro del servidor tiene la causa."
+        "unexpected": "El servidor respondió con un error: el registro del servidor tiene la causa.",
+        "wrong_password": "Contraseña incorrecta, o el archivo fue modificado: vuelve a escribir la contraseña.",
+        "password_required": "Es una copia segura: escribe su contraseña.",
+        "envelope_damaged": "La copia segura está dañada o fue modificada: no se puede abrir.",
+        "envelope_unsupported": "La copia segura viene de un LibreFolio más reciente: actualiza primero LibreFolio."
+      },
+      "password": {
+        "intro": "Una copia segura: escribe la contraseña con la que se hizo.",
+        "label": "Contraseña de la copia",
+        "submit": "Comprobar la copia",
+        "cancel": "Cancelar"
       }
     }
   }

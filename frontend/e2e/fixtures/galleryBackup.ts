@@ -63,6 +63,7 @@ export const GALLERY_BACKUP_JOB = {
     file_size: ARCHIVE_BYTES,
     warnings: [],
     error_code: null,
+    encrypted: false,
 } satisfies InstanceBackupJob;
 
 /**

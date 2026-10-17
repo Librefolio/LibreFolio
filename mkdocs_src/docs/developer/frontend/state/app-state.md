@@ -20,7 +20,7 @@ The **App & UI State** category contains stores responsible for the global user 
 | **Page busy** | `app/pageBusy.svelte.ts` | The «big» requests the page on screen has in flight, which its Refresh button waits for (`busy`). Scoped to the page: reset on a route change and when the client session ends. See [Page busy](#page-busy). |
 | **Instance configuration** | `$lib/features/instance/instanceConfig.svelte.ts` | The public configuration of the instance (`GET /api/v1/system/instance`), read once per page load, before the sign-in. See [Instance configuration](#instance-config). |
 | **Instance notices** | `$lib/features/instance/instanceNotices.svelte.ts` | The messages about the instance that features register, shown above every page of the app shell. See [Instance notices](#instance-notices). |
-| **Instance block** | `$lib/features/instance/instanceBlock.svelte.ts` | Whether the hosting provider blocked the instance: the first `423` `instance_blocked` from the API turns it on, and the `(app)` layout then shows the block page instead of the app. See [Instance block](#instance-block). |
+| **Instance block** | `$lib/features/instance/instanceBlockState.ts`, `$lib/features/instance/instanceBlock.svelte.ts` | Whether the hosting provider blocked the instance: the first `423` `instance_blocked` from the API turns it on, and the `(app)` layout then shows the block page instead of the app. The plain module (no runes) holds the state, which the API client marks; the `.svelte.ts` module is its reactive face, which the layout reads. See [Instance block](#instance-block). |
 | **Chart Settings** | `chartSettingsStore.svelte.ts` | Chart preferences of the FX and Assets pages: line colouring, area fill, grid lines, stale-data gradient, axis scales, the asset Calendar Return window and overlay signals. Kept per user in `localStorage` (`lf_{userId}_chartSettingsStore`), never on the server, in two separate scopes, `fx` and `assets`: each has its own global settings plus per-item overrides (pair slug, `asset-{id}`), and applying a scope's global settings clears that scope's per-item overrides. The chart period is not stored here: it lives in `sessionStorage` (Date Range, below). |
 | **Date Range** | `dateRangeStore.svelte.ts` | The date range (start, end) shared by the Dashboard (through `dateRangeController.svelte.ts`), the broker detail page, and the Assets and FX pages, list and detail. It lives in `sessionStorage` (`librefolio_dateRange`), so it belongs to the browser tab and survives a reload; on a full page load, `start` and `end` in the URL win, and it falls back to the last three months when the account changes. |
 
@@ -190,19 +190,35 @@ How `InstanceNotices.svelte` renders them:
 
 ## 🔒 Instance block {: #instance-block }
 
-`instanceBlock` (`lib/features/instance/instanceBlock.svelte.ts`, Svelte 5 runes) is a flag: whether
-the hosting provider blocked this instance (backend side: [Instance Block](../../architecture/security.md#instance-block)).
+The instance block is a flag: whether the hosting provider blocked this instance (backend side:
+[Instance Block](../../architecture/security.md#instance-block)). Two modules of
+`lib/features/instance/` hold it, so that the API client, which turns it on, imports no module with
+runes: the AI Export probe loads the client without Svelte's compiler, and a gate keeps the client
+rune-free ([the probe's frontend bridge](../../architecture/patterns/ai_export_probe_workflow.md#frontend-bridge)).
 
-- **Who turns it on**: the error interceptor of `lib/api/zodios-client.ts` calls `markBlocked()` when
-  `isInstanceBlockedError(status, data)` is true: status `423` (`INSTANCE_BLOCKED_STATUS`) and
-  `detail.code` `instance_blocked` (`INSTANCE_BLOCKED_CODE`). The error still reaches its caller. The
-  module imports nothing from the API, so the interceptor imports it without a cycle.
+- **The state**: `instanceBlockState` (`instanceBlockState.ts`), a plain module without runes. It
+  holds `blocked`, which `markBlocked()` and `clear()` change, and `subscribe(listener)`, which calls
+  the listener synchronously after every change and returns the function that stops it. The module
+  also exports `isInstanceBlockedError()`, `INSTANCE_BLOCKED_STATUS` and `INSTANCE_BLOCKED_CODE`, and
+  imports nothing from the API, so the client imports it without a cycle.
+- **The reactive face**: `instanceBlock` (`instanceBlock.svelte.ts`, Svelte 5 runes), which the
+  `(app)` layout reads. Its `$state` starts from `instanceBlockState.blocked` when the module loads —
+  a block marked before the layout loaded shows at once — and only its subscription writes it
+  afterwards, synchronously: a change shows in `instanceBlock.blocked` in the same tick. Its
+  `markBlocked()` and `clear()` are the plain module's own, and it re-exports the two constants and
+  `isInstanceBlockedError()`: a page or a feature may take all it needs from the face, while a module
+  on the API client's import graph imports the plain module.
+- **Who turns it on**: the error interceptor of `lib/api/zodios-client.ts` calls
+  `instanceBlockState.markBlocked()` when `isInstanceBlockedError(status, data)` is true: status `423`
+  (`INSTANCE_BLOCKED_STATUS`) and `detail.code` `instance_blocked` (`INSTANCE_BLOCKED_CODE`). The
+  error still reaches its caller.
 - **Who reads it**: in `routes/(app)/+layout.svelte`, the branch `$isAuthenticated && instanceBlock.blocked`
   comes before the bootstrap ones, so `InstanceBlockedPage` replaces the app and the app shell never
   starts: its requests never pile up refusals.
 - **Who turns it off**: `clear()`, which also runs when the signed-in account changes, signing out
-  included (`registerClientSessionReset('instanceBlock', …)`). A page load starts with the flag off.
-- **Getter**: `blocked`.
+  included: `instanceBlockState.ts` registers the reset (`registerClientSessionReset('instanceBlock', …)`),
+  and the face, which follows the state, registers none. A page load starts with the flag off.
+- **Getter**: `blocked`, on both.
 
 The backend answers `423` only to a signed-in user; anyone else gets the `401` of `get_current_user()`,
 which the interceptor turns into the login as usual — except on `/`, where the login already is, and
@@ -233,8 +249,9 @@ on the anonymous pages of a link, which handle the `401` themselves
   [Instance Block](../../architecture/security.md#instance-block)); the page never guesses it from the
   role, so a `false`, a missing field, a pending or a failed request mean no card, for an
   administrator too. The section stays outside the `role="alert"` one, so a screen reader announces
-  the block, not the card and its progress. The card's four routes already answer on a blocked
-  instance.
+  the block, not the card and its progress. The card's routes already answer on a blocked instance:
+  the four of the backup, and `GET /backup/instance/options`, the rules of a secure backup's password
+  ([Instance Block](../../architecture/security.md#instance-block)).
 - The page mounts its own `ToastContainer`: the `(app)` layout mounts one only with the app shell,
   which this page replaces, and the card reports its errors and a backup with warnings by toast.
 - Colours are colour roles only. The test ids are `instance-blocked`, `instance-blocked-description`,
@@ -243,15 +260,24 @@ on the anonymous pages of a link, which handle the `401` themselves
   the others).
 
 ```ts
-import {instanceBlock, isInstanceBlockedError} from '$lib/features/instance/instanceBlock.svelte';
+// lib/api/zodios-client.ts marks the plain state: no runes on the API client's import graph
+import {instanceBlockState, isInstanceBlockedError} from '$lib/features/instance/instanceBlockState';
 
-if (isInstanceBlockedError(error.response?.status, error.response?.data)) instanceBlock.markBlocked();
-instanceBlock.blocked; // true: the (app) layout shows InstanceBlockedPage
+if (isInstanceBlockedError(error.response?.status, error.response?.data)) instanceBlockState.markBlocked();
+
+// a page or a component reads the reactive face
+import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
+
+instanceBlock.blocked; // true, in the same tick: the (app) layout shows InstanceBlockedPage
 ```
 
 Tests: `./dev.py test front-utility component-unit` runs `InstanceBlockedPage.test.ts`, which mounts
 `BackupDownloadCardStub` (`frontend/src/__tests__/harness/`) in place of the card: it checks where the
 card goes and when, while `lib/features/backup/BackupDownloadCard.test.ts` covers what the card does.
+`./dev.py test front-utility core-unit` runs `instanceBlock.test.ts`: `isInstanceBlockedError()`, the
+flag and its reset at a change of account, and the face — a change through `instanceBlockState` shows
+in `instanceBlock.blocked` with nothing awaited, a block marked before the face loads is on from its
+first read, and one session reset, the plain module's, clears both.
 
 ## 🙈 Privacy masking {: #privacy-masking }
 
