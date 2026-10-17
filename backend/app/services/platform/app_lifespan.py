@@ -140,6 +140,12 @@ def _start_market_holiday_prewarm() -> None:
     _keep_in_background(start_market_holiday_prewarm())
 
 
+def _start_stored_currency_audit() -> None:
+    # The audit of the stored currency codes (E-19a), in background (H's review): its scans take about 0.6 s at a million
+    # price rows and 1.6 s at three, and it only reads and logs, never raises
+    _keep_in_background(asyncio.create_task(asyncio.to_thread(log_stored_currency_audit)))
+
+
 def _start_brim_parse_pool_prewarm() -> None:
     # Opt-in (LIBREFOLIO_BRIM_PREWARM, decision N56: off by default, on in test mode): start the BRIM parse pool's
     # forkserver with the BRIM module and its plugins preloaded, in a thread, in background: the first import of a
@@ -231,8 +237,6 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup)),
     # Then the lone giving TRANSFER legs older deletions left, at their Auto cost, which the fixes cannot compute (decision 47)
     Step("lone-transfer-legs", lambda: convert_lone_giving_legs_at_startup()),
-    # Then, after both repairs, one warning when stored currency codes are not ISO 4217 codes (E-19a): read-only, never a stop
-    Step("stored-currencies", lambda: asyncio.to_thread(log_stored_currency_audit)),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
     # The initial administrator of LIBREFOLIO_ADMIN_EMAIL (F02, workstream A), once the settings exist
@@ -245,6 +249,9 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("backup-leftovers", lambda: asyncio.to_thread(sweep_backup_leftovers)),
     # The stored plugin secrets the instance key can no longer read: an error in the log, with their count (H-15)
     Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
+    # The audit of the stored currency codes, in background: one warning when some are not ISO 4217 codes (E-19a). After
+    # both repairs and once the restore is settled, since it reports on the data (N57); read-only, never a stop or a wait
+    Step("stored-currencies", lambda: _start_stored_currency_audit()),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),
     Step("market-holidays", lambda: _start_market_holiday_prewarm()),
     Step("brim-parse-pool", lambda: _start_brim_parse_pool_prewarm()),
