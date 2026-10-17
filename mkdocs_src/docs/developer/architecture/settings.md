@@ -44,7 +44,13 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       entry to `MANAGED_DEFAULTS` in the test file, the decided table that
       `PROFILE_DEFAULTS["managed"]` must equal; the parametrised cases (the managed value given to a
       field nobody set, the guards on the table, the self-hosted code defaults) then cover the new
-      field.
+      field. A new security `Settings` field states its managed value there in the same lot, or says
+      why `managed` keeps the code default: a review rule, row «Config & Data Paths» of
+      `.github/instructions/backend.instructions.md`. At run time nothing refuses a managed entry lost
+      from the table, nor a value an operator sets: for the two security switches, the configuration
+      checks `platform.frame_protection`, a `warning`, and `platform.csp_report_only`, an `info`, show
+      a managed instance where either is off (H-39; see
+      [Configuration Checks](security.md#configuration-checks)).
     - **Profile defaults of the section modules' variables** (`ENVIRONMENT_PROFILE_DEFAULTS` in
       `__init__.py`): for each profile, the values it gives the variables that a section module of
       `backend/app/config/` reads from `os.environ`, outside `Settings`. `selfhosted` lists none: a
@@ -66,10 +72,12 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       types and the table, and the reader stops instead of using the value: unchecked, a `None` under
       `managed` would mean no upload limit at all for a restore (`backup_max_upload_mb()`, below).
       Under `selfhosted`, the fallback itself is returned unchecked. Both checks, for a missing entry
-      and for an entry's type, run at the reader's call, never at startup: only the reader knows the
-      variables it reads and the type it expects; the table is code, guarded before release by the
-      tests below; and a startup refused for one missing entry would take every managed instance
-      down, where a reader that stops closes only the feature that reads it.
+      and for an entry's type, run at the reader's call, never as a startup check of their own: only
+      the reader knows the variables it reads and the type it expects; the table is code, guarded before
+      release by the tests below; and a startup refused for one missing entry would take every managed
+      instance down, where a reader that stops closes only the feature that reads it. The backup's
+      startup checks call the upload limit's reader, and only log its error
+      ([Configuration Checks of the Backup](security.md#backup-config-checks)).
       The first entry is the upload limit of a restore:
       `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43), read by
       `backup_max_upload_mb()` in `config/backup.py` with `profile_default(MAX_UPLOAD_VARIABLE, 0)`: no limit on a

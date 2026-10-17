@@ -3292,6 +3292,12 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - 17/10, H-36: un blocco nuovo in fondo a `#client-address` di `connection_checks` (un paragrafo, quattro punti, un
     paragrafo) e due frasi nel §2 di `docker_advanced`, che rimandano a `connection_checks.md#client-address`.
     **Ordine**: `docker_advanced` va tradotta insieme a `connection_checks` o dopo, per la stessa ancora.
+  - 17/10, H-39 e H-40:
+    - in `configuration`, «Startup Checks», due righe nuove (la protezione dai frame e la CSP report-only spente nel
+      profilo managed);
+    - in `connection_checks`, «Limits», il paragrafo «It cannot always see where visitors are» riscritto in parte
+      (IPv4 e IPv6 su Docker Engine), e una clausola nel punto «To fix it» di «The Visitor's Address».
+    - `hosting_providers` e le pagine per sviluppatori sono solo in inglese.
 
   Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
 - ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
@@ -3653,6 +3659,12 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     potrebbe poi elencarli.
 
   Dettagli: piano H, §14, lotto «H-32».
+  - Cura fatta il 17/10 (lotto «H-34», piano H §14), con l'OK di scrittura del coordinatore.
+    - `FAProviderConfigBase.provider_params` (X) e `RiskAnalyticRequest.parameters` (J) hanno un
+      `field_validator(mode="before")` con `ensure_json_safe`. X e J rivedono.
+    - `ToolComputeItem.parameters` era già protetto: `JsonValue` rispetta l'`allow_inf_nan=False` del suo modello.
+    - La guardia di H-32 elenca ora le 5 posizioni libere, ognuna con la sua sonda. Il paragrafo di
+      `security.md#request-numbers` arriva con i documenti di H-39.
 - **H-35 · Dopo A8a: la docstring di `log_configuration_audit()` e la pulizia di `test_config_audit.py`** — minimo; H
   (review di A8a), via coordinatore, 17/10.
   - La docstring non nomina il `ValueError` di `LIBREFOLIO_LOGIN_LIMIT` né l'`AdminBootstrapConfigError` di F02.
@@ -3722,8 +3734,40 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Stato al 17/10: la regola è scritta in `.github/instructions/backend.instructions.md`, e la riga accanto a C-99 la
     scrive il coordinatore. I due controlli, i test e le chiavi i18n aspettano l'ingresso di B-9, che scrive negli
     stessi file (`config_audit.py`, `test_config_audit.py`). La cura in prova è pronta in `files/h39/` della sessione H.
+  - Cura fatta il 17/10, dopo B-9 (lotto «H-39», piano H §14).
+    - `check_frame_protection` (warning) e `check_csp_report_only` (info) in `config_audit.py`, dopo
+      `check_client_address`.
+    - Sei chiavi `instance.checks.*` in 4 lingue, e i documenti: `security.md`, `settings.md`, `configuration`,
+      `hosting_providers`.
+    - Resta: un controllo a richiesta letto dopo una modifica di `.env` senza riavvio può mostrare il valore nuovo,
+      mentre il middleware porta ancora quello vecchio. I documenti dicono già di riavviare.
 
-  Dettagli: piano H, §14, lotto «Z-24» (la nota di H-39).
+  Dettagli: piano H, §14, lotti «Z-24» (la nota di H-39) e «H-39».
+- **H-40 · IPv6 su Docker Engine: il visitatore arriva dal gateway della rete** — basso, documentazione; E, via
+  coordinatore, 17/10.
+  - `connection_checks.en.md:328-329` dice che Docker Engine su Linux tiene l'indirizzo del visitatore. Vale per IPv4
+    (DNAT). Un visitatore IPv6 verso un container senza IPv6 passa da `docker-proxy` e arriva dal gateway della rete,
+    senza header di inoltro. N70 non può vederlo, e tutti i visitatori IPv6 condividono un solo conteggio per
+    indirizzo (istanza esposta direttamente).
+  - Una frase nei documenti, da verificare su un host Linux, come H-38. Va con i documenti di H-39.
+  - Frase scritta il 17/10 (lotto «H-39», piano H §14), come cautela, in `connection_checks#limits`; più due clausole,
+    in `connection_checks#client-address` e in «Why only a local peer» di `security.md`. Un visitatore IPv6 che passa
+    da `docker-proxy` può anche aggiungere un header di inoltro e lasciare i limiti per indirizzo, come con Docker
+    Desktop. Resta da verificare su un host Linux con Docker, insieme a H-38.
+- **H-41 · I `resolved_fields` di una promozione non sono validati** — medio, robustezza; W (trovato nel lotto H-34),
+  17/10.
+  - `TXPromoteBatchItem.resolved_fields: Dict[str, Any]` (`POST /transactions/validate` e `/commit`) è applicato così
+    com'è da `_apply_promote_resolved_fields` (`services/transactions/batch_creates.py`).
+  - `description` è assegnata senza controllare il tipo né la lunghezza (il create la limita a 500). Un numero,
+    `Infinity` compreso, finirebbe nella colonna `Text` e ogni lettura di quella transazione darebbe 500, perché il
+    modello di lettura vuole una stringa.
+  - `cost_basis_override` passa da `Currency.model_validate`, il cui errore probabilmente esce come 500. `date` passa
+    da `parse_ISO_date`.
+  - Cura possibile, a W: un modello tipato (`description: str` con la stessa lunghezza, `tags`, `date`,
+    `cost_basis_override: Currency`, `extra="forbid"`). È da W anche decidere se le liste di `dict` di
+    `TXMixedBatch` (righe validate dopo, una per una) entrano nella guardia delle posizioni libere.
+
+  Dettagli: piano H, §14, lotto «H-34».
 
 ## A · Account e accessi (fase 01)
 
@@ -5786,13 +5830,15 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     l'unica spiegazione per l'utente. **J-43a** (come scritta) subito; **J-43b** (portarlo nel rapporto, issue INFO
     `TRANSFER_SHARE_MISMATCH` in 4 lingue, o togliere i campi morti) aspetta il via del coordinatore. Dettagli:
     [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-43».
-- **J-44 · Il Δ% del tooltip del grafico dà 0 % quando il primo valore è 0** — minimo, numeri; J, 17/10, letto nel
+- ✅ **J-44 · Il Δ% del tooltip del grafico dà 0 % quando il primo valore è 0** — minimo, numeri; J, 17/10, letto nel
   codice durante CP-14b. `components/charts/priceChartHelpers.ts::buildDeltaHtml` calcola il Δ% dal primo valore del
   grafico e, per scelta scritta nel suo JSDoc, dà 0 % su un primo valore 0. È lo stesso numero sbagliato che la
   decisione N65 toglie al righello (CP-14b: `—`), in una seconda copia del Δ% nel frontend (regola 10: va segnalata).
   Da instradare: il file ha storia dei colori (lotto B) e di X (helper della pagina asset). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «CP-14b».
   - 17/10, coordinatore: **a J**, dopo F5, riusando `changePct` di `MeasureSignal.ts` (stessa regola di N65); X rivede in sola lettura, nessuna classe di colore toccata.
+  - ✅ 17/10: fatta da J nel checkpoint di F5 (`changePct` esportato da `MeasureSignal.ts`, `buildDeltaHtml` con «—» su un
+    primo valore 0); il coordinatore l'aveva passata a Y mentre era già fatta: resta nel checkpoint di J, **Y rivede**.
 - **J-45 (SEC7-1b) · Il rigioco del motore del portafoglio gira sul ciclo degli eventi** — medio, sicurezza
   (disponibilità); J, 17/10, nell'analisi di R13-SEC7-1. `PortfolioCalculationEngine.calculate` chiama
   `builder.build()` (`engine.py:424`), lavoro di CPU sincrono, dentro una funzione `async`: un rapporto lungo ferma
@@ -5997,6 +6043,18 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   lock di produzione farebbe solo aspettare a turno i giri dei due server, senza toccare dati. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra processi:
   analisi».
+- **Z-25 · Un tetto alla lunghezza delle liste di `POST /assets/prices/query` e `POST /fx/currencies/convert`** —
+  basso, sicurezza; Z, 17/10 (X-R55, N75, punto 4; via coordinatore). Con X-R55 ogni voce ha un intervallo con un
+  tetto, ma le due API accettano liste di lunghezza qualsiasi (`List[FAPriceQueryItem]`, `List[FXConversionRequest]`),
+  e N voci moltiplicano il tetto per voce. Cura possibile: un `max_length` sui due corpi, con un 422 chiaro. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «X-R55 — intervalli di date senza
+  tetto su prezzi e cambi: analisi».
+- **Z-26 · L'attesa del lock fra processi dello scheduler non ha un tempo massimo** — basso; E (R13-SEC8), via
+  coordinatore, 17/10. `scheduler_run_lock()` (`scheduler/run_lock.py:83-91`, Z-11) aspetta il lock senza limite. Un
+  job bloccato in un worker ferma i giri degli altri: lo scheduler resta occupato, e `wake-sync` risponde 409 a chi
+  arriva dopo, dove prima rispondevano `not_leader`. Dopo X-R55 e Z-25; prima un'analisi: quanto aspettare, e cosa
+  rispondere quando il tempo finisce. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «Z-11 — lock dei job tra processi: analisi».
 
 ## B · Backup e Docker (fase 01)
 
@@ -6052,7 +6110,7 @@ sulla base `23f6578f3`.
     un'attenzione: un job della CLI si sposta fuori da `.jobs/` alla fine.
 
   Dettagli: piano 07, §13, B5a, terza tornata.
-- **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
+- ✅ **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
   - Oggi un `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile) si vede
     solo alla prima richiesta del pannello: 503 `backup_panel_unavailable` e una riga d'errore nel log.
   - All'avvio, `log_configuration_audit()` non lo nomina, e la futura scheda «Sicurezza» non lo mostrerà.
@@ -6061,6 +6119,15 @@ sulla base `23f6578f3`.
     chiavi `backup.checks.*` nelle 4 lingue.
 
   Dettagli: piano 07, §13, «B8 — il token del pannello, rimesso sopra `ef61f0e7f`».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 07:12), col controllo del limite di upload in più (coordinatore, 06:36). Il
+  modulo nuovo `instance_backup/checks.py` dà `backup.panel_token` e `backup.upload_limit`, in `CONFIG_CHECKS` dopo
+  `check_log_level` e prima dei controlli di E, che chiudono ancora la tupla. All'avvio un token o un limite
+  inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile; non intero, voce del profilo mancante o del tipo
+  sbagliato, H-27/H-37) è una riga ERROR che nomina la variabile, e la partenza continua. Il token non impostato è
+  `ok` (`.off`), non `info`: un avvio predefinito non scrive nulla di nuovo. Le chiavi `backup.checks.*` sono nei 4
+  cataloghi, per la scheda «Sicurezza» (A8b). Test: `services backup-checks` (57), più nel file di H le 2 voci di
+  `CHECK_IDS` e un blocco «Workstream B» in `_configure`. Dettagli: piano 07, «B-9».
 - **B-10 · Un pulsante del pannello che chiede all'istanza il link di reset dell'admin** — piccolo; B, 15/10 (decisione
   40, assegnata a B dal coordinatore). Recupero dell'admin dopo un ripristino o una password persa: oggi passa da
   «password dimenticata» via email (E), o dall'assistenza con `dev.py user reset-link`.
@@ -6271,7 +6338,29 @@ sulla base `23f6578f3`.
   esatta 1e70). Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J
   legge accanto a una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince
   `absent`.
+- ✅ **B-30 · Un disco pieno negli avvii brevi del backup e del ripristino risponde col codice sbagliato, o senza codice**
+  — piccolo; TA-B, 17/10 (B-9, rilettura delle etichette di `test_backup_restore.py`), allargato dall'analisi del 17/10.
+  Annotato per la cartella degli upload. `jobs._out_of_space` copre le fasi lunghe, non gli avvii brevi:
+  - la cartella degli upload e la fine dell'upload (`fsync`/`close`, dove NFS e le quote segnalano il disco pieno)
+    danno 500 `backup_upload_failed`, non 507;
+  - l'avvio di un controllo (`POST /restore/stage`) lascia uscire ogni `OSError` come 500 senza codice;
+  - l'avvio di un backup (scheda e pannello) dà 500 `backup_failed`, non `backup_no_space`.
+  Cura decisa dal coordinatore (17/10, 07:18), ambito 1+2+3+5: 507 `backup_no_space` per un disco pieno in tutti e
+  quattro; all'avvio del controllo, ogni altro `OSError` → 500 `stage_failed` con una riga nel log. Solo backend, con
+  codici e chiavi che esistono già. Dettagli: piano 07, «B-30».
 
+  ✅ **Fatto il 17/10** (checkpoint delle 08:00). Un disco pieno (ENOSPC o EDQUOT, anche fra le cause) risponde 507
+  `backup_no_space` alla cartella e alla fine dell'upload e all'avvio del backup (scheda e pannello), e 507 `no_space`
+  (il codice del controllo) all'avvio del controllo; lì ogni altro `OSError` dà 500 `stage_failed` con una riga nel log,
+  mai più il 500 senza codice. `jobs.out_of_space` è pubblica. Corretta anche la doppia `close` di `UploadWriter.finish()`
+  (trovata da TA-B). Test: 21 rossi API e 18 nei servizi, poi tutti verdi; 4 guardie Vitest.
+- **B-31 · Conferma, annullamento e riavvio di un ripristino: un guasto del disco senza codice o senza messaggio** —
+  basso; B, 17/10 (analisi di B-30). `POST /restore/stage/{id}/confirm` e `DELETE /restore/pending` lasciano uscire un
+  `OSError` come 500 senza codice; `restore_restart_failed` (il biglietto del riavvio non scritto) ha un codice ma
+  nessun messaggio nella UI (fuori da `ERROR_KEYS`: dice «unexpected») né una riga nella guida. Cura: un 500 con un
+  codice e un messaggio suo per ciascuno (3 chiavi × 4 lingue, `ERROR_KEYS`, l'elenco §5 di `restoreI18n.test.ts`) e
+  507 `backup_no_space` per un disco pieno alla conferma. Lotto separato, dopo B-30 (coordinatore, 07:18). Dettagli:
+  piano 07, «B-30» (punti 4, 6, 7).
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
@@ -6405,13 +6494,20 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Se il codice servirà, la strada è `LIBREFOLIO_SMTP_MAX_PER_DOMAIN`, spenta di default, con un default per il
       profilo `managed`, in un lotto suo.
     - Dettagli: piano 08, «E-12.0» ed «E-12.1».
-- **E-14 · Uno sfratto mirato libera ancora un identificativo bloccato** — piccolo; E, 17/10 (revisione di N70, LOW).
+- ✅ **E-14 · Uno sfratto mirato libera ancora un identificativo bloccato** — piccolo; E, 17/10 (revisione di N70, LOW).
   Con `eviction_scan=32`, sfrattare dal limitatore in memoria un identificativo bloccato costa 10 279 richieste,
-  contro le 10 000 dell'LRU semplice (misurato). Il tetto ferma lo spruzzo ingenuo, non quello mirato, e alzare K
-  aggiunge solo 10 richieste per unità. Un indice O(1) delle chiavi non piene porta lo sfratto a 100 000 richieste e
-  il lock a 9,9 µs (prototipo nella cartella di sessione). Nello stesso lotto: la precisione dei docs su «310 contro
-  100 000» (`developer/backend/email.md`, e `security.md` con l'ok di A). Dettagli:
-  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «La revisione di N70 a posteriori».
+  contro le 10 000 dell'LRU semplice (misurato). Il tetto ferma lo spruzzo ingenuo, non quello mirato. Dettagli:
+  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «La revisione di N70 a posteriori» ed «E-14».
+  - 17/10, E: fatta nella 1.3 (via del coordinatore).
+    - Il disegno proposto (un indice delle chiavi non piene) non bastava, e l'ho corretto prima del codice: chi si
+      ferma a 9 fallimenti non rende mai piena la chiave, e uno spruzzo la libera per circa 1 100 richieste a
+      tentativo, come oggi.
+    - Ora si sfratta la chiave con meno colpi nella finestra, e tra quelle la meno usata. La scadenza è esatta (un
+      heap), non c'è ricerca, e `eviction_scan` sparisce.
+    - Il caso migliore per l'attaccante costa ora circa 10 000 richieste per tentativo, e nessuno spruzzo libera una
+      chiave più pesante.
+    - I docs «310 contro 100 000» sono corretti.
+    - Commit al checkpoint di E-14.
 
 ## Y · Cruscotto e grafici (fase 01)
 
@@ -6470,16 +6566,21 @@ da Y il 15/10.
   - È un'inversione di livello: la UI generica dipende da una feature.
   - Da chiudere in FE9, spostando il contratto fra grafico e segnale in `components/charts` o in un modulo neutro.
   - Dettagli: piano di Y, §0.3 e §7 «Y3 e Y4 — analisi».
-- **Y-8 · `updateArrowRotations()` legge `getOption()` a ogni passo dello zoom** — basso, prestazioni; `test-author` di
-  Y, 15/10 (Y8). `charts/lineChartHelpers.ts:594` chiama `chart.getOption()`, che clona tutta l'opzione, e i tre
-  gestori di `dataZoom` la chiamano a ogni passo del gesto: `LineChart.svelte:399`, `CandlestickChart.svelte:290` e
-  `PriceChartFull.svelte:612`.
-  - Contraddice la nota di `PriceChartFull.svelte:604-609` («do NOT read chartInstance.getOption() here»), scritta
-    proprio contro gli scatti sui grafici con anni di dati giornalieri.
-  - È preesistente, e 47-1 non la peggiora: le sue letture aspettano che il gesto si fermi.
-  - Prima un rosso che conti le chiamate a `getOption()` per passo; poi la rotazione delle frecce letta in altro modo,
-    o rinviata come le etichette.
-  - Dettagli: piano di Y, §7 «Y8 — passo 3».
+- ✅ **Y-8 · `updateArrowRotations()` legge `getOption()` a ogni passo dello zoom** — basso, prestazioni; `test-author` di
+  Y, 15/10 (Y8). ✅ 17/10: le frecce si riallineano una volta, a gesto fermo, nel rinvio che già ridistanzia le etichette
+  (`LineChart` e `CandlestickChart` nel timer da 120 ms, `PriceChartFull` nel ramo «risoluzione tenuta» del rinvio da
+  200 ms); i gestori di `dataZoom` non leggono più `getOption()` e non riscrivono le serie. Nessuna cache: l'opzione si
+  legge al momento, quindi la riscrittura porta i colori correnti (condizione del programma colori). Fissato da 3 rossi
+  per passo e assestamento e da 4 guardie del colore chiaro → scuro → zoom (`LineChart.test.ts`,
+  `PriceChartFull.test.ts`), con la prova del morso: una cache del primo `getOption()` porta le 4 guardie al rosso.
+  Nello stesso lotto, Y-8b: `LineChart.renderChart()` ora ripristina lo zoom salvato prima di riallineare, come
+  `CandlestickChart` (prima, dopo un ridisegno di un grafico zoomato, le frecce restavano orientate sull'asse intero fino
+  all'assestamento); un rosso in `LineChart.test.ts`. Commit al checkpoint.
+  - Prima: `charts/lineChartHelpers.ts:594` chiamava `chart.getOption()`, che clona tutta l'opzione, e i tre gestori di
+    `dataZoom` la chiamavano a ogni passo del gesto: `LineChart.svelte:399`, `CandlestickChart.svelte:290` e
+    `PriceChartFull.svelte:612`, contro la nota di `PriceChartFull.svelte:604-609` («do NOT read
+    chartInstance.getOption() here»).
+  - Dettagli: piano di Y, «Y-8 · `updateArrowRotations()` e `getOption()` a ogni passo dello zoom».
 - **Y-9 · Il layout del PAC da telefono, da rivedere sugli scatti mobile dopo Y7** — basso; Y, 15/10 (Y7), per la
   decisione 50 del developer. Y7 fa scorrere con la tabella le colonne di selezione e azioni sotto i 768 px (D-Y17).
   Restano le larghezze dichiarate di `TargetsStep` (`features/tools/pac-allocator/planner/steps/TargetsStep.svelte`:
@@ -6631,6 +6732,19 @@ da Y il 15/10.
     `canRequestPnlCandles` più `untrack`) toglie il ciclo, ma serve una «chiave di scope» perché un cambio di periodo
     o un Refresh dopo un errore chiedano di nuovo.
   - Dettagli: piano di Y, «Y-16».
+- **Y-25 · Il ridimensionamento riallinea le frecce a ogni callback, e la riscrittura parte anche senza angoli cambiati**
+  — minimo, prestazioni; `test-author` di Y, 17/10 (analisi di Y-8). Comportamento preesistente, della stessa natura di
+  Y-8 ma su un gesto raro.
+  - Il `ResizeObserver` di `LineChart`, `CandlestickChart` e `PriceChartFull` chiama `updateArrowRotations` a ogni
+    callback, cioè a ogni frame mentre si trascina il bordo della finestra: una copia di `getOption()` e una riscrittura
+    di tutte le serie ciascuna, oltre al `resize()`.
+  - `updateArrowRotations` riscrive le serie appena trova una freccia, anche se nessun angolo è cambiato; il primo
+    disegno fa tre copie e tre riscritture in circa 50 ms (il disegno e i due passi della stabilità); ogni ridisegno di
+    un grafico zoomato ne fa una in più, 120 ms dopo, perché il ripristino dello zoom non è `silent`.
+  - Possibili rimedi: rinviare il riallineamento del ridimensionamento come quello dello zoom; non riscrivere quando
+    nessun angolo cambia (il test di Y-8 sull'assestamento va allora rifatto con lo zoom vero del registratore di
+    Y-8b, che cambia gli angoli).
+  - Dettagli: piano di Y, «Y-8 · `updateArrowRotations()` e `getOption()` a ogni passo dello zoom».
 
 ## MF · Matematica finanziaria (fase 01)
 
@@ -6741,3 +6855,11 @@ punto di partenza, l'audit dello stesso giorno:
   massimo (costo lineare, solo il corpo della richiesta li limita), e `POST /assets/provider/probe` non ha un limite
   per utente. Proposta: un tetto agli eventi (p. es. 10 000) nello schema, e il limite della sonda dove vivono gli altri
   limiti delle richieste. Dettagli: piano MF, sezione «SEC7-2 entrato; MF-SI1».
+- **MF-J45a · L'esecutore del motore non è chiuso allo spegnimento** — minimo; docs-writer di MF, 17/10 (J-45).
+  `_ENGINE_EXECUTOR` (`financial_math/portfolio/engine.py`) non è nella sequenza di spegnimento dell'app: una
+  ricostruzione in corso tiene il processo fino alla fine, come l'esecutore predefinito di `asyncio.to_thread`.
+  Proposta, se serve: `shutdown(wait=False, cancel_futures=True)` nel lifespan. Dettagli: piano MF, sezione «J-45».
+- **MF-J45b · Nessun single-flight sulla cache del motore** — basso, carico; J, 17/10 (revisione di J-45). Tra la
+  lettura della cache `portfolio_blob` (`portfolio/engine.py` ~:316) e la sua scrittura (~:457) nessun lucchetto: due
+  richieste identiche concorrenti ricostruiscono entrambe (con J-45 occupano i due worker). Nessuna azione ora; cura
+  possibile: un `asyncio.Future` per chiave in volo. Dettagli: piano MF, sezione «J-45».

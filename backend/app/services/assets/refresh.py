@@ -39,6 +39,7 @@ from backend.app.services.assets.base import (
 )
 from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.price_store import PriceStoreOperations, _unstorable_provider_point, storable_current_value, unstorable_quote_reason
+from backend.app.utils.date_range_limits import range_span_floor
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -256,7 +257,13 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                     if cached_dates:
                                         # Check if requested range is fully covered
                                         needed_dates = set()
-                                        d = start
+                                        # X-R55: the walk covers RANGE_SPAN_LIMIT_DAYS before history_end at most. An
+                                        # older start counts as missing, with the day before the floor, so the fetch
+                                        # still asks from the requested start.
+                                        walk_floor = range_span_floor(history_end)
+                                        if start < walk_floor:
+                                            needed_dates.update((start, walk_floor - timedelta(days=1)))
+                                        d = max(start, walk_floor)
                                         while d <= history_end:
                                             d_iso = d.isoformat()
                                             if d_iso not in cached_dates:
