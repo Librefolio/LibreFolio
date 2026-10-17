@@ -31,8 +31,22 @@
  * the code is one this build does not know, so it gets the generic failure (AERR-08's guard) — hence the reds; AERR-11
  * picks it up once it joins the list. Red until A-51, both cases.
  *
+ * Accounts lot A-16 (release 1.3, workstream A — «A-11 + A-16 + A-40 + A-26 as one lot: GO, reds first», 17/10):
+ * `DELETE /auth/users/me` refuses the last active administrator with a 400 which, until A-16, carried a bare English
+ * sentence and no code — and the deletion dialog showed that sentence as it was. Since A-16 the status stays 400 and
+ * the body is `{detail: {error_code: 'LAST_ADMIN', message}}`. `LAST_ADMIN` already answers the 409 of
+ * `PATCH /users/{id}`, and its sentence («neither deactivated nor demoted») does not fit a deletion; on a deletion the
+ * code can only come from one's own (deleting another administrator answers 409 `DEMOTE_FIRST`). The contract under
+ * test: on `'delete'`, that 400 → `{code: 'LAST_ADMIN', key: 'settings.usersTab.errors.LAST_ADMIN_DELETION'}`, the
+ * server's `message` never shown (AERR-15, AERR-16); that key is a sentence of its own — not `LAST_ADMIN`'s — in the
+ * four catalogues, naming no value, as `describeAccountError` fills none for it (AERR-17). The guards, green today:
+ * without `'delete'` — the Users tab's PATCH, which passes no action — `LAST_ADMIN` keeps its key (AERR-18); on a
+ * deletion the other refusals keep theirs (AERR-19); and a 400 or 409 whose detail is a sentence without a code still
+ * shows that sentence (AERR-09, AERR-10: no longer the last administrator's answer, the fallback stays). Red until A-16:
+ * AERR-15, AERR-16, AERR-17.
+ *
  * The refusals are shaped as axios builds them (`isAxiosError`, `response.status`, `response.data.detail`), with the
- * bodies of `api/v1/users.py`. Node environment: nothing renders.
+ * bodies of `api/v1/users.py` — and of `api/v1/auth.py` for A-16's. Node environment: nothing renders.
  */
 import {describe, expect, it, vi} from 'vitest';
 import en from '$lib/i18n/en.json';
@@ -48,6 +62,16 @@ const SERVER_SENTENCE = 'An English sentence nobody should read';
 const BILLING = 'https://billing.example.test/librefolio/subscription';
 const PENDING_SETUP_KEY = 'settings.usersTab.errors.PENDING_SETUP';
 const SETUP_COMPLETED_KEY = 'settings.usersTab.errors.SETUP_COMPLETED';
+/** The refusal of a deactivation or a demotion of the last active administrator (the Users tab's PATCH). */
+const LAST_ADMIN_KEY = 'settings.usersTab.errors.LAST_ADMIN';
+/** The refusal of the last active administrator's own deletion (A-16): a key of its own, `LAST_ADMIN` does not fit. */
+const LAST_ADMIN_DELETION_KEY = 'settings.usersTab.errors.LAST_ADMIN_DELETION';
+
+/**
+ * A refusal whose detail is a sentence with no code: still shown as it is (AERR-09, AERR-10). Not the last administrator
+ * deleting their own account any more — that one carries `LAST_ADMIN` since A-16 —, any refusal a backend words without one.
+ */
+const CODELESS_SENTENCE = 'A reason the server gives without a code';
 
 /** The codes `ACCOUNT_ERROR_CODES` lists before A7b. */
 const CODES_BEFORE_A7B = ['LAST_ADMIN', 'USER_LIMIT_REACHED', 'REGISTRATION_DISABLED', 'ACCOUNT_PROTECTED', 'SELF_DELETION', 'DEMOTE_FIRST'];
@@ -60,13 +84,19 @@ function refusal(status: number, detail: unknown): Error {
 /** A coded refusal of `api/v1/users.py`: 409 `{detail: {error_code, message, …extra}}`. */
 const conflict = (error_code: string, extra: Record<string, unknown> = {}) => refusal(409, {error_code, message: SERVER_SENTENCE, ...extra});
 
+/** The server's own sentence for the last active administrator's own deletion, as `api/v1/auth.py` words it since A-16. */
+const LAST_ADMIN_DELETION_MESSAGE = 'Cannot delete account: you are the last active administrator';
+
+/** `DELETE /auth/users/me` refusing the last active administrator since A-16: the status stays 400, the detail gains a code. */
+const LAST_ADMIN_ON_DELETION = refusal(400, {error_code: 'LAST_ADMIN', message: LAST_ADMIN_DELETION_MESSAGE});
+
 /** The answers read from the status, the deletion dialog's `'delete'` included. */
 const BY_STATUS: Array<{label: string; failure: unknown; action?: string; expected: AccountError}> = [
     {label: 'a 404, the account gone', failure: refusal(404, 'User not found'), expected: {code: 'NOT_FOUND', key: 'settings.usersTab.errors.NOT_FOUND'}},
     {label: 'a 422, an address refused', failure: refusal(422, [{type: 'value_error', loc: ['body', 'email'], msg: 'value is not a valid email address'}]), expected: {code: 'INVALID_INPUT', key: 'settings.usersTab.errors.INVALID_INPUT'}},
     {label: 'a 500 on a deletion', failure: refusal(500, 'Internal Server Error'), action: 'delete', expected: {code: 'DELETION_FAILED', key: 'settings.usersTab.errors.DELETION_FAILED'}},
     {label: 'a 500 on anything else', failure: refusal(500, 'Internal Server Error'), action: 'reactivate', expected: {code: null, key: 'settings.usersTab.errors.generic'}},
-    {label: 'a 400 with its own sentence', failure: refusal(400, 'The only administrator cannot delete their own account'), expected: {code: null, key: 'settings.usersTab.errors.generic', message: 'The only administrator cannot delete their own account'}},
+    {label: 'a 400 with its own sentence', failure: refusal(400, CODELESS_SENTENCE), expected: {code: null, key: 'settings.usersTab.errors.generic', message: CODELESS_SENTENCE}},
     {label: 'a 409 with its own sentence', failure: refusal(409, 'Something changed meanwhile'), expected: {code: null, key: 'settings.usersTab.errors.generic', message: 'Something changed meanwhile'}},
     {label: 'a request that never reached the server', failure: new Error('Network Error'), expected: {code: null, key: 'settings.usersTab.errors.generic'}},
     {label: 'null', failure: null, expected: {code: null, key: 'settings.usersTab.errors.generic'}},
@@ -163,9 +193,8 @@ describe('describeAccountError — what it answers before A7b', () => {
     // guard
     it('AERR-10: a refusal with its own sentence and no code shows that sentence, without asking the translator', () => {
         const translate = translator();
-        const sentence = 'The only administrator cannot delete their own account';
 
-        expect(accountErrorText(describeAccountError(refusal(400, sentence)), translate)).toBe(sentence);
+        expect(accountErrorText(describeAccountError(refusal(400, CODELESS_SENTENCE)), translate)).toBe(CODELESS_SENTENCE);
         expect(translate).not.toHaveBeenCalled();
     });
 });
@@ -193,5 +222,39 @@ describe('describeAccountError — a setup completed meanwhile (A-51)', () => {
     // red until A-51
     it('AERR-14: settings.usersTab.errors.SETUP_COMPLETED is a sentence in the four catalogues, naming no value it is not given', () => {
         expectSentenceInEveryCatalogue(SETUP_COMPLETED_KEY, describeAccountError(conflict('SETUP_COMPLETED')).params);
+    });
+});
+
+// =========================================================================
+describe('describeAccountError — the last active administrator deleting their own account (A-16)', () => {
+    // red until A-16
+    it('AERR-15: on a deletion, the 400 LAST_ADMIN → its code and settings.usersTab.errors.LAST_ADMIN_DELETION, never the server sentence', () => {
+        expect(describeAccountError(LAST_ADMIN_ON_DELETION, 'delete')).toEqual({code: 'LAST_ADMIN', key: LAST_ADMIN_DELETION_KEY});
+    });
+
+    // red until A-16
+    it('AERR-16: the text of the dialog and of its toast — accountErrorText — is that key translated: neither the server sentence nor LAST_ADMIN’s', () => {
+        const text = accountErrorText(describeAccountError(LAST_ADMIN_ON_DELETION, 'delete'), translator());
+
+        expect(text).toBe(`«${LAST_ADMIN_DELETION_KEY}»`);
+        expect(text).not.toContain(LAST_ADMIN_DELETION_MESSAGE);
+    });
+
+    // red until A-16
+    it('AERR-17: settings.usersTab.errors.LAST_ADMIN_DELETION is a sentence of its own in the four catalogues — not LAST_ADMIN’s —, naming no value it is not given', () => {
+        expectSentenceInEveryCatalogue(LAST_ADMIN_DELETION_KEY, describeAccountError(LAST_ADMIN_ON_DELETION, 'delete').params);
+        for (const [language, catalogue] of Object.entries(CATALOGUES)) {
+            expect(messageOf(catalogue, LAST_ADMIN_DELETION_KEY), `${language}: ${LAST_ADMIN_DELETION_KEY} speaks of a deletion, not with the words of ${LAST_ADMIN_KEY}`).not.toBe(messageOf(catalogue, LAST_ADMIN_KEY));
+        }
+    });
+
+    // guard — the Users tab passes no action; deactivating and demoting are the two refusals LAST_ADMIN answers there
+    it.each([undefined, 'deactivate', 'demote'])('AERR-18: without a deletion (action %s), the 409 LAST_ADMIN keeps settings.usersTab.errors.LAST_ADMIN', (action) => {
+        expect(describeAccountError(conflict('LAST_ADMIN'), action)).toEqual({code: 'LAST_ADMIN', key: LAST_ADMIN_KEY});
+    });
+
+    // guard — the deletion of another account (`DELETE /users/{id}`) refuses with these: only LAST_ADMIN changes key
+    it.each(['SELF_DELETION', 'DEMOTE_FIRST', 'ACCOUNT_PROTECTED'])('AERR-19: on a deletion, the 409 %s keeps its own key', (code) => {
+        expect(describeAccountError(conflict(code), 'delete')).toEqual({code, key: `settings.usersTab.errors.${code}`});
     });
 });
