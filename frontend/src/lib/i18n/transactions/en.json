@@ -246,7 +246,8 @@
       "decimalPlacesExceeded": "At most {max} decimal places",
       "significantDigitsExceeded": "At most {max} significant digits",
       "integerDigitsExceeded": "At most {max} digits before the decimal point",
-      "dateOutOfRange": "Between {min} and {max}"
+      "dateOutOfRange": "Between {min} and {max}",
+      "autoCostUnreadable": "Automatic cost unavailable: {count, plural, one {# transaction used} other {# transactions used}} for this asset's average cost {count, plural, one {holds} other {hold}} a value that is not a number. Enter the cost by hand."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
