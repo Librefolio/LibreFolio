@@ -5711,3 +5711,81 @@ response format». Script `files/checks/xr52_code.py`, una sostituzione, provato
 > - Niente CHANGELOG: P-10 non è mai uscito.
 - **Consegna di X-R47 con R13-SEC7** (06:20, FROZEN). Commit proposti: `fix(events): refuse a split ratio not above 0`,
   `fix(events): P-10 refusal shows only the caller's transactions`, `docs(journal): X-R47, X-R53, X-R55`.
+- **Commit e base** (06:19): il coordinatore ha committato `5f68a8db0` (fix, X-R47 + R13-SEC7) e `65ae9f925` (journal),
+  poi l'aggiornamento di base `dace18918` = X + dev `d107b6f26`, pulito.
+- **Slot 3** (06:19–06:26, sul `dace18918`, carico a 5 minuti < 50), tutto verde: `db populate --force` ✅,
+  `api portfolio-wac` 12, `api assets-events` 45, `api events-suggest` 9, `services event-split-ratio` 54,
+  `services asset-event-store` 71; porta 6183 libera.
+
+> **⚠️ Fuori pista (06:20) — X-R47 non entra: rosso bloccante della regola (d) dei confini dello strato.** J l'ha trovato
+> in `services financial-math` sulla revisione combinata: `test_layer_boundaries.py::test_only_the_split_loader_names_the_split_event_type`.
+> `AssetEventType.SPLIT` si può nominare in `backend/app` solo in `financial_math/splits.py` e
+> `transactions/event_suggestions.py`; `event_store.py` lo nominava alle righe 108, 416 e 422 (i due controlli di X-R47).
+> La regola è entrata con dev `d107b6f26`, quindi il mio slot non poteva vederla. Rosso confermato da me (06:27):
+> 1 fallito, 870 passati.
+> **Cura (proposta di J, adottata dal coordinatore)**:
+> - un predicato `is_split_event_type(value) -> bool` in `financial_math/splits.py`, accanto a `is_valid_split_ratio`
+>   (file di J: lo scrivo io, J rivede). Vero solo per un testo che, tolti gli spazi e in maiuscolo, è `SPLIT` (il membro
+>   dell'enum è un testo); falso per tutto il resto, `None` compreso; non solleva mai;
+> - i tre usi di `event_store.py` passano da lì; il `type` dei dettagli è la stringa normalizzata dell'evento; tolto
+>   l'import ormai inutile di `AssetEventType`;
+> - `event_store.py` **non** entra in `SPLIT_EVENT_TYPE_HOMES`.
+> Script `files/checks/xr47c_code.py` (6 sostituzioni in 2 file), provato a secco insieme a `xr47b_code.py`: ruff e black
+> puliti, il matcher della regola (d) non trova più righe in `event_store.py`.
+
+### X-R47b — senza chiamante il rifiuto di P-10 non nomina nessuna transazione ✅ (2026-10-17, 06:20–06:54; stesso lotto della cura della regola d, consegnato)
+
+**Origine**: la revisione di E su `5f68a8db0` («sound», più una LOW). Il default era fail-open: senza chiamante il rifiuto
+mostrava tutti gli id. **Decisione del coordinatore**: nello stesso lotto della cura della regola (d), perché è la stessa
+funzione.
+- la rotta passa `_current_user.id`, senza il ripiego `getattr(…, None)`;
+- `current_user_id=None` → nessun id (`transaction_ids` vuoto), `hidden_transactions_count` li conta tutti; il messaggio
+  non cambia (solo il totale);
+- i test P-10 di J nel file di W, che fissano quali transazioni, rispondono a un utente che le vede: J e W rivedono.
+
+**Disegno**: script `files/checks/xr47b_code.py` (4 sostituzioni in 2 file: due docstring, il ramo dei dettagli sempre con
+il conteggio, la rotta).
+- **Rossi** (test-author, solo scrittura, 06:35):
+  - nel mio `test_event_split_ratio.py`: la guardia «senza chiamante, tutti gli id» diventa il rosso «senza chiamante,
+    nessun id, contati tutti»; i casi del predicato, rossi per assenza (letto al momento del test, così il file raccoglie);
+  - nel file di W `test_asset_event_store.py`: un secondo utente con accesso al broker dell'unità (`holder_id`), che i tre
+    test P-10 passano come chiamante; i dettagli attesi prendono `hidden_transactions_count: 0`. L'utente dell'unità
+    resta senza accesso, perché `test_delete_keeps_the_in_use_breakdown_of_its_own_events` ci conta;
+  - nel file di W `test_asset_digit_limits.py`: le due chiamate dirette della rotta prendono un chiamante finto
+    (`SimpleNamespace(id=0)`).
+
+> **⚠️ Fuori pista (06:38) — X-R55 passa a Z.** Il coordinatore alleggerisce la mia coda: gli intervalli senza tetto
+> (`price_query.py`, il `convert` dei cambi) li scrive Z, che è libera; io li rivedo al checkpoint di Z, perché i file
+> sono miei. Coda: la cura della regola (d) con X-R47b → X-R43 → X-R53 → X-R48 → X-R44 → X-R49.
+- **Rossi** (06:40, prima del codice, per la ragione giusta):
+  - `services event-split-ratio` 25 falliti su 78: i 24 casi del predicato («`financial_math.splits` has no
+    `is_split_event_type`») e il rosso senza chiamante, che oggi mostra `[5, 6]` invece di `[]`;
+  - `services asset-event-store` 71 e `asset-digit-limits` 76 verdi, prima e dopo, come previsto;
+  - `services financial-math`: la regola (d), 1 fallito su 871 (06:27).
+- **Codice** (06:41): `xr47b_code.py` (4 sostituzioni) e `xr47c_code.py` (6); ruff e black puliti su 7 file;
+  `import backend.app.main` ok. Il test-author ha segnalato la descrizione del runner `event-split-ratio` rimasta
+  indietro: aggiornata (mia voce nel file condiviso), con X-R47b e il predicato.
+- **Verdi** (06:42–06:45, carico < 50): `services financial-math` 871 (la regola d di nuovo verde),
+  `event-split-ratio` 78, `asset-event-store` 71, `asset-digit-limits` 76; slot 4 (carico a 5 minuti 37):
+  `api portfolio-wac` 12, `api assets-events` 45; porta 6183 libera.
+
+> **⚠️ Fuori pista (06:43) — la nota LOW di W sulla revisione di X-R47.** In `eventSaveError.ts` il `ratio` arrivava
+> crudo dal server (`-0.5`), mentre in italiano, francese e spagnolo l'app scrive «-0,5». Il coordinatore: se costa poco,
+> nello stesso lotto. Costa poco: `formatExactDecimal` (`utils/core/formatFixed.ts`) esiste già, la sua doc nomina
+> proprio «a split ratio»; scrive la stringa decimale nella lingua dell'interfaccia senza passare da un float.
+> Script `files/checks/xr47d_frontend.py` (2 sostituzioni: l'import e la chiamata), provato a secco, prettier pulito.
+> Rosso Vitest affidato a un test-author (solo scrittura): it, fr, es → `-0,5` e `-0,000001`; l'inglese come guardia.
+- **La nota di W, chiusa** (06:51–06:53):
+  - Rosso Vitest 6 su 82: it, fr, es ricevono `-0.5` dove aspettano `-0,5` (e `-0.000001` per `-0,000001`). Il
+    test-author ha trovato che Node 26 ha un `navigator` globale, che segue la lingua della macchina (`en-US` qui): il
+    blocco lo toglie (`vi.stubGlobal`), come `uiLocale.test.ts`, e ogni test controlla la lingua prima della frase.
+  - Codice: `xr47d_frontend.py` (2 sostituzioni). Verdi: Vitest 139 (`eventSaveError` più `formatFixed`),
+    `front check` (svelte-check 0 errori, 0 avvisi), prettier pulito. Il segnaposto è un `{ratio}` semplice nelle 4
+    lingue (nessun `number` ICU che rileggerebbe il testo).
+  - Documentazione: nessuna modifica. `data-editor.md` dice che la frase nomina il rapporto, e resta vero; P-10 non è
+    documentato in MkDocs (è di J).
+- **Corsa in più** (06:53): `services asset-source-guards` 29 (chiama `bulk_upsert_events` senza chiamante, nessun
+  P-10). `git diff --check` pulito, porta 6183 libera.
+- **Consegna** (06:54, FROZEN): commit proposti `fix(events): split predicate; P-10 fails closed` e
+  `docs(journal): X-R47b, X-R55 to Z`. Revisioni: J (`splits.py` e il blocco P-10 nel file di W), W (`event_store.py`,
+  `events.py`, i due file di test, il frontend), E (X-R47b).
