@@ -6148,3 +6148,9 @@ punto di partenza, l'audit dello stesso giorno:
   a quote diverse sta dentro il ramo `tx.date != paired.date`: una coppia dello stesso giorno non lo produce. Il divario
   è un risultato nel P&L (J2), l'avviso spiega perché. Da vedere con chi possiede la qualità dei dati (J). Dettagli:
   piano MF, sezione «MF-J2 — codice e misura».
+- **MF-D3 · Il fattore d'annualizzazione riscritto nei validatori degli schemi del rischio** — minimo, nessun numero;
+  MF, 17/10 (MF-D resto). `schemas/risk.py:514` e `:595` ricalcolano `n_observations * 365 / calendar_days` per
+  controllare l'invariante del contratto, accanto alla funzione della casa `returns.observed_annualization`. Gli
+  schemi non importano servizi per scelta: oggi è un controllo dichiarato, non una seconda implementazione. Da
+  decidere se resta così (riga nella pagina dev) o se la formula scende in un modulo che entrambi possono leggere.
+  Dettagli: piano MF, sezione «MF-D resto».
