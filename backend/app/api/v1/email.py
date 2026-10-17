@@ -37,7 +37,7 @@ from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
 from backend.app.services.email.delivery import EmailDeliveryError, EmailRateLimitedError, EmailUnavailableError, budget_status, email_config_state
 from backend.app.services.email.links import EmailLinksUnavailableError, links_state
 from backend.app.services.email.messages import EmailRecipientError
-from backend.app.services.platform.client_address import client_address
+from backend.app.services.platform.client_address import rate_limit_address
 
 logger = get_logger(__name__)
 
@@ -156,7 +156,8 @@ async def request_password_reset_email(
     asks for its current password (workstream A, lot A6e): a moment inside someone's session cannot move their address,
     then their password, through here.
     """
-    address = client_address(request)
+    # None behind a reverse proxy LibreFolio does not trust: no count per address then (N70, E-13)
+    address = rate_limit_address(request)
     try:
         await flows.admit_forgotten_password(address, body.identifier)
     except EmailUnavailableError:
@@ -196,12 +197,15 @@ async def resend_email_verification(body: EmailVerificationResendRequest, reques
     anonymous caller gets on a blocked instance (E-11); 403 ``ACCOUNT_DISABLED`` for an account an administrator
     deactivated. 409 ``EMAIL_VERIFICATION_NOT_NEEDED`` for an active account; 409 ``EMAIL_UNAVAILABLE``,
     ``EMAIL_LINKS_UNAVAILABLE`` (without the ``problem``: not an administrator); 409 ``USER_LIMIT_REACHED`` when the old link expired and the instance is full now; 429
-    ``EMAIL_RATE_LIMITED`` with ``Retry-After`` (10 requests per 15 minutes per address, before the password; per
-    account, one email every 5 minutes and 3 an hour; the hourly budget); 502 ``EMAIL_DELIVERY_FAILED`` (without the
+    ``EMAIL_RATE_LIMITED`` with ``Retry-After`` (10 requests per 15 minutes per address, before the password; the
+    sign-in's limit on failed passwords, 10 per identifier and 50 per address in 15 minutes, shared with
+    ``POST /auth/login``, before the password too; per account, one email every 5 minutes and 3 an hour; the hourly
+    budget); 502 ``EMAIL_DELIVERY_FAILED`` (without the
     ``smtp_code``); 422
     ``EMAIL_RECIPIENT_INVALID`` when the account's address is not one address.
     """
-    address = client_address(request)
+    # None behind a reverse proxy LibreFolio does not trust: no count per address then (N70, E-13)
+    address = rate_limit_address(request)
     try:
         language = await verification.resend_verification(session, identifier=body.username, password=body.password, address=address)
     except verification.VerificationCredentialsError:

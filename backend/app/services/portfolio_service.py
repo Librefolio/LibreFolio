@@ -115,6 +115,7 @@ from backend.app.services.financial_math.yield_on_cost import (
 )
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
+from backend.app.utils.datetime_utils import latest_range_end
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 _logger = structlog.get_logger(__name__)
@@ -475,6 +476,14 @@ class PortfolioService:
         assets = await self._get_assets_map(set(asset_ids))
         return [(asset_id, assets[asset_id].display_name if asset_id in assets else f"Asset {asset_id}") for asset_id in asset_ids]
 
+    async def _invalid_split_assets(self, engine_result: Any) -> list[tuple[int, str]]:
+        """(asset_id, name) of the assets with a SPLIT event whose stored ratio the engine counted as missing (MF-D4)."""
+        asset_ids = sorted({event.asset_id for event in getattr(engine_result, "invalid_split_events", [])})
+        if not asset_ids:
+            return []
+        assets = await self._get_assets_map(set(asset_ids))
+        return [(asset_id, assets[asset_id].display_name if asset_id in assets else f"Asset {asset_id}") for asset_id in asset_ids]
+
     @staticmethod
     def _merge_missing_pairs(items: list[WACMissingPairInfo]) -> list[WACMissingPairInfo]:
         merged: dict[str, set[date_type]] = defaultdict(set)
@@ -516,7 +525,12 @@ class PortfolioService:
         from backend.app.services.platform.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS  # noqa: PLC0415
 
         today = date_type.today()
+        # R13-SEC7-1: the summary's whole horizon (engine run, MWRR, stale prices, annualization) ends by latest_range_end()
+        if date_to is not None:
+            date_to = min(date_to, latest_range_end())
         valuation_date = date_to or today
+        if date_from is not None:
+            date_from = min(date_from, valuation_date)
         base_currency = target_currency_override or await self._get_base_currency(user_id)
 
         # ── 1. Run engine for aggregate values + performance ──
@@ -985,8 +999,10 @@ class PortfolioService:
             missing_fx_pairs_dto=merged_missing_fx_pairs,
             transaction_implied_assets_dto=transaction_implied_assets if transaction_implied_assets else None,
             missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
+            invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
             valued_at_cost_assets_dto=valued_at_cost_assets or None,
             mwrr_available=mwrr_result is not None,
+            share_mismatches=engine_result.share_mismatches,
             configured_fx_pairs=configured_fx_pairs,
             real_provider_fx_pairs=real_provider_fx_pairs,
             period_from=date_from,
@@ -1815,7 +1831,13 @@ class PortfolioService:
         base_currency = query.target_currency or await self._get_base_currency(user_id)
         date_from = query.date_range.resolved_start() if query.date_range else None
         date_to = query.date_range.resolved_end() if query.date_range else None
+        # R13-SEC7-1: the report — history, summary, metadata, cache key — ends by latest_range_end(), and a start after
+        # that end moves to it
+        if date_to is not None:
+            date_to = min(date_to, latest_range_end())
         effective_date_to = date_to or today
+        if date_from is not None:
+            date_from = min(date_from, effective_date_to)
 
         # ── 0. Layer 2 cache check ──
         # Build a fingerprint from transactions + prices to detect data changes
@@ -2046,7 +2068,9 @@ class PortfolioService:
             data_quality = views.build_data_quality_report(
                 missing_fx_pairs_dto=_engine_missing_fx_pairs(engine_result, date_from, effective_date_to) or None,
                 missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
+                invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
                 mwrr_available=False,
+                share_mismatches=engine_result.share_mismatches,
                 configured_fx_pairs=configured_fx_pairs,
                 real_provider_fx_pairs=real_provider_fx_pairs,
                 period_from=date_from,

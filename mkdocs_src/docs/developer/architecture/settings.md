@@ -44,27 +44,40 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       entry to `MANAGED_DEFAULTS` in the test file, the decided table that
       `PROFILE_DEFAULTS["managed"]` must equal; the parametrised cases (the managed value given to a
       field nobody set, the guards on the table, the self-hosted code defaults) then cover the new
-      field.
+      field. A new security `Settings` field states its managed value there in the same lot, or says
+      why `managed` keeps the code default: a review rule, row «Config & Data Paths» of
+      `.github/instructions/backend.instructions.md`. At run time nothing refuses a managed entry lost
+      from the table, nor a value an operator sets: for the two security switches, the configuration
+      checks `platform.frame_protection`, a `warning`, and `platform.csp_report_only`, an `info`, show
+      a managed instance where either is off (H-39; see
+      [Configuration Checks](security.md#configuration-checks)).
     - **Profile defaults of the section modules' variables** (`ENVIRONMENT_PROFILE_DEFAULTS` in
       `__init__.py`): for each profile, the values it gives the variables that a section module of
       `backend/app/config/` reads from `os.environ`, outside `Settings`. `selfhosted` lists none: a
       self-hosted install keeps every code default. A section module calls
-      `profile_default(name, fallback)`, and only while its variable is unset: the function returns
-      the active profile's value for `name` or, when the profile lists none, `fallback` itself, the
-      code's own default (the self-hosted behaviour). The profile is
+      `profile_default(name, fallback)`, and only while its variable is unset. Under `selfhosted` the
+      function returns `fallback` itself, the code's own default. Any other profile (today `managed`)
+      must list `name`, and the function returns that profile's value: a name it does not list raises
+      `ProfileDefaultError` (H-37), naming the variable, the profile and the table, and the reader
+      stops. A missing entry thus fails closed instead of quietly giving a managed instance the
+      self-hosted behaviour (no upload limit for a restore, below). The profile is
       `get_settings().LIBREFOLIO_PROFILE`, read at each call. A blank or an invalid value stays under
       the module's own rules: a module can, for example, treat a blank value as unset, and answer an
       invalid one with a coded error when the value is used rather than stop the startup.
       `profile_default()` converts nothing, but checks the active profile's entry before returning
       it: the entry must be of the exact type of `fallback`, the reader's own default (`500` for the
       fallback `0`; never `None`, `"500"`, `500.0` nor `True`: `True` does not pass for an `int`
-      fallback, nor `60` for a `float` one). An entry of any other type raises `ProfileDefaultError`,
-      a `TypeError` defined in `__init__.py` whose message names the variable, the profile, both types
-      and the table, and the reader stops instead of using the value: unchecked, a `None` under
-      `managed` would mean no upload limit at all for a restore (`backup_max_upload_mb()`, below). The
-      fallback itself, for a name the active profile does not list (any name under `selfhosted`), is
-      returned unchecked. The check runs at the reader's call, never at startup: only the reader knows
-      the type it expects; the table is code, guarded before release by the tests below.
+      fallback, nor `60` for a `float` one). An entry of any other type raises `ProfileDefaultError`
+      too, a `TypeError` defined in `__init__.py` whose message names the variable, the profile, both
+      types and the table, and the reader stops instead of using the value: unchecked, a `None` under
+      `managed` would mean no upload limit at all for a restore (`backup_max_upload_mb()`, below).
+      Under `selfhosted`, the fallback itself is returned unchecked. Both checks, for a missing entry
+      and for an entry's type, run at the reader's call, never as a startup check of their own: only
+      the reader knows the variables it reads and the type it expects; the table is code, guarded before
+      release by the tests below; and a startup refused for one missing entry would take every managed
+      instance down, where a reader that stops closes only the feature that reads it. The backup's
+      startup checks call the upload limit's reader, and only log its error
+      ([Configuration Checks of the Backup](security.md#backup-config-checks)).
       The first entry is the upload limit of a restore:
       `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43), read by
       `backup_max_upload_mb()` in `config/backup.py` with `profile_default(MAX_UPLOAD_VARIABLE, 0)`: no limit on a
@@ -74,17 +87,22 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       decided table of the test file; no key that is a `Settings` field or sits in both tables; every
       key read, as a string constant, by a section module, and documented in `.env.example`; for
       every listed name, `profile_default()` returning the fallback under `selfhosted` and the
-      table's value under `managed`; an entry of another type raising `ProfileDefaultError` under
-      `managed` while `selfhosted` still gets the fallback, and the real `backup_max_upload_mb()`
-      raising on a `None` managed entry instead of lifting the limit; and, read in the sources, every
-      `profile_default(NAME, …)` call of a section module written with a literal fallback whose type
-      is exactly that of every profile's entry for `NAME`.
-      To give such a variable a managed default, a workstream adds one
-      entry to `ENVIRONMENT_PROFILE_DEFAULTS["managed"]` and the same entry to
-      `ENVIRONMENT_MANAGED_DEFAULTS` in the test file, says the managed value in the variable's
-      commented line of `.env.example`, and calls `profile_default(NAME, fallback)` in its section
-      module while the variable is unset, with a literal fallback of the variable's own type, as the
-      upload limit's `0`. Admin view of both tables:
+      table's value under `managed`; under `managed`, a name the table does not list raising
+      `ProfileDefaultError`, as an entry of another type does, while `selfhosted` still gets the
+      fallback; the real `backup_max_upload_mb()` raising on a `None` managed entry, and on a managed
+      entry removed, instead of lifting the limit; and, read in the sources, every
+      `profile_default(NAME, …)` call of a section module written with a literal fallback, checked
+      both ways: every entry of the table read by such a call, of exactly the type of the call's
+      fallback, and every call's `NAME` listed by every profile but `selfhosted` (H-37). Two
+      self-tests check that the guard reports a broken table: `None` for the managed entry of the
+      upload limit (the type), and that entry removed (the listing).
+      To read a new variable through `profile_default`, a workstream adds its entry to
+      `ENVIRONMENT_PROFILE_DEFAULTS["managed"]`: mandatory, even at the fallback's own value when
+      `managed` keeps the self-hosted behaviour, since a name `managed` does not list raises. It adds
+      the same entry to `ENVIRONMENT_MANAGED_DEFAULTS` in the test file, says the managed value in the
+      variable's commented line of `.env.example`, and calls `profile_default(NAME, fallback)` in its
+      section module while the variable is unset, with a literal fallback of the variable's own type,
+      as the upload limit's `0`. Admin view of both tables:
       [The Managed Profile](../../admin/hosting_providers.md#managed-profile).
     - `get_data_dir()` picks the data root: in test mode `LIBREFOLIO_TEST_DATA_DIR` or
       `backend/data/test` (refused if it overlaps production), otherwise `LIBREFOLIO_DATA_DIR`,
@@ -93,7 +111,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` (both
       also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
       `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`,
-      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
+      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_LOGIN_LIMIT`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
       job or `./dev.py docker build` freezes), `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`,
       `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`), the variables of the plugin
       settings (`LIBREFOLIO_PLUGIN_*` and the aliases of secret fields, all also as `_FILE`), the order
@@ -136,7 +154,9 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
       `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`, `support_url()`),
       `accounts.py` (A: `donation_popup_disabled()`, `registration_mode_override()`,
-      `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`, and
+      `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`,
+      `login_limit_value()` and `login_limit_enabled()`, the switch of the
+      [limit on failed sign-ins](security.md#login-limit), and
       `admin_bootstrap_config()`, the [initial administrator](access_control.md#initial-admin), its
       token also as `_FILE`), `plugins.py`
       (X: `web_link_finder_enabled()`, `web_link_finder_engine()`, `web_link_finder_api_key()`,
@@ -168,7 +188,9 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `LIBREFOLIO_SUPPORT_URL` does not either: `support_link()`
       (`services/platform/instance_links.py`) logs it once, and `GET /system/instance` answers
       `support_url: null`, so the app keeps its link to the project's GitHub issues. An unusable
-      `LIBREFOLIO_ADMIN_*` value does stop it, as `admin_bootstrap_config()` runs in the startup audit.
+      `LIBREFOLIO_ADMIN_*` value does stop it, as `admin_bootstrap_config()` runs in the startup audit,
+      and so does a `LIBREFOLIO_LOGIN_LIMIT` other than `on` or `off`: `login_limit_enabled()` runs
+      right after it.
     - The rule: every environment variable of the application is read inside
       `backend/app/config/`. A module elsewhere calls a function there instead of reading
       `os.environ`. The rule holds with no exception, and a guard test checks it (runner selector

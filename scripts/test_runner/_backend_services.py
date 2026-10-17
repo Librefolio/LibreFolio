@@ -200,6 +200,15 @@ def services_asset_source_refresh(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Asset source refresh smoke test", verbose=verbose)
 
 
+def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bool:
+    """X-R55 (N75): date ranges capped at tomorrow (UTC) and 100 years for asset prices, FX conversions and the sync walk."""
+    print_section("Services: Date Range Ceiling (X-R55)")
+    print_info("Testing: get_prices_bulk + _build_backward_filled_series, the POST /fx/currencies/convert handler, refresh._fetch_refresh_item")
+    print_info("Extreme ranges (0001-01-01 … 9999-12-31) bounded by the wall clock and by fuses inside the per-day loops")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_range_ceiling.py", test_names)
+    return run_command(cmd, "Date range ceiling tests", verbose=verbose)
+
+
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
     """Test registry dei provider (asset & fx)."""
     print_section("Services: Provider Registry")
@@ -410,6 +419,30 @@ def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Synthetic yield tests", verbose=verbose)
 
 
+def services_scheduled_investment_cost_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC7-2: the Scheduled Investment provider's cost."""
+    print_section("Services: Scheduled Investment Cost Bounds (R13-SEC7-2)")
+    print_info("Testing: scheduled_investment/plugin.py (COMPOUND late interest closed form, late history, cache cap, late horizon)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_cost_bounds.py", test_names)
+    return run_command(cmd, "Scheduled investment cost bounds tests", verbose=verbose)
+
+
+def services_scheduled_investment_min_start(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-SI1: the Scheduled Investment history from "min"."""
+    print_section('Services: Scheduled Investment History From "min" (MF-SI1)')
+    print_info('Testing: scheduled_investment/plugin.py get_history_value(start_date="min"), explicit-start parity')
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_min_start.py", test_names)
+    return run_command(cmd, "Scheduled investment min start tests", verbose=verbose)
+
+
+def services_scheduled_investment_late_alignment(verbose: bool = False, test_names: list = None) -> bool:
+    """J's note on R13-SEC7-2: one late value per day, whoever reads it."""
+    print_section("Services: Scheduled Investment Late Alignment")
+    print_info("Testing: scheduled_investment/plugin.py COMPOUND late interest: current value = history close = settlement = closed form, by str")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_late_alignment.py", test_names)
+    return run_command(cmd, "Scheduled investment late alignment tests", verbose=verbose)
+
+
 def services_synthetic_yield_integration(verbose: bool = False, test_names: list = None) -> bool:
     """Test E2E synthetic yield integration scenarios."""
     print_section("Services: Synthetic Yield Integration E2E")
@@ -490,6 +523,26 @@ def services_account_tokens(verbose: bool = False, test_names: list = None) -> b
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_tokens.py", test_names)
     return run_command(cmd, "Account token service tests", verbose=verbose)
+
+
+def services_login_throttle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the limit on failed sign-ins (F15): per identifier and per address, its switch."""
+    print_section("Services: Login Throttle")
+    print_info("Testing: backend/app/services/accounts/login_throttle.py")
+    print_info("Tests: 10 failures per identifier and 50 per address in 15 minutes, a refusal not counted, a success forgets the identifier, LIBREFOLIO_LOGIN_LIMIT=off")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_login_throttle.py", test_names)
+    return run_command(cmd, "Login throttle service tests", verbose=verbose)
+
+
+def services_accounts_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the accounts' configuration check and its switch: LIBREFOLIO_LOGIN_LIMIT."""
+    print_section("Services: Accounts Configuration Checks")
+    print_info("Testing: backend/app/config/accounts.py (login_limit_enabled), backend/app/services/accounts/checks.py")
+    print_info("Tests: on/off/invalid, the check in CONFIG_CHECKS, the startup audit stopping on an invalid value")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_accounts_checks.py", test_names)
+    return run_command(cmd, "Accounts configuration check tests", verbose=verbose)
 
 
 def services_registration(verbose: bool = False, test_names: list = None) -> bool:
@@ -972,6 +1025,15 @@ def services_current_price_storable(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Current price storable tests", verbose=verbose)
 
 
+def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R47: a SPLIT event's ratio checked when it is written, manual SPLITs of 0 or below refused, a provider's dropped; and R13-SEC7: the P-10 refusal shows only the caller's transactions."""
+    print_section("Services: Event Split Ratio")
+    print_info("Testing: backend/app/services/assets/event_store.py (bulk_upsert_events, _upsert_asset_events, _reject_split_retype_without_costs), backend/app/api/v1/assets/events.py")
+    print_info("Tests: a manual SPLIT of ratio 0 or below refused with EVENT_INVALID_SPLIT_RATIO (HTTP 400) in every way it is written, nothing written; a provider's dropped with one warning; valid ratios accepted; the P-10 refusal naming only the caller's transactions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_event_split_ratio.py", test_names)
+    return run_command(cmd, "Event split ratio tests", verbose=verbose)
+
+
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
@@ -1362,6 +1424,14 @@ def services_backup_leftovers(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Backup leftovers tests", verbose=verbose)
 
 
+def services_backup_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the backup's configuration checks: the hosting panel's token and the restore's upload limit (lot B-9)."""
+    print_section("Services: Backup Configuration Checks")
+    print_info("Testing: backend/app/services/platform/instance_backup/checks.py, config_audit.py (BACKUP_CONFIG_CHECKS)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_checks.py", test_names)
+    return run_command(cmd, "Backup configuration checks tests", verbose=verbose)
+
+
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger and closing the handlers it removes."""
     print_section("Services: Credentials in uvicorn's Request Lines")
@@ -1465,6 +1535,15 @@ def services_ai_export_pure(verbose: bool = False, test_names: list = None) -> b
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
     return run_command(cmd, "AI Export pure contract tests", verbose=verbose)
+
+
+def services_ai_export_period_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the AI Export period bound (R13-SEC7-1): the period a snapshot hands its components (no DB, no network)."""
+    print_section("Services: AI Export Period Bounds (R13-SEC7-1)")
+    print_info("Testing: backend/app/services/ai_export/runtime_service.py (prepare_request, build_snapshot)")
+    print_info("Tests: period end clamped to tomorrow, start to 100 years before it, extreme periods bounded fast")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_ai_export_period_bounds.py", test_names)
+    return run_command(cmd, "AI Export period bound tests", verbose=verbose)
 
 
 def services_provider_errors(verbose: bool = False, test_names: list = None) -> bool:
@@ -1672,6 +1751,17 @@ Note: No backend server required.
     )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
+    add_test(
+        cat,
+        "range-ceiling",
+        services_range_ceiling,
+        name="Date Range Ceiling",
+        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 UTC, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses",
+        # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
+        # with create_all; the FX handler is called directly with convert_bulk replaced by an in-process converter; the
+        # sync step runs with an in-process provider double and stand-ins for the two core caches, all by monkeypatch.
+        isolation="pure",
+    )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
     add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
     add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
@@ -1714,6 +1804,11 @@ Note: No backend server required.
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
+    add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in closed form per date, bounded day counts, cache cap, horizon")
+    # Pure: no lane DB, no server, no network; each test deletes its own process-local _CACHE entry before and after.
+    add_test(cat, "scheduled-investment-min-start", services_scheduled_investment_min_start, name="Scheduled Investment Min Start", desc='MF-SI1: history from "min" = from the earliest value or manual event, as the explicit-start call', isolation="pure")
+    # Pure: the plugin's date_type is swapped in-process for one with-block; each test deletes its own _CACHE entry.
+    add_test(cat, "scheduled-investment-late-alignment", services_scheduled_investment_late_alignment, name="Scheduled Investment Late Alignment", desc="COMPOUND late interest: current value = history close = settlement = closed form, by str", isolation="pure")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(
         cat,
@@ -1739,6 +1834,25 @@ Note: No backend server required.
         desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs; the pages of token_path are the API client's LINK_PAGES (A7b)",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The concurrency test races two connections on that private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "login-throttle",
+        services_login_throttle,
+        name="Login Throttle",
+        desc="F15 (A8a): 10 failed sign-ins per identifier (A–Z folded) and 50 per address (IPv6 by /64) in 15 minutes; a refusal is not counted, a success forgets the identifier only, the longer wait wins; LIBREFOLIO_LOGIN_LIMIT=off records and refuses nothing",
+        # PURE: module limiters replaced by fresh ones on an injected clock; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "accounts-checks",
+        services_accounts_checks,
+        name="Accounts Configuration Checks",
+        desc="LIBREFOLIO_LOGIN_LIMIT (A8a): unset/on/off, any other value a ValueError; accounts.login_limit ok/warning/error in CONFIG_CHECKS; the startup audit stops on an invalid value before logging anything",
+        # PURE: environment through monkeypatch, the audit's logger recorded; three fresh interpreters check the import
+        # order, as email-checks does. No DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -2136,6 +2250,20 @@ Note: No backend server required.
         # log-once keys are the test's own; the cache's set is patched for one test only (monkeypatch).
         # Nothing here counts or reads a row it did not write.
     )
+    add_test(
+        cat,
+        "event-split-ratio",
+        services_event_split_ratio,
+        name="Event Split Ratio",
+        desc="X-R47: a manual SPLIT whose ratio is not valid (0, -2, -0.000001) refused with EVENT_INVALID_SPLIT_RATIO before anything of the request is written -- new (upsert or create), upserted on the key of a stored SPLIT, edited by id, or turned into a SPLIT by an edit -- its details naming the item and every offending event (event_index, date, type), HTTP 400 with each ratio as sent; a provider's SPLIT with an invalid ratio dropped by _upsert_asset_events (a stored SPLIT on its key kept), the other events written, one warning naming it and the asset; valid ratios (2, 0.5, 1.5, 0.000001) accepted manual in every way or from a provider, other event types of 0 and a SPLIT edited into a DIVIDEND of 0 accepted. R13-SEC7: given the caller (current_user_id, which POST /assets/events passes), the P-10 refusal EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST lists only the costless adjustments on a broker the caller holds an access to and counts the others in hidden_transactions_count, the message unchanged, nothing written; X-R47b: without a caller it names none and counts them all (fail closed). The split predicate financial_math.splits.is_split_event_type (rule d of the layer boundaries): the member and text reading SPLIT in any case, blanks around ignored, are a split; anything else, None and non-text included, is not, and it never raises",
+        # WRITE-SCOPED, the category default, as asset-digit-limits: every row is this unit's own -- two assets
+        # created under a unique name, the first assigned to a provider code of the unit's own that no provider has,
+        # two users and two brokers under the same marker with one access each, and only the events of those assets
+        # and the transactions on those brokers, written, read and wiped by asset and broker id; the log capture is the
+        # test's own (structlog's testing capture, proved live by a barrier event); the route runs in process on an app
+        # of the call's own, get_current_user overridden there and never on the shared app. Nothing here counts or
+        # reads a row it did not write.
+    )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, one replay from the first movement")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
@@ -2247,7 +2375,7 @@ Note: No backend server required.
         "profile-defaults",
         services_profile_defaults,
         name="Profile Defaults",
-        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call",
+        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call; H-27: an entry not of the very type of the reader's literal fallback raises ProfileDefaultError (a TypeError naming the variable, the profile, both types and the table), None for the upload limit stops backup_max_upload_mb(), and the sources' profile_default(NAME, literal) calls are checked against every profile's entries; H-37 (E, R13-SEC7): under any profile but selfhosted a variable the profile does not list raises ProfileDefaultError instead of the self-hosted fallback (fail closed), the upload limit's managed entry removed stops its reader while selfhosted keeps 0, every call's variable is listed by every profile but selfhosted (guard and self-test), and an entry equal to its reader's own default is fine",
         # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
         # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
         isolation="pure",
@@ -2433,6 +2561,15 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "backup-checks",
+        services_backup_checks,
+        name="Backup Configuration Checks",
+        desc="Lot B-9 (instance_backup/checks.py, in the platform's CONFIG_CHECKS). check_panel_token, backup.panel_token: unset or blank ok .off (a default start logs nothing new), usable (32 characters included) ok, 31 characters tooShort {minimum: 32}, a space, a tab or a letter outside ASCII notVisibleAscii, a _FILE missing, blank or not UTF-8 unreadable with the reader's error as reason, the variable winning over its broken file. check_upload_limit, backup.upload_limit: 0 or unset self-hosted unlimited, a number or the managed 500 limited {limit_mb}, letters, negative or decimal invalid, H's managed entry of another type or removed profileTable (H-27, H-37), self-hosted reading no entry, the variable winning over a wrong table. Never raises on each documented error of its reader; no token in any result, record or event of the startup audit (canary); BACKUP_CONFIG_CHECKS in order, in CONFIG_CHECKS together before the email checks; either module imported first in a fresh interpreter; the startup audit logs an unusable configuration as one ERROR and goes on, a default start logs nothing about them; the nine messages in the four backup catalogues with their placeholders",
+        # PURE: variables through monkeypatch, secret files under tmp_path. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "logging-access-filter",
         services_logging_access_filter,
         name="Credentials in uvicorn's Request Lines",
@@ -2465,6 +2602,14 @@ Note: No backend server required.
         services_ai_export_pure,
         name="AI Export Pure Contracts",
         desc="Payload/aggregate invariants, observed FX math, shared technical helpers",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "ai-export-period-bounds",
+        services_ai_export_period_bounds,
+        name="AI Export Period Bounds",
+        desc="R13-SEC7-1: the period a snapshot hands its components ends at tomorrow at the latest and spans 100 years at most (mocked session, test-owned registry)",
         isolation="pure",
     )
     add_test(

@@ -49,7 +49,7 @@ from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.series_preparation import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.service import SignalService
-from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.datetime_utils import latest_range_end, utcnow
 
 logger = structlog.get_logger(__name__)
 
@@ -146,6 +146,11 @@ class PriceQueryOperations:
         results: list[FAPricePoint] = []
         last_known: Optional[PriceHistory] = seed_price
         current = start_date
+        if seed_price is None:
+            # Nothing is emitted before the first known price: start the walk there (X-R55).
+            if not price_map:
+                return results
+            current = max(start_date, min(price_map))
         while current <= end_date:
             ph = price_map.get(current)
             if ph:
@@ -234,9 +239,27 @@ class PriceQueryOperations:
 
         This method reads ONLY from DB — it does not delegate to providers.
         Provider fetch is a separate operation (POST /assets/prices/sync).
+
+        Every item's range ends at ``latest_range_end()`` at the latest (X-R55): the series, the signals and the events
+        see the cut range. An item that starts after it gets an empty result, in its place.
         """
         if not requests:
             return []
+
+        latest_end = latest_range_end()
+        clamped: list = []
+        future_positions: set[int] = set()
+        for index, req in enumerate(requests):
+            if req.date_range.start > latest_end:
+                future_positions.add(index)
+            elif (req.date_range.end or req.date_range.start) > latest_end:
+                req = req.model_copy(update={"date_range": DateRangeModel(start=req.date_range.start, end=latest_end)})
+            clamped.append(req)
+        if future_positions:
+            present = [req for index, req in enumerate(clamped) if index not in future_positions]
+            present_results = iter(await PriceQueryOperations.get_prices_bulk(present, session) if present else [])
+            return [FAPriceQueryResult(asset_id=req.asset_id) if index in future_positions else next(present_results) for index, req in enumerate(clamped)]
+        requests = clamped
 
         signal_service = SignalService()
         signal_plans = []

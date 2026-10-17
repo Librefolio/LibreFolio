@@ -6,17 +6,26 @@ counts while ``clock() - hit_time < window_seconds``; a refused hit is not recor
 does not push its own unlock further away.
 
 The counts live in this process: with N worker processes a limit is N times the configured one. The number of keys is
-bounded (``max_keys``): a new key beyond it evicts the least recently used one. The clock is injectable, so a test
-moves time instead of waiting for it. Thread-safe.
+bounded (``max_keys``): a new key beyond it evicts the key with the fewest hits still in the window, the least recently
+used among them (lot E-14). A key sprayed to make room holds one hit, so a spray never frees a key that holds more: not
+a locked one, nor one a hit short of its limit, whose caller would otherwise get its count back for the price of the
+spray. To free a key with n hits, every other key must hold n hits too. Expiry is exact: a heap holds, for each key,
+when its oldest hit leaves the window, so a key whose hits left keeps no protection, read or not. Nothing is searched,
+so a new key costs the same however many keys there are. The clock is injectable, so a test moves time instead of
+waiting for it. Thread-safe.
 """
 
 from __future__ import annotations
 
+import heapq
 import threading
 import time
 from collections import OrderedDict, deque
 from collections.abc import Callable, Hashable, Sequence
 from dataclasses import dataclass
+
+#: How many stale entries the expiry heap may hold beyond one per key before it is rebuilt from the keys.
+_EXPIRY_SLACK = 64
 
 
 @dataclass(frozen=True)
@@ -42,7 +51,14 @@ class SlidingWindowLimiter:
         self._window = float(window_seconds)
         self._max_keys = max_keys
         self._clock = clock
-        self._hits: OrderedDict[Hashable, deque[float]] = OrderedDict()
+        # The hits of each key still in the window, oldest first: a key without one is not here.
+        self._hits: dict[Hashable, deque[float]] = {}
+        # The keys grouped by how many hits they hold, each group least recently used first.
+        self._by_count: dict[int, OrderedDict[Hashable, None]] = {}
+        # (oldest hit, serial, key) per key; an entry whose serial is not the key's in _serials is stale and skipped
+        self._expiry: list[tuple[float, int, Hashable]] = []
+        self._serials: dict[Hashable, int] = {}
+        self._next_serial = 0
         self._lock = threading.Lock()
 
     @property
@@ -54,7 +70,9 @@ class SlidingWindowLimiter:
         return self._window
 
     def __len__(self) -> int:
+        """The keys holding a hit still in the window."""
         with self._lock:
+            self._expire(self._clock())
             return len(self._hits)
 
     def _resolve_limit(self, limit: int | None) -> int:
@@ -64,21 +82,74 @@ class SlidingWindowLimiter:
             raise ValueError("limit must be at least 1")
         return limit
 
-    def _live(self, key: Hashable, now: float) -> deque[float] | None:
-        """The hits of ``key`` still in the window, oldest first, or None. The key becomes the most recently used.
+    def _regroup(self, key: Hashable, old: int, new: int) -> None:
+        """Move ``key`` from the group of ``old`` hits to the end of the group of ``new``; 0 is no group. Lock held."""
+        if old:
+            group = self._by_count[old]
+            del group[key]
+            if not group:
+                del self._by_count[old]
+        if new:
+            self._by_count.setdefault(new, OrderedDict())[key] = None
 
-        Lock held. A key whose hits all expired is forgotten.
-        """
+    def _schedule(self, key: Hashable, oldest: float) -> None:
+        """Note when the oldest hit of ``key`` leaves the window, replacing the key's earlier entry. Lock held."""
+        serial = self._next_serial
+        self._next_serial += 1
+        self._serials[key] = serial
+        heapq.heappush(self._expiry, (oldest, serial, key))
+
+    def _compact(self) -> None:
+        """Rebuild the expiry heap from the keys once it holds more than two entries per key and a slack: the stale
+        entries left by forgotten keys never pile up, however many keys come and go. Lock held."""
+        if len(self._expiry) > 2 * len(self._hits) + _EXPIRY_SLACK:
+            self._expiry = [(hits[0], self._serials[key], key) for key, hits in self._hits.items()]
+            heapq.heapify(self._expiry)
+
+    def _forget(self, key: Hashable) -> None:
+        """Drop ``key`` and its hits; its heap entry becomes stale. Lock held."""
+        self._regroup(key, len(self._hits.pop(key)), 0)
+        del self._serials[key]
+        self._compact()
+
+    def _expire(self, now: float) -> None:
+        """Take out of every key the hits that left the window, regrouping each key by what it still holds. Lock held."""
+        while self._expiry and now - self._expiry[0][0] >= self._window:
+            _, serial, key = heapq.heappop(self._expiry)
+            if self._serials.get(key) != serial:
+                continue
+            hits = self._hits[key]
+            held = len(hits)
+            while hits and now - hits[0] >= self._window:
+                hits.popleft()
+            if hits:
+                self._regroup(key, held, len(hits))
+                self._schedule(key, hits[0])
+            else:
+                self._regroup(key, held, 0)
+                del self._hits[key]
+                del self._serials[key]
+        self._compact()
+
+    def _live(self, key: Hashable, now: float) -> deque[float] | None:
+        """The hits of ``key`` still in the window, oldest first, or None. The key becomes the most recently used of
+        its group. Lock held."""
+        self._expire(now)
         hits = self._hits.get(key)
-        if hits is None:
-            return None
-        while hits and now - hits[0] >= self._window:
-            hits.popleft()
-        if not hits:
-            del self._hits[key]
-            return None
-        self._hits.move_to_end(key)
+        if hits is not None:
+            self._by_count[len(hits)].move_to_end(key)
         return hits
+
+    def _evict_one(self, keep: Hashable) -> bool:
+        """Forget the key with the fewest hits, the least recently used among them, never ``keep``; False when there is
+        no other key. Lock held."""
+        for count in sorted(self._by_count):
+            for key in self._by_count[count]:
+                if key != keep:
+                    # Forgotten and left at once: the iteration does not go on over the changed group
+                    self._forget(key)
+                    return True
+        return False
 
     def _decide(self, hits: Sequence[float], limit: int, now: float) -> RateDecision:
         count = len(hits)
@@ -103,11 +174,15 @@ class SlidingWindowLimiter:
             if not decision.allowed:
                 return decision
             if hits is None:
-                hits = deque()
+                hits = deque((now,))
                 self._hits[key] = hits
-                while len(self._hits) > self._max_keys:
-                    self._hits.popitem(last=False)
-            hits.append(now)
+                self._regroup(key, 0, 1)
+                self._schedule(key, now)
+                while len(self._hits) > self._max_keys and self._evict_one(key):
+                    pass
+            else:
+                self._regroup(key, len(hits), len(hits) + 1)
+                hits.append(now)
             return RateDecision(allowed=True, remaining=effective - len(hits), retry_after=0.0)
 
     def count(self, key: Hashable = None) -> int:
@@ -118,9 +193,13 @@ class SlidingWindowLimiter:
     def reset(self, key: Hashable = None) -> None:
         """Forget the hits of one key."""
         with self._lock:
-            self._hits.pop(key, None)
+            if key in self._hits:
+                self._forget(key)
 
     def clear(self) -> None:
         """Forget every key."""
         with self._lock:
             self._hits.clear()
+            self._by_count.clear()
+            self._expiry.clear()
+            self._serials.clear()
