@@ -620,6 +620,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 30 | La spec del rischio sui ruoli: `risk-analysis.spec.ts` (L3), le righe confrontate con `--lf-surface-card` e `--lf-selected` risolti nella pagina; TC-17 nell'indice | ✅ commit `3c810cd04`, entrato in `9016f47c3`: `front-portfolio risk` 38/38, `tx-picker-pagination` 5/5 |
 | 31 | I 23 «ruolo-mancante»: 4 file (i chip su `bg-lf-neutral/50`, lo stato vuoto degli asset sull'accento, l'anello di `SocialShareModal`), il TSV (m1 697 → 674), la voce di `htmlSink`, lo skill (domanda 7) | ✅ commit `a092cda38`, entrato in `9016f47c3`: Vitest 300/300, `front check` 0 e 0, E2E 20/20 |
 | 32 | `CompactCashCell` sul percorso nuovo (`features/transactions/form/`): i 12 token di `table.css` sui ruoli, il segnaposto e il bordo del disabilitato come la select della cella | ✅ commit `55bced133`, entrato in `b58108665`: Vitest 179/179, `front check` 0 e 0, E2E 44/45; FM6 (TC-18, duplicato di W-B56) verde sulla punta, 10/10 |
+| 33 | Il caso (c) di `theme-roles.spec.ts`: una sonda nel contenuto della pagina invece di `dashboard-cash-balances`, migrata da DV | ⏳ CHECKPOINT READY (11:5x): desktop 13/13, mobile 11/11 + 2 saltati per costruzione, (c) verde sui due |
 
 ## Avanzamento
 
@@ -3151,3 +3152,74 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > carico 37–49, il build del frontend e della documentazione rifatto perché i sorgenti erano cambiati): **10/10**, FM6
 > verde in 8,7 s; porta libera alle 01:37:59. TC-18 chiusa nell'indice come duplicato di W-B56, con la segnalazione
 > originale; un commit solo docs.
+
+### Il caso (c) di `theme-roles.spec.ts` senza componenti legacy — 🔄 17/10/2026
+
+> **Avvio** (coordinatore, 11:16; worktree portato alla punta `2dddaa95d`, pulito): un rosso della mia spec, segnalato
+> dalla 1.3. `e2e/layout/theme-roles.spec.ts:613`, il caso (c), su desktop e mobile, si aspetta che
+> `dashboard-cash-balances` sia legacy per decisione (D-T3), `bg-white` dipinto in scuro dal remap con
+> `--theme-bg-card`; ma DV l'ha migrata su `bg-lf-card` (`daea7b31c`, 16/10, «dashboard on colour roles», mandato
+> D-T28). Su D-T3 poggiano anche il commento alle righe 88–94 e la riga ~165. L'errore di processo è del coordinatore:
+> all'ingresso di DV i gate non lanciano quella spec. Proposta: una sonda `bg-white` nel contenuto della pagina, la metà
+> del menu delle lingue com'è; decido io con test-author. Slot concesso alle 11:2x, solo questa spec, desktop e mobile,
+> carico sotto 50.
+
+> ✅ **1 · L'analisi** (lettura):
+
+> - **Niente sonda `bg-white`:** il gate C4 (`themeTokens.gate.test.ts`, righe ~36–37) toglie una regola di classe come
+>   `html.dark .bg-white` nel cambio che ne rimuove l'ultimo uso, e `bg-white` ha 17 usi in 10 file: il caso cadrebbe di
+>   nuovo nell'ondata di qualcun altro, come oggi.
+> - **La regola strutturale** `html.dark .rounded-xl:where(:not([class*='-lf-']))` (`app.css` ~249–253, `border-color:
+>   var(--theme-border-primary)`, senza `!important`) se ne va solo con B6 (il gate, riga ~755: «when the clean-up (B6)
+>   removes them, this check goes with them»), e B6, togliendo il remap, riscriverà comunque questa metà.
+> - **Il caso nuovo:** nel `<main>` dello shell (`app-shell` → il landmark `main`), in scuro, una sonda `<div
+>   class="rounded-xl">`, aggiunta, letta e tolta nello stesso task, ha il bordo `--theme-border-primary` risolto nella
+>   pagina, non `--lf-border-subtle`; il gemello con `border-lf-subtle` sfugge al remap. Prima il controllo positivo:
+>   `--theme-border-primary` diverso da `--lf-border-subtle` e da `--lf-border-raised`. La metà del menu delle lingue
+>   resta com'è.
+> - **Le altre spec** (grep di `--theme-`, `D-T3`, `remap`, `by decision`, dei colori letterali e delle classi in
+>   palette): nessuna dà per legacy un componente. I letterali rimasti sono il cielo e l'ambra di
+>   `risk-analysis.spec.ts`, categoriali e tenuti («strada 1»); `asset-list.spec.ts:781–784` legge le classi in palette
+>   del badge di ambito, un'eccezione accettata, che cambierà col lotto delle categorie insieme a
+>   `AssetTable.test.ts:195`. Nessuna pagina MkDocs né della devWiki cita la spec.
+> - **Un file condiviso:** la `desc` di `theme-roles` in `scripts/test_runner/_frontend_utility.py` (riga 1014)
+>   descriveva ancora (c) col componente legacy. **Approvato dal coordinatore** (11:2x), insieme alla sonda strutturale
+>   al posto di `bg-white`; cambiata solo quella frase (1 riga, il file compila). H ha un commit non ancora entrato
+>   sullo stesso file, in altri punti (righe ~685 e ~1050): il merge lo verifica il coordinatore all'ingresso.
+
+> ✅ **2 · test-author** (agente `theme-roles-case-c`, 11:2x–11:37): `theme-roles.spec.ts` +64/−18, solo quel file.
+> - **Il caso (c), nuovo titolo** «(c) dark theme: in the page content a legacy container takes the remap and its twin
+>   with a role escapes it, and a migrated menu over the page draws its roles»: il `<main>` dello shell (contato, uno
+>   solo); il controllo positivo (`--theme-border-primary` diverso da `--lf-border-subtle` e da `--lf-border-raised`, in
+>   scuro `#334155`, `#222c28`, `#2e3b36`); la sonda `<div class="rounded-xl">` col bordo del remap, il gemello
+>   `rounded-xl border-lf-subtle` col suo ruolo. Un aiuto nuovo, `probeIn(container, className, property)`: aggiunge,
+>   legge e toglie nello stesso task, lette una volta (un elemento nuovo non ha transizioni). La metà del menu identica
+>   (11 righe, stesso `shasum`), tranne il commento d'apertura («over that legacy page» → «over the page»).
+> - **I commenti riallineati:** l'introduzione, il blocco (c) dell'intestazione (perché una sonda e non un componente,
+>   D-T28; perché una regola strutturale e non `bg-white`, C4 contro B6), «What it cannot see» (il remap letto su una
+>   regola sola; le pagine sono dei casi delle ondate e della galleria). «How it reads» resta vero senza ritocchi.
+> - **Adattamenti, approvati da me:** niente `not.toBe` ridondante sul lato legacy (il controllo positivo lo implica);
+>   nomi di variabile nuovi per non ridichiarare `subtle`. Il commento non dice che C4 ignora le regole strutturali
+>   (`p1Classes` legge anche `rounded-xl`, con ~142 usi): dice che una regola strutturale poggia su una forma, che le
+>   migrazioni tengono, e se ne va con B6.
+> - **Prove:** Prettier pulito; `tsc -p tsconfig.e2e.json`: 0 errori nella spec.
+
+> ✅ **3 · La run** (slot della 1.3, 11:38–11:49, carico 44–56; `files/T-r2/tr/`): prima `dev.py api sync` (rc 0, nessun
+> file tracciato toccato: il client generato, ignorato, era vecchio dopo il fast-forward), poi `tr/go.sh`, cioè
+> `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6155 --data-dir
+> /tmp/librefolio-r2-t --workers 2 front-utility theme-roles`, con il build del frontend e della documentazione rifatto.
+> **rc 0, 24 verdi e 2 saltati:** desktop **13/13**, mobile **11/11** più i 2 saltati per costruzione (il caso dei campi
+> sotto il puntatore, solo desktop, nei due temi); **(c) verde sui due progetti**. Porta libera alle 11:49:16.
+
+> Il caso nuovo morde: il lato legacy passa solo se il remap colora la sonda (senza, il preflight di Tailwind darebbe al
+> bordo `currentColor`, il testo chiaro della pagina), il gemello solo se l'esenzione `:where(:not([class*='-lf-']))`
+> regge, e i tre colori sono diversi per il controllo positivo.
+
+> ⚠️ **Fuori pista — il controllo dei tipi di `e2e/` dopo `api sync`** (11:50, carico 44): da 17 errori a 5. I 12 di
+> `settings/backup.spec.ts` e `fixtures/galleryBackup.ts` erano il client vecchio. Restano i 4 noti e uno nuovo,
+> `e2e/assets/asset-list.spec.ts:1046` (TS2769, il predicato `isStoredPoint` contro `FAPricePoint_Output`), dal commit
+> della 1.3 `c18517e31` (C-66, oggi 11:03): fuori perimetro, segnalato al coordinatore; Playwright non controlla i tipi,
+> quindi la spec gira.
+
+> ✅ **4 · L'handoff** (11:5x): CHECKPOINT READY con la spec, la frase della `desc` e il piano; commit proposto
+> `test(e2e): probe the dark remap in theme-roles (c)`. Poi FROZEN.
