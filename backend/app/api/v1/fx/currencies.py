@@ -38,6 +38,8 @@ from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
+from backend.app.utils.date_range_limits import range_span_floor
+from backend.app.utils.datetime_utils import latest_range_end
 
 router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
 
@@ -422,11 +424,20 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
     bulk_conversions = []
     conversion_metadata: list[dict] = []
 
+    latest_end = latest_range_end()
+    served_ranges: dict[int, DateRangeModel] = {}
     for conv_idx, conversion in enumerate(request):
         to_cur = conversion.to_currency
-        requested_end = conversion.date_range.end or conversion.date_range.start
+        # X-R55: the range ends at latest_range_end() and spans RANGE_SPAN_LIMIT_DAYS at most; a conversion entirely
+        # after that end asks nothing, and its signals run on an empty series.
+        requested_end = min(conversion.date_range.end or conversion.date_range.start, latest_end)
+        visible_start = max(conversion.date_range.start, range_span_floor(requested_end))
+        in_range = visible_start <= requested_end
+        if in_range and (visible_start, requested_end) != (conversion.date_range.start, conversion.date_range.end or conversion.date_range.start):
+            conversion = conversion.model_copy(update={"date_range": DateRangeModel(start=visible_start, end=requested_end)})
+        served_ranges[conv_idx] = conversion.date_range
 
-        current_date = conversion.date_range.start
+        current_date = visible_start
         while current_date <= requested_end:
             bulk_conversions.append(
                 (
@@ -464,14 +475,14 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
                 plan.max_history_days_before_visible,
                 (conversion.date_range.start - date.min).days,
             )
-            signal_start = conversion.date_range.start - timedelta(days=warmup_days)
+            signal_start = max(conversion.date_range.start - timedelta(days=warmup_days), range_span_floor(requested_end))
             signal_plans[conv_idx] = plan
             signal_amount = Currency(
                 code=conversion.from_amount.code,
                 amount=Decimal("1"),
             )
             current_date = signal_start
-            while current_date <= requested_end:
+            while in_range and current_date <= requested_end:
                 bulk_conversions.append(
                     (
                         signal_amount,
@@ -551,7 +562,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
                 request_index=request_index,
                 from_currency=conversion.from_amount.code,
                 to_currency=conversion.to_currency,
-                date_range=conversion.date_range,
+                date_range=served_ranges[request_index],
                 signals=await signal_service.execute(
                     plan,
                     signal_points[request_index],

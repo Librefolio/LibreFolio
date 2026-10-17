@@ -5484,3 +5484,216 @@ backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check
 >     con A8a.
 >   - Le chiavi restano fuori dal worktree: senza il codice sarebbero morte, e un `instance/*.json` sporco potrebbe
 >     fermare l'avanzamento del ramo se B-9 lo tocca.
+4. ✅ **Ingresso** (17/10, 07:07): Z-24 e la regola di H-39 sono entrati in dev `36a487e84`. Z-24 è chiusa nel backlog
+   dal coordinatore (`b58f22357`), e il mio HEAD è avanzato lì, pulito.
+   - Nota di proprietà fino all'ingresso di B-9: B scrive in `config_audit.py`, `test_config_audit.py`, `security.md` e
+     `settings.md` (l. 68-70). Li rivedo al suo checkpoint, e non li tocco fino ad allora.
+   - Il coordinatore ha dato l'ordine: H-34, poi H-19, poi H-3 (solo l'analisi, se serve una decisione del developer).
+
+### Lotto «H-34: `Infinity` e `NaN` dentro il JSON libero di una richiesta» (2026-10-17, mattina) — in corso
+
+> Residuo di H-32, dal backlog (dal test-author e dal docs-writer di H-32). Ora è assegnato ad H dal coordinatore.
+
+**Analisi** (sola lettura, in processo, HEAD `b58f22357`; `files/h34/inventory.py` e `files/h34/probe.py`):
+
+1. **Inventario delle posizioni libere** (`Any`, `object`, `JsonValue`) che una richiesta dell'app vera raggiunge. Ho
+   usato il percorso di H-32 (`_Walk` di `test_request_float_inputs.py`), con un'aggiunta che le annota. Sono **5**,
+   nessun problema di percorso:
+
+   | Posizione | Tipo | Rotte |
+   |-----------|------|-------|
+   | `FAProviderAssignmentItem.provider_params{*}` (X) | `Any` | `POST /assets/provider` |
+   | `FAProviderProbeRequest.provider_params{*}` (X) | `Any` | `POST /assets/provider/probe` |
+   | `RiskAnalyticRequest.parameters{*}` (J) | `JsonValue` | `POST /risk/query` |
+   | `SignalRequest.params{*}` | `JsonValue` | `POST /assets/prices/query`, `/fx/currencies/convert`, `/signals/preview` |
+   | `ToolComputeItem.parameters` | `JsonValue` | `POST /tools/compute` |
+
+2. **La prova** (validazione in modalità Python, come fa FastAPI dopo `json.loads`, che trasforma `NaN`, `Infinity` e
+   `1e400` in float). Il valore usato è `{"top": inf, "deep": [1, {"x": nan}], "neg": -inf}`:
+   - `JsonValue` rispetta l'`allow_inf_nan=False` del modello: `ToolComputeItem` (`ToolTransportModel`, `strict=True,
+     allow_inf_nan=False`) dà 422, e in più `services/tools/wire.py` rifiuta le costanti già nel parsing (il campo era
+     segnato «da verificare»: è protetto);
+   - `SignalRequest.params` ha già `ensure_json_safe`;
+   - `RiskAnalyticRequest.parameters`: **accettato**;
+   - `FAProviderAssignmentItem`: **accettato** con `borsa_italiana`, `justetf`, `mockprov` e `yfinance`, il cui
+     `validate_params` accetta le chiavi in più; `css_scraper` e `scheduled_investment` rifiutano per altri motivi.
+     I valori finiscono nel DB come `Infinity` (il JSON di SQLAlchemy usa `json.dumps`), e una lettura con
+     `response_model` li ridà come `null` (H-32).
+   - `FAProviderProbeRequest`: stessa base, `FAProviderConfigBase`, quindi stesso esito. Nella mia sonda l'operazione
+     era sbagliata, e il 422 veniva da quella.
+3. Nessun codice interno costruisce questi modelli con valori Python non JSON: l'unico `RiskAnalyticRequest(...)`
+   interno (`ai_export/components/drawdown_context.py:348`) non passa `parameters`.
+4. Nessun ramo locale cambia `schemas/provider.py` o `schemas/risk.py` rispetto alla sua base con dev.
+
+**Progetto**:
+- `FAProviderConfigBase` (`schemas/provider.py`, X) e `RiskAnalyticRequest` (`schemas/risk.py`, J) ricevono un
+  `field_validator(mode="before")` che chiama `ensure_json_safe(value, "<campo>")`, come `SignalRequest.params`.
+  Risposta 422; il gestore globale di A7b-2 non ripete il valore. Va in tutti e due il proprietario: OK di scrittura
+  dal coordinatore, poi review di X e J.
+- La guardia nel mio `test_request_float_inputs.py` (lavoro del test-author):
+  - la passata trova esattamente le 5 posizioni libere, e una nuova fallisce («aggiungila con la sua sonda»);
+  - per ognuna, un corpo minimo valido con un valore non finito annidato dà `ValidationError`, mentre lo stesso corpo
+    finito passa (barriera).
+- Documenti: il paragrafo va in `security.md#request-numbers`, che è chiuso fino all'ingresso di B-9. Proposta:
+  arriva con i documenti di H-39.
+
+> **Approvazione** (coordinatore, 07:2x): OK di scrittura su `schemas/provider.py` (rivede X) e su `schemas/risk.py`
+> (rivede J). Il paragrafo di `security.md#request-numbers` arriva con i documenti di H-39, dopo B-9. Questo checkpoint
+> è solo codice e test. Per la CHANGELOG il coordinatore vuole una voce 🔒 breve: un `Infinity` o un `NaN` annidato
+> nei parametri di un provider veniva salvato e riletto come `null`.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina), solo in `test_request_float_inputs.py`:
+   - il paragrafo (g) «H-34: free-form JSON», e la passata ora annota le posizioni libere (`free_form` in
+     `RequestFloats`);
+   - `KNOWN_FREE_FORM` con le 5 posizioni e le loro sonde. Il provider scelto è `mockprov`, il cui `validate_params`
+     non fa nulla per costruzione, con una barriera che sia registrato;
+   - 6 posizionamenti: in cima `inf`, `-inf` e `nan`, `inf` in una lista, `nan` in un dizionario annidato, `-inf` in
+     un dizionario dentro una lista;
+   - 62 casi nuovi: la passata trova esattamente le 5 posizioni; ognuna rifiuta (30); lo stesso corpo finito passa
+     (30, la barriera); un autotest della passata su un'app sua.
+   - Comando: `files/runs/h34-red.sh`. Esito: **18 failed, 77 passed**, cioè le due posizioni dei provider e quella
+     del rischio, ognuna per 6 posizionamenti. Ruff e black puliti.
+   > **⚠️ Fuori pista** (dal test-author, poi verificato): `TXMixedBatch` (W) ha i corpi in `List[dict]`, e la
+   > passata non apre un contenitore nudo. Le righe vengono validate dopo, una per una, in `TXCreateItem`,
+   > `TXUpdateItem`, `TXSplitBatchItem` e `TXPromoteBatchItem` (`files/h34/tx_probe.py`):
+   > - nessuna foglia float, e gli importi sono `SafeDecimal`, che rifiuta anche `"Infinity"` scritto come testo;
+   > - resta una posizione libera, `TXPromoteBatchItem.resolved_fields{*}`, applicata così com'è:
+   >   - `description` va nella colonna `Text` senza controllo di tipo né di lunghezza, e un numero renderebbe ogni
+   >     lettura un 500;
+   >   - `cost_basis_override` e `date` hanno errori che probabilmente escono come 500.
+   >
+   > È più largo dei numeri non finiti ed è di W: registrato come **H-41**, da passare a W. Non lo tocco.
+2. ✅ **Cura** (`files/h34/apply.py --apply`, identica alla copia di prova): un `field_validator(mode="before")`
+   chiama `ensure_json_safe`, in `FAProviderConfigBase.provider_params` e in `RiskAnalyticRequest.parameters`.
+3. ✅ **Controlli leggeri** (`files/runs/h34-green.sh`):
+
+   | Comando | Esito |
+   |---------|-------|
+   | `services request-float-inputs` | 95 passed |
+   | `schemas assets` | 70 passed |
+   | `schemas risk` | 88 passed |
+   | `services risk-asset-set` | 55 passed |
+   | `services asset-source-refresh` | 18 passed |
+   | `services plugin-settings-runtime` | 120 passed |
+   | `utils provider-core-cache` | 46 passed |
+   | ruff, black (3 file) | puliti |
+   | `git diff --check` | pulito |
+
+   - **OpenAPI invariato.** Ho confrontato, chiave per chiave, il documento dell'app su HEAD (copiata da
+     `git archive` nella cartella di sessione) con quello attuale. L'unica differenza è `/info/version` (il
+     `git describe` del worktree).
+   - Non eseguito: le rotte vere (`api assets…`, `api risk…`), passi pesanti che spettano al cancello.
+   - Documenti: il paragrafo di `security.md#request-numbers` arriva con H-39 (deciso dal coordinatore).
+   - Backlog: la nota della cura in H-34; nuove **H-40** (IPv6 su Docker Engine, la frase di E) e **H-41**
+     (`resolved_fields`, W).
+4. ✅ **Ingresso** (17/10, 07:43): H-34 è entrato in dev `75bfac237`, con la riga 🔒 della CHANGELOG `27f948ccd`. Il mio
+   HEAD è avanzato a `27f948ccd`, che contiene già B-9 e A8a. X e J rivedono a posteriori; H-41 va a W, dentro SEC7-3.
+
+### Review di B-9 sulle righe nei miei file (2026-10-17, 07:45) — ✅ OK, due note
+
+- Ho letto, solo in lettura, `git diff 45f9c5406 997dc7ecf` di `config_audit.py`, `test_config_audit.py`,
+  `security.md` e `settings.md`, più il modulo di B `instance_backup/checks.py`.
+- **OK**:
+  - in `config_audit.py`, `*BACKUP_CONFIG_CHECKS` sta dopo `check_log_level` e prima di A, con la docstring delle chiavi
+    A/B/E. Nessun ciclo: `checks.py` importa `ConfigCheck` solo quando un controllo gira;
+  - il test della tupla intera separa `backup` da `platform`, nell'ordine platform → B → A → E;
+  - il blocco «Workstream B» di `_configure`: il `_FILE` è coperto dal ciclo che c'era già;
+  - in `security.md`, le due righe `backup.*` fra `platform.log_level` e `accounts.login_limit`, e la frase
+    sull'ordine.
+- **Note**:
+  1. la docstring di `checks.py` dice «right before E's email checks», ma in mezzo ci sono quelli di A (è di B);
+  2. l'import con i sostituti di B-9 in `test_config_audit.py` ora è impalcatura vecchia: la tolgo in H-35.
+
+### Lotto «H-39: un profilo managed senza protezione dai frame si vede» (decisione di E, 2026-10-17, mattina) — in corso
+
+> Dalla review di H-37 fatta da E: per `PROFILE_DEFAULTS` nessuna chiusura a runtime, ma un controllo che si veda.
+> Approvato dal coordinatore (06:52):
+> - nel profilo managed, `LIBREFOLIO_FRAME_PROTECTION` spenta è un **warning** e `LIBREFOLIO_CSP_REPORT_ONLY` spenta è
+>   un **info**;
+> - nel self-hosted sono sempre ok;
+> - la regola di review (in `backend.instructions.md`, già entrata) e la riga accanto a C-99, del coordinatore.
+>
+> Rimandato fino a B-9 (07:43, «go»): i controlli, i test e le chiavi i18n, e un solo giro di documenti con il paragrafo
+> di H-34 e la frase di H-40.
+
+**Progetto** (la cura in prova `files/h39/apply.py` si applica pulita sulla base nuova `27f948ccd`):
+- `config_audit.py`:
+  - `check_frame_protection()` (`platform.frame_protection`) e `check_csp_report_only()` (`platform.csp_report_only`),
+    in `CONFIG_CHECKS` dopo `check_client_address` e prima di `check_log_level`;
+  - leggono `get_settings()`; l'aspettativa di managed sta nel codice (`MANAGED_PROFILE`), non nella tabella, perché
+    una voce persa cambierebbe l'aspettativa insieme al valore;
+  - stati: acceso → ok `…on`; spento e self-hosted → ok `…offSelfHosted`; spento e managed → warning
+    `frameProtection.offManaged`, oppure info `cspReportOnly.offManaged`, con il suo summary.
+- i18n: 6 chiavi `instance.checks.frameProtection.*` e `.cspReportOnly.*`, in 4 lingue. I messaggi di
+  `instance.checks` passano da 18 a 24.
+- Test (test-author, `test_config_audit.py`): ogni stato, i summary, l'avvio in managed con la protezione spenta (un
+  warning e un info nel log), `CHECK_IDS` e l'ordine. In `_configure`, tolte le due variabili.
+- Documenti (docs-writer, solo inglese):
+  - `security.md`: le righe della tabella d'ordine, «18» che diventa «24», il paragrafo di H-34 in `#request-numbers`;
+  - `admin/configuration.en.md#startup-checks`: due righe;
+  - `admin/hosting_providers.en.md#managed-profile`: una frase;
+  - `settings.md`: una frase, per `PROFILE_DEFAULTS`;
+  - `admin/connection_checks.en.md#limits`: la frase di H-40 (IPv6 attraverso `docker-proxy`), da verificare su un host
+    Linux come H-38.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina), in `test_config_audit.py`:
+   - il paragrafo (g) e la riga d'ordine di (c);
+   - `CHECK_IDS` con le due voci dopo `check_client_address`;
+   - in `_configure`, le due variabili tolte;
+   - 6 test e 53 casi: gli stati, con 5 modi di scrivere il profilo e 6 valori; una voce tolta da
+     `PROFILE_DEFAULTS["managed"]` deve risultare ancora `offManaged`; «non cambia nulla», compreso `PROFILE_DEFAULTS`;
+     l'ordine dopo il controllo degli indirizzi; all'avvio, in managed, il warning e poi l'info, e la partenza va
+     avanti; in self-hosted, niente nel log;
+   - un test di H-36 adattato: prima voleva `check_log_level` subito dopo il controllo degli indirizzi.
+   - Comando: `files/runs/h39-red.sh`. Esito: **rosso alla raccolta**, «ImportError: cannot import name
+     'check_csp_report_only'». Ruff e black puliti sul file di test.
+2. ✅ **Cura** (`files/h39/apply.py --apply`, identica alle copie di prova): i due controlli e `MANAGED_PROFILE` in
+   `config_audit.py`, più 6 chiavi in `instance/{en,it,fr,es}.json` dopo `clientAddress`.
+3. ✅ **Documenti** (docs-writer, solo inglese, due giri):
+   - `security.md`:
+     - la tabella d'ordine e «24 messages»;
+     - un paragrafo con gli stati `ok` e il perché dell'aspettativa scritta nel controllo;
+     - la riga «Tests:» con l'ordine platform → B → A → E (ci mancava B);
+     - una frase in `#managed-headers`;
+     - **il paragrafo di H-34** in `#request-numbers`, con i contenitori nudi non coperti, e la clausola IPv6 in «Why
+       only a local peer»;
+   - `settings.md`: la frase su `PROFILE_DEFAULTS` e la regola di review;
+   - `configuration.en.md`, «Startup Checks»: due righe;
+   - `hosting_providers.en.md`: una frase;
+   - `connection_checks.en.md`, «Limits»: la frase di **H-40** (IPv4 sì, IPv6 attraverso `docker-proxy` dal gateway),
+     scritta come cautela, più una clausola IPv6 nel punto «To fix it» di «The Visitor's Address».
+   - In più, il test-author di H-34 ha aggiornato le docstring vecchie di `test_request_float_inputs.py`: (d), (e),
+     (g), `FixedValueBody`, `PlainValueBody` e «How to fix a red». Sono solo testo.
+   > **⚠️ Fuori pista**: la build rigorosa falliva su un link. `hosting_providers.en.md` non ha traduzioni, quindi il
+   > sito IT usa la pagina inglese, e il suo link `configuration.md#startup-checks` cercava l'ancora in
+   > `configuration.it.md`, che oggi ha solo `#session-cookie-secure`. Ora il link punta alla pagina,
+   > «Startup Checks» in [Configuration].
+4. ✅ **Controlli leggeri** (`files/runs/h39-green.sh`, `h39-final.sh`, `h39-docs2.sh`):
+
+   | Comando | Esito |
+   |---------|-------|
+   | `services config-audit` | 155 passed |
+   | `services email-checks` | 87 passed |
+   | `services backup-checks` | 57 passed |
+   | `services accounts-checks` | 76 passed |
+   | `services security-headers` | 15 passed |
+   | `services profile-defaults` | 112 passed |
+   | `services config-package` | 862 passed |
+   | `services request-float-inputs` | 95 passed |
+   | `i18n check` | strict, 4995 chiavi |
+   | `utils gate-i18n-catalog` | 176 passed |
+   | `utils gate-i18n-usage` | 195 passed |
+   | `i18n audit` | le 6 chiavi nuove non compaiono: sono usate |
+   | ruff, black (3 file) | puliti |
+   | `mkdocs build` (rigoroso) | 0 avvisi, dopo il link |
+   | `check-links` | 97 |
+   | `git diff --check` | pulito |
+
+   - `git merge-file` dei 14 file contro dev `f4dab3db7`: 0 conflitti.
+   - Non eseguito: `api security-checks` di A (passo pesante, va nel cancello). L'elenco della scheda Sicurezza avrà due
+     controlli in più.
+   - Backlog:
+     - H-39 chiusa, con il resto: un controllo letto a richiesta dopo una modifica di `.env` senza riavvio può non
+       coincidere con gli header;
+     - H-40 scritta e da verificare su Linux;
+     - H-5, il debito di traduzione di `configuration` e `connection_checks`.

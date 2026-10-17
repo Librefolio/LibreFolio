@@ -37,6 +37,7 @@
     "missingFxRatesAfterSync": "FX rates are still missing for {pairs} between {date_from} and {date_to} ({dates_count} date(s)): the provider returned none for those dates. Enter them by hand on the pair’s page.",
     "missingCostBasis": "{count} asset(s) have an acquisition without a purchase cost — counted at zero until you set it",
     "valuedAtCost": "{count} asset(s) valued at cost — no price available for over 2 weeks (as of {as_of_date})",
-    "transferShareMismatch": "{count} transfer(s) between brokers where your share differs — the difference counts as a gain or loss"
+    "transferShareMismatch": "{count} transfer(s) between brokers where your share differs — the difference counts as a gain or loss",
+    "invalidSplitRatio": "{count} asset(s) have a split with an invalid ratio — ignored until you fix it in the asset's events"
   }
 }

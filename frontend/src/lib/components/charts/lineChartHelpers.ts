@@ -584,8 +584,13 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
  *
  * Must be called:
  *  - After every `chart.setOption()`
- *  - On `dataZoom` events (zoom changes pixel aspect ratio)
+ *  - Once a `dataZoom` gesture settles (zoom changes pixel aspect ratio), from the chart's zoom
+ *    debounce — never on each tick: `getOption()` deep-clones the whole option, and the write-back
+ *    merges every series again (Y-8)
  *  - On `resize` events
+ *
+ * Reads the option afresh on every call and keeps nothing between calls, so what it writes back
+ * carries the colours of the option on screen, after a theme or colour rebuild too (Y-8).
  */
 export function updateArrowRotations(chart: echarts.ECharts): void {
     if (!chart || chart.isDisposed?.()) return;

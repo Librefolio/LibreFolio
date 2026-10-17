@@ -117,7 +117,7 @@ async def get_lots_analysis(
 
 High-level flow:
 
-1. Load accessible brokers, asset transactions, split ratios, broker shorting flags, `price_history`, asset income and FEE / TAX transactions.
+1. Load accessible brokers, asset transactions, split ratios, broker shorting flags, `price_history`, asset income and FEE / TAX transactions. A split whose stored ratio fails `is_valid_split_ratio()` stays in the ratio map, so its row is still split-linked and the WAC lines still treat it as a split, but the FIFO engine skips it: no lot is rescaled, `lot_events` has no `SPLIT` row for it, and the analysis reports no issue (lot MF-D4).
 2. Build one qbq-aware resolver series with `build_asset_price_series()`, from the `price_history` rows and the loaded transactions — before the engine, which reads it for reference prices (see [Unified Price Resolver](#unified-price-resolver)).
 3. When a requested analysis reads income, fees or taxes, build the engine's economic inputs first — income and FEE / TAX events and the BUY / SELL amounts that weight the FEE / TAX split, each converted at its own date (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`). Then build `reference_price_lookup()` over the series (see [Reference Price](#reference-price)) and run `run_fifo_lot_engine(...)`.
 4. Resolve selected lots, and the days valued at cost: `at_cost_until = last_day_without_observation(price_series, history_dates)` (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)).

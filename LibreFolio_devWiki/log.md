@@ -3705,6 +3705,18 @@ Graph: not updated; graphify is not available in this worktree.
 execution to `signals/execution.py` and the output checks to `signals/validation.py`; the annotation helpers join
 `signals/annotations.py`. No behaviour change. Source-file rows point at the module that now holds the behaviour.
 Updated: [[domains/signals]], [[decisions/signal-backend-plugin-architecture]], [[decisions/drawdown-full-history-warmup]].
+## [2026-10-17] update | Domain: EMAIL — E-14: the limiter evicts the key with the fewest hits
+Workstream E's lot E-14 (release 1.3), from E's after-the-fact review of decision N70, approved by the coordinator for
+the cloud. `SlidingWindowLimiter` now evicts the key with the fewest hits still in the window, the least recently used
+among them, with exact expiry (a heap of each key's oldest hit) and no search; `eviction_scan` is gone. The lesson
+filed on the page: any least-recently-used family, N70's «spare the full keys» included, lets an attacker who stops one
+failure short of a lock reset the count with a spray of `max_keys` fresh keys (about 1,100 requests per guess,
+measured); only «fewest hits go» makes every other key carry as many hits (about 10,000 per guess), and only with
+exact expiry, or keys at a stale high count would shield the spray. The first design E proposed (an index of the keys
+not full) protected locked keys only: corrected before any code. Sources: plan 08 «E-14», `rate_window.py`.
+Updated: [[domains/email]].
+Graph: not updated; graphify is not available in this worktree.
+
 ## [2026-10-17] update | Domain: EMAIL — E-13: the per-address limits skip an untrusted local proxy
 Workstream E's lot E-13 (release 1.3), approved by the coordinator after H-36 and A8a+N70. The three per-address
 limits of E (forgot password, «send the link again», the registration emails) take workstream H's
@@ -3788,4 +3800,11 @@ between brokers owned at different shares made P&L with no explanation: now an I
 unbounded date range (`end: 9999-12-30`) froze the instance through the portfolio, lots, risk and AI Export routes:
 every range now ends by tomorrow and starts at the first transaction, with a test seam for the far-future suites.
 Filed: [[problems/share-mismatch-warning-never-left-the-classifier]], [[problems/unbounded-date-range-froze-the-instance]].
+## [2026-10-17] file | Y-8: the arrow markers are re-aimed once a zoom settles, not on every tick
+`updateArrowRotations()` read `getOption()`, a deep clone of the whole option, and wrote every series back on each
+`dataZoom` tick of `LineChart`, `CandlestickChart` and `PriceChartFull`. The arrows are now re-aimed in the debounce
+that re-spaces the labels, reading the option afresh each time: a cached option would paint pre-rebuild colours back
+after a theme or Designer Lab rebuild, which a light → dark → zoom unit test pins. A full render of `LineChart` now
+restores the saved zoom before it re-aims, as `CandlestickChart` did: the restore's event only schedules the settle (Y-8b).
+Updated: [[concepts/echarts-chart-gotchas]].
 Graph: not updated; graphify is not available in this worktree.
