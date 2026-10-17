@@ -42,12 +42,22 @@
  *     `loadChartData(true)` — and the poll lasts until the reload lands. Otherwise today's point is merged into
  *     `chartData`, through its setter.
  *   - **`resetPrice()`** clears the price and the conversion flag, and nothing else.
+ *   - **The change over the range** (X-R59, decision N80): the summary's Δ from the first day of the range on screen to
+ *     the live price, computed by the backend. The page may hand `rangeStart`, that first day; without one no change is
+ *     asked. The effect reads it beside the rest, so a new start restarts the poller, and every run of the effect,
+ *     stopped or running, puts `rangeDelta` back to null — unknown — at once. A poll sends `rangeStartFor(rangeStart,
+ *     today)` as the `range_start` query of its quote request, with the display currency as `target_currency` only when
+ *     the price is converted, and the asset ids alone when there is no day to send. An answer that writes the price
+ *     writes `rangeDelta` with it, after the conversion: the answer's `range_change` as the summary shows it, or no change
+ *     when no start was sent or the conversion failed (a native price beside a change in the display currency). Nothing
+ *     else writes it; `resetPrice()` clears it too.
  *
  * `startActivePolling` is mocked: each call is recorded with its options, and a case runs a poll itself by calling
  * `run()` — no cadence, no activity tracking, no timer. `$lib/api` and `invalidateAssetPriceStore` are mocked;
  * `livePriceService` and `assetDetailChartPoints` are the real ones (pure). The page is a reactive box the case owns,
- * handed to the instance as the page hands it: an object of getters, with a setter for `chartData`. The clock is
- * faked only around the decay of the flash.
+ * handed to the instance as the page hands it: an object of getters, with a setter for `chartData`. `rangeStart` is a
+ * getter only for a case that gives it, even as `undefined`: every other case hands the instance the page as it was
+ * before X-R59. The clock is faked only around the decay of the flash.
  */
 import {beforeAll, beforeEach, describe, expect, it, onTestFinished, vi} from 'vitest';
 import type {Mock} from 'vitest';
@@ -55,6 +65,7 @@ import {flushSync} from 'svelte';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import type {ActivePolling, ActivePollingOptions, ActivePollingState, PollOutcome} from '$lib/features/live-updates/activePolling';
+import type {RangeDelta} from '$lib/utils/rangeChange';
 
 const {api, startActivePolling, invalidateAssetPriceStore} = vi.hoisted(() => ({
     api: {
@@ -72,6 +83,7 @@ vi.mock('$lib/stores/assetPriceStoreRegistry', () => ({invalidateAssetPriceStore
 
 import {assertEffectsRun, effectRoot, reactiveBox} from '$test/runes.svelte';
 import {ASSET_DETAIL_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
+import {todayIso} from '$lib/utils/dateOnly';
 import {AssetDetailLive, LIVE_PRICE_FLASH_DECAY_MS, type AssetDetailLiveInput} from './assetDetailLive.svelte';
 
 const pricesEndpoint = api.get_current_prices_bulk_api_v1_assets_prices_current_post;
@@ -107,6 +119,8 @@ interface PageState {
     primaryMode: 'price' | 'calendar-return';
     calendarReturnView: {state: string};
     chartData: ChartPoint[];
+    /** The first day of the range on screen (X-R59): a getter only when the case gives it, see `mount()`. */
+    rangeStart?: string;
 }
 
 /** One amount of the conversion request. */
@@ -195,6 +209,9 @@ function mount(overrides: Partial<PageState> = {}) {
         },
         loadChartData: (force) => loadChartData(force),
     };
+    // The range start (X-R59) is a getter only when the case gives it, even as `undefined`: every other case hands the
+    // instance the page as it was before, and its effect reads what it read before.
+    if ('rangeStart' in overrides) Object.defineProperty(input, 'rangeStart', {enumerable: true, get: () => read('rangeStart')});
     const root = effectRoot(() => new AssetDetailLive(input));
     /** The reads made while the instance was built, before any effect could run. */
     const readsWhileBuilding = reads.length;
@@ -1164,5 +1181,343 @@ describe('resetPrice()', () => {
         await poll();
         expect(live.currentPrice).toBe(93);
         expect(live.conversionFailed).toBe(false);
+    });
+});
+
+// --- The change over the range (X-R59) ------------------------------------------------------------------------------
+
+/** A range start well in the past: on or before today, whatever day the suite runs. */
+const PAST_START = '2025-10-16';
+/** Another start in the past: the range on screen moved. */
+const OTHER_PAST_START = '2024-10-16';
+/** A range start after today, whatever day the suite runs. */
+const FUTURE_START = '9999-12-31';
+
+/** No change, known: what the summary shows where there is none. Not null, which is a change not known yet. */
+const NO_CHANGE: RangeDelta = {abs: null, pct: null};
+
+/** The `range_change` of a quote of 99 USD as the backend answers it, from 88 USD on the range's first day; as the summary shows it. */
+const CHANGE_TO_99 = {reference_date: PAST_START, change_abs: '11', change_ratio: '0.125'};
+const DELTA_TO_99: RangeDelta = {abs: 11, pct: 12.5};
+/** A quote of 110 USD, from 88 USD. */
+const CHANGE_TO_110 = {reference_date: PAST_START, change_abs: '22', change_ratio: '0.25'};
+const DELTA_TO_110: RangeDelta = {abs: 22, pct: 25};
+/** A quote shown converted, 92 EUR: its change in EUR, as the backend computes it with `target_currency`, from 80 EUR. */
+const CHANGE_TO_92_EUR = {reference_date: PAST_START, change_abs: '12', change_ratio: '0.15'};
+const DELTA_TO_92_EUR: RangeDelta = {abs: 12, pct: 15};
+/** A quote shown converted, 93 EUR, from 80 EUR. */
+const CHANGE_TO_93_EUR = {reference_date: PAST_START, change_abs: '13', change_ratio: '0.1625'};
+const DELTA_TO_93_EUR: RangeDelta = {abs: 13, pct: 16.25};
+/** The `range_change` of a quote whose range the backend could not value: no price on its first day, or no rate. */
+const NO_RANGE_VALUE = {reference_date: null, change_abs: null, change_ratio: null};
+
+/** The price the summary shows, and its change over the range. */
+function priceAndChange(live: AssetDetailLive) {
+    return {price: live.currentPrice, change: live.rangeDelta};
+}
+
+/** A change of the range start, from what the page handed to what it hands now. */
+const RANGE_START_CHANGES: Array<{change: string; from: string | undefined; to: string | undefined}> = [
+    {change: 'another day', from: PAST_START, to: OTHER_PAST_START},
+    {change: 'a day where there was none', from: undefined, to: PAST_START},
+    {change: 'none where there was a day', from: PAST_START, to: undefined},
+];
+
+/** What re-runs the effect without stopping the poll: what it polls with, and the range start. */
+const RERUNS_WITH_A_RANGE: PageChange[] = [...POLLED_WITH, {change: 'the range start', apply: (page) => (page.rangeStart = OTHER_PAST_START)}];
+
+/** How the quote is asked for with a range start in the past, by what the page shows: the queries of the request. */
+const ASKED_WITH_A_START: Array<{when: string; overrides: Partial<PageState>; queries: Record<string, string>}> = [
+    {when: "the page shows the asset's currency", overrides: {}, queries: {range_start: PAST_START}},
+    {when: 'the page converts the price into another currency', overrides: {displayCurrency: 'EUR'}, queries: {range_start: PAST_START, target_currency: 'EUR'}},
+    {when: 'the FX pair is missing, so the price is shown native', overrides: {displayCurrency: 'EUR', fxConversionMissing: true}, queries: {range_start: PAST_START}},
+    {when: 'the page has no display currency yet', overrides: {displayCurrency: ''}, queries: {range_start: PAST_START}},
+    {when: 'the asset has no currency', overrides: {assetInfo: {id: ASSET_ID, currency: ''}}, queries: {range_start: PAST_START}},
+];
+
+/** When a poll has no range start to send. */
+const NO_START_TO_SEND: Array<{when: string; overrides: Partial<PageState>}> = [
+    {when: 'the page hands none', overrides: {rangeStart: undefined}},
+    {when: 'the page has no range start at all', overrides: {}},
+    {when: 'it is the "min" sentinel, not yet a day', overrides: {rangeStart: 'min'}},
+    {when: 'it is a day the calendar does not have', overrides: {rangeStart: '2026-02-30'}},
+    {when: 'it falls after today', overrides: {rangeStart: FUTURE_START}},
+    {when: 'it falls after today, on a page that converts the price', overrides: {rangeStart: FUTURE_START, displayCurrency: 'EUR'}},
+];
+
+/** Answers with no price to show, though their item carries a change over the range. */
+const UNUSABLE_WITH_A_CHANGE: Array<{answer: string; response: unknown}> = [
+    {answer: 'an empty body', response: undefined},
+    {answer: 'no item', response: prices()},
+    {answer: 'a null value', response: prices(quote(null, {range_change: CHANGE_TO_110}))},
+    {answer: 'a value that is not a number', response: prices(quote('n/a', {range_change: CHANGE_TO_110}))},
+    {answer: 'an infinite value', response: prices(quote('Infinity', {range_change: CHANGE_TO_110}))},
+];
+
+/** What can move under a quote request in flight, and the change shown once it has: the last one, or none known. */
+const MOVES_UNDER_A_RANGE: Array<{move: string; apply: (mounted: Mounted) => void; shown: RangeDelta | null}> = [
+    {move: 'the route moved to another asset', apply: ({page}) => (page.pageAssetId = OTHER_ASSET_ID), shown: DELTA_TO_99},
+    {move: 'the display currency changed', apply: ({page}) => (page.displayCurrency = 'EUR'), shown: null},
+    {move: 'the range start changed', apply: ({page}) => (page.rangeStart = OTHER_PAST_START), shown: null},
+    {move: 'the head left today', apply: ({page}) => (page.isHeadToday = false), shown: null},
+    {move: 'the provider was unassigned', apply: ({page}) => (page.providerAssignment = null), shown: null},
+    {move: 'the page was destroyed', apply: ({stop}) => stop(), shown: DELTA_TO_99},
+];
+
+// X-R59: the summary's Δ runs from the first day of the range on screen to the live price, and the backend computes it
+// with the quote (`POST /assets/prices/current?range_start=…`): `rangeDelta` replaces the page's own arithmetic on the
+// chart's first close. Red today: the poll sends no queries, and the instance has no `rangeDelta`.
+describe('the change over the range (X-R59)', () => {
+    describe('the effect', () => {
+        it('knows no change before a poll lands, with a range start or without', () => {
+            expect(mount().live.rangeDelta, 'no range start').toBeNull();
+            expect(mount({rangeStart: PAST_START}).live.rangeDelta, 'a range start').toBeNull();
+        });
+
+        it('reads the range start in its effect, beside the rest, and nothing while it is built', () => {
+            const {reads, readsWhileBuilding} = mount({rangeStart: PAST_START});
+
+            expect(readsWhileBuilding).toBe(0);
+            expect(new Set(reads)).toEqual(new Set(['assetInfo', 'displayCurrency', 'fxConversionMissing', 'isHeadToday', 'providerAssignment', 'rangeStart']));
+        });
+
+        it.each(RANGE_START_CHANGES)('restarts on a change of the range start, $change: the old poller stopped, a new one started', ({from, to}) => {
+            const {page} = mount({rangeStart: from});
+            const first = lastPoller();
+
+            page.rangeStart = to;
+            flushSync();
+
+            expect(first.stop).toHaveBeenCalledTimes(1);
+            expect(startActivePolling).toHaveBeenCalledTimes(2);
+            expect(lastPoller()).not.toBe(first);
+            expect(lastPoller().stop).not.toHaveBeenCalled();
+        });
+
+        it.each(RERUNS_WITH_A_RANGE)('drops the change at once when a change of $change re-runs the effect: none known until the next poll lands', async ({apply}) => {
+            const {live, page} = mount({rangeStart: PAST_START});
+            quoteNext('99', {range_change: CHANGE_TO_99});
+            await poll();
+            expect(live.rangeDelta, 'precondition: the change of the first quote').toEqual(DELTA_TO_99);
+
+            apply(page);
+            flushSync();
+
+            // A re-run, not a stop: the poll goes on with a new poller.
+            expect(startActivePolling).toHaveBeenCalledTimes(2);
+            expect(live.rangeDelta).toBeNull();
+        });
+
+        it.each(LEAVES)('drops the change with the price when $leaves', async ({leave}) => {
+            const {live, page} = mount({rangeStart: PAST_START});
+            quoteNext('99', {range_change: CHANGE_TO_99});
+            await poll();
+            expect(live.rangeDelta, 'precondition: the change of the first quote').toEqual(DELTA_TO_99);
+
+            leave(page);
+            flushSync();
+
+            expect(priceAndChange(live)).toEqual({price: null, change: null});
+        });
+    });
+
+    describe('the request of a poll', () => {
+        it.each(ASKED_WITH_A_START)('asks with the range start, the display currency only for a converted price, and shows the change answered: $when', async ({overrides, queries}) => {
+            const {live} = mount({rangeStart: PAST_START, ...overrides});
+            quoteNext('99', {range_change: CHANGE_TO_99});
+            convertEndpoint.mockResolvedValue(conversion('92')); // asked only when the price is converted
+            await poll();
+
+            expect(pricesEndpoint.mock.calls, 'one request: the asset ids, then its queries').toStrictEqual([[[ASSET_ID], {queries}]]);
+            expect(live.rangeDelta).toEqual(DELTA_TO_99);
+        });
+
+        it('raises a range start before 1900 to 1900-01-01, the first day the backend values', async () => {
+            mount({rangeStart: '1850-06-01'});
+            quoteNext('99', {range_change: CHANGE_TO_99});
+            await poll();
+
+            expect(pricesEndpoint.mock.calls).toStrictEqual([[[ASSET_ID], {queries: {range_start: '1900-01-01'}}]]);
+        });
+
+        it('sends a range start on today: a range of one day', async () => {
+            // Read before the poll, which reads today after it: never a later day than the poll's, either side of midnight.
+            const today = todayIso();
+            mount({rangeStart: today});
+            quoteNext('99', {range_change: CHANGE_TO_99});
+            await poll();
+
+            expect(pricesEndpoint.mock.calls).toStrictEqual([[[ASSET_ID], {queries: {range_start: today}}]]);
+        });
+
+        it('asks with the range start its effect read, and reads none of its own while it polls', async () => {
+            const {reads} = mount({rangeStart: PAST_START});
+            const readsBeforePoll = reads.length;
+            quoteNext('99', {range_change: CHANGE_TO_99});
+            await poll();
+
+            expect(pricesEndpoint.mock.calls).toStrictEqual([[[ASSET_ID], {queries: {range_start: PAST_START}}]]);
+            expect(reads.slice(readsBeforePoll), 'the poll read the range start of the moment: it asks with its effect’s, as it converts into its effect’s currency').not.toContain('rangeStart');
+        });
+
+        it.each(NO_START_TO_SEND)('asks with the asset ids alone, one argument, and shows no change once a usable answer lands, when $when', async ({overrides}) => {
+            const {live} = mount(overrides);
+            quoteNext('99', {range_change: null});
+            convertEndpoint.mockResolvedValue(conversion('92')); // asked only when the price is converted
+            await poll();
+
+            expect(pricesEndpoint.mock.calls, 'exactly the asset ids: no queries, not even empty ones').toStrictEqual([[[ASSET_ID]]]);
+            expect(live.currentPrice, 'control: the answer was usable').not.toBeNull();
+            expect(live.rangeDelta, 'no change, known: not null, which is a change not known yet').toEqual(NO_CHANGE);
+        });
+    });
+
+    describe('what a poll writes', () => {
+        it("writes the quote's change with its price, poll after poll", async () => {
+            const {live} = mount({rangeStart: PAST_START});
+
+            quoteNext('99', {range_change: CHANGE_TO_99});
+            await poll();
+            expect(priceAndChange(live)).toEqual({price: 99, change: DELTA_TO_99});
+
+            quoteNext('110', {range_change: CHANGE_TO_110});
+            await poll();
+            expect(priceAndChange(live)).toEqual({price: 110, change: DELTA_TO_110});
+        });
+
+        it('writes the change the backend computed in the display currency, beside the converted price', async () => {
+            const {live} = mount({rangeStart: PAST_START, displayCurrency: 'EUR'});
+            quoteNext('99', {range_change: CHANGE_TO_92_EUR});
+            convertEndpoint.mockResolvedValueOnce(conversion('92'));
+            await poll();
+
+            expect(live.conversionFailed).toBe(false);
+            expect(priceAndChange(live)).toEqual({price: 92, change: DELTA_TO_92_EUR});
+        });
+
+        it('writes it in the same step as the price, once the conversion has landed', async () => {
+            const {live} = mount({rangeStart: PAST_START, displayCurrency: 'EUR'});
+            quoteNext('99', {range_change: CHANGE_TO_92_EUR});
+            convertEndpoint.mockResolvedValueOnce(conversion('92'));
+            await poll();
+            expect(priceAndChange(live), 'precondition: the first quote, converted').toEqual({price: 92, change: DELTA_TO_92_EUR});
+
+            const conversionInFlight = holdNextConversion();
+            quoteNext('101', {range_change: CHANGE_TO_93_EUR});
+            const landing = poll();
+            await conversionInFlight.sent;
+            expect(priceAndChange(live), 'while the new price converts, the summary keeps the last one and its change').toEqual({price: 92, change: DELTA_TO_92_EUR});
+
+            conversionInFlight.answer.resolve(conversion('93'));
+            await landing;
+            expect(priceAndChange(live)).toEqual({price: 93, change: DELTA_TO_93_EUR});
+        });
+
+        it.each(NO_AMOUNT)('shows no change when the conversion answers $answer: the price is shown native, the change would be in the display currency', async ({response}) => {
+            const {live} = mount({rangeStart: PAST_START, displayCurrency: 'EUR'});
+            quoteNext('99', {range_change: CHANGE_TO_92_EUR});
+            convertEndpoint.mockResolvedValueOnce(response);
+            await poll();
+
+            expect(live.conversionFailed).toBe(true);
+            expect(priceAndChange(live)).toEqual({price: 99, change: NO_CHANGE});
+        });
+
+        it('shows no change when the conversion throws, and the change again once a conversion answers', async () => {
+            const {live} = mount({rangeStart: PAST_START, displayCurrency: 'EUR'});
+            quoteNext('99', {range_change: CHANGE_TO_92_EUR});
+            convertEndpoint.mockRejectedValueOnce(new Error('rate unavailable'));
+            await poll();
+            expect(live.conversionFailed).toBe(true);
+            expect(priceAndChange(live)).toEqual({price: 99, change: NO_CHANGE});
+
+            quoteNext('101', {range_change: CHANGE_TO_93_EUR});
+            convertEndpoint.mockResolvedValueOnce(conversion('93'));
+            await poll();
+            expect(live.conversionFailed).toBe(false);
+            expect(priceAndChange(live)).toEqual({price: 93, change: DELTA_TO_93_EUR});
+        });
+
+        it('shows no change when the backend could not value the range: no price on its first day, or no rate', async () => {
+            const {live} = mount({rangeStart: PAST_START, displayCurrency: 'EUR'});
+            quoteNext('99', {range_change: NO_RANGE_VALUE});
+            convertEndpoint.mockResolvedValueOnce(conversion('92'));
+            await poll();
+
+            expect(priceAndChange(live)).toEqual({price: 92, change: NO_CHANGE});
+        });
+
+        it('keeps the change it shows when the request throws', async () => {
+            const {live} = mount({rangeStart: PAST_START});
+            quoteNext('99', {range_change: CHANGE_TO_99});
+            await poll();
+            expect(live.rangeDelta, 'precondition: the change of the first quote').toEqual(DELTA_TO_99);
+
+            pricesEndpoint.mockRejectedValueOnce(new Error('Network Error'));
+            await expect(poll()).resolves.toEqual({ok: false});
+
+            expect(priceAndChange(live)).toEqual({price: 99, change: DELTA_TO_99});
+        });
+
+        it.each(UNUSABLE_WITH_A_CHANGE)('keeps the change it shows for $answer: an answer that writes no price writes no change', async ({response}) => {
+            const {live} = mount({rangeStart: PAST_START});
+            quoteNext('99', {range_change: CHANGE_TO_99});
+            await poll();
+            expect(live.rangeDelta, 'precondition: the change of the first quote').toEqual(DELTA_TO_99);
+
+            pricesEndpoint.mockResolvedValueOnce(response);
+            await poll();
+
+            expect(priceAndChange(live)).toEqual({price: 99, change: DELTA_TO_99});
+        });
+
+        it.each(MOVES_UNDER_A_RANGE)('drops the change of an answer that lands after $move', async ({apply, shown}) => {
+            const mounted = mount({rangeStart: PAST_START});
+            quoteNext('99', {range_change: CHANGE_TO_99});
+            await poll();
+            expect(mounted.live.rangeDelta, 'precondition: the change of the first quote').toEqual(DELTA_TO_99);
+            const answer = holdNextQuote();
+            const landing = poll();
+
+            apply(mounted);
+            flushSync();
+            answer.resolve(prices(quote('110', {range_change: CHANGE_TO_110})));
+            await landing;
+
+            expect(mounted.live.rangeDelta).toEqual(shown);
+        });
+
+        it.each(CONVERSION_SETTLES)('drops the change with a conversion that lands after the effect re-ran: $settles writes none', async ({settle}) => {
+            const {live, page} = mount({rangeStart: PAST_START, displayCurrency: 'EUR'});
+            quoteNext('99', {range_change: CHANGE_TO_92_EUR});
+            convertEndpoint.mockResolvedValueOnce(conversion('92'));
+            await poll();
+            expect(live.rangeDelta, 'precondition: the change of the first quote').toEqual(DELTA_TO_92_EUR);
+
+            const conversionInFlight = holdNextConversion();
+            quoteNext('101', {range_change: CHANGE_TO_93_EUR});
+            const landing = poll();
+            await conversionInFlight.sent;
+            page.displayCurrency = 'CHF';
+            flushSync();
+            settle(conversionInFlight.answer);
+            await landing;
+
+            expect(live.rangeDelta).toBeNull();
+        });
+    });
+
+    it('resetPrice() clears the change with the price; the next poll shows one again', async () => {
+        const {live} = mount({rangeStart: PAST_START});
+        quoteNext('99', {range_change: CHANGE_TO_99});
+        await poll();
+        expect(live.rangeDelta, 'precondition: the change of the first quote').toEqual(DELTA_TO_99);
+
+        live.resetPrice();
+        expect(priceAndChange(live)).toEqual({price: null, change: null});
+
+        quoteNext('110', {range_change: CHANGE_TO_110});
+        await poll();
+        expect(priceAndChange(live)).toEqual({price: 110, change: DELTA_TO_110});
     });
 });

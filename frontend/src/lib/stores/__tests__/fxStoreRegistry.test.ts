@@ -43,11 +43,11 @@ vi.mock('$lib/api/bulkBatches', async (importOriginal) => {
 
 import {zodiosApi} from '$lib/api';
 import {notifyPortfolioMutation, notifyPricesCaughtUp, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+import * as registry from '../fxStoreRegistry';
 import {
     apiResultToFxDataPoint,
     apiResultsToCanonicalFxDataPoints,
     createPairSlug,
-    displayFxDelta,
     displayFxRate,
     ensureFxRangeLoaded,
     ensureFxRangeLoadedBulk,
@@ -512,52 +512,17 @@ describe('displayFxRate', () => {
     });
 });
 
-// The delta describes the pair as displayed: 1/rate when inverted.
-// Bug B1: the FX pair page negated the direct percentage for an inverted pair. The change of
-// 1/rate is first/last − 1, not −(last/first − 1): raw 0.8 → 1.0 is displayed as 1.25 → 1.0,
-// which is −20 %, while the negation reports −25 %.
-describe('displayFxDelta', () => {
-    it('measures a direct pair on the rate as quoted', () => {
-        const delta = displayFxDelta(1.25, 1.0, false);
-        expect(delta).not.toBeNull();
-        expect(delta!.abs).toBeCloseTo(-0.25, 10);
-        expect(delta!.pct).toBeCloseTo(-20, 10);
-    });
-
-    it('measures the absolute change of an inverted pair on the displayed rate', () => {
-        // raw 0.8 -> 1.0 is displayed as 1.25 -> 1.0
-        const delta = displayFxDelta(0.8, 1.0, true);
-        expect(delta).not.toBeNull();
-        expect(delta!.abs).toBeCloseTo(-0.25, 10);
-    });
-
-    it('measures the percentage change of an inverted pair on the displayed rate, not as the negated direct change', () => {
-        // displayed 1.25 -> 1.0 is -20 %; negating the direct +25 % gives -25 %
-        const delta = displayFxDelta(0.8, 1.0, true);
-        expect(delta).not.toBeNull();
-        expect(delta!.pct).toBeCloseTo(-20, 10);
-    });
-
-    it.each([
-        [1.1, 1.21],
-        [2, 1],
-    ])('gives an inverted pair a percentage of (first / last - 1) * 100 for raw %s -> %s', (first, last) => {
-        const delta = displayFxDelta(first, last, true);
-        expect(delta).not.toBeNull();
-        expect(delta!.pct).toBeCloseTo((first / last - 1) * 100, 10);
-    });
-
-    it.each<[string, number | null, number | null]>([
-        ['a missing first rate', null, 1.1],
-        ['a missing last rate', 1.1, null],
-        ['two missing rates', null, null],
-        ['a zero first rate', 0, 1.1],
-        ['a zero last rate', 1.1, 0],
-        ['a negative first rate', -1.1, 1.1],
-        ['a negative last rate', 1.1, -1.1],
-    ])('has no delta with %s, in either orientation', (_label, first, last) => {
-        expect(displayFxDelta(first, last, false)).toBeNull();
-        expect(displayFxDelta(first, last, true)).toBeNull();
+// One home for financial math: the backend (X-R59, decision N80). The FX table’s Δ Abs and Δ %, the FX card’s Δ and the
+// pair page’s summary read the change over the range from `POST /fx/currencies/period-changes` — `range_change`, both
+// orientations — through `utils/rangeChange.ts`: the registry no longer derives it from the first and last rates it cached.
+// Bug B1’s rule (an inverted pair changes by first ÷ last − 1, never by the negated direct change) is the backend’s
+// `inverse_change_ratio` now, read and never derived (`utils/__tests__/rangeChange.test.ts`). The displayed rate stays here.
+//
+// Red today: displayFxDelta is exported.
+describe('the Δ over the range is the backend’s, not the registry’s (X-R59)', () => {
+    it('exports no displayFxDelta', () => {
+        expect('displayFxDelta' in registry, 'the change over the range is the backend’s range_change: fxStoreRegistry still offers its own computation of it').toBe(false);
+        expect(typeof registry.displayFxRate, 'control: the module is read, and the displayed rate stays').toBe('function');
     });
 });
 
