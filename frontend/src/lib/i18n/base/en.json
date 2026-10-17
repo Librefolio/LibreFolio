@@ -120,7 +120,11 @@
     "createForex": "Create forex…",
     "unknownError": "unknown error",
     "decimalPlacesExceeded": "{max, plural, =0 {Whole numbers only} one {At most # decimal place} other {At most # decimal places}}",
-    "decimalExponentOutOfRange": "Write the number out in full: scientific notation is read only on its own, with an exponent up to ±{max}"
+    "decimalExponentOutOfRange": "Write the number out in full: scientific notation is read only on its own, with an exponent up to ±{max}",
+    "bulkRefusal": {
+      "tooManyItems": "Some values could not be loaded: the server takes at most {max, number} items in one request, and this one held {count, number}.",
+      "tooManyDays": "Some values could not be loaded: the server builds at most {max, number} daily values in one request, and this one needed more. Choose a shorter period."
+    }
   },
   "csvImport": {
     "title": "Import CSV Data",

@@ -8,12 +8,15 @@
  * - Database populated (./dev.py test db populate --force)
  */
 
+import {IntlMessageFormat} from 'intl-messageformat';
 import {expect, test, type Locator, type Page, type Request} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso} from '../fixtures/dates';
+import {t as catalogueText} from '../fixtures/i18n-data';
 import {maximisePageSize} from '../fixtures/paging';
+import {pageLanguage} from '../fixtures/sync-overwrite';
 import {goToFxPage} from './fx-helpers';
 
 test.describe('FX List Page', () => {
@@ -818,6 +821,191 @@ test.describe('FX list — which period changes the list keeps, and when it asks
             await waitForSettled(fxPage, 20_000);
 
             expect(asked, 'the retry asked the period changes again, though they do not depend on the signals').toBe(askedBefore);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+});
+
+// ============================================================================
+// A bulk rate request refused as too large says so (workstream X, lot X-R58)
+// ============================================================================
+
+/** The catalogue's sentence for a bulk request refused for its days (`bulk_too_many_days`, Z-25). */
+const BULK_TOO_MANY_DAYS_KEY = 'common.bulkRefusal.tooManyDays';
+
+/**
+ * The numbers the stubbed refusal carries: the backend's budget of item-days, and a count past it. Seven digits are
+ * grouped in the four languages whatever the CLDR data of the runtime, so the browser and Node write the budget alike.
+ */
+const REFUSED_DAYS = {max_item_days: 1_000_000, item_days: 1_234_567} as const;
+
+/** The 422 of a convert past the budget, worded as the backend words it for the FX convert: its count is «at least». */
+const REFUSED_DAYS_DETAIL = {code: 'bulk_too_many_days', message: `A bulk request may build at most ${REFUSED_DAYS.max_item_days} per-day points, and this one would build at least ${REFUSED_DAYS.item_days}`, ...REFUSED_DAYS};
+
+/** One conversion of a convert request (`FXConversionRequest`), as far as these tests read it. */
+type FxConversionQuery = {from_amount?: {code?: string}; to?: string};
+
+/** The pair a conversion asks, whichever way its card shows it: `BASE-QUOTE`, sorted as the slugs are. */
+function conversionSlug(item: FxConversionQuery): string {
+    return [item.from_amount?.code ?? '', item.to ?? ''].sort().join('-');
+}
+
+/**
+ * `key` as the `lang` catalogue words it, formatted with `values` by `intl-messageformat`, the formatter svelte-i18n
+ * compiles messages with — the reading of `overwriteWarningSentence` (`fixtures/sync-overwrite.ts`) for any message.
+ * A catalogue without the message fails here, by name: a key that resolved to itself would let a toast printing the
+ * key pass.
+ */
+function catalogueSentence(lang: string, key: string, values: Record<string, number>): string {
+    const message = catalogueText(lang, key);
+    expect(message, `the "${lang}" catalogue has a message for ${key}`).not.toBe(key);
+    return String(new IntlMessageFormat(message, lang).format(values));
+}
+
+/**
+ * A bulk rate request the backend refuses as too large reaches the user (X-R58). Since Z-25 `POST /fx/currencies/convert`
+ * refuses a request past its caps with a coded 422 (`backend/app/utils/date_range_limits.py`); the list sends its rates
+ * through `sendBulkBatches` (Z-27), which splits a batch refused for its days and fails on the first part it cannot
+ * split — a single pair, or the last level. The list then says so in an error toast: the catalogue's
+ * `common.bulkRefusal.tooManyDays`, with the budget the refusal carries and no count (the convert's may be a bound) —
+ * whether the whole list was loading (`fetchAllPairSeries`) or one pair (`fetchPairSeries`, the row's own refresh).
+ * Any other failure stays as it was: logged, the cards falling back to what is cached, and no toast.
+ *
+ * Observed through the network: the refusals and the plain failure are the stubs'. The list is loaded over about two
+ * months ending on a known day in the past, as in X-R53; a fresh page holds no rate, so every pair is asked, the seeded
+ * EUR/USD among them — read, never written. The sentence is the catalogue's, formatted for the page's language: never a
+ * translation written here.
+ *
+ * Red today: `loadFxRatesAndSignalsBulk` throws the refusal on, and both catches of the page only log it. The guard is
+ * red with them: its first step is the refused load's toast, the proof that the page's error toasts are observed at all.
+ */
+test.describe('FX list — a bulk rate request refused as too large says so (X-R58)', () => {
+    // A ceiling, never a delay: each test loads the list's waves — pairs, rates refused or not, period changes — and the
+    // last two ask for rates once more.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a load refused for its days, down to a part it cannot split, shows the catalogue’s sentence in an error toast', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const asked: FxConversionQuery[] = [];
+        const sizes: number[] = [];
+        const failures: string[] = [];
+        try {
+            // Every conversion request is refused for its days: the list splits its batch again and again, and gives up on
+            // the first part it cannot split.
+            await page.route(FX_CONVERT, async (route) => {
+                try {
+                    const body = (route.request().postDataJSON() as FxConversionQuery[] | null) ?? [];
+                    asked.push(...body);
+                    sizes.push(body.length);
+                    await route.fulfill({status: 422, json: {detail: REFUSED_DAYS_DETAIL}});
+                } catch (error) {
+                    // Nobody awaits a route callback, so what it throws would land on whatever runs next: recorded, and the
+                    // request let through, for the test to fail on its own assertions.
+                    failures.push(String(error));
+                    await route.continue().catch(() => undefined);
+                }
+            });
+
+            // The list over the range; `goToFxPage` returns once `data-busy` says the load is over, refusals included.
+            await goToFxPage(page, range);
+            expect(failures, 'the refusals reached the page').toEqual([]);
+            expect(asked.map(conversionSlug), `premise: the list asked the rates of ${SLUG} — check its ECB route in populate_mock_data.py`).toContain(SLUG);
+
+            // One load, given up once: one error toast, and its words are the catalogue's.
+            const errorToasts = page.getByTestId('toast-error');
+            await expect(errorToasts, `the refused load (requests of ${sizes.join(' → ')} pairs) must say so in an error toast — the list only logged it`).toHaveCount(1, {timeout: 10_000});
+            const sentence = catalogueSentence(await pageLanguage(page), BULK_TOO_MANY_DAYS_KEY, {max: REFUSED_DAYS.max_item_days});
+            await expect(errorToasts, 'the catalogue’s sentence, with the budget of the refusal').toHaveText(sentence);
+            await expect(errorToasts).toBeVisible();
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a pair’s own refresh refused for its days shows the same sentence in an error toast', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const failures: string[] = [];
+        let refused = 0;
+        try {
+            // The list loads as it is, the pair's row on screen.
+            await openPairRow(page, range);
+            const errorToasts = page.getByTestId('toast-error');
+            await expect(errorToasts, 'premise: the load raised no error toast').toHaveCount(0);
+
+            // From here on, a request for the pair alone — its own refresh — is refused for its days; any other goes through.
+            await page.route(FX_CONVERT, async (route) => {
+                try {
+                    const body = (route.request().postDataJSON() as FxConversionQuery[] | null) ?? [];
+                    if (body.length === 0 || !body.every((item) => conversionSlug(item) === SLUG)) {
+                        await route.continue();
+                        return;
+                    }
+                    await route.fulfill({status: 422, json: {detail: REFUSED_DAYS_DETAIL}});
+                    refused += 1;
+                } catch (error) {
+                    failures.push(String(error));
+                    await route.continue().catch(() => undefined);
+                }
+            });
+
+            await rowAction(page, SLUG, 'refresh');
+            await expect.poll(() => refused, {message: 'the pair’s refresh never asked its own rates', timeout: 10_000}).toBeGreaterThan(0);
+            await expect(errorToasts, 'the refused refresh must say so in an error toast — the page only logged it').toHaveCount(1, {timeout: 10_000});
+            const sentence = catalogueSentence(await pageLanguage(page), BULK_TOO_MANY_DAYS_KEY, {max: REFUSED_DAYS.max_item_days});
+            await expect(errorToasts, 'the catalogue’s sentence, with the budget of the refusal').toHaveText(sentence);
+            expect(failures, 'the refusal reached the page').toEqual([]);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a plain 500 on the same request shows no error toast: any other failure stays as it was', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const failures: string[] = [];
+        let answer: 'refusal' | 'server error' = 'refusal';
+        let serverErrors = 0;
+        try {
+            // The load is refused for its days; once `answer` turns, every conversion request fails with a plain 500.
+            await page.route(FX_CONVERT, async (route) => {
+                try {
+                    if (answer === 'refusal') {
+                        await route.fulfill({status: 422, json: {detail: REFUSED_DAYS_DETAIL}});
+                        return;
+                    }
+                    await route.fulfill({status: 500, json: {detail: 'synthetic: the conversions are unavailable (X-R58)'}});
+                    serverErrors += 1;
+                } catch (error) {
+                    failures.push(String(error));
+                    await route.continue().catch(() => undefined);
+                }
+            });
+            await goToFxPage(page, range);
+            const fxPage = page.getByTestId('fx-page');
+            const errorToasts = page.getByTestId('toast-error');
+
+            // Presence first: the refused load's toast proves that the page's error toasts are observed here, so the absence
+            // at the end is the page's doing, not a slot nobody reads. Dismissed, it leaves none.
+            await expect(errorToasts, 'the refused load must say so in an error toast — the list only logged it').toHaveCount(1, {timeout: 10_000});
+            await errorToasts.getByTestId('toast-dismiss').click();
+            await expect(errorToasts, 'the toast is dismissed: no error toast is left').toHaveCount(0);
+
+            // The same request now fails with a plain 500: the page's refresh asks every pair again.
+            answer = 'server error';
+            const refreshAll = page.getByTestId('fx-refresh-all-button');
+            await expect(refreshAll).toBeEnabled();
+            await refreshAll.click();
+            await expect.poll(() => serverErrors, {message: 'the refresh never asked the rates again', timeout: 10_000}).toBeGreaterThan(0);
+            // The refresh is over: whatever the page does with the failure, it has done — an error toast lasts 15 s.
+            await expect(refreshAll, 'the refresh is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            await waitForSettled(fxPage, 20_000);
+            expect(failures, 'the refusal and the failure reached the page').toEqual([]);
+
+            await expect(errorToasts, 'a plain 500 is no refusal: the page logs it and shows no toast, as before X-R58').toHaveCount(0);
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
         }

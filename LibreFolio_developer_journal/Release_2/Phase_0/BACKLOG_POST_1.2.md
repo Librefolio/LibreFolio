@@ -4923,8 +4923,11 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     - (a) una migrazione di dati che toglie, o mette da parte, le righe con `rate < 1E-10` o `rate >= 1E+14`: richiede
       il via del developer, perché tocca dati dell'utente;
     - (b) lo stesso filtro, `usable_fx_rate_bounds()`, in ogni lettore: molti file di J e dell'AI Export.
-- **X-R46 · Editor dei cambi: i rifiuti del server non si vedono** — basso-medio, **subito dopo X-R38**; X, 17/10
+- **X-R46 · Editor dei cambi (e degli asset): i rifiuti del server non si vedono** — basso-medio, **subito dopo X-R38**; X, 17/10
   (trovato dal docs-writer di X-R38).
+  - Allargata il 17/10 (revisione di X-R65 e nota di Z): anche `AssetDataEditorSection.svelte`, e il nuovo 422
+    `date_out_of_range` (`items`, `count`, `params.min`/`max`): oggi entrambi gli editor mostrano solo «Request failed with
+    status code 422» (`e.message`), senza la data né i limiti. Un refuso come 2062 per 2026 basta a farlo comparire.
   - `FxDataEditorSection.svelte`, `handleSave()`, quando tutti i tassi sono rifiutati (400): il toast e il banner mostrano
     «Request failed with status code 400» di Axios, non il `detail` del backend (coppia, data, limiti). L'editor resta
     aperto con le modifiche.
@@ -5033,7 +5036,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     (`EVENT_IN_USE`): la CTA `navigate_asset` del nuovo avviso `INVALID_SPLIT_RATIO` porta a un vicolo cieco.
   - Direzione: un refresh del provider riscrive o scarta quell'evento (con la regola dei collegamenti), oppure una via
     di recupero.
-- **X-R58 · Le liste di asset e cambi tacciono quando la richiesta bulk supera i limiti di Z-25** — piccolo, **subito
+- ✅ **X-R58 · Le liste di asset e cambi tacciono quando la richiesta bulk supera i limiti di Z-25** (chiusa il 17/10, in attesa del commit del coordinatore: un toast tradotto da `bulkRefusalMessage`; il caricatore FX continua a rilanciare, per scelta) — piccolo, **subito
   dopo X-R53, quando Z-25 entra**; X, 17/10 (coordinatore, N77).
   - Z-25 aggiunge due 422 con codice a `POST /assets/prices/query` e `POST /fx/currencies/convert`:
     `bulk_too_many_items` (più di 1000 voci) e `bulk_too_many_days` (più di 5 milioni di giorni-voce, contati dopo la
@@ -5059,7 +5062,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     sostituire i prezzi salvati del periodo, modifiche manuali comprese. L'avviso c'è solo nella finestra (Sync all, il
     Sync della selezione, la pagina dell'asset).
   - Da decidere: aprire la finestra anche lì, o un avviso leggero, o lasciare com'è.
-- **X-R62 · «Nessun provider» fallisce quando un evento del provider è collegato a una transazione** — basso (fallisce
+- ✅ **X-R62 · «Nessun provider» fallisce quando un evento del provider è collegato a una transazione** (chiusa il 17/10 da H: `9fcbbe523` + `1e660d104`, entrata in dev `907fb3b97`; revisione di X dopo l'ingresso: OK, il residuo dei 500 in X-R74) — basso (fallisce
   chiuso, nessun costo corrotto), **dopo la 1.3** salvo che costi poco; X, 17/10 (trovato leggendo X-R49, non
   riprodotto).
   - `bulk_remove_providers` cancella l'assegnazione; `AssetEvent.provider_assignment_id` è `ON DELETE CASCADE`,
@@ -5074,12 +5077,63 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     sonde al minuto per utente. «Test Configuration» mostra il `message` inglese del backend (`extractErrorMessage`),
     «Ask Provider» un generico «si è verificato un errore».
   - Cura: una frase tradotta con l'ora locale di fine attesa, come per il `RATE_LIMITED` dei provider.
-- **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** — decisione notturna N83; X, 17/10
+- **X-R49b · I controlli degli SPLIT senza costo leggono prima del BEGIN differito** — basso, dopo la 1.3 salvo che costi
+  poco; X, 17/10 (E, revisione di X-R49, via coordinatore). Vale anche per X-R48.
+  - Il controllo legge prima della prima scrittura, fuori dal lock di scrittura di SQLite: una rettifica senza costo
+    collegata da un altro utente nei millisecondi fra controllo e cancellazione sfugge.
+  - Cura, se la si vuole: rifare il controllo dopo la prima scrittura, sotto il lock, come fa A-42.
+- **X-R67 · Liste `IN (...)` di id di evento oltre i 32.766 parametri di SQLite** — basso, dopo la 1.3; X, 17/10 (revisione
+  di X-R62).
+  - `costless_incoming_split_adjustments` (X-R48, X-R49) e `event_links.events_with_linked_transactions` (X-R62) mettono
+    tutti gli id in un solo `IN`. Un asset con più eventi generati (un piano con cedole giornaliere su circa 90 anni)
+    farebbe un 500.
+  - Cura: una sottoquery sull'assegnazione o sull'asset al posto della lista.
+- **X-R68 · Due funzioni senza chiamanti in produzione** — minimo; X, 17/10 (Z, dopo Z-27).
+  - `ensureFxRangeLoadedBulk` (`stores/fxStoreRegistry.ts`) e `ensureAssetPriceRangeLoaded`
+    (`stores/assetPriceStoreRegistry.ts`): candidate al codice morto, con i loro test.
+- **X-R69 · Togliere il provider rifiuta, cambiare il piano scollega** — basso, decisione di prodotto; X, 17/10 (H, nota di
+  X-R62).
+  - «Nessun provider» rifiuta finché un evento generato ha transazioni collegate (X-R62); nuovi parametri del piano o un
+    altro provider scollegano quegli eventi e rifiutano solo per gli SPLIT con rettifiche senza costo (X-R49).
+  - Da decidere se allineare: per esempio, scollegare anche alla rimozione con la sola regola degli SPLIT.
+- **X-R70 · Il refresh conta le date rifiutate dal controllo OHLC** — basso; X, 17/10 (Z, nota di X-R65).
+  - `_persist_refresh_item` toglie dal conteggio le date che nessuna colonna tiene e quelle fuori intervallo, ma non
+    quelle che `bulk_upsert_prices` rifiuta per OHLC impossibile (chiusura fuori da [minimo, massimo]).
+- **X-R71 · Il caricamento manuale dei prezzi non è tutto o niente sulla valuta** — basso-medio; X, 17/10 (Z, nota di
+  X-R65).
+  - Una valuta diversa da quella dell'asset è rifiutata asset per asset, dopo che gli asset precedenti sono stati
+    scritti. Il controllo va prima della prima scrittura, come X-R65 fa ora per le date.
+- **X-R72 · Le date degli eventi degli asset senza pavimento al 1900** — basso, prima da verificare; X, 17/10 (Z, nota di
+  X-R65).
+  - I periodi di un piano Scheduled Investment sono già limitati a 1900-2200 (`SCHEDULE_MIN_DATE`). La data aperta è
+    probabilmente quella degli `asset_events` del piano, e degli eventi degli asset in generale (manuali o dei
+    provider), che X-R65 non limita.
+- **X-R73 · `_range_start_in_bounds` ripete `stored_date_bounds()`** — minimo; X, 17/10 (Z, nota di X-R65).
+  - `api/v1/assets/prices.py` (di MF, R13-SEC9-4) confronta a mano [`EARLIEST_RANGE_START`, `latest_range_end()`]:
+    deve chiamare l'aiuto unico di `utils/date_range_limits.py`.
+- **X-R74 · Le rotte di asset e cambi rispondono 500 con il testo dell'errore** — basso, sicurezza (fuga di testo SQL),
+  **nella 1.3, primo lotto dopo X-R58**; X, 17/10 (revisione di X-R62, punto 1 di J; decisione del coordinatore).
+  - X-R62 ha tolto l'`IntegrityError` dal 500 (ora `PROVIDER_REMOVAL_CONFLICT`, senza SQL). Il `except Exception` di
+    `remove_providers_bulk`, e il ripiego per gli altri `AssetSourceError`, rispondono ancora `detail=str(e)`: un altro
+    errore del database (per esempio `OperationalError`) mostra il suo SQL. Lo stesso in tutto
+    `api/v1/assets/providers.py`: 7 punti, e la sonda non registra nemmeno l'errore.
+  - La stessa fuga in altri 5 file di X: `assets/crud.py` 7, `assets/events.py` 5, `assets/market_data.py` 2 (uno è
+    il wipe di X-R48), `fx/providers.py` 4 (`f"Failed to …: {e!s}"`), `fx/currencies.py` 1. **Tutti e 6 i file in un
+    solo lotto** (sì del coordinatore, 17/10 15:50), con un rosso parametrizzato su ogni rotta, la sonda che registra il
+    suo errore e una riga 🔒 nel CHANGELOG.
+  - Cura: il messaggio generico di R13-SEC9-3 (come `api/v1/assets/prices.py`), l'errore nel log con la sua eccezione;
+    i 400/404/409 scritti apposta restano. Prima un rosso parametrizzato su ogni rotta, come
+    `test_sec9_3_a_failure_answers_500_without_echoing_it`.
+  - Registrata prima, per errore, come «H-51» nella sezione di H: l'ID era già di H (`trusted_schema`).
+- **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** — decisione notturna N83; **fatta da Z** (`30e19b9d9`, rivista da X il 17/10: OK); X, 17/10
   (il coordinatore; numerata X-R65 per lo scontro con X-R64).
   - Le letture si fermano al 1900-01-01 (`EARLIEST_RANGE_START`), le scritture manuali di prezzi e di tassi di cambio
     no: un prezzo prima del 1900 si può salvare, e «Tutto» risolve allora l'inizio dell'intervallo prima del 1900
     (visto nella revisione di X-R59: un `range_start` così fa fallire tutta la richiesta di period-changes).
   - Direzione (N83): lo stesso pavimento sulle scritture manuali, come per le transazioni (N74).
+  - Dettagli del coordinatore: un prezzo piantato al 0001-01-01 faceva percorrere a un replay del rischio o a una query
+    circa 740.000 giorni per asset (J, SEC8-1b); intervallo [`EARLIEST_RANGE_START`, `latest_range_end()`], 422 con
+    codice (`date_out_of_range`); i punti dei provider fuori intervallo scartati e non contati.
 - ✅ **X-R44c · Solo asset e cambi possono dichiarare `test_only`** (chiusa il 17/10, in attesa del commit del coordinatore: due guardie in `services test-only-providers`, provate con una mutazione) — piccolo, **subito** (il coordinatore, 17/10); X, 17/10.
   - Il filtro di X-R44 sta nella base dei registri (`_withheld()`), ma segnali e rischio (`list_definitions`), BRIM
     (rilevamento ed elenco) e tools (la sua istantanea) leggono il proprio archivio senza chiederlo: un `test_only` lì
