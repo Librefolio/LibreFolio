@@ -6377,6 +6377,23 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `metadata.params` ripetono la richiesta. Visibile solo fuori dai limiti. Da scegliere una convenzione sola, o da dire
   nella pagina. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione
   «SEC8-1b».
+- **J-54 · Nell'AI Export `null` vuol dire anche «nessuno», e T-B7 lo nomina come «non disponibile»** — minimo,
+  chiarezza; J, 17/10 (rossi di T-B7, letto nel codice).
+  - Il backend scrive ogni `None` come `null` (`model_dump(mode="json")`, senza `exclude_none`), anche dove vuol dire
+    «nessuno» invece che «ignoto»:
+    - il `closing_date` di un lotto aperto;
+    - il `reason_code` di una riga senza problemi;
+    - il `component` di un'uscita scalare;
+    - `minimum`/`maximum` di un'uscita senza limiti (`IndicatorOutputColumn`).
+  - Il preambolo dice `null=explicitly unavailable`. Era già così in una tabella mista; da T-B7 una colonna così, nulla
+    in ogni riga, si nomina anche su `omitted_null_columns=`. Per esempio ogni OUTPUT DEFINITIONS di un segnale senza
+    limiti nomina `component,minimum,maximum`.
+  - Cure possibili (da decidere):
+    - (a) il preambolo allarga `null` a «non disponibile, o nessuno per quella riga»;
+    - (b) il renderer tratta come «non si applica» i metadati delle definizioni;
+    - (c) il backend omette quei campi, con un salto di versione dei componenti.
+  - Da guardare nella sonda mirata di T-B7. Dettagli:
+    [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «T-B7».
 
 ## Z · Sospensione e risveglio (fase 01)
 
