@@ -7339,6 +7339,14 @@ da Y il 15/10.
     lascia un segno durevole sulla riga di `?highlight=` (il test guarda la navigazione e la modale). Un `data-state` o un
     `data-highlighted` li renderebbe espliciti.
   - Dettagli: piano di Y, «J-12, la metà del pannello».
+- **Y-32 · Le card della lista degli asset: prezzo live, Δ della serie** — basso, coerenza, domanda di prodotto per il
+  developer; Y, 17/10 (X-R59, D2: il coordinatore ha scelto la parità per il lotto A).
+  - La card mostra il prezzo live (`livePriceMap`, dal poll di `/prices/current`), ma la sua Δ sull'intervallo è quella della
+    serie, fino al prezzo salvato su `as_of`: dopo X-R59, il `range_change` di `period-changes`. Finché il prossimo
+    caricamento non la rilegge, la Δ non segue il prezzo mostrato. Succedeva già prima, con la Δ calcolata nel browser.
+  - Rimedio possibile: quando l'intervallo finisce oggi, il poll della lista chiede `/prices/current?range_start=` e la card
+    usa quel `range_change`, come la pagina dell'asset (lotto B di X-R59).
+  - Dettagli: piano di Y, «X-R59».
 
 ## MF · Matematica finanziaria (fase 01)
 

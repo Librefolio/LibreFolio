@@ -5791,3 +5791,116 @@ Documentazione (`docs-writer`): `lots-analysis.md:121` e la pagina utente. Check
 > - **Ordine d'ingresso**: il commit sul mio ramo ora; l'ingresso in dev **con o dopo la metà di J** (senza, l'avviso non ha
 >   righe e le bloccanti tornano al banner senza broker); poi lo slot `front-broker detail` per l'E2E, prima della consegna
 >   finale.
+>
+> **Coordinatore (12:39)**: J-12 metà del pannello committata (`23aa2110f`, `0bb91c384`, `0c7afb49f`); entra con la metà di
+> J o dopo, poi lo slot `front-broker detail`; il testo 🔄 del CHANGELOG salvato.
+
+## X-R59, il passaggio del frontend — analisi (12:39–12:5x; HEAD `0c7afb49f`, sola lettura)
+
+Dal coordinatore (12:39), tolta dalla coda di X (X tiene X-R60, X-R58 e la divisione in lotti delle period-changes). Il
+passaggio sostituisce `computeDerivedPriceState()` (le card degli asset), `displayFxDelta()` (`FxTable`, `FxCard`,
+`FxPriceSummary` di `fx/[pair]`) e il calcolo della pagina dell'asset (`assets/[id]/+page.svelte:502-514`) con la quotazione
+live (`POST /prices/current?range_start=`). Note di X da includere: `range_start` tagliato a 1900-01-01; −100 % resta con un
+prezzo finale 0 (MF corregge la regola della casa). Da non toccare senza dirlo: le regioni di Z (`assets/+page.svelte`
+~742-760, `fxStoreRegistry.ts` ~429-453) e `periodChanges.ts` (X-R60).
+
+**Il contratto** (MF, `a8de6b584` «feat(prices): whole-range change from the server», sopra `46bbbb1e3`, già nel mio HEAD;
+non in dev; decisione N80). Il piano di MF non è nel commit: valgono codice, schemi e documenti.
+- `POST /assets/prices/period-changes` e `POST /fx/currencies/period-changes`: ogni voce accetta `range_start` (≥
+  1900-01-01, ≤ `as_of`, al più 5 giorni distinti per richiesta come `as_of`, 422 `period_changes_too_many_days`); ogni
+  risultato porta `range_change`: asset `{reference_date, change_abs, change_ratio}` (con `target_currency` convertito al
+  cambio di ogni giorno), cambi anche `inverse_change_abs`, `inverse_change_ratio`. Riferimento: il valore su `range_start`
+  (all'indietro), altrimenti il primo dentro l'intervallo, cioè il primo punto della serie della pagina; ancora: il valore
+  su `as_of`. Tutto null senza valore o con uno dei due ≤ 0 (MF correggerà lo 0 finale → −100 %).
+- `POST /assets/prices/current?range_start=`: ogni risultato porta `range_change` verso il prezzo corrente (live o
+  `db:last_known`), **nella valuta del prezzo, senza conversione**; un fallimento lascia i campi null; `range_start` <
+  1900-01-01 → 422.
+- `range_change()` in `financial_math/returns.py`. I documenti di MF (`assets/architecture.md`, `fx/architecture.md`,
+  `financial_math.md`) dicono «the web app is to send `range_start`… it does not yet»: da aggiornare col passaggio.
+
+**Stato reale del frontend**
+- Lista asset: le card prendono `deltaAbs`/`deltaPercent` da `computeDerivedPriceState()` (thread principale `:820` e Web
+  Worker `priceProcessing.worker.ts:80`), primo e ultimo punto della serie, in float. La card mostra il prezzo live
+  (`livePriceMap`) ma la Δ della serie: incoerenza già oggi. `AssetTable` ha `deltaAbs`/`deltaPercent` nelle righe ma non li
+  disegna. `loadPeriodChanges()` (X-R53, `:638-656`) chiede già `period-changes` per tutti gli asset con `as_of = dateEnd`,
+  in parallelo alla serie, con il suo contatore di versione e `periodChangesLoading` nel busy.
+- Lista cambi: `FxTable.getDelta()` → `displayFxDelta()` per le colonne Δ Abs e Δ %; `FxCard` la sua Δ %; il caricamento delle
+  period-changes (`loadPeriodChanges`, `loadPairPeriodChanges`) sceglie diretto/inverso per coppia come per le colonne dei
+  periodi.
+- Pagina della coppia: `displayFxDelta()` sui punti del grafico; oggi nessuna chiamata a `period-changes`.
+- Pagina dell'asset: `lastPrice` = live se l'intervallo arriva a oggi, altrimenti l'ultima chiusura; Δ dal primo punto del
+  grafico, nella **valuta di visualizzazione** (la serie è chiesta con `target_currency`; il live è convertito dal client con
+  `convert` al cambio di oggi, `AssetDetailLive`). Con una lacuna di cambio parziale il primo punto è nativo e l'ultimo
+  convertito: Δ in valute miste (difetto di oggi).
+- `'min'` diventa `2000-01-01`; una data a mano o nell'URL può essere prima del 1900: serve il taglio.
+- Nessun elemento della Δ ha un test id (card, riassunti); l'E2E di X-R53 cerca le voci con `objectContaining`, quindi un
+  `range_start` in più non lo rompe. Test che fissano le copie: `assetPriceDerived.test.ts` (`:21`, `:54`),
+  `fxStoreRegistry.test.ts` (`:502-525`); `assetDetailLive.svelte.test.ts` per il poller.
+
+**Decisioni proposte**
+- **D1, pagina dell'asset con valuta convertita e quotazione live** (il caso di default per chi guarda un asset nella sua
+  valuta): `/prices/current` dà `range_change` solo nativo. (a) MF aggiunge `target_currency` a quel `range_change`
+  (riferimento al cambio del suo giorno, ancora al cambio di oggi, come il client converte il live) — **proposta**; (b)
+  ripiego: `period-changes` con `target_currency` e `as_of` oggi, sul prezzo salvato (il poll lo aggiorna: Δ in ritardo di
+  al più un poll); (c) la Δ nativa: sbagliata.
+- **D2, card della lista**: parità (Δ della serie, dalle period-changes) — **proposta**; ancorarla al live come la pagina
+  dell'asset (il poll della lista chiama già `/prices/current` per tutti) va nell'indice, se il developer lo vuole.
+- **D3, dove vive la richiesta**: il `range_start` deve viaggiare nella stessa richiesta delle period-changes (un'altra
+  costerebbe i dieci giorni dei periodi di nuovo), quindi due aggiunte opzionali in `fetchAssetPeriodChanges` e
+  `fetchFxPeriodChanges` di `periodChanges.ts` (il file di X-R60 e della divisione in lotti); il resto (taglio a 1900,
+  lettura di `range_change` in `{abs, pct}` diretta/inversa) in un modulo nuovo, `utils/rangeChange.ts`.
+- **D4**: tolte le copie (`displayFxDelta`, la Δ di `computeDerivedPriceState`, il calcolo inline della pagina dell'asset),
+  non lasciate accanto; i campi morti di `AssetTable`.
+
+**Conflitti previsti**: X (X-R60 e la divisione in lotti su `periodChanges.ts` e sui caricatori delle due liste; X-R58 sul
+`catch` di `fetchAllPriceData`); AF (i colori di asset e cambi: `AssetCard`, `FxCard`, `FxTable`, i riassunti, le pagine —
+le mie modifiche sono prop, derivati e test id, nessuna classe); MF (i tre documenti, dopo l'ingresso). Regioni di Z
+evitate.
+
+**Lotti**: A — liste e pagina della coppia (`periodChanges.ts` + `rangeChange.ts`, le due liste, la coppia; via
+`displayFxDelta` e la Δ di `computeDerivedPriceState`); B — pagina dell'asset (period-changes per il caso storico,
+`/current?range_start=` nel poller per il live, D1). Ognuno: rossi (`test-author`), cura, documenti (`docs-writer`), E2E
+in slot, checkpoint FROZEN; la riga 🔄 del CHANGELOG con l'ultimo. Prerequisito di entrambi: X-R59 di MF (con SEC9-1 e lo 0
+finale) nel mio HEAD.
+>
+> **Coordinatore (12:48)**: **D1 = (a)**: MF aggiunge `target_currency` al `range_change` di `/prices/current` nel suo lotto
+> SEC9-1 aperto (riferimento al cambio del suo giorno, prezzo live al cambio di oggi, come il client). **D2**: parità; la Δ
+> ancorata al live sulla lista → **Y-32** nell'indice. **D3, D4**: sì, le copie vanno via. **Ordine su `periodChanges.ts`**:
+> X-R60 (X, ora) → il mio lotto A sopra → la divisione in lotti di X dopo Z-27 → X-R58; le mie aggiunte scritte in modo che
+> la divisione di X le possa avvolgere. **AF**: nessuna modifica aperta su quei componenti; solo prop, derivati e test id,
+> nessuna classe. **X-R59 di MF**: dopo SEC9-1, lo 0 finale e D1(a), poi l'ingresso (primo pomeriggio). Intanto i rossi
+> Vitest; righe dei runner (`_frontend_asset.py`, `_frontend_fx.py`) OK, solo aggiunte.
+>
+> **Lotto A, rossi Vitest** (`test-author`, dalle 12:5x): il modulo nuovo `utils/rangeChange.ts` (`EARLIEST_RANGE_START`,
+> `RangeDelta`, `rangeStartFor`, `assetRangeDelta`, `fxRangeDeltas`); i due fetcher di `periodChanges.ts` con un terzo
+> argomento facoltativo `rangeStart` (il fetcher applica `rangeStartFor`; senza, le voci restano identiche) e le mappe
+> `rangeDeltaByAssetId` / `rangeDeltasByPair`, provati in un file nuovo (`periodChanges.rangeChange.test.ts`) per non
+> toccare `periodChanges.test.ts`, aperto da X-R60; `computeDerivedPriceState` senza Δ; `displayFxDelta` non più esportata.
+>
+> **J-12, l'E2E sulla revisione combinata ✅** (12:53–13:04). Il coordinatore: J-12 completa in dev (metà di J `4195fa857`
+> + `fc8ab50ca`, la mia `0c7afb49f` → dev `46b5fbc0e`; il `log.md` riunito e la riga 🔄 del CHANGELOG combinata in
+> `4e11fabec`). Parcheggiati i miei 3 file sporchi (`files/patches/xr59_park_1254.patch`, 144 righe; il test-author di X-R59
+> in pausa, nessun file scritto), fast-forward a `4e11fabec`, patch riapplicata pulita. Slot `front-broker detail`
+> (`files/scripts/j12_e2e.sh`, guardia del carico a 5 minuti: 36.76): **40/40** (2,3 min), J12-1 e J12-2 compresi, nessun
+> ritentativo; porta 6189 libera.
+>
+> **Lotto A, rossi ✅** (`test-author` `b4d8d984`, 12:50–13:20, in pausa durante il fast-forward e l'E2E di J-12; log
+> `files/logs/xr59_*.json`):
+> - `rangeChange.test.ts` (nuovo): non si raccoglie (modulo mancante);
+> - `periodChanges.rangeChange.test.ts` (nuovo): **26 rossi**, 2 verdi (i rifiuti della chiamata); nessun `range_start`
+>   inviato, nessuna mappa nuova, l'elenco vuoto senza la mappa;
+> - `assetPriceDerived.test.ts`: **3 rossi** (le chiavi `deltaAbs`/`deltaPercent` ci sono ancora), 10 verdi;
+> - `fxStoreRegistry.test.ts`: **1 rosso** (`displayFxDelta` esportata), 90 verdi; i 12 test di `displayFxDelta` (`:498-545`,
+>   col commento B1) tolti.
+> - `rangeStartFor` controlla il calendario (`2026-02-30`, `2026-02-29`, `1900-02-29`, mese 13, mese o giorno 00 → null; una
+>   data sbagliata prima del 1900 è rifiutata, non alzata).
+> - Osservazioni del test-author, accolte: `ratioToPercent` deve lasciare `periodChanges.ts` (importa `$lib/api`: un modulo
+>   puro non può importarlo, e sarebbe un ciclo) → casa nuova in `rangeChange.ts`, `periodChanges.ts` la riesporterà nel
+>   lotto A (sopra X-R60); i due `toEqual` di `periodChanges.test.ts` sull'elenco vuoto («asks nothing for no asset/pair»)
+>   vanno adattati nel lotto A (chiavi nuove); il client generato toglie `range_change` finché non è rigenerato dal backend
+>   di MF (prerequisito già noto); i due file nuovi non passano il controllo dei tipi fino alla cura.
+>
+> **Cura, il modulo puro ✅** (13:2x): `frontend/src/lib/utils/rangeChange.ts` (`EARLIEST_RANGE_START`, `RangeDelta`,
+> `ratioToPercent` spostata qui, `rangeStartFor` col calendario, `assetRangeDelta`, `fxRangeDeltas`): `rangeChange.test.ts`
+> **83/83**, Prettier pulito. Due copie di `ratioToPercent` finché `periodChanges.ts` non la riesporta (lotto A, dopo
+> X-R60). Il resto del lotto A aspetta X-R60 e l'ingresso di X-R59 di MF.
