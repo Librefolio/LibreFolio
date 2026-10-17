@@ -5067,6 +5067,42 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   così va saltata, con un avviso. Analisi (17/10): una correzione post-migrazione che annulla o cancella gli inf ricavabili e
   riporta quelli dell'utente, più due guardie puntuali; decisione D-W63-1. Dettagli: piano 04, sezioni «W-B58 e W-B59», «W-B60» e
   «W-B62 e W-B63».
+- **W-B69 · Il costo Auto si calcola saltando una riga illeggibile (regressione di W-B58)** — medio, numeri; W, 17/10 (all-backend di
+  W-B60, approvata dal coordinatore: **blocca il rilascio**). Da W-B58 una quantità o un importo illeggibile si legge `None` invece di
+  sollevare: `compute_wac_iterative` carica la riga e `cost_movement_from_transaction` (`financial_math/average_cost.py`) la salta, e
+  un importo `None` diventa un acquisto gratuito. Così la media di un costo Auto (batch, divisione di una coppia TRANSFER, gambe sole,
+  cancellazione di un broker) esce senza quella riga, per sempre; i 2 rossi di `test_lone_transfer_legs.py` sono rossi anche in dev.
+  Cura: `UnreadablePoolError` in `_auto_cost` (`backend/app/services/transactions/auto_cost.py`), la ragione per gamba, la
+  cancellazione che fallisce intera, nel batch l'issue `autoCostUnreadable` `{count}` (4 lingue) e lo stop; rossi prima. Dopo
+  SEC7-3. Dettagli: piano 04, sezione «W-B69».
+- **W-B70 · L'unione di una promozione propone una descrizione che il backend rifiuta, in inglese** — minimo, chiarezza; W, 17/10
+  (H-41). La descrizione unita (`mergeStrings`, `frontend/src/lib/features/transactions/bulk/promoteHelpers.ts`: `a\nb`) di due
+  descrizioni lunghe supera i 500 caratteri che create, update e (da H-41) i campi uniti accettano: il salvataggio la rifiuta con
+  `string_too_long`, che `PYDANTIC_BUILTIN_KEYS` (`resolveValidationMessage.ts`) non traduce («Descrizione: String should have at most
+  500 characters»; lo stesso per una create o un update troppo lunghi). Cura: la modale d'unione mostra il conteggio e avvisa oltre 500;
+  `string_too_long` tradotto (con `max_length` dai `ctx` dell'errore, che il parse del batch oggi scarta). Dettagli: piano 04, sezione
+  «H-41 dentro SEC7-3».
+- **W-B71 · Il suggerimento di promozione (ed eventi) va in 500 con una data ai bordi del calendario** — basso, disponibilità; W, 17/10
+  (SEC7-3). `promote_suggest_bulk` (`backend/app/services/transactions/promotion.py`) calcola `inp.date ± timedelta(days=tolerance_days)`
+  (0–30, 7 di default): con `0001-01-01` o `9999-12-31` un `OverflowError`, un 500 per quella richiesta sola (niente memoria né CPU); da
+  verificare lo stesso giro nel suggerimento degli eventi (`schemas/transactions/event_suggest.py`, 0–7). Cura: le date di input nei
+  limiti di N74 (un 422 al confine) o la finestra tagliata ai bordi. Dettagli: piano 04, sezione «R13-SEC7-3 — cura».
+- **W-B72 · Il costo unito di una promozione finisce su entrambe le righe di una coppia di cassa** — basso, numeri; W, 17/10 (H-41,
+  docs-writer). `_apply_promote_cost_basis` (`backend/app/services/transactions/batch_creates.py`) scrive il costo sulla gamba di
+  quantità positiva, ma su **entrambe** quando nessuna ne ha una (una coppia di cassa: FX_CONVERSION, CASH_TRANSFER), e dopo la pulizia
+  di `cost_basis_allowed`: un client dell'API può lasciare un costo per unità su righe che non ne prendono. L'interfaccia non manda il
+  costo (solo descrizione e tag). Da verificare se `validate_cost_basis` lo rifiuta dopo; cura probabile: lo stesso
+  `cost_basis_allowed` sul costo unito, rosso prima. Dettagli: piano 04, sezione «H-41 dentro SEC7-3».
+- **W-B73 · La pagina utente delle transazioni dice che l'unione sceglie anche data e costo** — minimo, doc; W, 17/10 (docs-writer).
+  `mkdocs_src/docs/user/transactions/index.en.md` descrive il dialogo «Promote pair» con la scelta di data e costo; `PromoteMergeModal`
+  offre solo descrizione e tag dal maggio 2026 (SP-C Step 5). La pagina ha già un debito di traduzione non timbrato (la cache di Aphra
+  non corrisponde all'EN di HEAD): correggere l'EN e lasciare la traduzione alla pipeline. Dettagli: piano 04, sezione «R13-SEC7-3 —
+  cura».
+- **W-B74 · Una riga illeggibile fa fallire il giro dei saldi senza codice** — basso, chiarezza; W, 17/10 (test-author di W-B69). Una
+  quantità o un importo che si legge `None` (testo, o un inf: W-B58) fa sommare `None` a `_validate_broker_balances`
+  (`backend/app/services/transactions/balances.py`): un `TypeError`, che il batch rende come «Balance validation error» senza codice né
+  riga. Ogni batch che rigioca quel broker da prima della riga si ferma così, e l'utente non sa perché. Cura: la riga illeggibile come
+  issue con un codice proprio (o la pulizia di W-B63). Dettagli: piano 04, sezione «W-B69».
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il

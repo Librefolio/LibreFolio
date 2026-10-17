@@ -5168,3 +5168,192 @@ di test aggiunti nello stesso punto (×2); in `architecture/database/index.md` l
 build` stretto e `check-links` verdi; i due file risolti non sono cambiati in dev fra le due punte (fuori di essi, solo altre sezioni
 del backlog, che si fondono da sole). Prova semantica: `utils real-decimal` lanciato nell'albero simulato (il codice di dev più il mio)
 → **267 passati** (i 239 di W-B60 più i 28 di X-R38/X-R50).
+
+**W-B60 — `all-backend` e ingresso (06:36–06:5x)**: `all-backend --workers 2` su `c5761ac55` (05:57–06:36, 38m44s; la build del
+frontend 17 minuti): **6 categorie su 7 verdi**; nei servizi 6 486 passati, 5 saltati, **2 falliti**, entrambi in
+`test_lone_transfer_legs.py` → **W-B69** (sotto). Non di W-B60: gli stessi 2 rossi su un'esportazione pura di dev `1c2bac918` (senza
+W-B60) e da soli nel worktree (carico 23–25). W-B60 entrato: dev `484c71afb`, CHANGELOG 🐛 `0dc58c70b`; HEAD avanzata a `0dc58c70b`.
+Revisione di X-R47 (`5f68a8db0`, sola lettura): OK, una nota bassa (il rapporto mostrato com'è, `-0.5`, in frasi IT/FR/ES che
+scrivono «0,5»).
+
+### W-B69 — il costo Auto calcolato ignorando una riga illeggibile (regressione di W-B58): analisi ✅ (2026-10-17)
+
+**Stato reale**: la decisione 1 della 47 vuole che una gamba che cede, il cui costo non si calcola, resti un TRANSFER con una
+ragione. I test lo provocano piantando nel suo insieme una riga di quantità `'n/a'` (testo): prima di W-B58 la lettura sollevava
+(TypeError) e il calcolo con lei. Da W-B58 (`7a4fdf024`) `RealDecimal` legge `None`: `compute_wac_iterative` (facciata di MF,
+`portfolio_service.py`) carica la riga (`quantity IS NOT NULL AND quantity != 0` vale per un testo) e
+`cost_movement_from_transaction` (`financial_math/average_cost.py:294`) tratta `None` come 0 e la salta: la media esce **senza
+quella riga** e la gamba diventa un ADJUSTMENT a quel costo, per sempre. Con W-B60 un importo illeggibile letto `None` fa peggio:
+`abs(tx.amount) if tx.amount else 0` ne fa un acquisto gratuito. Gli stessi calcoli servono al costo Auto nel batch (create,
+update, divisione di una coppia TRANSFER), alla cancellazione di un broker (`delete_by_broker`, «ogni costo prima di cambiare una
+riga: un calcolo che fallisce lascia tutto com'era») e al passo delle gambe sole (`lone_transfer_legs.py`, per gamba `try/except` →
+ragione).
+
+**Disegno**: in `_auto_cost` (`auto_cost.py`, mio) una guardia prima del calcolo: le righe dell'insieme (stessi filtri della
+facciata, senza gli esclusi) lette dall'ORM; una con quantità o importo `None` → `UnreadablePoolError` (gli id nel log, il conteggio
+nel messaggio). Effetti: le gambe sole tornano alla decisione 1 (i 2 rossi diventano verdi); la cancellazione di un broker torna a
+fallire intera, come progettato; nel batch un **issue** al posto di un 500 o di un costo sbagliato: codice nuovo
+`autoCostUnreadable` sulla riga (`cost_basis_override`, `params {count}`, nessun id: l'insieme può essere di un broker partner),
+chiave `transactions.errors.autoCostUnreadable` (4 lingue); il batch si ferma lì. Fuori: l'anteprima `POST /portfolio/wac` (facciata
+di MF, nessuna scrittura) e gli altri lettori che saltano un `None` (la pulizia dei dati è W-B63). Rossi: i 2 esistenti, più il batch
+(create Auto e divisione di una coppia) e la cancellazione di un broker con un insieme illeggibile, e il caso dell'importo.
+**Peso**: medio (~2–3 ore con i18n, test e doc), non sotto l'ora → dopo SEC7-3, come da ordine del coordinatore.
+
+### R13-SEC7-3 — `format(v, "f")` sull'input prima dei limiti, il giro dei giorni, le date: analisi ✅ (2026-10-17)
+
+**Fonte**: piano 08 di E, «R13-SEC7», reperto 3 (MEDIUM 8/10, DoS da qualsiasi utente: OOM), più le due aggiunte del coordinatore
+(06:3x): `balances.py:75` e la data controllata in scrittura (J). Priorità: prima di W-B69.
+
+**Stato reale** (HEAD `0dc58c70b`):
+- `services/brokers/broker_service.py:173`: i saldi iniziali di un broker nuovo diventano un dict grezzo con
+  `format(currency_obj.amount, "f")` prima di `execute_batch`; `Currency.validate_amount` (`schemas/common.py`) fa solo
+  `Decimal(str(v))`, e pydantic accetta `1E+999999999` (finito): `format` scrive un miliardo di cifre sul loop degli eventi.
+- `services/transactions/promotion.py`: `format(-abs(qty), "f")` e `format(abs(qty), "f")` (`quantity: SafeDecimal` della richiesta,
+  `:127`, `:136`): `abs()` va in `Overflow` oltre l'Emax del contesto (`1E+1000000`: un 500), e sotto scrive tutte le cifre;
+  `format(req.cost_basis_override.amount, "f")` (`:141`) come il broker. Le due casse (`:151`, `:160`) vengono da righe salvate:
+  limitate.
+- Gli altri `format(v, "f")` dei servizi leggono valori interni o già limitati (ledger_totals, series_preparation, telemetry, PAC);
+  quello del plugin Danske legge il file nel worker del pool (da guardare a parte: fuori dal reperto).
+- `services/transactions/balances.py:75`: il giro di `_validate_broker_balances` va **giorno per giorno** da `from_date` (o dalla
+  prima transazione) all'ultima transazione. Nessuna richiesta gli passa un intervallo: gli estremi sono le **date delle
+  transazioni**, che però scrive l'utente senza limiti → una riga del `0001-01-01` (o del `9999-12-31`) fa girare ~740 000 (o ~2,9
+  milioni) di giorni a ogni batch che tocca quel broker, sul loop degli eventi.
+- **Date**: nessun limite (`TXCreateItem.date`, `TXUpdateItem.date`, `resolved_fields.date` della promozione); l'interfaccia vieta già
+  il futuro (`SingleDatePicker`, `allowFuture` falso di default, i form non lo cambiano), l'API no.
+
+**Disegno della cura**:
+1. **I due dict grezzi**: `str(v)` al posto di `format(v, "f")` (la notazione corta: `1E+999999999` resta di 12 caratteri, e il batch
+   la rifiuta con `integerDigitsExceeded` e si ferma, W-B58); il segno con `copy_abs()`/`copy_negate()`, senza contesto (niente
+   `Overflow`).
+2. **Al confine**, difesa in profondità: `Currency.validate_amount` rifiuta un importo con un esponente fuori da ±100
+   (`adjusted()`), e la `quantity` della richiesta di promozione lo stesso: 422 prima di qualsiasi lavoro. Nessun valore legittimo vi si
+   avvicina (al più 24 cifre intere, al più 12 decimali). `SafeDecimal` in generale e il serializzatore `_decimal_fixed_point` non li
+   tocco: condivisi da 207 campi anche di risposta; il lato dei provider è W-B62 di X.
+3. **Il giro dei giorni**: solo i giorni con transazioni (più `from_date`), non ogni giorno del calendario: fra due giorni con
+   movimenti i saldi non cambiano, e il primo giorno negativo è sempre uno di loro (o `from_date`, coi saldi precedenti) →
+   equivalente, e lineare nelle transazioni.
+4. **Le date in scrittura (decisione notturna N74)**: `1900-01-01 ≤ data ≤ oggi + 1 anno`, controllate in uno stadio del batch accanto
+   a `check_decimal_limits` (create, update, `resolved_fields.date` delle promozioni; l'import BRIM conferma dal batch); codice
+   `dateOutOfRange` `{min, max}` sul campo `date`, chiave `transactions.errors.dateOutOfRange` (4 lingue); il batch si ferma come per
+   le cifre intere. **N74, N = 1 anno**: l'interfaccia vieta già il futuro; un anno copre fusi orari e date di regolamento in avanti di
+   un report; alternativa N = 10. Il batch risponde con le issue (200, `committed` falso), come per tutti i codici del batch.
+
+**Prove** (rossi del test-author prima della cura): i dict grezzi del broker e della promozione senza cifre espanse (una spia su
+`execute_batch`, con `1E+5000000`, senza rischiare un OOM nel test) e la promozione di `1E+1000000` senza 500; il 422 al confine; il
+giro dei giorni (guardia d'equivalenza: la data dell'errore con anni di vuoto, e coi saldi precedenti già negativi); le date (create,
+update, promozione, i bordi: 1900-01-01 e oggi + 1 anno accettati, il giorno prima e il giorno dopo rifiutati). Dopo: `services
+transaction-*`, `api transactions-validate`, `api batch-split-promote`, `api brokers*`, e uno slot.
+
+### R13-SEC7-3 — cura (2026-10-17, in corso)
+
+**Disegno approvato** dal coordinatore (17/10): «design OK, in the order you gave»; `schemas/common.py` mio per questo lotto;
+**N74 con N = 1 anno**; il batch risponde 200 con `committed` falso; `balances.py` sui soli giorni con transazioni.
+
+**Decisione notturna N74** (da rivedere col developer): una transazione porta una data fra **1900-01-01** e **oggi + 1 anno**
+(UTC; il 29 febbraio → 28 febbraio). Controllata in scrittura nello stadio `check_dates` del batch: create, update che cambia la
+data, data risolta di una promozione; l'import BRIM conferma da lì. Fuori dai limiti `dateOutOfRange` sul campo `date`, `params
+{min, max}` (ISO), il batch si ferma dopo il controllo d'accesso. Perché 1 anno: l'interfaccia vieta già il futuro
+(`SingleDatePicker`, `allowFuture` falso), un anno copre i fusi orari e le date di regolamento in avanti di un report;
+alternativa N = 10. Le righe già salvate fuori dai limiti restano (un update che non tocca la data passa): il giro dei saldi non
+le paga più (passo 3 del disegno); altri giri per giorno su tutta la storia, se ce ne sono, sono di J.
+
+1. ✅ **Rossi** (test-author `3f86d648`, 2026-10-17).
+   > **⚠️ Fuori pista**: il limite al confine (`Currency.validate_amount`, ±100) cambia un caso già committato di W-B58:
+   > `test_transaction_decimal_places.py`, `MILLION_DIGIT_REFUSALS`, `c-cash-amount--1E+1000000` non arriva più a
+   > `check_decimal_limits` (`integerDigitsExceeded {max: 15}`): lo rifiuta il parse del batch (`value_error` su `cash.amount`,
+   > «Invalid value»). Stesso scopo (niente 500, niente salvato), codice diverso; la quantità (non `Currency`) tiene
+   > `integerDigitsExceeded` a ogni esponente. Scelto di tenere il disegno approvato e ri-fissare quel caso (test-author), non
+   > di restringere il limite alle due richieste: il limite in `Currency` protegge ogni richiesta che porta un importo. I plugin
+   > BRIM costruiscono `Currency` nel parse: un file con un esponente oltre ±100 non si legge più (prima lo rifiutava il batch);
+   > nessun file vero ci si avvicina, e `abs()` di quei valori andava già in `Overflow`.
+   > **Note implementazione**: rossi per la cifra espansa (broker `test_broker_service.py`, promozione `test_transaction_service.py`:
+   > lo `str` breve sulla spia di `execute_batch`, con `model_construct`), il 422 al confine (`test_common_schemas.py`,
+   > `test_broker_schemas.py`, `test_transaction_schemas.py`; `test_brokers_api.py`, `test_transfer_promotion.py`: oggi 200 e 500), il giro dei
+   > giorni (`TestBalanceReplayDays`: tre guardie + il rosso dei 3 653 passi), le date (`TestTheDateIsCheckedAtWrite` e i codici elencati),
+   > il risolutore (`resolveValidationMessage.decimals.test.ts`, 4 lingue dal catalogo vero). Tutti rossi per il contratto mancante.
+   > **⚠️ Fuori pista**: la mia revisione della cura contro i rossi ha trovato un buco: nel batch, il costo risolto di una promozione che
+   > `Currency` rifiuta (esponente oltre ±100, o nessun numero) sfuggiva al controllo e alzava in `_apply_promote_cost_basis` (un 500;
+   > `abc` lo fa già oggi). Rosso in più, `TestAPromotedCostBasisCurrencyRefuses` (8 rossi, 11 verdi), e la cura lo copre.
+   > **⚠️ Fuori pista**: il test-author, con un `UPDATE … WHERE status != 'done'` sulla tabella `todos` della sessione, ha chiuso 21
+   > todo altrui; rimessi a posto a mano dal confronto col backlog (17 riaperti, 4 marcati «da verificare»).
+2. ✅ **Cura** (2026-10-17): `files/scripts/sec73_cure.py --apply` (9 file) + `dev.py i18n add transactions.errors.dateOutOfRange` (EN
+   «Between {min} and {max}», IT «Tra {min} e {max}», FR «Entre {min} et {max}», ES «Entre {min} y {max}»).
+   > **Note implementazione**: `str()` e `copy_abs()/copy_negate()` nei due dict grezzi; `check_decimal_exponent` (±100,
+   > `MAX_DECIMAL_EXPONENT`) in `schemas/common.py`, chiamato da `Currency.validate_amount` (anche il ramo `Decimal`) e dal validatore della
+   > `quantity` di `TXTransferPromoteRequest`; il giro dei saldi sui giorni con transazioni più `from_date`; `check_dates` (N74) con
+   > `transaction_date_bounds()`, `TXValidationCode.DATE_OUT_OF_RANGE`, lo stop in `execute_batch`, `dateOutOfRange` in
+   > `FIELD_PREFIXED_CODES`. Lint: ruff pulito; black chiedeva una riga vuota in `common.py` (corretta, script allineato); prettier pulito.
+   > Verificato prima: una lettura `RealDecimal` quantizza alla scala della colonna, quindi nessuna lettura dà a `Currency` un esponente
+   > oltre 12; il suggerimento delle promozioni nega solo la riga salvata (`-tx_b.…`), mai l'input.
+   > **⚠️ Fuori pista** (trovato a margine, fuori dal reperto): lo stesso suggerimento fa `inp.date ± timedelta(days=tolerance_days)`, e
+   > una data `0001-01-01` o `9999-12-31` dà un `OverflowError`, un 500 di quella richiesta (non memoria né CPU) → **W-B71** nel backlog.
+3. ⏳ **Verdi**. Leggeri (17/10 07:43–07:44, carico 33–39): `schemas common` 100, `schemas brokers` 38, `schemas transactions` 126,
+   `services broker` 81, `services transaction` 104, `services transaction-decimal-places` 150: tutti verdi. Restano Vitest, i file `api`,
+   `utils gate-i18n-catalog`, e dopo H-41 il giro intero.
+4. ✅ **Doc** (2026-10-17): docs-writer `2e1c78ce`, 12 pagine EN (sviluppatore: `balance_validation.md`, `service.md` con
+   «📅 Transaction dates», `database/index.md`, `brim_plugin_guide.md`, `split_promote.md` con `#promote-request-shape`, `brokers/forms.md`,
+   `wac.md`, `brokers_transactions.md`; utente: `form`, `import/how-to`, `import/index`, `transactions/index`). Le frasi IT/FR/ES delle 4
+   pagine utente le ho scritte io (`files/scripts/sec73_user_docs_i18n.py`, 12 file, le etichette dal catalogo); `translate-validate`
+   pulito su `how-to`, `import/index`, `index`; timbrate solo `how-to` e `import/index` (la cache di Aphra combaciava con l'EN di HEAD).
+   `mkdocs build` stretto ok (87 s, carico 35), `check-links` ok (docs-writer).
+   > **⚠️ Fuori pista**: `form.en.md` ha un debito di traduzione precedente, mio (E1b, `0ffaa9127`): il punto «Missing event?» e il suo
+   > link `events.md#new-event`, la cui sezione manca anche in `events.{it,fr,es}.md` → non timbrata (il timbro nasconderebbe il debito),
+   > resta alla pipeline. `transactions/index.en.md` aveva già una deriva non timbrata (cache ≠ EN di HEAD) → non timbrata.
+   > **⚠️ Fuori pista**: discordanze trovate dal docs-writer: (1) il giro giorno per giorno partiva da `from_date`, non dalla prima riga:
+   > la riga che pesava su ogni batch era una lontana nel futuro (`9999-12-31`: ~2,9 milioni di giorni a ogni giro successivo, poi
+   > l'overflow della data), una dell'anno 1 solo quando il giro partiva da lì → il commento in `balances.py` corretto; (2) «ogni lettura
+   > fallisce» (H-41) non si riproduce: la colonna `Text` di SQLite salva un numero come testo (`'42'`) → tolto dalla docstring del modello
+   > e dal piano; (3) il costo unito su entrambe le righe di una coppia di cassa → **W-B72**; (5) la pagina utente dice che l'unione sceglie
+   > data e costo → **W-B73**; (6) la docstring di `execute_batch` senza `check_dates` → corretta.
+5. ✅ **Simulazione sulla punta di dev** (2026-10-17 08:20): `sim_cherry_pick.sh 7f8e69be6 --docs` sui 51 file del lotto (SEC7-3 +
+   H-41, giornale compreso; dev è 98 commit avanti): 0 conflitti, ruff/black e JSON puliti, `mkdocs build` stretto e `check-links` ok
+   sull'albero simulato (carico 35). Dev ha toccato un solo file del lotto, `BACKLOG_POST_1.2.md` (altre sezioni).
+   > **Note implementazione**: la metà dei rossi di W-B69 che resta a me (33 rossi, 24 guardie, `test_transaction_cost_basis_rule.py`)
+   > è parcheggiata in `files/wb69_mine/` (copia e diff, sha256 `3f48c081db18…`) e il file riportato al contenuto di HEAD con
+   > `git show HEAD:… >` (nessun comando git che scrive): fuori dal checkpoint e dal giro completo sulla revisione combinata. La metà di
+   > MF (17 test, file a sé) gli è stata mandata direttamente (`files/wb69_for_mf/`), con la bozza di `auto_cost.py` e il cucito.
+6. ⏳ **Handoff** (CHECKPOINT READY), poi il giro completo (`all-backend --workers 2`) sulla revisione combinata, in uno slot: copre
+   anche i file `api` (transfer-promotion, brokers, batch-split-promote, tx-balance-walk, transactions-validate) che chiedono la
+   ricostruzione del frontend.
+
+#### H-41 dentro SEC7-3 — i campi uniti di una promozione, tipati (2026-10-17)
+
+**Fonte**: H, via il coordinatore (17/10 07:5x): «`TXPromoteBatchItem.resolved_fields: Dict[str, Any]` … applicato com'è; `description` nella
+colonna `Text` senza controllo di tipo né di lunghezza: un numero (anche `Infinity`) lì fa fallire ogni lettura di quella transazione;
+`cost_basis_override` o `date` sbagliati probabilmente un 500. Direzione: un modello tipato, un rosso prima per ogni campo».
+
+**Stato reale**: `_apply_promote_resolved_fields` (`batch_creates.py`) scrive `description` com'è (la lettura, `TXReadItem.description:
+Optional[str]`, fallirebbe su un numero; ma la colonna `Text` di SQLite lo salva come testo, `'42'`: non si riproduce), `tags_to_csv(123)` alza (TypeError), un dict di tag ne salva le chiavi,
+`parse_ISO_date` alza su una data sbagliata o `null`, `Currency.model_validate` su un costo che non è un oggetto; una chiave sconosciuta è
+ignorata. L'interfaccia (`PromoteMergeModal`) manda solo `description` e `tags`; `date` e `cost_basis_override` solo dall'API.
+
+**Disegno**: `TXPromoteResolvedFields(StrictModel)` in `schemas/transactions/batch.py`, tipato come i campi di una create: `description`
+(al più 500), `tags` (`validate_tags_list`), `date` (un `null` esplicito rifiutato), `cost_basis_override: Currency`; chiavi sconosciute
+rifiutate. Si applica ciò che la richiesta nomina (`model_fields_set`): un `null` esplicito svuota descrizione, tag, costo. Il rifiuto è al
+parse del batch, issue della promozione sul nome del campo stesso (`_loc_to_field` toglie `resolved_fields.`: l'etichetta è quella del
+campo). Sostituisce la cattura dei rifiuti di `Currency` che avevo messo in `_promote_cost_amount` (passo 2): il parse li rifiuta già, con
+lo stesso codice e lo stesso campo (`cost_basis_override.amount`). Script: `files/scripts/h41_cure.py` (dry run pulito su 3 file).
+**Scelta (500 caratteri)**: la descrizione unita (`mergeStrings`: `a\nb`) di due descrizioni lunghe può superarli e allora è rifiutata;
+è già così sul ramo misto e su quello nuovo+nuovo dell'unione, dove la create porta il testo unito (`TXCreateItem.description`
+`max_length=500`): il limite allinea gli altri due rami (edit+edit, pagina Transazioni), invece di lasciare righe che una modifica non
+salva più. Residuo di chiarezza (W-B70, sotto): l'unione non avvisa, e `string_too_long` non è tradotto (`PYDANTIC_BUILTIN_KEYS`).
+
+1. ✅ **Rossi** (2026-10-17): `TestTheResolvedFieldsAreTyped` in `test_transaction_decimal_places.py` (44 test): 21 rossi, 23 verdi
+   (carico 35,6), ognuno per il contratto mancante. Oltre ai 500 attesi, due difetti di oggi: dei tag mandati come testo (`"a, b"`) si
+   salvano `'a,,, ,b'` (`tags_to_csv` unisce i caratteri), e una descrizione lista fallisce al flush (`ProgrammingError`, un 500). Il
+   costo `"12"` e `{"amount": "1"}` erano già verdi con la cattura del passo 2 di SEC7-3; il `null` esplicito del costo su un TRANSFER dà
+   `costBasisRequired` (fissato).
+2. ✅ **Cura** (2026-10-17): `files/scripts/h41_cure.py --apply` (3 file).
+   > **⚠️ Fuori pista**: un import circolare (`batch.py` → `transactions.py` → `type_metadata.py` → `batch.py`): `validate_tags_list` si
+   > importa dentro il validatore, col `# noqa: PLC0415 — avoid circular import` come `schemas/provider.py:240`, senza spostare né
+   > riesportare nulla; provati i tre ordini d'import e `backend.app.main`. Nessun comando era partito nella corsia.
+   > `api sync` (17/10 08:0x): exit 0, nessun file tracciato cambiato; il client generato non tipizza i corpi del batch, quindi il
+   > `Record<string, unknown>` del frontend non cambia.
+3. ⏳ **Verdi**: `services transaction-decimal-places` 194 (150 + 44), `schemas transactions` 126 (08:04, carico 27); `front check`
+   (08:2x): svelte-check 0 errori, 0 avvisi, prettier pulito. Resta il giro completo.
+   > **⚠️ Fuori pista**: `front check` l'ho lanciato senza la porta del carico, ed è partito a 70,9 (il minuto; la regola vuole < 50 per i
+   > controlli leggeri). Il risultato vale, la regola no: da qui ogni controllo passa da `sec73_light.sh` o da un `gate` esplicito.
+   > **Riassegnazione** (coordinatore, 17/10 08:1x): il cuore di W-B69 (la guardia dell'insieme in `_auto_cost`, `UnreadablePoolError`,
+   > `delete_by_broker`, le gambe sole) va a **MF**; a me resta la parte del batch (`autoCostUnreadable` negli stadi), dopo SEC7-3, e la
+   > revisione del lotto di MF. Il cucito che ho chiesto: `_compute_wac_for_auto_items(..., unreadable=lista)` raccoglie per riga in
+   > `auto_cost.py` (file di MF). Materiale a MF: `files/wb69_for_mf/` (la mia bozza, la metà dei rossi).
