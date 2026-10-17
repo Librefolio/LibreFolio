@@ -3868,3 +3868,13 @@ area output into runs at the points without a value, one series each with the sa
 the signals panel badge counts distinct dates (`renderedSignalPointCount`).
 Filed: section added to [[concepts/absence-sentinel-vs-nullable-type]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | The lots chart keeps its price line, and the reports an `api` run removes (Y-30)
+Y-30 added a lot-free market price series, `MARKET_PRICE_HISTORY` / `market_price_history`, which a FAILED replay keeps
+(`_AVERAGE_COST_ANALYSES` became `_REPLAY_FREE_ANALYSES`); the panel draws its price line from it in every analysis
+(N89). The FAILED rule's one uncovered exception (income, fee and tax rates converted before the engine are still
+reported) is noted on the entity page. In the E2E slot, `LF_SETUP_DONE=1` after an `api` run found every broker's
+import history empty: that run's `--force` populate, without `--with-reports`, had emptied `broker_reports`.
+Filed: revision of [[decisions/fifo-v4-gross-net-status-model]], [[entities/lots-analysis-service]]; section added to
+[[problems/direct-playwright-run-in-a-test-lane]].
+Graph: not updated; graphify is not available in this worktree.

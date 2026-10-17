@@ -8210,8 +8210,9 @@ da Y il 15/10.
     dal backend), quindi posto, visibilità e larghezza scelti dall'utente si azzerano a ogni caricamento; prima succedeva
     solo quando un intervallo più corto le nascondeva.
   - Dettagli: piano di Y, «Y-27»; devWiki `problems/datatable-pruned-preferences-of-absent-columns`.
-- **Y-28 · Il test C-66 «sync all over a period whose prices are all filled backward» non può più passare dopo X-R55** —
-  medio, test rosso su dev; Y, 17/10 (E2E di Y-27). Da instradare dal coordinatore.
+- ✅ **Y-28 · Il test C-66 «sync all over a period whose prices are all filled backward» non può più passare dopo X-R55** —
+  medio, test rosso su dev; Y, 17/10 (E2E di Y-27). Da instradare dal coordinatore. ✅ 17/10: chiuso da X (`c18517e31`, in dev
+  `8aafffad8`): il test lavora su un fine settimana passato, portato avanti, sincronizzato dalla selezione.
   - `frontend/e2e/assets/asset-list.spec.ts:1084` (`32c64bbd9`, 16/10) chiede `POST /assets/prices/query` sul periodo da oggi+7
     a oggi+14 e pretende, come precondizione, che almeno un asset con un fornitore vi mostri prezzi portati avanti.
   - X-R55 (`a71d23e7e`, in dev dalle 08:30 con `ab7711f04`) taglia ogni intervallo a `latest_range_end()`, cioè domani: un
@@ -8226,14 +8227,15 @@ da Y il 15/10.
   fuori dai file dichiarati) non guarda più dentro i tre moduli dei lotti di D-MF6(b), che sommano, mediano e ribasano ma non
   annualizzano. Un'annualizzazione aggiunta un giorno lì passerebbe in silenzio. Rimedio possibile: un segnalino per voce
   («può annualizzare»), vero solo per `MeasureSignal.ts` e le curve di R19. Dettagli: piano di Y, «Y12b, il resto».
-- **Y-30 · Con l'analisi dei lotti `FAILED` il grafico prezzo/WAC perde la linea del prezzo di mercato** — basso,
-  chiarezza; **per J** (backend); Y, 17/10 (J-12, metà del pannello). Il coordinatore (11:4x) l'ha tenuta fuori da J-12.
+- ✅ **Y-30 · Con l'analisi dei lotti `FAILED` il grafico prezzo/WAC perde la linea del prezzo di mercato** — basso,
+  chiarezza; Y, 17/10 (J-12, metà del pannello). Il coordinatore (11:4x) l'ha tenuta fuori da J-12. ✅ 17/10 (Y, backend
+  compreso; J rivede il backend), via del coordinatore 20:3x: la serie del prezzo senza lotti `MARKET_PRICE_HISTORY` /
+  `market_price_history` (`build_market_price_history`), tenuta con `FAILED` (`_REPLAY_FREE_ANALYSES`, con i suoi buchi di
+  cambio); il pannello la usa **sempre** al posto dell'unione (decisione notturna N89, per il developer) e pubblica
+  `data-price-line`. Commit al checkpoint. Dettagli: piano di Y, «Y-30».
   - Con `FAILED` (J-12, N81 opzione A) `price_history` torna `null`, perché è per lotto (`LotPriceHistoryPoint.lot_id`,
-    un punto per ogni giorno di vita di ogni lotto). Il grafico costruisce la linea del prezzo dall'unione per data di quei
-    punti (`LotWacPriceChart.svelte:747-764`), quindi mostra solo le linee del costo medio.
-  - Rimedio possibile: una serie del prezzo senza lotti sull'intervallo calcolato, un campo nuovo della risposta (e il
-    suo contratto nell'AI Export, se serve); il pannello la userebbe solo con `FAILED`, o sempre al posto dell'unione.
-  - Dettagli: piano di Y, «J-12, la metà del pannello».
+    un punto per ogni giorno di vita di ogni lotto). Il grafico costruiva la linea del prezzo dall'unione per data di quei
+    punti, quindi mostrava solo le linee del costo medio, e senza lotti aperti la linea si interrompeva.
 - ✅ **Y-31 · E2E di J-12: la regola della lingua dell'interfaccia (M-18) ricopiata in una spec, e due stati non
   pubblicati** — basso, test; Y, 17/10 (test-author di J-12). ✅ 17/10, versione minima (coordinatore, 13:21 e 13:36):
   `resolveUiLocale` in `stores/app/uiLocaleRule.ts`, senza import, riesportato da `uiLocale.ts`; la spec lo importa invece
@@ -8268,8 +8270,11 @@ da Y il 15/10.
   - ✅ 17/10: dopo il clic, prima l'URL (tetto 30 s), poi la radice (10 s), nell'aiuto e nella copia in riga del test della
     cache degli eventi; commento di `:332` senza totali (`test-author`). E2E `front-asset asset-detail` 39/39. Review di X.
     Dettagli: piano di Y, «Y-33».
-- **Y-34 · `brokers-detail.spec.ts`: 5 s per il pannello dei lotti dopo «analizza i lotti», sotto carico** — minimo, stabilità
-  dei test; gate I, via il coordinatore, 17/10. Review di X.
+- ✅ **Y-34 · `brokers-detail.spec.ts`: 5 s per il pannello dei lotti dopo «analizza i lotti», sotto carico** — minimo, stabilità
+  dei test; gate I, via il coordinatore, 17/10. Review di X. ✅ 17/10: `expectLotsPanelOpen` (prima l'URL con `?asset=`, 30 s,
+  poi il pannello, 10 s) ed `expectLotsPanelClosed` per i 12 punti; 60 s sui describe «Live price direction flash» e «Asset
+  Detail Page» di `asset-detail.spec.ts`. Entrata in dev `7dbd46aa6` (`69b2fe74e` + `2abcb35d9`). La nota di X a posteriori
+  (il parametro `assetId` mai passato) è chiusa dentro Y-30.
   - `:355` («right-clicking a holding row shows a context menu with both actions») aspetta 5 s `lots-analysis-panel` dopo
     l'azione: caduto una volta col carico vicino a 90, verde da solo col carico a 28 (40/40). La stessa attesa di 5 s è in 12
     test del file (`:314`…`:610`). L'azione scrive `?asset=<id>` nell'URL (`assetPanelUrl.ts`), la pagina lo legge in un `$:`
@@ -8286,6 +8291,11 @@ da Y il 15/10.
     sull'URL. Le altre attese del pannello (`data-quality-real`, `data-quality-legacy`, `stale-price-banner`) seguono un deep
     link: fuori classe.
   - Dettagli: piano di Y, «Y-34».
+- **Y-35 · `PRICE_HISTORY` (il prezzo per lotto) non ha più lettori nell'app** — minimo, domanda per il developer; Y, 17/10
+  (Y-30). Dopo Y-30 il pannello dei lotti chiede `MARKET_PRICE_HISTORY`; `PRICE_HISTORY` / `price_history` resta
+  nell'API pubblica (`POST /portfolio/lots/analysis`), con i suoi test, e l'AI Export non lo usa. Da decidere: tenerlo
+  (API pubblica, nessun costo se nessuno lo chiede) o dichiararlo deprecato e toglierlo in una release successiva.
+  Dettagli: piano di Y, «Y-30».
 
 ## MF · Matematica finanziaria (fase 01)
 
