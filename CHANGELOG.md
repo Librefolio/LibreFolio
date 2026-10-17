@@ -85,6 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- The Dashboard warns when transactions are dated before 1900: they still count, but the history starts on 1 January 1900.
+- Testing a provider's settings is limited to 30 times a minute per user (`LIBREFOLIO_PROBE_RATE_LIMIT`, `0` turns it off); a scheduled investment holds at most 10,000 manual events.
 - `./dev.py user deactivate` on the administrator still waiting for its setup cancels its setup link; `./dev.py user demote` refuses it.
 - On very large instances the asset and FX lists load their prices in several requests, each within the server's limits, instead of one oversized request.
 - **Lots with a broken history**: when an asset's lots cannot be rebuilt (for example a sale of more units than were held), the lots panel no longer draws lots it cannot trust. It says why, lists each transaction to fix (day, broker, a link) and keeps only the average-cost lines; AI Export lists the asset as failed instead of adding wrong figures to the totals.
@@ -266,6 +268,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The lots analysis no longer fails when shares moved by a transfer to or from a broker outside the view (a broker's page, a broker filter, a co-owner who sees one broker, AI Export): units received open a lot at the transfer's cost, units sent close at that day's market price.
 - The lots analysis no longer fails when a transfer between your brokers is still on its way at the end of the chosen period: its units show as in transit.
 - A transaction dated far in the past (e.g. year 1) no longer makes every portfolio report recompute hundreds of thousands of days, nor fail: histories start no earlier than 1 January 1900.
+- A transaction dated in year 1 no longer breaks the lots and the yield on cost.
 - A transaction or report dated at the very edge of the calendar no longer breaks the promote and event suggestions or a broker-report import's checks.
 - A scheduled wake-up no longer waits indefinitely behind a scheduler run that never ends: after ten minutes it gives up, logs a warning and answers `not_leader`, and the next wake-up is accepted instead of refused.
 - The 1D … 5Y change endpoints of the Assets and FX lists now refuse an oversized request or a date before 1900 instead of overloading the server or failing.
@@ -291,6 +294,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Price and FX queries no longer accept date ranges without a ceiling: the end stops at tomorrow and the FX start at 100 years before it; a range reaching year 9999, which previously exhausted the server and ended in an error, now answers at once.
 - Price and FX queries now refuse at once, with an explicit error, a request of more than 1,000 items or one that would build more than 1 million daily points; such a request could previously hold the server for minutes.
 - A risk analysis or an AI Export over a very long period with many assets no longer fails with a server error: it tells you to choose a shorter period (or fewer assets).
+- Current prices: an asset requested twice is fetched once, a request over 1,000 assets is refused, conversions over many currency pairs no longer fail, and server errors no longer show internal details.
 - A number that is not finite (`NaN`, `Infinity`) nested in a provider's parameters or in a risk analytic's parameters is refused (422): a provider's was saved and read back as `null`.
 - The test doubles shipped in the image (`mockprov` for prices, `MOCKFX` and `MOCKFX_FAIL` for exchange rates) are no longer reachable outside test mode. Before, any signed-in user could assign `mockprov` to an asset, which is shared, and give everyone a made-up price series, or route a currency pair through `MOCKFX` and give every conversion a made-up rate. To check an existing instance, look for an asset whose price source is `mockprov` and for an exchange-rate route that names `MOCKFX`.
 - Frame protection (`LIBREFOLIO_FRAME_PROTECTION`, on in the managed profile) now also enforces `object-src 'none'`, `base-uri 'self'` and `form-action 'self'` on HTML pages.
