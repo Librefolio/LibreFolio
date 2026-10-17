@@ -476,6 +476,14 @@ class PortfolioService:
         assets = await self._get_assets_map(set(asset_ids))
         return [(asset_id, assets[asset_id].display_name if asset_id in assets else f"Asset {asset_id}") for asset_id in asset_ids]
 
+    async def _invalid_split_assets(self, engine_result: Any) -> list[tuple[int, str]]:
+        """(asset_id, name) of the assets with a SPLIT event whose stored ratio the engine counted as missing (MF-D4)."""
+        asset_ids = sorted({event.asset_id for event in getattr(engine_result, "invalid_split_events", [])})
+        if not asset_ids:
+            return []
+        assets = await self._get_assets_map(set(asset_ids))
+        return [(asset_id, assets[asset_id].display_name if asset_id in assets else f"Asset {asset_id}") for asset_id in asset_ids]
+
     @staticmethod
     def _merge_missing_pairs(items: list[WACMissingPairInfo]) -> list[WACMissingPairInfo]:
         merged: dict[str, set[date_type]] = defaultdict(set)
@@ -991,6 +999,7 @@ class PortfolioService:
             missing_fx_pairs_dto=merged_missing_fx_pairs,
             transaction_implied_assets_dto=transaction_implied_assets if transaction_implied_assets else None,
             missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
+            invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
             valued_at_cost_assets_dto=valued_at_cost_assets or None,
             mwrr_available=mwrr_result is not None,
             share_mismatches=engine_result.share_mismatches,
@@ -2059,6 +2068,7 @@ class PortfolioService:
             data_quality = views.build_data_quality_report(
                 missing_fx_pairs_dto=_engine_missing_fx_pairs(engine_result, date_from, effective_date_to) or None,
                 missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
+                invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
                 mwrr_available=False,
                 share_mismatches=engine_result.share_mismatches,
                 configured_fx_pairs=configured_fx_pairs,

@@ -4793,6 +4793,321 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Backlog**: B-16 chiuso con ✅. Aggiunti gli SHA ai chiusi di oggi: B-21..B-26 `964ecf434`, B-28 `9403ecda0`, B-29
 > `c96861834`.
 
+### B-9 — il token del pannello fra i controlli della configurazione (2026-10-17, 06:35-07:36) — ✅ entrato in dev `997dc7ecf`
+
+> **B-16 entrato (coordinatore, 06:33)**: dev `3896cb6b3`, il CHANGELOG 🐛 in `47405701f`. HEAD portata in avanti a
+> **`47405701f`**, pulita. Via all'analisi di B-9.
+>
+> Due note di A:
+>
+> - percorsi vecchi nei commenti di `BackupTab.svelte:2` e di `instance_backup/apply.py:3`. Ho letto le due intestazioni:
+>   ogni percorso citato esiste (`./BackupDownloadCard.svelte`, `./RestoreCard.svelte`, `app_lifespan.py`, `dev.py`,
+>   `outcome.py`; gli altri sono file della cartella dei dati). Serve la stringa esatta di A;
+> - A8b toccherà più avanti anche `admin/backup_restore.en.md`: ci sarà un piccolo merge.
+>
+> **Stato reale**:
+>
+> - `backup_download_token()` (`config/backup.py`) solleva `BackupConfigError`
+>   (`BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`, `BACKUP_DOWNLOAD_TOKEN_TOO_SHORT`) o `SecretFileError` (un `_FILE`
+>   illeggibile), e restituisce `None` se non è impostato: allora le rotte del pannello sono spente. Un token
+>   inutilizzabile si vede solo alla prima richiesta del pannello: 503 `backup_panel_unavailable` più una riga d'errore;
+> - `backup_max_upload_mb()` ha lo stesso punto cieco: `BACKUP_MAX_UPLOAD_MB_INVALID`, o `ProfileDefaultError` (H-27),
+>   si vede solo al primo upload (503) o alla lettura dello stato (B-21);
+> - `config_audit.CONFIG_CHECKS` (file di H) contiene i controlli della piattaforma più `*EMAIL_CONFIG_CHECKS` (il modulo
+>   di E, `services/email/checks.py`). All'avvio `log_configuration_audit()` registra ogni controllo che non è `ok`. Solo
+>   `GET /email/status` mostra i controlli di E. Le chiavi `instance.checks.*` di H esistono nei 4 cataloghi per la
+>   futura scheda «Sicurezza», e nessuna pagina le usa ancora;
+> - `test_config_audit.py` (di H) fissa `CHECK_IDS`, una voce per ogni controllo.
+>
+> **Proposta**:
+>
+> - un modulo nuovo di B, `instance_backup/checks.py`, sul modello di quello di E: legge la configurazione, non cambia
+>   nulla, non solleva mai, non mette mai un valore nel risultato, e importa in modo pigro;
+>   - `check_panel_token()` (`backup.panel_token`): non impostato → `info` (le rotte del pannello sono spente); usabile →
+>     `ok`; inutilizzabile → `error`, col solo motivo (`notVisibleAscii`; `tooShort` con `minimum`; `unreadable` per il
+>     `_FILE`). Mai il token né il contenuto del file;
+>   - `check_upload_limit()` (`backup.upload_limit`), **in più rispetto al testo di B-9**, perché ha lo stesso punto
+>     cieco: un valore non valido o un errore della tabella dei profili → `error`; altrimenti `ok`, col limite in `detail`
+>     (0 vuol dire nessun limite);
+>   - `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit)`;
+> - in `config_audit.CONFIG_CHECKS`, una riga `*BACKUP_CONFIG_CHECKS` (file di H); in `test_config_audit.py`, le due voci
+>   di `CHECK_IDS` (file di H). Scrivo io, H rivede;
+> - le chiavi `backup.checks.*` nei 4 cataloghi di `backup/`, come quelle di H: nessuna pagina le usa finché non arriva
+>   la scheda;
+> - il comportamento non cambia, salvo il log: un token o un limite inutilizzabile dà un ERROR già all'avvio, e la
+>   partenza non si ferma. Il self-hosted resta com'è;
+> - test: un file nuovo, `test_services/test_backup_checks.py` (selettore `services backup-checks`), più `services
+>   config-audit`. Solo run leggeri, niente slot;
+> - doc: `hosting_providers.en.md` (il token del pannello) e i controlli d'avvio in `configuration.en.md`, se li elenca.
+>
+> **Costo**: piccolo.
+>
+> **Domande**:
+>
+> 1. includo anche il controllo del limite di upload? Propongo sì;
+> 2. scrivo io la riga in `config_audit.py` e le voci nel test di H, con H che rivede?
+> 3. la stringa esatta della nota di A.
+>
+> **Via (coordinatore, 06:36)**:
+>
+> 1. sì anche al controllo del limite di upload. È coerente con H-37: un `ProfileDefaultError` dà `error`;
+> 2. sì: scrivo io la riga `*BACKUP_CONFIG_CHECKS` in `config_audit.py` e le 2 voci di `CHECK_IDS`, e H rivede. H ora
+>    non tocca quei due file. Però H-37 scrive `developer/architecture/security.md`, quindi se mi serve lo dico prima. A8a
+>    ha righe sue in `config_audit.py`: io aggiungo soltanto, e sto lontano dal blocco `ACCOUNTS_CONFIG_CHECKS`;
+> 3. la nota di A riguarda il **percorso nella UI** («Settings › Backup», `BackupTab.svelte:2`), che A8b sposta nel
+>    gruppo Administration: va allineato **dopo l'ingresso di A8b**, come per E. Ora niente.
+>
+> Quando entra la scheda «Sicurezza» (A8b), controllare con A che mostri i miei id.
+>
+> **Contratto congelato (06:40)** nei file della sessione (`b9-test-brief.md`): le due tabelle di stato, la riga in
+> `config_audit.py`, le chiavi `backup.checks.*`, i test (file nuovo `test_backup_checks.py`, le 2 voci di `CHECK_IDS`,
+> le chiavi nei 4 cataloghi). test-author (TA-B) scrive i rossi; il codice è pronto in uno script di patch
+> (`b9-wip/apply_b9.py`, modulo in `b9-wip/checks.py`), provato a secco e pulito per ruff e black.
+>
+> **⚠️ Fuori pista — revisione del contratto (06:42)**: un token **non impostato** è `ok` (chiave
+> `backup.checks.panelToken.off`), non più `info` come proponeva l'analisi. Motivo: i test di H in
+> `test_config_audit.py` vogliono ogni controllo `ok` su una configurazione predefinita
+> (`test_startup_logs_nothing_when_every_check_is_ok`, e i test della chiave d'istanza e del blocco con
+> `logged == []`); con `info` ogni avvio self-hosted avrebbe una riga in più nel log, contro «il self-hosted resta com'è»
+> dell'analisi. È anche il precedente di E (`email.checks.smtp.off` è `ok`). TA-B avvisato mentre scriveva.
+>
+> **Coordinatore (06:43)**: d'accordo su `ok` per il token non impostato. `developer/architecture/security.md`
+> (scritto ora da H-37): **aspettare l'ingresso di H-37**. Intanto codice, test e doc admin; quando H-37 entra, il
+> coordinatore aggiorna la mia base e aggiungo (a) il paragrafo su `instance_backup/checks.py` nella sezione del backup e
+> (b) la clausola «`backup.checks.*` per quelli di B» nella riga `i18n_key` della tabella di H, **nello stesso lotto
+> B-9**, non dopo.
+>
+> **H-37 entrato (06:47)**: dev `b37e926af`. Due note di H da includere in B-9:
+>
+> 1. in `test_backup_restore.py`, blocco (e), le etichette «B-21, RED until the routes catch it» sono vecchie;
+> 2. la docstring di `backup_max_upload_mb()` («else `0`, the self-hosted default») vale ora solo per `selfhosted`: con
+>    un altro profilo, una voce mancante → `ProfileDefaultError`.
+>
+> HEAD era antenata di `b37e926af`, e i miei 5 file sporchi non erano toccati da `47405701f..b37e926af`. Ho chiesto un
+> fast-forward subito: il selettore in `_backend_services.py`, la nota 1, la riga del backlog e `security.md` cadono
+> tutti in file cambiati in dev. **Coordinatore (06:51)**: ff a **`c8ea9ddd4`** (oltre `b37e926af`: MF SEC7-2 e il
+> changelog); file sporchi intatti; B-9 resta un commit solo. Approvata anche la correzione di `configuration.en.md`
+> l.202-204: «work the same way» dopo «the server stops at startup» fa credere che ogni `_FILE` elencato fermi l'avvio
+> (trovata dal docs-writer).
+>
+> - ✅ **Rossi, giro 1** (TA-B, 06:49): `test_backup_checks.py`, 54 istanze; nel file di H le 2 voci di `CHECK_IDS`
+>   dietro un import protetto, che tollera solo l'assenza del modulo. Oggi: 48 errori al setup (il modulo manca), 2
+>   fallimenti (interprete nuovo), 4 fallimenti (chiavi nei cataloghi), 1 fallimento nel file di H (`set(CONFIG_CHECKS)`
+>   ≠ `set(CHECK_IDS)`).
+> - **⚠️ Fuori pista — ordine in `CONFIG_CHECKS`**: TA-B ha trovato che «dopo `*EMAIL_CONFIG_CHECKS`» (§2 del contratto)
+>   rompe EMK-010, EMK-011 ×5 ed EMK-012 ×4 di E, che fissano «`CONFIG_CHECKS` finisce coi tre controlli dell'email»; lo
+>   dice anche la doc di E (`email.md`: «closes the platform's `CONFIG_CHECKS`»). Decisione mia (posizione scelta da me
+>   nel contratto): `*BACKUP_CONFIG_CHECKS` va **prima** di quelli di E, dopo `check_log_level`. Nessuna modifica ai file
+>   di E; il test di registrazione dice «prima», non «subito prima», così A8a può aggiungere le sue righe in mezzo.
+> - **H-37 nel controllo del limite**: `ProfileDefaultError` ora vuol dire anche una voce mancante, quindi il riassunto
+>   e i testi `profileTable` dicono «missing or of the wrong type» / «nessun valore, o uno del tipo sbagliato».
+>   Nuovi casi chiesti a TA-B: managed con la voce tolta → `profileTable`; selfhosted con la stessa voce tolta → `ok`.
+> - **`_configure` di H**: ha un blocco «Workstream E» che toglie `LIBREFOLIO_SMTP_*`, così i controlli di E sono `ok`.
+>   Con B-9 i test di H «tutto ok» dipendono anche dal token e dal limite (un valore nel `.env` o nella shell
+>   entrerebbe): chiesto a TA-B un blocco «Workstream B» uguale. Da far rivedere a H.
+> - ✅ **Doc admin, giro 1** (docs-writer, 06:46): `configuration.en.md` (righe Main Options, «Secrets in Files», due
+>   righe in «Startup Checks») e `hosting_providers.en.md` (token, riga 503, limite). Il link da `hosting_providers` a
+>   `configuration.md` è senza ancora: `#startup-checks` esiste solo nella pagina inglese (la lezione di B4).
+> - **Giro 2** (in corso): TA-B: l'ordine, gli orari, i casi H-37, il blocco in `_configure`, e le etichette «RED until»
+>   vecchie di `test_backup_restore.py` (blocco (e) e anche (f): `api backup-restore` 130/130 verde nello slot di B-28).
+>   docs-writer: le righe spostate prima dell'email, l.202-204, e `security.md` (a) sezione nuova
+>   `#backup-config-checks` in fondo a «Secure Backups», (b) la clausola `i18n_key` più una frase dopo la tabella
+>   dell'ordine, (c) il paragrafo «never at startup» del token in «Secrets from Files», che B-9 rende falso, (d) una
+>   clausola nelle righe di H-37 su `upload_limit_mb`.
+> - **Codice pronto** in `b9-wip/apply_b9.py`, provato a secco su `c8ea9ddd4`: `checks.py`; in `config_audit.py`
+>   l'import in ordine ruff (dopo `client_address`) e la riga prima del commento di E; la docstring di
+>   `backup_max_upload_mb()` (nota 2 di H); le chiavi nei 4 cataloghi. Il selettore è in `b9-wip/apply_runner.py`.
+> - ✅ **Giro 2 dei test** (TA-B): 57 istanze. Il test di registrazione dice «prima dei controlli dell'email»; gli
+>   orari corretti in 06:42; i casi H-37 (voce managed tolta → `profileTable`; selfhosted con la stessa voce tolta →
+>   `unlimited`; uno anche nell'audit d'avvio). Nel file di H, il blocco «Workstream B» in `_configure`. In
+>   `test_backup_restore.py` le etichette «RED until» riscritte, solo docstring, commenti e banner: (e) B-21 e H-37,
+>   (f) «fixed since» (TA-B ha verificato ogni correzione nel codice). Le due frasi «lot B-13 is not written yet» nei
+>   messaggi di due assert le ho corrette io: solo il testo del messaggio.
+>   TA-B ha anche notato che il test (f) di H fissa `session_cookie → client_address → log_level` adiacenti: la riga di
+>   B va proprio dopo `check_log_level`.
+> - **⚠️ Fuori pista — il 507 alla creazione**: TA-B scriveva che il vecchio suggerimento «507 a disco pieno mentre si
+>   crea il file di upload» non è mai entrato. Verificato: non è così. `os.open` e la scrittura riconoscono già
+>   `ENOSPC` (`_out_of_space` → `UploadNoSpaceError` → 507, `restore_jobs.py` l.153-157 e l.170-173). Resta solo
+>   la creazione della cartella degli upload (`ensure_private_dir`, l.145, fuori da quel `try`) → 500. Annotato come
+>   **B-30** (minimo) nel backlog.
+> - **Coordinatore**: sì alla clausola in `developer/architecture/settings.md` l.68-70 (file di H; H la rivede, e non
+>   tocca `settings.md`, `security.md`, `config_audit.py` né `test_config_audit.py` fino al mio ingresso). OK anche
+>   alle altre scelte. Scritta: «never as a startup check of their own … The backup's startup checks call the upload
+>   limit's reader, and only log its error».
+> - ✅ **Rossi** (07:02-07:03, corsia 6187, carico ~26):
+>   - `services backup-checks`: 6 falliti e 51 errori, nessun passato. 102 righe «does not exist: lot B-9 is not
+>     written yet», 53 `ModuleNotFoundError` del modulo, e le 9 chiavi mancanti in ognuno dei 4 cataloghi;
+>   - `services config-audit`: 1 fallito (`test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing`,
+>     `set(CONFIG_CHECKS) != set(CHECK_IDS)`), 100 passati.
+> - ✅ **Codice** (07:03): `apply_b9.py` applicato (3 operazioni in 2 file, il modulo, 4 cataloghi); ruff e black puliti
+>   sui 6 file Python; `i18n build`: 4983 chiavi (+9); `i18n check` strict pulito.
+> - ✅ **Verdi** (07:04-07:06, carico 25-40): `services backup-checks` 57, `services config-audit` 101,
+>   `services email-checks` 87 (EMK-010/011/012 di E compresi: l'ordine regge), `services admin-bootstrap` 190,
+>   `services profile-defaults` 112, `utils gate-i18n-catalog` 176, `utils gate-i18n-usage` 195. Porta 6187 libera.
+> - ✅ **Doc** (docs-writer, giro 2; rilette da me sul codice finale):
+>   - `configuration.en.md`: le due righe di «Startup Checks» prima di quelle dell'email, e la riga rara aggiornata;
+>     l.205-206 corretta;
+>   - `security.md`: (a) la sezione `#backup-config-checks` in fondo a «Secure Backups»; (b) la clausola nella riga
+>     `i18n_key` e la frase dopo la tabella dell'ordine; (c) il paragrafo del token in «Secrets from Files»; (d) una
+>     frase dopo le righe di H-37;
+>   - `settings.md`: la clausola.
+>   Build strict pulita (07:07-07:09, 86 s), `check-links` pulito, `utils gate-docs-links` 63.
+>   `translate-validate --file admin/configuration.en.md -L`: 309 errori e 663 avvisi su it/fr/es, quasi tutti
+>   vecchi (285 `link-missing`). È il debito della traduzione futura, che parte solo su richiesta; niente stamp.
+> - Non eseguiti: `api` ed `e2e`, perché nessuna rotta cambia. Le modifiche a `test_backup_restore.py` sono solo testo
+>   (py_compile, ruff e black puliti). Niente `front check`: nessun file Svelte o TS cambia, solo i cataloghi JSON,
+>   coperti da `i18n check` e dai due gate.
+> - **Backlog**: B-9 ✅; B-30 nuovo.
+>
+> **Commit e merge con A8a+N70+E-13** (07:12-07:36):
+>
+> - 07:12: il coordinatore committa B-9 (`b35581e5b`). Contro il ramo A8a+N70+E-13 confligge in 4 file; A entra prima.
+>   Intanto, fino al merge: albero pulito, B-30 solo in analisi (sezione «B-30» qui sotto).
+> - 07:22: A8a+N70+E-13 è entrato (dev `45f9c5406`), e il coordinatore apre nel mio worktree il merge di dev nel mio ramo.
+> - Risoluzione, tenendo entrambi i lati, nell'ordine vero di `CONFIG_CHECKS`: piattaforma, **B**, **A**, E.
+>   - `config_audit.py`: `*BACKUP_CONFIG_CHECKS` dopo `check_log_level`, poi `*ACCOUNTS_CONFIG_CHECKS` di A, poi quelli
+>     di E. È l'ordine che il test di A sulla tupla intera
+>     (`test_config_checks_holds_every_check_in_its_place_with_its_id`) già si aspettava: il suo `platform` era ogni
+>     voce di `CHECK_IDS` tranne quelle di E, quindi conteneva anche le due di B. Restano veri «A subito prima dei tre di
+>     E» ed «E per ultimo» (EMK-010/011/012). La docstring del modulo ora nomina i prefissi `auth`, `backup` ed `email`.
+>   - `test_config_audit.py`: in `_configure` entrambi i blocchi (B, poi A); la docstring (c); nel test di A sulla tupla
+>     intera, i controlli di B resi espliciti (`backup = (check_panel_token, check_upload_limit)`, fuori da `platform`).
+>     Il verdetto è lo stesso; il messaggio e la docstring prima erano sbagliati. Da far rivedere a H.
+>   - `configuration.en.md`, «Startup Checks»: le due righe di B, poi quella di A, poi quelle dell'email (ordine del
+>     log).
+>   - `security.md`:
+>     - la riga `i18n_key`: la riscrittura di dev più la clausola `backup.checks.*`, e «No page shows the `instance`,
+>       `auth` and `backup` messages yet»;
+>     - due mie righe che il merge aveva reso false, il punto «In `CONFIG_CHECKS`» e la frase dell'ordine («platform,
+>       B, A, E»);
+>     - due righe `backup.*` nella tabella dell'ordine di H, fra `platform.log_level` e `accounts.login_limit`: senza
+>       di esse la tabella, che dice «in this order», mostrava il controllo di A subito dopo `log_level`. Da far rivedere
+>       a H.
+>   - Riletti gli auto-merge: `settings.md` (la mia clausola intatta; i pezzi di dev stanno altrove),
+>     `_backend_services.py` (entrambi i selettori; compila), `BACKLOG_POST_1.2.md` (sezione B intatta).
+>   - Il nuovo `GET /security/checks` di dev restituisce `run_config_checks()`, quindi anche i due controlli di B. I suoi
+>     test (`api security-checks`, `api login-throttle`) confrontano a runtime, senza una lista fissa: non me ne aspetto
+>     la rottura. Il coordinatore lo mette nel prossimo gate; io lo faccio girare nello slot API di B-30.
+> - Gate (07:27-07:36, corsia 6187, carico 36-48, un'attesa sopra 50): `services config-audit` 102 (101 prima, più il
+>   test di A), `backup-checks` 57, `email-checks` 87, `accounts-checks` 76; `mkdocs build` strict OK (124 s),
+>   `check-links` OK, `utils gate-docs-links` 63. Porta libera; `git diff --cached --check` pulito; ho messo in stage
+>   solo le 4 risoluzioni.
+> - **Entrato**: merge `0f3f72961` → dev `997dc7ecf`, CHANGELOG ✨ `94fb9be08`; HEAD portata in avanti a `94fb9be08`.
+> - **Congelamento** (coordinatore): `frontend/e2e/settings/backup.spec.ts` resta fermo fino all'ingresso di A8b.
+>   A cambia il controllo del membro e il clic a `:263/:276` (il nuovo percorso della scheda); lo rivedo al
+>   checkpoint di A.
+
+### B-30 — un disco pieno negli avvii brevi del backup e del ripristino (2026-10-17, 07:12-08:00) — ✅ 🧊 FROZEN (checkpoint delle 08:00)
+
+> **Analisi** (07:12-07:17, in sola lettura sull'albero pulito; testo intero nei file della sessione,
+> `b30-analysis.md`). `jobs._out_of_space` (ENOSPC, EDQUOT, `SQLITE_FULL`, lungo la catena delle cause) distingue un
+> disco pieno da ogni altro guasto nelle fasi lunghe: la costruzione del backup (`backup_no_space`), il controllo in
+> background (`no_space`), il file e le scritture dell'upload (507). Non negli avvii brevi:
+>
+> 1. **upload, la cartella**: `ensure_private_dir(uploads_dir)` sta fuori dal `try` (`restore_jobs.py` l.145): il primo
+>    upload su un disco pieno dà 500 `backup_upload_failed`, non 507 (il B-30 annotato);
+> 2. **upload, la fine**: `fsync`, `close` e `replace` di `finish()` senza mappatura. NFS e le quote segnalano il
+>    guasto a `close` o `fsync` (close(2)), quindi 500. In più, una `close` fallita lasciava `self._fd` impostato, e
+>    `abort` l'avrebbe chiuso una seconda volta (EBADF, o il descrittore riusato da un altro thread);
+> 3. **il controllo, l'avvio** (`POST /restore/stage` → `start_check`): la rotta non prende `OSError`. ENOSPC, EACCES
+>    o EIO escono come il 500 in testo semplice di Starlette, senza codice, con un traceback nel log; la scheda dice
+>    «unexpected». È la stessa classe della scoperta (f) n.1 di B3, corretta allora solo per l'upload;
+> 4. **la conferma**: lo stesso 500 senza codice (raro; `_write_state` è atomico: mai mezza conferma);
+> 5. **il backup, l'avvio** (scheda e pannello, `start_job`): un disco pieno dà 500 `backup_failed`; un secondo dopo,
+>    nella costruzione, lo stesso disco dà `backup_no_space`;
+> 6. **il riavvio**: `restore_restart_failed` ha un codice ma nessun messaggio nella UI (fuori da `ERROR_KEYS`: dice
+>    «unexpected») e nessuna riga nella guida;
+> 7. **l'annullamento**: un `OSError` dà un 500 senza codice. Non riguarda lo spazio.
+>
+> **Decisioni del coordinatore (07:18)**:
+>
+> 1. ambito **1+2+3+5**;
+> 2. **`stage_failed`** per un `OSError` che non è spazio all'avvio del controllo, con una riga nel log;
+> 3. **B-31** (4, 6, 7) come lotto separato, dopo B-30.
+>
+> L'implementazione parte dopo il merge e l'ingresso di B-9 (via arrivato verso le 07:38), con uno slot API breve per
+> rossi e verdi.
+>
+> **Contratto congelato** (file della sessione, `b30-test-brief.md`):
+>
+> - un disco pieno (ENOSPC o EDQUOT) alla cartella o alla fine dell'upload, all'avvio del controllo, all'avvio del
+>   backup (scheda e pannello) → **507 `backup_no_space`**;
+> - all'avvio del controllo, ogni altro `OSError` → **500 `stage_failed`**, con un ERROR nel log (tipo e strerror);
+> - mai le parole del sistema né un percorso nella risposta; nulla lasciato indietro; il lock del controllo libero;
+> - `jobs._out_of_space` diventa pubblica, `out_of_space`: la usano le rotte;
+> - OpenAPI: 507 in `START_RESPONSES` e sulla rotta del controllo, il cui 500 nomina anche `stage_failed`.
+>
+> Nessun cambiamento del frontend: `backupFailureCode` legge `detail.code` qualunque sia lo stato, e le due schede
+> hanno già le frasi di `backup_no_space` e `stage_failed`. Le guardie lo fissano.
+>
+> **Codice pronto** in `b30-wip/apply_b30.py` (18 operazioni in 5 file), provato a secco su `94fb9be08`. Le copie
+> patchate, scritte nei file della sessione, passano ruff (ordine degli import compreso) e black, letti da stdin col
+> percorso vero del repo: il worktree resta intatto finché i rossi non hanno girato.
+>
+> - ✅ **Rossi scritti** (TA-B, dalle 07:39, ultimo file alle 07:47): 39 istanze in 4 file, nessuna verde oggi.
+>   - `test_backup_restore.py` 15: (1) cartella ENOSPC/EDQUOT ×2; (2) fine dell'upload ×3 (fsync-ENOSPC,
+>     close-EDQUOT, close-ENOSPC), con la chiusura del descrittore contata una sola volta; (3) ×4 e (3') ×4 (le cartelle e
+>     il primo stato, × ENOSPC/EDQUOT o EACCES/EIO; il messaggio esatto, una riga di log, l'upload tenuto, nessuno stato
+>     né thread, poi 202); l'OpenAPI: `refusals` (+507) e un test nuovo sui codici `no_space`/`stage_failed`;
+>   - `test_backup_instance_errors.py` 4: ENOSPC, EDQUOT, EIO causato da ENOSPC → 507, più l'OpenAPI;
+>   - `test_backup_panel.py` 2 (PANEL-022): l'avvio del pannello su un disco pieno → 507, più l'OpenAPI;
+>   - `test_backup_jobs.py` 18: `jobs._out_of_space` → `jobs.out_of_space`.
+>   Note di TA-B:
+>   - la doppia `close` è un bug vero: una `close` fallita lasciava il numero a `abort`, che su Linux poteva chiudere
+>     il file aperto nel frattempo da un'altra richiesta;
+>   - il lock di (3) funziona già oggi: manca solo la mappatura nella rotta;
+>   - `_FOLDER_UNUSABLE` è condiviso fra stage e conferma, quindi lo stage ha la sua descrizione (`_STAGE_NOT_STARTED`
+>     nella patch).
+> - ✅ **Rosso leggero** (07:49, corsia 6187, carico 27): `services backup-jobs`, 18 falliti e 51 passati: 16
+>   `AttributeError: … has no attribute 'out_of_space'`, più i 2 cicli, che falliscono dentro il loro thread.
+> - **Slot API chiesto** (07:48): i rossi `api backup-restore`, `backup-instance-errors` e `backup-panel`, poi il
+>   codice, poi i verdi degli stessi più `api backup`, `backup-secure`, `backup-restore-apply` e `security-checks`.
+> - ✅ **Slot 2** (concesso alle 07:49, rilasciato alle 07:57; corsia 6187, carico 20-36):
+>   - rossi (07:50-07:54): `api backup-restore` 15 falliti e 131 passati, `api backup-instance-errors` 4 e 6,
+>     `api backup-panel` 2 e 59. Ognuno per la ragione attesa: 500 `backup_upload_failed`; il 500 in testo semplice di
+>     Starlette («Internal Server Error») all'avvio del controllo; i 507 e i codici assenti dall'OpenAPI. Il primo run ha
+>     ricostruito frontend e doc (svelte-check: 0 errori);
+>   - **codice** (07:54): `apply_b30.py`, 18 operazioni in 5 file; ruff e black puliti sui 6 file Python di B-30;
+>     nessun `_out_of_space` rimasto;
+>   - verdi (07:54-07:57): `api backup-restore` 146, `api backup-instance-errors` 10, `api backup-panel` 61,
+>     `api backup` 23, `api backup-secure` 24, `api backup-restore-apply` 136, `api security-checks` 3 (i due controlli
+>     di B ora fra quelli che l'endpoint restituisce).
+> - ✅ **Verdi leggeri** (07:57-07:58): `services backup-jobs` 69, `backup-staging` 161, `backup-secure` 68,
+>   `backup-leftovers` 44, `backup-checks` 57.
+> - ✅ `api sync` (07:58): l'OpenAPI documenta il 507 sui tre avvii (stage `no_space`; istanza e pannello
+>   `backup_no_space`) e il 500 `stage_failed` dello stage; i file generati sono ignorati da git.
+> - ✅ **Doc** (07:59-08:00): `mkdocs build` strict OK (55 s), `check-links` OK, `utils gate-docs-links` 63. Traduzioni:
+>   `backup_restore.en.md` non ne ha;
+>   `hosting_providers.en.md` non ne ha.
+> - Non eseguiti: `e2e` (nessun file Svelte né componente cambia; `frontend/e2e/settings/backup.spec.ts` resta fermo per
+>   A8b), `front check` a parte quello del build dentro il primo run `api`.
+> - **Backlog**: B-30 ✅; B-31 nuovo (conferma, annullamento, messaggio del riavvio).
+> - ✅ **Guardie Vitest** (TA-F, 07:43): 4 casi in 3 file (`backupJob.test.ts`, `BackupDownloadCard.test.ts`,
+>   `restoreFlow.test.ts`), verdi già oggi per lettura del codice (non ancora eseguiti): ogni codice si legge da
+>   `detail.code` qualunque sia lo stato, e le schede lo traducono. Nessun buco funzionale del frontend.
+> - **Revisione di H su B-9** (OK, via il coordinatore, 07:45): nella docstring di `instance_backup/checks.py`
+>   «right before E's email checks» non è più vero, perché in mezzo ci sono quelli di A. Corretta dentro B-30: «right
+>   after the platform's own checks and before workstream A's and E's (E's close it)»; ruff e black puliti. Le
+>   impalcature «B-9 is not written» in `test_config_audit.py` le toglie H in H-35: io non le tocco.
+> - **⚠️ Fuori pista — il codice all'avvio del controllo** (07:44, decisione mia, dentro i codici di B): TA-F nota che
+>   il 507 `backup_no_space` all'avvio del controllo farebbe dire alla scheda «Not enough free space on the server for
+>   this archive.», la frase scritta per l'upload. Il codice del controllo che resta senza spazio, `no_space`, dice
+>   invece «…to check the archive». Quindi all'avvio del controllo: **507 `no_space`** e 500 `stage_failed`, i due
+>   codici del controllo (`StagingError`). L'upload e l'avvio del backup restano `backup_no_space`. Aggiornati la patch,
+>   il contratto (revisione 07:44), TA-B (mentre scriveva), TA-F e il docs-writer.
+> - ✅ **Guardie eseguite** (07:45, carico 24): `vitest run` su `backupJob.test.ts`, `BackupDownloadCard.test.ts`,
+>   `restoreFlow.test.ts`: 3 file, 412 test verdi. Il frontend legge già le nuove risposte, senza cambiare nulla.
+> - ✅ **Doc** (docs-writer, finito alle 07:44; codice non ancora applicato):
+>   - `backup_restore.en.md`: quattro righe in «What Settings › Backup Says» (upload `backup_no_space`, controllo
+>     `no_space`, `stage_failed`, backup `backup_no_space`), in un solo blocco per il merge con A8b;
+>   - `hosting_providers.en.md`: una riga `507` all'avvio del pannello; il 507 dell'upload vale anche per un disco che
+>     si dice pieno solo alla fine;
+>   - `security.md`: «The start» del backup, la riga delle rotte del controllo, un paragrafo su `jobs.out_of_space` e su
+>     `UploadWriter`.
+>   Il docs-writer ha corretto il mio contratto: la cartella è `.restore/upload/` (`UPLOAD_FOLDER = "upload"`), non
+>   `uploads/`. Nota sua, lasciata com'è: dopo un avvio di controllo fallito, la scheda dimentica l'id dell'upload; nella
+>   UI «riprova» vuol dire scegliere di nuovo l'archivio, che sostituisce quello tenuto.
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
