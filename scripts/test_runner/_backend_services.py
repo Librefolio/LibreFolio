@@ -53,7 +53,7 @@ AI_EXPORT_PURE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_temporal_aggregator_invariants.py",
 )
 
-# Provider error paths: what the four price/FX providers do when the source
+# Provider error paths: what the price and FX providers do when the source
 # misbehaves. Every HTTP client is doubled, so these never leave the machine —
 # which is also the only way the assertions can be exact rather than "something
 # arrived". No session and no server either, hence PURE and its own unit: folding
@@ -61,6 +61,7 @@ AI_EXPORT_PURE_TEST_PATHS = (
 # waste the parallelism on tests that touch nothing.
 PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_borsa_italiana_errors.py",
+    "backend/test_scripts/test_services/test_fx_parse_errors.py",
     "backend/test_scripts/test_services/test_justetf_errors.py",
     "backend/test_scripts/test_services/test_snb_errors.py",
     "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
@@ -950,6 +951,15 @@ def services_asset_digit_limits(verbose: bool = False, test_names: list = None) 
     print_info("Tests: manual prices (12 decimals) and events (6) beyond the limit or 15 significant digits refused with nothing written, provider prices truncated, what fits read back exactly")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_digit_limits.py", test_names)
     return run_command(cmd, "Asset digit limit tests", verbose=verbose)
+
+
+def services_current_price_storable(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R40 + W-B62: the current price and the price refresh serve, cache and announce only what the database can keep."""
+    print_section("Services: Current Price Storable")
+    print_info("Testing: backend/app/services/assets/price_query.py (get_current_prices_bulk), refresh.py (bulk_refresh_prices)")
+    print_info("Tests: an unstorable quote never served nor cached (database fallback) and logged once per value, a valid one served and cached as the database keeps it, a refresh's changed_points and current-value cache limited to what is stored, a fallback past an unreadable close")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_price_storable.py", test_names)
+    return run_command(cmd, "Current price storable tests", verbose=verbose)
 
 
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
@@ -2078,6 +2088,18 @@ Note: No backend server required.
         # created under a unique name, and only their prices and events, written, read and wiped by asset id.
         # Nothing here counts or reads a row it did not write.
     )
+    add_test(
+        cat,
+        "current-price-storable",
+        services_current_price_storable,
+        name="Current Price Storable",
+        desc="X-R40 + W-B62: a current quote no price column keeps (storable_price None: 1E+50000000, 1E+60, 1E-13, a float inf) never served nor cached -- the item falls back to the latest stored close that reads a number (db:last_known) or to an error, the next call asks the provider again -- and its refusal logged once per (asset, provider, value), never at every poll; a valid quote served and cached as the database keeps it (65432.1234567890999 -> 65432.123456789), one that already fits served in its own form; a refresh leaves out of changed_points a date no column keeps, and neither caches nor stores nor announces an unstorable current value, while it caches a valid one as stored; the database fallback passes over a close that reads None and never raises",
+        # WRITE-SCOPED, the category default, as asset-digit-limits: every row is this unit's own -- two assets
+        # created under a unique name, and only their prices, events and provider assignment, written, read and
+        # wiped by asset id. The provider codes are unique per test, so the current-value cache entries and the
+        # log-once keys are the test's own; the cache's set is patched for one test only (monkeypatch).
+        # Nothing here counts or reads a row it did not write.
+    )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
@@ -2389,7 +2411,7 @@ Note: No backend server required.
         "provider-errors",
         services_provider_errors,
         name="Provider Error Paths",
-        desc="justETF, Borsa Italiana, Yahoo Finance and SNB when the source misbehaves or refuses for too many requests (every client doubled)",
+        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE and FED when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50)",
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")

@@ -212,27 +212,91 @@ When calling `POST /api/v1/fx/currencies/sync`:
 
 This ensures resilience to individual provider outages and supports currency pairs that no single provider covers directly.
 
-### 📅 Chain Dates, Writes and Counters
+### 📅 Chain Dates, Writes and Counters {: #chain-dates-writes-and-counters }
 
 - **Strict date matching.** `compute_chain_rate()` (`backend/app/services/fx/conversion.py`) produces a chain
   rate for a date only when every leg has a rate on that exact date; a missing leg skips the date.
-  A chain through a sparse series therefore has rates only on the dates that series publishes.
+  A chain through a sparse series therefore has rates only on the dates that series publishes. A leg
+  that is present but unusable (one `storable_fx_rate()` refuses, or at most 0) counts as missing
+  (X-R38): a chain never divides by zero, nor yields an infinite or absurd rate.
 - **Upsert, the provider wins.** Rates are written with
   `INSERT … ON CONFLICT (date, base, quote) DO UPDATE`, which replaces `rate`, `source` and
   `fetched_at`. A synced date overwrites whatever was stored, including a rate entered by hand
   through `POST /api/v1/fx/currencies/rate` (`upsert_rates_bulk()`, the same upsert). Dates outside
   the requested range are not written.
-- **Counters.** `points_fetched` counts the rates computed for the pair in the range;
-  `points_changed` counts the new dates plus the dates whose value changed, compared at storage
-  precision (`_count_actual_changes()`, `truncate_fx_rate()`).
+- **What the column keeps.** `fx_rates.rate` is `Numeric(24, 10)`: 10 decimal places and 14 digits
+  before the decimal point (`max_integer_digits()`, precision − scale). `storable_fx_rate()`
+  (`backend/app/db/precision.py`; X-R38, the FX side of W-B58) answers the rate as the column keeps
+  it (`truncate_fx_rate()`: 10 decimal places, rounded down), or `None` when it is not finite, has
+  more than 14 digits before the point, or is 0 once truncated (below `1E-10`): a rate is never 0,
+  since its inverse and the conversions divide by it. It also answers `None` when the truncated
+  rate's double reaches `1E+14` (`float(stored) >= 1E+14`; X-R50): SQLite keeps the rate as a
+  double, and a rate within about 0.008 of `1E+14` with more digits than a double holds, such as
+  `99999999999999.995`, has 14 digits before the point but would be stored as `1E+14`, which the
+  conversions skip as unusable ([Loading only the usable rate window](architecture.md#convert-bulk-window));
+  `99999999999999.99` stays the double `99999999999999.98` and is kept. Like W-B58's helpers (see
+  [Decimal Columns](../../architecture/database/index.md#decimal-columns)), it counts the digits
+  without a decimal context and never raises: `1E+1000000` and `1E-2000000` are refused, never an
+  overflow or a zero. A negative rate is its callers' to refuse.
+- **A provider's rate the column cannot keep is skipped.** While a provider's answer is read
+  (`_collect_leg_rates()`), an observation that is not a finite rate above 0, or whose inverse
+  overflows or underflows to 0, is set aside (`normalize_storable_rate()`) instead of making every
+  leg of that provider fail. A rate `storable_fx_rate()` refuses once normalized is skipped when
+  stored; before, from
+  `1E+50` up the route failed with none of the pair's dates stored, and a failing primary route
+  switched the pair to its fallback route. For a chain (`_storable_chain_rates()`), a date whose leg
+  is present but unusable, or whose chain rate the column cannot keep (`1E+20`, or 0 once
+  truncated), is skipped. A skipped rate is never stored and never fails the pair: its other dates
+  are stored. One warning per pair and per sync (`_warn_unusable_rates()`), *FX rates skipped: the
+  column cannot keep them*, covers its skipped rates, the observations of its legs set aside
+  included, with `pair`, `provider` (the `CHAIN:…` source for a chain), `skipped` (the count),
+  `dates` (the earliest ten, ISO) and `limits` (`fx_rate_limits_text()`). The unwired
+  `ensure_rates_multi_source()` follows the same rules: one normalization pass, the rate skipped,
+  one warning per pair.
+- **A manual rate the column cannot keep is refused.** `upsert_rates_bulk()`
+  (`backend/app/services/fx/storage.py`) refuses a base equal to its quote and a finite rate ≤ 0
+  (*Rate must be positive*), then puts the pair in alphabetical order, inverting the rate when the
+  base comes after the quote, and checks the limits on the rate as stored, never on the rate typed:
+  MMK → KHR `1E-13` is stored as KHR/MMK `1E+13`, accepted. A rate that is not finite, whose inverse
+  overflows (`1 / 1E-1000000`) or underflows to 0 (`1 / 1E+1000027`), or that `storable_fx_rate()`
+  refuses is a `ValueError` naming the pair in stored order, the date and the limits
+  (`fx_rate_refusal()`): *The rate of KHR/MMK on
+  2024-01-02 cannot be stored: an exchange rate keeps at most 14 digits before the decimal point
+  and 10 decimal places, and must stay above 0 once cut to them*. Nothing of the call is written;
+  before, `1E+400` was stored as a REAL inf, and its inverse and `1E-11` as values that read back
+  0. A valid rate is still written as normalized, not truncated.
+- **The manual-rate endpoint.** `POST /api/v1/fx/currencies/rate` (`upsert_rates_endpoint()`,
+  `backend/app/api/v1/fx/currencies.py`) handles its items one by one: a refused item becomes
+  `Rate N: Validation error: …` in `errors` (N, the item's 0-based index) while the others are
+  stored (200), and when every item fails the answer is 400 *All rates failed: …*. Its own
+  inversion runs inside the item's `try` (`normalize_storable_rate()`), so an inverse that
+  overflows is that item's error, never a 500, and one that underflows to 0 is refused naming the
+  limits, like any rate the column cannot keep (X-R50; before, the item's error was *Rate must be
+  positive (got 0E-1000026)*). The schema answers 422 to a rate that is not a
+  number (`"abc"`, `true`, `"0x10"`), not finite (the JSON number `1E+400`, which JSON parsing
+  turns into `inf`; `NaN`; `"Infinity"`) or ≤ 0 (`gt=0`): `FXUpsertItem.coerce_rate()` reads a
+  finite float through its shortest decimal text (`0.1` → `Decimal("0.1")`) and hands anything
+  else to Pydantic as it came, a non-finite float as its text (`"inf"`), which the 422 can echo.
+  Before, `"abc"` made the validator raise `InvalidOperation` past Pydantic, and a non-finite rate
+  was echoed as `Decimal('Infinity')`, which the JSON renderer cannot write: both were a 500.
+- **Counters.** `points_fetched` counts the rates computed for the pair in the range, the skipped
+  ones left out; `points_changed` counts the new dates plus the dates whose value changed, compared
+  at storage precision (`_count_actual_changes()`, which reads the stored rate through
+  `storable_fx_rate()`). A legacy stored rate the column cannot keep (an infinite one, `1e60`, 0)
+  compares as a change, and the upsert overwrites it; before, a stored inf or `1e60` made the
+  comparison raise and the pair's sync fail. `ensure_rates_multi_source()` compares the same way.
 - **Empty is not a failure.** The next route is tried only when a leg of the current one fails,
-  its wait for the legs times out (120 s) or its computation raises. A route that answers with no
-  rate in the range ends the pair as `partial`: the next route is not tried.
+  its wait for the legs times out (120 s) or its computation raises; a rate the column cannot keep
+  does none of these. A route that answers with no rate in the range ends the pair as `partial`:
+  the next route is not tried. A single-step route whose every rate in the range was skipped says
+  so in its `message`, *Provider P returned no rate the database can keep for B/Q in start–end:*
+  followed by the limits; a chain keeps its *Chain … produced no complete rates* message, and the
+  warning names the dates.
 
 | Status | When |
 |:-------|:-----|
 | `ok` | The route produced at least one rate in the range |
-| `partial` | The route answered but produced no rate in the range; `message` and `detail` (per leg: `dates_available`, `error`) say why |
+| `partial` | The route answered but produced no rate in the range, or none the column can keep; `message` and `detail` (per leg: `dates_available`, `error`) say why |
 | `skipped` | Every route of the pair is `MANUAL` |
 | `failed` | The pair has no route, or every route failed; `errors` lists the failure of each route |
 

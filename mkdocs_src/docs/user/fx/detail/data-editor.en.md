@@ -43,6 +43,10 @@ save.
 
 Your changes show on the chart as a purple **Preview** line. **Save (N)** writes them all;
 **Cancel** drops them. A rate must be greater than zero: a zero, negative or empty one is skipped.
+A rate the database cannot keep — more than 14 digits before the decimal point, or below
+0.0000000001 — is refused when you save and is not stored. The limit applies to the rate as stored:
+LibreFolio keeps each pair in alphabetical order, so on the USD/EUR page it applies to 1 ÷ the rate
+you type.
 
 !!! warning "Synced data overwrites manual edits"
 
