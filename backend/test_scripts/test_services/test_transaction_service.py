@@ -27,13 +27,14 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode
+from backend.app.schemas.transactions.batch import TXBatchResponse, TXPromoteBatchItem, TXSplitBatchItem, TXValidationCode
 from backend.app.schemas.transactions.promotion import TXTransferPromoteRequest
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXUpdateItem
 from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, PairFieldConstraint, TXTypesResponse
@@ -331,6 +332,93 @@ class TestServiceHelpers:
         )
 
         assert result is True
+
+
+# ============================================================================
+# THE PARAMS OF A LONE BUSINESS-RULE ERROR (N78, W-B72)
+# ============================================================================
+
+# A BUY of -5 units paying 500 EUR, valid but for rule 10: qtyPositive is its one error, a lone one.
+LONE_RULE_BUY = {"broker_id": 1, "asset_id": 1, "type": "BUY", "date": "2025-02-03", "quantity": "-5", "cash": {"code": "EUR", "amount": "-500"}}
+# A DEPOSIT valid but for its description, one character past the 500 TXCreateItem allows: a field-level error, alone.
+LONG_DESCRIPTION_DEPOSIT = {"broker_id": 1, "type": "DEPOSIT", "date": "2025-02-03", "cash": {"code": "EUR", "amount": "100"}, "description": "x" * 501}
+
+
+def _pydantic_errors(model, raw: dict) -> list[dict]:
+    """What pydantic answers of ``raw`` under ``model``: its errors (``type``, ``loc``, ``ctx``); [] when it validates."""
+    try:
+        model.model_validate(raw)
+    except ValidationError as exc:
+        return exc.errors()
+    return []
+
+
+def _lone_parse_issues(raw: dict, model, operation: str) -> list[tuple]:
+    """The issues ``_parse_lenient`` answers for ``raw`` sent alone, as ``(operation, index, code, field, params)``."""
+    parsed, issues = _parse_lenient([raw], model, operation)
+    assert parsed == [], f"scaffold: the {operation} must be refused at the parse; it parsed: {parsed}"
+    return [(issue.operation, issue.index, issue.code, issue.field, issue.params) for issue in issues]
+
+
+class TestParseLenientParamsOfALoneError:
+    """The params of a lone business-rule error: the coordinator's approval of 17/10, with the refined N78 (W-B72).
+
+    ``_parse_lenient`` (``transaction_batch_stages.py``) unpacks ``multipleBusinessRuleErrors`` into one issue per packed
+    error, each with its context as ``params`` (``test_parse_lenient_unpacks_multiple_business_rule_errors``), but gives a
+    LONE error ``params`` None: a create breaking one business rule reaches the app without the ``{type}`` its message names.
+    The contract: a lone model-level business-rule error — ``loc`` empty, its context plain data (str, int, float, bool or
+    None values) — keeps that context as ``params``. A field-level pydantic error (``loc`` not empty) and a ``value_error``
+    (``loc`` empty too, but its context holds the exception itself) keep ``params`` None: the H-41 and decimal-places pins
+    stay valid. Each case first checks what pydantic answers, so it tests the kind of error it names.
+
+    - RED until the lone-params cure: a BUY of −5 units paying 500 EUR breaks rule 10 alone, ``qtyPositive``; its issue
+      carries ``{"type": "BUY"}``, today None.
+    - Guard: a description of 501 characters gets ``string_too_long`` on ``description``, ``params`` None.
+    - Guard: a split or a promote its own model validator refuses with a ``ValueError`` — a split's ``id_a == id_b``, a
+      promote without a reference to its TX B (a promote's validator does not compare the two ids) — gets ``value_error``,
+      no field, ``params`` None.
+    """
+
+    def test_a_lone_business_rule_error_keeps_its_context_as_params(self):
+        """RED until the lone-params cure: ``("create", 0, "qtyPositive", None, {"type": "BUY"})``; today ``params`` None."""
+        errors = _pydantic_errors(TXCreateItem, LONE_RULE_BUY)
+        assert [(error["type"], error["loc"], error.get("ctx")) for error in errors] == [("qtyPositive", (), {"type": "BUY"})], f"scaffold: the BUY of -5 units must break rule 10 alone, a model-level error with the context {{'type': 'BUY'}}; pydantic answers {errors}"
+
+        issues = _lone_parse_issues(LONE_RULE_BUY, TXCreateItem, "create")
+
+        assert [issue[:4] for issue in issues] == [("create", 0, "qtyPositive", None)], f"The lone qtyPositive must be the one issue of create 0, on no field: {issues}"
+        assert issues[0][4] == {"type": "BUY"}, (
+            f"N78 (W-B72), lone params: a create breaking rule 10 alone must keep its context as params {{'type': 'BUY'}}, as a packed error does; today it carries {issues[0][4]!r}. "
+            "_parse_lenient keeps the ctx of a business-rule error only when several are packed (multipleBusinessRuleErrors), so the app cannot name the type"
+        )
+
+    def test_guard_a_field_level_error_keeps_params_none(self):
+        """Guard, green today and after: ``("create", 0, "string_too_long", "description", None)`` — the context
+        ``{"max_length": 500}`` is plain data, but the error is the field's, not the model's."""
+        errors = _pydantic_errors(TXCreateItem, LONG_DESCRIPTION_DEPOSIT)
+        assert [(error["type"], error["loc"]) for error in errors] == [("string_too_long", ("description",))], f"scaffold: the DEPOSIT must fail on its description alone, a field-level error; pydantic answers {errors}"
+
+        issues = _lone_parse_issues(LONG_DESCRIPTION_DEPOSIT, TXCreateItem, "create")
+
+        assert issues == [("create", 0, "string_too_long", "description", None)], f"A field-level pydantic error keeps params None (the approval of 17/10): {issues}"
+
+    @pytest.mark.parametrize(
+        ("model", "operation", "raw"),
+        [
+            pytest.param(TXSplitBatchItem, "split", {"id_a": 7, "id_b": 7}, id="split-id_a-equals-id_b"),
+            pytest.param(TXPromoteBatchItem, "promote", {"id_a": 7}, id="promote-without-a-reference-to-tx-b"),
+        ],
+    )
+    def test_guard_a_value_error_of_a_model_validator_keeps_params_none(self, model, operation, raw):
+        """Guard, green today and after: ``(operation, 0, "value_error", None, None)`` — a model-level error like a business
+        rule's, ``loc`` empty, but its context ``{"error": ValueError(...)}`` is no plain data."""
+        errors = _pydantic_errors(model, raw)
+        assert [(error["type"], error["loc"]) for error in errors] == [("value_error", ())], f"scaffold: the {operation} {raw} must fail its own model validator alone, a model-level value_error; pydantic answers {errors}"
+        assert isinstance((errors[0].get("ctx") or {}).get("error"), ValueError), f"scaffold: the context of a validator's value_error holds the exception itself; pydantic answers {errors[0].get('ctx')!r}"
+
+        issues = _lone_parse_issues(raw, model, operation)
+
+        assert issues == [(operation, 0, "value_error", None, None)], f"A value_error keeps params None (the approval of 17/10): {issues}"
 
 
 # ============================================================================
@@ -2746,6 +2834,51 @@ class TestTransferPromotion:
         expected = [("create", index, None, "integerDigitsExceeded", "quantity", {"max": 15}) for index in (0, 1)]
         assert _issue_tuples(batch) == expected and batch.committed is False, f"R13-SEC7-3: the batch must refuse both legs of {quantity} units with {expected}; it answered committed={batch.committed}, issues {_issue_tuples(batch)}"
         await _assert_promotion_left_nothing(session, response, before, broker_ids)
+
+    # ------------------------------------------------------------------
+    # N78 (W-B72) — an FX_CONVERSION promotion refuses a cost basis
+    # ------------------------------------------------------------------
+    #
+    # The coordinator's approval of 17/10, with the refined N78. ``promote_transfer`` builds the two legs of an
+    # FX_CONVERSION without ``req.cost_basis_override``: a cost basis sent with one is dropped in silence and the promotion
+    # commits. Neither leg of an FX_CONVERSION takes a cost basis (``cost_basis_allowed``), so the request is refused
+    # instead, as an ``asset_id`` sent with one is: rolled back, one error naming ``cost_basis_override`` and FX_CONVERSION.
+
+    @pytest.mark.asyncio
+    async def test_promote_to_fx_conversion_with_a_cost_basis_is_refused(self, session, test_broker_overdraft):
+        """RED until N78's promotion cure. The FX_CONVERSION promotion of
+        ``test_promote_deposit_withdrawal_to_fx_conversion_intra_broker`` — a WITHDRAWAL of 500 EUR and a DEPOSIT of 540 USD
+        on one broker — sent with a cost basis of 12.5 EUR, run as the route runs it (``_promote_as_the_route``): rolled
+        back; exactly one error, naming ``cost_basis_override`` and FX_CONVERSION (the sentence is the cure's: only those
+        two names are pinned); the cash pair as it was; no FX_CONVERSION row on the broker. Today the promotion commits,
+        and the cost basis is dropped."""
+        service = TransactionService(session)
+        resp = await create_bulk(
+            service,
+            [
+                TXCreateItem(broker_id=test_broker_overdraft.id, type=TransactionType.WITHDRAWAL, date=date.today(), cash=Currency(code="EUR", amount=Decimal("-500"))),
+                TXCreateItem(broker_id=test_broker_overdraft.id, type=TransactionType.DEPOSIT, date=date.today(), cash=Currency(code="USD", amount=Decimal("540"))),
+            ],
+        )
+        assert resp.rolled_back is False, f"scaffold: the cash pair was not stored: {resp.errors}"
+        from_id, to_id = resp.results[0].transaction_id, resp.results[1].transaction_id
+        before = await _rows_state(session, [from_id, to_id])
+        request = TXTransferPromoteRequest(from_tx_id=from_id, to_tx_id=to_id, new_type=TransactionType.FX_CONVERSION, cost_basis_override=Currency(code="EUR", amount=Decimal("12.5")))
+
+        response = await _promote_as_the_route(session, request, "an FX_CONVERSION promotion with a cost basis of 12.5 EUR")
+
+        if not response.rolled_back:
+            statement = select(Transaction.id, Transaction.type, Transaction.cost_basis_override, Transaction.cost_basis_currency).where(Transaction.id.in_([response.new_from_tx_id, response.new_to_tx_id]))
+            written = {row.id: (row.type.value, row.cost_basis_override, row.cost_basis_currency) for row in await session.execute(statement)}
+            pytest.fail(
+                "N78 (W-B72): an FX_CONVERSION promotion sent with a cost basis of 12.5 EUR must be refused — rolled back, one error naming cost_basis_override and FX_CONVERSION; "
+                f"today it committed (errors {response.errors}), the pair re-created as {written} (id: type, cost basis, currency): the cost basis dropped in silence"
+            )
+        assert len(response.errors) == 1 and "cost_basis_override" in response.errors[0] and "FX_CONVERSION" in response.errors[0], f"N78: the refusal must be exactly one error, naming cost_basis_override and FX_CONVERSION; the promotion answered {response.errors}"
+        after = await _rows_state(session, [from_id, to_id])
+        assert after == before, f"N78: the promotion was refused, yet the cash pair changed: before {before}, after {after}"
+        fx_rows = (await session.execute(select(Transaction.id).where(Transaction.broker_id == test_broker_overdraft.id, Transaction.type == TransactionType.FX_CONVERSION))).scalars().all()
+        assert fx_rows == [], f"N78: the promotion was refused, yet the broker holds the FX_CONVERSION rows {fx_rows}"
 
 
 # ============================================================================

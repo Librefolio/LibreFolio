@@ -3913,10 +3913,50 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     Quasi ovunque il server risponde con un redirect, quindi il danno è raro.
   - Cura: i link tengono il percorso com'è scritto, per esempio con un parametro di `env_url` o con una funzione
     sorella; `PUBLIC_URL` tiene il taglio. Gli stessi controlli (`http(s)`, nome dell'host, niente credenziali).
-  - Tocca lettori e test di A (`test_legal_links.py` confronta con quello che dà `env_url`): serve l'OK di A sui suoi
-    file.
+  - **Rimandata a dopo la 1.3** (coordinatore, 17/10). I rossi erano scritti, ma la cura toccava più di quanto stimato.
+    Il lavoro in corso (i test, la doc, `apply_h48.py`) è conservato fuori dal repo, nella cartella della sessione H
+    (`files/h48-wip/`); i file del repo sono tornati come prima.
+  - I test da cambiare (13), con l'OK di A sui suoi:
+    - miei:
+      - `test_config_package.py`: i sei test di `env_url` estesi a `env_link`; due test nuovi su `env_link`; la riga
+        `stripped-without-its-trailing-slash` di `support_url`; `test_support_link_is_the_support_address_and_logs_nothing[valid-is-the-address]`;
+      - `test_instance_block.py`: `BILLING_LINK`, la riga `https-one-trailing-slash-removed` e
+        `test_the_block_page_gives_a_regular_user_no_billing_link`;
+      - `test_system_api.py`: `test_the_configured_support_address_is_answered[set-without-its-trailing-slash]`;
+    - di A:
+      - `test_legal_links.py`: le righe `stripped-without-its-trailing-slash` e `ipv4-with-a-port`, il confronto con
+        `env_url` e `test_the_link_is_the_address_and_logs_nothing[terms|privacy-valid-is-the-address]`;
+      - `test_instance_config_legal_api.py`: `test_a_valid_address_is_published_as_env_url_gives_it[selfhosted|managed-both-stripped-…]`;
+      - `test_registration_service.py`: `test_a_url_variable_is_stripped_of_spaces_and_of_its_trailing_slash[trailing-slash|stripped-http-with-port|path-and-case-kept-billing_url]`
+        e `test_a_missing_url_or_a_valid_billing_url_is_no_problem_to_report`.
+  - Selettori: `services config-package`, `legal-links`, `registration`; e, con uno slot di ~8 min,
+    `api instance-block`, `api system`, `api instance-legal`.
 
-  Dettagli: piano H, §14, «Review di A9».
+  Dettagli: piano H, §14, «Review di A9» e lotto «H-49 e H-48».
+- **H-49 · `platform.test_mode`: un lane id nei limiti della sonda di prontezza** — basso; E (review di H-46), via
+  coordinatore, 17/10. Da fare con H-48.
+  - H-46 conta come corsia ogni `LIBREFOLIO_TEST_LANE_ID` non bianco. Il runner ne crea uno di 32 caratteri, e la sonda
+    `test-lane-health` accetta da 16 a 128 caratteri: un lane id fuori da quei limiti non è una corsia che funziona.
+  - Cura: i due limiti in costanti accanto a `owning_test_lane_id()`, usate dalla sonda e dal controllo.
+  - Cura fatta il 17/10 da H (lotto «H-49 e H-48», piano H §14); E rivede.
+    - `TEST_LANE_ID_MIN_LENGTH` (16) e `TEST_LANE_ID_MAX_LENGTH` (128) in `config/platform.py`, usati dalla sonda e da
+      `platform.test_mode`: è una corsia solo un id, senza spazi, fra quei limiti.
+    - Il messaggio dello stop managed dice «(no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters)».
+    - Test: `services config-audit`, 220.
+
+  Dettagli: piano H, §14, lotto «H-49 e H-48».
+- **H-50 · Le impostazioni di scope SYSTEM si leggono una volta per voce di `/prices/current`** — basso, prestazioni;
+  E (R13-SEC9), via coordinatore, 17/10. Dopo la 1.3.
+  - `configure_instance()` (`services/plugin_settings/runtime.py`) apre un `AsyncSession` sul motore asincrono per ogni
+    istanza di un plugin che ha campi SYSTEM o USER. `POST /api/v1/assets/prices/current` configura un'istanza per
+    voce: una connessione SQLite e una lettura per ogni asset della richiesta.
+  - Oggi solo `mockprov` (test-only) dichiara campi così, quindi in esercizio non costa nulla; costerà al primo plugin
+    vero con impostazioni.
+  - Cura: leggere le righe una volta per richiesta (per famiglia e plugin) e passarle alle istanze, oppure una cache
+    breve, invalidata da ogni scrittura delle impostazioni. Il codice è di X (impostazioni dei plugin): serve il suo
+    OK, o lo fa X.
+
+  Dettagli: questa riga.
 
 ## A · Account e accessi (fase 01)
 
@@ -4305,12 +4345,19 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - In parte già coperto: `test_validation_errors_api.py` vuole il segnale assente da **tutta** la risposta sulle otto
     rotte con credenziali, ma solo per le forme d'errore che esercita. Cura: una regola in `security.md#validation-errors`
     («un validatore non mette il valore nel messaggio») e, se serve, un test che la imponga per ogni campo segreto.
-- **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; dalla revisione di E di A7b-2 («R13-SEC4»).
+- ✅ **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; chiusa il 17/10 in A-42/A-43 (commit del
+  coordinatore); dalla revisione di E di A7b-2 («R13-SEC4»). Cura: `issue_setup_link` e il riarmo revocano prima (un solo
+  UPDATE, che prende il lock) e rileggono «in attesa» sotto il lock; `complete_admin_setup` rifiuta (`TOKEN_INVALID`)
+  quando un altro link di setup dell'account è consumato, e ritira i suoi link.
   `issue_setup_link` e il riarmo all'avvio decidono «in attesa» da una lettura fatta prima del BEGIN differito: un
   `POST /auth/setup` chiuso in quella finestra lascia un link vivo all'account appena attivato. Cura proposta da E: rifiutare
   il consumo (e il rilascio) quando un altro link di setup dell'account è già consumato.
-- **A-43 · La disattivazione non tocca i link di setup (con A-44: annullare l'admin iniziale)** — basso; dalla revisione
-  di E di A7b-2 («R13-SEC4»); A-44 unita qui dal coordinatore (17/10, 03:09). Dopo A8a.
+- ✅ **A-43 · La disattivazione non tocca i link di setup (con A-44: annullare l'admin iniziale)** — basso; chiusa il
+  17/10 in A-42/A-43 (commit del coordinatore); dalla revisione di E di A7b-2 («R13-SEC4»); A-44 unita qui dal
+  coordinatore (17/10, 03:09). Cura: come sotto; in più la retrocessione dell'admin in attesa è rifiutata (409
+  `PENDING_SETUP`, `user demote`), la sua cancellazione diretta è permessa, la scheda Utenti ha «Annulla il link di
+  setup», e un account protetto rifiuta anche l'annullamento (la CLI no). Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-42 + A-43 — Implementazione».
   - Disattivare l'admin **in attesa** è l'annullamento: i suoi link si **revocano** (non si ritirano: resta in attesa,
     così `user setup-link`, la via dell'operatore, gli dà ancora un link nuovo; un ritiro lo toglierebbe dall'attesa e
     `setup-link` non lo troverebbe più).
@@ -4344,6 +4391,11 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   (`emailLinks.ts`, di E) «irraggiungibile»: col codice nuovo i due posti possono dire «questa istanza non può
   verificare gli indirizzi: vedi i controlli di configurazione». Condivisa con E. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Revisione di H-19».
+- **A-50 · Dopo un annullamento, l'avvio dice «scaduto»** — minimo; da A-43 (A, 17/10). Annullato il link dell'admin in
+  attesa, un riavvio con lo **stesso** `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` giustamente non lo riarma (il valore è noto),
+  ma `_keep_pending_admin` avvisa «The initial administrator's setup link has expired»: il rimedio è giusto, la causa
+  no. Cura: leggere l'ultimo link di setup e dire «cancelled» quando è revocato. Dettagli:
+  [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-43.5».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -5517,6 +5569,22 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   N78** (D-W72-1 → b, coordinatore 08:39, da rivedere col developer): la regola 12 estesa a `cost_basis_override` su ogni scrittura,
   codice `costBasisNotAllowed {type, qty}`, le righe già salvate restano; più la chiave mancante di `costBasisModeIncompatible` (oggi
   in inglese grezzo) e un cancello sui codici delle regole. Ordine: dopo W-B71. Dettagli: piano 04, «W-B71, W-B72, W-B74 — analisi».
+  **N78 raffinata** (coordinatore, 17/10, dai rossi): **tranne un ADJUSTMENT a quantità < 0**, il costo di consegna della decisione 47,
+  che la decisione 4 lascia mettere a un update dello stesso batch dello split. Con la cura: un errore di regola da solo tiene i suoi
+  `params` (oggi solo quelli impacchettati), e il vecchio `promote_transfer` rifiuta un costo su un FX_CONVERSION invece di lasciarlo
+  cadere. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
+  ✅ 17/10: regola 12b (`cost_basis_set`, `costBasisNotAllowed {type, qty}`, tranne un ADJUSTMENT −q) su create e update;
+  `_resolved_cost_issues` per il costo unito di una coppia di cassa; `_lone_error_params` in `_parse_lenient`; `promote_transfer`
+  rifiuta un costo su FX_CONVERSION; `costBasisNotAllowed` e `costBasisModeIncompatible` in 4 lingue, cancello su tutti i codici delle
+  regole (22). 21 rossi verdi: `transaction-cost-basis-rule` 164, `transaction` 125, `transaction-decimal-places` 201; BRIM
+  (`brim-create-transaction` 14, `brim-gap-fix` 115, `external brim-providers` 736) e gate i18n verdi. Dettagli: piano 04, sezione
+  «W-B72 — … (N78): cura».
+- **W-B75 · Un errore di campo di un plugin BRIM può rendere la risposta del parse non serializzabile** — minimo, disponibilità; W,
+  17/10 (W-B72). `BRIMProvider._create_transaction` (`backend/app/services/brim/brim_provider.py`) copia in `params` il contesto di ogni
+  errore solo così com'è; quello di un `value_error` porta l'oggetto eccezione, e `BRIMValidationIssue.model_dump(mode="json")` alza
+  `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
+  rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
+  (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
 - **W-B73 · La pagina utente delle transazioni dice che l'unione sceglie anche data e costo** — minimo, doc; W, 17/10 (docs-writer).
   `mkdocs_src/docs/user/transactions/index.en.md` descrive il dialogo «Promote pair» con la scelta di data e costo; `PromoteMergeModal`
   offre solo descrizione e tag dal maggio 2026 (SP-C Step 5). La pagina ha già un debito di traduzione non timbrato (la cache di Aphra
@@ -6377,7 +6445,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   `scheduler/run_lock.py`. Un modulo comune li unirebbe; tocca file di più sessioni (fra cui B per il backup).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra
   processi: analisi».
-- ✅ **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — **chiusa il 17/10 da H** (dev `36a487e84`): `managed_paths` di `validate_test_data_dir()` + test di symlink e hardlink. Era: minimo, facoltativo; Z, 17/10
+- ✅ **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — **chiusa il 17/10 da H**
+  (dev `36a487e84`): `managed_paths` di `validate_test_data_dir()` + test di symlink e hardlink. Era: minimo,
+  facoltativo; Z, 17/10
   (Z-11, segnalato da test-author). `validate_test_data_dir` (`backend/app/config/__init__.py`, file di H) elenca i
   percorsi gestiti che una cartella di test non può condividere con la produzione: c'è `scheduler_state.json`, non
   il nuovo `.scheduler.lock`. Rischio basso: un symlink al suo posto è già rifiutato (`O_NOFOLLOW`), e un hardlink al
@@ -6408,7 +6478,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   fermava i giri degli altri, e `wake-sync` rispondeva 409 a chi arrivava dopo. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-26 — l'attesa del lock fra
   processi senza tempo massimo: analisi».
-- **Z-27 · Il web app manda una pagina intera in una richiesta di massa (per Y e X)** — basso, dopo Z-25; Z, 17/10
+- ✅ **Z-27 · Il web app manda una pagina intera in una richiesta di massa (per Y e X)** — basso, dopo Z-25; Z, 17/10
   (Z-25, N77; via coordinatore).
   - La lista asset (`fetchAllPriceData` in `routes/(app)/assets/+page.svelte`) manda una voce per asset in un solo
     `POST /assets/prices/query`; la lista e il registro dei cambi fanno lo stesso con le coppie.
@@ -6416,8 +6486,22 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     allora le carte senza prezzi: l'errore arriva solo alla console (il `catch` di `fetchAllPriceData`).
   - Seguito: dividere la richiesta in lotti (Y, X). Il messaggio esplicito lo fa X (con X-R53), per non avere due
     scrittori sulle stesse pagine.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-25 — un tetto alle
-  richieste di massa di prezzi e cambi: analisi».
+  - **Chiusa il 17/10 per la parte di Z** (il commit è del coordinatore; decisioni D1–D4): l'aiuto
+    `lib/api/bulkBatches.ts` e i chiamanti A (lista asset) e C (lista cambi), con R13-SEC9-2 (il budget a 1 000 000,
+    800 000 nel web app). Le colonne Δ (D/B) le passa X all'aiuto, con X-R59 e X-R60; il messaggio di X-R58 viene
+    dopo, negli stessi `catch`.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-25 — un tetto alle
+  richieste di massa di prezzi e cambi: analisi», «Z-27 — il web app e i tetti delle richieste di massa: analisi» e
+  «Z-27 — le richieste di massa divise in lotti: lavoro».
+- **Z-29 · Una scheda della lista asset carica lo storico giornaliero intero** — **alto** (coordinatore, 17/10, da
+  R13-SEC9-2 di E: «it's the real cure, post-1.3»), progetto, dopo la 1.3; Z, 17/10 (dall'analisi di Z-27).
+  - Su «All» la lista chiede per ogni asset tutti i giorni dal 2000 (~9 800 punti): 300 asset sono ~2,9 milioni di
+    punti, centinaia di MB di JSON, elaborati dal pool di worker. I lotti di Z-27 ne limitano il picco per risposta,
+    non il totale.
+  - Una scheda ne mostra un riassunto (ultimo prezzo, mini grafico): servirebbe una serie ridotta dal backend
+    (campionata) o un'altra fonte per le schede. Da progettare dopo la 1.3; tocca la lista (X) e la query dei prezzi.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-27 — il web app e i tetti
+  delle richieste di massa: analisi».
 - ✅ **Z-28 · Due file di lock aperti con `open()`, che segue un symlink** — basso, sicurezza; Z, 17/10
   (dall'analisi di Z-23; via coordinatore, che l'ha assegnata). **Chiusa il 17/10 col lotto Z-28** (il commit è del
   coordinatore).
