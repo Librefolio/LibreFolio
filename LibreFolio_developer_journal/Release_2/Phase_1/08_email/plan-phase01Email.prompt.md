@@ -4714,6 +4714,77 @@ non sposti il registro.
 > **L'ordine**: prima la revisione X-R44 (blocca un ingresso), se (1) non è già a metà. Poi, alle 10:31, l'urgenza
 > E-8.5 ha preceduto entrambe.
 
+#### E-15.2 — La cura alla radice ✅ (2026-10-17, 10:5x–11:27)
+> **Il disegno**, prima di scrivere: chi altro dipende dalla variabile.
+> - **I moduli di A** (`test_login_throttle.py:136`, `test_accounts_checks.py:152`) hanno un fixture autouse, di
+>   funzione, che la *toglie*: per i loro casi il limite è acceso di default. `test_login_throttle_api.py` e
+>   `test_config_audit.py:190` la mettono o la tolgono dentro il test.
+>   - Il fixture nuovo deve quindi girare **prima** di loro: di funzione, nel `conftest.py` radice. Pytest esegue gli
+>     autouse del conftest prima di quelli del modulo, a parità di scope.
+>   - Deve agire **solo se la variabile manca**.
+>   - Mai in un hook, mai di modulo o di sessione.
+> - **«Un valore esplicito vince ancora»** (il commento di `conftest.py`). Un fixture che rimette sempre `off`
+>   romperebbe un run diretto di pytest con `=on`, perché anche il valore esplicito sparisce nel drop.
+>   - Quindi il fixture rimette **il valore della sessione**: il ritorno di `setdefault`, cioè il valore esplicito o
+>     `off`.
+> - Con `monkeypatch`: nessun test chiama `monkeypatch.undo()` (verificato), quindi il valore resta per tutto il test.
+> - **SC-LANE-01** (`test_security_checks_api.py`, di A):
+>   - `_expected_login_limit()` legge la variabile al momento del test, e il server nel processo la legge a ogni
+>     richiesta: restano d'accordo in entrambi i modi.
+>   - Ma il ramo «da solo, senza server condiviso, variabile tolta → `ok`», con le righe 16-18 della sua docstring,
+>     descrive proprio l'effetto del drop: da solo ora vede `off` e si aspetta `warning`. Verde, ma il racconto
+>     invecchia. È il file di A: lo segnalo come sovrapposizione semantica, non lo tocco.
+> - **I docs**: `security.md` descriveva il `setdefault` una volta sola in due punti (:479 e :655). Riscritti: una
+>   volta all'import, e rimesso prima di ogni test che non ce l'ha più. La pagina è di A, che la rivede al checkpoint.
+>
+> **Il codice**: dal `test-author` `c212c89c`, solo `conftest.py`.
+> - `_SESSION_LOGIN_LIMIT = os.environ.setdefault(...)`;
+> - il fixture `restore_login_limit`, autouse, di funzione: se la variabile manca, rimette il valore della sessione,
+>   e lo toglie a fine test;
+> - il commento riscritto.
+>
+> **Note implementazione**:
+> - **Una deviazione del `test-author`, che approvo**: il fixture usa un `pytest.MonkeyPatch.context()` suo, non il
+>   fixture `monkeypatch`.
+>   - Chiesto da un autouse del conftest radice, `monkeypatch` verrebbe preparato prima di ogni altro fixture di
+>     funzione, in tutta la suite.
+>   - Il suo `undo` girerebbe allora dopo il teardown di tutti gli altri fixture, invece che prima: un cambio d'ordine
+>     su migliaia di test.
+>   - Con un contesto suo, l'ordine degli altri resta com'è.
+> - **L'ordine verificato** in pytest 9.1.1 (dal `test-author`):
+>   - gli autouse del conftest radice girano prima di quelli del modulo, a parità di scope, quindi i fixture di A che
+>     tolgono la variabile vincono ancora, e così `_no_inherited_variables` di `test_username_rules_api.py`;
+>   - `_aiosqlite_leak_guard` resta il primo (ordine alfabetico nel conftest).
+> - **Il limite noto**: i fixture di modulo e di sessione girano prima di un fixture di funzione. In un run combinato
+>   vedono ancora la variabile tolta, cioè il limite acceso.
+>   - Oggi è innocuo: una password giusta non è mai rifiutata.
+>   - I fallimenti registrati allora non rifiutano i test, che girano con `off`, e con `off` `refusal()` è `None`.
+>   - I test del limite usano limitatori loro.
+> - **SC-LANE-01** (`test_security_checks_api.py`, di A), da solo e senza server condiviso: ora vede `off` e verifica
+>   `warning`. È verde, ma la docstring, righe 16-18, racconta ancora «da solo, variabile tolta → `ok`». Lo segnalo
+>   ad A come sovrapposizione semantica; non tocco il file.
+>
+> **Prove** (11:01–11:27, `files/tools/e15_accept.sh`): pytest diretto con l'ambiente della corsia 6188, variabile
+> tolta salvo dove detto. Il «grilletto» è `test_user_profile.py`, che chiama `setup_test_database()` all'import.
+> Una sola invocazione alla volta, ognuna partita col carico sotto 50.
+>
+> | Run | Prima (triage) | Dopo |
+> |---|---|---|
+> | (a) `test_email_verification.py` più il grilletto | **21 falliti**, 158 passati | **179 passati** |
+> | (a) `test_email_verification_api.py` più il grilletto | — | 112 passati |
+> | (a) `test_email_change_notice_api.py` più il grilletto | — | 66 passati |
+> | (a) `test_email_verification_hooks_api.py` più il grilletto | — | 78 passati |
+> | (b) le 3 unità del worker 0 (chiesto dal coordinatore; nessun grilletto tra loro) | 267 passati | 267 passati |
+> | (c) le 3 unità del worker 0 più il grilletto | — | **319 passati** |
+> | (d) tutti i 13 moduli di E più il grilletto, un solo processo | — | 1 453 passati |
+> | (e) i moduli del limite di A (`login_throttle`, `accounts_checks`, `config_audit`, `login_throttle_api`) più il grilletto | — | 372 passati |
+> | (f) guardia: `LIBREFOLIO_LOGIN_LIMIT=on` esplicito più il grilletto | 21 falliti | **gli stessi 21** (insieme identico, `diff`): il valore esplicito vince ancora |
+> | (g) `dev.py test … --no-shared-server api security-checks` | — | 3 passati (`accounts.login_limit: warning`) |
+>
+> - `ruff` e `black` su `conftest.py`: puliti. `git diff --check`: pulito. Porta 6188: libera.
+> - **Non eseguito**: `mkdocs build`. In `security.md` cambia solo la prosa di due punti di elenco, senza link né
+>   ancore.
+
 ### R13-SEC6 — A8a (il limite dei login falliti, `security/checks`) e i miei file (2026-10-17, 05:03–)
 > **Il compito del coordinatore** (05:02): A8a, cioè il codice `66873b0c9`, le docs `4a93f1f54` e il merge di dev
 > `125c19f0e`, con E-11 in `email.md`. Letto dagli oggetti git, mai dal worktree di A. Due parti:
@@ -5613,3 +5684,40 @@ non sposti il registro.
 > | `front-utility email-tab` (con i titoli «Settings › Administration › Email») | 5 passati | 87 s |
 >
 > La porta 6188 è libera alla fine (09:55). E-8 è pronto all'ingresso.
+
+> **La revisione di X-R44** (`59f5bcfdc`, il ramo di X; 10:2x–10:5x, sola lettura dagli oggetti git, interrotta alle
+> 10:31 dall'urgenza E-8.5 e ripresa dopo): **chiusa, nessun reperto bloccante.** È la cura della mia nota di R13-SEC5:
+> `mockprov`, `MOCKFX` e `MOCKFX_FAIL` erano raggiungibili sulle istanze di produzione.
+> - **Le quattro porte nascondono i doppi**: `get_plugin`, `get_plugin_instance`/`get_provider_instance`,
+>   `list_plugin_codes` e `list_providers` non danno le classi `test_only` fuori dal test mode. `is_test_mode()` è
+>   letto a ogni chiamata.
+>   - Nessuna sottoclasse ridefinisce le porte.
+>   - Nessun codice di prodotto legge `_providers` o `_plugins` direttamente, salvo `shutdown_all_providers` (nota 3).
+> - **Ogni chiamante gestisce il nuovo `None`**:
+>   - il validatore di assegnazione e sonda: «Unknown provider code», un 422;
+>   - le rotte FX (`fx/providers.py:201-227`): «Unknown provider(s)»;
+>   - la ricerca e i link: saltati;
+>   - il refresh e il sync FX: «not found» o saltati;
+>   - la capacità dei segnali (`price_query.py:212`): chiude in sicurezza;
+>   - la policy dei provider: annotato nel log e scartato;
+>   - le impostazioni dei plugin, `_plugins()`: assente, quindi 404.
+> - **Il blocco «produzione» del test non può toccare i dati veri.** Fuori dal test mode `get_data_dir()` punta a
+>   `backend/data/prod/` e `Settings` legge il `.env`, quindi l'ho verificato:
+>   - i costruttori dei provider fanno solo cache in memoria;
+>   - `configure_instance`, l'unico che legge il DB, è sostituito da un registratore;
+>   - `monkeypatch.context()` rimette la variabile anche se il test fallisce.
+> - **Note**, correzione in avanti facoltativa:
+>   1. **LOW, i dati già scritti.** La cura ferma le scritture nuove, ma le righe che un doppio ha già scritto su
+>      un'istanza rilasciata con più utenti restano, e niente le segnala. Si trovano:
+>      `price_history.source_plugin_key='mockprov'`, `fx_rates.source IN ('MOCKFX','MOCKFX_FAIL')`, le assegnazioni a
+>      `mockprov`, le rotte che nominano `MOCKFX`.
+>      - Il minimo: una frase nel CHANGELOG su come controllare.
+>      - Meglio, e generico: un controllo di qualità dei dati che elenca assegnazioni, rotte e righe il cui codice nessun
+>        registro serve. Copre anche i plugin rimossi.
+>   2. **LOW, irrobustimento, per H.** Nessun controllo di sicurezza segnala `LIBREFOLIO_TEST_MODE` su un'istanza in
+>      esecuzione, e ora l'irraggiungibilità dei doppi dipende da quella variabile.
+>   3. **Info.** `shutdown_all_providers` (`provider_registry.py:402`) istanzia ancora i doppi allo spegnimento, senza
+>      `_withheld`. Innocuo: costruttori in memoria.
+>   4. **Nit.** Il CHANGELOG nomina la serie di prezzi inventata ma non la rotta FX (`MOCKFX`: 1,2345 in ogni
+>      conversione di tutti), che la docstring del commit stesso descrive.
+> - Verdetto mandato al coordinatore alle 10:5x.
