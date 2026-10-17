@@ -6821,3 +6821,7 @@ punto di partenza, l'audit dello stesso giorno:
   `_ENGINE_EXECUTOR` (`financial_math/portfolio/engine.py`) non è nella sequenza di spegnimento dell'app: una
   ricostruzione in corso tiene il processo fino alla fine, come l'esecutore predefinito di `asyncio.to_thread`.
   Proposta, se serve: `shutdown(wait=False, cancel_futures=True)` nel lifespan. Dettagli: piano MF, sezione «J-45».
+- **MF-J45b · Nessun single-flight sulla cache del motore** — basso, carico; J, 17/10 (revisione di J-45). Tra la
+  lettura della cache `portfolio_blob` (`portfolio/engine.py` ~:316) e la sua scrittura (~:457) nessun lucchetto: due
+  richieste identiche concorrenti ricostruiscono entrambe (con J-45 occupano i due worker). Nessuna azione ora; cura
+  possibile: un `asyncio.Future` per chiave in volo. Dettagli: piano MF, sezione «J-45».

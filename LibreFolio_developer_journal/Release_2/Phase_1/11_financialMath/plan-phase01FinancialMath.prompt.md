@@ -2142,3 +2142,12 @@ Quattro commit, uno per lotto che cambia numeri:
 - ✅ **Verdi** (`files/j45.sh green`): `engine_off_the_loop` 6, `roi-fifo-utils` **1251**, `portfolio-engine` 41,
   `financial-math` 1111, `portfolio-allocation-source` 98. ruff/black puliti, `git diff --check` pulito, porta 6190
   libera. Non eseguito: `api portfolio` (pesante, nello slot del coordinatore).
+- ✅ **Slot 2 su `ae4f41297`** (J-45 + dev `7f8e69be6`, albero pulito; carico a 5 min < 50 alle 08:20): `api
+  portfolio` **51**, `roi-fifo-utils` **1251**, `portfolio-engine` 41, porta 6190 libera.
+- ✅ **Revisione J: OK, un LOW di sola doc** (08:3x): «Off the Event Loop» e la docstring del test (l. 8–12, 22–24,
+  127) dicevano il contesto structlog (`merge_contextvars`: nessuno chiama `bind_contextvars`) e `expire_on_commit=False`
+  come argomento. Corretti: la copia porta oggi la maschera dei segreti e il contesto `decimal` (tenuto da `decimal` in
+  una contextvar: la ricostruzione calcola con precisione e arrotondamento della richiesta); l'invariante vero è «solo
+  righe caricate dalle query di `calculate()`, che non fa commit, rollback né expire». La pagina cita ora il file di
+  test. `engine_off_the_loop` 6/6, ruff/black puliti, mkdocs build strict exit 0, check-links 97. Backlog **MF-J45b**
+  (nessun single-flight tra lettura e scrittura della cache `portfolio_blob`).

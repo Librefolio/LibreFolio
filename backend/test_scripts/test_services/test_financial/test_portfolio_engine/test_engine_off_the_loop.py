@@ -5,11 +5,12 @@ pure CPU, long on a wide range) directly on the event loop: while one user's wid
 request was served. R13-SEC7-1 capped the range end; this lot moves the replay off the loop. The cure
 (``financial_math/portfolio/engine.py``): a module-level ``_ENGINE_EXECUTOR = ThreadPoolExecutor(max_workers=2,
 thread_name_prefix="portfolio-engine")`` and ``result = await loop.run_in_executor(_ENGINE_EXECUTOR,
-contextvars.copy_context().run, builder.build)`` — the copied context keeps the request's contextvars (structlog's log
-context) in the worker. Its safety (MF plan, «SEC7-1b»): the builder reads only loaded column attributes of the ORM
-``Transaction`` instances it is handed (``classified_txs[*].tx``, ``paired_tx``, the transit legs), never a relationship
-(``Transaction.related_transaction``, the only one, is lazy), there are no deferred columns, the sessions are
-``expire_on_commit=False``, and no session enters the thread.
+contextvars.copy_context().run, builder.build)`` — the copied context keeps the request's contextvars in the worker:
+today the secrets ``secrets_in_flight`` masks and the ``decimal`` context; no code binds a structlog context yet. Its
+safety (MF plan, «SEC7-1b»): the builder reads only loaded column attributes of the ORM ``Transaction`` instances it is
+handed (``classified_txs[*].tx``, ``paired_tx``, the transit legs), never a relationship (``Transaction.related_transaction``,
+the only one, is lazy), there are no deferred columns, it reads only rows ``calculate()``'s own queries loaded, which
+never commits, rolls back or expires, and no session enters the thread.
 
 - ``TestTheReplayRunsOffTheEventLoop`` — red on HEAD 7e6cf7914, green after:
   * ``…on_a_portfolio_engine_worker``: ``build`` runs on a ``portfolio-engine_N`` thread, not the loop's. HEAD: on the
@@ -20,7 +21,7 @@ context) in the worker. Its safety (MF plan, «SEC7-1b»): the builder reads onl
     thread; the wait times out after ``_RELEASE_TIMEOUT_S`` and the test fails on that, it never hangs.
 - ``TestTheWorkerKeepsTheRequestContext`` — green on HEAD (``build`` runs in the request's own context there), a guard
   of ``copy_context().run``: an executor call without it hands the worker an empty context, and the replay's log lines
-  lose the request's ``request_id`` and stop masking the secrets in flight (``utils/runtime/secret_masking.py``).
+  stop masking the secrets in flight (``utils/runtime/secret_masking.py``) and would lose any structlog context bound.
 - ``TestNoLazyLoadDuringTheReplay`` — green on HEAD and after:
   * the guard: during the replay — on a ``portfolio-engine`` thread, or on the thread running ``build`` (HEAD's loop) —
     any read of ``Transaction.related_transaction`` and any lazy load of a mapped attribute (the one funnel of SQLAlchemy's
@@ -124,7 +125,7 @@ _TICKS = 5
 #: How long a held replay waits for the ticker. On the cure the release comes after five loop iterations; on HEAD it
 #: never comes (the loop's thread is the one waiting), and this bound turns the hang into a failure.
 _RELEASE_TIMEOUT_S = 5.0
-#: The structlog context key the request binds (merged into every log line by logging_config's merge_contextvars).
+#: A structlog context key the test binds (no request binds one today; logging_config's merge_contextvars would merge it).
 _LOG_CONTEXT_KEY = "request_id"
 
 # (label, broker, on X, type, day, quantity, amount, currency)
