@@ -113,7 +113,7 @@ html.light,
     --lf-cat-etf: #2459b8;
     --lf-cat-etf-on-soft: #2459b8;
     --lf-cat-bond: #536a9e;
-    --lf-cat-bond-on-soft: #4f669a; /* her #50679b (4.51:1 on the rounded #e3e7ed) gives 4.49:1 on the exact tint: OKLCH lightness -0.003 (D-T6), 4.56:1; to confirm with her */
+    --lf-cat-bond-on-soft: #4f669a; /* her #50679b (4.51:1 on the rounded #e3e7ed) gives 4.49:1 on the exact tint: OKLCH lightness -0.003 (D-T6), 4.56:1; accepted by the coordinator, 17/10 */
     --lf-cat-crypto: #b87916;
     --lf-cat-crypto-on-soft: #925e0c; /* her badge text: the colour, darker */
     --lf-cat-fund: #5147b8;
