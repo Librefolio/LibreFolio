@@ -136,6 +136,14 @@ export function eventSaveErrorMessage(err: unknown, t: Translate, sent: SentEven
                     values: {date: dateLabel(text(first.date)), type: typeLabel(text(first.type)), ratio: formatExactDecimal(text(first.ratio)), more: Math.max(events.length - 1, 0)},
                 });
             }
+            case 'EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST': {
+                // P-10 (decision 27): a split is retyped while linked incoming adjustments have no purchase cost. The params
+                // name the ones the caller can see and count the others (R13-SEC7, X-R47b): the sentence counts them all.
+                const raw = p.hidden_transactions_count;
+                const hidden = typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 ? raw : 0;
+                const visible = Array.isArray(p.transaction_ids) ? p.transaction_ids.length : 0;
+                return t('events.saveError.splitAdjustmentsWithoutCost', {values: {date: dateLabel(text(p.date)), type: typeLabel('SPLIT'), n: visible + hidden, hidden}});
+            }
         }
         return t('events.saveError.generic', {values: {message: refusal.message || refusal.code}});
     }

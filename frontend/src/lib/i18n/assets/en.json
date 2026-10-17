@@ -421,7 +421,8 @@
       "inUse": "Nothing was saved: the {type} event of {date} is linked to {n, plural, one {# transaction} other {# transactions}} and cannot be deleted. Remove the link from the transactions first{more, plural, =0 {} one { (and # more event)} other { (and # more events)}}.",
       "notDeletable": "Nothing was saved: one of the events to delete no longer exists or cannot be deleted here. Reload the data and try again.",
       "tooManyDigits": "Nothing was saved: the value of the {type} event of {date}{more, plural, =0 {} one { (and # more)} other { (and # more)}} has too many digits. An event value keeps at most {max} decimal places, {significant} significant digits and {integer} digits before the decimal point.",
-      "invalidSplitRatio": "Nothing was saved: the {type} event of {date}{more, plural, =0 {} one { (and # more)} other { (and # more)}} has a ratio of {ratio}. A split's ratio must be a number above 0: 2 for a 2-for-1 split, 0.5 for a 1-for-2 reverse split."
+      "invalidSplitRatio": "Nothing was saved: the {type} event of {date}{more, plural, =0 {} one { (and # more)} other { (and # more)}} has a ratio of {ratio}. A split's ratio must be a number above 0: 2 for a 2-for-1 split, 0.5 for a 1-for-2 reverse split.",
+      "splitAdjustmentsWithoutCost": "Nothing was saved: the {type} event of {date} has {n, plural, one {# linked adjustment} other {# linked adjustments}} without a purchase cost{hidden, plural, =0 {} one { (# of them at a broker you cannot see)} other { (# of them at brokers you cannot see)}}. Without the split, those units would count as bought at an unknown price: give the adjustments a purchase cost first, then change the event's type."
     }
   },
   "providerErrors": {
