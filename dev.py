@@ -327,6 +327,10 @@ def cmd_server(args):
         # Frontend E2E tests (Playwright) log in repeatedly against shared test users —
         # never let the donation popup signal fire and interfere with test assertions.
         env["LIBREFOLIO_DISABLE_DONATION_POPUP"] = "1"
+        # The suites sign in wrongly on purpose, from one address: the limit on failed sign-ins (F15) would refuse their
+        # later attempts. Off on every lane (configure_test_runtime has dropped any LIBREFOLIO_* of .env and the shell);
+        # its own tests turn it on in-process.
+        env["LIBREFOLIO_LOGIN_LIMIT"] = "off"
     else:
         env["LIBREFOLIO_TEST_MODE"] = "0"
     if debug_mode:
