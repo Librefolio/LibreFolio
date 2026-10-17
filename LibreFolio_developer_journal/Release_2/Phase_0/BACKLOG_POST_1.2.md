@@ -6239,6 +6239,11 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   rivedere). L'azione manda l'invito sempre nella lingua predefinita dell'istanza; `POST /email/links` accetterebbe
   `language`, ma la 1.3 non mostra un selettore. Da aggiungere se serve invitare chi parla un'altra lingua.
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E4.1».
+  - 17/10, E: analisi fatta; il coordinatore ha deciso con la decisione notturna **N69**: il default resta la lingua
+    dell'istanza, il selettore cambia solo la lingua dell'email, e l'esito mostra la lingua usata. Il codice va dopo
+    A8b, insieme all'allineamento del percorso «Settings › Email» all'etichetta del gruppo di A8b (coordinatore, 17/10:
+    26 punti tra i18n, docs, `EmailSettingsTab.svelte` e devWiki, elencati nel piano). Dettagli: piano 08, «E-8.0»,
+    «E-8.1» e la nota «Il percorso Settings › Email dopo A8b».
 - ✅ **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
   sicurezza finale, nota sotto la soglia). `strip().casefold()` fa di `victim+1@…` e `victim+2@…` caselle diverse:
   con la registrazione aperta si può puntare il budget orario dell'istanza su una casella sola, e ogni email porta lo
