@@ -3857,12 +3857,18 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   H-42 per E, via coordinatore, 17/10. E lo giudica nella revisione di H-42.
   - Con la protezione dai frame accesa, `PAGE_POLICY` va solo sulle risposte `text/html`. Un SVG o un XHTML, documenti
     anche loro quando si aprono direttamente, tengono il solo `frame-ancestors 'self'`.
-  - Oggi gli SVG serviti sono quelli della build e dei documenti. Un SVG dell'utente arriva come `attachment`, dagli
-    upload e dai broker (`INLINE_SAFE_MEDIA_TYPES` di `api/v1/brokers.py` non ha `image/svg+xml`).
-  - Strada possibile: allargare `_is_html` di `security_headers.py` ai due tipi, con i casi per tipo di
-    `test_managed_headers.py`, (g).
+  - Oggi la build, i documenti e i plugin non hanno SVG (verificato il 17/10: lo dicevo a torto). Un SVG dell'utente
+    arriva come `attachment`, dagli upload e dai broker (`INLINE_SAFE_MEDIA_TYPES` di `api/v1/brokers.py` non ha
+    `image/svg+xml`).
+  - Cura fatta il 17/10 da H (lotto «H-45», piano H §14), con la specifica di E; E rivede.
+    - Con la protezione dai frame accesa, `PAGE_POLICY` va su ogni documento: `text/html`, `application/xhtml+xml`,
+      `image/svg+xml`, `application/xml`, `text/xml` e i tipi `+xml`. I PDF restano fuori, e il report-only resta su
+      `text/html` esatto.
+    - Un 304 non riceve nessuna CSP. Una sonda in Chromium 149 mostra che la CSP di un 304 sostituisce quella della
+      pagina in cache; oggi è latente, perché solo `StaticFiles` (`/_app`) risponde 304 e non ha documenti.
+    - Test: `services managed-headers`, 355.
 
-  Dettagli: piano H, §14, lotto «H-42», passo 7.
+  Dettagli: piano H, §14, lotti «H-42», passo 7, e «H-45».
 - **H-46 · `LIBREFOLIO_TEST_MODE` acceso fuori da una corsia di test non si vede** — basso, sicurezza; E (review di
   X-R44), via coordinatore, 17/10.
   - `dev.py server` lo spegne sempre. Un server avviato in altro modo (`uvicorn` a mano, un'unità di servizio) lo
@@ -3881,6 +3887,36 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     posto del traceback di `PermissionError`.
 
   Dettagli: piano H, §14, lotto «H-46».
+- **H-47 · `read_secret_file`: un'opzione per rifiutare link e file non regolari, per chi legge da root** — basso,
+  sicurezza; B-38 della review BZ di B, via coordinatore, 17/10. Dopo la 1.3, salvo che costi poco.
+  - La CLI del backup gira da root e legge la password e la chiave d'istanza vecchia (`--password-file`,
+    `--instance-key-file`, B-18) con `read_secret_file` (`config/__init__.py`). Quella segue i link e apre le FIFO.
+    Il file può stare in una cartella che l'utente del server controlla: `backups/`, come suggeriva la guida di B-18.
+  - B mette ora la guardia dal lato della CLI: `O_NOFOLLOW|O_NONBLOCK` e `fstat` su un file regolare, prima di
+    chiamare la mia funzione.
+  - L'opzione di H, `regular_only=False` per default: `os.open` con `O_NOFOLLOW` (dove esiste) e `O_NONBLOCK`, poi
+    `fstat`. Un link, una FIFO, una cartella o un dispositivo danno `SecretFileError` («is not a regular file»), con il
+    nome e il percorso come oggi.
+  - **Mai di default**: i segreti di Kubernetes sono link (`..data/`). I segreti di Docker invece sono file regolari
+    montati, quindi i lettori dell'avvio (`env_secret`, la chiave generata) restano come sono.
+  - Costo stimato: piccolo, una ventina di righe e i test (link, FIFO senza blocco, cartella, file regolare, opzione
+    spenta come oggi). Si fa dopo B-38, così la CLI può passare all'opzione e togliere la sua copia.
+
+  Dettagli: questa riga; la guardia di B in B-38.
+- **H-48 · `env_url` toglie la barra finale anche ai link di una pagina** — basso; H (review di A9), via coordinatore,
+  17/10. Da fare con H-47 (stesso file, `config/__init__.py`), altrimenti dopo la 1.3.
+  - `env_url` toglie una barra finale perché a `LIBREFOLIO_PUBLIC_URL` si attacca un percorso. Gli altri suoi
+    lettori sono link a una pagina, dove `…/terms/` diventa `…/terms`:
+    - `LIBREFOLIO_SUPPORT_URL` (H, `config/platform.py`);
+    - `LIBREFOLIO_TOS_URL` e `LIBREFOLIO_PRIVACY_URL` (A9, stesso file);
+    - `LIBREFOLIO_BILLING_URL` (A, `config/accounts.py`).
+    Quasi ovunque il server risponde con un redirect, quindi il danno è raro.
+  - Cura: i link tengono il percorso com'è scritto, per esempio con un parametro di `env_url` o con una funzione
+    sorella; `PUBLIC_URL` tiene il taglio. Gli stessi controlli (`http(s)`, nome dell'host, niente credenziali).
+  - Tocca lettori e test di A (`test_legal_links.py` confronta con quello che dà `env_url`): serve l'OK di A sui suoi
+    file.
+
+  Dettagli: piano H, §14, «Review di A9».
 
 ## A · Account e accessi (fase 01)
 
