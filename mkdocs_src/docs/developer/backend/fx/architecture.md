@@ -127,7 +127,8 @@ sync time from a multi-step chain route, which stores the composite rate under t
 
 `POST /api/v1/fx/currencies/convert` expands each conversion's `date_range` into one `convert_bulk()`
 item per day, both ends included; with signals, a second series of one-unit items runs from the start
-of their warm-up to the same end. Both ends have a limit (X-R55). The end is cut at tomorrow by the
+of their warm-up to the same end. An amount of 0 is sent as one unit too, so its results answer 0 with the
+day's real `rate` instead of dividing 0 by 0 (X-R41). Both ends have a limit (X-R55). The end is cut at tomorrow by the
 server's calendar (`datetime_utils.latest_range_end()`, the helper
 [R13-SEC7-1](../financial_math.md#portfolio-package) also uses), a day of margin for a user whose
 today is already the server's tomorrow. The start, the warm-up included, goes back at most

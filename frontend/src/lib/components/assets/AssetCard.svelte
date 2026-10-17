@@ -317,6 +317,7 @@
             </button>
             <button
                 class="p-1.5 rounded-md hover:bg-lf-neutral text-lf-muted hover:text-lf-danger transition-colors"
+                data-testid="asset-card-delete-btn"
                 onclick={(e) => {
                     stop(e);
                     ondelete?.(asset);
