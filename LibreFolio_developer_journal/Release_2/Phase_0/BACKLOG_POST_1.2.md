@@ -103,9 +103,10 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
 - **C-52 · La CLI della sonda dell'AI Export non sa scegliere l'Asset né l'utente sintetico** — minimo. Dettagli: 38, C-52.
 - ✅ **C-53 · L'AI Export dice «non riconciliato» per un residuo di rumore** — chiusa nella 1.2 da T, treno 47
   (`876d2b430`). Dettagli: 38, C-53.
-- **C-54 · «Novità dalla tua ultima versione» al login** — medio; **dopo la 1.2**, per decisione del developer (12/10).
+- ✅ **C-54 · «Novità dalla tua ultima versione» al login** — medio; **dopo la 1.2**, per decisione del developer (12/10).
   Al login, una versione più nuova dell'ultima vista apre il modale del changelog sui capitoli non visti, nella
   lingua dell'utente. Dettagli: 38, C-54.
+  ✅ **Fatto da A il 17/10 (A11)** (`737268864`, dev `630c478cd`): `AuthUserResponse.whats_new` e `POST /auth/whats-new/seen`, modale `WhatsNewModal` fra i popup differiti; account `NULL` vedono il capitolo corrente, i nuovi mai.
 - ✅ **C-55 · L'AI Export di un broker senza posizioni non passa i controlli pubblici «invalid HHI points»** — chiusa
   nella 1.2 da T, nel treno 56 (developer, 12/10). Il payload era corretto; sbagliava la sonda, che contava ogni HHI
   nullo come violazione. Dettagli: 38, C-55.
