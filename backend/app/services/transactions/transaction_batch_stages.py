@@ -22,7 +22,7 @@ from backend.app.services.transactions.transaction_batch_context import (
     cost_fields,
     rule_values,
 )
-from backend.app.utils.datetime_utils import today_date
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, today_date
 
 if TYPE_CHECKING:
     from backend.app.services.transactions.transaction_service import TransactionService
@@ -172,19 +172,19 @@ def _check_limit(context: TransactionBatchContext, operation: str, index: int, r
     return integer_digits_issue(value, Transaction, column) is not None
 
 
-# N74 (R13-SEC7-3): the dates a transaction may carry, from 1900-01-01 to a year after today. The interface never offers a
-# future date; a year covers the time zones and the settlement dates a broker's report puts ahead.
-TRANSACTION_DATE_MIN = date(1900, 1, 1)
+# N74 (R13-SEC7-3): the dates a transaction may carry, from EARLIEST_RANGE_START (1900-01-01, the floor of every replay and
+# history walk too: MF-SEC8-2) to a year after today. The interface never offers a future date; a year covers the time
+# zones and the settlement dates a broker's report puts ahead.
 TRANSACTION_DATE_YEARS_AHEAD = 1
 
 
 def transaction_date_bounds(today: Optional[date] = None) -> tuple[date, date]:
-    """The first and the last date a transaction may carry (N74): 1900-01-01, and ``today`` (UTC by default) a year on —
-    28 February for a 29 February."""
+    """The first and the last date a transaction may carry (N74): ``EARLIEST_RANGE_START`` (1900-01-01), and ``today``
+    (UTC by default) a year on — 28 February for a 29 February."""
     today = today or today_date()
     year = today.year + TRANSACTION_DATE_YEARS_AHEAD
     latest = today.replace(year=year, day=28) if (today.month, today.day) == (2, 29) else today.replace(year=year)
-    return TRANSACTION_DATE_MIN, latest
+    return EARLIEST_RANGE_START, latest
 
 
 def _promote_date(item: TXPromoteBatchItem) -> Optional[date]:
