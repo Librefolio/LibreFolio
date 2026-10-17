@@ -6782,6 +6782,26 @@ da Y il 15/10.
     cioè `changePct` dappertutto; (c) ribasare sul primo valore non nullo, come il grafico dei lotti. Poi una copia sola
     della regola per tutte.
   - Raro: un prezzo o un cambio esattamente a 0 all'inizio. Dettagli: piano di Y, «J-44 · revisione a posteriori».
+- ✅ **Y-27 · `DataTable` pota le preferenze delle colonne assenti, e le colonne Δ le perdono a ogni caricamento** — medio-basso,
+  preferenze; Y, 17/10 (revisione di X-R53). Il rimedio (a), affidato a Y dal coordinatore (08:55), lotto a parte. ✅ 17/10:
+  `dataTableLogic.ts` con `withNewColumns` (aggiunge solo le colonne mai viste, al posto naturale) e `reorderKeepingAbsent`
+  (il riordino rimette una colonna assente dopo quella che seguiva); `DataTable.svelte` tiene tutte le scelte di visibilità
+  salvate e non pota più ordine, scelte e larghezze. 14 rossi prima (8 d'unità, 6 di componente con un `localStorage`
+  finto). Commit al checkpoint.
+  - `DataTable.svelte` toglie dall'ordine salvato gli id delle colonne assenti e salva subito, e scarta le loro scelte di
+    visibilità e le loro larghezze. Da X-R53 le colonne Δ 1W…5Y di Asset e FX mancano al primo disegno (i periodi arrivano
+    dal backend), quindi posto, visibilità e larghezza scelti dall'utente si azzerano a ogni caricamento; prima succedeva
+    solo quando un intervallo più corto le nascondeva.
+  - Dettagli: piano di Y, «Y-27»; devWiki `problems/datatable-pruned-preferences-of-absent-columns`.
+- **Y-28 · Il test C-66 «sync all over a period whose prices are all filled backward» non può più passare dopo X-R55** —
+  medio, test rosso su dev; Y, 17/10 (E2E di Y-27). Da instradare dal coordinatore.
+  - `frontend/e2e/assets/asset-list.spec.ts:1084` (`32c64bbd9`, 16/10) chiede `POST /assets/prices/query` sul periodo da oggi+7
+    a oggi+14 e pretende, come precondizione, che almeno un asset con un fornitore vi mostri prezzi portati avanti.
+  - X-R55 (`a71d23e7e`, in dev dalle 08:30 con `ab7711f04`) taglia ogni intervallo a `latest_range_end()`, cioè domani: un
+    elemento che comincia dopo riceve un risultato vuoto. Quindi «0 stored of 0 shown» per tutti, e il test cade sulla sua
+    precondizione. Verde alle 08:43 su `039af67bb`, senza X-R55; rosso alle 10:05 su `73443c6db`.
+  - Da scegliere: riscrivere il test su un periodo passato con giorni portati avanti e non salvati (un fine settimana, un
+    festivo), o rivedere il tetto per il caso «sincronizza un periodo futuro». Dettagli: piano di Y, «Y-27», Fuori pista.
 
 ## MF · Matematica finanziaria (fase 01)
 
