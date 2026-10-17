@@ -5,12 +5,15 @@ cannot start.
 Under test: ``backend/app/api/v1/backup/instance.py``, ``start_instance_backup``.
 
 (a) A folder of ``backups/`` is a link or a file (``BackupPathError``, for ``backups`` or ``backups/.jobs``): 500 with
-    ``detail.code`` ``backup_folder_unusable``. Any other ``OSError`` before the run (``backups/`` cannot be written):
-    500 ``backup_failed``. Another run in progress (``BackupBusyError``): 409 ``backup_busy``, as before. The answer
-    carries the code and the route's own message, never the path of the data directory nor the system's words: those
-    go to the server log.
+    ``detail.code`` ``backup_folder_unusable``. A full disk or a quota (``ENOSPC``, ``EDQUOT``, the failure itself or a
+    cause of it: ``jobs.out_of_space`` walks the chain): 507 ``backup_no_space``, «Not enough free space to start the
+    backup», and one WARNING with the run's origin, as the same disk a second later ends the run (B-30). Any other
+    ``OSError`` before the run (``backups/`` cannot be written, a read-only file system): 500 ``backup_failed``. Another
+    run in progress (``BackupBusyError``): 409 ``backup_busy``, as before. The answer carries the code and the route's
+    own message, never the path of the data directory nor the system's words: those go to the server log.
 (b) A run that starts: 202 and its first state. It is the barrier of (a): the app of this test does reach the route, so
     an answer without the code cannot come from a route that was never called.
+(c) OpenAPI: the start documents its 507 beside its 409 and its 500 (``START_RESPONSES``, B-30).
 
 Pure: an app of this test holds ``instance_router`` under ``/api/v1/backup``; ``require_admin`` is overridden by an
 administrator and ``jobs.start_backup`` is replaced for each case, so no data directory, database, server or network
@@ -31,6 +34,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from fastapi import FastAPI
+from structlog.testing import capture_logs
 
 from backend.app.api.v1.backup.instance import instance_router
 from backend.app.api.v1.settings import require_admin
@@ -44,6 +48,14 @@ VALID_ID = "0123456789abcdef0123456789abcdef"
 DATA_DIR = Path("/srv/librefolio-data-b1-errors")
 #: The system's words for the errors of this module: they belong in the log, not in an answer.
 SYSTEM_WORDS = (os.strerror(errno.EACCES), os.strerror(errno.EROFS))
+#: ``EDQUOT`` (quota exceeded) where the platform has it.
+EDQUOT = getattr(errno, "EDQUOT", None)
+needs_edquot = pytest.mark.skipif(EDQUOT is None, reason="this platform has no EDQUOT")
+#: B-30: the system's words of a full disk, of a quota and of the error a full disk can cause: never in an answer.
+NO_SPACE_WORDS = tuple(os.strerror(code) for code in (errno.ENOSPC, EDQUOT, errno.EIO) if code is not None)
+#: B-30: what a start on a full disk answers and logs.
+NO_SPACE_MESSAGE = "Not enough free space to start the backup"
+NO_SPACE_WARNING = "Instance backup could not start: not enough free space"
 
 
 def administrator() -> SimpleNamespace:
@@ -122,3 +134,48 @@ async def test_a_run_that_cannot_start_answers_its_code_and_nothing_of_the_serve
     leaked = [word for word in (str(DATA_DIR), *SYSTEM_WORDS) if word in response.text]
     assert leaked == [], f"the answer must not carry the server's path or the system's words: {leaked} in {response.text}"
     print_success(f"{status_code} {code}")
+
+
+def caused_by_a_full_disk() -> OSError:
+    """Another error of the file system whose cause is a full disk, as a failure wrapped on its way up leaves it."""
+    error = OSError(errno.EIO, os.strerror(errno.EIO), str(DATA_DIR / "backups" / ".jobs"))
+    error.__cause__ = OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
+    return error
+
+
+#: B-30: a start on a full disk or a quota, the failure itself or the cause of another.
+NO_SPACE_STARTS = [
+    pytest.param(lambda: OSError(errno.ENOSPC, os.strerror(errno.ENOSPC), str(DATA_DIR / "backups" / ".jobs")), id="ENOSPC"),
+    pytest.param(lambda: OSError(EDQUOT, os.strerror(EDQUOT), str(DATA_DIR / "backups")), id="EDQUOT", marks=needs_edquot),
+    pytest.param(caused_by_a_full_disk, id="EIO-caused-by-ENOSPC"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", NO_SPACE_STARTS)
+async def test_a_run_that_cannot_start_for_lack_of_space_answers_507_and_warns_once(monkeypatch, error):
+    """(a) B-30 (5): ``start_backup`` meets a full disk or a quota (``jobs.out_of_space``: the failure or a cause of it):
+    507 ``backup_no_space``, «Not enough free space to start the backup», never 500 ``backup_failed``; one WARNING,
+    «Instance backup could not start: not enough free space», with the origin ``ui``; neither the path nor the system's
+    words in the answer."""
+    calls = replace_start(monkeypatch, raising(error()))
+    with capture_logs() as events:
+        response = await post_start()
+    assert calls == ["ui"], f"precondition: the route asked for a run: {calls}"
+    body = response.json() if response.headers.get("content-type", "").startswith("application/json") else None
+    detail = body.get("detail") if isinstance(body, dict) else None
+    answer = (response.status_code, *((detail.get("code"), detail.get("message")) if isinstance(detail, dict) else (None, None)))
+    assert answer == (507, "backup_no_space", NO_SPACE_MESSAGE), f"expected 507 backup_no_space, got {response.status_code}: {response.text}"
+    loud = [(event.get("log_level"), event.get("event"), event.get("origin")) for event in events if event.get("log_level") in ("warning", "error", "critical")]
+    assert loud == [("warning", NO_SPACE_WARNING, "ui")], f"one warning, with the origin: {loud}"
+    leaked = [word for word in (str(DATA_DIR), *NO_SPACE_WORDS) if word in response.text]
+    assert leaked == [], f"the answer must not carry the server's path or the system's words: {leaked} in {response.text}"
+    print_success("507 backup_no_space, one warning")
+
+
+def test_openapi_documents_507_on_the_start():
+    """(c) B-30: ``POST /backup/instance`` documents its 507 beside its 409 and its 500 (``START_RESPONSES``)."""
+    app = FastAPI()
+    app.include_router(instance_router, prefix="/api/v1/backup")
+    documented = set(app.openapi()["paths"][URL]["post"]["responses"])
+    assert {"409", "500", "507"} <= documented, f"the start's refusals, 507 included: {sorted(documented)}"

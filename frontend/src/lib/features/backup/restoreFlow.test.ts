@@ -127,6 +127,7 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockIns
 import type {z} from 'zod';
 import type {schemas} from '$lib/api';
 import {assertEffectsRun} from '$test/runes.svelte';
+import {restoreErrorKey} from './restoreText';
 
 const zodios = vi.hoisted(() => ({
     get_restore_status_api_v1_backup_restore_status_get: vi.fn(),
@@ -1069,6 +1070,44 @@ describe('upload(): a refused PUT, or a check that cannot start', () => {
             ['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 4096}],
             ['backup.restore.failed', {code, what: 'check'}],
         ]);
+    });
+});
+
+// =====================================================================================================================
+// B-30 — a check that cannot start: a full disk (507), its folders or its state unwritable (500) — guards
+// =====================================================================================================================
+
+/*
+ * After B-30, `POST /backup/restore/stage` refuses on a full disk with 507 `no_space` (the check's own code), and on any
+ * other failure to write the check's folders or state with 500 `stage_failed`, both before any check exists (B-30 brief
+ * §1). No frontend change: the code is read off `detail.code` whatever the status, and restoreText.ts words both. These
+ * guards pin what the flow does today with them — exactly what any check that cannot start does (the case above) — and
+ * the sentence the card shows (`restoreErrorKey`, as RestoreCard.svelte resolves it). Green from the start.
+ */
+describe('B-30 — a check that cannot start on a full disk, or with its folders unwritable', () => {
+    it.each<[string, number, string]>([
+        ['507 no_space: not enough free space to check the archive', 507, 'no_space'],
+        ['500 stage_failed: its folders or its state could not be written', 500, 'stage_failed'],
+    ])('%s: failed (check) as any check that cannot start, worded by backup.restore.errors.<code>', async (_case, status, code) => {
+        const {controller, api, storage, events} = await idle();
+        api.upload.mockResolvedValueOnce(uploaded());
+        api.startCheck.mockRejectedValueOnce(refusal(status, code));
+
+        await controller.upload(archive());
+        await flush();
+
+        expect(api.startCheck.mock.calls).toEqual([[UPLOAD_ID]]);
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('check');
+        expect(controller.busy).toBe(false);
+        expect(controller.stage, 'no check exists').toBeNull();
+        expect(storage.setItem, 'no check exists to remember').not.toHaveBeenCalled();
+        expect(events()).toEqual([
+            ['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 4096}],
+            ['backup.restore.failed', {code, what: 'check'}],
+        ]);
+        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe(`backup.restore.errors.${code}`);
     });
 });
 
