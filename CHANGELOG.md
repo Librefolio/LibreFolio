@@ -275,6 +275,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dev.py backup decrypt` run through `docker compose exec` writes a zip owned by the server's user, like the other backup commands; an archive it cannot read now says so.
 - A portfolio report over a long range or many assets no longer freezes the server for other users while it is computed.
 - An Auto cost basis is no longer computed over transactions whose stored numbers cannot be read: the broker deletion and the repair of old transfer legs refuse instead of saving a wrong cost, and saving an Automatic cost in the transaction editor says so instead of failing with a server error.
+- A broker whose history holds a transaction with a value that is not a number is no longer checked against wrong balances: saving or comparing with the bank now says so.
 - **The Δ columns of the Assets and FX lists (1D … 5Y) are computed by the server.** The browser counted the days in local time, so across a daylight-saving change a period could start one day early (a 1M change on 15 November compared with 15 October instead of 16 October). The server counts calendar days, so the figures no longer depend on the time zone; a one-day range now shows its 1D change too.
 - **Changing an asset's currency no longer turns split adjustments into purchases of unknown cost.** The change deletes the asset's events, splits included; when a split has linked adjustments without a purchase cost, the change is now refused and names the split: give those adjustments a cost first.
 
