@@ -147,7 +147,11 @@ rounded (`EVENT_TOO_MANY_DIGITS`, C-97; the digits before the point since W-B58)
 however it is written: added, matched on its date and type, or edited by `id`, including an edit
 that turns another type into a `SPLIT`. Until X-R47 such a split was stored, and as soon as a
 transaction linked it the portfolio engine raised (`financial_math/portfolio/engine.py`): the
-Dashboard report answered 500.
+Dashboard report answered 500. Since lot MF-D4 a split stored that way counts as missing. Only
+its ratio is dropped: the linked `ADJUSTMENT` rows stay the split's rescale, with their cost
+kept. No trade price before the split is restated by that ratio, the FIFO lots skip it, and the
+Dashboard names the asset in an `INVALID_SPLIT_RATIO` warning (see
+[DataQualityBanner](../../frontend/data-quality-banner.md)). The user fixes the ratio here.
 
 Each result carries `event_ids`: the id of the event each point of
 the item wrote, in request order. An edit keeps its id, an event matched on its date and type gets
