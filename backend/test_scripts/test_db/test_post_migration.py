@@ -53,6 +53,14 @@ anomaly and rebuilds the census tables with AUTOINCREMENT. The contract pinned h
 15. The offline script logs to the console only (W-B23, guard, green before and after): a run through
     ``python -m backend.app.db.post_migration`` writes no file in the configured data dir — no ``logs/`` —
     and leaves its canary as it was.
+16. The lock file is never a link, and is its owner's alone (Z-28, as the backup and scheduler locks): the run opens
+    ``<db name>.post-migration.lock`` with ``os.open(…, O_RDWR | O_CREAT | O_NOFOLLOW, 0o600)`` and ``flock``s the
+    descriptor. A symbolic link at that path — dangling, or to an existing file — makes the run raise ``OSError``
+    before the database is opened: no connection, so no fix, the database byte-identical and unconverted, no backup;
+    nothing created behind a dangling link, an existing file behind it unchanged (bytes and mode), the link as it was.
+    A lock file the run creates gives its owner read and write and group and others nothing (0o600, which the umask
+    can only narrow: never pinned exactly). RED until the cure: today ``open(…, "a+")`` follows the link — creating a
+    dangling one's target — and runs the fixes, and creates the file 0o666 less the umask (0o644 under the usual 0o022).
 
 The 1.1 database is real: ``fixtures/db/schema_v1_1_0.sql`` (the v1.1.0 schema at revision
 5b1333fa6b07), populated here with foreign keys on — every table, rows of non-census tables pointing
@@ -81,6 +89,7 @@ import os
 import re
 import select
 import sqlite3
+import stat
 import subprocess
 import sys
 import time
@@ -1621,3 +1630,119 @@ def test_the_offline_script_writes_no_file_in_the_configured_data_dir(configured
     assert _autoincrement_tables(_master(db)) == CENSUS, f"barrier: the script converted, so it had lines to log\n{_output(completed)}"
     assert _tree(configured_sandbox) == before, f"a file appeared in the configured data dir\n{_output(completed)}"
     assert not (data_dir / "logs").exists(), _output(completed)
+
+
+# =============================================================================
+# 16. THE LOCK FILE IS NEVER A LINK, AND IS ITS OWNER'S ALONE (Z-28)
+# =============================================================================
+#
+# As the backup and scheduler locks: ``os.open(<lock>, O_RDWR | O_CREAT | O_NOFOLLOW, 0o600)``, then ``flock`` on the
+# descriptor. Nothing here holds a lock while the run is called: its ``flock`` waits, and no test may hang on it. The
+# umask is left alone: it can only narrow 0o600, so the mode is pinned as "owner read and write, nothing for group and
+# others", never as an exact value.
+
+BEHIND_THE_LINK = b"not a lock file: behind a symbolic link\n"
+BEHIND_THE_LINK_MODE = 0o644
+LINKS = ("dangling", "to-an-existing-file")
+OWNER_RW = 0o600
+GROUP_AND_OTHERS = 0o077
+
+
+def _link_at(lock: Path, behind: Path, kind: str) -> Path:
+    """A symbolic link at ``lock``, to ``behind/never-created`` (``dangling``) or to ``behind/existing-file`` (``BEHIND_THE_LINK``, mode ``BEHIND_THE_LINK_MODE``): its target.
+
+    The dangling link's folder exists, so a lock that follows the link creates its target there rather than fail on a
+    missing folder: a ``FileNotFoundError`` is an ``OSError`` too, and would pass for the refusal.
+    """
+    behind.mkdir(parents=True)
+    target = behind / ("never-created" if kind == "dangling" else "existing-file")
+    if kind != "dangling":
+        target.write_bytes(BEHIND_THE_LINK)
+        target.chmod(BEHIND_THE_LINK_MODE)
+    lock.symlink_to(target)
+    return target
+
+
+def _what_is_at(path: Path) -> tuple[Any, ...]:
+    """What is at ``path`` itself, never following a link: ``("absent",)``, ``("link", <target>)`` or ``("file", <bytes>, <mode>)``."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return ("absent",)
+    if stat.S_ISLNK(info.st_mode):
+        return ("link", str(path.readlink()))
+    return ("file", path.read_bytes(), oct(stat.S_IMODE(info.st_mode)))
+
+
+def _mode_bits(path: Path) -> tuple[str, str, str]:
+    """``path`` itself, never following a link: ``(its ls-style mode, its owner's read and write bits, its group's and others' bits)``."""
+    mode = path.lstat().st_mode
+    return stat.filemode(mode), oct(stat.S_IMODE(mode) & OWNER_RW), oct(stat.S_IMODE(mode) & GROUP_AND_OTHERS)
+
+
+def _run_recording_connections(db: Path) -> tuple[Optional[OSError], Optional[PostMigrationReport], list[str]]:
+    """``run_post_migration_fixes(db, None)``: ``(the OSError it raised, the report it returned, every database it opened)``.
+
+    ``sqlite3.connect`` — the module the run reaches it through — is wrapped for the call only: the test's own reads
+    afterwards are not counted.
+    """
+    opened: list[str] = []
+    real_connect = sqlite3.connect
+
+    def recording_connect(database: Any, *args: Any, **kwargs: Any) -> sqlite3.Connection:
+        opened.append(str(database))
+        return real_connect(database, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(sqlite3, "connect", recording_connect)
+        try:
+            report = post_migration.run_post_migration_fixes(db, None)
+        except OSError as error:
+            return error, None, opened
+    return None, report, opened
+
+
+@pytest.mark.parametrize("kind", LINKS)
+def test_a_symbolic_link_at_the_lock_file_is_refused_before_the_database_is_opened(tmp_path: Path, kind: str) -> None:
+    """Contract 16 (RED): with a symbolic link at ``<db name>.post-migration.lock``, the run raises ``OSError`` without having opened the database.
+
+    The database is a 1.1 install at head, which a run that got past its lock would convert (contract 2): here no
+    connection is made, so no fix runs — the file byte-identical, unconverted, no backup. Behind a dangling link
+    nothing is created; an existing file behind it keeps its bytes and its mode; the link is still there, to the
+    same target. Today ``open(<lock>, "a+")`` follows the link — creating a dangling one's target —, locks the file
+    behind it and converts the database: no ``OSError``.
+    """
+    db = _build_v110_db(tmp_path / "sqlite" / "app.db")
+    lock = _lock_file(db)
+    assert _what_is_at(lock) == ("absent",), "setup: no lock file beside the database yet"
+    target = _link_at(lock, tmp_path / "behind-the-link", kind)
+    _settle(db)
+    digest, behind, link = _digest(db), _what_is_at(target), _what_is_at(lock)
+
+    error, report, opened = _run_recording_connections(db)
+
+    assert error is not None, f"the run followed the symbolic link {lock.name} -> {target}: no OSError; it opened {opened}, outcomes {getattr(report, 'outcomes', None)}; behind the link: {behind[0]}, now {_what_is_at(target)[0]}"
+    assert opened == [], f"{type(error).__name__}, but only once the database was opened: {opened}"
+    assert _what_is_at(target) == behind, f"{type(error).__name__}, but behind the link {behind[0]} is now {_what_is_at(target)[0]}: the lock followed it"
+    assert _what_is_at(lock) == link, f"the link is left as it was: {link}, now {_what_is_at(lock)}"
+    assert (_digest(db), _autoincrement_tables(_master(db)), _backups(db)) == (digest, set(), []), "no fix ran: the database byte-identical, unconverted, no backup"
+
+
+def test_the_lock_file_a_run_creates_is_its_owners_alone(tmp_path: Path) -> None:
+    """Contract 16 (RED): a run that finds no lock file beside the database creates one its owner reads and writes, with nothing for group and others.
+
+    A new database: ``clean``, its lock taken all the same (contract 12), the file kept. Created 0o600, which the
+    umask can only narrow, so only those bits are pinned, and the umask is left alone. Today ``open(<lock>, "a+")``
+    creates it 0o666 less the umask: 0o644 under the usual 0o022, readable by every user of the machine. Under a umask
+    that already takes everything from group and others the defect cannot show, and this passes either way.
+    """
+    db = tmp_path / "sqlite" / "app.db"
+    _alembic_upgrade_head(db)
+    lock = _lock_file(db)
+    assert _what_is_at(lock) == ("absent",), "setup: no lock file beside the new database yet"
+
+    report = post_migration.run_post_migration_fixes(db, None)
+
+    assert report.outcomes.get(FIX) == "clean", f"barrier: the run went through its detection, under its lock: {report.outcomes}"
+    filemode, owner, others = _mode_bits(lock)
+    assert (filemode[0], owner, others) == ("-", oct(OWNER_RW), oct(0)), f"{lock.name} was created {filemode}: a regular file its owner reads and writes, group and others nothing (0o600, which the umask can only narrow)"
