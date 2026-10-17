@@ -76,6 +76,7 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     missing_fx_pairs_dto: list | None = None,
     transaction_implied_assets_dto: list | None = None,
     missing_cost_basis_assets: list[tuple[int, str]] | None = None,
+    invalid_split_assets: list[tuple[int, str]] | None = None,
     valued_at_cost_assets_dto: list | None = None,
     classifier_warnings: list[str] | None = None,
     share_mismatches: Sequence[ShareMismatch] | None = None,
@@ -94,6 +95,9 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     missing_cost_basis_assets: (asset_id, name) of the assets with an acquisition whose cost
     is not known (a TRANSFER or ADJUSTMENT adding quantity without cost_basis_override): it
     counts at zero cost, so their purchase cost and P&L are incomplete.
+    invalid_split_assets (MF-D4): (asset_id, name) of the assets with a SPLIT event whose stored ratio is unusable: it
+    counts as missing (no ratio restates a trade price observed before it), so a valuation that rests on such a price may
+    be wrong until the ratio is fixed on the asset's events.
     If None, the report still populates date-level fields.
 
     share_mismatches (J-43): the engine's linked internal pairs between brokers owned at
@@ -219,6 +223,24 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
                 cta_action="navigate_asset",
                 cta_target=str(missing_cost_basis_assets[0][0]),
                 group_key="missing_cost_basis",
+            )
+        )
+
+    # INVALID_SPLIT_RATIO — warning (MF-D4): a SPLIT whose stored ratio is unusable counts as missing
+    if invalid_split_assets:
+        issues.append(
+            DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.INVALID_SPLIT_RATIO,
+                severity=IssueSeverity.WARNING,
+                message_i18n_key="dataQuality.invalidSplitRatio",
+                message_params={"count": len(invalid_split_assets)},
+                count=len(invalid_split_assets),
+                affected_asset_ids=[asset_id for asset_id, _ in invalid_split_assets],
+                affected_asset_names=[name for _, name in invalid_split_assets],
+                cta_action="navigate_asset",
+                cta_target=str(invalid_split_assets[0][0]),
+                group_key="invalid_split_ratio",
             )
         )
 
