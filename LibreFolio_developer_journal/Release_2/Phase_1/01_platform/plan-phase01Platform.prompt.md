@@ -7088,3 +7088,29 @@ Revocation).
      and in the restore check's upgrade.»
    - Note per B, le passa il coordinatore: l'`OperationalError` grezzo di `describe_database()`; la docstring di
      `env.py`.
+
+### Mini-lotto «H-47 col disegno giusto; la clausola di B-37 in `database/index.md`» (2026-10-17, 16:00) — solo giornale e doc
+
+> Dal coordinatore (15:55, dopo l'entrata di H-51: `2def8f7db`, dev `70ab2fcc6`, CHANGELOG 🔒 `6aa42af1a`): «Next: the
+> mini-lot (the H-47 line with the right design, plus the `database/index.md` r.203-204 clause), journal and docs only.
+> After it, propose your most valuable open 1.3 item, analysis first.» La riga «H-51» che X ha scritto nella mia
+> sezione (i 500 di `providers.py`) diventa X-R74, di X: non la tocco. In dev non c'è.
+
+1. ✅ **H-47** (backlog, sezione H): riscritta col disegno giusto, dopo aver riletto B-38 entrato (`_secret_path()` in
+   `scripts/backup_cli.py`).
+   - Cosa fa B-38, da root:
+     - il giro di `lstat` dentro la cartella dei dati;
+     - un'apertura `O_RDONLY|O_NONBLOCK` che **segue** i link, con `fstat` che chiede un file regolare;
+     - poi `read_secret_file` riapre per percorso.
+   - Il residuo sono quindi tre passi separati.
+   - Il disegno: `regular_only`, cioè controllo e lettura sullo stesso descrittore; `no_links_under=<radice>`, cioè
+     una discesa con `dir_fd` e `O_NOFOLLOW` per componente sotto la radice. Mai un `O_NOFOLLOW` secco (Kubernetes).
+   - Il punto «B mette `O_NOFOLLOW|O_NONBLOCK`» descriveva il piano, non quello che B ha consegnato: è corretto.
+2. ✅ **`database/index.md`** r.204: «`run_post_migration_fixes()` works on a direct `sqlite3` connection, with
+   `trusted_schema` off before anything else (lot B-37)».
+3. ✅ (2026-10-17, 15:54) Verifica (`files/runs/mini47.sh`): `mkdocs build` stretto senza avvisi, `check-links` 97,
+   `git diff --check` pulito. Dev è fermo alla HEAD `6aa42af1a`.
+   > **⚠️ Fuori pista**: rileggendo la mia sezione per scegliere «il lotto più utile», ho visto che molte righe H già
+   > entrate non sono chiuse con ✅, data e commit, come chiede la regola del backlog. Esempi con il commit che le nomina:
+   > H-17, H-21…H-25, H-27…H-30, H-32…H-34, H-37, H-39, H-42, H-45, H-46. Altre, come H-19 e H-49, hanno commit che
+   > non nominano l'ID. Propongo una riconciliazione, solo giornale.
