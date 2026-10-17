@@ -236,6 +236,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changing the type of a split whose adjustments have no purchase cost is refused: those units would otherwise count as bought at an unknown price.
 - Freezing an automatic average cost into a manual one no longer fails on a value with too many decimals.
 - Dashboard cash breakdown: cash moved between brokers or converted between currencies keeps the returns it carried, instead of being counted as contributed capital; a gain or loss between the two legs (exchange rate, ownership share) counts as a result.
+- AI Export: a drawdown section no longer fails on a total loss or on one implausible price — the −100 % stays in the export with no recovery gain, and only the affected asset's row is marked as failed.
 
 #### 🔒 Security
 
