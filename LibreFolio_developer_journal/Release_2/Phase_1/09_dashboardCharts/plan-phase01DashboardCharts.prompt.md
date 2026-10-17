@@ -5904,3 +5904,41 @@ finale) nel mio HEAD.
 > `ratioToPercent` spostata qui, `rangeStartFor` col calendario, `assetRangeDelta`, `fxRangeDeltas`): `rangeChange.test.ts`
 > **83/83**, Prettier pulito. Due copie di `ratioToPercent` finché `periodChanges.ts` non la riesporta (lotto A, dopo
 > X-R60). Il resto del lotto A aspetta X-R60 e l'ingresso di X-R59 di MF.
+
+## X-R59, lotto B — la pagina dell'asset (dalle 13:21; HEAD `c4fe7cfb1`)
+
+> **Coordinatore (13:20)**: checkpoint del lotto A sul mio ramo, non per dev (`c18deef09` test e modulo, `c4fe7cfb1` diario);
+> dev entrerà nel ramo con X-R60 e X-R59 di MF. Dice a X di non spostare `ratioToPercent`.
+>
+> **Coordinatore (13:21)**: mentre il lotto A aspetta, **i rossi del lotto B**. Contratto (MF): `/prices/current?range_start=
+> &target_currency=` con `range_change`; un cambio mancante dà una variazione nulla; un riferimento prima del 1900 è
+> tagliato. Rossi Vitest per `assetDetailLive` e la Δ derivata della pagina, con risposte finte (nessuna dipendenza dal
+> client generato); commit a un confine di passo. Se avanza tempo prima degli ingressi: **Y-31** (minima).
+> - Il ramo di MF (`f252acb4a`) non ha ancora `target_currency` su `/current`: vale il contratto del coordinatore; i test
+>   usano risposte finte. Le istantanee «copilot checkpoint» di altre sessioni non le leggo.
+>
+> **Contratto del lotto B** (proposto, da fissare nei rossi): `AssetDetailLiveInput.rangeStart?` (facoltativo: le fixture
+> esistenti restano valide); stato `rangeDelta: RangeDelta | null`, azzerato a ogni giro dell'effetto, scritto nello stesso
+> passo di `currentPrice` (`assetRangeDelta(range_change)`; nessuna variazione senza `range_start` o con la conversione
+> fallita); la chiamata `([id], {queries: {range_start, target_currency?}})`, esattamente `([id])` senza inizio;
+> `resetPrice()` la azzera. Modulo nuovo `assetDetailRangeChange.ts`: `summaryRangeDelta(liveShown, live, series)` (mai la
+> Δ della serie accanto a un prezzo live) e `fetchSeriesRangeDelta({assetId, asOf, dateStart, targetCurrency?})` (una voce
+> di `period-changes`). Il test nuovo va in `_frontend_asset.py` (non in `_frontend_utility.py`, file del programma colori).
+>
+> **Lotto B, rossi ✅** (`test-author` `b4d8d984`, 13:2x–13:4x; log `files/logs/xr59b_*.json`):
+> - `assetDetailRangeChange.test.ts` (nuovo, 25 test: 7 `summaryRangeDelta`, 18 `fetchSeriesRangeDelta`): non si raccoglie
+>   (modulo mancante).
+> - `assetDetailLive.svelte.test.ts`: 127 test, **50 rossi** nuovi (l'effetto 13, la richiesta del poll 14, cosa scrive un
+>   poll 22, `resetPrice()` 1), tutti su asserzioni; i **77 esistenti verdi**. Il getter `rangeStart` è definito solo
+>   quando un caso passa la chiave: il test esistente che fissa le cinque letture dell'effetto resta verde anche dopo la
+>   cura; il nuovo fissa le sei letture per una pagina che passa `rangeStart`.
+> - Registrazione: `assetDetailRangeChange.test.ts` in `_frontend_asset.py` (`asset-unit`, aggiunta approvata), non in
+>   `_frontend_utility.py`.
+> - Dubbi del test-author, per la cura: riformulare «nothing else» di `resetPrice()` (docblock e titolo esistenti); serve la
+>   versione di MF con `target_currency` su `/current` e un `api sync`; le query confrontate in modo stretto (mai una chiave
+>   `undefined`); `rangeStart` catturato dall'effetto, non riletto dal poll; **`fetchSeriesRangeDelta` riceve la valuta di
+>   visualizzazione solo quando il grafico è davvero convertito** (con `fxConversionMissing` niente `target_currency`, o la
+>   Δ sparirebbe per ogni asset senza la coppia); la Δ si spegne per una richiesta al cambio di valuta o di intervallo; la
+>   conversione del prezzo live resta del client (data UTC) mentre la Δ è del backend.
+>
+> ### Lotto B rossi — checkpoint 🧊 FROZEN (13:4x)
