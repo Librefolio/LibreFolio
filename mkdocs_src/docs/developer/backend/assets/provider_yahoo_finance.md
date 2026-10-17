@@ -42,6 +42,12 @@ The public method now delegates its local work to focused helpers without changi
    - A finite range calls `ticker.history(start=start_date, end=end_date + 1 day)`, preserving
      LibreFolio's inclusive end date over yfinance's exclusive `end`.
    - Currency metadata falls back to `USD`.
+   - Otherwise the currency is Yahoo's own code (`ticker.info["currency"]`), passed on unchanged
+     as `FAHistoricalData.currency`: `GBp` for a London line quoted in pence. The price points and
+     the dividends carry `GBP` (their schemas upper-case the code) with the numbers in pence, and
+     the refresh keeps the raw code on the assignment
+     ([The Provider's Own Quote Currency](architecture.md#reported-currency)). Two guards in
+     `test_yahoo_finance_errors.py` pin both: no validator on that field, no conversion here.
    - Dividend and split series are acquired independently and best-effort; one failing does not
      suppress the other or the prices.
 2. **Map — `_map_history_prices()`**
@@ -138,6 +144,10 @@ are owned by `assets/core.py`; Yahoo owns only its currency sub-operation cache.
   Other transient errors (timeouts, reset connections, `503`…) are still retried: at most three
   attempts, 1.5 s and then 3 s apart.
 - **ISIN resolution**: Not all ISINs are resolvable by yfinance (depends on market coverage).
+- **Prices in pence**: a London line quoted in pence (`GBp`) is stored in pence as `GBP`. Its
+  holdings are right once the asset's quote base is 100, and the Dashboard warns until then
+  (`QUOTE_IN_MINOR_UNIT`, see [Data Quality Banner](../../frontend/data-quality-banner.md)); its
+  dividends stay in pence whatever the base.
 - **Data gaps**: Some tickers may have missing days or delayed data.
 
 ---
