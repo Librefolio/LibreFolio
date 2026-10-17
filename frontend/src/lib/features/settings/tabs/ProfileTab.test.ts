@@ -721,8 +721,9 @@ describe('ProfileTab — deleting the account', () => {
     });
 
     it('keeps the user logged in and explains itself when the deletion is refused', async () => {
-        // The server's own refusal: the only active administrator stays (400, a sentence, no error_code).
-        deleteMe().mockRejectedValue(axiosError('Cannot delete account: you are the only administrator'));
+        // The server's own refusal: the last active administrator stays. 400 with a code since A-16 (a bare sentence
+        // before): `LAST_ADMIN`, worded by the dialog for a deletion — AccountDeletionDialog.test.ts, ADEL-28.
+        deleteMe().mockRejectedValue(axiosError({error_code: 'LAST_ADMIN', message: 'Cannot delete account: you are the last active administrator'}));
         await mount();
         await openDelete();
         await type(confirmInput(), 'alice');
