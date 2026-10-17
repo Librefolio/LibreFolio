@@ -5366,6 +5366,80 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-18, riparazione — il cancello G rosso: `instance_key_invalid` non dichiarato (2026-10-17, 11:40-11:52) — ✅ 🧊 FROZEN
+
+> **Coordinatore, urgente prima di BZ** (11:40): il cancello G (`api backup-restore`) è rosso su
+> `test_backup_restore.py::test_every_code_a_check_can_end_with_is_one_the_api_declares`, con
+> `(produced, not declared): ['instance_key_invalid']`.
+>
+> **Causa**: la guardia legge con l'AST ogni `StagingError("<codice>")` di `staging.py` e vuole lo stesso insieme di
+> `RestoreErrorCode`, nei due versi. B-18 ha aggiunto `StagingError("instance_key_invalid", …)` senza dichiararlo. Non
+> l'avevo visto perché nessun run `api` faceva parte del lotto: niente slot, e i servizi non bastavano.
+>
+> **Scelta: dichiararlo** (la prima cura proposta dal coordinatore). Nessun test cambia, e la guardia resta stretta: se
+> un giorno l'API desse una chiave alla verifica, il codice sarebbe già dichiarato.
+> - Oggi non può arrivare da un GET: l'API non passa mai `instance_key`, e la CLI chiama `stage_archive` direttamente,
+>   senza registro della verifica.
+> - Il commento sopra `RestoreErrorCode` lo dice.
+> - La scheda non lo mostra: le liste del frontend sono scritte a mano, non derivate dall'enum generato, e
+>   `restoreErrorKey` prende una stringa. Quindi niente chiave i18n e niente `ERROR_KEYS`.
+>
+> - ✅ `backend/app/schemas/backup.py`: `instance_key_invalid` in coda a `RestoreErrorCode`, con il commento. Ruff e
+>   black puliti.
+> - ✅ `api backup-restore` (11:44:59-11:51:07, attesa del carico; svelte-check 0 errori nel build): **146 passati**,
+>   la guardia compresa.
+> - ✅ `api sync` (11:51:07-11:51:42), uscita 0: `openapi.json` e `generated.ts`, ignorati da git, lo contengono.
+> - Porta 6187 libera. Nessun tipo del frontend è esaustivo su `RestoreErrorCode` (grep), quindi niente `front check`
+>   a parte.
+> - **Lezione**: un codice nuovo di `StagingError` richiede `api backup-restore`, anche in un lotto «solo CLI».
+
+### BZ, parte 1 — revisione di sicurezza di ciò che è consegnato (2026-10-17, 10:55-11:58) — ✅ inviata al coordinatore, sola lettura
+
+> **Coordinatore** (10:53):
+> - B-20 committato, `7b13e4d43`, sopra B-18 `7b1911fd6`; entrano insieme dopo la revisione di H su B-18.
+> - Ora la **parte 1 di BZ**, in sola lettura: le superfici di backup e ripristino consegnate in dev (B-9, B-16, B-19,
+>   B-28…B-32) e B-18/B-20 sul mio ramo, cioè rotte, CLI da root, biglietti, staging, lettura degli archivi, segreti.
+> - Le scoperte vanno nella mia sezione del backlog come voci B nuove, ognuna con gravità e cura proposta. **Niente
+>   codice prima del suo OK.** La parte 2 (la consegna finale) viene alla fine, dopo B7 e B9.
+>
+> Base: HEAD `7b13e4d43`, albero pulito. Superficie: circa 6800 righe:
+> - `instance_backup/*.py` e `api/v1/backup/*.py`;
+> - `scripts/backup_cli.py`;
+> - `instance_key.py` e `plugin_settings/crypto.py`, solo come consumatore.
+> Delegata all'agente `security-review`.
+>
+> - **B-18 e B-20 entrati** (coordinatore, 10:56): dev `5c4d7456a`, CHANGELOG ✨ `582cfb6b0`; HEAD portata in avanti.
+>   La revisione di H su B-18 è OK, con un LOW-1 e due appunti della doc, registrati come **B-34**.
+> - **⚠️ Fuori pista — l'agente non parte (10:56)**: la sua richiesta portava con sé il contesto della sessione,
+>   243 035 token contro un limite di 128 000. Nessuna lettura è stata fatta. Riprovo dopo la compattazione del contesto.
+>   Secondo tentativo (11:00), con un prompt corto e il brief in un file (`bz-security-brief.md` nella cartella della
+>   sessione): stesso errore, 293 779 token. L'agente eredita il contesto della mia sessione, e un prompt più corto non
+>   basta. Chiesto al coordinatore come procedere (tier a contesto lungo, o lancio da una sessione fresca).
+> - **Coordinatore** (11:35):
+>   - né l'opzione 1 né la 3: il permesso per il contesto lungo può darlo solo il developer, e la domanda va nella sua
+>     lista;
+>   - la revisione la faccio **io, direttamente**, in sola lettura, dal brief, area per area (rotte, CLI da root,
+>     biglietti e staging, lettura degli archivi, segreti), con un agente `explore` per un'area stretta se parte.
+>   Le scoperte diventano voci B con gravità e cura; niente codice prima del suo OK. Registro in corso nella cartella
+>   della sessione: `bz-findings.md`.
+> - **Metodo** (11:36-11:58): revisione diretta, area per area.
+>   - Un agente `explore` (partito senza problemi) ha raccolto i fatti della lettura degli archivi: nomi, estrazione,
+>     limiti, manifest, chiave, SQLite, Alembic, involucro, fughe. Ho verificato io i punti decisivi: `env.py` fa vincere
+>     l'URL di `-x`; `_row_counts` di post_migration.
+>   - Le altre aree le ho lette io: rotte e autenticazione, upload, download, pannello, biglietto dell'esito, CLI da
+>     root, password e KDF dei backup sicuri, controlli di B-9, esportazioni.
+>   - **Garanzia più bassa** di un agente `security-review` dedicato. La domanda sul contesto lungo è nella lista del
+>     developer, se vuole un secondo passaggio.
+> - **Scoperte** (5), registrate come voci B nel backlog:
+>   - 🟡 **B-35** (F3): lo scompattamento non è limitato dal tetto di caricamento. MEDIO nel cloud;
+>   - ⚪ **B-36** (F1): nomi di tabella non quotati in `post_migration._row_counts`; proprietario fuori da B;
+>   - ⚪ **B-37** (F2): `trusted_schema` acceso sulle connessioni di post_migration e di Alembic alla copia; fuori da B;
+>   - ⚪ **B-38** (F4): la CLI da root legge i file dei segreti attraverso link e FIFO, mentre la guida mette la chiave in
+>     `backups/`;
+>   - ⚪ **B-39** (F5): formule nei CSV esportati (le `notes` degli eventi).
+>   Nessuna critica né alta. Niente codice prima del via del coordinatore.
+> - **Sano**: l'elenco con le righe sta in `bz-findings.md`, sezione «Checked and sound».
+
 ### B-20 — knip e `RESTORE_TICKET_HEADER` (2026-10-17, 10:50-10:54) — ✅ 🧊 FROZEN (checkpoint delle 10:54)
 
 > **B-18 committato** (coordinatore, 10:50): `7b1911fd6`, albero pulito, merge-tree con dev pulito. Il testo del
