@@ -45,9 +45,10 @@
  * ## How it reads, and what it cannot see
  *
  * Colours come from the module's resolver, which reads the forms tokens.css uses — a hex, `transparent`, `var(--…)`,
- * `color-mix(in oklab, A p, B)` — and mixes as CSS Color 5 does (OKLab, premultiplied alpha). A new form fails C2
- * loudly before it could fail C3 in silence. Contrast is computed on the declared values, not on the page: an
- * opacity utility (`text-lf-muted/70`), a gradient or an image behind the text are invisible here. So is a
+ * `color-mix(in oklab, A p, B)` and `color-mix(in srgb, A p, B)` — and mixes as CSS Color 5 does: premultiplied alpha,
+ * in OKLab, or on the gamma-encoded sRGB channels (the tints of the categories, mixed as the designer mixed them). A
+ * new form fails C2 loudly before it could fail C3 in silence. Contrast is computed on the declared values, not on the
+ * page: an opacity utility (`text-lf-muted/70`), a gradient or an image behind the text are invisible here. So is a
  * translucent layer, unless it is a role whose pair names the opaque role it lies on, `over`: then the ratio is
  * taken on the two composited as the browser draws them (the backdrop and the selected tint, over each surface they
  * lie on); with no `over`, a translucent background is refused. A pair missing from `CONTRAST_PAIRS` is not checked
@@ -232,6 +233,12 @@ const STATUSES = ['success', 'warning', 'danger', 'info'];
 const SIGNS = ['gain', 'loss'];
 /** The neutral surfaces text and controls are set on, the header's among them (D-T23); the green sidebar's pairs are its own. */
 const SURFACES = ['surface-app', 'surface-page', 'surface-header', 'surface-card', 'surface-panel', 'surface-field'];
+/**
+ * The categories of round 3 (§1.9): one per family of asset types — its name in lower case, `_` → `-` — and the cash
+ * bucket's, `liquidity`. Each is a colour, `cat-<key>`, with a badge tint, `cat-<key>-soft`, and a badge text,
+ * `cat-<key>-on-soft`.
+ */
+const CATEGORIES = ['stock', 'etf', 'bond', 'crypto', 'fund', 'hold', 'crowdfund', 'commodity', 'real-estate', 'index', 'other', 'liquidity'];
 
 interface ContrastPair {
     foreground: string;
@@ -314,6 +321,19 @@ const pairsOver = (foregrounds: string[], background: string, unders: string[], 
  * 6.83 and 9.20:1, the dismiss 5.69 and 6.38:1, the link 5.36 and 4.83:1, the focus ring 5.36 and 4.83:1 on a tint and
  * 4.40 and 3.28:1 on a line, a row on a worse tint 4.52 and 4.67:1.
  *
+ * And round 3's categories (§1.9), K one of `CATEGORIES`: the colour of a family of asset types or of the cash bucket,
+ * --lf-cat-K, the one the charts draw it in. Its badge is a tint, --lf-cat-K-soft, the colour at 14% on the card, mixed
+ * in sRGB as the designer mixed her badge values — the resolver reads `in srgb` for them — and its text,
+ * --lf-cat-K-on-soft, the colour itself or the colour moved in lightness alone, reaches 4.5:1 on it. One text is a D-T6
+ * correction of hers, BOND's in light: her #50679b, 4.51:1 on her tint rounded to #e3e7ed, gives 4.49:1 on the exact
+ * one, and #4f669a 4.56:1, for her to confirm. Drawn on its own, as a bar or a swatch, every colour reaches 3:1 on the
+ * card, her rule for every category. A subtype wears its family's badge and says what it holds with a dot in the badge
+ * text of its content, held at 3:1 on the family's tint: an ETF's stock, bond, commodity, real estate, crypto and money
+ * market (the liquidity's) on --lf-cat-etf-soft, a crowdfunding's real estate on --lf-cat-crowdfund-soft; in the
+ * content's own colour, the crypto dot gave 2.84:1 in light. Measured on 17/10, the worst in light and in dark: a badge
+ * text 4.51 (OTHER) and 4.62:1 (FUND), a colour on the card 3.50 (CRYPTO) and 5.62:1 (FUND), a dot 4.30 (ETF_CRYPTO)
+ * and 4.52:1 (ETF_MONETARY).
+ *
  * What C3 cannot express: a control told apart by two colours at once. The knob of a switch turned off,
  * --lf-switch-knob-off, is white on the light track of --lf-switch-off in light, and the control is recognised by the
  * --lf-border-input edge the knob is drawn with — an edge between two fills, which no pair holds. An item for the
@@ -367,6 +387,12 @@ const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...STATUSES.flatMap((status) => pairs(['focus'], [`${status}-soft`, `${status}-line`], NON_TEXT)),
     ...pairs(['warning', 'info'], ['danger-soft'], NON_TEXT),
     ...pairs(['info'], ['warning-soft'], NON_TEXT),
+
+    // Round 3 of the designer (17/10): the categories of the asset types (§1.9) — a badge, a colour on the card, a dot
+    ...CATEGORIES.flatMap((category) => pairs([`cat-${category}-on-soft`], [`cat-${category}-soft`], TEXT)),
+    ...CATEGORIES.flatMap((category) => pairs([`cat-${category}`], ['surface-card'], NON_TEXT)),
+    ...pairs(['cat-stock-on-soft', 'cat-bond-on-soft', 'cat-commodity-on-soft', 'cat-real-estate-on-soft', 'cat-crypto-on-soft', 'cat-liquidity-on-soft'], ['cat-etf-soft'], NON_TEXT),
+    ...pairs(['cat-real-estate-on-soft'], ['cat-crowdfund-soft'], NON_TEXT),
 ];
 
 interface KnownException {
@@ -419,7 +445,7 @@ function measurePair(tokens: Tokens, pair: ContrastPair, theme: Theme): Contrast
 }
 
 describe('tokens.css: contrast in both themes (C3)', () => {
-    it('measures contrast the WCAG way, composites a translucent colour and mixes in OKLab (positive control)', () => {
+    it('measures contrast the WCAG way, composites a translucent colour and mixes in OKLab and in sRGB (positive control)', () => {
         const tokens = readTokens();
         const colour = (expression: string): Rgba => resolveColour(tokens, expression, 'light');
         expect(contrastRatio(colour('#000000'), colour('#ffffff'))).toBeCloseTo(21, 5);
@@ -431,6 +457,11 @@ describe('tokens.css: contrast in both themes (C3)', () => {
         const veil = colour('color-mix(in oklab, #ff0000 40%, transparent)');
         expect(toHex(veil), 'a mix with transparent keeps the colour').toBe('#ff0000');
         expect(veil.alpha, 'and scales its alpha').toBeCloseTo(0.4, 10);
+        // The tints of the categories (round 3) mix in sRGB, as the designer mixed them: on the gamma-encoded channels.
+        expect(toHex(colour('color-mix(in srgb, #000000 50%, #ffffff)')), 'the sRGB midpoint of black and white: not the OKLab #636363, nor the linear-light #bcbcbc').toBe('#808080');
+        const srgbVeil = colour('color-mix(in srgb, #ff0000 40%, transparent)');
+        expect(toHex(srgbVeil), 'in sRGB too a mix with transparent keeps the colour: premultiplied, not the #660000 of straight channels').toBe('#ff0000');
+        expect(srgbVeil.alpha, 'and scales its alpha').toBeCloseTo(0.4, 10);
     });
 
     it('composites a translucent background over the opaque role its pair names, and refuses one with none (positive control)', () => {

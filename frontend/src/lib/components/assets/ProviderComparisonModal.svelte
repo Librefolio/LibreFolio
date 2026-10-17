@@ -19,7 +19,7 @@
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {X} from 'lucide-svelte';
-    import {assetTypeBadgeClass, getAssetTypeIconUrl, sectorI18nKey} from '$lib/utils/assetTypes';
+    import {assetTypeBadgeClass, assetTypeBadgeDotClass, getAssetTypeIconUrl, sectorI18nKey} from '$lib/utils/assetTypes';
     import IdentifierPrimaryChooser, {type IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
 
@@ -260,12 +260,16 @@
     }
 </script>
 
-<!-- The asset type as the asset cards draw it: badge colour, icon and localized name. -->
+<!-- The asset type as the asset cards draw it: badge colour, icon, localized name, a subtype's content dot. -->
 {#snippet typeBadge(type: string | null | undefined)}
     {#if type}
+        {@const dot = assetTypeBadgeDotClass(type)}
         <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded {assetTypeBadgeClass(type)}" data-testid="comparison-type-badge" data-type={type}>
             <img src={getAssetTypeIconUrl(type)} alt="" class="w-4 h-4 object-contain" />
             {typeLabel(type)}
+            {#if dot}
+                <span class="inline-block w-1.5 h-1.5 shrink-0 rounded-full {dot}" aria-hidden="true" data-testid="asset-type-dot"></span>
+            {/if}
         </span>
     {:else}
         <span class="text-xs text-lf-muted italic">—</span>
