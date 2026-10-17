@@ -88,9 +88,14 @@ class FifoInputTransaction:
     related_transaction_id: int | None = None
     target_amount: Decimal | None = None
     target_currency: str | None = None
+    # An ADJUSTMENT-out that hands each fragment over at its own FIFO cost (realized 0): a transfer leg leaving the scope
+    # on a day without any price (``financial_math/lots/scope_boundary.py``, J-10).
+    hands_over_at_own_cost: bool = False
 
     @classmethod
-    def from_transaction(cls, tx: TransactionLike) -> FifoInputTransaction:
+    def from_transaction(cls, tx: TransactionLike | FifoInputTransaction) -> FifoInputTransaction:
+        if isinstance(tx, FifoInputTransaction):
+            return tx
         tx_type = getattr(tx.type, "value", tx.type)
         return cls(
             id=_require_id(tx.id),
