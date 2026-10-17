@@ -14,7 +14,7 @@ from backend.app.services.financial_math.returns import required_recovery_return
 ZERO_TOLERANCE = 1e-15
 """Absolute tolerance below which a dispersion statistic counts as exactly zero.
 
-Public because the vectorised rolling helpers in :mod:`backend.app.services.risk.signal_helpers`
+Public because the vectorised rolling helpers in :mod:`backend.app.services.signals.risk_adapters`
 must test the *same* threshold on the *same* statistic. A metric is undefined when its
 denominator vanishes, and the scalar and vectorised paths have to agree on where that
 boundary lies — otherwise one of them emits a number where the other emits ``None``,

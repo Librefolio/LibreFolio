@@ -78,6 +78,21 @@
       "submit": "Définir le nouveau mot de passe",
       "done": "Votre mot de passe a été modifié : connectez-vous avec le nouveau.",
       "failed": "Le mot de passe n'a pas pu être modifié. Réessayez."
-    }
+    },
+    "setup": {
+      "title": "Configurez votre compte administrateur",
+      "intro": "Choisissez le mot de passe du compte administrateur de cette instance.",
+      "account": "Compte :",
+      "submit": "Activer le compte",
+      "failed": "Le compte n'a pas pu être configuré. Réessayez.",
+      "blocked": "Cette instance est bloquée par son hébergeur : le compte pourra être configuré une fois l'instance débloquée.",
+      "newLinkHint": "Demandez un nouveau lien à votre hébergeur. Sur votre propre serveur, lancez « dev.py user setup-link »."
+    },
+    "notices": {
+      "openRegistration": "L'inscription est ouverte et cette instance est joignable depuis l'extérieur de votre réseau local : n'importe qui la trouvant peut créer un compte.",
+      "openRegistrationLocked": "L'inscription est ouverte, fixée par LIBREFOLIO_REGISTRATION, et cette instance est joignable depuis l'extérieur de votre réseau local : n'importe qui la trouvant peut créer un compte. Modifiez la variable pour la fermer.",
+      "openRegistrationAction": "Changer qui peut s'inscrire"
+    },
+    "instanceBlocked": "Cette instance est bloquée par son hébergeur : réessayez une fois qu'elle sera débloquée."
   }
 }

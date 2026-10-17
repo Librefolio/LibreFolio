@@ -17,11 +17,8 @@ from backend.app.schemas.risk_scenarios import RiskScenarioCatalogResponse
 from backend.app.services.risk.scenario_catalog import (
     get_loaded_risk_scenario_catalog,
 )
-from backend.app.services.risk.service import (
-    RiskScopeAccessError,
-    RiskScopeNotFoundError,
-    RiskService,
-)
+from backend.app.services.risk.scope import RiskScopeAccessError, RiskScopeNotFoundError
+from backend.app.services.risk.service import RiskService
 
 router = APIRouter(prefix="/risk", tags=["Risk Analysis"])
 

@@ -410,9 +410,10 @@ page explains how both reach the Dashboard.
   `(date_from, date_to]` whose proceeds and cost are both known; realized =
   Σ (proceeds − cost). A disposal left out is reported instead (its pair, or the
   cost basis its pool lacks). There is no per-sale WAC query.
-- **Period-boundary cost** (positions contribution). `_boundary_cost()` reads
-  `state_at(day).cost_report_for(qty)` and returns `None` while the pool is
-  incomplete that day, so no partial cost enters an unrealized figure.
+- **Period-boundary values** (positions contribution). Each row reads the engine's
+  `position_states_start` / `position_states_end`: the end cost only when `cost_complete`,
+  and `unrealized_pnl` is `None` while the cost is incomplete, so no partial cost enters an
+  unrealized figure.
 - **Holdings.** `wac_per_unit` is the historical WAC already in the report currency
   (`None` while incomplete). It is also the Yield on Cost denominator, which
   therefore needs no conversion at the end date.
@@ -563,7 +564,7 @@ Rule 12 of `validate_transaction_business_rules()`
 `_cost_basis_rule()`, shared with `cost_basis_required()` — is `forbidden`, or
 `required_qty_pos` without a positive quantity. It is the test the frontend makes
 before sending a cost basis (`cbAllowed` in
-`frontend/src/lib/utils/transactions/txPayloadHelpers.ts`), and with today's
+`frontend/src/lib/features/transactions/txPayloadHelpers.ts`), and with today's
 table it admits exactly the rows that need an override: a `TRANSFER` or
 `ADJUSTMENT` adding quantity.
 
@@ -604,7 +605,7 @@ stored cost stays. Elsewhere the `null` is ignored, so the giving leg of a split
 the update names `cost_basis_mode` `auto` or `auto-detail`, which compute their
 own (see [Inline Batch Auto Modes](#inline-batch-auto-modes)): the frontend sends a
 `null` with an Auto row that has no currency hint yet (`buildUpdateDiff()` in
-`frontend/src/lib/utils/transactions/txPayloadHelpers.ts`). Tests:
+`frontend/src/lib/features/transactions/txPayloadHelpers.ts`). Tests:
 `./dev.py test services transaction-cost-basis-rule`
 (`TestDecisionP5AnExplicitNullEmptiesTheCost`).
 

@@ -4731,3 +4731,248 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   `ProfileTab.test.ts`, `_frontend_utility.py` (registrazione), due pagine di doc, piano e backlog (A-25 ✅, A-28
 >   nuova).
 > - Prossimo: **A7b** (ordine del coordinatore: A-25 → A7b → A8 → A9).
+
+### A7b — Analisi e contratto (2026-10-16, 20:20)
+> Base `5a54e23ad` (A-25 entrata in dev, `b7e50b359`). Ordine del coordinatore: A-25 → **A7b** → A8 → A9.
+
+**Stato reale, verificato**:
+- **Backend A7a c'è**: `POST /auth/setup` (C3), `tokens/inspect` accetta `admin_setup` e risponde lo username, il link è
+  `/setup#token=…` (frammento, come il reset). Il client generato ha già `admin_setup` e `/api/v1/auth/setup`.
+- **Frontend**: nessuna rotta `/setup`. `linkToken.ts` ha `LinkPurpose = 'invite' | 'password_reset'`. Il modello c'è:
+  `routes/reset-password/+page.svelte` con `AuthPageFrame`, `LinkStatusCard`, `ResetPasswordCard`, `takeLinkToken`,
+  `inspectLinkToken`.
+- **K-5**: chiusa in A6d dal flag `first_account_open` (C6 di A6d); l'etichetta «Crea l'account amministratore» di §4.7
+  lì è caduta. Con F02 l'admin in attesa è una riga di `users`, quindi `first_account_open` è falso e il link «Register
+  here» non c'è (modalità `invite`): coerente, niente da costruire.
+- **Avviso di registrazione aperta**: l'area di H è `instanceNotices` (registro: chi registra decide chi vede e toglie
+  l'avviso; «nessuno tocca il layout»); oggi registra solo `priceRefresh`, agganciato al client. Regola dell'host:
+  decisione §10.4 («host della richiesta diverso da localhost e rete locale»), elenco in §4.7.
+- **Scheda Utenti**: `holds_place` marca solo gli account in attesa della verifica (E5b), non l'admin in attesa, che
+  appare «disattivo» con «Riattiva»: riattivarlo attiverebbe un account con una password che nessuno sa, e C3
+  rifiuterebbe poi il suo link di setup (account attivo).
+- **P16 (d)**, file delle decisioni (riga P16): «con l'istanza bloccata la creazione dell'admin è bloccata anche lei».
+  `tokens/inspect` resta permesso da bloccata (`ALLOWED_WHEN_BLOCKED`), `POST /auth/setup` risponde 401: la pagina
+  mostrerebbe il modulo e l'invio finirebbe in 401.
+
+**Contratto proposto (C1–C7)**:
+- **C1 · `/setup`** (`routes/setup/+page.svelte`, pubblica, come `/reset-password`): il token dal frammento
+  (`takeLinkToken`, indirizzo ripulito), `inspectLinkToken(token, 'admin_setup')`; mancante, non valido, scaduto o usato →
+  `LinkStatusCard` con testi propri (cosa fare: chiedere un link nuovo al fornitore, o `./dev.py user setup-link`);
+  valido → `SetupCard`.
+- **C2 · `SetupCard.svelte`** (`features/auth`): lo username (sola lettura, dall'inspect), password e conferma,
+  `PasswordStrength` con le regole del server (decisione 37). Invio `POST /auth/setup {token, new_password}`; riuscito: la
+  risposta porta il cookie come il login, `auth.checkAuth()` e dentro l'app. `PASSWORD_TOO_WEAK` → le regole mancanti;
+  `TOKEN_INVALID` → lo stato «link non valido»; 401 (istanza bloccata, P16 d) → un messaggio proprio; altro → errore
+  generico. Solo ruoli `-lf-` (skill `design-system`), `data-testid` ovunque.
+- **C3 · `LinkPurpose`** prende `admin_setup`.
+- **C4 · Avviso**: un helper puro `isLocalHost(hostname)` (§4.7: localhost, 127/8, 10/8, 172.16/12, 192.168/16,
+  100.64/10, nomi a un'etichetta, `.local`, `.lan`, `.home.arpa`, `.internal`; `*.ts.net` esterno per Funnel; proposta:
+  anche IPv6 `::1`, `fc00::/7`, `fe80::/10`) e un modulo che, per un admin, con `registration_mode === 'open'` e
+  `location.hostname` non locale, mostra l'avviso `accounts.openRegistration` (warning, chiudibile, azione verso
+  l'impostazione della registrazione; se la modalità è fissata da `LIBREFOLIO_REGISTRATION`, nessuna azione e il testo
+  nomina la variabile), e lo toglie altrimenti.
+- **C5 · L'admin in attesa nella scheda Utenti**: `AdminUserRead.pending_setup: bool` (disattivo con un token
+  `admin_setup` vivo, lo stesso filtro di `user_usage`), nella lista e nella risposta della PATCH; nella scheda lo stato
+  «In attesa del setup» al posto di «Disattivo», e niente «Riattiva» per lui. Un'azione «nuovo link di setup» dall'API
+  admin sarebbe scope nuovo: proposta in backlog.
+- **C6 · i18n**: chiavi nuove nel mio sottosistema, nelle 4 lingue.
+- **C7 · Doc**: `admin/hosting_providers` (sezione F02: la pagina), `admin/users` (l'admin in attesa), una pagina
+  utente sul primo accesso col link, sviluppatori (`security.md`, `access_control.md`). CHANGELOG all'ingresso: il testo
+  A7a+A7b del coordinatore.
+
+**Superfici e aree dei colori**: nuovi `routes/setup/+page.svelte` e `features/auth/SetupCard.svelte` (area T, file
+nuovi, solo ruoli); `features/settings/users/**` (area IM: da chiedere); `.ts` senza colori (`linkToken.ts`, l'helper,
+il modulo dell'avviso); backend `schemas/users.py`, `api/v1/users.py` (più `api sync`).
+
+**Domande al coordinatore**: (1) dove si aggancia il modulo dell'avviso (il layout è di H); (2) via libera per la scheda
+Utenti (IM) e conferma che «nuovo link di setup» va in backlog; (3) IPv6 locale in `isLocalHost`; (4) E2E: una per i
+link non validi di `/setup` (un admin in attesa sulla corsia non si crea: F02 vuole un'istanza vuota).
+
+**Passi**: rossi (C1–C3, C4 helper) → risposte (1)–(2) → rossi di C4 modulo e C5 → codice → verdi (vitest, `front
+check`, `api users-admin`, `api sync`) → doc → handoff.
+> **Contratto approvato** (coordinatore, 20:30, C1–C7). Risposte: (1) l'avviso con il meccanismo di registrazione di
+> `instanceNotices`, chiamato dalla mia funzione di accesso quando l'utente è noto, senza toccare il layout; (2)
+> `features/settings/users/**`: il coordinatore chiede a IM, intanto il backend di C5 (`pending_setup` + `api sync`) e
+> i rossi; «nuovo link di setup» dall'API admin in backlog; (3) IPv6 locali `::1`, `fc00::/7`, `fe80::/10`, più
+> `127.0.0.0/8` e `::ffff:127.*`; (4) E2E solo per il link non valido; il percorso riuscito e il 401 dell'istanza
+> bloccata nel test del componente (API finta).
+> **Ancora dal coordinatore** (20:40–20:50): IM libera `features/settings/users/**`, ne sono lo scrittore fino
+> all'ingresso; **non toccare `settings/users/linkShareActions.ts`** (lo cambia E: «manda per email»); il distintivo «In
+> attesa del setup» sui **ruoli**, un tono di `STATUS_TONES` (`lib/theme/toneClasses.ts`) o un distintivo già usato
+> nella scheda (i file non hanno riga nel TSV: una classe di palette fa fallire `--check`). **Aggancio dell'avviso**:
+> una riga in `appBootstrap.load()` (`features/onboarding/appBootstrap.svelte.ts`, non toccato dall'8/10, nessun ramo lo
+> ha aperto: ne sono lo scrittore per A7b), idempotente e iniettabile come gli altri `load*`, con il test nel test
+> esistente del bootstrap (`lib/stores/app/onboarding.test.ts`, `buildBootstrap()`).
+
+#### A7b.1 — Rossi in scrittura (2026-10-16, 20:35–)
+> - Tre `test-author` in parallelo, file distinti: (1) `/setup` — `routes/setup/page.test.ts`,
+>   `features/auth/SetupCard.test.ts` (nuovi), `LinkStatusCard.test.ts` (prop `hintKey` e `link-status-hint`),
+>   `linkToken.test.ts` (`admin_setup`); (2) l'avviso — `features/auth/localHost.test.ts`,
+>   `features/auth/openRegistrationNotice.test.ts` (nuovi) e l'aggancio in `lib/stores/app/onboarding.test.ts`; (3) il
+>   backend di C5 — `pending_setup` nell'API admin.
+> - Interfacce fissate nei brief: `SetupCard` come `ResetPasswordCard` (`token`, `username`, `ondone`, `oninvalid`;
+>   `data-testid` `setup-*`, `setup-blocked` per il 401); la rotta dopo `ondone` fa `auth.checkAuth()` e va a
+>   `/dashboard`; `LinkStatusCard` prende `hintKey` (la rotta passa `auth.setup.newLinkHint`); `isLocalHost` in
+>   `features/auth/localHost.ts`; `openRegistrationNoticeFor(...)` puro e `startOpenRegistrationNotice(deps?)`
+>   idempotente in `features/auth/openRegistrationNotice.svelte.ts`, avviso `accounts.openRegistration` verso
+>   `/settings?tab=admin` (senza azione se la modalità è fissata dalla variabile).
+> - **Scelte di dettaglio** (20:55): i testi i18n nuovi in `auth.setup.*` e `auth.notices.*` (il mio sottosistema
+>   `lib/i18n/auth/`; nessuno spazio `accounts` esiste), bozze nelle 4 lingue in `work/a7b/i18n_keys.json`. Nella scheda
+>   Utenti `STATUS_TONES` non ha voci sue: il distintivo «In attesa del setup» riusa quello «Disattivo» della scheda
+>   (neutro: `border-lf-subtle bg-lf-neutral text-lf-secondary`), al suo posto quando `pending_setup`; nessun «Riattiva»
+>   per lui, ma una riga che dice che si attiva col suo link di setup (`./dev.py user setup-link` o il fornitore).
+>   `pending_admin_filter` (quello di `user_usage`) vuol dire «disattivo, con un token `admin_setup`, nessuno
+>   consumato», senza guardare la scadenza: `pending_setup` usa la stessa nozione.
+
+#### A7b.2 — Rossi scritti (2026-10-16, 20:35–21:05)
+> - **`/setup`** (`test-author`, 0 lanci): `routes/setup/page.test.ts` (nuovo, 26 casi), `features/auth/SetupCard.test.ts`
+>   (nuovo, 31 casi), `LinkStatusCard.test.ts` (+13, `hintKey` e `link-status-hint`), `linkToken.test.ts` (+1,
+>   `admin_setup`: rosso solo al controllo dei tipi). Registrati da me in `front_component_unit`. In più, come il modello
+>   del reset: il markup per il gestore di password, le regole del server, «registrazione `disabled` non blocca
+>   `/setup`».
+> - **Backend C5** (`test-author`): solo `test_users_admin_api.py`, con l'harness privato del file (router veri su un
+>   SQLite sotto `tmp_path`, l'admin in attesa fatto da `run_admin_bootstrap` vero): UADM-060 (la lista), UADM-061 (11
+>   stati del link di setup), UADM-062 (la PATCH che lo lascia in attesa), UADM-063 (dopo il setup vero il flag è
+>   falso), UADM-064 (lo schema, nove campi); UADM-003/007/008/028 rossi perché la lista dei campi prende
+>   `pending_setup`. Provati in privato contro cinque implementazioni sbagliate: ognuna cade.
+> - **⚠️ Fuori pista — tre punti emersi** (al coordinatore, 21:05): (1) l'intercettore 401 di `lib/api/zodios-client.ts`
+>   (di H) manda al login ogni 401 fuori da `/`: su `/setup` il 401 dell'istanza bloccata non arriverebbe mai alla
+>   scheda (lo stesso meccanismo di A-13); proposta: le pagine dei link anonime non reindirizzano. (2) La PATCH accetta
+>   «Riattiva» sull'admin in attesa: proposta 409 `PENDING_SETUP`. (3) Un 423 sul setup mostra `setup-blocked` come il
+>   401 (deciso da me salvo obiezione).
+> - **Decisioni del coordinatore** (21:10): (1) l'eccezione nell'intercettore per le pagine anonime dei link (`/setup`,
+>   `/invite`, `/reset-password`, `/verify-email`: nessun reindirizzamento al login su un 401) la scrivo io, una
+>   condizione e il test in `zodios-client.test.ts`; **H la rivede in sola lettura** prima del checkpoint; il 423 di H
+>   resta com'è; **chiude A-13**. (2) 409 `PENDING_SETUP` nella PATCH `{is_active: true}` sull'admin in attesa, rosso
+>   prima. (3) 423 → `setup-blocked`. Per chiudere A-13 davvero: `describeRegistrationError` mappa un 401 (e un 423
+>   `instance_blocked`) su `auth.instanceBlocked`, altrimenti `/invite` mostrerebbe il «Not authenticated» grezzo.
+> - **Rossi osservati, prima parte** (20:40–20:44, carico 37): `api users-admin` **21 rossi**, 59 verdi (UADM-060…064 e
+>   i quattro test esistenti che fissano la lista dei campi, tutti per `pending_setup` assente); vitest: `SetupCard` e la
+>   rotta rossi interi (import mancante), `LinkStatusCard` 13 rossi, `linkToken` rosso solo ai tipi.
+> - **Bozze pronte** (a secco pulite, `work/a7b/`): `apply_backend.py` (`pending_admin_ids`/`is_pending_admin` in
+>   `registration_service`, il campo, la lista, la PATCH con il 409 `PENDING_SETUP` prima del controllo del limite, e la
+>   risposta col flag calcolato dopo l'aggiornamento), `apply_frontend.py` (tipo del link, `hintKey`, A-13 in
+>   `registrationErrors`, l'eccezione nell'intercettore, la riga della scheda Utenti, `PENDING_SETUP` in
+>   `accountErrors`; nuovi `SetupCard.svelte`, la rotta, `localHost.ts` — che legge anche la forma esadecimale degli
+>   IPv4 mappati, `[::ffff:7f00:1]`, come la scrivono i browser), `i18n_add.py` (16 chiavi nelle 4 lingue con `dev.py i18n
+>   add`, poi `build` e `check`). Il modulo dell'avviso e l'aggancio in `appBootstrap` dopo aver letto i loro test.
+> - Un quarto `test-author` per la parte UI di C5 (`UserRow.pendingSetup.test.ts`, `accountErrors`).
+
+### A7b.3 — Rossi, seconda parte ✅ (16/10, 20:57–21:15)
+
+- **Test nuovi**, dai quattro `test-author` (sola scrittura, nessuna corsa):
+  - `features/auth/localHost.test.ts` (142 casi: i due lati di ogni confine, la forma esadecimale degli IPv4 mappati
+    che il browser scrive, i suffissi come etichette intere, i gruppi IPv6 letti come numeri);
+  - `features/auth/openRegistrationNotice.test.ts` (66 casi: la tabella di verità, il watcher iniettato, i valori
+    predefiniti dell'app — store dell'auth, `instanceConfig`, l'host della pagina, il registro di H —, la chiusura
+    dell'utente che sopravvive alle rivalutazioni, le chiavi nelle 4 lingue);
+  - `stores/app/onboarding.test.ts` (+8: l'avvio dell'avviso in `load()` subito dopo la guardia dell'utente, prima dei
+    caricatori, anche quando falliscono; il predefinito senza argomenti; una guardia senza utente);
+  - `SetupCard.test.ts` (35: anche il 423 `instance_blocked` → `setup-blocked`, e tre 423/403 che restano «failed»);
+  - `zodios-client.test.ts` (+24: niente login su un 401 dalle quattro pagine dei link, con e senza la barra finale;
+    le altre pagine come oggi; il 423 invariato), `registrationErrors.test.ts` (+16: A-13);
+  - `test_users_admin_api.py`: UADM-065 (6, il 409 `PENDING_SETUP`, anche a link scaduto), guardie UADM-066/067;
+  - `features/settings/users/UserRow.pendingSetup.test.ts` (35) e `accountErrors.test.ts` (32, nuovo).
+- **Registrati** nel runner: `localHost`, `openRegistrationNotice`, `accountErrors` in `core-unit`;
+  `UserRow.pendingSetup` in `component-unit`.
+- **Osservati** (20:57–21:04, carico 45): `api users-admin` **27 rossi** (i 21 di prima + i 6 di UADM-065), 64 verdi
+  (+5 guardie); vitest 8 file rossi su 9 — import mancanti (`SetupCard`, la rotta, `localHost`, l'avviso),
+  `LinkStatusCard` 13, `registrationErrors` 12, `onboarding` 7: tutti per la ragione giusta.
+> **⚠️ Fuori pista**: nel `describe` nuovo di `zodios-client.test.ts` cadevano **anche le 15 guardie** (24 su 24),
+> tutte sulla barriera (`error.response` assente). Triage: con `browser: true` l'intercettore della *richiesta* legge
+> `localStorage` per `Accept-Language`, e jsdom sotto Node 26 non ne espone uno usabile (la stessa nota di
+> `AboutTab.test.ts`): un `TypeError` respinge la richiesta prima dell'adapter. Verdetto **assunzione** del test, non
+> difetto del prodotto: il `test-author` aggiunge al solo `describe` un `localStorage` di prova, ripristinato dopo ogni
+> caso. `zodios-client.ts` non cambia per questo.
+> **Scelte di dettaglio** (non fissate dai test, decise dal titolare):
+> - il `config` **predefinito** dell'avviso vale solo a configurazione caricata (`instanceConfig.loaded`): prima della
+>   risposta di `/system/instance` vige quella di default, che è `open`, e un'istanza a invito raggiunta da fuori — il
+>   caso del cloud — mostrerebbe l'avviso per niente; il `config` iniettato non cambia;
+> - l'avviso legge l'utente con `fromStore(currentUser)`, chiama `show`/`hide` fuori dal tracciamento (`untrack`), e un
+>   secondo avvio restituisce una funzione vuota;
+> - il suggerimento della riga in attesa sta sotto le azioni, come le ragioni dei pulsanti disattivati; nei testi
+>   `dev.py user setup-link` senza `./`, giusto sia per l'installazione da sorgente sia per Docker
+>   (`python dev.py …`).
+- **Terzo giro di rossi** (21:19–21:20, carico 49, dopo la riparazione): `zodios-client` 9 rossi sul `goto`, 15 guardie
+  verdi; `UserRow.pendingSetup` 23 rossi, 12 guardie verdi; `accountErrors` 4 rossi, 28 guardie verdi. Tutti per la
+  ragione prevista.
+
+### A7b.4 — Codice ✅ (16/10, 21:20–21:45)
+
+- Applicati gli script di `work/a7b/` (`apply_backend.py`, `apply_frontend.py`, `apply_notice.py`): backend 3 file,
+  frontend 8 modificati e 4 nuovi (`SetupCard.svelte`, la rotta `/setup`, `localHost.ts`,
+  `openRegistrationNotice.svelte.ts`), più `AdminAccount.pending_setup?` in `settings/users/types.ts` (chiesto dai tipi
+  dei test della riga).
+- `ruff` e `black` puliti; `api sync` (21:22, carico 48) rigenera il client con `pending_setup`, nessun file tracciato
+  toccato; `i18n add` di **14** chiavi nelle 4 lingue (non 16: 7 del setup, 3 dell'avviso, `auth.instanceBlocked`, 3
+  della scheda Utenti), `i18n build` e `check` verdi (4 800 chiavi); Prettier pulito dopo `--write` sul solo
+  `UserRow.svelte` (la riga `<li>` col nuovo attributo, andata a capo).
+- Docs (`docs-writer`, 13 pagine EN, nessun timbro: debito A-10): admin `hosting_providers` (§ nuova
+  «What Your Customer Sees»), `users` (§ `#pending-setup`), `settings` (§ `#open-registration-warning`),
+  `configuration`; utente `getting-started`; developer `features/auth` (`#setupcard`, `#link-page-401`,
+  `#open-registration-notice`), `features/settings`, `onboarding`, `state/app-state`, `architecture/security`,
+  `access_control`, `pages/index`, `live-ticker` (il motivo per cui il poll evita il client, che dava per scontato il
+  401 → login ovunque). Citazioni verificate col catalogo; le etichette «Deactivated» e «Admin» sono quelle reali.
+- Commento in testa all'intercettore aggiornato; descrizione di `auth-links` nel runner estesa a `/setup`; richiesta al
+  coordinatore della revisione di H (sola lettura) su `zodios-client.ts`.
+> **Verificato, non è un buco** (segnalato dal `docs-writer`): `dev.py user activate` non conosce l'admin in attesa e
+> lo attiva. Ma `complete_admin_setup` rifiuta e revoca il link di un account già attivo («once the account is set up,
+> by any path»): `activate` + `reset` è la via di scorta dell'operatore, e il link muore. Nessuna modifica.
+
+### A7b.5 — Revisione di H su `zodios-client.ts` ✅ (16/10, 21:48)
+
+- **Esito di H**: OK, nessun cambio alla logica (il 423 intatto, i percorsi esatti, le quattro pagine sono quelle di
+  `_TOKEN_PATHS` del backend; sana anche il token perso nel frammento). Due richieste non bloccanti, fatte:
+  1. il commento prometteva troppo per `/verify-email` (lì il 401 di `confirm` non è riconosciuto da `readLinkRefusal`
+     e la pagina mostra l'errore generico: H lo passa a E): ora dice «which the page receives». Le doc lo dicevano già
+     giusto («`/verify-email` shows its own failure, with Retry»);
+  2. rimando incrociato fra `LINK_PAGES` (frontend) e `_TOKEN_PATHS` (`token_service.py`), con un commento ai due lati,
+     e una guardia: un test puro in `test_account_tokens.py` (unità `services account-tokens`, nessuna voce nuova nel
+     runner) che legge il letterale TS e lo confronta con le pagine di `token_path` — un `test-author`.
+- **Backlog**: A-13 ✅ (con la nota su `/verify-email`); A-29 (sotto `vite dev` `hooks.server.ts` porta le pagine dei
+  link al login: segnalato da H, fuori da A7b); A-30 (un nuovo link di setup dall'API e dalla scheda Utenti, deciso dal
+  coordinatore).
+- Rifiniture dopo la revisione: la docstring di `POST /auth/tokens/inspect` nomina anche il link di setup (segnalata dal
+  `test-author` dell'E2E); descrizioni del runner (`auth-links` con `/setup`, `account-tokens` con la guardia).
+- **Guardia `LINK_PAGES` = pagine di `token_path`** (`test-author`): `test_token_path_pages_are_the_link_pages_of_the_api_client`
+  in `test_account_tokens.py`, con le barriere (il parser su frammenti sintetici, i quattro rifiuti, la differenza che
+  nomina la pagina mancante o in più, il file vero non vuoto), verde in processo; provata contro dieci derive simulate.
+- **E2E** (`test-author`): in `e2e/auth-links.spec.ts` il `describe` «Setup links (/setup)», 3 casi (un token che
+  nessuno ha emesso: esce dalla barra, una sola ispezione `admin_setup`, `unknown` col suggerimento, `no-referrer`,
+  si resta su `/setup`; nessun token → `missing` senza ispezioni; un token nella query → `missing`). Nota del
+  `test-author`: sulla corsia nessuna chiamata della pagina risponde 401, quindi l'eccezione dell'intercettore la tiene
+  solo `zodios-client.test.ts`.
+
+### A7b.6 — Verdi (16/10)
+
+- **Vitest** (21:52–21:56, carico 47): i file di A7b e i vicini (`AuthCard`, `AuthPageFrame`, `LoginCard` ×2,
+  `RegisterCard` ×2, `ResetPasswordCard`, `registrationErrors.verification`, `passwordRules`, `instanceBlock`,
+  `instanceConfig`, `instanceNotices`, `UserRow.verification`, `InviteDialog`, `ResetLinkDialog`, i due cancelli del
+  layout, le pagine `invite`, `reset-password`, `verify-email`): **31 file, 1 009 test verdi**.
+- **Backend** sulla corsia: `api users-admin` **91 verdi** (22:03–22:16; la prima corsa dopo il codice ricostruisce
+  frontend e sito); `api admin-setup` **42**; `api auth` **95**.
+  `api registration` **102** (22:56–22:59; l'unico avviso è la deprecazione di Starlette di sempre, come in P18).
+- **Finali** (`work/a7b/final.sh`, 23:01–23:28, ciascuno a carico < 50): `services account-tokens` **66 verdi** (con
+  la guardia); `theme-roles.mjs --check` rc 0 e `themeRoles.gate` 80/80; `check-orphans` pulito; E2E
+  `front-utility auth-links` **12 verdi** (i 3 nuovi di `/setup` compresi); `mkdocs build` (strict) verde, 3 076 URL
+  relativi risolti; `mkdocs check-links` verde; `lint --dead-code`: nessun reperto nei file di A7b (rc 1 per reperti
+  preesistenti: dipendenze `@embedpdf/*` non elencate, metodi al 60 % di vulture).
+> **⚠️ Fuori pista**: `front check` (23:02) ha trovato **1 errore**, mio: allargare `LinkPurpose` con `'admin_setup'`
+> rompeva `features/email/sendLinkApi.ts` (di E), il cui endpoint accetta solo invito e reset. `LinkPurpose` è anche «i
+> link che un admin condivide» (`LinkShare`, `linkShareActions`, il mittente delle email): lì il setup non c'entra. Cura
+> nel mio file, senza toccare quelli di E e di IM: `LinkPurpose` torna `'invite' | 'password_reset'`, e
+> `inspectLinkToken` prende un tipo nuovo, `InspectedLinkPurpose = LinkPurpose | 'admin_setup'`; aggiornati i due
+> commenti di `linkToken.test.ts` e una cella di `features/auth.md`. Poi (23:28–23:31) vitest di `linkToken`, la
+> pagina `/setup`, `LinkShare` e `linkShare` **84 verdi**, `front check` **0 errori, 0 avvisi**. La cella delle doc
+> non tocca link: il `build` strict delle 23:20 resta valido.
+- `git diff --check` pulito; porta 6182 libera (`lsof` rc 1).
+
+### A7b — Definizione di fatto ✅ (16/10, 23:35)
+
+C1–C7 consegnati: la pagina `/setup` (C1), `SetupCard` col 423 `instance_blocked` come il 401 (C2), lo scopo
+`admin_setup` dell'ispezione (C3 — **non** in `LinkPurpose` ma in `InspectedLinkPurpose`, vedi il «Fuori pista» qui
+sopra), l'avviso di registrazione aperta e `localHost` con l'aggancio in `appBootstrap` (C4), `pending_setup` con la
+riga della scheda Utenti (C5), le 14 chiavi nelle 4 lingue (C6), le doc (C7). Dalle decisioni del coordinatore:
+l'eccezione del 401 nell'intercettore e A-13 in `registrationErrors` (A-13 ✅), il 409 `PENDING_SETUP` della PATCH.
+Rossi prima del codice in tre giri, verdi dopo, E2E del link non valido, revisione di H fatta. Resta per dopo: A-29,
+A-30 (backlog); per E, il 401 di `confirm` su `/verify-email` (lo passa H).

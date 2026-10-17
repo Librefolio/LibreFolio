@@ -107,6 +107,24 @@ describe('buildHurtRows', () => {
         expect(row.requiredRecovery).toBeNull();
     });
 
+    it('gives the duration of the KPI fall when the summary depth contradicts its sign and the KPI depth stands in', () => {
+        // `+0.3` breaks the `le=0` convention again, so the depth is the KPI's. The
+        // summary's 99 days are the length of its own trough: next to another
+        // analytic's depth they would time a fall nobody measured. The duration
+        // follows the depth's source, as the recovery does.
+        const [row] = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: 0.3, maximum_drawdown_duration_days: 99}), ok('historical_kpi', {max_drawdown: -0.4, max_drawdown_duration_days: 30})]);
+        expect(row).toMatchObject({id: 'worst', loss: 0.4});
+        expect(row.durationDays).toBe(30);
+    });
+
+    it('keeps the summary depth and its duration together when the KPI states a deeper fall', () => {
+        // The counterpart of the case above: a valid summary wins whole. The KPI
+        // states another, deeper episode only so that each figure's source shows.
+        const [row] = buildHurtRows([ok('drawdown_summary', {maximum_drawdown: -0.25, maximum_drawdown_duration_days: 12}), ok('historical_kpi', {max_drawdown: -0.4, max_drawdown_duration_days: 30})]);
+        expect(row).toMatchObject({id: 'worst', loss: 0.25});
+        expect(row.durationDays).toBe(12);
+    });
+
     it('gives no recovery for a fall of zero, where there is nothing to climb back from', () => {
         // The backend states 0 here. The row itself is kept today, at a zero loss;
         // the subject is the recovery, which stays empty rather than reading +0%.

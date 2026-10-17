@@ -2852,3 +2852,310 @@ positivo in entrambi: un clic su «Aggiorna» dopo la ricarica fa vedere `true` 
 4. ✅ 16/10 22:21 — Checkpoint FROZEN inviato: otto file (il Dashboard, due spec, il runner, due pagine di doc, il
    piano, il backlog con Z-18 ✅). Il `.svelte` è nell'area DV, solo `<script>`: lo SHA va ai colori; i due casi di
    `page-busy.spec.ts` li rivede Y.
+
+### Lotto A — Z-3, Z-8, Z-19: il «oggi» delle pagine degli asset, nessun polling senza fornitore, N58
+
+> **Via** (coordinatore, 16/10 22:22): «Y OK'd your 2 cases. Lot B entered […], and your branch is fast-forwarded to
+> the tip, clean. Lot A: go. In its E2E slot, also run `front-portfolio page-busy` (12), as Y recommends, to prove
+> lot B on the combined revision.» Prima (16/10 22:22): «X's OK on Z-8: you're the writer of
+> `assetDetailLive.svelte.ts` in lot A», con tre note di X: il test che fissa gli input letti dall'effetto, il suo
+> docblock e `live-ticker.md` §«Asset detail» seguono la nuova condizione; la pulizia rimette `direction = 'neutral'`;
+> i 70 casi del file girano in `core-unit`. `dashboard-cache.spec.ts` (di Y): sì (16/10 22:21). Base: `4e233fe5b`.
+
+**Stato reale** (su `4e233fe5b`).
+- Z-3: le due pagine calcolano `isHeadToday` come `dateEnd >= new Date().toISOString().slice(0, 10)` (data UTC),
+  mentre `dateEnd` (`resolveDateSentinel('max')` = `todayIso()`) è sul calendario dell'utente. Due facce del `>=`:
+  a ovest di Greenwich, la sera, un intervallo che finisce oggi sembra passato (niente prezzo dal vivo); a est, subito
+  dopo mezzanotte, un intervallo finito ieri sembra vivo e interroga il fornitore.
+- Z-8: l'effetto di `assetDetailLive.svelte.ts` (FE5c-9b di X) avvia il poller con `isHeadToday` e l'id, senza
+  guardare il fornitore: un asset manuale chiede `POST /assets/prices/current` ogni 30 s (l'endpoint rimanda solo il
+  prezzo salvato, e ogni risposta conta come mutazione del portafoglio). Il controllo del fornitore c'è solo nella
+  testa del grafico (`#applyLiveChartHead`). `reloadPage()` azzera `assetInfo` e `providerAssignment` insieme;
+  `reloadMetadata()` li riassegna in parallelo (`Promise.all`), con oggetti nuovi.
+- Z-19: `reset_provider_cooldowns()` (`provider_cooldown.py`) e `reset_shutdown_budget_state()`
+  (`shutdown_budget.py`) servono solo ai test; `Cooldowns.clear()` ha come unico chiamante la prima.
+  `Cooldowns.reset(key)` non ha chiamanti di prodotto: lo usano PCD-011 (lascia pulita l'istanza spedita) e CDW-032.
+
+**Decisioni** («da rivedere»):
+- N-ZA-1 (Z-3): `isHeadToday` con `todayIso()` (`lib/utils/dateOnly.ts`) in entrambe le pagine, come `dateEnd`.
+- N-ZA-2 (Z-3): l'E2E prova le due facce: New York alle 21:00 e Roma alle 00:30 (orologio della pagina).
+- N-ZA-3 (Z-8): l'effetto vuole anche un codice di fornitore, letto da un `$derived` booleano creato nel costruttore:
+  riparte quando il codice compare o sparisce, non quando l'assegnazione si ricarica con lo stesso codice (né con un
+  altro: il poll chiede al backend, che legge l'assegnazione del momento).
+- N-ZA-4 (Z-8): il controllo del fornitore in `#applyLiveChartHead` esce (non più raggiungibile: niente poller senza
+  codice, e una risposta in volo quando il codice sparisce la scarta `isCurrent()`); il commento I-bis #24 dice perché.
+- N-ZA-5: la data della conversione in `#applyLiveSummary` resta UTC, con un commento: è la data di una ricerca che
+  riempie all'indietro (`convert_currency_bulk`: il tasso più recente fino a quella data, nessun controllo sul futuro),
+  e su entrambi i calendari dà lo stesso tasso, l'ultimo salvato. Nessun effetto visibile: per la classificazione di
+  `problems/utc-today-vs-user-calendar` è «corretto così», non il «oggi» di chi guarda.
+- N-ZA-6 (Z-19, N58): escono `reset_provider_cooldowns()`, `reset_shutdown_budget_state()` e `Cooldowns.clear()`
+  (resta senza chiamanti). `Cooldowns.reset(key)` resta, eccezione di N58 scritta nel suo docstring: nessun metodo
+  pubblico dà a PCD-011 lo stesso stato pulito (`succeeded` non dimentica una pausa in corso, `released` libera solo
+  la prova), e `--dead-code` non lo segnala. Decisione del coordinatore (16/10 22:3x): «remove the three as you
+  propose. For `Cooldowns.reset(key)`: […] first see whether PCD-011 can get the same clean state through a public
+  method that already exists (`succeeded(key)` or `released(key)`). If it can't, keep it, with one line in the
+  docstring: «used by the tests only (N58 exception): …»».
+
+**Test** (test-author, in bozza da `27994759a`, invariati fino a `4e233fe5b`; `files/za-draft/README.md`):
+`asset-live-pause.spec.ts` (i)–(l) nuovi, rossi senza Z-3; `assetDetailLive.svelte.test.ts` 10 casi rossi senza Z-8
+(tre casi vecchi tolti perché contraddicono la correzione); `dashboard-cache.spec.ts` sceglie la prima riga posseduta
+con un fornitore (verde prima e dopo); `test_provider_cooldown.py` (PCD-018 riscritto sul comportamento, PCD-021 senza
+il reset), `test_shutdown_budget.py` (SDB-032 tolto, fixture con `monkeypatch`, contratti 12–14 → 11–13),
+`test_cooldown.py` (CDW-032 senza `clear`): verdi prima e dopo. In più, per N-ZA-3: un caso «l'assegnazione ricaricata
+con lo stesso codice, o con un altro, non riavvia il poller».
+
+**Passi.**
+1. ✅ 16/10 22:29–22:41 — Bozze dei test nel worktree (sei file; i blob di base sono quelli del README: nessuno è
+   cambiato da `27994759a` a `4e233fe5b`, copia = diff). Rossi leggeri, codice a HEAD (`files/za_reds.sh`): Vitest sul
+   solo file (binario locale) 10 rossi su 76, i dieci attesi, ognuno perché l'effetto ignora il fornitore (un poller
+   avviato, `stop` mai chiamato, `providerAssignment` assente dalle letture); `services provider-cooldown` 66/66.
+   > **⚠️ Fuori pista**: carico a ~175 (altre corsie). Ho fermato l'attesa della catena prima di `services
+   > shutdown-budget` e `utils cooldown` (nessun test partito): le due prove «prima» non dicono nulla sul codice, i
+   > test in bozza non chiamano le funzioni tolte; contano le prove «dopo» (passo 4).
+   > **⚠️ Fuori pista**: nel log di Vitest due avvisi `assignment_value_stale` di Svelte, dalle frecce delle bozze
+   > che assegnano un oggetto a `providerAssignment` in un'espressione (`LEAVES`): li toglie test-author (passo 2).
+2. ✅ 16/10 22:33–22:55 — Codice (`files/za-draft/apply_za.py`, passi `z3`, `z8`, `z19`, ognuno col suo inverso
+   esatto; impronta dei tre file del frontend in `files/za-draft/za_applied.md5`):
+   - `z3`: le due pagine, solo `<script>` (+4 −2 ciascuna): l'import di `todayIso` e `isHeadToday` con
+     `dateEnd >= todayIso()`, col commento.
+   - `z8`: `assetDetailLive.svelte.ts` (+22 −12): `hasProvider` (`$derived`, nel costruttore) nella condizione
+     dell'effetto (N-ZA-3); il controllo del fornitore tolto da `#applyLiveChartHead` (N-ZA-4); i commenti del
+     modulo, dell'interfaccia, del blocco I-bis #24 e della data UTC della conversione (N-ZA-5). La pulizia rimette
+     ancora `direction = 'neutral'` (nota 2 di X).
+   - `z19`: tolte le tre funzioni; il docstring di `Cooldowns.reset` con l'eccezione di N58 (N-ZA-6); la frase della
+     guida dei plugin (`asset_plugin_guide.md`); la descrizione di `services provider-cooldown`.
+   - A mano: le descrizioni di `utils cooldown` («reset/len») e di `front-asset live-pause` (descrizione e docstring,
+     Z-3).
+   - test-author, nel file Vitest: il caso di N-ZA-3 («does not restart when the assignment is reloaded — a new
+     object with the same code, or another code — but stops when the code goes»), il docblock allineato alle letture
+     (nota 1 di X), e corpi a blocco per le frecce che assegnano un oggetto (anche tre righe di HEAD che davano
+     `assignment_value_stale`).
+   - Prettier `--check` pulito sui sei file del frontend; ruff e black puliti sui file Python. In
+     `_frontend_asset.py` restano 25 errori di ruff, e black riformatterebbe `_frontend_asset.py` e
+     `_backend_utils.py`: identici a HEAD, non miei.
+   - Nessuna menzione rimasta delle funzioni tolte fuori dal journal (`git grep`).
+   > **⚠️ Fuori pista**: docs-writer ha notato che `reloadPage()` carica asset e assegnazione in parallelo:
+   > «l'assegnazione arriva dopo l'asset» non è garantito. Corretti il mio commento in `z8` («nor before the
+   > assignment has loaded») e, da test-author, il docblock, un titolo e un commento del file Vitest.
+   > **Osservazione (non cambiata)**: dopo una sync o una modifica `reloadMetadata()` riassegna anche `assetInfo`, e
+   > l'effetto, che legge `assetInfo`, riparte comunque una volta (un poll subito), come prima di Z-8: il `$derived`
+   > toglie solo il secondo riavvio, quello del fornitore. Sono azioni dell'utente; la doc lo dice.
+3. ✅ 16/10 22:40–22:56 — Doc (docs-writer, verificata da me sul codice): `live-ticker.md` (+54 −26). Tabella «Runs
+   while»; `isHeadToday` sul calendario dell'utente, con le due facce di prima; l'effetto del dettaglio (letture,
+   `hasProvider`, nessun poller senza codice, nessun riavvio sulla ricarica dell'assegnazione); il lampo; la testa del
+   grafico; «Still a write»; le righe dei test e il paragrafo sui (i)–(l). Più tre correzioni mie dalle sue note:
+   lo stato del poller del dettaglio è `live.updatesState` (vecchio da FE5c), il lampo si spegne anche quando il
+   periodo non arriva più a oggi, la data UTC della conversione è voluta.
+4. ✅ 16/10 22:55–23:50 — Controlli leggeri, solo a carico sotto 50 (coordinatore, 16/10 ~22:55: «Meanwhile the
+   light checks, only at load < 50»): `files/za_light.sh`, un passo alla volta, fermo durante lo slot.
+   > **⚠️ Fuori pista**: `z_run.sh`, dopo 30 minuti d'attesa, parte comunque: per questo lotto la catena ha una
+   > soglia rigida (nessun passo a carico ≥ 50), si ferma senza uccidere nulla se esiste `files/za_pause` (per lo slot),
+   > e scrive il passo in corso in `files/za_light.running`. Lo slot (`files/za_slot.sh`) non parte se un passo è in
+   > corso o se `assetDetailLive.svelte.ts` non è alla sua impronta (la mutazione di N-ZA-3 è temporanea).
+   > La prima catena (`files/za_after_backend.sh`) era ancora in attesa: fermata, nessun test partito.
+   Passi: `services provider-cooldown`, `services shutdown-budget`, `utils cooldown`, `lint --dead-code`; la mutazione
+   di N-ZA-3 (l'effetto che legge l'assegnazione dritta: atteso rosso il solo caso «does not restart…», poi i byte
+   rimessi); il file Vitest col codice; `api sync`, `front check`, `front-utility core-unit`, `mkdocs build`,
+   `mkdocs check-links`.
+   Esiti, col codice: `services provider-cooldown` 66/66; `services shutdown-budget` 187/187 (188 a Z6b, meno
+   SDB-032); `utils cooldown` 112/112; `lint --dead-code` non segnala più le due funzioni di Z-19 (rc 1 per i
+   risultati che c'erano già: knip del frontend, vulture su altri moduli); la mutazione di N-ZA-3 fa rosso il solo
+   caso «does not restart…», 1 su 77, e i byte tornano esatti; Vitest col codice 77/77, nessun
+   `assignment_value_stale`; `api sync`; `front check` 0 errori e 0 avvisi; `front-utility core-unit` 7277/7277 (192
+   file, coi cancelli dei colori); `mkdocs build` senza avvisi; `check-links` 97 validi. Porta 6186 libera.
+   > **Osservazione**: vulture mette fra le «Referenced only by tests» altre quattro funzioni di Z
+   > (`cooldown_snapshot()`, `ShutdownWatchdog.armed_at`, `current_shutdown_watchdog()`, `ActivityTracker.is_busy`):
+   > Z-21 nel backlog (nata Z-20, rinominata il 16/10), fuori dal lotto per tenerlo corto. `_local_times_to_utc`
+   > (scheduler) non è di Z.
+5. ✅ 16/10 22:57–23:25 — Slot 2 (coordinatore: «Slot 2 is free (J finished at 22:55): lot A E2E go»), soglia 70,
+   `files/za_slot.sh`; i controlli leggeri fermi per tutto lo slot (`files/za_pause`, nessun passo in corso):
+   - A, Z-3 tolto (`apply_za.py revert-z3`, le due pagine identiche a HEAD; Z-8 e Z-19 restano), una ricostruzione
+     (`build/index.html` 23:03): `front-asset live-pause` 4 rossi e 8 verdi. I rossi sono (i)–(l), ognuno col suo
+     messaggio «Z-3: …»: a ovest (i) e (j) nessuna richiesta all'apertura; a est la lista ha chiesto a −2,7 s e
+     +57,3 s (k), il dettaglio a −3,6 s e +26,4 s (l). (j) è su `/assets/1`, con fornitore: Z-8 non c'entra.
+   - B, Z-3 rimesso (impronta dei tre file controllata): `live-pause` 12/12; `front-asset asset-detail` filtrato su
+     «Live price direction flash» e «C-66» 5/5 (i quattro del lampo e il caso di C-66); `front-portfolio
+     dashboard-cache` 6/6; `front-portfolio page-busy` 12/12 (il lotto B sulla revisione combinata, come chiesto da Y).
+     Porta 6186 libera.
+6. ✅ 16/10 23:55 — Backlog: Z-3, Z-8, Z-19 ✅, Z-21 nuova (nata Z-20). Checkpoint FROZEN inviato al coordinatore: 19 file
+   tracciati, nessuno nuovo; le due pagine sono nell'area AF, solo `<script>`: lo SHA va ai colori; il commento di
+   C-66 in `asset-detail.spec.ts` (riga ~8672, «by its UTC reckoning…») è di X, da girargli. Due righe di CHANGELOG
+   proposte (🐛 Z-3, 🐛 Z-8).
+
+### Wiki-file di Z-3 e Z-20/Z-21 (16/10, sola devWiki e journal)
+
+> **Via** (coordinatore, 16/10 ~23:55): «Lot A committed (`a43502298` fix, `f8c47fc3d` journal) and entered: dev
+> `0f55265a1`, with the 2 CHANGELOG lines in `ac9671fd3`. 1. ID collision: J's line J-26 in dev already cites «Z-20»
+> for the probe bridge broken on 16/10 11:18 (the decoupling of `zodios-client` from `instanceNotices`, which I had
+> assigned to you). At your next journal touch, then: Z-20 = the decoupling of `zodios-client` from
+> `instanceNotices`, so that the probe bridge doesn't need the Svelte plugin; your new item (the 4 N58 functions)
+> becomes Z-21. 2. Next: the `wiki-file` on `utc-today-vs-user-calendar` (yes), then Z-14. Z-21 after that, if
+> there's time.» Base: ff a `ac9671fd3` (coordinatore, 16/10 ~23:57), albero pulito.
+
+1. ✅ 16/10 23:40–23:58 — `wiki-file` su `LibreFolio_devWiki/wiki/problems/utc-today-vs-user-calendar.md`: sezione
+   nuova «2026-10-16 — a comparison is one site, not two (Z-3)», cinque righe in «Source files», `updated:` e
+   `concepts/prices-current-side-effect` fra i `related:`; la riga dell'indice; una voce in `log.md`. Storia provata
+   in git, non dedotta:
+   - `2e104b919` (30/08, il commit dell'audit dei 18 punti) ha portato `defaultRange().end` e
+     `resolveDateSentinel('max')` a `todayIso()`; le due righe di `isHeadToday`, con lo stesso idioma UTC nel padre
+     del commit, sono rimaste com'erano. Prima entrambi i lati erano UTC: il confronto era coerente.
+   - Quindi la faccia ovest (la sera un periodo che finisce oggi sembra passato, la vista di default) nasce il 30/08;
+     quella est (dopo mezzanotte un periodo finito ieri interroga, e ogni poll scrive) è più vecchia.
+   - La regola aggiunta: un confronto fra date è un punto solo; chi sposta un lato al calendario dell'utente cerca
+     ogni confronto che lo legge. La data della conversione resta UTC, «corretta così» (ricerca all'indietro).
+   - I sei punti di prodotto che hanno ancora l'idioma a `ac9671fd3` sono elencati, non riclassificati.
+   `check_source_paths.py`: 5 mancanti (8 occorrenze) prima e dopo, tutti preesistenti; la pagina 0 su 8.
+   > **⚠️ Fuori pista**: il passo 6 della skill (graphify `--update`) punta al checkout principale e il grafo non c'è
+   > nel worktree: non eseguito, come le altre voci del `log.md` di questa fase.
+2. ✅ 16/10 23:59 — Numerazione: Z-20 → Z-21 (le quattro funzioni N58) nel backlog e nel lotto A di questo piano; Z-20
+   nuova, il disaccoppiamento. Nota per Z-20, letta nel codice e non provata: la sonda importa `$lib/api`, quindi
+   `zodios-client.ts`, che importa `priceRefresh.ts` (Z5) e, sulla riga dopo, `instanceBlock.svelte.ts` di H, con
+   `$state` al primo livello dal 15/10 (`cb34327e9`). Togliere il plugin dal ponte chiede di disaccoppiare entrambi:
+   detto al coordinatore.
+
+### Z-14 — le pagine dei prezzi e dei cambi vedono un recupero: analisi (17/10 ~00:05, sola lettura)
+
+> **Via** (coordinatore, 16/10 ~23:55): «Next: the `wiki-file` on `utc-today-vs-user-calendar` (yes), then Z-14.»
+> Poi (17/10 ~00:00): «I'm waiting for the Z-14 analysis.» Base: `31a64eb17`, albero pulito.
+
+**Stato reale.**
+- I due registri (`lib/stores/assetPriceStoreRegistry.ts`, `lib/stores/fxStoreRegistry.ts`) tengono un
+  `TimeSeriesStore` (`lib/stores/core/TimeSeriesStore.ts`, usato solo da loro) per chiave. Un intervallo segnato
+  `markFetched` non si chiede più; `invalidateAll()` cancella dati e segni. Nessuno dei due ascolta il bus.
+- Le risposte dei prezzi e dei cambi riempiono all'indietro i giorni senza dato (`backward_fill_info`): il negozio ha
+  un punto per ogni giorno. Dopo un recupero i giorni nuovi non sono buchi: né `getMissingIntervals` né il solo
+  azzeramento dei segni li farebbero chiedere. Serve uno stato «stale» che chieda di nuovo anche dove ci sono dati.
+- Chi legge: le due pagine degli asset, con `getMissingIntervals`. Su un hit il dettaglio chiede comunque eventi e
+  segnali (`include_price: false`): dopo un recupero mostra prezzi vecchi con segnali calcolati sui nuovi. Il dettaglio
+  di un cambio (`loadChartData`, `getMissingIntervals`); la lista dei cambi (`loadFxRatesAndSignalsBulk`: con segnali
+  chiede sempre l'intervallo intero, senza solo i buchi). I moduli delle transazioni con `lookupFxRate`, che prende un
+  punto per sola presenza della data e lo fonde senza `markFetched`. Molte letture sincrone (`getRange`,
+  `getAllSorted`, `lookupFxRateSync`): svuotare i negozi lascerebbe vuoti valori che nessuno ricarica.
+- Il bus: report, rischio e lotti segnano stale, Dashboard e broker ricaricano (Z-13); i negozi si registrano
+  all'import, prima delle pagine.
+
+**Disegno proposto, A** (solo `.ts` di `lib/stores/`, decisioni N-Z14-1…3, «da rivedere»):
+- N-Z14-1: `TimeSeriesStore.markStale()` toglie i segni e mette il negozio in stato stale: da lì
+  `getMissingIntervals(start, end)` restituisce le parti dell'intervallo non lette dopo il segno, anche dove ci sono
+  dati. I dati restano (le letture sincrone non cambiano); la prossima lettura chiede di nuovo, poi l'intervallo è
+  fresco. `invalidateAll()` azzera anche lo stato.
+- N-Z14-2: i due registri ascoltano il bus all'import e segnano stale tutti i loro negozi solo su `{kind: 'prices'}`.
+  Non su `mutation` (il poll dal vivo lo è ogni 30 s: ogni poll farebbe richiedere intervalli interi), né su
+  `refresh` (l'«Aggiorna» del portafoglio; le pagine dei prezzi hanno il loro).
+- N-Z14-3: `lookupFxRate` tratta un punto stale come mancante (`getMissingIntervals(date, date)`) e segna la lettura.
+
+**Fuori, da decidere (B):** una pagina dei prezzi o dei cambi già aperta durante il recupero non si ricarica da sola,
+come fanno Dashboard e broker (Z-13). Servirebbero un ascoltatore e una ricarica silenziosa (la lezione di Z-18) in
+quattro pagine (asset lista e dettaglio, cambi lista e dettaglio), fra cui il dettaglio asset, ora in mano a Y.
+Proposta: Z-14b nel backlog. Nel cloud la prima pagina dopo un risveglio è di solito il Dashboard (Z-13); con A la
+navigazione successiva è fresca.
+
+**Test** (test-author, rossi prima): `TimeSeriesStore.test.ts` (lo stato stale), `assetPriceStoreRegistry.test.ts` e
+`fxStoreRegistry.test.ts` (l'ascolto, solo `prices`; le letture dopo il segno; `lookupFxRate`), azioni `front-fx
+fx-unit` e `front-asset asset-unit`. E2E nello spec di Z-13 (`front-portfolio price-refresh`): dettaglio di un asset,
+il Dashboard (navigazione nell'app, i negozi restano in memoria), un recupero simulato come in (a), ritorno al
+dettaglio: la query della pagina chiede i prezzi (`include_price: true`); rosso oggi (`false`). Lo stesso per il
+dettaglio di un cambio, sulla sua richiesta `convert`.
+
+**Superfici e conflitti:** i tre `.ts` dei negozi (ultimo tocco: 11/10, X), tre file di test, lo spec di Z-13 (mio).
+Doc: `developer/frontend/state/registries.md` (passo 4, «Invalidating»), `core-infrastructure.md`, `live-ticker.md`
+(`#price-refresh`), `domain-state.md` (chi ascolta il bus). Nessun `.svelte`, nessuna area dei colori. Rischio:
+basso; una lettura in più per intervallo dopo ogni recupero, nessuna fra un recupero e l'altro.
+
+> **Via** (coordinatore, 17/10 ~00:10): «Z-14: proposal A approved (N-Z14-1/2/3), go with the reds. Z-14b in the
+> backlog as you described it, a UX decision for the developer: I'm noting it among the morning questions. For the
+> E2E, a short slot when you're ready.»
+
+**Passi:** 1. rossi (test-author); 2. codice; 3. doc (docs-writer); 4. controlli leggeri; 5. slot E2E corto
+(`price-refresh`); 6. backlog (Z-14 ✅, Z-14b nuova) e checkpoint.
+
+1. ✅ 17/10 00:10–00:46 — Rossi (test-author): `TimeSeriesStore.test.ts` 8 casi nuovi più uno che fissa il
+   comportamento senza segno; `assetPriceStoreRegistry.test.ts` 4; `fxStoreRegistry.test.ts` 6; nello spec di Z-13
+   (g) dettaglio asset e (h) dettaglio cambio, col registratore della pagina esteso alle richieste
+   `prices/query` e `fx/convert` (aggiunta). Ognuno ha un controllo: senza recupero la cache risponde, provato con
+   `performance.timeOrigin` invariato (navigazione nell'app). Vitest sui tre file, codice di HEAD
+   (`files/z14_light.sh red`): 18 rossi su 141, i 18 attesi, ognuno col suo messaggio «(Z-14)»; 123 verdi.
+   > **⚠️ Fuori pista**: Prettier segnalava una riga del registratore (HEAD era pulito): riscritta in due righe,
+   > pulita. La nota in fondo a `fxStoreRegistry.test.ts` (già a HEAD) citava `fxStoreRegistry.ts:296` e `:399`,
+   > numeri già sbagliati e spostati dal codice: ora nomina le due funzioni («two arms», non «three»).
+2. ✅ 17/10 00:47 — Codice (`files/z14-draft/apply_z14.py code`, inverso esatto provato su una copia; impronta in
+   `files/z14-draft/z14_applied.md5`): `TimeSeriesStore.ts` +48 −1, `assetPriceStoreRegistry.ts` +11,
+   `fxStoreRegistry.ts` +15 −1; Prettier pulito. Descrizione dell'azione `front-portfolio price-refresh` e docstring
+   aggiornate (Z-14).
+   > **Osservazioni di test-author, non cambiate**: `ensureAssetPriceRangeLoaded` non ha chiamanti nel prodotto (le
+   > pagine usano il negozio direttamente; preesistente); dopo un recupero il ritorno a una pagina dei prezzi mostra
+   > il caricamento, come una prima visita, non i punti vecchi (le pagine non li leggono su un buco): una volta per
+   > recupero, accettato dal contratto; nella riga di Z-14b.
+3. ✅ 17/10 00:47–01:05 — Doc (docs-writer, verificata da me): `state/registries.md` (passo 5 nuovo «Going stale after
+   a price catch-up», il diagramma, il passo 2), `state/core-infrastructure.md` (`markStale()`), `state/domain-state.md`
+   (i due registri fra gli ascoltatori del bus, solo `prices`), `live-ticker.md` (`#price-refresh`, due righe nuove e
+   (f)–(h) nella tabella dei test). Due correzioni sue, accettate: `lookupFxRate` non precompila, dà il cambio di
+   mercato che le modali delle transazioni confrontano (`TxFormPairSection.svelte:355`, `TransactionBulkModal.svelte`);
+   ho corretto con lui il messaggio dell'asserzione in `fxStoreRegistry.test.ts`. Derive trovate e non toccate:
+   `domain-state.md` 13–16 (colonna «Location» di quattro store, preesistente), l'intro di `#price-refresh`,
+   `admin/sleep_wake.en.md` (pagina tradotta: niente).
+4. ✅ 17/10 00:46–01:36 — Controlli leggeri (`files/z14_light.sh green`, soglia 50), col codice: i tre file
+   141/141; `front-fx fx-unit` 153/153; `front check` 0 errori e 0 avvisi; `front-asset asset-unit` 884/885: rosso solo
+   `growthLadderAxis.test.ts` «L14-self.4», «Test timed out in 5000ms» a 5054 ms, sotto carico.
+   > **⚠️ Fuori pista** (test-triage): il file non è nel lotto e non arriva al codice di Z-14 (importa `echarts`, i
+   > moduli della scala e `timeSeriesAggregation.ts`, che ha solo import di tipo). Ipotesi: tempo massimo di Vitest
+   > superato sotto carico; prova: lo stesso file da solo, poi l'azione intera (sotto).
+   Prova (`files/z14_after.sh`): il file da solo 138/138, «L14-self.4» verde; `front-asset asset-unit` di nuovo 885/885:
+   era il carico. Poi `front-utility core-unit` 7308/7308; `mkdocs build` stretto senza avvisi (con `anchors: warn`);
+   `check-links` 97 validi. In più, a mano: il docblock di `portfolioMutation.ts` nomina i due registri (solo
+   commento) e la riga E2E di `live-ticker.md` dice dell'«Aggiorna» nei due giri. Porta 6186 libera.
+5. ✅ 17/10 00:51–01:26 — Slot 1 (coordinatore, «start right away»: la galleria dei colori alza il carico dalle
+   ~01:16), `files/z14_slot.sh`:
+   - A (codice tolto, i tre file = HEAD): `front-portfolio price-refresh` 6 verdi, (g) e (h) rossi; B (impronta
+     verificata): 7 verdi, (h) rosso.
+   > **⚠️ Fuori pista**: (h) era rosso in A e in B alla stessa premessa («a running catch-up shows the notice»),
+   > prima dell'asserzione di Z-14: difetto del test. Il caso contava sulle risposte del Dashboard per avviare il
+   > tracker; in (g) succede perché il poll dal vivo della pagina asset è una scrittura e rende stale il report del
+   > Dashboard, la pagina del cambio non scrive. Riparo (test-author, via del coordinatore): l'«Aggiorna» del
+   > Dashboard in entrambi i giri, controllo e recupero, in (g) e (h) — sul server legge soltanto, i negozi ignorano
+   > `refresh`, nessuna voce nella cronologia — più la premessa esplicita «no API answer after the header was set».
+   - Re-run filtrato su (g) e (h) (`files/z14_rerun.sh`, slot 1 di nuovo): B 2/2; A 2 rossi, ognuno col suo
+     messaggio Z-14 dopo premesse e controllo; poi di nuovo B, impronta verificata. Porta 6186 libera.
+   - I sei casi di Z5/Z-13/Z-18 erano verdi in B nel primo slot, sullo spec di prima del riparo, che ha toccato solo
+     helper e commenti di Z-14: non rifatti in pieno.
+6. ✅ 17/10 ~01:37 — Backlog: Z-14 ✅, Z-14b nuova (domanda di UX del mattino). Checkpoint FROZEN inviato al
+   coordinatore. Nessun `.svelte`, nessuna area dei colori. (L'ora era scritta «01:40» prima dell'invio: corretta.)
+7. ✅ 17/10 01:38–01:57 — Ingresso: commit `1f4986c70` e `3a776cc9e`; base aggiornata dal coordinatore (merge di
+   `b36e3873f`, `cf37fb03c`; il conflitto in `domain-state.md` risolto come proposto: il mio paragrafo, poi la riga
+   di Y). Revisione combinata, controlli leggeri sotto 50 (`files/z14_combined.sh`): `api sync`; `front check` 0/0;
+   `core-unit` 7708/7708; `fx-unit` 153/153; `asset-unit` 885/885; `mkdocs build` stretto senza avvisi; `check-links`
+   97. Slot 2: `front-portfolio price-refresh` intero 8/8. Entrato in dev (`2765773f5`), riga 🐛 in `6e02e56ec`.
+
+### Z-21 — N58: quattro nomi che solo i test leggono (17/10, backend, solo controlli leggeri)
+
+> **Via** (coordinatore, 16/10 ~23:55, poi 17/10 ~01:58): «Z-21 after that, if there's time.» — «Z-14 entered: dev
+> `2765773f5` […]. Your HEAD is ff'd to `6e02e56ec`, clean. Z-21: go (apply, light checks, checkpoint).»
+> Base: `6e02e56ec`, albero pulito; gli otto file di Z-21 identici a `cf37fb03c`, la base delle bozze.
+
+**Stato reale** (vulture, «Referenced only by tests», visto nel lotto A): `cooldown_snapshot()`
+(`provider_cooldown.py`, Z7a), `ShutdownWatchdog.armed_at` e `current_shutdown_watchdog()` (`shutdown_budget.py`, Z6b),
+`Activity.is_busy()` (`sleep_wake/activity.py`, Z2a). Nessun chiamante nel prodotto: `shutdown_deadline()` legge
+`_watchdog` direttamente, il prodotto legge `busy_reasons()`, nessuno legge le pause fuori dai test. Nomi anche in due
+descrizioni del runner (`services provider-cooldown`, `services sleep-wake-activity`); nessuna pagina di doc.
+
+**Decisione** N-Z21-1 («da rivedere»): via tutti e quattro (non un lettore di prodotto: il pannello delle pause non
+c'è, Z-21 non lo inventa). I test leggono l'istanza in uso (`cooldowns.snapshot()`), il `deadline` (al posto di
+`armed_at`), `shutdown_budget._watchdog` (stato privato, lecito in un test) e `busy_reasons()`.
+
+**Test** (test-author, bozze fuori dal repo, copie complete in `files/z21-draft/`): nessun caso tolto, nessun numero
+che resta scoperto. Tre asserzioni più strette di prima, accettate: SWA-021 (un controllo per lettura), PCD-012
+(`wait_before_call` prima dello scambio), SDB-018/026 (deadline fra due letture dell'orologio).
+
+**Passi.**
+1. ✅ 17/10 01:57–01:59 — Bozze dei test nel worktree (quattro file, copie: identici a `cf37fb03c` anche a
+   `6e02e56ec`), ruff e black puliti. Prima della modifica (`files/z21_run.sh before`, sotto 50): `services
+   provider-cooldown` 66/66, `shutdown-budget` 187/187, `shutdown-process` 7/7, `sleep-wake-activity` 111/111;
+   `lint --dead-code` elenca i quattro nomi.
+2. ✅ 17/10 01:59 — Prodotto (`files/z21-draft/apply_z21.py code`, inverso esatto provato su una copia):
+   `provider_cooldown.py` −6 (con l'import di `CooldownState`), `shutdown_budget.py` −10, `sleep_wake/activity.py`
+   −4, due descrizioni del runner. Ruff e black puliti; `git grep -w` dei quattro nomi in `backend`, `scripts`,
+   `mkdocs_src`, `frontend`, `.github`: nulla.
+3. ✅ 17/10 02:00–02:01 — Dopo (`files/z21_run.sh after`): le stesse quattro azioni con gli stessi numeri;
+   `lint --dead-code`: 49 → 45 risultati del backend, spariti esattamente i quattro, nessuno nuovo (rc 1 per i
+   risultati preesistenti). Porta 6186 libera.
+4. ✅ 17/10 ~02:02 — Backlog: Z-21 ✅. Checkpoint FROZEN inviato al coordinatore.

@@ -5,7 +5,8 @@
  * Thin wrappers over the generated client, so that the pages and their tests share one seam.
  */
 import {zodiosApi} from '$lib/api';
-import {refusalDetail, refusalStatus, retryAfterOf} from './emailApi';
+import {isInstanceBlockedError} from '$lib/features/instance/instanceBlock.svelte';
+import {refusalBody, refusalDetail, refusalStatus, retryAfterOf} from './emailApi';
 
 /** Why a verification link was refused (400 `TOKEN_INVALID`): the status of its token. */
 export type VerificationLinkRefusal = 'expired' | 'consumed' | 'revoked' | 'unknown';
@@ -18,10 +19,15 @@ export async function confirmEmailVerification(token: string): Promise<{username
     return {username: answer.username};
 }
 
-/** The status of a refused link, or null for any other failure (no answer, a server error), which may be tried again. */
-export function readLinkRefusal(error: unknown): VerificationLinkRefusal | null {
+/** Why the page cannot use the link, or null for any other failure (no answer, a server error), which may be tried
+ * again: the status of its token (400 `TOKEN_INVALID`), or `blocked` while the hosting provider blocks the instance —
+ * the 423 `instance_blocked` a signed-in browser gets (workstream H's `isInstanceBlockedError`), or the 401 an anonymous
+ * one gets, the only 401 of this public route (lot E-10, from H's review of A7b). */
+export function readLinkRefusal(error: unknown): VerificationLinkRefusal | 'blocked' | null {
+    const status = refusalStatus(error);
+    if (status === 401 || isInstanceBlockedError(status, refusalBody(error))) return 'blocked';
     const fields = refusalDetail(error);
-    if (refusalStatus(error) !== 400 || fields === null || fields.error_code !== 'TOKEN_INVALID') return null;
+    if (status !== 400 || fields === null || fields.error_code !== 'TOKEN_INVALID') return null;
     return typeof fields.status === 'string' && LINK_REFUSALS.has(fields.status) ? (fields.status as VerificationLinkRefusal) : 'unknown';
 }
 

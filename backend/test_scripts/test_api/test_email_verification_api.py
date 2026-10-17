@@ -398,9 +398,10 @@ def _token_in(text: str) -> str:
 
 
 def _assert_is_the_verification_email(received: object, *, language: str = "en", username: str = ALICE) -> str:
-    """The message is exactly the verification email of the link it carries; that link's token."""
+    """The message is exactly the verification email of the link it carries, greeting nobody by name — ``username``, the account's, in no part of it (decision N62) —; that link's token."""
     token = _token_in(_text(received))
-    expected = build_verification(language=language, username=username, link=email_link(VERIFICATION, token), ttl=TTL, instance=PUBLIC_HOST)
+    assert username not in received.message["Subject"] + _text(received) + _html(received), "the verification email greets nobody by name: whoever signs up chooses the username (N62)"
+    expected = build_verification(language=language, link=email_link(VERIFICATION, token), ttl=TTL, instance=PUBLIC_HOST)
     assert received.message["Subject"] == expected.subject
     assert _lines(_text(received)) == _lines(expected.text)
     assert _lines(_html(received)) == _lines(expected.html)
@@ -545,7 +546,7 @@ async def test_a_body_that_is_not_a_token_answers_422(private: _Private, body: d
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("own", "language"), [pytest.param(None, "en", id="the-instances-language"), pytest.param("it", "it", id="the-accounts-own-language")])
 async def test_resend_answers_200_with_the_language_and_emails_the_link(private: _Private, monkeypatch: pytest.MonkeyPatch, own: str | None, language: str) -> None:
-    """EVA-005 — contract 3: the right password for a waiting account: 200 ``{"language"}`` alone, the language of the email; one message to the account's address, exactly the verification email of a live link."""
+    """EVA-005 — contract 3: the right password for a waiting account: 200 ``{"language"}`` alone, the language of the email; one message to the account's address, exactly the verification email of a live link, greeting nobody by name (decision N62)."""
     print_section(f"EVA-005: {language}")
     alice, _hold = await _waiting(private.engine)
     if own is not None:

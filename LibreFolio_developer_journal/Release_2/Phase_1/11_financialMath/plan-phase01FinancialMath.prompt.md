@@ -1102,3 +1102,353 @@ Quattro commit, uno per lotto che cambia numeri:
 - Guardia, lacuna nota (test-author): un confronto con la stringa `"SPLIT"` (`AssetEvent.type == "SPLIT"`) sfuggirebbe;
   oggi le uniche `== "SPLIT"` sono `event.kind` degli eventi già classificati in memoria (`fifo/engine.py:137`,
   `lots_analysis_service.py:930`, `yield_on_cost.py:623`), non caricatori del DB: non aggiunta.
+
+#### Ondata 2 — B, H, poi A (16/10, dalle 20:40) — base `45ae068cc` (J-24, lotto C, I2 commit `291423296`)
+
+- **Base**: il coordinatore committa I2 (`291423296` + `e4e0d8aab`) e fonde la punta di dev (`45ae068cc`, genitori
+  `e4e0d8aab` + `6319a7dbf`: J-24, lotto C, A, W-B53…), pulita; HEAD verificata. I2 entra da sola (`3741b95b0`, treno
+  136). `daily_state.py`/`models.py` miei per J1 (nessun ramo aperto lì).
+- **J** (20:4x): CP-7b resta fuori da `portfolio/{daily_state,models,engine}.py`, `portfolio_service.py`,
+  `technical_shared.py`; **legge** soltanto `price_marks.py`; tocca `lots_analysis_service.py`,
+  `lots/{prices,conversions,histories}.py`, un docstring di `fifo/engine.py`, e una descrizione di
+  `schemas/portfolio.py` (~:829, `LotSummarySchema.value_source`, J-28). Nessuna sovrapposizione.
+
+##### MF-B — le card dei broker dal motore
+- **Lettura** (verificata su `45ae068cc`): la card sommava le `current_value` delle posizioni di `position_states_end`
+  sopra la soglia della polvere + la cassa `native_cash.value_at(valuation_date)` + il valore in transito della fetta;
+  il commento diceva «il motore rivaluta un giorno solo quando succede qualcosa». Ma i giorni «sporchi» del motore
+  comprendono ogni giorno di prezzo (`daily_state.py:394`), di cambio della cassa (`:380`) e di cambio delle
+  valutazioni (`:383`), gli split, gli stale; e `_revalue_foreign_cash` rivaluta la cassa estera con lo stesso
+  `value_at`. Quindi `nav_contribution` dello stato del giorno di valutazione = la card, salvo la polvere: il motore
+  conta anche le posizioni con 0 < quantità ≤ 0,00001, che la card scartava (e il titolo no).
+- ✅ **Codice**: `portfolio_service.py` — `net_worth` = `nav_contribution`, `gain_loss` = `pnl_contribution` della fetta
+  di `last_state`; via `broker_market_values`; `cash_total` invariato (`value_at`). Le card ora sommano esattamente il
+  titolo. `models.py`: commento di `in_transit_contribution` (non lo somma più la card; lo leggono i test del motore).
+- **Numeri**: solo la polvere (valore d'un residuo ≤ 0,00001 unità, in genere < 0,01) entra nella sua card come già nel
+  titolo. **CHANGELOG**: nessuna riga (sotto il centesimo; da confermare col rosso).
+- **Prova** (test-author `mf-bh-tests`): invarianti Σ card = titolo e card = posizioni + cassa (+ transito) su cassa
+  estera rivalutata dopo l'ultimo movimento, giorno senza eventi, posizione al costo, transito, polvere (rosso su HEAD
+  solo la polvere).
+
+##### MF-H — la finestra di detenzione nella casa (T-B4, T-U6)
+- **Correzione della carta**: D-MF2 = **(a)**, l'arrivo al broker (la carta diceva ancora «data d'origine», dalla D-7
+  del piano 43): i trasferimenti restano come oggi; cambia solo lo split.
+- ✅ **Codice**: `financial_math/holding_window.py` nuovo — `QuantityMove`, `quantity_moves(transactions,
+  split_linked_ids)`, `oldest_open_lot_date(moves)` (FIFO delle quantità per broker; lo split riscala i lotti aperti di
+  `(tenuto + q) / tenuto` e ne tiene le date), `closed_position_window(moves, dust)` (lo split non apre né chiude);
+  soglia da `data_quality_thresholds` (infrastruttura ammessa dalla regola (a) dello strato). `portfolio_service.py`:
+  via `_oldest_open_lot_date`, `_closed_position_window` e `deque`; `get_summary` e `get_positions_contribution` leggono
+  gli id degli split con `splits.split_linked_ids` (I2) e chiamano la casa. Mappe: docstring del pacchetto, le due
+  istruzioni, albero di `financial_math.md`. Ruff/black puliti, import verde.
+- **Numeri**: la colonna nascosta «Oldest open lot» delle posizioni e l'annualizzato della Performance per le posizioni
+  con uno split seguito da una vendita parziale (split in avanti) o con più lotti prima d'uno split all'indietro.
+- **CHANGELOG** (🐛 Fixed): «Performance: a stock split no longer resets the holding period used for annualized
+  returns.»
+- **Prova** (test-author `mf-bh-tests`): puro `test_holding_window.py` (parità coi vecchi algoritmi senza split; split
+  avanti/indietro; finestra dei chiusi); servizio `test_holding_window_service.py` (rossi su HEAD: le due date e
+  l'annualizzato; il trasferimento resta all'arrivo). Doc (docs-writer `mf-h-docs`): `net-annualized-return.en.md`,
+  `user/dashboard/positions.en.md`.
+
+##### MF-A — disegno (16/10, sola lettura su `45ae068cc`)
+- **Oggi** (`get_positions_contribution`, ~:1489-1881): il motore gira da t=0 (`date_from=None`) e le righe si valutano
+  da sé ai confini: `_get_price_at_date` (sole quotazioni di mercato, prezzo grezzo), `_convert_to_base` al giorno
+  d'inizio ma, alla fine, **al giorno della quotazione**; un cambio mancante dà `None` e la coppia è scartata (`_`);
+  nessun segno di scambio, nessuno split dopo l'ultima quotazione, nessuna stima al costo (J-17); quantità dai movimenti
+  grezzi × quota. La riga «Other» non usa le righe (è `pnl − ugl_delta − realizzato − proventi + costi` del motore),
+  quindi le righe e «Other» non chiudono il totale quando le valutazioni divergono.
+- **Il motore ha già tutto**: `_build_position_state` (valutazione del giorno con segni, split, stima al costo, coppia
+  mancante), il pool del costo del giorno, e `_internal_pair_value` (il valore all'arrivo d'una coppia interna, lotto
+  41). `position_states_start` oggi è l'istantanea del primo giorno del frame e **nessuno la legge**.
+- **Disegno**:
+  1. `DailyStateBuilder`/`engine.calculate(period_start=…)` (opt-in, nella chiave della cache del blob): l'istantanea
+     `position_states_start` diventa quella della **fine del giorno `period_start`** (lo stesso confine di
+     `period.period_boundaries` e di `qty_at_start` di oggi: movimenti con data ≤ `date_from`), giorno reso «sporco».
+     `get_report` e `get_positions_contribution` passano `date_from`.
+  2. Valore e non realizzato d'inizio e fine di ogni riga dalle istantanee (`market_value`, `cost_basis`,
+     `unrealized_pnl`, `missing_fx_pair` → qualità dei dati); quantità del motore (quota già applicata). Polvere: la
+     soglia di oggi per «venduta del tutto».
+  3. **P22**: per ogni coppia interna d'un titolo fra due broker con arrivo nel periodo, il mittente chiude il suo
+     tratto al valore all'arrivo (`_internal_pair_value`, il transito resta suo), il ricevente lo apre a quel valore:
+     ± (valore all'arrivo − costo spostato) nel delta non realizzato delle due righe; totale invariato. Il motore
+     espone queste coppie per titolo (oggi le dà solo per broker).
+  4. Regole R4 nella casa (`financial_math/portfolio/contributions.py`): % sul valore d'inizio, base di ripiego (costo
+     di fine) per l'annualizzato, finestra `max(date_from, lotto aperto più vecchio)` (H), annualizzato dei chiusi sul
+     costo venduto e la finestra dei chiusi (H). `portfolio_service` resta orchestrazione.
+  5. Via `_get_price_at_date`/`_convert_to_base` da questo percorso (restano per la variazione a 1 giorno di
+     `get_summary`, che è P/D-MF6, non A). Commenti «Realized G/L of the SELLs» → «SELLs and priced outgoing
+     ADJUSTMENTs» (J-24). Ordine degli unallocati (B19): già `access_order` (verificare).
+- **Invariante nuova** (test): Σ righe `period_unrealized_delta` = `ugl_delta` del motore (stesse istantanee, in transito
+  escluso da entrambi), quindi righe + «Other» = P&L del periodo.
+
+##### B+H — prove (16/10, sera; carico alto, attese fino a 27 min)
+- ✅ **Test** (test-author `mf-bh-tests`): `test_financial/test_broker_cards.py` (3 invarianti × 7 scenari: due broker EUR,
+  giorno senza eventi, cassa USD rivalutata dopo l'ultimo movimento, posizione al costo, titolo e cassa in transito,
+  polvere); `test_financial_math/test_holding_window.py` (75: parità coi vecchi algoritmi su 18 flussi senza split,
+  split avanti/indietro/3:1/su niente, finestra dei chiusi, `quantity_moves`); `test_financial/test_holding_window_service.py`
+  (split reali con le ADJUSTMENT collegate; il trasferimento resta all'arrivo). Lacuna nota: uno split su una posizione
+  vuota è ignorato da `oldest_open_lot_date` ma entra nel totale corrente di `closed_position_window` (come nel motore);
+  dato incoerente, non fissato.
+- ✅ **Doc** (docs-writer `mf-h-docs`): `net-annualized-return.en.md:100` (lotti per broker, lo split riscala e tiene
+  le date), `user/dashboard/positions.en.md:45`. Debito: it/fr/es delle due pagine.
+- ✅ **Rossi** (21:25, `files/bh.sh red`; patch `4a8b9c37…`, `holding_window.py` `03accdfc…`, ripristino identico):
+  `services financial-math test_holding_window` **75/75 rossi** (`ModuleNotFoundError`); `services roi-fifo-utils
+  "broker_cards or holding_window_service"` **7 rossi, 21 verdi** — B: solo `dust-residual` nei 3 test (card A
+  4999.998 contro il titolo 8220: la polvere mancava); H: le 4 attese (date dello split / del secondo acquisto,
+  annualizzato su 211 giorni invece di 305).
+- **Verdi** (`files/bh.sh green`): `services financial-math` 667, `services roi-fifo-utils` 891 (21:26-21:28); il resto
+  in attesa del carico.
+
+##### MF-A — rossi scritti (test-author `mf-a-tests`, 16/10 ~21:55; non ancora eseguiti)
+- `test_financial/test_positions_contribution_engine.py` (62; ~26 rossi attesi): segno di scambio all'inizio (uno e due
+  acquisti: oggi `None` e delta 400 invece di 200), quotazione USD vecchia alla fine (oggi al cambio della quotazione:
+  960 invece di 750), split dopo l'ultimo segno (2000 invece di 1000), posizione al costo (oggi `None`), P22 nello
+  stesso giorno e con transito nel periodo (A 200 / B 300 e A 300 / B 200; oggi A −200 / B 700); verdi di parità:
+  transito a cavallo dell'inizio e della fine, EUR ordinario, cambio mancante (`None`). Ogni scenario passa per
+  `get_report` e per `get_summary` + `get_positions_contribution`. Invariante: Σ `period_unrealized_delta` =
+  `period_unrealized_gain_loss_delta` del sommario, Σ `period_pnl` + Σ `other_effects` = `period_pnl` (polvere per riga
+  nascosta). P22: fissati i delta, non `end_value` di A né `start_value` di B (0 o V: da decidere nel codice, regola 1
+  → 0).
+- `test_financial/test_portfolio_engine/test_period_start_snapshot.py` (17; 12 rossi `TypeError`): `period_start` da
+  t=0 = l'istantanea d'un giro con `date_from=D`; stati giornalieri invariati; prima del primo movimento vuota;
+  **cache del blob**: un giro senza `period_start` non deve rispondere per uno con, e viceversa.
+- **⚠️ Fuori pista — due scoperte del test-author**:
+  1. *Cache del blob* (`engine.py` ~:283): `blob_from <= actual_from and blob_to == actual_to` → un giro da t=0 in cache
+     risponde già a un `date_from` più tardo con l'istantanea del primo giorno del frame. Innocuo oggi (nessuno legge
+     `position_states_start` in produzione), da chiudere con `period_start` nella chiave.
+  2. *Quotazione di mercato prima d'uno split*: `_market_value_for` considera una quotazione di mercato già «sull'asse
+     delle unità correnti» (si presume che il fornitore riscriva lo storico); senza una quotazione dopo lo split il
+     valore raddoppia, nel motore come oggi nella tabella. Il caso è stato costruito con un ultimo segno di scambio (che
+     il motore riscala). **Domanda di contratto per il developer** (area valutazione, J): riscalare anche le quotazioni
+     di mercato precedenti a uno split quando non ne esiste una successiva? Non fissato in nessun verso.
+
+##### MF-P — contratti concordati con Y (16/10, 22:00-22:11)
+- **Unità**: frazione ovunque (0,05 = 5 %), come `twrr_percent`, `gain_loss_percent`, `period_pnl_percent`.
+- **R17** (in `PortfolioSummary`): `pnl_change_1d: Currency|None`, `pnl_change_1d_vs_total_pnl_percent`,
+  `pnl_change_1d_vs_nav_percent` (Δ / |base|, segno di Δ; None con base 0 o senza D−1), `timing_effect_percent`
+  (`mwrr_cumulative_percent − twrr_percent`, None se uno manca). «Il giorno prima» = lo stato del motore del giorno di
+  calendario precedente (`state_as_of(D−1)`), non il punto precedente della serie.
+- **W8**: `summary.holding_groups: list[{broker_id, asset_type|None (None = livello broker), gain_loss, gain_loss_percent}]`;
+  Σ G/L / Σ costo (valore − G/L) con `gain_loss_ratio(…, positive_base=False)`, solo i titoli con valore e G/L noti
+  (oggi il frontend mette nella base il valore d'un titolo senza G/L) → riga 🐛 con Y.
+- **P4**: nessun campo nuovo; Y usa `period_pnl_percent` (= `period_pnl / |start_value|`); con A migliorano i valori.
+- **V11**: `opening_value` sugli eventi BUY dei lotti, nella valuta di `unit_price`; con MF-E dopo CP-7b (file di J).
+- **P5**: piè delle righe visibili e ribasamento del grafico WAC = misure interattive dichiarate da Y; il totale fisso
+  dei lotti è già del backend (`LotSummarySchema`).
+- **Periodi fissi dell'asset (1G, 1S…)**, eccezione di D-MF6(b): non sono in Y12b; li calcola il frontend nell'area di
+  X (`lib/utils/assetPriceDerived.ts:193-196` `computePeriodDelta`, `AssetTable.svelte:239-248`; FX
+  `routes/(app)/fx/+page.svelte:236-240`) → proprietario da decidere col coordinatore e X.
+- **Date**: R17 + W8 il 17/10 mattina, prima di A; A il 17/10; V11 dopo CP-7b e MF-E (~18/10).
+- ✅ **Verdi** (resto): `api portfolio` 51 (21:53, avvio lento sotto carico); `services ai-export` intera **interrotta dal
+  limite di 600 s del runner** (`_common.run_command`, carico 60-240) — guasto d'infrastruttura, nessun test rosso;
+  rifatta a pezzi: «portfolio or broker» **341 passed** (4 min 49), il resto 516 passed prima di un altro limite,
+  `structural_invariants` da solo 77 passed / 0 failed prima del limite (controlli di definizioni e cataloghi, nessun
+  legame con sommario o contributi), file 15-22 **198 passed**. Nessun rosso in tutta la categoria; la coda di
+  `structural_invariants` resta al cancello del coordinatore.
+- ✅ **Statici** (`files/bh.sh lint`): ruff/black puliti; `mkdocs build` strict 0; `git diff --check` pulito; porta libera.
+- **Due commit** (B non cambia numeri oltre la polvere, H sì): toppe in `files/bh_split/` — `B.patch` (sha
+  `a9128b0f…`, `portfolio_service.py` card + `models.py`) si applica su HEAD; `H_portfolio_service.patch` (sha
+  `80108161…`) si applica sopra B. Verificato con un indice temporaneo; la versione «solo B» compila e passa ruff.
+- I rossi di A (`test_positions_contribution_engine.py`, `test_portfolio_engine/test_period_start_snapshot.py`) restano
+  fuori dal checkpoint (rossi voluti, non ancora curati).
+
+#### B+H committati ed entrati; notte (16/10, 23:15)
+- Coordinatore: `e229adc26` (B, dalla toppa), `e5d287287` (H), giornale `c2feebaa8`; entrati in dev `bcc644491` (CHANGELOG
+  🐛 MF-H); il suo cancello su dev comprende `ai-export`. I rossi di A restano non tracciati. HEAD verificata `c2feebaa8`.
+- Risposte: MF-P come concordato con Y; **tabella dei periodi fissi (D-MF6 b): il campo del backend lo faccio io in P,
+  X lo consuma** (`assetPriceDerived.ts`, `AssetTable.svelte`, `fx/+page.svelte`); la quotazione prima d'uno split va
+  nella lista del developer (mattina, con J); A: avanti coi rossi; versioni AI Export: una volta per componente per
+  release, controllare `COMPACT_COMPONENT_VERSIONS`.
+- **Regola della notte** (developer a letto): una domanda solo sua → nel piano + al coordinatore, e si passa oltre.
+
+##### MF-P (1) — R17 e W8 (16/10, dalle 23:16)
+- ✅ **Codice**: `returns.py` — `change_ratio(change, base)` (change / |base|, segno della variazione; None su base 0),
+  `group_gain_loss(pairs)` (solo coppie valore e G/L note, costo = valore − G/L, `gain_loss_ratio(…, positive_base=False)`),
+  `timing_effect(mwrr_cumulative, twrr)`; `portfolio/period.py` — `DayChange`, `day_change(states, as_of)` (stati
+  `state_as_of(as_of)` e `state_as_of(as_of − 1 giorno di calendario)`); `schemas/portfolio.py` — `HoldingGroupGainLoss`
+  e i campi `timing_effect_percent`, `pnl_change_1d`, `pnl_change_1d_vs_total_pnl_percent`, `pnl_change_1d_vs_nav_percent`,
+  `holding_groups` in `PortfolioSummary`; `portfolio_service.get_summary` li riempie (gruppi: broker prima, poi tipi in
+  ordine alfabetico). Mappe aggiornate. Ruff/black puliti; `api sync` exit 0 (client non tracciato); schema a Y.
+- **Prova**: test-author `mf-p-r17w8-tests` (puri in `test_financial_math/`, servizio in `test_financial/`), rossi su
+  HEAD per assenza dei nomi/campi.
+- **Numeri**: campi nuovi; i valori che il frontend mostrerà cambiano solo dove il suo calcolo divergeva (serie
+  campionata; titoli senza G/L nel gruppo). CHANGELOG con Y (🔄 e 🐛 W8).
+- ✅ **Test R17/W8** (test-author `mf-p-r17w8-tests`): `test_financial_math/test_returns_change_and_groups.py` (37),
+  `test_financial_math/test_period_day_change.py` (12), `test_financial/test_summary_day_change_and_groups.py` (18: R17 su
+  cinque libri a mano, nato il giorno di valutazione, `get_report` con un giorno di intervallo dove il KPI di oggi tace,
+  timing = MWRR − TWRR e None con D-MF5; W8 su nove titoli: ordine, titoli senza G/L fuori dalla base — 235/3000 contro
+  il 235/3500 del frontend —, al costo conta, gruppi tutti ignoti `(None, None)`).
+- ✅ **Rossi R17/W8** (00:00, `files/p.sh red`: R17/W8 tolto, A tenuto; toppa `p_split/R17_portfolio_service.patch` al
+  contrario, ripristino con confronto byte): `financial-math` **49/49 rossi**, `roi-fifo-utils` **18/18 rossi**.
+
+##### MF-A — codice (16/10 notte)
+- ✅ **Motore**: `portfolio/models.py` — `InternalAssetTransfer` (partenza, arrivo, titolo, mittente, ricevente, valore
+  all'arrivo, costo spostato), campi `internal_asset_transfers` e `position_states_start_date` di
+  `PortfolioCalculationResult`; `portfolio/daily_state.py` — `period_start` (default il primo giorno del frame: test
+  esistenti invariati), istantanea alla fine di quel giorno (reso «sporco»), `_internal_pairs()` estratto da
+  `_internal_transfer_flows` (stessa firma: i test che lo sostituiscono reggono) e `_internal_asset_transfers()`
+  (valore = `_internal_pair_value`, costo = passo del pool del mittente se completo); `portfolio/engine.py` —
+  `calculate(period_start=…)` e **chiave della cache del blob con `period_start or date_from`** (chiude il difetto
+  trovato dal test-author).
+- ✅ **Casa**: `portfolio/contributions.py` nuovo — `transfer_tract_adjustments` (P22: partenza e arrivo nel periodo,
+  ± (V − C)), `period_return_on_start`, `window_start`, `annualized_period_return`, `closed_position_annualized` (le
+  regole R4 di oggi, identiche: 4 decimali, |inizio|, ripiego sul costo di fine).
+- ✅ **Servizio**: `get_positions_contribution` legge le istantanee del motore (quantità con la quota, valore,
+  non realizzato, costo di fine se completo); polvere come oggi (nessun valore proprio); **un confine tenuto con il
+  non realizzato ignoto rende ignoto il delta** (prima: il lato noto meno zero); ripiego: un risultato condiviso preso
+  per un altro inizio → nuovo giro con `period_start`; `get_report` passa `period_start=date_from` quando chiede i
+  contributi; via `_boundary_cost`, la quota e i movimenti in `position_info` (ordine delle righe invariato); commenti
+  «SELLs and priced outgoing ADJUSTMENTs» (J-24). `_get_price_at_date`/`_convert_to_base` restano per la variazione
+  a 1 giorno delle posizioni di `get_summary`.
+- **⚠️ Fuori pista — golden EUR-only** (`fixtures/native_cash_guard/eur_only_golden.json`): rosso atteso su
+  `get_positions_contribution` e `get_report.positions_contribution`. Rivisto riga per riga: ETF@A fine 996,18 → 991,32
+  (= `current_value` della posizione, segno di scambio più recente: prima la tabella e le posizioni divergevano), HOLD@B
+  `null` → 250,25 / delta 0 (al costo, J-17), STOCK A→B (P22): A +13,488 sul tratto, STOCK@B delta resta `null` (costo
+  incompleto: con la regola dell'ignoto). Rigenerato con `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1` (sha finale
+  `a306e8d6…`); la variante «solo R17/W8» (`files/a/golden.r17.json`, sha `2be086ba…`) differisce da HEAD per sole
+  aggiunte (i campi nuovi) e va nel commit di R17/W8.
+- ✅ **Rossi A** (23:27, `files/a.sh red`: file di A sostituiti dalle versioni pre-A, R17/W8 tenuto; ripristino con
+  hash): **38 rossi, 41 verdi** come previsto (snapshot 10 + cache 2; contributi: segno di scambio 4, USD 2, split 2,
+  al costo 2, P22 4, invariante 12).
+- ✅ **Verdi A** (00:04-00:10, dopo la regola dell'ignoto e il golden): test nuovi 79; `roi-fifo-utils` 988;
+  `financial-math` 717; `api portfolio` 51.
+- **Coordinatore (00:28)**: T-R1, metà rischio chiusa da CP-9a di J (dev `c4eeaef14`: `risk/data_quality.py` legge
+  `load_configured_fx_pair_sets` dalla casa, il rischio non importa più `PortfolioService`). Resta: `portfolio_service`
+  importa il privato `_compute_tx_fingerprint` del motore → da fare in MF (file mio) quando ci ripasso. Per MF-D: R6 è
+  ora `risk/results.py::portfolio_twrr_returns` (`drawdown_context.py` invariato); aggiornare la base prima di toccare
+  `risk/`.
+- ✅ **AI Export, versioni (J, 00:2x)**: regola scritta (`ai-development.instructions.md` §Versions) «mai per valori nuovi
+  attraverso un builder invariato». Tecnici: nessun aumento (stessa regola d'universo e formula dei pesi).
+  Performance (`portfolio/broker/asset.performance`): nessun aumento — i campi sono già `Optional` nel contratto e
+  nessuna stringa di semantica descrive i confini come «solo mercato» o i trasferimenti (verificato:
+  `portfolio_financial.py`, `broker_financial.py`, `asset_core.py`, `payloads/portfolio_broker.py`,
+  `asset_payloads.py`). Precedenti: CP-7a/CP-7b. `ai-export` verde: 341 + 647 (00:15-00:27).
+- ✅ **Descrizioni dello schema** (API, non AI Export): `AssetPeriodContribution.period_unrealized_delta`, `start_value`,
+  `end_value` dicono la valutazione del portafoglio, P22 e l'ignoto; `api sync` exit 0.
+- ✅ **T-R1, resto** (coordinatore 00:28): `engine._compute_tx_fingerprint` → `compute_tx_fingerprint` pubblico, importato
+  da `portfolio_service.get_report`; docstring d'un test aggiornato
+  (`test_orphan_transfer_after_broker_delete.py:728`).
+- ✅ **Doc A** (docs-writer `mf-a-docs`): `period-pnl.en.md:150-160`, `portfolio-engine/index.en.md` §7 (termine
+  T(a,b), regola dell'ignoto, identità della somma, esempio A +200 / B +300), `user/dashboard/positions.en.md:96-97`,
+  `developer/backend/financial_math.md` (albero, chiave della cache, `period_start`, `internal_asset_transfers`, giorni
+  ricalcolati); **contraddizione corretta** in `developer/backend/transactions/wac.md:413-416` (descriveva
+  `_boundary_cost`). Lasciati: §5 definisce il non realizzato come NAV − Book (transito incluso) mentre `period.py` usa
+  MV − costo (§7 ora lo dice); l'annualizzato dei chiusi non è documentato in `period-pnl`/`net-annualized-return` →
+  backlog. Debito di traduzione: `period-pnl`, `index` §7, `positions` (it/fr/es).
+- **Light freeze CP-10b** (coordinatore): `signal_service.py`, `signal_runtime.py`, `signal_annotations.py`,
+  `signal_plugins/base.py`, `risk/signal_helpers.py` vietati; `technical_shared.py` e i `rolling_*` solo import di J;
+  nessuno nel mio delta.
+- **Due commit**: `files/p_split/P.patch` (sha `18c0ecc8…`, 12 file, +1463/−9) = R17/W8 da solo su HEAD (versioni
+  «solo R17» di `portfolio_service.py`, schema, golden, mappe; i 3 file di test nuovi). Verificato: si applica a HEAD
+  in un indice temporaneo; l'albero «HEAD + P» estratto in `/tmp` importa, passa ruff e i 49 test puri.
+  **⚠️ Fuori pista**: `pipenv run` dalla cartella temporanea ha creato un `Pipfile` lì (cancellato con la cartella);
+  nessuna installazione, venv condiviso intatto (nessun `dist-info` né file nuovo negli ultimi 15 minuti). Il resto
+  del diff è A.
+- ✅ **Finali sull'albero combinato** (00:39-00:41): `roi-fifo-utils` 988, `financial-math` 717, `api portfolio` 51;
+  ruff/black puliti (15 `.py`; lo script passava il golden `.json` ai linter: corretto); `mkdocs build` strict 0;
+  `git diff --check` pulito; porta libera.
+- **Coordinatore (00:49)**: CP-7b di J entrato (`48da9bf3c`): MF-E sbloccato (aggiornamento di base quando parto).
+  Y già risposto alle 22:00-22:11. **MF-D** dopo CP-9a (già in dev `c4eeaef14`: `risk/service.py` diviso in
+  `risk/{scope,replay,results,data_quality}.py`; R6 in `risk/results.py::portfolio_twrr_returns`): da concordare
+  direttamente con J quando parto. Ordine mio: commit P e A → aggiornamento di base → MF-E (sintesi del lotto, segno
+  dei corti, T-B8, V11) → J1/J2 → D-rest → campo dei periodi fissi con X.
+
+#### P e A committati; aggiornamento di base 4 (17/10, 00:49)
+- Coordinatore: `f191dfbf9` (P, da `P.patch`), `9a1d57bfa` (A + giornale); merge di dev `b58108665` (CP-7b, CP-9a,
+  decisione 47) pulito → HEAD **`f2bd62ba1`** verificata. CP-10b non ancora dentro.
+- **Validazione combinata** chiesta (decisione 47 — gambe di trasferimento orfane — accanto a P22): `financial-math`,
+  `roi-fifo-utils` (contiene l'orfano e i test di A), `api portfolio`, `ai-export` a pezzi (`files/a.sh combined`).
+- **W-B56 → MF-W56** (W e coordinatore, 00:49): d'accordo; arrotondo alla facciata `compute_wac_iterative` con
+  `round_computed_value(…, Transaction, "cost_basis_override")` (D6), non nella casa; copre anteprima, «congela» e costo
+  automatico. Dopo MF-E, rossi prima. Riga nel backlog. Anche **MF-A2** (doc dei chiusi e §5) nel backlog.
+- **W su MF-W56** (01:0x): il rosso «il costo automatico lo scrive arrotondato» non può rileggere dal DB (`RealDecimal`
+  rilegge già a 12 decimali / 15 cifre: 100/3 → `33.333333333333` comunque; W lo fissa in
+  `test_transaction_decimal_places.py`, `AUTO_COST_OF_HUNDRED_OVER_THREE`, che resta verde): leggere il valore prima
+  che sia salvato — `wac_results` del batch, `POST /portfolio/wac`, o l'attributo ORM prima della scadenza. W-B58 (W,
+  in corso) aggiunge un terzo limite a `decimal_limit_issue` e cambia il docstring di `round_computed_value`, non il
+  comportamento: nessuna sovrapposizione.
+- ✅ **Validazione combinata su `f2bd62ba1`** (00:51-01:06, `files/a.sh combined`): `financial-math` 774,
+  `roi-fifo-utils` 995 (con l'orfano della decisione 47 e i test di A), `api portfolio` 51, `ai-export` 341 + 647
+  (senza `structural_invariants`). Nessun rosso: decisione 47 e P22 convivono.
+
+#### P e A entrati; MF-E (17/10, dalle 01:10) — HEAD `5c9ad06d7` (ff del coordinatore)
+- Coordinatore: P + A in dev `536501541`, riga 🐛 `151488582`; piano committato `5c9ad06d7`; HEAD ff verificata. La
+  riga MF-W56 del backlog va col prossimo checkpoint.
+
+##### MF-E — analisi (su `5c9ad06d7`, CP-7b dentro)
+- **Sintesi del lotto** (`lots_analysis_service._build_lot_summaries` ~:713-852): valore aperto, valore totale e P&L per
+  direzione, rendimento relativo (`latest / reference − 1`), P&L di mercato, totale, netto, rendimenti, annualizzato.
+  Le stesse regole stanno già in `lots/histories.py` (`_value_snapshot_on_date`, `_lot_snapshot_on_date`,
+  `_lot_returns`): la convenzione del rendimento per direzione **coincide già** (corto: `costo + valore totale`,
+  cioè P&L + proventi sul costo) — nessun divario da curare lì.
+- **Costo residuo** scritto tre volte: sintesi (`opening_value * open / original`), storie (`open * (cost /
+  original)`), AI Export `payloads/portfolio_broker.py::lot_residual_cost_basis` (`cost * |open| / |original|`).
+- **T-B8** (`payloads/portfolio_broker.py::summarize_fifo_asset_rows`): `open_value` e `unrealized_pnl` sommano i lotti
+  aperti dove ciascuno è noto; i conteggi della copertura contano quelli dove sono noti entrambi → sommare entrambi su
+  `valued_open_rows`. `portfolio/broker.fifo_summary` sono già v2 nella 1.3: da confermare con J che basta.
+- **V11**: `opening_value` sugli eventi BUY/ADJUSTMENT_IN = il costo d'origine del lotto convertito alla data
+  d'apertura (`original_cost` = quantità × prezzo unitario del lotto), nella valuta di `unit_price`.
+- **⚠️ Corti nella storia di performance (E2) — domanda del developer**: `build_performance_history` somma il valore
+  aperto d'un lotto corto come quello d'un lungo; e i flussi non contano né la vendita d'apertura del corto (+) né i
+  riacquisti (−). Correggere il segno da solo non basta: con un NAV negativo il TWRR (`(V1 − V0)/V0`) dà il segno
+  sbagliato (una passività che cresce sembra un guadagno) e il ROI semplice non ha capitale investito. Scelte:
+  **(a)** la storia di performance d'un asset conta solo i lotti lunghi (documentato; il P&L d'un corto resta nella
+  sintesi del lotto, rendimento sul ricavo) — **raccomandata**; **(b)** corti col segno giusto e flussi completi, con
+  rendimenti su |esposizione| (una convenzione da definire); **(c)** com'è oggi. Notte: scritta qui e mandata al
+  coordinatore; E2 attende, E1 procede.
+- **E1 — disegno**: `financial_math/lots/summary.py` nuovo con le cifre della sintesi (funzione pura, i campi di oggi,
+  stessa composizione P&L di mercato / realizzato / proventi / costi), `lot_value(direction, …)` comune a sintesi e
+  storie, `residual_cost(...)` comune a sintesi, storie e AI Export, `relative_return` → `returns.price_return`; il
+  servizio resta mappatura. T-B8 e V11 come sopra. **Numeri**: nessuno nella sintesi e nelle storie (parità); T-B8 cambia
+  le due somme dell'AI Export solo con un lotto di valore noto e P&L ignoto; V11 campo nuovo.
+- **J (01:2x)**: `portfolio/broker.fifo_summary` erano già **v2 nella 1.2.1** rilasciata (B3b) → T-B8 è un cambio di
+  builder → **v3** (+1 sull'ultima release), segnaposto del catalogo e `COMPACT_COMPONENT_VERSIONS` `[1, 2, 3]` nello
+  stesso cambio; `lot_residual_cost_basis` nella casa a uscita identica: nessun aumento (e `fifo_lots` resta v2 se le
+  righe non cambiano). Coordinatore (01:3x): via alle due voci della mappa e ai segnaposto v3; casi di ripiego del test
+  v3 → v4 come J-17; **sonda AI Export di fumo** al checkpoint (`ai-export-probe-tuning`) coi test dei due componenti.
+
+##### MF-E1 — codice (17/10 notte)
+- ✅ `financial_math/lots/summary.py` nuovo: `residual_cost`, `lot_value`, `LotSummaryFigures`, `lot_summary_figures`
+  (la composizione della sintesi di oggi, riga per riga: valore aperto a mercato o al costo residuo in modo stimato,
+  totale/P&L per direzione — un lungo senza costo tiene il valore e perde il P&L —, P&L di mercato, totale, netto,
+  rendimenti sul costo, annualizzato; `relative_return` → `price_return`). Prende proventi, riacquisti e realizzato già
+  noti (niente import di `histories`: nessun ciclo).
+- ✅ `lots_analysis_service._build_lot_summaries`: conversioni, data di chiusura e mappatura; le cifre dalla casa; via
+  gli import inutili. `lots/histories.py`: `_value_snapshot_on_date` e `_lot_snapshot_on_date` usano `lot_value` e
+  `residual_cost` (al costo: `costo × aperto / originale` invece di `aperto × (costo / originale)`: al più l'ultima
+  delle 28 cifre).
+- ✅ AI Export: `payloads/portfolio_broker.py::lot_residual_cost_basis` delega a `residual_cost`; **T-B8**
+  (`summarize_fifo_asset_rows`: `open_value` e `unrealized_pnl` su `valued_open_rows`, docstring);
+  `portfolio/broker.fifo_summary` **v3** (definizioni e segnaposto del catalogo); `COMPACT_COMPONENT_VERSIONS`
+  `[1, 2, 3]` per i due (`snapshotDataRenderer.ts`); test del renderer al test-author.
+- ✅ **V11**: `LotTimelineEventSchema.opening_value` (BUY/ADJUSTMENT_IN = costo d'origine convertito alla data
+  d'apertura, la `original_cost` della sintesi, nella valuta di `unit_price`); `api sync`.
+- ✅ Mappe: docstring del pacchetto `lots`, le due istruzioni, albero di `financial_math.md`. Ruff/black puliti.
+- ✅ **Test E1** (test-author `mf-e1-tests`): `test_financial_math/test_lots_summary_house.py` (50: `residual_cost` ×
+  tre vie — formula di HEAD scritta, delega viva, regole —, `lot_value` lungo/corto); T-B8 in
+  `test_ai_export_components_portfolio_broker_financial.py` (tre lotti aperti, e lo specchio «P&L noto, valore
+  ignoto»; **aggiornato** `test_summary_takes_its_currency_…[market-value-only]`, che fissava il vecchio `open_value`;
+  `TestFifoComponentVersion` ora `fifo_summary` = 3, `fifo_lots` = 2); catalogo
+  (`test_fifo_summary_components_are_version_3_on_both_sides_of_the_catalog`); V11 in
+  `test_financial/test_lots_analysis_service.py` (EUR, USD, ADJUSTMENT-in prezzato nel 2048; mancanza di cambio →
+  None); `snapshotDataRenderer.test.ts` (v3 compatte e identiche alla v1; ripiego YAML ora a v4).
+- ✅ **Rossi E1** (01:19, `files/e1.sh red`; toppa `4b0ef393…`, `summary.py` `0cea343d…`, ripristino identico):
+  `financial-math test_lots_summary_house` **50/50**; `ai-export` mirato **7** (T-B8 ×2, il test aggiornato, versioni
+  ×4); `roi-fifo-utils opening_event` **2/2**; `front-ai-export unit` **4** (v3 ripiegavano in YAML).
+- **Sonda AI Export di fumo**: **bloccata nel mio worktree** — nessun DB di produzione
+  (`backend/data/prod/sqlite/app.db`, predefinito di `--source-db`) e nessuna credenziale
+  (`LIBREFOLIO_AI_EXPORT_PROBE_PASSWORD*`); il checkout principale non lo leggo. Da chiedere al coordinatore: la
+  esegue lui (o J) su dev dopo l'ingresso, oppure mi indica un `--source-db` e le credenziali.
+- ✅ **Verdi E1** (01:21-01:39, `files/e1.sh green` e `ai`): `financial-math` 825, `roi-fifo-utils` 997,
+  `lots-analysis-pure` 177, `front-ai-export unit` 568, `api portfolio` 51, `ai-export` 345 + 647 (senza
+  `structural_invariants`). Statici: ruff/black (13 `.py`), prettier dei due file TS, `mkdocs build` strict 0 (dopo la
+  doc), `git diff --check` pulito, porta libera.
+- ✅ **Doc E1** (docs-writer `mf-e1-docs`): `ai_export_composition.md:436-439` (le quattro somme di mercato sullo stesso
+  insieme, v3), `lots_analysis_service.md` (riga `summary.py` nella tabella, `opening_value` degli eventi d'apertura,
+  percorso di valutazione; corretti `:351`, `:411`, `:414` che citavano variabili sparite), `fifo_lot_engine.md:406`.
+  Solo pagine dev (nessun debito di traduzione).
+- **Due commit**: `files/e1_split/E1a.patch` (sha `d7c950c6…`, 13 file: casa, servizio, storie, delega AI Export
+  dell'`lot_residual_cost_basis` senza T-B8, V11 nello schema e nel servizio, test della casa e di V11, mappe e doc dev
+  dei lotti) — verificata su un indice temporaneo e su un albero estratto in `/tmp` (import, 50 test puri; con
+  `PIPENV_PIPFILE` del mio worktree, nessun `Pipfile` vagante). Il resto è **E1b** (T-B8 + v3: `portfolio_broker.py`
+  restante, `broker_financial.py`, `portfolio_financial.py`, `catalog.py`, `snapshotDataRenderer.ts` e il suo test, i due
+  test dell'AI Export, `ai_export_composition.md`) + giornale.

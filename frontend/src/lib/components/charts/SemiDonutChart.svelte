@@ -29,8 +29,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {themed} from '$lib/theme/themePair';
-    import {CHART_TOOLTIP_COLORS, SEMI_DONUT_COLORS} from '$lib/theme/chartTheme';
+    import {chartNeutrals} from '$lib/theme/chartTheme';
     import {CATEGORY_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
     import {shadePoles} from '$lib/theme/chartShades';
     import {chartRoles} from '$lib/theme/roleColors';
@@ -209,8 +208,9 @@
         const currentInstance = chartInstance;
 
         const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, container);
         const avatarSize = 44;
-        const borderColor = themed(SEMI_DONUT_COLORS.avatarBorder, isDark);
+        const borderColor = neutrals.semiDonut.avatarBorder;
         const borderWidth = 2;
         // GR5.2: the owners take the first eight asset types in order, then a shade of them (GR4) past the eighth. The
         // roles are read once, from the chart's own element.
@@ -250,11 +250,11 @@
                 pct: {
                     fontSize: 11,
                     fontWeight: 'bold',
-                    color: themed(SEMI_DONUT_COLORS.label, isDark),
+                    color: neutrals.semiDonut.label,
                     lineHeight: 18,
                     padding: [2, 0, 0, 0],
                     align: 'center',
-                    textShadowColor: themed(SEMI_DONUT_COLORS.labelShadow, isDark),
+                    textShadowColor: neutrals.semiDonut.labelShadow,
                     textShadowBlur: 3,
                 },
             };
@@ -280,7 +280,7 @@
                     height: avatarSize,
                     align: 'center',
                     lineHeight: avatarSize,
-                    borderColor: themed(SEMI_DONUT_COLORS.avatarBorder, isDark),
+                    borderColor: neutrals.semiDonut.avatarBorder,
                     borderWidth: 2,
                 };
                 formatter = `{avatar|${initial}}\n{pct|${formatPercent(slice.percentage, {digits: 1, signed: false})}}`;
@@ -300,7 +300,7 @@
             chartData.push({
                 value: avail,
                 name: label,
-                itemStyle: {color: themed(SEMI_DONUT_COLORS.available, isDark)},
+                itemStyle: {color: neutrals.semiDonut.available},
                 label: {show: false},
             });
         }
@@ -310,7 +310,7 @@
             chartData.push({
                 value: 100,
                 name: `${label} (100%)`,
-                itemStyle: {color: themed(SEMI_DONUT_COLORS.available, isDark)},
+                itemStyle: {color: neutrals.semiDonut.available},
                 label: {show: false},
             });
         }
@@ -323,9 +323,9 @@
                     return `${escapeHtml(String(item.name ?? ''))}: ${formatPercent(Number(item.value), {digits: 1, signed: false})}`;
                 },
                 position: tooltipPositionAboveFinger,
-                backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
-                borderColor: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
-                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark)},
+                backgroundColor: neutrals.tooltip.box.background,
+                borderColor: neutrals.tooltip.box.border,
+                textStyle: {color: neutrals.tooltip.box.text},
             },
             series: [
                 {
@@ -337,7 +337,7 @@
                     padAngle: 2,
                     itemStyle: {
                         borderRadius: 6,
-                        borderColor: themed(SEMI_DONUT_COLORS.sliceGap, isDark),
+                        borderColor: neutrals.semiDonut.sliceGap,
                         borderWidth: 2,
                     },
                     label: {
@@ -350,7 +350,7 @@
                         show: true,
                         length: 10,
                         length2: 8,
-                        lineStyle: {color: themed(SEMI_DONUT_COLORS.labelLine, isDark)},
+                        lineStyle: {color: neutrals.semiDonut.labelLine},
                     },
                     emphasis: {
                         label: {show: true},

@@ -209,7 +209,11 @@ and any of them at most 15 significant digits.
   a bond price divided by 100. Round it to its column where it is computed, with the one
   helper `round_computed_value(value, model, column_name)` (`backend/app/db/precision.py`):
   `ROUND_HALF_EVEN` to the scale of the model's column, then to 15 significant digits on a
-  `RealDecimal` column (decision D6). `broker_intesa/plugin.py` calls it on the patrimonio
+  `RealDecimal` column (decision D6). On such a column the rounding always brings the
+  result within the decimal places and the significant digits, but not within the third
+  limit, the digits before the decimal point (15 for a quantity, decision N63; 12 for a
+  per-unit cost), which no rounding brings back: the confirmation refuses a value past
+  them with `integerDigitsExceeded`. `broker_intesa/plugin.py` calls it on the patrimonio
   seed's per-unit cost, `broker_credit_agricole/plugin.py` on the per-unit cost of a bond
   received by succession, its price divided by 100.
 
@@ -639,7 +643,7 @@ transaction breaks these rules, so flip source signs as needed:
 
     The user reads the file's language only if the notice code has **no**
     `importWizard.brimNotice.<code>` key. The wizard resolves a notice with
-    `resolveBrimNoticeMessage` (`frontend/src/lib/utils/transactions/resolveBrimNotice.ts`):
+    `resolveBrimNoticeMessage` (`frontend/src/lib/features/transactions/resolveBrimNotice.ts`):
     a key, when it exists, replaces the plugin's message with the text in the UI language;
     without one, the plugin's `message` is shown as written. The `degiro_*` codes have no
     key on purpose, and `test_no_i18n_key_overrides_the_language_of_the_file`
@@ -815,7 +819,7 @@ and a **To** line in the bulk editor's markup (`renderFromToHtml` mirrors `rende
 row selects both legs (`setPairSelected`: its tick shows the pair as selected only when both
 legs are, and select all, deselect all and select visible move both legs too), only complete
 pairs reach the bulk editor, and each pair reaches it with a fresh `link_uuid`, the same for
-both legs (`frontend/src/lib/utils/transactions/importPairs.ts`, and `pairCellHtml.ts` beside
+both legs (`frontend/src/lib/features/transactions/import/importPairs.ts`, and `pairCellHtml.ts` beside
 it for the cell): the plugin's ids repeat whenever the same statement is parsed again, so two
 uploads of one statement would share them. The counters and the `Import {n} transactions`
 button count transactions, not rows, so a pair counts as two (`step4SelectedCount` and

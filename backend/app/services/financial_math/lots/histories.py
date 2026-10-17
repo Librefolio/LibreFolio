@@ -20,6 +20,7 @@ from backend.app.services.financial_math.fifo.models import FifoEngineResult, Fi
 from backend.app.services.financial_math.lots.conversions import ConvertedClosure, FxRateResolver, convert_closure
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics
 from backend.app.services.financial_math.lots.prices import opening_reference_price
+from backend.app.services.financial_math.lots.summary import lot_value, residual_cost
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series
 from backend.app.services.financial_math.valuation import compute_holding_value
@@ -346,14 +347,12 @@ def _value_snapshot_on_date(
     quote_base_quantity: int,
 ) -> tuple[Decimal, Decimal, Decimal, Decimal]:
     open_value = _open_value_on_date(fragments, market_price, current_date, quote_base_quantity)
-    proceeds = _prefix_value_on_date(proceeds_by_day, current_date)
     if lot.direction == "LONG":
-        total_value = open_value + proceeds
-        pnl = total_value - converted_original_cost
+        proceeds = _prefix_value_on_date(proceeds_by_day, current_date)
+        total_value, pnl = lot_value(lot.direction, open_value, proceeds, Decimal("0"), converted_original_cost)
     else:
         proceeds = converted_short_proceeds
-        total_value = proceeds - _prefix_value_on_date(buybacks_by_day, current_date) - open_value
-        pnl = total_value
+        total_value, pnl = lot_value(lot.direction, open_value, proceeds, _prefix_value_on_date(buybacks_by_day, current_date), converted_original_cost)
     return open_value, proceeds, total_value, pnl
 
 
@@ -466,15 +465,15 @@ def _lot_snapshot_on_date(
         open_value = Decimal("0")
         if lot.direction == "LONG":
             proceeds = _prefix_value_on_date(basis.proceeds_by_day, current_date)
-            total_value = open_value + proceeds
-            return open_value, proceeds, total_value, total_value - basis.original_cost
-        total_value = basis.short_proceeds - _prefix_value_on_date(basis.buybacks_by_day, current_date) - open_value
-        return open_value, basis.short_proceeds, total_value, total_value
+            total_value, pnl = lot_value(lot.direction, open_value, proceeds, Decimal("0"), basis.original_cost)
+            return open_value, proceeds, total_value, pnl
+        total_value, pnl = lot_value(lot.direction, open_value, basis.short_proceeds, _prefix_value_on_date(basis.buybacks_by_day, current_date), basis.original_cost)
+        return open_value, basis.short_proceeds, total_value, pnl
     if at_cost and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
-        open_value = open_quantity * (basis.original_cost / lot.original_quantity)
+        open_value = residual_cost(basis.original_cost, open_quantity, lot.original_quantity)
         proceeds = _prefix_value_on_date(basis.proceeds_by_day, current_date)
-        total_value = open_value + proceeds
-        return open_value, proceeds, total_value, total_value - basis.original_cost
+        total_value, pnl = lot_value(lot.direction, open_value, proceeds, Decimal("0"), basis.original_cost)
+        return open_value, proceeds, total_value, pnl
     return None
 
 

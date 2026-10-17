@@ -19,6 +19,7 @@ from backend.app.db.models import (
     AssetProviderAssignment,
     PriceHistory,
 )
+from backend.app.db.precision import storable_price
 from backend.app.schemas import (
     FAPricePoint,
     SignalCadence,
@@ -45,7 +46,7 @@ from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.series_preparation import mark_market_closed_carries, prepare_asset_series_set
-from backend.app.services.signal_service import (
+from backend.app.services.signals.service import (
     SignalPreparedSeriesBundle,
     SignalService,
 )
@@ -858,7 +859,12 @@ class PriceQueryOperations:
             )
 
             for item in items_to_persist:
-                new_close = Decimal(str(item.value))
+                # Truncated like the history (W-B58): 12 decimal places, 15 significant digits; a quote no price column
+                # can keep (not finite, past 12 digits before the point, 0 once truncated) is not saved.
+                new_close = storable_price(Decimal(str(item.value)))
+                if new_close is None:
+                    logger.warning("Current-price persist: quote skipped, no price column can keep it", asset_id=item.asset_id, value=str(item.value), source=item.source)
+                    continue
                 existing = existing_by_asset.get(item.asset_id)
                 if existing is None:
                     # F.2 bootstrap — open=high=low=close=new, volume=None

@@ -44,8 +44,7 @@
     import {ChartLine, ChartCandlestick, Coins} from 'lucide-svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {themed} from '$lib/theme/themePair';
-    import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS, GROWTH_CHART_COLORS} from '$lib/theme/chartTheme';
+    import {chartNeutrals} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
     import {
         alignFlowToDates,
@@ -1129,8 +1128,9 @@
 
     function applyFullOption(isDark: boolean, series: echarts.SeriesOption[], zoomWindow: {start: number; end: number}) {
         if (!chartInstance) return;
-        const {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor} = buildTooltipTheme(isDark);
-        const gridColor = themed(CHART_NEUTRALS.dashboard.gridLine, isDark);
+        const neutrals = chartNeutrals(isDark, chartContainer);
+        const {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor} = buildTooltipTheme(isDark, chartContainer);
+        const gridColor = neutrals.dashboard.gridLine;
         /**
          * Bucket separators need their own colour. `gridColor` is tuned for horizontal
          * value lines, which run the full width and read even when very faint; a vertical
@@ -1138,7 +1138,7 @@
          * tint it disappeared — in dark mode entirely (#1e293b is barely off the slate-800
          * background it is drawn on).
          */
-        const bucketLineColor = themed(GROWTH_CHART_COLORS.bucketSeparator, isDark);
+        const bucketLineColor = neutrals.growth.bucketSeparator;
         // The ladder (Candles and Income) draws on a category axis: one slot per bucket,
         // so every bar and body gets the same width from the first render, whatever the
         // zoom. Its labels and separators come from the ladder plan, not from the shared
@@ -1232,11 +1232,11 @@
                 // ancestor.
                 confine: true,
                 position: tooltipPositionSide,
-                axisPointer: {type: 'line'},
+                axisPointer: {type: 'line', lineStyle: {color: neutrals.axisPointer.line}},
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,
-                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
+                textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
                 formatter: (params: any) => buildGrowthTooltip(params, {...tooltipView(), isDark, theme: {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor}}),
             },
             legend: {

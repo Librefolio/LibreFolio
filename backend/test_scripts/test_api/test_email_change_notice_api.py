@@ -10,9 +10,10 @@ case, every other character as written, nothing stripped. This module pins the h
    new address>}, message: "Profile updated successfully"}`` with a new ``session`` cookie that signs in as the new
    address; after it, exactly one email, to the old address only (envelope and ``To``, no ``Cc``/``Bcc``), exactly what
    ``build_email_changed`` writes in the account's language — its own, else the instance's — with «LibreFolio» as the
-   instance (no ``LIBREFOLIO_PUBLIC_URL``: the notice carries no link) and the new address masked (``***@<its domain>``),
-   never written whole; one unit of the hourly budget; the work's ``info`` line «Email change notice sent to the previous
-   address» with the account's id and the language.
+   instance (no ``LIBREFOLIO_PUBLIC_URL``: the notice carries no link), greeting nobody by name and carrying no part of
+   the new address — neither its local part nor its domain, in its text, its HTML or a header (decision N62) —; one
+   unit of the hourly budget; the work's ``info`` line «Email change notice sent to the previous address» with the
+   account's id and the language.
 2. The work starts after the answer is complete, never before — the user does not wait on an SMTP server —, queued once
    with the account's id, the address it had, the address it has now and the engine of the request's own session, never
    the process's default database.
@@ -84,7 +85,7 @@ from backend.app.db.session import get_session_generator
 from backend.app.services.accounts import auth_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.email import delivery, flows, smtp
-from backend.app.services.email.messages import build_email_changed, masked_address
+from backend.app.services.email.messages import build_email_changed
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.fixtures.email.fake_smtp import FakeSmtpServer
 from backend.test_scripts.test_utils import print_section, print_success
@@ -107,9 +108,11 @@ VERA = "zq_vera"
 OTHER = "zq_other"
 OLD = "zq-vera@example.com"
 OLD_LOCAL_PART = "zq-vera"
-#: On another domain than the old address: the masked form the notice shows, ``***@moved.example.com``, is this one's.
+#: On another domain than the old address, so that this domain found in the notice could only be the new address's: the
+#: notice shows no part of it (decision N62).
 NEW = "zq-north@moved.example.com"
 NEW_LOCAL_PART = "zq-north"
+NEW_DOMAIN = "moved.example.com"
 #: One address in two spellings, apart in the case of A–Z alone: the same address for A and for E, who compare two
 #: addresses with one rule, ``user_service.same_email`` (decision P18).
 CASE_OLD = "Zq-Vera@example.com"
@@ -382,7 +385,7 @@ def _naming(events: list[dict[str, Any]], *needles: str) -> list[dict[str, Any]]
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("own", "language"), [pytest.param(None, "en", id="the-instances-language"), pytest.param("it", "it", id="its-own-language")])
 async def test_an_email_change_answers_as_before_then_emails_the_old_address(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, own: str | None, language: str) -> None:
-    """ECN-001 — contract 1: the right current password, email ready. The answer: 200 with the new address and A's message, a new session cookie, and ``GET /auth/me`` with it says the new address. Then one email, to the old address only, exactly ``build_email_changed`` in the account's language with «LibreFolio» as the instance; the new address masked, never whole, in its text, its HTML or a header; one budget unit; the notice's ``info`` line with the account's id and the language. E's events name neither address."""
+    """ECN-001 — contract 1: the right current password, email ready. The answer: 200 with the new address and A's message, a new session cookie, and ``GET /auth/me`` with it says the new address. Then one email, to the old address only, exactly ``build_email_changed`` in the account's language with «LibreFolio» as the instance; no part of the new address — neither its local part nor its domain — and no username in its text, its HTML or a header (decision N62); one budget unit; the notice's ``info`` line with the account's id and the language. E's events name neither address."""
     print_section(f"ECN-001: an email change, the notice in {language}")
     vera = await _add_user(private.engine, VERA, OLD, language=own)
 
@@ -403,16 +406,16 @@ async def test_an_email_change_answers_as_before_then_emails_the_old_address(pri
     received = fake.messages[0]
     assert _mailboxes(received.message["To"]) == [("", OLD)]
     assert (received.message["Cc"], received.message["Bcc"]) == (None, None)
-    _assert_is(received, build_email_changed(language=language, username=VERA, new_address=NEW, instance=flows.INSTANCE_FALLBACK))
-    assert masked_address(NEW) in _text(received), f"the new address shown masked, {masked_address(NEW)}"
     shown = _text(received) + _html(received) + " ".join(str(value) for value in received.message.values())
-    assert NEW_LOCAL_PART not in shown, "the new address is never written whole in the notice"
+    assert [part for part in (NEW, NEW_LOCAL_PART, NEW_DOMAIN) if part.casefold() in shown.casefold()] == [], "the notice carries no part of the new address, neither its local part nor its domain: its new owner chose them (N62)"
+    assert VERA not in shown, "the notice greets nobody by name: the username is its owner's text (N62)"
+    _assert_is(received, build_email_changed(language=language, instance=flows.INSTANCE_FALLBACK))
     assert budget.count() == 1
 
     assert [(event["event"], event["log_level"]) for event in _e_events(events)] == [("Email sent", "info"), ("Email change notice sent to the previous address", "info")]
     assert [(event.get("user_id"), event.get("language")) for event in _notices(events)] == [(vera.id, language)]
     assert _naming(_e_events(events), OLD, OLD_LOCAL_PART, NEW, NEW_LOCAL_PART) == [], "E's events name neither address: the delivery logs the recipient's domain alone"
-    print_success(f"200 and a new cookie; one notice to {OLD} in {language}, {masked_address(NEW)} shown")
+    print_success(f"200 and a new cookie; one notice to {OLD} in {language}, no part of {NEW} shown")
 
 
 @pytest.mark.asyncio
