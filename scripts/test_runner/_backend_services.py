@@ -481,6 +481,26 @@ def services_account_tokens(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Account token service tests", verbose=verbose)
 
 
+def services_login_throttle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the limit on failed sign-ins (F15): per identifier and per address, its switch."""
+    print_section("Services: Login Throttle")
+    print_info("Testing: backend/app/services/accounts/login_throttle.py")
+    print_info("Tests: 10 failures per identifier and 50 per address in 15 minutes, a refusal not counted, a success forgets the identifier, LIBREFOLIO_LOGIN_LIMIT=off")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_login_throttle.py", test_names)
+    return run_command(cmd, "Login throttle service tests", verbose=verbose)
+
+
+def services_accounts_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the accounts' configuration check and its switch: LIBREFOLIO_LOGIN_LIMIT."""
+    print_section("Services: Accounts Configuration Checks")
+    print_info("Testing: backend/app/config/accounts.py (login_limit_enabled), backend/app/services/accounts/checks.py")
+    print_info("Tests: on/off/invalid, the check in CONFIG_CHECKS, the startup audit stopping on an invalid value")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_accounts_checks.py", test_names)
+    return run_command(cmd, "Accounts configuration check tests", verbose=verbose)
+
+
 def services_registration(verbose: bool = False, test_names: list = None) -> bool:
     """Test who may create an account: registration modes, invitations, the user limit, and their variables."""
     print_section("Services: Registration")
@@ -1646,6 +1666,25 @@ Note: No backend server required.
         desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs; the pages of token_path are the API client's LINK_PAGES (A7b)",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The concurrency test races two connections on that private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "login-throttle",
+        services_login_throttle,
+        name="Login Throttle",
+        desc="F15 (A8a): 10 failed sign-ins per identifier (A–Z folded) and 50 per address (IPv6 by /64) in 15 minutes; a refusal is not counted, a success forgets the identifier only, the longer wait wins; LIBREFOLIO_LOGIN_LIMIT=off records and refuses nothing",
+        # PURE: module limiters replaced by fresh ones on an injected clock; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "accounts-checks",
+        services_accounts_checks,
+        name="Accounts Configuration Checks",
+        desc="LIBREFOLIO_LOGIN_LIMIT (A8a): unset/on/off, any other value a ValueError; accounts.login_limit ok/warning/error in CONFIG_CHECKS; the startup audit stops on an invalid value before logging anything",
+        # PURE: environment through monkeypatch, the audit's logger recorded; three fresh interpreters check the import
+        # order, as email-checks does. No DB, no server, no network.
         isolation="pure",
     )
     add_test(

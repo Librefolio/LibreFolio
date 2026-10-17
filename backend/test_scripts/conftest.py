@@ -9,6 +9,11 @@ import pytest
 from backend.app.config import get_data_dir, is_test_mode
 from backend.test_scripts import test_aiosqlite_guard as aiosqlite_guard
 
+# The limit on failed sign-ins (F15) counts per process: the in-process apps of many files share one pytest process,
+# and the suites sign in wrongly on purpose. Off for every test process, as dev.py does for the lane's server; the
+# limit's own tests turn it on with monkeypatch, on limiters of their own. An explicit value still wins.
+os.environ.setdefault("LIBREFOLIO_LOGIN_LIMIT", "off")
+
 # Matches PRAGMA busy_timeout=30000 in backend/app/db/session.py: this fixture
 # competes for the same write lock as the app, so it waits as long as the app.
 _SEED_LOCK_TIMEOUT_S = 30.0

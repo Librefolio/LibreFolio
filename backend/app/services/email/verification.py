@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.settings import SETTINGS_REGISTRY
-from backend.app.services.accounts import token_service, user_service
+from backend.app.services.accounts import login_throttle, token_service, user_service
 from backend.app.services.accounts.auth_service import verify_password_or_dummy
 from backend.app.services.accounts.global_settings_service import get_setting_value
 from backend.app.services.email import delivery
@@ -359,8 +359,10 @@ async def confirm_email(session: AsyncSession, token: str, *, now: datetime | No
 async def resend_verification(session: AsyncSession, *, identifier: str, password: str, address: str | None, now: datetime | None = None) -> str:
     """The login's «resend»: a new verification link by email, for whoever gives the account's password.
 
-    The address limit first, then the password as the login checks it (a dummy hash for an unknown account, the same
-    refusal for both). Then: ``EmailVerificationNotNeededError`` for an active account, ``VerificationAccountDisabledError``
+    The address limit first, then the sign-in's limit on failed passwords (``login_throttle``, F15: the same two counts as
+    ``POST /auth/login``, by the identifier as typed and by the address), then the password as the login checks it (a
+    dummy hash for an unknown account, the same refusal for both): a wrong one counts, the right one forgets the
+    identifier's failures. Then: ``EmailVerificationNotNeededError`` for an active account, ``VerificationAccountDisabledError``
     for one that does not wait; the configuration, the per-account limits (``EmailRateLimitedError``), and a place
     again when the old link expired (``VerificationUserLimitError``). Returns the email's language; raises what
     ``send_email`` raises.
@@ -371,12 +373,19 @@ async def resend_verification(session: AsyncSession, *, identifier: str, passwor
         decision = RESEND_BY_ADDRESS.hit(key)
         if not decision.allowed:
             raise EmailRateLimitedError(decision.retry_after)
+    # The sign-in's limit (F15): the password is guessed no faster here than at the sign-in, refused before it is checked
+    refused = login_throttle.refusal(identifier, address)
+    if refused is not None:
+        raise EmailRateLimitedError(refused.retry_after)
     user = await user_service.get_user_by_username_or_email(session, identifier)
     password_ok = await asyncio.to_thread(verify_password_or_dummy, password, user.hashed_password if user else None)
     if not password_ok or user is None:
+        # An unknown identifier counts as a wrong password does: the count tells nothing of who has an account.
+        login_throttle.record_failure(identifier, address)
         # Logged as the login logs its failures, without the identifier: monitoring that watches them sees these too.
         logger.warning("Verification resend refused: wrong credentials")
         raise VerificationCredentialsError()
+    login_throttle.record_success(identifier)
     if user.is_active:
         raise EmailVerificationNotNeededError()
     if not await awaiting_verification(session, user):

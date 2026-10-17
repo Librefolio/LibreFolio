@@ -16,9 +16,10 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from backend.app.config import SecretFileError, get_settings, secrets_set_twice
-from backend.app.config.accounts import admin_bootstrap_config
+from backend.app.config.accounts import admin_bootstrap_config, login_limit_enabled
 from backend.app.config.platform import configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date
 from backend.app.logging_config import get_logger
+from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
 from backend.app.services.platform.instance_key import InstanceKeyError, instance_key_status
 
@@ -141,6 +142,8 @@ CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (
     check_instance_key,
     check_session_cookie,
     check_log_level,
+    # Workstream A: the limit on failed sign-ins (services/accounts/checks.py)
+    *ACCOUNTS_CONFIG_CHECKS,
     # Workstream E: the SMTP configuration and its encryption (services/email/checks.py)
     *EMAIL_CONFIG_CHECKS,
 )
@@ -171,6 +174,8 @@ def log_configuration_audit() -> None:
         instance_deletion_date()
     # F02 (workstream A): an unusable LIBREFOLIO_ADMIN_* variable raises AdminBootstrapConfigError, naming it
     admin_bootstrap_config()
+    # F15 (workstream A): a LIBREFOLIO_LOGIN_LIMIT other than on or off raises ValueError, naming it
+    login_limit_enabled()
     status = instance_key_status()
     if status.source == "configured" and status.problem is not None:
         raise InstanceKeyError(status.problem)

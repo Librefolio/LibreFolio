@@ -93,6 +93,13 @@
       "openRegistrationLocked": "L'inscription est ouverte, fixée par LIBREFOLIO_REGISTRATION, et cette instance est joignable depuis l'extérieur de votre réseau local : n'importe qui la trouvant peut créer un compte. Modifiez la variable pour la fermer.",
       "openRegistrationAction": "Changer qui peut s'inscrire"
     },
-    "instanceBlocked": "Cette instance est bloquée par son hébergeur : réessayez une fois qu'elle sera débloquée."
+    "instanceBlocked": "Cette instance est bloquée par son hébergeur : réessayez une fois qu'elle sera débloquée.",
+    "checks": {
+      "loginLimit": {
+        "ok": "Les connexions échouées sont limitées : après 10 en 15 minutes pour un nom d'utilisateur ou un e-mail, ou 50 depuis une adresse, la connexion attend.",
+        "off": "La limite des connexions échouées est désactivée (LIBREFOLIO_LOGIN_LIMIT=off) : les mots de passe peuvent être essayés sans pause. Réactivez-la, sauf s'il s'agit d'une instance de test.",
+        "invalid": "LIBREFOLIO_LOGIN_LIMIT vaut « {value} », ni on ni off : le serveur ne démarre pas avec cette valeur."
+      }
+    }
   }
 }

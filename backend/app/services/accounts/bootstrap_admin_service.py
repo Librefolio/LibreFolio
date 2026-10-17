@@ -297,7 +297,7 @@ async def complete_admin_setup(session: AsyncSession, token: str, new_password: 
     # bcrypt is slow on purpose: it runs off the event loop.
     user.hashed_password = await asyncio.to_thread(hash_password, new_password)
     user.is_active = True
-    user_service.end_sessions(user)
+    await user_service.end_sessions(session, user)
     user.updated_at = moment
     session.add(user)
     await token_service.revoke_tokens(session, user_id=user.id, purpose=_SETUP, now=moment)

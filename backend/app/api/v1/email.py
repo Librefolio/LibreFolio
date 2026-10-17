@@ -195,8 +195,10 @@ async def resend_email_verification(body: EmailVerificationResendRequest, reques
     unknown account, the same answer and the same cost; 403 ``ACCOUNT_DISABLED`` for an account an administrator
     deactivated. 409 ``EMAIL_VERIFICATION_NOT_NEEDED`` for an active account; 409 ``EMAIL_UNAVAILABLE``,
     ``EMAIL_LINKS_UNAVAILABLE`` (without the ``problem``: not an administrator); 409 ``USER_LIMIT_REACHED`` when the old link expired and the instance is full now; 429
-    ``EMAIL_RATE_LIMITED`` with ``Retry-After`` (10 requests per 15 minutes per address, before the password; per
-    account, one email every 5 minutes and 3 an hour; the hourly budget); 502 ``EMAIL_DELIVERY_FAILED`` (without the
+    ``EMAIL_RATE_LIMITED`` with ``Retry-After`` (10 requests per 15 minutes per address, before the password; the
+    sign-in's limit on failed passwords, 10 per identifier and 50 per address in 15 minutes, shared with
+    ``POST /auth/login``, before the password too; per account, one email every 5 minutes and 3 an hour; the hourly
+    budget); 502 ``EMAIL_DELIVERY_FAILED`` (without the
     ``smtp_code``); 422
     ``EMAIL_RECIPIENT_INVALID`` when the account's address is not one address.
     """

@@ -16,6 +16,7 @@ from backend.app.api.v1 import (
     plugin_settings,
     portfolio_api,
     risk,
+    security,
     settings,
     signals,
     system,
@@ -42,6 +43,7 @@ router.include_router(system.router)  # System info
 router.include_router(uploads.router)  # File uploads
 router.include_router(users.router)  # User search
 router.include_router(email.router)  # Email: state and test email (admin)
+router.include_router(security.router)  # Security: the checks of the «Security» tab (admin)
 router.include_router(fx.fx_router)
 router.include_router(assets.asset_router)
 router.include_router(transactions.tx_router)

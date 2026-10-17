@@ -5,6 +5,7 @@ Provides login, logout, and JWT-based session management.
 """
 
 import asyncio
+import math
 from typing import Literal
 
 import structlog
@@ -34,7 +35,7 @@ from backend.app.schemas.auth import (
     UpdateProfileResponse,
 )
 from backend.app.schemas.users import AccountDeletionPreviewRead, BrokerAccessItemRead, BrokerDeletionItemRead
-from backend.app.services.accounts import address_probe, bootstrap_admin_service, password_policy, registration_service, settings_service, token_service, user_service
+from backend.app.services.accounts import address_probe, bootstrap_admin_service, login_throttle, password_policy, registration_service, settings_service, token_service, user_service
 from backend.app.services.accounts.auth_service import (
     create_jwt_token,
     decode_jwt_token,
@@ -151,6 +152,10 @@ async def login(
     Accepts username or email in the `username` field.
     Returns user info and sets session cookie.
     """
+    # Too many failures for this identifier or from this address: refused before the account is even looked up (F15)
+    address = client_address(http_request)
+    _refuse_too_many_failures(request.username, address)
+
     # Try to find user by username or email
     user = await user_service.get_user_by_username_or_email(session, request.username)
 
@@ -159,6 +164,7 @@ async def login(
     # so neither the answer nor its timing tells which accounts exist.
     password_ok = await asyncio.to_thread(verify_password_or_dummy, request.password, user.hashed_password if user else None)
     if not password_ok or user is None:
+        login_throttle.record_failure(request.username, address)
         # Never what was typed: the field takes an email too, and no address goes in the log (workstream E's rule).
         if user is None:
             logger.warning("Login failed: user not found")
@@ -182,6 +188,7 @@ async def login(
     await session.commit()
 
     _issue_session_cookie(response, http_request, user, await _session_ttl_hours(session))
+    login_throttle.record_success(request.username)
 
     logger.info("User logged in", user_id=user.id, username=user.username)
 
@@ -236,6 +243,20 @@ _REGISTRATION_REFUSALS: dict[str, int] = {
     # cannot activate.
     "EMAIL_VERIFICATION_UNAVAILABLE": 409,
 }
+
+
+def _refuse_too_many_failures(identifier: str, address: str | None) -> None:
+    """429 ``TOO_MANY_ATTEMPTS`` with ``Retry-After`` once the failed checks of a password reach their limit (F15).
+
+    Before any password is checked, and the same whether an account matches ``identifier`` or not.
+    """
+    refused = login_throttle.refusal(identifier, address)
+    if refused is not None:
+        raise HTTPException(
+            status_code=429,
+            detail={"error_code": "TOO_MANY_ATTEMPTS", "message": "Too many failed attempts: try again later"},
+            headers={"Retry-After": str(max(1, math.ceil(refused.retry_after)))},
+        )
 
 
 def _refuse_weak_password(password: str) -> None:
@@ -336,12 +357,17 @@ async def change_password(
     Requires the current password for verification. Every other session of the account ends; this one
     receives a new session cookie in the response, and carries on.
     """
+    # The current password is guessed no faster here than at the sign-in: the account's username, the same limit (F15)
+    address = client_address(http_request)
+    _refuse_too_many_failures(current_user.username, address)
     _refuse_weak_password(request.new_password)
 
     # Verify current password
     if not await asyncio.to_thread(verify_password, request.current_password, current_user.hashed_password):
+        login_throttle.record_failure(current_user.username, address)
         logger.warning("Password change failed: wrong current password", user_id=current_user.id)
         raise HTTPException(status_code=400, detail="Current password is incorrect")
+    login_throttle.record_success(current_user.username)
 
     # Check new password is different
     if request.current_password == request.new_password:
@@ -350,7 +376,7 @@ async def change_password(
     # Update password, and end every session of the account: this one gets a new cookie below. The live password-reset
     # links of the account die with the old password (A-27), in the same commit; a setup link left is retired (A-32).
     current_user.hashed_password = await asyncio.to_thread(hash_password, request.new_password)
-    user_service.end_sessions(current_user)
+    await user_service.end_sessions(session, current_user)
     await token_service.revoke_tokens(session, user_id=current_user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
     await token_service.retire_tokens(session, user_id=current_user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
     session.add(current_user)
@@ -394,9 +420,14 @@ async def update_profile(
     if email_changes:
         if request.current_password is None:
             raise HTTPException(status_code=400, detail={"error_code": "CURRENT_PASSWORD_REQUIRED", "message": "Changing the email needs the current password"})
+        # The same limit as the sign-in, under the account's username (F15)
+        address = client_address(http_request)
+        _refuse_too_many_failures(current_user.username, address)
         if not await asyncio.to_thread(verify_password, request.current_password, current_user.hashed_password):
+            login_throttle.record_failure(current_user.username, address)
             logger.warning("Email change refused: wrong current password", user_id=current_user.id)
             raise HTTPException(status_code=400, detail={"error_code": "CURRENT_PASSWORD_INVALID", "message": "Current password is incorrect"})
+        login_throttle.record_success(current_user.username)
 
     # Update profile
     updated_user, error = await user_service.update_profile(
