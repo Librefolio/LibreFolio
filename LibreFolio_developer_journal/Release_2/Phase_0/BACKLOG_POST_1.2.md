@@ -4105,6 +4105,14 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
   Dettagli: piano H, §14, lotto «H-52», passo 3.
 
+  ✅ **Fatto il 17/10** (checkpoint delle 21:41).
+  - L'impronta dell'elenco registrata dopo ogni build riuscita (`tool_contract_fingerprint()`) contiene ora anche i file
+    contati di `frontend/src/` e `frontend/static/`, tolti i cataloghi generati; il formato è `/2`.
+  - Un file cancellato, rinominato o arrivato con una data vecchia fa ricostruire. Dopo l'aggiornamento c'è una
+    ricostruzione, una volta sola.
+  - Provato dal vivo: dopo la build, l'impronta registrata e quella attuale sono uguali e non si ricostruisce più.
+  - Test: `utils runtime-isolation` 454 (+67).
+
 ## A · Account e accessi (fase 01)
 
 Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
