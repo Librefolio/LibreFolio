@@ -33,8 +33,9 @@ The `LoginCard` handles user authentication via username/email and password.
           email verification gets it) → `email.verification.loginRequired`, which `LoginCard` answers
           with [`VerificationNotice`](../../../backend/email.md#verification-frontend) instead of the
           `login-error` line, passing the form's `username` and `password`;
-        - 422 → `auth.invalidInput`; 429 → `auth.tooManyAttempts` (the backend sets no login limit of
-          its own: a throttling proxy in front of it may answer 429);
+        - 422 → `auth.invalidInput`; 429 → `auth.tooManyAttempts`: the backend's
+          [failed sign-in limit](../../../architecture/security.md#login-limit) (`TOO_MANY_ATTEMPTS`, with
+          `Retry-After`), or a throttling proxy in front of it;
         - no response at all (network error, timeout), or a 502, 503 or 504 →
           `auth.loginServerUnreachable`; any other 5xx → `auth.loginServerError`;
         - any other status (a 403 without the code included), and a failure that is not an axios

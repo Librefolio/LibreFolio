@@ -840,9 +840,16 @@ counts as never sent.
    (`needs_place`).
 7. [Emailing a link](#verification-email).
 
+Since lot A8a, workstream A's [limit on failed sign-ins](../architecture/security.md#login-limit) sits between steps 1
+and 2: when `login_throttle.refusal(identifier, address)` refuses, on the sign-in's own two counts, the request gets
+`EmailRateLimitedError` with that wait, before the password is checked. In step 2, a wrong password or an unknown
+account counts there (`record_failure()`), and the right password forgets the identifier's failures
+(`record_success()`) before step 3, whatever follows.
+
 | Limit | Counted on | Past it |
 |-------|------------|---------|
 | `RESEND_BY_ADDRESS`: 10 requests every 15 minutes | The client address, workstream H's `client_address(request)`, through its `client_rate_key()` ([Which client address](#flow-forgot)): an IPv6 client by its /64. A request counts whatever its password | 429 `EMAIL_RATE_LIMITED` |
+| Workstream A's limit on failed sign-ins: 10 failures every 15 minutes per identifier, 50 per client address (`login_throttle`) | The sign-in's own counts, shared both ways: the identifier as typed, A–Z folded, and the client address through `client_rate_key()`. Only a wrong password or an unknown account counts | 429 `EMAIL_RATE_LIMITED`, before the password |
 | `REGISTRATION_EMAILS_BY_ADDRESS`: 10 registration emails an hour | The client address of `POST /auth/register`, through `client_rate_key()` as above, counted when the email may go ([`registration_email_allowed()`](#verification-functions)). Registrations only: «send the link again» has `RESEND_BY_ADDRESS` | For a registration, no email queued (`Verification email held: …`), and the account still waits |
 | One email every 5 minutes, 3 an hour (`VERIFICATION_EMAIL_MIN_INTERVAL`, `VERIFICATION_EMAILS_PER_HOUR`) | The account's verification tokens that carry an address, created in the last hour: the links emailed, never a hold, so never a link whose email did not go out, which lost its address. «Send the link again» counts them first; every email counts them again inside the write transaction | 429 `EMAIL_RATE_LIMITED`, with the wait |
 | `VERIFICATION_BY_MAILBOX`: 3 emails an hour | The recipient's address stripped and case-folded, whatever account gives it: the registration's email and «send the link again» alike. Peeked before anything is created, hit only once the email went out | 429 `EMAIL_RATE_LIMITED` for «send the link again», with the wait; for a registration, no email (`Verification email: not sent`), and the account still waits |
@@ -881,7 +888,7 @@ wrong credentials leave an event; the answer says the others. The email itself l
 |------|------|
 | `features/email/verificationApi.ts` | The seam over the generated client, shared by the page and the notice. `confirmEmailVerification(token)` calls `confirm_email_verification_api_v1_email_verification_confirm_post` and gives `{username}`; `readLinkRefusal(error)` gives the status of a 400 `TOKEN_INVALID` (`expired`, `consumed`, `revoked`, and `unknown` for any other), `blocked` while the hosting provider blocks the instance (lot E-10: the 423 `instance_blocked` of a signed-in browser, recognised by workstream H's `isInstanceBlockedError()`, or the 401 of an anonymous one, the only 401 of this public route, which stays outside `ALLOWED_WHEN_BLOCKED`), and `null` for any other failure (no answer, a server error), which may be tried again. `resendEmailVerification(username, password)` calls `resend_email_verification_api_v1_email_verification_resend_post` and gives the email's language; `readResendFailure(error)` gives a `ResendFailure`, `{errorCode, retryAfter}`: `INVALID_CREDENTIALS` for a 401, else the `error_code` of the `detail`, `UNKNOWN` without one |
 | `features/email/emailApi.ts` | Exports the readers of a refusal that `verificationApi.ts` shares with `readTestFailure()`: `refusalBody()`, `refusalStatus()` (the HTTP status, `undefined` without an answer), `refusalDetail()` (the `detail` object, `null` for a plain-text `detail` or none) and `retryAfterOf()` (a finite `retry_after`) |
-| `features/email/emailText.ts` | `VerifyPageStatus` (`checking`, a refusal of the link, `blocked`, `missing`, `error`) and `VERIFY_PAGE_KEYS`, each status to its whole `email.verification.page.*` key. `resendFailureMessage()`: a key of `email.verification.resendErrors.*` of its own for `INVALID_CREDENTIALS`, `EMAIL_RATE_LIMITED` (with the minutes, `minutesUntil()`; one neutral text for every 429, whether the per-address limit, a per-account limit or the hourly budget), `EMAIL_VERIFICATION_NOT_NEEDED`, `USER_LIMIT_REACHED` and `ACCOUNT_DISABLED`; `unavailable` for `EMAIL_UNAVAILABLE`, `EMAIL_LINKS_UNAVAILABLE`, `EMAIL_DELIVERY_FAILED` and `EMAIL_RECIPIENT_INVALID`; `generic` for anything else |
+| `features/email/emailText.ts` | `VerifyPageStatus` (`checking`, a refusal of the link, `blocked`, `missing`, `error`) and `VERIFY_PAGE_KEYS`, each status to its whole `email.verification.page.*` key. `resendFailureMessage()`: a key of `email.verification.resendErrors.*` of its own for `INVALID_CREDENTIALS`, `EMAIL_RATE_LIMITED` (with the minutes, `minutesUntil()`; one neutral text for every 429, whether the per-address limit, the limit on failed sign-ins, a per-account limit or the hourly budget), `EMAIL_VERIFICATION_NOT_NEEDED`, `USER_LIMIT_REACHED` and `ACCOUNT_DISABLED`; `unavailable` for `EMAIL_UNAVAILABLE`, `EMAIL_LINKS_UNAVAILABLE`, `EMAIL_DELIVERY_FAILED` and `EMAIL_RECIPIENT_INVALID`; `generic` for anything else |
 | `features/email/VerifyEmailCard.svelte` | What the page of a link shows: the wait, why the link cannot be used, a blocked instance, or a check that failed, and the way back to the sign-in |
 | `features/email/VerificationNotice.svelte` | The sign-in's notice for an account that waits: «verify your email», and «Send the link again» |
 | `routes/verify-email/+page.svelte` | The page of the link, `/verify-email#token=…` |
@@ -1035,24 +1042,25 @@ The 400 also has a fixed English `message`. An expired link is not the end: sign
 An `async def`, without a session: the credentials of the sign-in stand in for one. The body is an
 `EmailVerificationResendRequest`: `username`, the username or the email address as at sign-in, 1 to 254 characters,
 and `password`, 1 to 1024. The route calls [`resend_verification()`](#verification-resend) with
-`client_address(request)` for the per-address limit, and answers 200 `EmailVerificationResendResponse`: the `language`
-of the email.
+`client_address(request)` for the per-address limits, its own and the sign-in's, and answers 200
+`EmailVerificationResendResponse`: the `language` of the email.
 
 | Status | `detail` | When |
 |--------|----------|------|
 | 200 | — | A new link went to the account's address; the older ones no longer work |
-| 401 | `Invalid credentials`, a plain string | A wrong password or an unknown account: the sign-in's answer, at the same cost |
+| 401 | `Invalid credentials`, a plain string | A wrong password or an unknown account: the sign-in's answer, at the same cost, counted as a failed sign-in ([Failed Sign-in Limit](../architecture/security.md#login-limit)) |
 | 403 | `error_code` `ACCOUNT_DISABLED` | An inactive account that does not wait: an administrator deactivated it |
 | 409 | `error_code` `EMAIL_VERIFICATION_NOT_NEEDED` | The account is active: there is nothing to verify |
 | 409 | `error_code` `EMAIL_UNAVAILABLE` | Email is off or unusable, or the instance is blocked |
 | 409 | `error_code` `EMAIL_LINKS_UNAVAILABLE` | `LIBREFOLIO_PUBLIC_URL` is missing, or cannot start a link |
 | 409 | `error_code` `USER_LIMIT_REACHED` | The account's link expired, and its place with it: the instance is full now |
-| 429 | `error_code` `EMAIL_RATE_LIMITED`, `retry_after`; the `Retry-After` header | Past the per-address limit (before the password), a per-account limit, or the hourly budget |
+| 429 | `error_code` `EMAIL_RATE_LIMITED`, `retry_after`; the `Retry-After` header | Past the per-address limit or the [limit on failed sign-ins](../architecture/security.md#login-limit) (both before the password), a per-account limit, or the hourly budget |
 | 502 | `error_code` `EMAIL_DELIVERY_FAILED`, `smtp_code` | The SMTP server did not take the message: the new link lost its address, the account still waits, and a new request may follow at once |
 | 422 | `error_code` `EMAIL_RECIPIENT_INVALID` | The account's address is not exactly one address |
 
 Each `detail` object also has a fixed English `message`; a body that fails validation gets FastAPI's own 422. Only
-the 401 and the per-address 429 can answer someone without the account's password. Like
+the 401 and the two 429s before the password, the per-address limit and the limit on failed sign-ins, can answer
+someone without the account's password. Like
 [`/password-reset`](#api-password-reset)'s, the two `…_UNAVAILABLE` answers carry no `problem`: whoever asks is not
 an administrator.
 
@@ -1223,9 +1231,9 @@ Where they are hosted, in workstream A's files:
 
 `backend/app/utils/runtime/rate_window.py` is the one primitive for every limit that counts events in a moving
 window: the hourly email budget, the «forgot password» limits of [`flows.py`](#flow-forgot) and the per-address limit
-of «send the link again» ([`verification.py`](#verification-resend)) use it, and the
-login limits of workstream A (lot A8) are planned to reuse it. A new limit of this kind uses it too, instead of a
-counter of its own.
+of «send the link again» ([`verification.py`](#verification-resend)) use it, and so does workstream A's
+[limit on failed sign-ins](../architecture/security.md#login-limit) (lot A8a), which «send the link again» consults
+too. A new limit of this kind uses it too, instead of a counter of its own.
 
 | Member | Contract |
 |--------|----------|
