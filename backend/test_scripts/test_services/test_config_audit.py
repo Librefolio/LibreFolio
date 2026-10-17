@@ -124,7 +124,7 @@ from backend.app.services.platform.config_audit import (
     log_configuration_audit,
     run_config_checks,
 )
-from backend.app.services.platform.instance_backup.checks import BACKUP_CONFIG_CHECKS, check_panel_token, check_upload_limit
+from backend.app.services.platform.instance_backup.checks import BACKUP_CONFIG_CHECKS, check_panel_token, check_restore_limit, check_upload_limit
 from backend.app.services.platform.instance_key import INSTANCE_KEY_FILE, InstanceKeyError, derive_key, instance_key_path
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -151,6 +151,7 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     **({_TEST_MODE_CHECK: "platform.test_mode"} if _TEST_MODE_CHECK is not None else {}),
     check_panel_token: "backup.panel_token",
     check_upload_limit: "backup.upload_limit",
+    check_restore_limit: "backup.restore_limit",
     check_login_limit: "accounts.login_limit",
     check_smtp_configuration: "email.smtp",
     check_smtp_encryption: "email.smtp_encryption",
