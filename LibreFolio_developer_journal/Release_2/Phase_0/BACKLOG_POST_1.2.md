@@ -3913,10 +3913,50 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     Quasi ovunque il server risponde con un redirect, quindi il danno è raro.
   - Cura: i link tengono il percorso com'è scritto, per esempio con un parametro di `env_url` o con una funzione
     sorella; `PUBLIC_URL` tiene il taglio. Gli stessi controlli (`http(s)`, nome dell'host, niente credenziali).
-  - Tocca lettori e test di A (`test_legal_links.py` confronta con quello che dà `env_url`): serve l'OK di A sui suoi
-    file.
+  - **Rimandata a dopo la 1.3** (coordinatore, 17/10). I rossi erano scritti, ma la cura toccava più di quanto stimato.
+    Il lavoro in corso (i test, la doc, `apply_h48.py`) è conservato fuori dal repo, nella cartella della sessione H
+    (`files/h48-wip/`); i file del repo sono tornati come prima.
+  - I test da cambiare (13), con l'OK di A sui suoi:
+    - miei:
+      - `test_config_package.py`: i sei test di `env_url` estesi a `env_link`; due test nuovi su `env_link`; la riga
+        `stripped-without-its-trailing-slash` di `support_url`; `test_support_link_is_the_support_address_and_logs_nothing[valid-is-the-address]`;
+      - `test_instance_block.py`: `BILLING_LINK`, la riga `https-one-trailing-slash-removed` e
+        `test_the_block_page_gives_a_regular_user_no_billing_link`;
+      - `test_system_api.py`: `test_the_configured_support_address_is_answered[set-without-its-trailing-slash]`;
+    - di A:
+      - `test_legal_links.py`: le righe `stripped-without-its-trailing-slash` e `ipv4-with-a-port`, il confronto con
+        `env_url` e `test_the_link_is_the_address_and_logs_nothing[terms|privacy-valid-is-the-address]`;
+      - `test_instance_config_legal_api.py`: `test_a_valid_address_is_published_as_env_url_gives_it[selfhosted|managed-both-stripped-…]`;
+      - `test_registration_service.py`: `test_a_url_variable_is_stripped_of_spaces_and_of_its_trailing_slash[trailing-slash|stripped-http-with-port|path-and-case-kept-billing_url]`
+        e `test_a_missing_url_or_a_valid_billing_url_is_no_problem_to_report`.
+  - Selettori: `services config-package`, `legal-links`, `registration`; e, con uno slot di ~8 min,
+    `api instance-block`, `api system`, `api instance-legal`.
 
-  Dettagli: piano H, §14, «Review di A9».
+  Dettagli: piano H, §14, «Review di A9» e lotto «H-49 e H-48».
+- **H-49 · `platform.test_mode`: un lane id nei limiti della sonda di prontezza** — basso; E (review di H-46), via
+  coordinatore, 17/10. Da fare con H-48.
+  - H-46 conta come corsia ogni `LIBREFOLIO_TEST_LANE_ID` non bianco. Il runner ne crea uno di 32 caratteri, e la sonda
+    `test-lane-health` accetta da 16 a 128 caratteri: un lane id fuori da quei limiti non è una corsia che funziona.
+  - Cura: i due limiti in costanti accanto a `owning_test_lane_id()`, usate dalla sonda e dal controllo.
+  - Cura fatta il 17/10 da H (lotto «H-49 e H-48», piano H §14); E rivede.
+    - `TEST_LANE_ID_MIN_LENGTH` (16) e `TEST_LANE_ID_MAX_LENGTH` (128) in `config/platform.py`, usati dalla sonda e da
+      `platform.test_mode`: è una corsia solo un id, senza spazi, fra quei limiti.
+    - Il messaggio dello stop managed dice «(no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters)».
+    - Test: `services config-audit`, 220.
+
+  Dettagli: piano H, §14, lotto «H-49 e H-48».
+- **H-50 · Le impostazioni di scope SYSTEM si leggono una volta per voce di `/prices/current`** — basso, prestazioni;
+  E (R13-SEC9), via coordinatore, 17/10. Dopo la 1.3.
+  - `configure_instance()` (`services/plugin_settings/runtime.py`) apre un `AsyncSession` sul motore asincrono per ogni
+    istanza di un plugin che ha campi SYSTEM o USER. `POST /api/v1/assets/prices/current` configura un'istanza per
+    voce: una connessione SQLite e una lettura per ogni asset della richiesta.
+  - Oggi solo `mockprov` (test-only) dichiara campi così, quindi in esercizio non costa nulla; costerà al primo plugin
+    vero con impostazioni.
+  - Cura: leggere le righe una volta per richiesta (per famiglia e plugin) e passarle alle istanze, oppure una cache
+    breve, invalidata da ogni scrittura delle impostazioni. Il codice è di X (impostazioni dei plugin): serve il suo
+    OK, o lo fa X.
+
+  Dettagli: questa riga.
 
 ## A · Account e accessi (fase 01)
 

@@ -72,7 +72,7 @@ Today the profile changes eleven things:
   server started without `./dev.py` takes it from its environment, your panel's included: it would serve data
   providers that exist only for the tests, and keep the instance's data in a test folder instead of its data
   directory. So a managed instance does not start with it, and says why:
-  `In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): …; unset LIBREFOLIO_TEST_MODE`.
+  `In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters): …; unset LIBREFOLIO_TEST_MODE`.
   Remove the variable, then start again. See «Startup Checks» in [Configuration](configuration.md).
 - Like the upload limit, the last three rows are defaults, each set on its own by its variables, in
   either profile: `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS` and `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS`
