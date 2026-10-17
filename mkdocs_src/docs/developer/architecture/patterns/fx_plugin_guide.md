@@ -68,7 +68,7 @@ graph TD
 
 **Phase 2** happens during sync — the system requests actual rate data for specific date ranges.
 
-**Plugin responsibility**: Fetch raw rates from the provider's API. Apply multi-unit adjustment (e.g., JPY ÷ 100). Return data in the provider's native format (no inversion, no alphabetical ordering).
+**Plugin responsibility**: Fetch raw rates from the provider's API. Apply multi-unit adjustment (e.g., JPY ÷ 100). Return data in the provider's native format (no inversion, no alphabetical ordering). Skip only what it cannot read: BOE, FED and SNB also catch `ArithmeticError` in the `try` around each line or point, so a value that is no number (`"abc"`, `"1.2.3"`) skips its line or point alone, logged at debug like their other invalid lines (X-R50; before, `decimal.InvalidOperation`, which is no `ValueError`, escaped that `try`: BOE and FED lost that currency's answer, and SNB, whose `_parse_json()` runs outside the `try` of `fetch_rates()`, the whole fetch).
 **Core responsibility**: Normalize for storage (alphabetical `base < quote`), skip duplicates, handle fallback chains.
 
 ---
