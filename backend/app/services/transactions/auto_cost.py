@@ -8,13 +8,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Transaction, TransactionType
+from backend.app.schemas.transactions.batch import TXValidationCode
 from backend.app.schemas.transactions.transactions import (
     TXCreateItem,
     TXUpdateItem,
 )
 from backend.app.schemas.wac import WACPreviewResultItem
 from backend.app.services.financial_math.splits import split_linked_ids
-from backend.app.services.portfolio_service import compute_wac_iterative
+from backend.app.services.portfolio_service import compute_wac_iterative, wac_pool_holding
 from backend.app.services.transactions.unreadable_rows import count_unreadable_rows
 
 
@@ -30,6 +31,16 @@ class UnreadablePoolError(Exception):
     def __init__(self, count: int) -> None:
         self.count = count
         super().__init__(f"The Auto cost cannot be computed: {count} transaction(s) of the pool it averages cannot be read")
+
+
+class NothingToAverageError(Exception):
+    """An Auto cost whose pool has nothing to average (N88, J-57): ``code`` is ``autoCostEmptyPool`` (no units held on
+    its date, never held or sold out) or ``autoCostUnknownPool`` (units held, none at a known cost). Its average of 0
+    would be written as a free acquisition; the batch refuses the row instead."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(f"The Auto cost has nothing to average ({code})")
 
 
 class TransactionAutoCostMixin:
@@ -50,6 +61,7 @@ class TransactionAutoCostMixin:
         parsed_updates: list[tuple[int, TXUpdateItem]],
         created_rows: dict[int, Transaction],
         unreadable: list[tuple[str, int, int]] | None = None,
+        nothing_to_average: list[tuple[str, int, str]] | None = None,
     ) -> list[WACPreviewResultItem] | None:
         """Compute WAC for items with cost_basis_mode in ('auto', 'auto-detail').
 
@@ -67,6 +79,9 @@ class TransactionAutoCostMixin:
 
         An item whose pool holds rows that cannot be read gets no cost and no result: it goes to ``unreadable`` as
         (operation, index, count), for the batch to refuse (W-B69); without that list the ``UnreadablePoolError`` raises.
+        An item whose average is 0 from a pool holding no units, or none at a known cost, gets no cost and no result either:
+        it goes to ``nothing_to_average`` as (operation, index, code), for the batch to refuse (N88, J-57); without that
+        list the ``NothingToAverageError`` raises. A pool of free units keeps its average of 0.
 
         Called post-flush, after link resolution and promotes: all rows are in the session
         (not committed). The pool to average comes from ``_auto_cost_source``: a receiving
@@ -129,13 +144,21 @@ class TransactionAutoCostMixin:
 
             # Compute WAC (session sees all flushed rows) and write it on the DB row; the other rows not costed yet stay out
             others = sorted(pending - {db_tx.id})
+            pool = (source_broker_id, excluded + others, as_of_date)
             try:
-                wac_result = await self._auto_cost(db_tx, (source_broker_id, excluded + others, as_of_date), ccy_hint)
+                wac_result = await self._auto_cost(db_tx, pool, ccy_hint)
             except UnreadablePoolError as exc:
                 if unreadable is None:
                     raise
                 unreadable.append((operation, idx, exc.count))
                 continue
+            if wac_result.wac is not None and wac_result.wac.is_zero():
+                refusal = await self._nothing_to_average(db_tx, pool, ccy_hint)
+                if refusal is not None:
+                    if nothing_to_average is None:
+                        raise NothingToAverageError(refusal)
+                    nothing_to_average.append((operation, idx, refusal))
+                    continue
             self._write_auto_cost(db_tx, wac_result)
             if wac_result.wac:
                 pending.discard(db_tx.id)
@@ -182,6 +205,29 @@ class TransactionAutoCostMixin:
             excluded_tx_ids=excluded,
             target_currency_override=ccy_hint,
         )
+
+    async def _nothing_to_average(self, db_tx: Transaction, source: tuple[int, list[int], date_type], ccy_hint: str | None) -> str | None:
+        """Why an average of 0 is no Auto cost for ``db_tx``, as a ``TXValidationCode`` value, or None when it is one (N88,
+        J-57): the pool ``source`` names holds no units on its date (``autoCostEmptyPool``), or holds units none of which
+        has a known cost (``autoCostUnknownPool``) — read from the average-cost engine itself (``wac_pool_holding``). A
+        pool of free units holds units at a known cost of 0: its average stands."""
+        source_broker_id, excluded, as_of_date = source
+        asset_result = await self.session.execute(select(Asset.currency).where(Asset.id == db_tx.asset_id))
+        asset_currency = asset_result.scalar_one_or_none() or "USD"
+        holding = await wac_pool_holding(
+            self.session,
+            broker_id=source_broker_id,
+            asset_id=db_tx.asset_id,
+            as_of_date=as_of_date,
+            asset_currency=asset_currency,
+            excluded_tx_ids=excluded,
+            target_currency_override=ccy_hint,
+        )
+        if holding.quantity <= 0:
+            return TXValidationCode.AUTO_COST_EMPTY_POOL.value
+        if not holding.cost_complete:
+            return TXValidationCode.AUTO_COST_UNKNOWN_POOL.value
+        return None
 
     async def _unreadable_pool_rows(self, broker_id: int, asset_id: int | None, as_of_date: date_type, excluded: list[int]) -> int:
         """How many rows of the pool ``compute_wac_iterative`` averages — its filters, without ``excluded`` — hold a stored

@@ -6699,3 +6699,63 @@ arrotondato contro uno 0,000153 salvato (resta un doppione), il caso degli inter
    > **Scoperta**: il wizard ha una **copia** della regola, sul float e a 0,0001, per i doppioni fra file e col pool in attesa
    > (`importDedup.ts:145-157`, l'identità del gruppo con `toFixed(4)`): **W-B81**, proposta subito dopo.
 5. ✅ **Slot** (con W-B48): `api brim` **118/118**, `api brim-scalable` **2/2**. Checkpoint FROZEN con W-B48 (sopra).
+
+### W-B81 — i doppioni del wizard con la regola di W-B51: analisi e cura (2026-10-17) ✅
+
+**Base**: HEAD `c97001b80` = dev con W-B48 e W-B51 (`080f7ee7f`, `52573b4aa`, `5c2faced1` → `4bc6b2ab1`, CHANGELOG `c97001b80`). Via del
+coordinatore (17/10 19:4x): «Vitest first; `importDedup.ts:145-157` applies exactly D-W51-1; fold the `toFixed(4)` group identity onto
+the same rule, no float compare on decimals; name the shared cases so backend and frontend pin the same table».
+
+**Stato reale** (`frontend/src/lib/features/transactions/import/importDedup.ts`, `importTypes.ts`):
+- `DedupKey` tiene quantità, importo e costo per unità come `number`; `buildDedupKey` legge `Number(tx.quantity ?? 0)`;
+  `dedupKeysMatch` confronta in float a 0,0001 (quantità e costo) e a 0,01 (importo); `describeDedupKey` scrive `toFixed(4)`/`toFixed(2)`
+  (0,00015123 e 0,00015098 hanno la stessa identità `0.0002`). Il wizard usa le chiavi solo attraverso le funzioni (`ImportWizardModal`,
+  il pool in attesa); l'identità del gruppo vive nella sessione (nessuna memoria).
+- In più, dai rossi: un NaN (`'n/a'`) combaciava con tutto (`Math.abs(NaN) > 0.0001` è falso), il float sbagliava il limite
+  (100 contro 100,0001; −100 contro −100,01) e confondeva due testi a 18 decimali (`wei-apart`).
+
+**Contratto**: un lettore esatto dei testi decimali semplici (segno, cifre, punto facoltativo; mai un esponente: un report scrive
+decimali semplici, `SafeDecimal`), `sameDedupQuantity(a, b)` con la regola di D-W51-1 (half-up alla scala del meno preciso, `normalize`
+dei testi, e `|a − b| ≤ 0,0001`) per quantità e costo per unità; l'importo entro 0,01 calcolato esatto; `DedupKey` con i testi esatti, e
+`describeDedupKey` con il testo esatto di ogni numero. Un testo che non è un decimale semplice non fa chiave; **uno vuoto si legge `0`**
+(decisione mia, il default del payload: una riga di cassa con la quantità svuotata incontra ancora il suo gemello in attesa).
+`getDedupCurrency` rende l'importo come testo esatto; **un importo vuoto si legge `0`** come uno mancante e come la quantità (oggi
+`Number('')` è 0; domanda del test-author, decisione mia). **Un numero finito** (i default `?? 0` del codice, un valore messo a run
+time: il tipo dice testo) si legge come lo scrive JavaScript, l'esponente espanso (`1.5e-7` → `0.00000015`); un testo resta stretto
+(`'1.5e-7'` illeggibile). Il confronto resta stretto: il vuoto diventa `0` solo nei lettori dei campi (`buildDedupKey`, `getDedupCurrency`).
+Fuori ambito: i gettoni del confronto a N colonne (`CmpSource`, `ImportWizardModal.svelte:1718`, `toFixed(2)`) evidenziano le celle a
+schermo, non decidono un doppione: restano.
+
+**Passi**:
+1. ✅ **Rossi** (test-author `wb81-reds`, `importDedup.test.ts`, in `front-utility core-unit`): **47 rossi, 72 verdi** (119); la tabella
+   condivisa coi nomi del backend (`apart-at-5-decimals`, `recurring-buys-at-8-decimals`, `report-rounded`, `integers-10`,
+   `integers-10-and-10.4`, `identical-reimport`, i due «padded», `half-up-tie`, `unreadable[text]`, `unreadable[inf]`), più
+   `integers-10-read-back`, `bound-inclusive`, `wei-apart`, `negative-half-up-tie`; i letterali di `DedupKey` passati a testi. Poi due
+   aggiustamenti chiesti: il vuoto si legge `0` in `buildDedupKey`, le attese di `getDedupCurrency` come testi. Terzo giro: l'importo
+   vuoto si legge `0`, un numero finito come lo scrive JavaScript (esponente espanso), le forme accettate (`+0.5`, `.5`, `5.`, `' 0.5 '`,
+   `-.5`), l'esponente anche finito (`'1.5e-7'`) illeggibile. **Rossi confermati da me** (17/10, carico 15): `importDedup.test.ts` **135
+   test, 67 rossi, 68 verdi**; `importDuplicateResolver.test.ts` 54/54 (solo il commento di `:298`). Log `files/logs/wb81/50_reds_confirm.log`.
+2. ✅ **Cura pronta**: `files/scripts/wb81_cure.py` (dry run pulito sui 2 file), l'aritmetica provata in node su tutta la tabella nei due
+   versi (`files/wb81_check.mjs`).
+3. ✅ **Doc**: `developer/frontend/components/features/import-wizard.md`, la tabella della firma (quantità, importo, costo per unità).
+4. ✅ **Cura applicata** (17/10, `wb81_cure.py --apply`): `importTypes.ts` (`DedupKey` a testi, le tolleranze come testi) e
+   `importDedup.ts` (`readExactDecimal` / `readFieldDecimal`, `exactText`, `atScale`, `withinExact`, `sameDedupQuantity` esportata,
+   `sameDedupAmount`, `getDedupCurrency` a testo, `buildDedupKey`, `dedupKeysMatch`, `describeDedupKey` senza `toFixed`).
+   > **Note implementazione**: un lettore solo, `readExactDecimal`: un testo decimale semplice, o un numero finito com'è scritto da
+   > JavaScript con l'esponente espanso (`exactDecimal`); `readFieldDecimal` legge il vuoto come `0` (i due lettori dei campi). Le cifre
+   > in `bigint`, nessun `Number` sulle cifre. Aritmetica provata in node prima (`files/wb81_check.mjs`, 21 casi nei due versi e il limite
+   > dell'importo; `files/wb81_check2.mjs`, 35 casi del lettore).
+   > **⚠️ Fuori pista**: `ImportWizardModal.svelte:1718` scrive `src.cashAmount.toFixed(2)`, ma `src` è un `CmpSource` del confronto a N
+   > colonne (gettoni per evidenziare le celle), non una `DedupKey`: fuori ambito, non toccato. Gli E2E leggono l'identità del gruppo
+   > dal testid (`import-wizard-resolver-compare-{key}`, `tx-import-duplicate-precedence.spec.ts:858`), mai un formato scritto a mano;
+   > l'identità resta unica (`DuplicatesStep.svelte:149`, `{#each … (group.key)}`): due chiavi dello stesso testo combaciano.
+5. ✅ **Verdi** (17/10, `files/scripts/wb81_light.sh`, carico 13–41, una alla volta; log in `files/logs/wb81/`):
+   - Vitest dei 7 file dell'import (`importDedup`, `importDuplicateResolver`, `importMerge`, `importPairs`, `importRowState`,
+     `importResolutionHelpers`, `ImportWizardModal`): **347/347**;
+   - Prettier dei 4 file: pulito; `theme-roles --check`: pulito;
+   - `api sync`: nessuna differenza tracciata;
+   - `front-utility core-unit`: **217 file, 9 212 test** verdi; `front-utility component-unit`: **185 file, 4 923** verdi;
+   - `front check`: **0 errori, 0 avvisi**.
+   - Non girato: nessun E2E. Proposto facoltativo: `front-transaction tx-import-duplicate-precedence` (6 test, i gruppi tra file sul
+     percorso dei dati veri).
+6. ✅ **Backlog**: W-B81 ✅.

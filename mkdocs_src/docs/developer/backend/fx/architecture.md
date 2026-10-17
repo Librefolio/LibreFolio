@@ -127,7 +127,8 @@ sync time from a multi-step chain route, which stores the composite rate under t
 
 `POST /api/v1/fx/currencies/convert` expands each conversion's `date_range` into one `convert_bulk()`
 item per day, both ends included; with signals, a second series of one-unit items runs from the start
-of their warm-up to the same end. Both ends have a limit (X-R55). The end is cut at tomorrow by the
+of their warm-up to the same end. An amount of 0 is sent as one unit too, so its results answer 0 with the
+day's real `rate` instead of dividing 0 by 0 (X-R41). Both ends have a limit (X-R55). The end is cut at tomorrow by the
 server's calendar (`datetime_utils.latest_range_end()`, the helper
 [R13-SEC7-1](../financial_math.md#portfolio-package) also uses), a day of margin for a user whose
 today is already the server's tomorrow. The start, the warm-up included, goes back at most
@@ -176,8 +177,8 @@ in the same chunks):
 - it loads the rows from the **backward-fill anchor** — the last rate on or before `min_date`, a
   `MAX(date)` scalar subquery — up to `max_date`. The anchor keeps the unlimited backward fill exact:
   the earliest item still finds its rate, however old;
-- it reads only the usable rates (X-R38): `rate >= 1E-10 AND rate < 1E+14`, the bounds of
-  `usable_fx_rate_bounds()` (`backend/app/db/precision.py`), in the anchor subquery as in the window,
+- it reads only the usable rates (X-R38): `usable_fx_rate_clause()`, that is `rate >= 1E-10 AND rate < 1E+14`, the
+  bounds of `usable_fx_rate_bounds()` (`backend/app/db/precision.py`), in the anchor subquery as in the window,
   so a legacy unusable row neither anchors the window nor is loaded. There is no per-row check in
   Python: any double within those bounds reads back as a rate `storable_fx_rate()` keeps, and this
   path is hot;
@@ -195,6 +196,19 @@ skipped it as unusable.
 Apart from the unusable rates left out, return values and errors are those of the full-history version
 this replaced, which loaded every pair's whole history up to the latest requested date and scanned it
 linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
+
+The same condition filters every other read that computes with a stored rate (X-R45):
+
+- the period changes' first usable day (`services/fx/period_changes.py`);
+- the PAC planner's latest saved quote per pair, inside its latest-date subquery so the latest *usable* row wins,
+  and its WAC evidence (`services/pac_allocator/source/fx_quotes.py`, `wac.py`);
+- the scheduler's last date per pair (`_last_fx_dates`), so a day an older version stored as 0 or `inf` is
+  fetched again and overwritten.
+
+The reads that must see every row stay raw: the sync's overwrite and change count, the writes and deletes,
+the backup export, the engine's cache fingerprint and the AI Export's `source` lookup.
+`./dev.py test utils gate-usable-fx-rate` keeps that list: a new read of `FxRate` that neither calls the
+clause nor is listed fails it.
 
 ### 📅 Fixed-Period Changes {: #fixed-period-changes }
 

@@ -30,16 +30,21 @@ async def compute_wac_and_fx_issues(
         for issue in context.issues
     )
     if not has_non_balance_issues:
-        # W-B69: an Auto row whose pool holds rows that cannot be read is refused, never costed without them.
+        # W-B69: an Auto row whose pool holds rows that cannot be read is refused, never costed without them. N88 (J-57):
+        # so is one whose average of 0 comes from a pool holding no units, or none at a known cost — never a free purchase.
         unreadable: list[tuple[str, int, int]] = []
+        nothing_to_average: list[tuple[str, int, str]] = []
         context.wac_results = await service._compute_wac_for_auto_items(
             context.parsed_creates,
             context.parsed_updates,
             context.created_by_index,
             unreadable=unreadable,
+            nothing_to_average=nothing_to_average,
         )
         for operation, index, count in unreadable:
             context.issues.append(_auto_cost_unreadable(operation, index, None, count))
+        for operation, index, code in nothing_to_average:
+            context.issues.append(_auto_cost_nothing_to_average(operation, index, code))
         await _cost_split_handovers(service, context)
 
     if context.wac_results:
@@ -68,6 +73,21 @@ async def _cost_split_handovers(service: TransactionService, context: Transactio
             service._write_auto_cost(row, handover)
         elif handover.wac_missing_pairs:
             context.issues.append(_wac_fx_unavailable("split", split_index, row.id, handover.wac_missing_pairs))
+
+
+def _auto_cost_nothing_to_average(operation: Any, index: int, code: str) -> TXValidationIssue:
+    """The issue of an Auto cost with nothing to average (N88, J-57): ``code`` — ``AUTO_COST_EMPTY_POOL`` or
+    ``AUTO_COST_UNKNOWN_POOL`` — on ``cost_basis_override``, no ``params`` and no id: the pool can be another user's
+    broker (the receiving side of a TRANSFER averages its partner's)."""
+    reason = "holds no units on that date" if code == TXValidationCode.AUTO_COST_EMPTY_POOL.value else "holds no units of known cost on that date"
+    return TXValidationIssue(
+        operation=operation,
+        index=index,
+        ref_id=None,
+        error=f"Auto cost: the pool it averages {reason}",
+        code=code,
+        field="cost_basis_override",
+    )
 
 
 def _auto_cost_unreadable(operation: Any, index: int, ref_id: int | None, count: int) -> TXValidationIssue:

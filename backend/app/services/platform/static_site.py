@@ -10,8 +10,14 @@ their 404, like a missing file (H-29).
 
 Caching: the chunks under ``_app/immutable/`` are cached for a year (their names change with their content); every
 other file of ``_app`` (``env.js``, ``version.json``) and every HTML document is revalidated (F28).
+
+``spa_inline_script_hashes()`` gives the hashes of the inline scripts of the build's pages, which the managed profile's
+report-only policy allows (H-52, ``security_headers.py``).
 """
 
+import base64
+import hashlib
+from html.parser import HTMLParser
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -20,8 +26,11 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.app.config import API_V1_PREFIX, PROJECT_NAME, PROJECT_ROOT, get_version
+from backend.app.logging_config import get_logger
 from backend.app.services.platform.security_headers import register_served_types
 from backend.app.utils.runtime.paths import confined_path
+
+logger = get_logger(__name__)
 
 # Serve mkdocs site from FastAPI at /mkdocs if site directory exists, otherwise return placeholder HTML.
 SITE_DIR = PROJECT_ROOT / "mkdocs_src" / "site"
@@ -35,6 +44,57 @@ FRONTEND_BUILD_DIR = PROJECT_ROOT / "frontend" / "build"
 # a manual reload (beta report; issue #26, «Plugin does not work on chromium»). The chunks stay
 # immutable: their names change with their content.
 REVALIDATE_HTML = {"Cache-Control": "no-cache, must-revalidate"}
+
+
+class _InlineScripts(HTMLParser):
+    """The text of every inline ``<script>`` of a document, one without ``src``, as the browser's parser hands it on."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.scripts: list[str] = []
+        self._text: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "script":
+            self._text = None if any(name == "src" for name, _ in attrs) else []
+
+    def handle_data(self, data: str) -> None:
+        if self._text is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script":
+            if self._text is not None:
+                self.scripts.append("".join(self._text))
+            self._text = None
+
+
+def spa_inline_script_hashes(build_dir: Path) -> tuple[str, ...]:
+    """The CSP source expressions, ``'sha256-<base64>'``, of every inline script of the build's pages (H-52).
+
+    Every ``*.html`` directly in ``build_dir`` (``index.html``, ``200.html``, ``offline.html``; not a hidden one, which no
+    route serves), every ``<script>`` without ``src`` whatever its type, its text as the browser hashes it: newlines
+    normalized as the HTML parser does (CR LF and a lone CR read as LF), UTF-8 encoded. Deduplicated and
+    sorted; ``()`` without a build. A page that cannot be read is left out with a warning: the server starts anyway, and
+    the browser reports what the policy then lacks. The build's bootstrap script names the build's own chunks, so its
+    hash changes with every build: read when the middleware is built, never per request.
+    """
+    if not build_dir.is_dir():
+        return ()
+    hashes: set[str] = set()
+    for page in sorted(build_dir.glob("*.html")):
+        if page.name.startswith("."):
+            continue
+        try:
+            text = page.read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            logger.warning("A page of the build could not be read for the hashes of its inline scripts", page=page.name, error=type(error).__name__)
+            continue
+        parser = _InlineScripts()
+        parser.feed(text.replace("\r\n", "\n").replace("\r", "\n"))
+        parser.close()
+        hashes.update(f"'sha256-{base64.b64encode(hashlib.sha256(script.encode('utf-8')).digest()).decode('ascii')}'" for script in parser.scripts)
+    return tuple(sorted(hashes))
 
 
 def _revalidated_file(path: Path) -> FileResponse:

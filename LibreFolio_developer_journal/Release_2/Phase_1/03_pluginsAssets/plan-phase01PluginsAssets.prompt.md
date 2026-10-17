@@ -6711,3 +6711,114 @@ Base `b7f8ebeac`. Decisione del coordinatore: nella 1.3, rossi Vitest prima, nes
   nessuna pagina utente promette 4 decimali.
 - **Effetto noto** (dal test-author): un Δ positivo di rumore (circa 2e-16) prima si leggeva `+0.0000`, ora `0.0000`
   senza segno.
+
+### Lotto delle piccole correzioni visibili ✅ — X-R41, X-R31, X-R15, X-R19, X-R17, X-R18, X-R20 (19:55–20:40)
+
+Base `ab74aafbf` (C-97c-4 entrata in dev `e414edf0b`, poi MF-J45c). Decisione del coordinatore: nella 1.3, rossi prima
+dove c'è logica (X-R41, X-R18), finestra da chiedere per `front-asset` lista e cancellazione più `api fx`. W-B48
+aggiunge due `data-testid` nei miei file (`asset-detail-editor-close`, `fx-import-swap`): quelle righe non si toccano.
+- **X-R41**: in `convert_currency_bulk` (`api/v1/fx/currencies.py` ~582), `rate = converted / from_amount`, cioè 0/0
+  → 500. Cura: un importo 0 si converte come una unità (come già i segnali). Il risultato è 0 e il tasso quello
+  dell'unità; con la stessa valuta, tasso None come oggi.
+- **X-R31**: `AssetSearchAutocomplete.svelte` ~422 mostra `e?.message || 'Search failed'`. Cura:
+  `assets.search.failed`, 4 lingue; l'errore tecnico resta in `console.error`.
+- **X-R15**:
+  - «Provider» (`AssetDetailMetadataPanel.svelte:109`): c'è già `common.provider` in 4 lingue, quindi si riusa (regola
+    i18n: prima `common.*`) e la chiave nuova è una sola;
+  - «✏️ Manual» (`AssetDetailHeader.svelte:78`): `assetDetail.manualChip`, con l'emoji nel markup.
+- **X-R19**: `itemsLabel={\`${n} assets\`}`. Cura: `assets.delete.itemsLabel`, un plurale ICU.
+  `assets.sync.assetsCount` è la sola parola, non un plurale: niente doppione.
+- **X-R17**: `assets.delete.confirmWarning` e `bulkConfirmMessage` nominano anche gli eventi. Correggo intanto i refusi
+  di `bulkConfirmMessage` (FR «supprimes», ES «eliminaran») e «Delete 1 assets?» con un plurale.
+- **X-R18**: `tx_count` della riga è «Total transactions referencing this asset (any broker)», lo stesso del rifiuto
+  `HAS_TRANSACTIONS`. Cura: la conferma singola si apre già nello stato dei risultati, bloccata, con il link
+  `asset-delete-transactions-link` e senza Conferma.
+  - La card passa un oggetto senza `tx_count`, quindi la riga si cerca per id.
+  - La multipla resta com'è: i risultati dopo la conferma nominano già le righe bloccate con il loro link. Un blocco
+    preventivo di una selezione mista vorrebbe un'altra modale.
+- **X-R20**: `data-testid="asset-card-delete-btn"` sul cestino della card; `testId` sulle due `ConfirmModal`
+  (`asset-delete-confirm`, `asset-bulk-delete-confirm`); le E2E di `asset-list.spec.ts` passano a questi.
+- **Rossi affidati**:
+  - backend: X-R41 in `api fx-unit`;
+  - frontend: X-R31 in `AssetSearchAutocomplete.test.ts`, X-R18 e X-R20 in `asset-list.spec.ts`.
+- **Rossi** (20:05–20:25):
+  - **X-R41**, `api fx-unit` in processo: **3 failed** (`decimal.InvalidOperation` 0/0, nel doppio e sul filo con BAM/SSP),
+    2 guardie verdi. Codice applicato (solo `currencies.py`): **64 passed**.
+  - **X-R31**, Vitest `AssetSearchAutocomplete.test.ts`: **1 failed** (si vede «boom 42»), 61 passed.
+  - **X-R18 e X-R20**, E2E in `asset-list.spec.ts`, 8 test, da lanciare nella finestra:
+    - un blocco nuovo, con un asset e un BUY propri, `tx_count` letto di nuovo da `GET /assets/query`, e un osservatore
+      che nessun DELETE parta;
+    - la variante dalla riga della lista;
+    - una guardia senza transazioni;
+    - 5 test esistenti limitati alle loro conferme con i nuovi `testId`.
+- Finestra chiesta al coordinatore (20:25).
+- **Registrata X-R80** (20:14, dal coordinatore, dall'analisi di B per X-R79). Dopo la 1.3: le gambe delle catene
+  non sono mai davvero «solo aggiunte», perché `create_routes_bulk` fa l'upsert per priorità; serve un flag
+  `create_only` nel backend.
+- **Finestra E2E** (20:14–20:27, via del coordinatore; W-B48 entrata in dev `4bc6b2ab1`):
+  - rossi: `front-asset asset-list` sui 4 filtri, **8 failed**, perché i testid non c'erano;
+  - codice frontend e i18n applicati senza corse attive (`xr_small_code.py` senza la parte backend già applicata,
+    `xr_small_i18n.py`: 3 chiavi nuove e 2 aggiornate, tutte nella sorgente `assets`);
+  - verdi: `front-asset asset-list` **41 passed** (tutta la spec), `api fx` **33 passed**; porta 6183 libera.
+- **Verdi leggeri**:
+  - Vitest `AssetSearchAutocomplete` **62**;
+  - `i18n check` pulito (5.084 chiavi); `gate-i18n-catalog` **176**, `gate-i18n-usage` **195**;
+  - `front check` 0/0; `theme-roles --check` pulito; `check-orphans` verde.
+- **Doc**:
+  - `user/assets/index.en.md`: la Cancellazione toglie anche gli eventi, e la conferma si apre già sul risultato
+    quando la lista conta transazioni (pagina tradotta: debito);
+  - `developer/backend/fx/architecture.md`: un importo 0 si manda come unità (X-R41).
+  `mkdocs build` stretta pulita, `check-links` 97.
+- **CHANGELOG** 🐛, due righe: gli asset (cancellazione bloccata, eventi, quattro testi tradotti) e l'API della
+  conversione di 0.
+- La multipla di X-R18 resta com'è, come deciso sopra.
+
+### Revisioni (17/10, 20:30–20:45)
+- **Y-34** (Y, `69b2fe74e`): OK. Il quesito di Y su `assetId` di `expectLotsPanelOpen`: toglierlo, nessun chiamante lo passa.
+- **Z-33** (Z, `60170aae5`, plugin e schemi): OK, `provider-errors` 248. Una nota bassa: un fuso dell'indice che non è un
+  nome IANA sostituisce quello valido dei metadati; la cura è `exchange_zone(index) or exchange_zone(info)`.
+
+### X-R45 ✅ — una sola condizione per un tasso di cambio usabile (20:50–21:40)
+
+**Analisi** (in sola lettura, sul HEAD `16e837153`, inviata al coordinatore). L'esposizione vera è più stretta di quanto
+dica il backlog.
+- **Già filtrati**: `convert_bulk` e `period_changes`, con una copia in linea dei limiti. Passando da `convert_bulk`
+  sono quindi al sicuro le conversioni del motore, i lotti, `price_marks` e i valori FX dell'AI Export.
+- **Non filtrati, e calcolano con il valore**:
+  - `pac_allocator/source/fx_quotes.py`: l'ultima riga vince anche se inusabile; uno 0 diventa «mancante» e un `inf` o
+    un valore oltre 1E+14 passa come valore;
+  - `pac_allocator/source/wac.py`: `inf` o un tasso enorme dà un WAC assurdo.
+- **Solo date**: `scheduler/jobs.py` `_last_fx_dates`. La riga inusabile conta come coperta e non si riprende più.
+- **Devono restare grezzi**: il sync (sovrascrittura e conteggio dei cambi), `storage`, il conteggio del delete,
+  l'export del backup, l'impronta della cache del motore (`engine.py:142`), il `source` dell'AI Export.
+
+**Decisione del coordinatore** (20:50): la (A), prima di X-R16 e X-R48b.
+- `usable_fx_rate_clause()` in `db/precision.py` sostituisce le 2 copie, e si aggiunge a `fx_quotes` (anche nella
+  sottoquery dell'ultima data), a `wac` e a `_last_fx_dates`.
+- Una guardia strutturale con la lista dei lettori ammessi.
+- Revisori: MF per i siti del PAC, Z per la riga dello scheduler.
+- La (B), la riparazione all'avvio, è esclusa. Niente riga di conteggio nell'audit all'avvio: semmai dopo la 1.3.
+
+Codice preparato e provato a secco (`xr45_code.py`, 6 file, black e ruff puliti); rossi affidati al test-author.
+- **Rossi** (test-author):
+  - `utils gate-usable-fx-rate`, nuovo e puro, con la condizione e la guardia strutturale sull'AST di `backend/app`:
+    **4 failed**, 3 passed. La guardia nomina i 5 lettori: `convert_bulk`, `_first_rate_days_inside`,
+    `_load_latest_planner_fx_rows`, `_load_wac_fx_rows`, `_last_fx_dates`;
+  - `services bulk-reads-chunked xr45` (SQLite in memoria, PAC con 0, `inf` e 1E+14): **15 failed**, 6 passed;
+  - `services scheduler-last-fx-dates`, nuovo e sul DB della corsia, senza commit: **6 failed**, 3 passed.
+  - Lista dei lettori ammessi (`RAW_FX_RATE_READERS`), 8 coppie modulo/funzione: `backup_fx_rates`,
+    `delete_rates_endpoint`, `_load_rate_source`, `compute_portfolio_fx_cache_identity`, `delete_rates_bulk`,
+    `upsert_rates_bulk`, `_count_actual_changes`, `_stored_rates`.
+- **Codice** (`xr45_code.py`, 6 file): la condizione in `precision.py`, le 2 copie sostituite, e la condizione
+  aggiunta a `fx_quotes` (nella sottoquery dell'ultima data), `wac` e `_last_fx_dates`. black e ruff puliti, l'app si
+  importa.
+- **Verdi**:
+  - `gate-usable-fx-rate` **7**, `bulk-reads-chunked` **35**, `scheduler-last-fx-dates` **9**;
+  - `scheduler-jobs` 73, `fx-core` 42, `bulk-writes-chunked` 69, `portfolio-allocation-source` 98;
+  - `api fx-unit` 64, `period-changes` 60, `fx-pairs-per-query` 6;
+  - `check-orphans` verde; porta libera.
+- **Doc**: `developer/backend/fx/architecture.md`, dove la finestra di `convert_bulk` nomina la condizione, e un
+  paragrafo su chi la usa, chi resta grezzo e la guardia. `mkdocs build` stretta pulita, `check-links` 97.
+- **CHANGELOG** 🐛: i tassi inusabili non arrivano più al PAC, e lo scheduler riprende quei giorni.
+- **Da notare** (test-author): `test_scheduler_jobs.py::test_last_fx_dates_stays_valid_against_live_schema` calcola
+  la data attesa su tutte le righe. Resta giusto finché la corsia non ha tassi inusabili nelle coppie campionate.
