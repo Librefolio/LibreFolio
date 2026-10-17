@@ -7636,6 +7636,10 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - Resta **E-19b**: `IssueCode.NON_ISO_CURRENCY` al posto di `MISSING_FX_*`, il banner senza bottone, il selettore
     col valore salvato, l'avviso del ripristino (via di B), i18n nelle 4 lingue, `api sync`.
   - Per D1, se si sceglie C: la rietichettatura automatica deve escludere anche `GBp`, non solo GBX/ZAC/ILA.
+  - ✅ Il pezzo di J: la guardia di `Intl` in `riskAnalysisHelpers.ts:168`, entrata in dev `b13ed7944` (CHANGELOG
+    `826f99f17`).
+  - Smistati altrove dal coordinatore: il modale delle rotte FX che cancella prima di ripubblicare (X) e il `GBp` di
+    Yahoo contro il confronto esatto del refresh (Z).
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19».
 
 ## Y · Cruscotto e grafici (fase 01)
