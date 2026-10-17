@@ -218,3 +218,74 @@ describe('uiLocaleStore and uiLocale() — the browser’s own tag', () => {
         expect(bothFaces(graph), 'French UI').toEqual(as('fr'));
     });
 });
+
+/**
+ * uiLocaleRule — the rule on its own, for the E2E spec that imports it directly (Y-31).
+ *
+ * `resolveUiLocale` lives in `./uiLocaleRule`, a module that imports nothing, and `./uiLocale` re-exports it. The reason
+ * is outside this file: brokers-detail.spec.ts computes the locale the lots panel writes a day in with the app's own
+ * rule (`dayAsThePanelWritesIt`), importing the module directly, and Playwright resolves neither `$app` nor `$lib` — the
+ * aliases `./uiLocale` reaches through `./language`. One import would break that spec at load, before any of its tests,
+ * and nothing here would notice: Vite resolves those aliases for Vitest.
+ *
+ * So the first test reads the module's source and lists everything it would load: an `import` of any kind, type-only
+ * included; an `export … from`; an `import … = require()`; an `import()` call or an `import('…')` type; a `require()`.
+ * The source is parsed by TypeScript, not matched by a pattern, so a comment or a string that names an import is not
+ * one. Its positive control is the same scan run on `./uiLocale`, which must find the import of `./language` — the one
+ * that keeps `./uiLocale` out of Playwright's reach.
+ *
+ * The second pins the move as a move: `./uiLocale` exports the very same function object, so every test above, which
+ * reaches the rule through `./uiLocale`, still tests the rule the spec imports.
+ *
+ * Both import `./uiLocaleRule` dynamically: while the module is missing they fail on their own, and the file still
+ * collects.
+ */
+describe('uiLocaleRule — the rule alone, which an E2E spec imports directly (Y-31)', () => {
+    interface ModuleReference {
+        kind: string;
+        specifier: string;
+    }
+
+    /** Everything the module `file`, a sibling of this test, would load, in source order; and whether it parsed. */
+    async function moduleReferences(file: string): Promise<{references: ModuleReference[]; parseErrors: string[]}> {
+        const {readFileSync} = await import('node:fs');
+        const ts = (await import('typescript')).default;
+        const sf = ts.createSourceFile(file, readFileSync(new URL(file, import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+        const named = (node: import('typescript').Node | undefined): string => (node === undefined ? '<none>' : ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) ? node.text : `<${node.getText(sf)}>`);
+        const references: ModuleReference[] = [];
+        const visit = (node: import('typescript').Node): void => {
+            if (ts.isImportDeclaration(node)) references.push({kind: 'import', specifier: named(node.moduleSpecifier)});
+            else if (ts.isExportDeclaration(node) && node.moduleSpecifier) references.push({kind: 'export … from', specifier: named(node.moduleSpecifier)});
+            else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) references.push({kind: 'import = require()', specifier: named(node.moduleReference.expression)});
+            else if (ts.isImportTypeNode(node)) references.push({kind: "import('…') type", specifier: ts.isLiteralTypeNode(node.argument) ? named(node.argument.literal) : named(node.argument)});
+            else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) references.push({kind: 'import()', specifier: named(node.arguments[0])});
+            else if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require') references.push({kind: 'require()', specifier: named(node.arguments[0])});
+            ts.forEachChild(node, visit);
+        };
+        visit(sf);
+        // Parsed with errors, the tree may stop short of a reference: the scan would not have read the whole module.
+        const diagnostics = (sf as unknown as {parseDiagnostics?: readonly import('typescript').Diagnostic[]}).parseDiagnostics ?? [];
+        return {references, parseErrors: diagnostics.map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '))};
+    }
+
+    it('./uiLocaleRule imports nothing — no import, no export … from, no import(), no require() — so Playwright loads it as it is', async () => {
+        const rule = await import('./uiLocaleRule');
+        expect(typeof rule.resolveUiLocale, 'barrier: the module exists and exports the rule').toBe('function');
+
+        const control = await moduleReferences('./uiLocale.ts');
+        expect(control.parseErrors, 'positive control: ./uiLocale parses').toEqual([]);
+        expect(control.references, 'positive control: the scan finds the import of ./language, which keeps ./uiLocale out of Playwright’s reach').toContainEqual({kind: 'import', specifier: './language'});
+
+        const scanned = await moduleReferences('./uiLocaleRule.ts');
+        expect(scanned.parseErrors, './uiLocaleRule parses: the scan read all of it').toEqual([]);
+        expect(scanned.references, 'what ./uiLocaleRule would load, for an E2E spec that resolves neither $app nor $lib: nothing').toEqual([]);
+    });
+
+    it('./uiLocale re-exports the very function ./uiLocaleRule declares: the tests above test the rule the spec imports', async () => {
+        const {ui} = await boot();
+        const rule = await import('./uiLocaleRule');
+
+        expect(typeof rule.resolveUiLocale, 'control: the rule module exports resolveUiLocale').toBe('function');
+        expect(ui.resolveUiLocale, 'one function object, re-exported — not a copy that could drift').toBe(rule.resolveUiLocale);
+    });
+});
