@@ -19,7 +19,8 @@
     import TagInput from '$lib/components/ui/input/TagInput.svelte';
     import {Link2} from 'lucide-svelte';
     import {getStringBadgeStyle} from '$lib/utils/colors';
-    import {mergeStrings, mergeTagSets} from '$lib/features/transactions/bulk/promoteHelpers';
+    import {mergeStrings, mergeTagSets, textLength, TX_DESCRIPTION_MAX_LENGTH} from '$lib/features/transactions/bulk/promoteHelpers';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     interface Props {
         open: boolean;
@@ -46,6 +47,11 @@
     let diffDesc = $derived(txA?.description !== txB?.description);
     let diffTags = $derived(JSON.stringify(txA?.tags ?? []) !== JSON.stringify(txB?.tags ?? []));
     let hasDifferences = $derived(diffDesc || diffTags);
+
+    // W-B70: the merged notes past the description's limit would be refused at save; the dialog counts them, as the
+    // backend does (code points), and holds the confirmation until they fit.
+    let descriptionLength = $derived(textLength(resDescription));
+    let descriptionTooLong = $derived(diffDesc && descriptionLength > TX_DESCRIPTION_MAX_LENGTH);
 
     // All available tags for TagInput: union of both sides + availableTags prop
     let allTagSuggestions = $derived([...new Set([...(txA?.tags ?? []), ...(txB?.tags ?? []), ...availableTags])]);
@@ -86,6 +92,7 @@
     }
 
     function handleConfirm() {
+        if (descriptionTooLong) return;
         const resolved: Record<string, unknown> = {};
         if (diffDesc) resolved.description = resDescription;
         if (diffTags) resolved.tags = resTags;
@@ -164,11 +171,28 @@
                             </div>
                             <textarea
                                 rows={2}
-                                class="w-full text-xs px-2 py-1.5 rounded border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary resize-none overflow-y-auto"
+                                class="w-full text-xs px-2 py-1.5 rounded border border-lf-input hover:border-lf-input-hover aria-invalid:border-lf-danger bg-lf-field text-lf-primary resize-none overflow-y-auto"
                                 style="field-sizing: content; max-height: 8rem; white-space: pre-wrap"
                                 bind:value={resDescription}
+                                aria-invalid={descriptionTooLong}
+                                aria-describedby="promote-merge-desc-counter"
                                 data-testid="promote-merge-desc-input"
                             ></textarea>
+                            <div class="mt-1 flex items-start justify-between gap-2">
+                                {#if descriptionTooLong}
+                                    <p class="text-xs text-lf-danger" data-testid="promote-merge-desc-too-long" data-max={TX_DESCRIPTION_MAX_LENGTH}>
+                                        {$t('transactions.promote.descriptionTooLong', {values: {max: formatFixed(TX_DESCRIPTION_MAX_LENGTH, 0)}})}
+                                    </p>
+                                {/if}
+                                <p
+                                    id="promote-merge-desc-counter"
+                                    class="ml-auto text-xs tabular-nums {descriptionTooLong ? 'text-lf-danger' : 'text-lf-muted'}"
+                                    data-testid="promote-merge-desc-counter"
+                                    data-state={descriptionTooLong ? 'over' : 'ok'}
+                                >
+                                    {formatFixed(descriptionLength, 0)} / {formatFixed(TX_DESCRIPTION_MAX_LENGTH, 0)}
+                                </p>
+                            </div>
                         </div>
                     {/if}
 
@@ -259,7 +283,13 @@
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-secondary bg-lf-panel hover:bg-lf-neutral" onclick={handleCancel} data-testid="promote-merge-cancel">
                     {$t('common.cancel')}
                 </button>
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-on-status bg-lf-success hover:bg-lf-success-hover inline-flex items-center gap-1.5" onclick={handleConfirm} data-testid="promote-merge-confirm">
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm rounded-lg text-lf-on-status bg-lf-success hover:bg-lf-success-hover inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={descriptionTooLong}
+                    onclick={handleConfirm}
+                    data-testid="promote-merge-confirm"
+                >
                     <Link2 size={14} />
                     {$t('transactions.promote.mergeConfirm')}
                 </button>

@@ -229,9 +229,9 @@ const REGISTRY: Site[] = [
     },
     {
         file: 'lib/components/charts/PriceChartFull.svelte',
-        snippet: '`${currencyHtml}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`',
+        snippet: '`${currencyHtml}: ${formatPrice(Number(value), {minDecimals: 4})}${valueSuffix}${axisNoteHtml}`',
         status: 'public',
-        why: "The value part of a price-chart tooltip row (asset and FX detail): the price, or the percentage return, of an asset, an FX pair or an overlay signal at the hovered date — market data, never the user's holdings, so public by the rule that keeps prices, rates and percentages readable. It matches only since K step 16 (06/10) moved the currency badge out of the label and next to the value, so that a phone can shrink the label and keep both whole; before that the same value rendered as `${labelHtml}: ${Number(value).toFixed(4)}…` with no currency token beside it. Since M-18 (12/10) the value is written through formatFixed, the localized toFixed, in the interface language: the same figure, so the same status.",
+        why: "The value part of a price-chart tooltip row (asset and FX detail): the price, or the percentage return, of an asset, an FX pair or an overlay signal at the hovered date — market data, never the user's holdings, so public by the rule that keeps prices, rates and percentages readable. It matches only since K step 16 (06/10) moved the currency badge out of the label and next to the value, so that a phone can shrink the label and keep both whole; before that the same value rendered as `${labelHtml}: ${Number(value).toFixed(4)}…` with no currency token beside it. Since M-18 (12/10) the value is written through formatFixed, the localized toFixed, in the interface language, and since C-97c (17/10) through formatPrice, which keeps a small price's significant digits: the same figure, so the same status.",
     },
 ];
 

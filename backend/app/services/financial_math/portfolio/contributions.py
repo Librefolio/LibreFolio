@@ -58,7 +58,18 @@ def transfer_costs_moved_out(transfers: Iterable[InternalAssetTransfer], date_fr
     return moved
 
 
-def closed_position_base(cost_sold: Decimal, sales: int, moved_out: tuple[Decimal, int] | None, exits: int) -> Decimal | None:
+def transfer_tracts_moved_in(transfers: Iterable[InternalAssetTransfer], date_from: date_type | None, end: date_type) -> dict[tuple[int, int], Decimal]:
+    """For each receiver ``(broker_id, asset_id)``, what its counted tracts' units gained before they arrived: Σ(value on
+    arrival − cost moved), the amount its row's result leaves out (MF-A8)."""
+    moved_in: dict[tuple[int, int], Decimal] = {}
+    for transfer in transfers:
+        if counted_tract(transfer, date_from, end):
+            key = (transfer.receiver_broker_id, transfer.asset_id)
+            moved_in[key] = moved_in.get(key, _ZERO) + (transfer.value_at_arrival - transfer.cost_moved)
+    return moved_in
+
+
+def closed_position_base(cost_sold: Decimal, sales: int, moved_out: tuple[Decimal, int] | None, exits: int, moved_in: Decimal | None = None) -> Decimal | None:
     """The base of a closed position's annualized return: the cost of every unit that left it in the period (MF-A5).
 
     The row's result carries what the units it sold realized and what the units it moved to another broker of the scope
@@ -66,13 +77,18 @@ def closed_position_base(cost_sold: Decimal, sales: int, moved_out: tuple[Decima
     counted in Realized, plus the cost its counted tracts moved out. When a unit left any other way — ``exits``, the
     position's outgoing quantity moves of the period, outnumber those disposals and tracts: a transfer outside the scope
     or still in transit at the end, a tract or a sale whose value or cost is unknown, an ADJUSTMENT without a cost —
-    the row's result is not covered by a base, and None leaves the general rule standing. None without a base too.
+    the row's result is not covered by a base, and None leaves the general rule standing.
+
+    ``moved_in``, the mirror (MF-A8): the units the row received by counted tracts enter its result at their value on
+    arrival (the tract adjustment takes back what they gained before), while its sales' and moves' costs are their
+    historical cost; adding what they gained before arriving puts them in the base at that value too. A unit bought
+    for 500, moved when worth 600, sold for 660: +60 on 600, not on 500. None for a base that is not positive.
     """
     moved_cost, moved_count = moved_out or (_ZERO, 0)
     if exits != sales + moved_count:
         return None
-    base = cost_sold + moved_cost
-    return base if base else None
+    base = cost_sold + moved_cost + (moved_in or _ZERO)
+    return base if base > 0 else None
 
 
 def period_return_on_start(period_pnl: Decimal | None, start_value: Decimal | None) -> Decimal | None:
@@ -96,15 +112,29 @@ def annualized_period_return(
     *,
     window_from: date_type | None,
     end: date_type,
+    moved_in: Decimal | None = None,
 ) -> Decimal | None:
     """The period's return annualized over the position's window (``window_from`` → ``end``).
 
     The base is the size of the start value; a position opened inside the period (no start value) falls back to its
     cost at the end. None without a base, a window, or the days :func:`returns.cumulative_to_annualized` needs.
+
+    ``moved_in`` (MF-A9), for a position opened inside the period that received units by counted tracts and from which
+    no unit left in the period: what they gained before arriving (:func:`transfer_tracts_moved_in`). Its result counts
+    them from their value on arrival, its end cost at their historical cost; the fallback base adds the same amount, as a
+    closed position's does (MF-A8), and must then be positive. Not passed when units left the position in the period —
+    before the arrival or after it: a transfer carries no quantity, so the part of the tract that left with them cannot
+    be told apart, and the end cost stays the base.
     """
     ratio = period_return_on_start(period_pnl, start_value)
-    if ratio is None and period_pnl is not None and end_cost is not None and end_cost != 0:
-        ratio = (period_pnl / end_cost).quantize(_RATIO_QUANTUM)
+    if ratio is None and period_pnl is not None and end_cost is not None:
+        if moved_in is None:
+            base = end_cost if end_cost != 0 else None
+        else:
+            base = end_cost + moved_in
+            base = base if base > 0 else None
+        if base is not None:
+            ratio = (period_pnl / base).quantize(_RATIO_QUANTUM)
     if ratio is None or window_from is None:
         return None
     return cumulative_to_annualized(ratio, (end - window_from).days)

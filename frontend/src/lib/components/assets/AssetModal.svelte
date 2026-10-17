@@ -36,6 +36,7 @@
     import {getIndexColor} from '$lib/utils/colors';
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {probeRateLimitMessage} from './resolveProviderError';
     import {userSettings} from '$lib/stores/app/settings';
     import {get} from 'svelte/store';
     import {trySave} from '$lib/utils/trySave';
@@ -977,7 +978,8 @@
         } catch (e: any) {
             if (!open || saving || !providerProbe.isMetadataCurrent(request)) return;
             console.error(`Ask Provider (${scope}) failed:`, e);
-            toasts.error($t('common.errorOccurred'));
+            // The probe's own limit (X-R66) says when to try again; any other failure stays generic
+            toasts.error(probeRateLimitMessage(e, $t) ?? $t('common.errorOccurred'));
         } finally {
             providerProbe.finishMetadata(request);
         }

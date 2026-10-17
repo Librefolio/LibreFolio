@@ -180,6 +180,20 @@ Each submitted item gets one result carrying the same `is_chain`/`providers_used
 
     If any submitted route references a provider code not registered in the provider registry, that item's result reports `success: false`, `action: "error"`, and a `message` naming the unknown code(s) — with `providers_used` still derived from the *submitted* `chain_steps`, so an unknown code appears in `providers_used` too (it is membership of what was posted, not a check that the code is valid). When at least one item fails validation, the whole batch is rolled back and the endpoint responds `400` with the per-item results (including the successful ones, none of which were actually persisted) in the error detail body.
 
+!!! note "Replacing a pair's routes: `?replace=true`"
+
+    By default the endpoint only creates or updates the priorities it is given: a route at another priority stays. With
+    `POST /api/v1/fx/providers/routes?replace=true`, each pair the request names keeps exactly the routes posted for it,
+    and its other priorities are deleted in the same transaction, after the validation (X-R75). An edit is then one
+    request: a refusal (`400`, `409`, `500`) or a request that never arrives leaves the pair as it was. The MANUAL rules
+    are the same: a real provider posted removes the MANUAL route, and the MANUAL item alone
+    (`{"from": base, "to": quote, "provider": "MANUAL"}`, priority `999`) leaves the pair manual. A pair not configured
+    yet is created; one another request configured in the meantime keeps only what this one posts for it.
+
+    The web app's provider editor (`FxPairAddModal`, the pair's detail page) saves this way. Before X-R75 it deleted the
+    whole pair first and then posted the new routes, so a failed post left the pair with no route at all, and removing
+    every route deleted the pair instead of leaving it manual.
+
 ### 🗑️ Delete Routes
 
 `DELETE /api/v1/fx/providers/routes`
@@ -198,7 +212,9 @@ Removes routing rules. Can delete a specific priority or all rules for a pair.
 ]
 ```
 
-If `priority` is omitted, all routes for the pair are deleted. When all real-provider routes are deleted, a MANUAL sentinel route is automatically reinstated to preserve the pair in the system.
+If `priority` is omitted, all routes for the pair are deleted, MANUAL included: the pair is removed, and no MANUAL
+route is reinstated. When a delete that names a priority leaves the pair without a real provider, a MANUAL sentinel route
+is reinstated to keep the pair in the system.
 
 ## 🔄 Auto-Sync Behavior
 
@@ -261,7 +277,8 @@ This ensures resilience to individual provider outages and supports currency pai
   base comes after the quote, and checks the limits on the rate as stored, never on the rate typed:
   MMK → KHR `1E-13` is stored as KHR/MMK `1E+13`, accepted. A rate that is not finite, whose inverse
   overflows (`1 / 1E-1000000`) or underflows to 0 (`1 / 1E+1000027`), or that `storable_fx_rate()`
-  refuses is a `ValueError` naming the pair in stored order, the date and the limits
+  refuses is an `FXRateNotStorableError`, a `ValueError` (X-R46), naming the pair in stored order,
+  the date and the limits
   (`fx_rate_refusal()`): *The rate of KHR/MMK on 2024-01-02 cannot be stored: an exchange rate
   keeps at most 14 digits before the decimal point and 10 decimal places, stays below
   100000000000000 (as the database stores it), and must stay above 0 once cut to them* (the
@@ -270,9 +287,8 @@ This ensures resilience to individual provider outages and supports currency pai
   inverse and `1E-11` as values that read back 0. A valid rate is still written as normalized,
   not truncated.
 - **The manual-rate endpoint.** `POST /api/v1/fx/currencies/rate` (`upsert_rates_endpoint()`,
-  `backend/app/api/v1/fx/currencies.py`) handles its items one by one: a refused item becomes
-  `Rate N: Validation error: …` in `errors` (N, the item's 0-based index) while the others are
-  stored (200), and when every item fails the answer is 400 *All rates failed: …*. Before
+  `backend/app/api/v1/fx/currencies.py`) handles its items one by one: a refused item is left out
+  while the others are stored (200), and the answer names it (next bullet). Before
   handling any of them, it checks every `date`: one outside `stored_date_bounds()` (1900-01-01 to
   tomorrow) refuses the whole request with a 422 `date_out_of_range`, nothing written, not even
   the valid items (X-R65, [Normalization and Storage](architecture.md#stored-rate-dates)). Its own
@@ -286,6 +302,25 @@ This ensures resilience to individual provider outages and supports currency pai
   else to Pydantic as it came, a non-finite float as its text (`"inf"`), which the 422 can echo.
   Before, `"abc"` made the validator raise `InvalidOperation` past Pydantic, and a non-finite rate
   was echoed as `Decimal('Infinity')`, which the JSON renderer cannot write: both were a 500.
+- **A refused item is named twice.** Since X-R46, the 200 keeps its sentence in `errors`, unchanged
+  (*Rate N: …*, N the item's 0-based index), and adds an entry to `rejected`,
+  `{"index", "date", "reason"}` (`FXRateRejection` in `backend/app/schemas/fx.py`), in request
+  order; `rejected` is empty when every item is stored. When every item is refused, the answer is
+  400 and its `detail` is an object instead of a string:
+  `{"code": "fx_rates_refused", "message", "rejected"}`, where `message` is the former string,
+  *All rates failed:* followed by the `errors` joined with `"; "`, and `rejected` lists every item, as
+  the 200 would. The web app's FX data editor counts only the `results` as saved and names the
+  refused dates (up to five, then a count) with their reasons: in a warning after a 200, in its
+  error banner and toast after the 400 (`frontend/src/lib/api/writeRefusal.ts`). The `reason` is
+  one of:
+    - `same_currency`: the base is the quote; `errors` says *Rate N: Base and quote must be
+      different (got EUR)*;
+    - `rate_not_storable`: a rate `fx_rates.rate` cannot keep once normalized (the limits above,
+      X-R38), raised as `FXRateNotStorableError` by the endpoint or by `upsert_rates_bulk()`;
+      `errors` says *Rate N: Validation error:* followed by `fx_rate_refusal()`'s text;
+    - `invalid_rate`: any other `ValueError` of the item (*Rate N: Validation error: …*);
+    - `internal_error`: an unexpected error, logged (*FX rate upsert failed*) and never echoed;
+      `errors` says *Rate N: Failed: internal error*.
 - **Counters.** `points_fetched` counts the rates computed for the pair in the range, the skipped
   ones left out; `points_changed` counts the new dates plus the dates whose value changed, compared
   at storage precision (`_count_actual_changes()`, which reads the stored rate through

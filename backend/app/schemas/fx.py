@@ -33,7 +33,7 @@ from __future__ import annotations
 import math
 from datetime import date as date_type
 from decimal import Decimal
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Literal, Optional
 
 from pydantic import (
     BaseModel,
@@ -252,8 +252,21 @@ class FXUpsertResult(BaseModel):
         return self.date.isoformat()
 
 
+class FXRateRejection(BaseModel):
+    """A rate a manual upsert left out, and why (X-R46): the data editor names it instead of counting it as saved."""
+
+    index: int = Field(..., description="The item's position in the request")
+    date: date_type = Field(..., description="Date of the rate left out")
+    reason: Literal["same_currency", "rate_not_storable", "invalid_rate", "internal_error"] = Field(
+        ...,
+        description="same_currency: base and quote are the same; rate_not_storable: a rate fx_rates.rate cannot keep, in either direction; invalid_rate: another refusal of the rate; internal_error: an unexpected error, logged",
+    )
+
+
 class FXBulkUpsertResponse(BaseBulkResponse[FXUpsertResult]):
     """Response model for bulk rate upsert."""
+
+    rejected: List[FXRateRejection] = Field(default_factory=list, description="The items left out, in request order, each with its reason (X-R46); `errors` keeps the same refusals as sentences")
 
 
 # ============================================================================

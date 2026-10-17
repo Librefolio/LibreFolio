@@ -7012,3 +7012,254 @@ vincolo «il testo resta inglese»; (c) il permesso su `DeferredAppPopups`; (d) 
 - **C-54 (+ la nota di H): definizione di fatto ✅** (revisione di E, H — `DeferredAppPopups`, onboarding — e della squadra
   dei colori per `WhatsNewModal` dopo l'ingresso; galleria di G dopo). La riga C-54 dell'indice sta nella sezione C (non
   la mia): la chiude il coordinatore.
+
+## C-54 — Entrato; X-R66 (dalla sezione di X) (17/10, 17:48–; base `7f2290ae0`)
+- **Entrato**: dev `630c478cd` (`737268864`); CHANGELOG ✨ e C-54 chiusa nella sezione C (`7f2290ae0`). Revisioni: E
+  (backend), H (`DeferredAppPopups`, il mock di `OnboardingCoachmark`), la squadra dei colori (`WhatsNewModal`); la foto
+  della galleria nella coda di G.
+- Dal coordinatore: «Next, from X's section (to lighten X's queue): X-R66, analysis first … X reviews.»
+
+### X-R66 — Il limite delle sonde dei provider nella lingua dell'utente: analisi (17:55, sola lettura)
+**Stato reale**
+- Backend (MF-SI2, `api/v1/assets/providers.py:243-273`): oltre `LIBREFOLIO_PROBE_RATE_LIMIT` sonde al minuto per
+  utente (30 di default) `POST /assets/provider/probe` risponde 429 `{error_code: "PROBE_RATE_LIMITED", retry_after:
+  <secondi, ≥ 1>, message: "Too many provider probes: try again later"}` con `Retry-After`. Nulla da cambiare.
+- «Test Configuration» (`components/assets/ProviderAssignmentSection.svelte:361`, `buildTestResults`):
+  `extractErrorMessage(probe.error, …)` → la frase inglese del backend, e `summarizeProbeError(detail)` → «Error» nel
+  riassunto di una riga.
+- «Ask Provider» (`components/assets/AssetModal.svelte` `fetchAndCompareMetadata`, ~:976): ogni errore → il toast
+  generico `common.errorOccurred`.
+- C'è già il modello: `resolveProviderError.ts` traduce il `RATE_LIMITED` dei provider («In pausa … fino alle {time}»,
+  `RATE_LIMITED_DAY` quando la fine è un altro giorno, `RATE_LIMITED_NO_TIME`), con `formatResumeTime`/`resumesToday`
+  (ora locale, arrotondata al minuto per eccesso), testi entro i 60 caratteri del riassunto. Chiavi nella sorgente i18n
+  `assets` (di X).
+- Nessun test oggi fissa il 429 della sonda.
+
+**Disegno**
+1. Un aiuto in `resolveProviderError.ts`: `probeRateLimitMessage(error: unknown, t): string | null` — per una risposta
+   429 con `detail.error_code === "PROBE_RATE_LIMITED"` la frase tradotta con l'ora locale di fine attesa (`retry_after`
+   del dettaglio, altrimenti l'intestazione `Retry-After`); `null` per ogni altro errore. Chiavi nuove
+   `providerErrors.PROBE_RATE_LIMITED` / `_DAY` / `_NO_TIME`, entro 60 caratteri con l'ora (la sonda conta sia «Test
+   Configuration» sia «Ask Provider»: la frase parla di verifiche del provider, non di un solo bottone).
+2. «Test Configuration»: il dettaglio e il riassunto di una riga diventano quella frase quando l'aiuto risponde; gli altri
+   errori come oggi.
+3. «Ask Provider»: il toast d'errore diventa quella frase per il 429; gli altri errori restano il generico.
+4. Test (`test-author`, rossi prima): `resolveProviderError.test.ts` (l'aiuto: oggi/altro giorno, senza `retry_after`,
+   dall'intestazione, gli altri errori → null, lunghezza ≤ 60 nelle 4 lingue), `ProviderAssignmentSection.test.ts`
+   (dettaglio e riassunto tradotti), `AssetModal.test.ts` o `.providerLifecycle.test.ts` (il toast). Niente backend,
+   niente E2E (tutto in Vitest: la corsia non serve).
+5. Doc: dove MF-SI2 descrive il 429 (sviluppatore), una riga: la UI lo dice tradotto, con l'ora.
+**Superfici**: file di X (`ProviderAssignmentSection.svelte`, `AssetModal.svelte` — area dei colori, nessuna classe
+toccata —, `resolveProviderError.ts`, la sorgente i18n `assets`); X rivede. **Peso**: basso.
+**Fuori**: `summarizeProbeError` dà riassunti inglesi anche per altri errori (timeout, HTTP…): non tradotti oggi, fuori.
+- **Coordinatore (17:50): GO**, com'è disegnato, rossi prima; X rivede; riga 🐛 al checkpoint. La sorgente `assets` può
+  essere aperta da X (X-R46): le chiavi vanno lì comunque, un'eventuale fusione la risolve il coordinatore all'ingresso
+  (non posso guardare l'albero di X; su dev la sorgente è cambiata più volte oggi).
+
+### XR66.1 — Rossi (17:51–, `test-author`) e codice pronto
+- Rossi: `resolveProviderError.test.ts` (l'aiuto: oggi, mezzanotte → `_DAY`, solo l'intestazione, nessuna attesa →
+  `_NO_TIME`, le chiavi mancanti → `_NO_TIME` poi il `message` del backend, ogni altro errore → null; la lunghezza ≤ 60
+  sui cataloghi veri delle 4 lingue), `ProviderAssignmentSection.test.ts` (dettaglio e riassunto), il test di
+  `AssetModal` che prova «Ask Provider» (il toast; la guardia: un altro errore resta generico).
+- Codice pronto, non applicato: `work/xr66/apply_xr66.py` (`probeRateLimitMessage` con `probeRefusal`/`toSeconds`; le due
+  chiamate) e `work/xr66/i18n_xr66.py` (3 chiavi `providerErrors.PROBE_RATE_LIMITED*`, frasi corte: «Too many checks: try
+  again at {time}» e simili). Dry-run pulito.
+
+### XR66.2 — Rossi osservati, codice applicato, verdi ✅ (17/10, 18:13–18:40)
+- **Rossi osservati prima del codice** (`cd frontend && nice -n 10 node_modules/.bin/vitest run <file> --maxWorkers 2`):
+  `resolveProviderError.test.ts` 36 rossi; `ProviderAssignmentSection.test.ts` PAS-RL1 rosso, le guardie PAS-RL2 verdi;
+  `AssetModal.providerLifecycle.test.ts` 1 rosso su 56, il toast di «Ask Provider» («An error occurred»), le guardie verdi
+  (`/tmp/libreFolio_xr66.log`).
+- **Codice** (applicato con `apply_xr66.py` e `i18n_xr66.py`):
+  - `resolveProviderError.ts`: `toSeconds`, `ProbeRefusal`, `probeRefusal(error)` e l'esportata
+    `probeRateLimitMessage(error, t, now?)`. Un 429 con `detail.error_code === 'PROBE_RATE_LIMITED'` dà
+    `providerErrors.PROBE_RATE_LIMITED` (o `_DAY`) con `{time: formatResumeTime(…)}`; l'attesa viene da `retry_after`,
+    altrimenti dall'intestazione `retry-after`; senza attesa `_NO_TIME`, senza chiavi il `message` del backend; `null`
+    per ogni altro errore;
+  - `ProviderAssignmentSection.svelte` (`buildTestResults`): la riga d'errore di una sonda rifiutata ha quella frase come
+    dettaglio e come riassunto (prima: la frase inglese del backend e «Error»);
+  - `AssetModal.svelte` (`fetchAndCompareMetadata`, il catch): `probeRateLimitMessage(e, $t) ?? $t('common.errorOccurred')`;
+  - sorgente i18n `assets`, 4 lingue: `providerErrors.PROBE_RATE_LIMITED`, `_DAY`, `_NO_TIME`.
+- **Verdi**:
+  - i 3 file: 189/189 (`/tmp/libreFolio_xr66_green.log`);
+  - tutta la cartella `components/assets`: 38 file, 1 629 test (`/tmp/libreFolio_xr66_assets.log`);
+  - `front-utility core-unit` dal runner (corsia 6182): 213 file, 8 880 test (`/tmp/libreFolio_xr66_core.log`);
+  - `front check` 0 errori e 0 avvisi; i18n strict 5 062 chiavi; `theme-roles --check` pulito; Prettier senza cambi.
+- **Doc**:
+  - `developer/backend/assets/architecture.md` (la sezione della sonda, dopo il 429): una frase su cosa dice la UI;
+  - `admin/configuration.en.md:58`, la riga `LIBREFOLIO_PROBE_RATE_LIMIT`: «**Ask Provider** counts too» e «past it,
+    the form tells the user when to try again». Nessun timbro: la riga manca ancora nelle traduzioni (debito di MF-SI2,
+    che resta visibile);
+  - `mkdocs build` strict pulito, `check-links` 97 validi (`/tmp/libreFolio_xr66_mkdocs2.log`, `…_links2.log`).
+- **Non eseguiti**: nessun E2E e nessun backend (non toccato). `component-unit` dal runner non lanciato: i due file del lotto
+  che ci stanno sono nella cartella `assets`, passata intera.
+- **Previsione dei conflitti** con dev `870d519bd` (29 commit avanti; i 7 dopo `0cf8eb4d5`, X-R75, non toccano questi file):
+  - 3 file in comune: `ProviderAssignmentSection.svelte` e il suo test (C-97c-3), `architecture.md` (Z-32 (c));
+  - la fusione a tre vie simulata in `/tmp` (`git merge-file`) è pulita, e le modifiche sono indipendenti: dev cambia il
+    formato del prezzo nel ramo riuscito (`formatPrice`), io aggiungo un ritorno anticipato per la sonda rifiutata; i due
+    `describe` nuovi del test hanno aiuti locali; la sezione nuova di Z-32 sta alla riga 285 della doc, la mia frase
+    alla 615;
+  - la sorgente i18n `assets`: su dev nessun cambio dalla mia base; l'albero di X non lo posso vedere.
+- **Note**:
+  - la prova della lunghezza (≤ 60 caratteri con l'ora) gira su en-GB, en-US, it, fr, es: fr-CA, es-US ed es-MX restano
+    fuori perché i testi X8 che ci sono già superano i 60;
+  - restano inglesi gli altri riassunti di `summarizeProbeError` (timeout, HTTP…): fuori, come da analisi.
+- **⚠️ Fuori pista**: la riga dell'admin (`admin/configuration`) non era nel disegno. La sonda conta anche «Ask Provider»
+  (`AssetModal.svelte:939` chiama lo stesso endpoint), e il messaggio nuovo lo dice: è doc direttamente collegata,
+  corretta con una riga e segnalata al coordinatore.
+- **X-R66: definizione di fatto ✅** (revisione di X dopo l'ingresso). La riga X-R66 dell'indice sta nella sezione di X: la
+  chiude il coordinatore.
+- **Indice, sezione A** (pulizia, 17/10): chiuse con ✅ due righe già fatte ma mai registrate, A-3 (A4, `3ac4114d5`) e la
+  «Nota per A8» (A8, `66873b0c9`), verificate nel codice. Fusione simulata con dev `870d519bd` (8 commit sull'indice):
+  pulita.
+
+## X-R66 — Entrato; lotto A-11 + A-16 + A-40 + A-26 (17/10, 18:37–; base `c5b9cca75`)
+- **Entrato**: dev `e50c23919` (`ed5ad328a`); CHANGELOG 🐛 e X-R66 chiusa (`c5b9cca75`), la riga di `admin/configuration`
+  tenuta. Revisione di X dopo l'ingresso. Worktree portato avanti: HEAD `c5b9cca75` = dev, albero pulito.
+- Dal coordinatore: «A-11 + A-16 + A-40 + A-26 as one lot: GO, reds first, with one API slot. A-11 … first: it's an
+  availability bug on the login path. CHANGELOG 🐛 lines for A-11 and A-16.»
+
+### Lotto A-11/A-16/A-40/A-26 — stato reale e disegno (18:40, sola lettura)
+**A-11 · Un tema salvato che l'app non conosce blocca l'accesso**
+- Verificato nel codice: `settings_service.get_user_settings()` e `update_user_settings()` costruiscono
+  `UserSettingsRead(theme=<valore salvato>)`, e `theme` è un `Literal["light", "dark", "auto"]`: un altro valore solleva
+  `ValidationError` → 500. Chiamanti: `POST /auth/login` (dopo il commit del login e il cookie: l'utente non entra),
+  `POST /auth/setup`, `GET /settings/user` (`get_or_create_user_settings`), `PUT /settings/user` (500 **dopo** il commit).
+- Da dove viene un valore così: la colonna `VARCHAR(20)` senza CHECK; una riga scritta a mano; un `default_theme` globale
+  scritto a mano, che `get_or_create_user_settings`, `update_user_settings` e il benvenuto di `onboarding_service` copiano
+  nelle righe nuove; un ritorno a una versione vecchia dopo un tema nuovo. E lo sa già: `email/flows.py:96`
+  («a settings row that no longer validates (an old theme, say) never stops an email»).
+- **Cura** (un punto solo, in `settings_service`): un aiuto che dà il tema da mostrare. Il valore salvato se lo schema lo
+  conosce (l'insieme letto da `UserSettingsRead`, una fonte sola); altrimenti il `default_theme` dell'istanza se è un tema
+  noto, altrimenti `auto`; un avviso nel log (`user_id`, il valore salvato tagliato a 20 caratteri, quello mostrato).
+  La lettura non scrive: la riga tiene il suo valore (una versione che lo conosce lo mostra di nuovo); un `PUT` senza
+  `theme` lo lascia, uno con `theme` lo sostituisce. Le scritture dei semi restano come sono (la lettura le copre).
+- Test (`test-author`): una classe nuova in `test_settings_api.py`, **in-process** (il router di auth e quello delle
+  impostazioni su un motore privato sotto `tmp_path`, come `private_sign_in` di `test_auth_api.py`): login 200, `GET` e
+  `PUT /settings/user` 200, il tema mostrato secondo la regola (anche con un `default_theme` sconosciuto), la riga intatta,
+  l'avviso nel log. Rossi osservabili senza server.
+
+**A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`**
+- Verificato: `DELETE /auth/users/me` → `400 "Cannot delete account: you are the only administrator"`; il frontend
+  (`accountErrors.ts`) mostra la frase inglese. Esiste già `LAST_ADMIN` (409, `PATCH /users/{id}`), con un testo
+  «né disattivare né declassare» che non va bene per un'eliminazione; su un'eliminazione `LAST_ADMIN` può venire solo
+  dall'eliminazione di sé (quella di un altro admin risponde `DEMOTE_FIRST`).
+- **Cura**: stato **400 invariato**, `detail = {error_code: "LAST_ADMIN", message: "Cannot delete account: you are the
+  last active administrator"}` (la frase vecchia diceva «only», ma la regola conta gli admin **attivi**, ACCDEL-003).
+  Frontend: `describeAccountError(e, 'delete')` con `LAST_ADMIN` → la chiave nuova
+  `settings.usersTab.errors.LAST_ADMIN_DELETION` (4 lingue, con le parole dei bottoni: «Make administrator»…); senza
+  `'delete'` resta `…LAST_ADMIN`.
+- I test che riconoscono la frase: `SOLE_ADMIN_DELETE_DETAIL` in 6 file (`test_broker_access_api.py`, da cui lo importa
+  `test_account_deletion_api.py`, e le pulizie di `test_http_compression_api`, `test_portfolio_wac`, `test_assets_provider`,
+  `test_pac_planner_tool_api`, `test_portfolio_api`, nel caso dell'utente di test che resta l'unico admin): la costante
+  diventa il dizionario nuovo, una riga per file, il confronto resta. ACCDEL-002/003 diventano i rossi.
+- Frontend: `accountErrors.test.ts`, `AccountDeletionDialog.test.ts` (modo self: il testo tradotto, non la frase),
+  `ProfileTab.test.ts` (il rifiuto con la forma vera).
+- **Fuori, da registrare** (A-52): la guardia legge il conteggio degli admin prima del lock di scrittura (classe A-51):
+  due ultimi admin che si eliminano nello stesso istante passerebbero entrambi. Il percorso dell'admin
+  (`DELETE /users/{id}`) usa già `begin_writes`.
+
+**A-40 · `user activate` sull'admin in attesa avvisa del limite**
+- Verificato: `cmd_set_user_active` avvisa per ogni account inattivo a istanza piena, salvo quello che aspetta la verifica
+  dell'email (`holds_place`); l'admin iniziale in attesa è già contato da `user_usage` (`pending_admin_filter`). L'API
+  non ha il difetto (risponde 409 `PENDING_SETUP` prima del limite).
+- **Cura**: nessun avviso anche quando `registration_service.is_pending_admin(session, user)` (lo stesso filtro del
+  conteggio). Test: IMG-030f in `test_dev_cli_image.py` (PURE), accanto a IMG-030c.
+
+**A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico**
+- **Cura** (solo test): in `test_migration_005_accounts.py`, la chiave `indexes (name, columns, unique)` di `_shape` da
+  `_index_list` (origine `'c'`) invece che dall'ispettore di SQLAlchemy, che salta gli indici su espressione. Rosso: un
+  meta-test di `_shape` su copie di `fresh_head` (un indice su espressione non unico da una parte sola, o con due nomi →
+  forme diverse); guardia: due copie uguali → forme uguali; il contratto 3 resta verde.
+- Lo stesso punto cieco è in `test_migration_010_reported_currency.py` (di Z): lo segnalo soltanto.
+
+**Corsia**: tutti i rossi si osservano senza server (in-process, PURE, Vitest). Lo slot API (uno) a fine lotto:
+`api settings`, `api account-deletion`, `api auth`. Doc (`docs-writer`): sviluppatore (impostazioni, controllo d'accesso,
+componenti delle impostazioni), `admin/cli_tools.en.md` (A-40, solo EN: le traduzioni sono già indietro, A-10).
+
+### A52.1 — Rossi (18:45–19:16, due `test-author` in parallelo, file distinti) ✅
+- **Backend** (agente `f24a8ad6`; ripetuti da me 19:14–19:16 con `/tmp/libreFolio_a8a_inproc/run.sh`, nessun server):
+  - A-11, `test_settings_api.py` classe `TestStoredThemeUnknownToTheApp` (SET-A11-01…07, in-process su un file privato,
+    i router veri di auth e impostazioni, `get_async_engine` come trappola): **7 rossi** (`ValidationError` di
+    `UserSettingsRead`, `literal_error`, al login, al GET e al PUT), **5 guardie verdi** (01, 05, 06×3);
+  - A-16, `test_account_deletion_api.py` ACCDEL-002/003 e la costante `SOLE_ADMIN_DELETE_DETAIL` (una riga in 6 file):
+    **2 rossi** sul controllo `error_code` («its detail is 'Cannot delete account: you are the only administrator'»);
+  - A-40, `test_dev_cli_image.py` IMG-030f: **1 rosso** («⚠️ The instance is at its limit … reactivates the account
+    anyway»), 7 verdi (IMG-030…030e, la guardia 030c compresa);
+  - A-26, `test_migration_005_accounts.py` MIG005-A26-01/02 (non unico e unico): **3 rossi** (forme uguali), la guardia
+    A26-03 verde.
+- **Frontend** (agente `0291b358`; ripetuto da me): `accountErrors.test.ts` AERR-15/16/17 rossi, AERR-18/19 guardie;
+  `AccountDeletionDialog.test.ts` ADEL-28 ×4 lingue rossi (chiave mancante; oggi il dialogo mostra il testo di
+  `LAST_ADMIN`, «né disattivare né declassare»), ADEL-29 ×4 guardie; `ProfileTab.test.ts` sulla forma nuova (verde prima e
+  dopo). **7 rossi, 193 verdi** (`/tmp/libreFolio_a52_front_red.log`).
+- **Note dell'agente**: il testo nuovo senza `''` ICU (il test confronta il valore grezzo del catalogo); diverso da quello
+  di `LAST_ADMIN` in ogni lingua. Dopo la cura il contratto 3 di 005 confronta per nome anche gli indici creati: da
+  verificare verde sul file intero.
+
+### A52.2 — Codice applicato e verdi locali ✅ (19:16–19:30)
+- **Codice** (`work/a52/apply_a52.py`, `work/a52/i18n_a52.py`):
+  - A-11, `services/accounts/settings_service.py`: `KNOWN_THEMES` (letto dal `Literal` di `UserSettingsRead.theme`),
+    `FALLBACK_THEME = "auto"`, `_shown_theme()` (il tema salvato se noto, altrimenti `default_theme` se noto, altrimenti
+    `auto`; un WARNING con `user_id`, `stored` tagliato a 20, `shown`) e `_settings_read()`, usato da `get_user_settings()`
+    e da `update_user_settings()`; la lettura non scrive;
+  - A-16, `api/v1/auth.py` `delete_own_account`: 400 con `{error_code: "LAST_ADMIN", message: "Cannot delete account: you
+    are the last active administrator"}`; `accountErrors.ts`: `LAST_ADMIN` con `'delete'` → la chiave nuova
+    `settings.usersTab.errors.LAST_ADMIN_DELETION` (4 lingue, sorgente `settings`), il commento falso riscritto;
+  - A-40, `scripts/user_cli.py` `cmd_set_user_active`: nessun avviso anche per `registration_service.is_pending_admin`;
+  - A-26, `test_migration_005_accounts.py` `_shape`: la chiave `indexes (name, columns, unique)` da `_index_list`
+    (origine `c`), la docstring aggiornata.
+- **Verdi** (in-process, nessun server): SET-A11 12/12; ACCDEL-002/003 2/2; `TestUserLimitFromTheCommandLine` 8/8;
+  `test_migration_005_accounts.py` intero 29/29 (il contratto 3 resta verde confrontando per nome anche gli indici
+  creati); `test_dev_cli_image.py` intero 95/95. Vitest dei 3 file 200/200. `ruff` pulito su 13 file, `black` pulito su
+  12 (`test_portfolio_api.py` non lo è già a HEAD, 38 righe: tocco solo la costante); Prettier pulito; i18n strict 5 064.
+- **⚠️ Fuori pista**: `front check` rosso su `components/fx/FxPairAddModal.svelte:327` (`queries: {replace: true}`, X-R75
+  entrata con l'avanzamento): il client generato (ignorato da git) era vecchio. `dev.py api sync` → nessun file tracciato
+  cambiato → `front check` 0 errori e 0 avvisi.
+- Doc: affidate al `docs-writer` (`3a36f6e7`), solo EN, nessun timbro.
+- **Unità leggere della corsia** (19:25–19:36, `work/a8a/reds.sh g52`, nessun server): `services settings` 23/23;
+  `front-utility core-unit` 214 file / 8 912; `front-utility component-unit` **rc 1**: 4 785 verdi, 113 saltati, 3 file
+  rossi per «Hook timed out in 60000ms» nel `beforeAll` che importa il componente — `changelog/WhatsNewModal.test.ts`
+  (C-54), `backup/RestoreCard.test.ts` e `backup/RestoreReportModal.test.ts` (B), nessuno toccato dal lotto.
+  - **Triage** (skill `test-triage`): nessuna asserzione eseguita (§1 non applicabile); il tempo dell'import nell'esecuzione
+    intera 1 895 s cumulati, il carico salito da 46 a **124** (media a 5 minuti, 19:37: le corse pesanti di altre
+    sessioni). I tre file da soli (19:39, carico a 1 minuto < 50): **113/113 in 12,8 s, import 0,4 s** — esattamente i 113
+    saltati. **Verdetto: ambiente** (macchina satura oltre il cancello; il mio `reds.sh` controlla il carico a 1 minuto
+    solo alla partenza). Rimedio: `component-unit` intera di nuovo dietro il cancello a 5 minuti, dopo lo slot API.
+
+### A52.3 — Doc e indice ✅ (19:20–19:45)
+- **Doc** (`docs-writer` `3a36f6e7`, solo EN, nessun timbro): `developer/architecture/settings.md` (paragrafo «A stored
+  theme the app does not know», A-11); `developer/architecture/access_control.md` («Superusers…»: il 400 `LAST_ADMIN`;
+  la tabella «The User Limit»: `user activate` senza avviso anche per l'admin in attesa, A-40);
+  `developer/architecture/users_and_brokers.md` («Deleting an Account»); `developer/frontend/components/features/settings.md`
+  (tabella «Account Errors»: la riga `LAST_ADMIN` su un'eliminazione, la riga della frase senza codice ora un ripiego
+  senza esempio; l'esito di `AccountDeletionDialog`; i test AERR-15…19 e ADEL-28/29); `admin/cli_tools.en.md` (📏 e 🏁);
+  `admin/users.en.md` («Waiting for Its Setup Link»). Verificato da me nel diff.
+- **⚠️ Fuori pista**: il `docs-writer` segnala `admin/configuration.en.md` («When the Instance Is Full»: «`user activate`
+  print[s] a warning») falso per chi tiene già il posto — già per la verifica dell'email, ora anche per l'admin in attesa:
+  corretto da me con una frase (stessa materia di A-40). E `developer/api/curl-testing.md` (~95–99): una rotta che non
+  esiste (`PATCH /auth/users/me/preferences`) → **A-53** nell'indice, non toccata.
+- `mkdocs build` strict pulito, `check-links` 97 validi (`/tmp/libreFolio_a52_mkdocs.log`, `…_links.log`).
+- **Indice** (la mia sezione): ✅ A-11, A-16, A-26, A-40; nuove **A-52** (l'eliminazione di sé conta gli admin attivi prima
+  del lock di scrittura, classe A-51) e **A-53**; ad A-10 una nota: in EN cambiano ancora `admin/cli_tools` e
+  `admin/configuration` (traduzioni indietro, nessun timbro).
+
+### A52.4 — Slot API (GO del coordinatore, 19:28) ✅ (19:43–19:54)
+- `work/slot_a52/slot.sh c5b9cca75 all`, dietro il cancello del carico a 5 minuti (atteso dalle 19:43 alle 19:46): `api
+  settings` **110/110** (le classi in-process comprese), `api account-deletion` **9/9**, `api auth` **95/95**;
+  `front-utility core-unit` **214 file / 8 912**; `front-utility component-unit` **181 file / 4 898** (i tre file del
+  timeout delle 19:36 verdi: verdetto «ambiente» confermato). Impronta dell'albero invariata (`0fdc3b5744821d76`),
+  porta 6182 libera.
+- **Lotto A-11/A-16/A-40/A-26: definizione di fatto ✅** — rossi osservati prima del codice, verdi locali e di corsia, doc
+  EN con build strict e link, indice aggiornato. Non eseguiti: nessun E2E (il lotto non ne tocca), `all-backend`.
+
+## Lotto A-11/A-16/A-40/A-26 — Entrato nel ramo; note di E e di H (17/10, 19:55–)
+- **Checkpoint del coordinatore** (6 commit, 30 file): `3e12b09ae` (A-11), `16164411d` (A-16), `87356c8c5` (A-40),
+  `f8503b48e` (A-26), `c64d8192b` (doc), `a1b826e42` (journal). HEAD `a1b826e42`, albero pulito.
+- **Revisione di E di A-51: OK**, con tre note → indice, sezione A: **A-54** (la `refresh` di una riga cancellata nella
+  finestra → 500, quattro punti), **A-55** (la DELETE rilegge sotto il lock solo l'admin in attesa), **A-56** (il limite
+  contato prima del lock: la riattivazione dal PATCH e, trovato da me, `create_invite`; la registrazione è già sicura).
+  Proposto al coordinatore un lotto «decidere sotto il lock»: A-52 + A-54 + A-55 + A-56 + A-53; in attesa del GO.
+- **Da H-43** (dev `a6adb0066`, la corsia gestita), due righe nell'indice: **A-57** (LGM-E-01/03 di
+  `legal-and-managed.spec.ts` leggono il profilo della corsia; in 1.3, prima della fase 2 di H-43; dopo il lotto in corso)
+  e **A-58** (la metà UX di H-53, dopo la 1.3: cosa vede l'admin quando `connect-src 'self'` blocca la verifica
+  dell'indirizzo).

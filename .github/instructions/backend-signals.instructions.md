@@ -1,5 +1,5 @@
 ---
-applyTo: "backend/app/services/signals/**,backend/app/services/signal_plugins/**,backend/app/services/series_preparation.py"
+applyTo: "backend/app/services/signals/**,backend/app/services/signal_plugins/**,backend/app/services/market_series.py"
 ---
 
 # Technical Signals (backend)
@@ -17,7 +17,7 @@ applyTo: "backend/app/services/signals/**,backend/app/services/signal_plugins/**
   call, failure isolation, the visible slice), `validation.py` (the output contract, sanitization, availability
   rewrites), `runtime.py`, `annotations.py` (crossings and their attachment to results), `series.py` (input coverage,
   quote days, availability, the visible slice), `base.py` (the contract), `registry.py` and `risk_adapters.py` (the
-  rolling risk helpers the risk-based indicators share). `series_preparation.py` is shared with the risk engine.
+  rolling risk helpers the risk-based indicators share). `market_series.py` is shared with the risk engine.
 - **API**: the Asset and FX catalogs and executions are served by `api/v1/assets/prices.py` and `api/v1/fx/currencies.py`. The frontend
   renders the declaration with no indicator-specific code (`frontend-signals.instructions.md`).
 

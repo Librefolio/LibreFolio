@@ -510,7 +510,7 @@ def _asset_drawdown_row(*, asset_id: int, points: tuple[tuple[Date, Decimal], ..
             n_observations=len(points),
         )
 
-    # The return path of the Risk series (series_preparation): the asset's row and its drawdown_summary agree.
+    # The return path of the Risk series (market_series): the asset's row and its drawdown_summary agree.
     returns = tuple(float_price_return(previous_value, current_value) for (_, previous_value), (_, current_value) in zip(points, points[1:], strict=False))
     try:
         report = drawdown_episodes(

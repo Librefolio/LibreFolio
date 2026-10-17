@@ -124,6 +124,28 @@
     "bulkRefusal": {
       "tooManyItems": "Certaines valeurs n'ont pas pu être chargées : le serveur accepte au plus {max, number} éléments par requête, et celle-ci en contenait {count, number}.",
       "tooManyDays": "Certaines valeurs n'ont pas pu être chargées : le serveur calcule au plus {max, number} valeurs journalières par requête, et celle-ci en demandait davantage. Choisissez une période plus courte."
+    },
+    "nonIsoCurrency": {
+      "suggestion": "{value} n'est pas un code ISO : il désigne {suggestion}",
+      "candidates": "{value} n'est pas un code ISO : il peut désigner {candidates}",
+      "unknown": "{value} n'est pas un code de devise ISO"
+    },
+    "writeRefusal": {
+      "dateOutOfRange": "{count, plural, one {# date est} many {# dates sont} other {# dates sont}} hors de l'intervalle {min} – {max} : {dates}. Rien n'a été enregistré.",
+      "currencyMismatch": "{count, plural, one {# prix est} many {# prix sont} other {# prix sont}} en {found}, pas dans la devise de l'actif {expected} : {dates}. Rien n'a été enregistré.",
+      "notSaved": "{count, plural, one {# valeur n'a pas été enregistrée} many {# valeurs n'ont pas été enregistrées} other {# valeurs n'ont pas été enregistrées}} : {items}",
+      "more": "et {n} de plus",
+      "reason": {
+        "ohlc_inconsistent": "clôture hors de l'intervalle bas–haut",
+        "date_out_of_range": "date hors intervalle",
+        "value_not_storable": "valeur trop grande ou trop petite pour être enregistrée",
+        "rate_not_storable": "taux trop grand ou trop petit pour être enregistré",
+        "same_currency": "même devise des deux côtés",
+        "invalid_rate": "taux non valide",
+        "internal_error": "erreur du serveur",
+        "other": "refusé par le serveur"
+      },
+      "tooManyItems": "Rien n'a été enregistré : le serveur accepte au plus {max, number} valeurs par enregistrement, et celui-ci en contenait {count, number}. Enregistrez-les en plusieurs fois."
     }
   },
   "csvImport": {

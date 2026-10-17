@@ -14,7 +14,7 @@ from pathlib import Path
 
 import argcomplete
 
-from scripts.cli_base import configure_test_runtime
+from scripts.cli_base import TEST_LANE_SETTABLE, TEST_LANE_SETTINGS, configure_test_runtime
 from scripts.coverage_analysis import register_subparser as register_cov_parser
 from scripts.coverage_analysis import run_analysis as run_coverage_analysis
 
@@ -539,6 +539,14 @@ def _add_runtime_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Data root for this test lane (default: LIBREFOLIO_TEST_DATA_DIR or backend/data/test)",
     )
+    parser.add_argument(
+        "--lane-setting",
+        dest="lane_settings",
+        action="append",
+        metavar="NAME=VALUE",
+        default=None,
+        help=f"A setting of this lane's instance, repeatable (H-43): only {', '.join(sorted(TEST_LANE_SETTABLE))}",
+    )
 
 
 def _configure_runtime(args) -> bool:
@@ -547,6 +555,7 @@ def _configure_runtime(args) -> bool:
         port, data_dir = configure_test_runtime(
             port=getattr(args, "test_port", None),
             data_dir=getattr(args, "data_dir", None),
+            lane_settings=getattr(args, "lane_settings", None),
         )
     except ValueError as exc:
         print_error(str(exc))
@@ -554,6 +563,8 @@ def _configure_runtime(args) -> bool:
 
     if getattr(args, "test_port", None) is not None or getattr(args, "data_dir", None) is not None:
         print_info(f"Test runtime lane: port {port}, data {data_dir}")
+    if os.environ.get(TEST_LANE_SETTINGS):
+        print_info(f"Test lane settings: {os.environ[TEST_LANE_SETTINGS]}")
     return True
 
 

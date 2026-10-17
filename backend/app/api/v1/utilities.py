@@ -10,12 +10,14 @@ Provides helper endpoints for:
 
 from fastapi import APIRouter, Query
 
+from backend.app.schemas.common import is_canonical_iso_currency, iso_currency_candidates, suggested_iso_currency
 from backend.app.schemas.utilities import (
     CountryListItem,
     CountryListResponse,
     CurrencyListItem,
     CurrencyListResponse,
     CurrencyNormalizationResponse,
+    CurrencySuggestionResponse,
     SectorItem,
     SectorListResponse,
 )
@@ -224,3 +226,20 @@ async def normalize_currency_endpoint(
         match_type=result["match_type"],
         error=result.get("error"),
     )
+
+
+#: The longest value the suggestion reads (E-19b1): every ISO 4217 name (at most 65 characters) fits, with room.
+SUGGEST_MAX_LENGTH = 200
+
+
+@router.get("/currencies/suggest", response_model=CurrencySuggestionResponse)
+def suggest_currency(value: str = Query(..., min_length=1, max_length=SUGGEST_MAX_LENGTH, description="A stored currency value: a code, a numeric code or a currency name")):
+    """The ISO 4217 code a stored currency value stands for (E-19b1).
+
+    Since E-18 a write takes only an ISO 4217 alphabetic code, while an earlier version saved what it accepted as written:
+    a numeric code or a name (``978``, ``EURO``). The currency picker asks here for such a value it cannot list, and
+    shows the code it stands for. ``canonical``: already stored as a code. ``suggestion``: the one code it stands for, or
+    null when it stands for none or for two (``Bolívar Soberano``: VED and VES); a subunit code (``GBX``, ``ZAC``,
+    ``ILA``) never gets one. ``candidates``: every code it may stand for, sorted. The rule is ``schemas/common.py``'s.
+    """
+    return CurrencySuggestionResponse(canonical=is_canonical_iso_currency(value), suggestion=suggested_iso_currency(value), candidates=list(iso_currency_candidates(value)))

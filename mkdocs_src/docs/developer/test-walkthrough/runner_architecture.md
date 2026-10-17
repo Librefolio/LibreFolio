@@ -729,7 +729,7 @@ def populate_registry(registry: dict) -> None:
     registry["utils"] = cat
 ```
 
-### Registry Entry Shape
+### Registry Entry Shape {: #registry-entry-shape }
 
 A category registered in `TEST_REGISTRY` maps to a dictionary containing:
 
@@ -743,6 +743,17 @@ A category registered in `TEST_REGISTRY` maps to a dictionary containing:
     * `name`: A human-readable title.
     * `desc`: A short description of the test action.
     * `prereq` / `tests` / `note`: Optional flags and metadata for dependencies.
+    * `in_all`: `True` unless the action is registered `in_all=False` or `named_only=True`. `False` leaves it out of
+      its category's serial `all`: an action whose files another action already runs, such as an aggregate alias, or
+      the four per-spec actions of `front-ai-export` that `cutover` runs in one invocation. Such an action is still a
+      claimant in the frontend consolidated pass: it gets its verdict from the run that covers its files.
+    * `named_only`: Present, and `True`, only for an action registered `named_only=True`: it runs only when named on
+      the command line, on any lane. It implies `in_all=False`, and `group_frontend_units()` (`_consolidate.py`)
+      leaves it out of the frontend consolidated pass too, whatever it launches. It exists for an action that needs a
+      lane of its own while other actions already run its files: today `front-utility cloud-smoke`, refused unless the
+      lane is managed. On a managed lane its profile check passes while the inventory collects launches, so with
+      `in_all=False` alone it would have stayed in `front-utility all`, and `all-frontend` would have run seven specs
+      twice. The backend's consolidated and parallel passes do not read it: no backend action needs it today.
 
 ---
 
@@ -858,7 +869,11 @@ To add a new test action to an existing category:
 5. Nothing else is needed. The category's `all` list is **derived** from the registry by
    `_get_category_tests_for_all()`, so a registered action is reachable by construction — the state
    "registered but never executed" is no longer expressible. Pass `in_all=False` only when another
-   action already runs the same files, as with an aggregate alias.
+   action already runs the same files, as with an aggregate alias. Pass `named_only=True` for an
+   action that must run only when named, on any lane: one that needs a lane of its own while other
+   actions already run its files, as `front-utility cloud-smoke` on a managed lane. It implies
+   `in_all=False`, and the frontend consolidated pass leaves it out too (see
+   [Registry Entry Shape](#registry-entry-shape)).
 
 !!! danger "Never hand-write an `all` list"
 

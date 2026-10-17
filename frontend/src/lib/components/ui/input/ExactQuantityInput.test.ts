@@ -503,3 +503,35 @@ describe('ExactQuantityInput — the digit budget says why it refuses (C-97b)', 
         expectDigitsError(input, TID, 6);
     });
 });
+
+/**
+ * W-B64 — the digit budget counts no zero the backend drops. The backend counts no leading zero of the integer part and no
+ * trailing zero of the fraction (`precision._digit_counts`); this wrapper counted characters too (`withinDigitBudget`), so
+ * a parent value of `0.10000000000` — one decimal — was past a budget of 10: shown as given, and refused.
+ *
+ * The contract: within the budget once those zeros are dropped, a parent value is shown as the decimal it is
+ * (`formatDecimalForDisplay`, as for any value within the budget: `0.1`) and published valid. A value whose digits are
+ * past the budget is still shown whole and refused: nothing cuts it to fit.
+ */
+describe('ExactQuantityInput — the digit budget counts no zero the backend drops (W-B64)', () => {
+    // Red before the W-B64 cure: withinDigitBudget counts eleven decimals, so the value is shown as given and refused.
+    it('shows a parent value of 0.10000000000 at maxFractionDigits=10 as 0.1, and publishes it valid', async () => {
+        const {input, validities} = mountWithParentLoop({value: '0.10000000000', maxFractionDigits: 10});
+
+        // `empty: false` waits for the inner field's own verdict, never the state this wrapper starts from.
+        await waitFor(() => {
+            const validity = lastValidity(validities);
+            expect({displayed: input.value, empty: validity?.empty, digitsValid: validity?.digitsValid, valid: validity?.valid}, 'one decimal for the backend, within a budget of ten').toEqual({displayed: '0.1', empty: false, digitsValid: true, valid: true});
+        });
+        expectNoDigitsError(input, TID);
+    });
+
+    // Guard: a parent value really past the budget is shown whole and refused — formatted, it would be cut to ten decimals.
+    it('still shows a parent value of 0.10000000001 at maxFractionDigits=10 whole, refused, and says why', async () => {
+        const {input, validities} = mountWithParentLoop({value: '0.10000000001', maxFractionDigits: 10});
+
+        await waitFor(() => expect(lastValidity(validities)).toMatchObject({empty: false, digitsValid: false, valid: false}));
+        expect(input, 'never cut to fit the budget').toHaveValue('0.10000000001');
+        expectDigitsError(input, TID, 10);
+    });
+});

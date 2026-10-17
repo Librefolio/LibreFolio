@@ -350,6 +350,9 @@ No transformation is needed between the DFS output and the API request body.
 - A pair that is already configured cannot be created again: the save button is disabled, and
   before posting the modal reloads the configured routes and drops the save if the pair appeared
   meanwhile.
-- In edit mode (**Providers** on the pair page) the modal first deletes all the pair's routes,
-  then posts the new list. With an empty list it posts nothing and keeps the `MANUAL` sentinel the
-  backend reinstates on delete.
+- In edit mode (**Providers** on the pair page) the modal posts the new list in one request with
+  `?replace=true` (X-R75): the backend keeps exactly those routes for the pair, in one transaction,
+  so a save that fails or never arrives leaves the pair as it was. With an empty list it posts the
+  `MANUAL` item, and the pair becomes manual. Before X-R75 the modal deleted all the pair's routes
+  first, so a failed post left the pair with no route, and an empty list deleted the pair: a
+  whole-pair delete never reinstates the `MANUAL` sentinel.

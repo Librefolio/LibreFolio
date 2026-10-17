@@ -943,7 +943,7 @@ describe('the widened optional numerics', () => {
 /**
  * A result's `metadata`, complete — it parses with `schemas.RiskResultMetadata`, which is what
  * `riskMetadata()` reads it through — and filled the way the engine fills it for an asset set
- * (`RiskService` loads prices from the day before the requested start, `series_preparation.py`
+ * (`RiskService` loads prices from the day before the requested start, `market_series.py`
  * prepares them):
  *
  *  - the BASELINE PRICE — the one the first return is measured from — is the last complete date

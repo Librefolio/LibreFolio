@@ -6524,3 +6524,190 @@ Trovata da E (E-19), girata dal coordinatore. In modifica `FxPairAddModal` cance
 le rimanda: un POST fallito le perde. Gemello da provare: togliendo tutti i provider la coppia resta senza rotte,
 nemmeno MANUAL (`delete_routes_bulk` rimette la sentinella solo dopo una cancellazione con priorità). Cura proposta:
 una sostituzione atomica nel backend; peso come X-R58. Dettagli nel backlog, «X-R75».
+
+### Voci registrate (17/10, 17:05)
+
+- **X-R74 entrata** in dev `1c1456713` (merge `468a164f7`; il conflitto del CHANGELOG risolto dal coordinatore con
+  entrambe le righe, prima quella di B-43); worktree portato avanti.
+- **X-R75 → B** (decisione del coordinatore): B ha già l'analisi, con lo stesso gemello, e fa l'opzione A, un
+  `replace=true` atomico su `POST /fx/providers/routes`; X rivede. La modale delle rotte resta a B.
+- **X-R76** (da W, residuo di W-B68): gli eventi pianificati di uno Scheduled Investment oltre i 6 decimali si
+  troncano in silenzio. Dopo la 1.3: `validate_params` gira anche a ogni lettura e al refresh, quindi un controllo
+  nello schema bloccherebbe i piani già salvati.
+- **X-R77** (da W): `_names_the_asset` di `test_event_split_ratio.py` accetta qualunque numero; con l'asset 1 basta
+  `count=1`. Da stringere sulla chiave `asset_id` al prossimo tocco del file.
+- Ordine: **X-R46** (allargata), poi **X-R66**; la finestra E2E la chiedo al coordinatore.
+
+### X-R46 ✅ — gli editor dei dati dicono i rifiuti del server (17:10–18:55)
+
+Base `1c1456713` (X-R74 entrata). Ordine del coordinatore: X-R46 allargata, poi X-R66; finestra E2E da chiedere.
+
+**Stato verificato.**
+- `FxDataEditorSection.handleSave()`: un errore mostra `e.message` di Axios («Request failed with status code 422/400»);
+  un 200 con rifiuti per voce (`errors`, stringhe «Rate {idx}: …») conta come salvate tutte le righe inviate e ricarica.
+- `AssetDataEditorSection.handleSave()` (prezzi): lo stesso `e.message`; un 200 conta come salvate tutte le righe inviate
+  (`validUpserts.length`) e non legge `results[0].count` né il messaggio, così una data scartata dal controllo OHLC è
+  annunciata come salvata (il gemello di B). Gli eventi hanno già `eventSaveErrorMessage`: restano come sono.
+- I rifiuti codificati che gli editor ricevono: 422 `date_out_of_range` (prezzi: `items[].dates`; cambi:
+  `items[].date`), 422 `price_currency_mismatch` (X-R71 di B: `items[].expected`/`found`/`dates`), 422
+  `bulk_too_many_items`; 400 con `detail` stringa (cambi «All rates failed: …», limiti C-97 dei prezzi).
+- Entrambi i genitori chiudono l'editor e ricaricano a `onsave`: dopo un rifiuto parziale il canale è il toast.
+- `BaseBulkResponse` dice che gli errori per voce stanno nelle voci, non in `errors`: il cambio lo viola.
+
+**Contratto deciso** (la decisione è mia, la riporto al checkpoint):
+1. Backend, prezzi: `FAPriceRejection {date, reason}` con `reason` ∈ `ohlc_inconsistent` | `date_out_of_range` |
+   `value_not_storable`; `FAUpsertResult.rejected` (lista, vuota per difetto, ordinata per data) riempita da
+   `bulk_upsert_prices` con le tre liste che già esistono. Il messaggio inglese resta.
+2. Backend, cambi: `FXRateRejection {index, date, reason}` con `reason` ∈ `same_currency` | `rate_not_storable` |
+   `invalid_rate` | `internal_error`; `FXBulkUpsertResponse.rejected`; le stringhe di `errors` restano. Tutto rifiutato:
+   400 con `detail` oggetto `{code: "fx_rates_refused", message: "All rates failed: …" (lo stesso testo), rejected}`.
+3. Frontend: `lib/api/writeRefusal.ts`, puro: `writeRefusalMessage()` (i 422 codificati, il 400 `fx_rates_refused`,
+   `bulk_*` delegati a `bulkRefusalMessage`), `rejectedMessage()` (date e motivo tradotto), `saveErrorText()` (quei
+   messaggi, altrimenti `extractErrorMessage`: mai il testo generico di Axios quando il server ha detto qualcosa). Date
+   ISO, come `eventSaveErrorMessage`.
+4. Gli editor: il conteggio dei salvati dalla risposta, i rifiutati a parte, il toast `warning` con le date e il motivo;
+   l'errore con `saveErrorText`.
+5. i18n (`base`, 4 lingue): `common.writeRefusal.*` (dateOutOfRange, currencyMismatch, notSaved, more, reason.*),
+   `fxDetail.refusedCount`, `assets.dataEditor.pricesRefused`.
+6. Prove: rossi pytest (`api fx-unit` in processo; `services asset-source-guards` per il prezzo), Vitest del modulo,
+   E2E con risposte simulate in `fx-data-editor` e `asset-data-editor` (finestra). `api sync` dopo gli schemi.
+7. Doc: `developer/backend/fx/configuration.md` (~275, la forma del 400 e il 200 con `rejected`), l'architettura degli
+   asset (`rejected`), le pagine utente dei due editor (tradotte: debito).
+- **Rossi affidati** (17:12): tre test-author in parallelo.
+  - backend: `api fx-unit` per il cambio, `services asset-source-guards` per il prezzo;
+  - Vitest: `src/lib/api/writeRefusal.test.ts`;
+  - E2E: `fx-data-editor`, `asset-data-editor`, da lanciare in una finestra.
+  Codice preparato a parte e provato a secco: `xr46_backend.py`, `xr46_frontend.py`, `xr46_i18n.py`, la bozza di
+  `writeRefusal.ts`. black, ruff e Prettier puliti sulle copie.
+- **Vitest** (17:29): `writeRefusal.test.ts`, 136 casi in 40 dichiarazioni, registrato in `_frontend_utility.py` dopo
+  `bulkRefusal.test.ts`.
+  - Rosso: «Cannot find module './writeRefusal'».
+  - Modulo messo al suo posto: **136 passed**.
+  - Chiesto al test-author un rosso in più: la parte «prezzi rifiutati» di `assetDataSaveSummary`.
+- **⚠️ Fuori pista — il motivo dei rifiuti X-R38** (17:30, dal test-author del backend):
+  - `normalize_storable_rate` non rifiuta `1E-12`. I limiti di X-R38 li controlla `storable_fx_rate` dentro
+    `upsert_rates_bulk`, con un `ValueError` qualunque. Il contratto letto alla lettera avrebbe dato `invalid_rate`
+    proprio ai rifiuti più comuni.
+  - Deciso: `FXRateNotStorableError(ValueError)` in `services/fx/storage.py`, sollevato da `upsert_rates_bulk` e dalla
+    rotta. La rotta sceglie `rate_not_storable` con `isinstance`. Il testo non cambia.
+- **Rossi backend**:
+  - `services asset-source-guards`: **5 failed**, 43 passed (17:31; «the asset's result has no 'rejected'», «no
+    FAPriceRejection»);
+  - `api fx-unit` (in processo, `--no-shared-server`): **11 failed**, 48 passed (17:38; «the 400's detail is a str»,
+    nessun `rejected`, nessun `FXRateNotStorableError`).
+- **Rossi Vitest**:
+  - `writeRefusal.test.ts`: modulo mancante (sopra);
+  - `assetDataSaveSummary.test.ts`: **11 failed**, 32 passed (17:38). Il test-author ci ha messo anche la presenza di
+    `assets.dataEditor.pricesRefused` nel catalogo vero.
+- **Rossi E2E** scritti (6, `describe('server refusals (X-R46)')`), insieme a tre uguaglianze esatte del dettaglio di
+  `assets.data.saved` adattate a `pricesRefused: 0` (test 24 e due salvataggi di soli eventi). `tsc -p tsconfig.e2e.json`
+  pulito.
+- **Codice backend applicato** (17:40, `xr46_backend.py`): black e ruff puliti, `import backend.app.main` ok.
+- **Verdi backend** (17:41–17:44):
+  - `services asset-source-guards` **48**;
+  - `api fx-unit` **59**;
+  - `services fx-core` **42**;
+  - `services bulk-writes-chunked` **69**;
+  - `services range-ceiling` **72**.
+- **Finestra E2E** (via del coordinatore, 17:44). Prima i rossi sugli editor ancora com'erano.
+- **Rossi E2E** (17:44–17:56, nella finestra): `front-fx fx-editor X-R46` **3 failed** («FX save failed: Request failed with
+  status code 422», toast di successo per il parziale, `fx-editor-error` assente); `front-asset asset-data-editor X-R46`
+  **3 failed** («Failed to save: Request failed with status code 422», `pricesSaved` 2).
+- **Codice frontend applicato** (17:56, nessuna corsa attiva): `xr46_frontend.py` (i due editor, `assetDataSaveSummary.ts`,
+  `writeRefusal.ts` già al suo posto, `data-testid="fx-editor-error"`); `xr46_i18n.py`, 14 chiavi in 4 lingue, ognuna
+  nella sua sorgente: `base` 12, `fx` 1, `assets` 1. `api sync` (il client ha `rejected`).
+- **Verdi** (17:57–18:15):
+  - Vitest `writeRefusal` + `assetDataSaveSummary` + `bulkRefusal` **238 passed**;
+  - `i18n check` pulito; `front check` 0 errori e 0 avvisi; `utils gate-i18n-catalog` **176**, `gate-i18n-usage` **195**;
+  - finestra: `front-fx fx-editor` **7 passed**, `front-asset asset-data-editor` **30 passed**, `api fx` **27 passed**;
+    porta 6183 libera.
+- **CHANGELOG**: 🐛 «gli editor non dicono più salvato un valore rifiutato…» in fondo ai Fixed; 🔄 «API: `rejected`…, il
+  400 dei cambi con `detail` oggetto» in fondo ai Changed. Da decidere col coordinatore se il 400 va anche nei ⚠️ Breaking.
+- **Documentazione** affidata a un docs-writer (18:15): `fx/configuration.md`, l'architettura degli asset, le due
+  pagine utente degli editor (tradotte: debito).
+- **⚠️ Fuori pista — tre reperti del docs-writer** (18:30). Il primo e il terzo sono sul percorso e costano poco, e li
+  riprendo nel lotto (X-R46b).
+  1. **Il −1 di cancellazione letto come limite.** Il controllo OHLC di `bulk_upsert_prices` usava `price.low`/`high`
+     grezzi. Cancellare High (o entrambi) dall'editor scartava la data come `ohlc_inconsistent`; prima di X-R46 la data
+     spariva in silenzio, contata come salvata.
+     - Cura: il −1 si risolve prima del controllo. Il controllo stretto vale solo con due limiti veri in arrivo,
+       altrimenti il ramo di prima (allargare i limiti uniti, o scrivere).
+     - Rossi (test-author): 4 test `manual_edit` in `asset-source-guards`. **3 failed, 1 passed**: la guardia, due
+       limiti veri con la chiusura sotto Low, resta rifiutata.
+     - Lo specchio (Low cancellato, High sotto la chiusura) fissa la politica attuale a un solo limite: **X-R78**,
+       registrata, decide se rifiutarlo.
+  2. **La valuta nella riga del CHANGELOG.** L'editor degli asset non manda mai una valuta con i prezzi, quindi
+     `price_currency_mismatch` non viene dall'editor: l'esempio è tolto.
+  3. **Il rifiuto per dimensione** (422 `bulk_too_many_items`, per esempio un import CSV dei cambi oltre 10.000 righe)
+     riceveva la frase di lettura di X-R58 («Some values could not be loaded…»).
+     - Cura: `common.writeRefusal.tooManyItems`, la frase di un salvataggio, in 4 lingue. `bulk_too_many_days` resta
+       delegato.
+     - Rossi Vitest: **3 failed**, 153 passed.
+- **Codice X-R46b** (18:40, `xr46b_code.py`, più la chiave via `i18n add`). Verdi:
+  - `services asset-source-guards` **52**; Vitest **258** (i tre file);
+  - `i18n check` pulito; `gate-i18n-usage` **195**, `gate-i18n-catalog` **176**; `front check` 0/0.
+- **Non lanciata**: `api ohlc-sentinel`, che vuole un server; i suoi −1 toccano solo open e volume, non i limiti.
+- Doc: il docs-writer aggiunge la regola del limite cancellato, la nota in `frontend/components/core-ui/data-editor.md`
+  e l'etichetta «Failed to save: …» nella pagina utente degli asset.
+- **Doc** (docs-writer, verificata):
+  - `developer/backend/fx/configuration.md`: il 200 con `rejected`, il 400 oggetto, i quattro motivi;
+  - `developer/backend/assets/architecture.md`: `#rejected-price-dates`, i tre motivi, la regola del limite
+    cancellato;
+  - `developer/frontend/components/core-ui/data-editor.md`: «Saving», con X-R46 ed etichetta «Failed to save: …»;
+  - le due pagine utente degli editor, più l'etichetta «Failed to save: …».
+  `mkdocs build` stretta verde; `check-links` verde (97 link). Debito di traduzione:
+  `user/{assets,fx}/detail/data-editor.{it,fr,es}.md`. La pagina degli asset era già indietro: va mandata intera
+  alla pipeline.
+- `check-orphans` verde; `git diff --check` pulito; porta 6183 libera.
+- ✅ **Chiusa il 17/10**, in attesa del commit del coordinatore. **X-R66 è entrata in dev fatta da A** (`7b626793c`):
+  dopo X-R46 la mia coda è vuota, chiedo l'ordine.
+
+### Revisioni dopo X-R46 (17/10, 18:50–19:30)
+
+Ordine del coordinatore: X-R75 → C-97c-3 AF → X-R66 → Z-32 (c), più Y-33 e X-R71 arrivate in ritardo. Tutte in sola
+lettura, sulla revisione combinata.
+- **X-R71** (B, `d5963fa60`): OK. La nota di B sul commento di `refresh.py` è confermata, e la correzione va in C-97c-4.
+- **Y-33** (Y, `137382901`): OK con un reperto. I 4 test del lampeggio del prezzo dal vivo hanno `test.setTimeout(20_000)`
+  e passano dall'helper: sotto carico finiscono con il timeout generico prima del soffitto di 30 s dell'URL. Proposto 60 s.
+- **X-R75** (B, `5cbc60844` + `970081b45`): OK con un reperto. `replace=true` vale anche per le gambe delle catene, e la
+  voce X-R75 le voleva solo aggiunte: corsa stretta. Vitest 32. Il coordinatore ne fa **X-R79**, fatta da B (registrata).
+- **C-97c-3** (W, `6f11057fb`), lato asset e cambi: OK, Vitest 455. Reperto: il lato cambi era rimasto a `formatFixed(x, 4)`
+  (lista, card, riepilogo), così VND→USD e LBP→USD si leggevano `0.0000` e IDR→USD `0.0001`. Il coordinatore ne fa
+  **C-97c-4**, mia.
+- **X-R66** (A, `7b626793c`): OK, Vitest 192. Confrontando i registri: lo spagnolo del catalogo è informale (164 a 10),
+  quindi il mio «Guárdelos» di X-R46 va corretto in «Guárdalos» (fatto in C-97c-4).
+- **Z-32 (c)** (Z, `aa9e07544`): OK, contratto e guardie. `provider-errors` 197, `asset-source-refresh` 26,
+  `db migration-010` 13.
+- **Prova combinata** prima dell'ingresso di X-R46, su `20c9a499c`: tutto verde.
+  - `front check`, dopo un `api sync`, 0/0: il primo giro trovò 3 errori di un client generato vecchio, non del codice.
+  - X-R46 entrata in dev `2c43ac451`, con la nota ⚠️ Breaking del coordinatore in `b7f8ebeac`.
+
+### C-97c-4 ✅ — i cambi deboli non si leggono più come zeri (19:30–19:55)
+
+Base `b7f8ebeac`. Decisione del coordinatore: nella 1.3, rossi Vitest prima, nessun cambio di markup o di classi,
+`theme-roles --check` pulito, la riga C-97c del CHANGELOG estesa.
+- **Siti**, tutti a `formatFixed(x, 4)`:
+  - `FxTable.svelte`: la cella del tasso e `formatDelta()`, il Δ assoluto da `getDelta()` (`displayFxDelta` non esiste);
+  - `FxCard.svelte`;
+  - `FxPriceSummary.svelte`;
+  - in più, sul percorso, `utils/currency/fxConversionHelper.ts`, il tooltip del cambio di una transazione: tasso
+    implicito, di mercato, spread.
+- **Rossi** (test-author): 3 file nuovi di componente (`FxPriceSummary`, `FxCard`, `FxTable`, registrati in
+  `component-unit`) più un blocco in `fxConversionHelper.test.ts`.
+  - Ogni rosso controlla prima che `formatPrice` dia la stringa attesa e che `formatFixed` dia gli zeri di oggi.
+  - **11 failed, 7 passed** («today 0.0000»).
+- **Codice** (`c97c4_code.py`): `formatPrice(x, {minDecimals: 4})`, con il segno dov'era. In più:
+  - il commento di `refresh.py` (sotto la chiave di un provider è un `ValueError`, il 422 di X-R71 vale solo per i
+    salvataggi manuali);
+  - lo spagnolo «Guárdalos» (`i18n update`);
+  - CHANGELOG: «Very small prices, exchange rates and costs… the FX list and cards and a transaction's exchange-rate
+    details…».
+- **Verdi**:
+  - Vitest **211** (i 4 file, più il gate HTML, `moneyRenderSites`, `FxMissingRate`, `writeRefusal`);
+  - `theme-roles --check` «Colour gates: clean»;
+  - `i18n check` pulito; `front check` 0/0;
+  - `services asset-source-refresh` 26.
+- **Doc**: nessuna. La riga di `formatPrice` in `developer/frontend/i18n.md` dice già «an exchange rate passes 4», e
+  nessuna pagina utente promette 4 decimali.
+- **Effetto noto** (dal test-author): un Δ positivo di rumore (circa 2e-16) prima si leggeva `+0.0000`, ora `0.0000`
+  senza segno.

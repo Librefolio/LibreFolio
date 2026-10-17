@@ -251,8 +251,9 @@ The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same b
 transactions have had the same floor since N74, with an end a year ahead
 ([Transaction dates](../transactions/service.md#transaction-dates), where the code is
 `dateOutOfRange`). Price and rate rows already stored before 1900 are left as they are (Z-30).
-The web app's data editors still show these 422s as a generic error; their coded message
-is a follow-up (workstream X).
+The web app's data editors tell these 422s in the interface language, naming the dates refused
+and the bounds (`writeRefusalMessage()` in `frontend/src/lib/api/writeRefusal.ts`, X-R46);
+before, they showed Axios's *Request failed with status code 422*.
 
 A manual call is all or nothing on the currency of its prices, as on its digits and dates
 (X-R71). Its third check, `_reject_currency_mismatches()`, runs right after
@@ -282,6 +283,35 @@ another currency answered 400 with the first two already saved.
   refresh writes one asset per call, and drops the points in another currency itself before);
   for a manual call it is a safety net, for an asset whose currency changed between the read
   and the write.
+
+Every date an asset's write leaves out is named in that asset's result, `results[].rejected`
+(X-R46; `FAPriceRejection` in `backend/app/schemas/prices.py`): one `{"date", "reason"}` per date,
+in date order, and an empty list when none is (an unknown asset's result, *Asset N not found*,
+names none). `count` counts only the dates written, and the
+English `message` keeps its sentences unchanged: the sync still copies it into the item's `errors`
+when it holds *rejected* (`_persist_refresh_item()` in `refresh.py`). A manual call meets only
+`ohlc_inconsistent`: a date out of bounds or a value over the limits refuses it whole instead.
+{: #rejected-price-dates }
+
+| `reason` | The date is left out because | Met by |
+|---|---|---|
+| `ohlc_inconsistent` | Its point carries two real bounds, a `low` and a `high` that are not the `-1` erase, and `low > high` or its close lies outside `[low, high]`, the values compared as sent; its stored row is kept | Manual and provider calls |
+| `date_out_of_range` | It lies outside the [date bounds](#stored-date-bounds) | Provider calls; a manual call is refused whole (422 `date_out_of_range`) |
+| `value_not_storable` | It holds a value no price column can keep (`_unstorable_provider_point()`) | Provider calls; a manual call is refused whole (400) |
+
+The integrity guard behind `ohlc_inconsistent` runs in the upsert loop and skips one date, never
+the call. Only two real incoming bounds are held to the close: a bound sent as `-1` is erased (the
+F.4 sentinel, written as NULL) and is no bound, so it is not checked (X-R46). A point without two
+real bounds is never refused: when the merged `[low, high]` has both, it is widened to include the
+new close, so that a close-only update (the justETF and scheduled-investment case) does not fail
+on the bounds an older flat candle left; otherwise the row is written as sent, a single real bound
+unchecked even on the wrong side of the close. The web app's asset data editor sends a row's Low
+and High with its close, and `-1` for an erased cell: a close typed outside two real bounds comes
+back as `ohlc_inconsistent`, while erasing High, Low or both saves the row with those bounds NULL.
+Before X-R46, the guard took an erased bound for a bound of `-1`, so erasing High (with a Low) or
+both left the date out. The editor counts `count` as saved and names the refused dates (up to
+five, then a count) with their reasons in a warning (`rejectedMessage()` in
+`frontend/src/lib/api/writeRefusal.ts`).
 
 ### 💷 The Provider's Own Quote Currency {: #reported-currency }
 
@@ -729,6 +759,9 @@ moment the asset, the range's start or the display currency changes until the ne
 Any user may start one, so each user gets at most 30 probes a minute (a `SlidingWindowLimiter` in
 `api/v1/assets/providers.py`, counted in each process; MF-SI2): past it the route answers 429
 `{"error_code": "PROBE_RATE_LIMITED", "retry_after", "message"}` with `Retry-After`, before the provider is called.
+The web app says it in the user's language, with the local time the wait ends, rounded up to the minute
+(`probeRateLimitMessage()` in `components/assets/resolveProviderError.ts`, X-R66): **Test Configuration** shows it as the
+result row's detail and one-line summary, **Ask Provider** as its error toast; any other failure is shown as before.
 `LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read at each probe by
 `probe_limiter()`, as the sign-in limit reads its variable: a change applies at the next probe, without a restart.
 `PROBES_BY_LIMIT` holds one limiter per limit the setting has had, so a value it comes back to finds its counts. `0`
@@ -933,7 +966,7 @@ cost unknown it stays `MISSING`.
 | `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers (`asset_ids` in the query): deletes each assignment and the events it generated, manual events staying; a 409 `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`, nothing of the request removed, while a transaction is linked to one of those events, whatever its type; `params` names the refused asset (`asset_id`, `item_index`) and, in `events`, only the transactions the caller can see; a 409 `PROVIDER_REMOVAL_CONFLICT`, nothing removed and no SQL in the answer, when a link appears between the check and the delete ([Provider Removal](events.md#provider-removal)) |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
 | `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |
-| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400), and so does a date before 1900-01-01 or after tomorrow (422 `date_out_of_range`, see [stored-date bounds](#stored-date-bounds)), or a price in a currency other than its asset's, on any asset of the request (422 `price_currency_mismatch`, see [price currency](#price-currency-coherence)); every refusal comes before anything is written |
+| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400), and so does a date before 1900-01-01 or after tomorrow (422 `date_out_of_range`, see [stored-date bounds](#stored-date-bounds)), or a price in a currency other than its asset's, on any asset of the request (422 `price_currency_mismatch`, see [price currency](#price-currency-coherence)); every refusal comes before anything is written; a date left out of a written call is named, with its reason, in its asset's `results[].rejected` (see [dates left out](#rejected-price-dates)) |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/period-changes` | POST | Bulk fixed-period changes, 1D … 5Y, of the Assets table (DB-only, backward-fill, optional `target_currency`), and the whole-range change with an optional `range_start` |

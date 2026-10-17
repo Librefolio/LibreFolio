@@ -54,6 +54,7 @@
         getLocalSignalDefinitions,
         mapSignalInstanceResults,
         renderBackendSignalResult,
+        renderedSignalPointCount,
         signalFromConfig,
         SignalResultState,
         type BackendSignalResult,
@@ -912,7 +913,7 @@
                 const rendered = backendOverlaySignals.filter((signal) => signal.id === cfg.id || signal.id.startsWith(`${cfg.id}:`));
                 const dates = rendered.flatMap((signal) => signal.data.map((point) => point.date)).sort();
                 result.set(cfg.id, {
-                    pointCount: rendered.reduce((maximum, signal) => Math.max(maximum, signal.data.length), 0),
+                    pointCount: renderedSignalPointCount(rendered),
                     eventCounts: {},
                     firstDate: dates[0] ?? null,
                     problem: getSignalProblem(instanceById.get(cfg.id)) ?? undefined,
@@ -2647,7 +2648,8 @@
                                 savedPanelStates = null;
                             }
                         }}
-                        title={$t('common.closeEditor')}>✕</button
+                        title={$t('common.closeEditor')}
+                        data-testid="asset-detail-editor-close">✕</button
                     >
                 </div>
                 <p class="px-4 pt-2 text-xs text-lf-warning-on-soft/70">

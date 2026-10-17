@@ -3050,3 +3050,223 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
 - ✅ **Corsia** (17:47; prodotto tolto `engine.py`, sha `383a938a…` uguale dopo): rosso **1** / 11 (`TestTheLeaderFails`);
   verdi il file 11, `roi-fifo-utils` **1407**, `portfolio-engine` 41, `app-lifecycle` 53 (attese a carico 55–87). ruff,
   black, diff-check, `mkdocs build` stretto, `check-links`. Porta libera.
+
+#### J45d entrato (dev `685d76dab`); MF-A8 — il lato ricevente della base delle chiuse (17/10, 17:5x)
+- Coordinatore: J45d **entrato** (dev `685d76dab`, merge `6a6725ad9`, nessuna riga di CHANGELOG, nessuno slot); il
+  compromesso degli errori transitori resta salvo richiesta di J. Il fast-forward è arrivato con le modifiche di A8 già
+  nell'albero: intatte sopra `685d76dab`.
+- **Revisione di J di MF-A5** (OK sul lato mittente) → **MF-A8**: una riga che riceve unità da un tratto contato le
+  misura dal valore all'arrivo (−tratto) ma la base delle sue vendite è il costo storico. Scelta: **la preferita di J**,
+  Σ(V_arrivo − C_spostato) dei tratti ricevuti nella base — numeratore e base contano le unità ricevute dallo stesso
+  valore (P22, il tratto del ricevente parte da V); l'annualizzazione sul tempo di volo resta anche per «spostato e poi
+  venduto», che una ricaduta perderebbe; su una catena A→B→C la riga di mezzo dà (V₂ − V₁)/V₁. ✅ Codice:
+  `contributions.transfer_tracts_moved_in` (stesso `counted_tract`), `closed_position_base(..., moved_in)` con base
+  **> 0** (prima ≠ 0), `portfolio_service` lo passa. Doc: `net-annualized-return.en.md` (il termine Σ(V_a − C_a), il
+  rovescio nell'esempio). Backlog: MF-A5 chiusa, MF-A8 in corso.
+- In corso: test-author `a8-tests`.
+- ✅ **Test A8** (test-author `a8-tests`): in `test_portfolio_contributions.py` `TestTransferTractsMovedIn`,
+  `TestClosedPositionBaseMovedIn`, `TestMovedInExamples` (J 0,10 contro 0,12; arrivo in perdita 0,10 contro 0,08; catena
+  45/600 contro 45/500) e la guardia di `closed_position_base` senza `moved_in` (copia di HEAD); in `TestClosedPositionBase`
+  (report e autonomo) l'esempio di J e la catena con B attraversato, più la guardia «in transito all'inizio». 11 mutanti
+  presi. Seguito → backlog **MF-A9** (una riga ricevente ancora aperta annualizza sul costo storico: C 5/500 invece di
+  5/645).
+- ✅ **Corsia** (18:11; prodotto tolto `contributions.py` + `portfolio_service.py`, sha `6c86b61b…` uguale dopo):
+  `financial-math -k contributions` rosso **64** / 88; `roi-fifo-utils test_positions_contribution_engine` rosso **4** /
+  80. Verdi: `financial-math` **1386**, `roi-fifo-utils` **1413**, `portfolio-engine` 41. ruff, black, diff-check,
+  `mkdocs build` stretto, `check-links`. Porta libera. Slot chiesto (`files/a8.sh slot`: `api portfolio`).
+- ✅ **Slot** (GO; partito 18:18, HEAD `685d76dab`): esito qui sotto. Coordinatore: la scelta di A8 è giusta; **MF-A9** nella
+  1.3 come prossimo lotto (analisi inviata: solo le righe senza valore iniziale, base `end_cost + Σ(V_a − C_a)` quando la
+  riga non ha uscite nel periodo — esatto —, altrimenti il costo alla fine com'è, limite dichiarato: il trasferimento non
+  porta la quantità). Revisione Z-32 (c) `QUOTE_IN_MINOR_UNIT`: OK, nessun rilievo. **CHECKPOINT READY** inviato, FROZEN.
+
+#### A8 entrato (dev `bc466d969`); MF-A9 — la riga ricevente aperta (17/10, 18:2x)
+- Coordinatore: A8 **entrato** (dev `bc466d969`, merge `4f9f29e8e`, clausola 🐛 `770928213`); worktree a `770928213`.
+- **MF-A9** ✅ codice: `annualized_period_return(..., moved_in=None)` — senza valore iniziale la base di ricaduta è
+  `end_cost` (≠ 0, com'era) o, con `moved_in`, `end_cost + moved_in` (> 0); `get_positions_contribution` calcola
+  `row_exits` una volta e passa `moved_in` solo se `row_exits == 0` (tutte le unità ricevute ancora tenute: esatto).
+  Limite dichiarato: con uscite nel periodo la base resta il costo alla fine (il trasferimento non porta la quantità).
+  Doc: `net-annualized-return.en.md` (la ricaduta della base: + Σ(V_a − C_a), il limite). Backlog: A8 chiusa, A9 in corso.
+- ✅ **Test A9** (test-author `a9-tests`): in `test_portfolio_contributions.py` la guardia
+  `TestAnnualizedPeriodReturnWithoutMovedInUnchanged` (copia di HEAD, 11 casi) e `TestAnnualizedPeriodReturnMovedIn`
+  (C 5/645 = 0,0078 contro 5/500; arrivo in perdita base 400; al costo; base ≤ 0 → `None`; il valore iniziale vince;
+  `moved_in=None` = HEAD); in `test_positions_contribution_engine.py` `TestOpenPositionMovedInBase` (report e autonomo):
+  la catena di A8 letta fino al 16/05 (`_passed_through_held_longer`, chiusura 130) — sul periodo di A8 la finestra di C
+  è 28 giorni, sotto i 30 dell'annualizzazione, `None` prima e dopo —, C **0,066576** (5/645, 44 giorni) contro HEAD
+  0,086045; guardie: un BUY a 645 dà lo stesso numero, e la riga ricevente poi venduta in parte resta sul costo alla fine
+  (1,370355, il limite dichiarato). Mutanti presi tutti. Note: `moved_in=0` con costo alla fine negativo → `None`
+  (prima un numero; coerente con `> 0` di `closed_position_base`, lo tengo); la riga tenuta all'inizio e ricevente ha
+  solo test puri (vince il valore iniziale).
+- ✅ **Corsia** (18:33; prodotto tolto `contributions.py` + `portfolio_service.py`, sha `a751853b…` uguale dopo):
+  `financial-math contributions` rosso **32** / 164 (tutti `TypeError … 'moved_in'`); `roi-fifo-utils
+  test_positions_contribution_engine` rosso **2** / 88 (C 0,086045 ≠ 0,066576, entrambi i percorsi). Verdi:
+  `financial-math` **1430**, `roi-fifo-utils` **1433**, `portfolio-engine` 41. ruff, black, diff-check; `mkdocs build`
+  stretto e `check-links` verdi (dopo la doc). Porta libera. Slot chiesto (`files/a9.sh slot`: `api portfolio`).
+- ✅ **Slot** (GO 18:37; partito 18:38, HEAD `770928213`): `api portfolio` **53** passati; porta 6190 libera.
+  Coordinatore: il `> 0` resta; il caso «costo alla fine negativo con `moved_in` → «—»» va solo qui, senza clausola
+  CHANGELOG. Revisione J di MF-A8: OK; nit doc preso: in `net-annualized-return.en.md`, dopo il termine $V_a − C_a$, la
+  frase «CostOut non è solo costo storico: per le unità ricevute la base tiene il loro valore all'arrivo». `mkdocs
+  build` stretto + `check-links` verdi dopo il nit. Rinomina CP-10d (`series_preparation` → `market_series`): A9 non
+  importa nessuno dei due. **CHECKPOINT READY** inviato, FROZEN.
+
+#### A9 entrato (dev `130002b5c`); il prossimo lotto senza decisioni (17/10, 18:5x)
+- Coordinatore: A9 **entrato** (dev `130002b5c`, merge `22eb7510f`, clausola CHANGELOG `5726486bc`); worktree a
+  `5726486bc`. Backlog: chiuse con ✅ MF-A9, e le già entrate senza segno MF-A2 e MF-SEC9e (`4507f7507`), MF-SEC9g
+  (`650c02b17`).
+- Richiesta: proporre la voce senza decisioni più utile per la 1.3. Proposta inviata (in attesa): MF-A7 + il lato doc
+  di MF-A6 (la soglia della polvere in `oldest_open_lot_date`, letta da Holdings `:814` e dalla finestra di ricaduta
+  `:1724`), poi MF-J45c (guardia sul report L2 condiviso); SEC9f e SEC9d restano informazione.
+- Coordinatore (18:48): **1 poi 2** — MF-A7 con la riga 🐛 e la doc «polvere a parte» di MF-A6 (l'allineamento di
+  `daily_state.py` resta dopo la 1.3), poi MF-J45c (la guardia). Rossi prima; revisore J. I ✅ del backlog viaggiano col
+  checkpoint di A7.
+
+#### MF-A7 — la soglia della polvere in `oldest_open_lot_date` (17/10, 18:5x)
+- ✅ **Codice**: `holding_window.oldest_open_lot_date(moves, dust=QUANTITY_DUST_THRESHOLD)` — i lotti aperti più vecchi
+  che insieme tengono `dust` o meno (il residuo d'una vendita) sono messi da parte: la data è quella del primo lotto
+  oltre il quale l'aperto cumulato supera `dust`, None se tutta la posizione tiene `dust` o meno (come
+  `closed_position_window` e le righe). Cumulato e non per lotto: una posizione aperta (> polvere) ha sempre una data,
+  anche fatta di lotti minuscoli. Nessun cambio ai chiamanti.
+  Numeri visibili: colonna «Lotto aperto più vecchio» di Esposizione (`get_summary` :814) e Performance (:1767) — una
+  riga chiusa a polvere dice «—» (prima la data del residuo), una riga col residuo vecchio e un acquisto nuovo dice la
+  data dell'acquisto; l'annualizzato della regola generale (:1724) parte dal lotto vero (finestra più corta) e, per
+  una riga chiusa a polvere in ricaduta, da `date_from` come una chiusa a zero. L'annualizzato di Esposizione usa la
+  prima transazione: invariato.
+- ✅ **Doc**: `net-annualized-return.en.md` (inizio finestra: i lotti di polvere messi da parte, MF-A7); MF-A6 lato doc:
+  `portfolio-engine/index.en.md` §7 e `period-pnl.en.md` «polvere a parte» (la riga non tiene un residuo ≤ 1e-5, lo
+  stato del portafoglio sì). Solo EN: debito di traduzione vero, niente stamp.
+- **Fuori pista**: i verdi pre-test danno 4 rossi in `TestParityOnSplitFreeStreams` (`dust-residual`,
+  `dust-residual-in-tranches`): il corpus di parità fissava il comportamento di HEAD sulla polvere (D1), che A7 cambia
+  apposta. Riparazione autorizzata al test-author `a7-tests` (attesa None, HEAD come «prima»).
+- ✅ Lanciato: test-author `a7-tests` (rossi puri e di servizio). Script `files/a7.sh` (PRODUCT = `holding_window.py`;
+  rossi `financial-math holding_window`, `roi-fifo-utils test_holding_window_service`; slot `api portfolio`).
+- ✅ **Codice, ritocco**: ruff C901 (12 > 10) → la riesecuzione FIFO in `_open_lots(moves)`, `oldest_open_lot_date` fa
+  solo la scansione della polvere. Stesso comportamento.
+- ✅ **Test A7** (test-author `a7-tests`): puro `TestDustResidualIsNotAnOpenLot` (residuo prima d'un acquisto nuovo → D3;
+  solo polvere, sotto e alla soglia → None; 0,000011 resta aperto; soglia sul cumulato; split che alza o abbassa un
+  residuo) e `TestTheDustIsAParameterOfTheOldestOpenLot` (`dust=0` = HEAD su tutto il corpus; soglie maggiori; il
+  default è quello della piattaforma). Riparato il corpus di parità: `dust-residual`, `dust-residual-in-tranches`
+  attendono None, HEAD (D1) tenuto come «prima» in `DUST_SET_ASIDE_BY_MF_A7`; `test_oldest_open_lot_date_is_heads`
+  sul corpus senza polvere. Servizio `TestDustResidual`: Esposizione e riga aperta datano dall'acquisto dopo il
+  residuo (annualizzato 0,741177 su 120 giorni, HEAD 0,243821 su 305); riga chiusa a polvere → None; la sua ricaduta
+  parte da `date_from` (−0,166700 su 365, HEAD −0,196064 su 305, il caso di J); guardie: la regola chiusa invariata,
+  un residuo sopra la polvere resta aperto. 9 mutanti, tutti presi dal puro; il servizio prova che entrambi i
+  consumatori usano la regola.
+- ✅ **Corsia** (19:04; prodotto tolto `holding_window.py`, sha `3be9bc4f…` uguale dopo): `financial-math
+  holding_window` rosso **45** / 86 (34 `TypeError … 'dust'`, il resto sulle date); `roi-fifo-utils
+  test_holding_window_service` rosso **4** / 9. Verdi: `financial-math` **1474**, `roi-fifo-utils` **1439**,
+  `portfolio-engine` 41. ruff, black, diff-check; `mkdocs build` stretto e `check-links` verdi. Porta libera. Slot
+  chiesto (`files/a7.sh slot`: `api portfolio`).
+- ✅ **Slot** (GO 19:12; HEAD `5726486bc`): `api portfolio` **53** passati; porta 6190 libera. Riga CHANGELOG 🐛
+  approvata dal coordinatore. **CHECKPOINT READY** inviato, FROZEN. Poi MF-J45c (analisi: i quattro consumatori di
+  `get_report` — `risk/scope.py`, `ai_export` `asset_resources`, `payloads/portfolio_broker`, `fx_core` — non
+  modificano il report in luogo; l'API lo serializza: guardia sola, istantanea profonda prima e dopo).
+
+#### A7 entrato (dev `09d29671d`); MF-J45c — la guardia del report L2 condiviso (17/10, 19:1x)
+- Coordinatore: A7 **entrato** (dev `09d29671d`, merge `b7bf1ca6b`, CHANGELOG 🐛 `5af05312b`); worktree a `5af05312b`.
+- **MF-J45c**: guardia sola, nessun cambio di prodotto previsto. `get_report` restituisce l'oggetto in cache L2 tale e
+  quale (`return cached`, ~:1992). Consumatori: API (serializza), `risk/scope.py:178`, `load_portfolio_report`
+  (`ai_export/components/payloads/portfolio_broker.py:899`, memoizzato per richiesta, letto da `broker_financial`,
+  `broker_cost_efficiency`, `portfolio_broker_technical`, `portfolio_financial`, `portfolio_income`…),
+  `asset_resources.py:259`, `fx_core.py:313`. Lettura statica: nessuna scrittura in luogo trovata.
+- In corso: test-author `j45c-tests` — file nuovo in `test_financial/` (lo copre `roi-fifo-utils`), istantanea
+  strutturale profonda di ogni report memorizzato in L2 prima e dopo i consumatori, precondizione «hit» per ciascuno,
+  metatest che l'istantanea vede una scrittura, mutanti che scrivono nel report.
+- ✅ **Test J45c** (test-author `j45c-tests`): `test_financial/test_portfolio_l2_report_shared.py` (nuovo, 847 righe; base
+  SQLite privata, due broker, EUR e USD). `TestTheCachedReportIsShared` (due chiamate → lo stesso oggetto, letto dalla
+  cache); `TestTheCachedReportIsNotMutatedByItsConsumers` (`_L2Watch`: ogni report memorizzato con l'istantanea
+  all'ingresso; due passate, la seconda tutta da L2 — 33 di 42 chiamate; consumatori: la rotta vera `POST
+  /portfolio/report` con la serializzazione di FastAPI, `RiskService.execute` su tre perimetri (tutte le analitiche del
+  portafoglio tranne simulazione e ottimizzazione, in processi figli), `AiExportSnapshotService.build_snapshot` per gli
+  8 dataset pubblici e i 67 componenti dei quattro domini, `model_dump`/`model_dump_json`/`jsonable_encoder`);
+  `TestTheSnapshotSeesAWrite` (esponente d'un Decimal, append, inversione, campo annidato, dict; un tipo ignoto
+  solleva). 6 mutanti (loader AI Export che ordina o riscrive un Decimal, rischio che ordina, `serialize_response` che
+  ordina la storia, append d'una riga, `generated_at`): tutti rossi col percorso. **Nessuna scrittura di prodotto**.
+  Nota: i risultati del rischio portano l'oggetto `data_quality` del report in cache tale e quale (`merge_data_quality`
+  riusa le voci annidate): un secondo riferimento, oggi senza scritture.
+- ✅ **Corsia** (19:44, nessun cambio di prodotto, nessuno slot): `roi-fifo-utils test_portfolio_l2_report_shared` **4**;
+  `roi-fifo-utils` **1443**; `financial-math` **1474**. ruff, black, diff-check. Il runner raccoglie tutta
+  `test_financial/` (`_backend_services.py:994`, registrata a `:2399`): nessuna riga nuova. Porta libera.
+  **CHECKPOINT READY** inviato, FROZEN.
+
+#### J45c entrato (dev `ab74aafbf`); MF-A10 — le finestre alla quota del proprietario, più il nit di A9 (17/10, 19:5x)
+- Coordinatore: J45c **entrato** (dev `ab74aafbf`, mio `6119fccd0`); worktree a `ab74aafbf`, pulito. J ha rivisto A7 e
+  A9: OK. **GO per MF-A10 + il nit di A9**; poi l'analisi di **J-14** (sola lettura, passata da J: le copie del realizzato
+  e del G/L % da portare alla regola 26). MF-A11 (proposta di J sulla base unica delle righe aperte) nelle domande del
+  developer. Backlog: ✅ J45c e A7; nuove MF-A10 (in corso) e MF-A11 (da decidere).
+- ✅ **Codice A10**: `holding_window.quantity_moves(transactions, split_ids, share=Decimal("1"))` scala ogni quantità
+  per la quota, come il motore (`daily_state.py:380`, `effective_share(role, share_percentage)`, costante per broker);
+  `get_summary` (~:675) e `get_positions_contribution` (~:1660) passano `lot_shares[broker_id]` dagli `accesses`.
+  `oldest_open_lot_date`, `closed_position_window`, `exits_in` vedono così la quantità della riga. Quota 0: ogni moto è
+  0, nessuna finestra (il motore non muove nulla). Numeri visibili: solo broker con s < 1 e un residuo grezzo in
+  (polvere, polvere/s] — la data «Lotto aperto più vecchio» e la finestra dell'annualizzato dal lotto vero; una chiusa
+  a polvere/quota ha la sua finestra chiusa invece della ricaduta.
+- ✅ **Nit di A9** (J): la condizione è `row_exits == 0` — nessuna unità uscita nel periodo, prima o dopo l'arrivo; allineati
+  docstring di `annualized_period_return`, commento in `get_positions_contribution` e prima frase del paragrafo in
+  `net-annualized-return.en.md`.
+- ✅ **Doc A10**: `net-annualized-return.en.md` — le quantità sono quelle del motore alla quota (esempio 50 %: 0,000012 →
+  0,000006, polvere per la finestra come per la riga); «chiusa» con la quantità alla quota.
+- ✅ **Test A10** (test-author `a10-tests`): puro `TestQuantityMovesAtTheOwnersShare` (30 casi: la quota scala ogni
+  quantità e tiene date, ordine e split; il caso di J 2015 → 2024 a ½; chiusa a polvere/quota → la data della vendita;
+  default = broker intero sul corpus; split avanti e indietro a ½; quota 0; `exits_in` invariato a ogni quota
+  positiva). Servizio `TestCoOwnedBrokerShare` (7): Esposizione e riga aperta datano dall'acquisto dopo il residuo
+  (0,741177 su 120 giorni, HEAD 0,243821 su 305); chiusa a polvere/quota 0,432922 su 185 giorni (HEAD None); tenuta
+  all'inizio: regola chiusa 0,152568 su 245 (HEAD generale 0,090900 su 365); guardie: broker intero (proprietario 100 %
+  ed editor con quota 0 registrata), residuo sopra polvere/quota. `share_percentage` è una frazione 0–1 (vincolo CHECK).
+  Helper `_scope` con `role`/`share` opzionali, default = prima. 11 mutanti presi (quota ignorata, divisa, invertita nei
+  chiamanti, solo agli split, tutto tranne gli split, default ½, solo in uno dei due chiamanti, `closed_position_window`
+  o il lotto più vecchio grezzi, `share_percentage` senza `effective_share`).
+  **Trovato** (test-author, non fissato): a broker intero un residuo 0,000012 (> polvere) lascia una riga tenuta con costo
+  alla fine 0,0012 e l'annualizzato della regola generale vale **1 774 600,33** (HEAD e ora): la base di ricaduta
+  minuscola. La proposta MF-A11 di J (base = costo alla fine + `closed_position_base`) lo cura; annotato su MF-A11.
+  Quota 0: `exits_in` 0 contro `per_sales` > 0 (il motore emette vendite a zero), innocuo (finestra `(None, None)`).
+- ✅ **Corsia** (19:59; prodotto tolto `holding_window.py` + `portfolio_service.py`, sha `fd531c23…` uguale dopo):
+  `financial-math holding_window` rosso **30** / 131 (tutti `TypeError … 'share'`); `roi-fifo-utils
+  test_holding_window_service` rosso **4** / 16 (i valori di HEAD nel messaggio). Verdi: `financial-math` **1504**,
+  `roi-fifo-utils` **1450**, `portfolio-engine` 41. ruff, black, diff-check, `mkdocs build` stretto, `check-links`. Porta
+  libera. Slot chiesto (`files/a10.sh slot`: `api portfolio`).
+- Coordinatore (20:03): slot A10 approvato, **attendere il suo segnale** (tre corse pesanti: H, B, Y). **J-14 approvata**
+  dopo l'ingresso di A10 (`period_identity_residual` + `is_reconciled` in `period.py`, parità esatta, nessun aumento di
+  versione); `ai_export/components/{portfolio_financial,broker_financial}.py` **liberi**. La variazione d'un giorno →
+  **MF-A12** (backlog), dopo J-14 se resta piccola. Il caso 1 774 600 va nella domanda di A11 al developer.
+- ✅ **Slot** (segnale 20:05; HEAD `ab74aafbf`): `api portfolio` **53** passati; porta 6190 libera. **CHECKPOINT READY**
+  inviato, FROZEN.
+
+#### J-14 — analisi (sola lettura, 17/10, 20:0x; base `ab74aafbf`)
+Passata da J (coordinatore, 19:48): le copie del realizzato e della G/L % da portare alla regola 26 (costo al cambio
+dell'acquisto, proventi al cambio della vendita). Inventario di J (piano 05, «Inventario del punto 26», 15/10)
+riverificato sul codice di oggi:
+
+| # | Superficie (inventario) | Oggi | Esito |
+|---|---|---|---|
+| 1 | motore: `_realized_sale` | `RealizedSale`: proventi al cambio della vendita − costo WAC storico | riferimento, nulla |
+| 2 | lotti: `lots/histories.py:160-182`, chiusure `lots_analysis_service.py:1042-1045` | `known_realized_pnl`/`known_cumulative_proceeds` (`histories.py:269-290`) e le righe di chiusura (`lots_analysis_service.py:1106-1122`) leggono `lots/conversions.convert_closure` (`:90-112`): gamba del lotto al cambio d'apertura, gamba di chiusura al cambio della chiusura, `realized_gain` della casa | **chiusa da CP-7a** (`4f9e94420`) |
+| 3 | sintesi del lotto `lots_analysis_service.py:728-770` | `financial_math/lots/summary.py` (`lot_value`, `lot_summary_figures`: `market_pnl = pnl − realized` sui valori già convertiti) | **chiusa da CP-7a** |
+| 4 | AI Export `payloads/portfolio_broker.py:604-606`, `:775-776` | ora `:614-616` (somme `_sum_complete("realized_pnl")`, `_sum_optional("unrealized_pnl")` delle righe dei lotti) e `:825-826` (`lot.realized_pnl`, `lot.market_pnl`): legge la sintesi già convertita | eredita; nessuna aritmetica finanziaria propria; nessun aumento di versione (regola «never for new values through an unchanged builder», CP-7a) |
+| 5 | AI Export: identità del periodo `portfolio_financial.py:489`, `broker_financial.py:434` | ora `portfolio_financial.py:491-495` e `broker_financial.py:432-436`, identiche: `residual = pnl − (ΔUGL + realized + income − fees + other)`, `reconciled = |residual| < CONVERSION_DUST` | **aperta**: duplicato senza cambio di valore |
+| 5b | (nuovo) `portfolio_service.py:1854` (`get_positions_contribution`) | `period_other_result = pnl − ΔUGL − realized − income + fees` scritto in linea, mentre `get_summary` (`:942`) chiama la casa `period.period_other_result` | **aperta**: duplicato, stesso ordine delle operazioni della casa → valori identici al bit |
+| 6 | G/L % posizioni e broker `portfolio_service.py:824`, `:939` | `returns.gain_loss_ratio` (`:730`, `:842`, `:915`) | **chiusa da CP-4** |
+| 7 | `brokers/summary.py:119-135` (W) | `gain_loss_ratio(..., positive_base=False)` (`:140`) | **chiusa da CP-7a** |
+
+**Il resto di J-14 = 5 + 5b, senza cambio di valore.**
+- Casa: in `financial_math/portfolio/period.py`, accanto a `period_other_result`, `period_identity_residual(pnl,
+  ugl_delta, realized, income, fees_taxes, other_result) -> Decimal` con **l'associazione di oggi**
+  (`pnl − (ugl_delta + realized + income − fees_taxes + other_result)`: Decimal a 28 cifre, un altro ordine potrebbe
+  cambiare l'ultima cifra d'un residuo di conversione e quindi il valore esportato) e il predicato
+  `is_reconciled(residual)` (`|residual| < CONVERSION_DUST`, da `native_cash`).
+- Chiamanti: `portfolio_financial._build_portfolio_reconciliation`, `broker_financial._build_broker_reconciliation`;
+  `get_positions_contribution` chiama `period_other_result`.
+- Prove: test puri con la copia di oggi scritta per esteso (parità esatta, esponente compreso, su un corpus con
+  residui di conversione a molte cifre, zero, negativi, al bordo di `CONVERSION_DUST`); i test esistenti dei due
+  componenti di riconciliazione e `api portfolio` invariati. Nessun rosso di comportamento: nulla cambia. AI Export:
+  nessun aumento di versione dei componenti (stessi valori dallo stesso builder); una sonda mirata solo se J la vuole.
+- Superfici: `period.py` (casa), `portfolio_service.py`, `ai_export/components/{portfolio_financial,broker_financial}.py`
+  — erano nella lista vietata del kickoff finché i lotti di J aperti allora non entravano: da confermare col
+  coordinatore. Doc: nessuna (la pagina `period-pnl` descrive già l'identità).
+- Taglia: piccola (~25 righe di prodotto, un file di test puri), corsia `financial-math` + `ai-export` dei due
+  componenti; slot `api portfolio` per il servizio.
+
+**Trovato di passaggio, fuori da J-14 (stessa regola «una casa»)**: in `get_summary` la variazione d'un giorno delle
+posizioni è scritta in linea — `price_change_1d = ((corrente − precedente) / precedente).quantize(0.0001)` (`:745`) e
+`gain_loss_change_1d_percent = (variazione / |valore precedente| × 100).quantize(0.01)` con la guardia
+`|precedente| > 0,01` (`:759`) — accanto a `returns.price_return` e `returns.change_ratio`. Valori: `price_return` fa
+`fine/inizio − 1`, non `(fine − inizio)/inizio`; dopo il quantize a 4 decimali coincidono salvo un pareggio al bordo
+dell'arrotondamento (da provare con un corpus). Proposta: voce MF a sé, dopo J-14, se il coordinatore la vuole.
