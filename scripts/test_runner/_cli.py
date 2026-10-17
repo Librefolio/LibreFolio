@@ -1286,8 +1286,10 @@ def main():
         with _common.tee_output(log_file):
             print_info(f"📝 Full run log → {log_file}")
             _activate_log_dir(args)
-            rc = _timed_run(args, lambda: _main_body(parser, args))
-            _snapshot_log_dir_db()
+            try:
+                rc = _timed_run(args, lambda: _main_body(parser, args))
+            finally:
+                _snapshot_log_dir_db()
             print_info(f"📝 Full run log saved to {log_file}")
         return rc
     _activate_log_dir(args)

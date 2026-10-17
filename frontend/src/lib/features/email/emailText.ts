@@ -132,6 +132,9 @@ export function resendFailureMessage(translate: Translate, failure: ResendFailur
     switch (failure.errorCode) {
         case 'INVALID_CREDENTIALS':
             return translate('email.verification.resendErrors.INVALID_CREDENTIALS');
+        case 'INSTANCE_BLOCKED':
+            // The hosting provider blocks the instance: the text of lot A7b, one home for it.
+            return translate('auth.instanceBlocked');
         case 'EMAIL_RATE_LIMITED':
             return translate('email.verification.resendErrors.EMAIL_RATE_LIMITED', {values: {minutes: minutesUntil(failure.retryAfter)}});
         case 'EMAIL_VERIFICATION_NOT_NEEDED':

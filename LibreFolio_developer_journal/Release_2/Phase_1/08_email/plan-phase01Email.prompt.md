@@ -3945,6 +3945,22 @@ Se arriva il via a (b) e (c):
 > - `BACKLOG`: gli hunk di dev sono fuori dalla sezione E;
 > - `devWiki/log.md`: due aggiunte in coda, da risolvere per unione.
 
+> **E-9 committato** (coordinatore, 01:34):
+> - `3dd23eaa4` (fix: codice, test, `auth.py`, `_backend_api.py` col `print_info`, approvato), `bb392de35` (docs),
+>   `7fc549fea` (journal);
+> - base aggiornata: merge di dev `b36e3873f`, con A7b e X-R35, pulito; HEAD `169a9d798`.
+>
+> **Validazione combinata** ✅ (01:35–01:50, `files/tools/e9_combined.sh`, carico sotto 50, una alla volta):
+> - `services email-*`: 124, 329, 149, 127, 32, 74, 87, 144, 67;
+> - `api`: `email` 158, `email-verification` 49, `email-verification-hooks` 16, `email-change-notice` 14, `profile` 28,
+>   `auth` 95;
+> - `schemas openapi-client-text` 78; `api sync`;
+> - `mkdocs build` stretto con 0 avvisi; `check-links` 97;
+> - worktree pulito, porta libera.
+>
+> **E-9 entrato in dev** (`49c07a95a`; la riga 🔒 del CHANGELOG in `3a5ff5194`). `_usable_base` resta com'è (OK del
+> coordinatore).
+
 ### E-11 — «Send the link again» su un'istanza bloccata
 
 #### E-11.0 — Analisi ✅ (2026-10-17, 01:15–01:25, in sola lettura su `dev_release2` `3e5336a0a`)
@@ -3997,3 +4013,256 @@ il testo inglese.
 - i Vitest di `features/email`;
 - `front check`, `i18n check`, `api sync`;
 - `mkdocs build` stretto.
+
+#### E-11.1 — Rossi ✅ (2026-10-17, 01:5x–02:07)
+> **Il via del coordinatore** (01:5x), sulla mia base `169a9d798`, che ha dentro A7b. Il `desc` di `email-verification`
+> nel catalogo condiviso (`_backend_api.py:1109`) va in questo lotto, col suo via; la nota su `instance_block.py`, che
+> non nomina `resend`, va ad H.
+>
+> **Rossi scritti** (`test-author`, 01:53–02:05; l'agente ha eseguito solo `py_compile`, `ruff`, `black` e `prettier`,
+> tutti puliti):
+> - `test_email_verification_api.py`:
+>   - EVA-006 riscritto: il 401 codificato, uguale per un account sconosciuto e una password sbagliata;
+>   - EVA-014: le due righe riscritte;
+>   - **EVA-017** nuovo, una guardia: `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`, con due controlli contro un
+>     verde a vuoto;
+>   - il contratto 6 dice che il modulo non monta la dipendenza del blocco.
+> - `verificationApi.test.ts`:
+>   - VFA-08 riscritto: il 401 codificato dà `INVALID_CREDENTIALS`;
+>   - **VFA-23**: ogni altro 401 dà `INSTANCE_BLOCKED`, su 12 corpi × 2 tipi d'errore;
+>   - **VFA-24**: il 423 `instance_blocked`;
+>   - **VFA-25**, una guardia: un 423 senza il codice, e il corpo del blocco su 403 o 500, danno `UNKNOWN`;
+>   - **VFA-26**: col client vero.
+> - `emailText.test.ts`: la riga `INSTANCE_BLOCKED` → `auth.instanceBlocked` (ETX-09 ed ETX-10).
+> - `VerificationNotice.test.ts`:
+>   - VNT-05 e VNT-06 usano il 401 codificato;
+>   - **VNT-08**: un 401 nudo mostra `auth.instanceBlocked`, l'evento porta `INSTANCE_BLOCKED` e il pulsante resta
+>     acceso.
+>
+> **Rossi visti** ✅ (02:06–02:07, `files/tools/e11_checks.sh reds`):
+> - `api email-verification`: **6 falliti** e 44 passati (EVA-006 ×4, EVA-014 ×2), perché la rotta risponde ancora
+>   con la stringa;
+> - Vitest sui 3 file: **32 falliti** e 427 passati (VFA-23 ×24, VFA-24 ×4, VFA-26 ×2, ETX-09, VNT-08).
+>
+> I 38 previsti dall'agente, tutti per la ragione giusta: il lettore dà `INVALID_CREDENTIALS` a ogni 401 e `UNKNOWN`
+> al 423, e il testo non ha il caso `INSTANCE_BLOCKED`.
+
+#### E-11.2 — Cura e docs ✅ (2026-10-17, 02:07–02:2x)
+> **Cura** (02:07, `files/e9/e11_cure.py --apply`, 5 modifiche in 3 file, dry run pulito prima):
+> - `api/v1/email.py`: il 401 della rotta diventa `{"error_code": "INVALID_CREDENTIALS", "message": "Invalid
+>   credentials"}`. La docstring lo dice, e dice che ogni altro 401 di questa rotta pubblica è del blocco (E-11).
+> - `features/email/verificationApi.ts`, `readResendFailure()`:
+>   - un 401 col codice dà `INVALID_CREDENTIALS`;
+>   - ogni altro 401, o il 423 che `isInstanceBlockedError()` riconosce, dà `INSTANCE_BLOCKED`, come oggetto
+>     `{errorCode}` esatto, senza `retryAfter`, come chiedono VFA-08 e VFA-23.
+> - `features/email/emailText.ts`: `INSTANCE_BLOCKED` → `auth.instanceBlocked`, la chiave di A7b; nessuna chiave nuova.
+> - Nessun `.svelte` toccato.
+>
+> **Col via del coordinatore**: il `desc` di `email-verification` nel catalogo condiviso
+> (`scripts/test_runner/_backend_api.py:1109`): «401 INVALID_CREDENTIALS (coded: any other 401 is the block's) and 403
+> byte for byte the login's».
+>
+> **Docs** (`docs-writer`, 02:12–02:20):
+> - `developer/backend/email.md`:
+>   - la tabella delle risposte di «resend», col 401 codificato e un paragrafo sul 401 del blocco;
+>   - la sezione frontend: `readResendFailure()`, `resendFailureMessage()` e `VerificationNotice` su un'istanza
+>     bloccata;
+>   - «Testing»: EVA-001…017, VFA-01…26, VNT-01…08.
+> - `admin/email.en.md`: il punto dell'istanza bloccata dice cosa mostra «Send the link again».
+> - Corretti per strada, perché la doc contraddiceva il codice:
+>   - la riga 502 di «resend» citava `smtp_code`, che la rotta non manda;
+>   - la pagina admin dava un testo vecchio per la registrazione su un'istanza bloccata, mentre il codice mostra
+>     `auth.instanceBlocked`, come dopo A-13.
+> - Fuori dai miei file, per H: la riga «Public routes outside the list» di `security.md` (Instance Block) non nomina
+>   le rotte email, come la docstring di `instance_block.py`.
+
+#### E-11.3 — Verdi ✅ (2026-10-17, 02:08–02:37)
+> **Verdi** (`files/tools/e11_checks.sh greens`, una alla volta, carico sotto 50; dalle 02:11 alle 02:29 in pausa per
+> il freeze della galleria, a carico 109–184):
+> - `api email-verification` 50; `api email` 158;
+> - Vitest sui 3 file 459, e su tutto `features/email` 837 in 12 file;
+> - `ruff`, `black` e `prettier` puliti;
+> - `api sync`; `schemas openapi-client-text` 78;
+> - `i18n check` stretto, 4938 chiavi;
+> - `front check`: 0 errori e 0 avvisi;
+> - `git diff --check` pulito, porta 6188 libera.
+>
+> **Docs** (`files/tools/e11_docs.sh`, 02:37–02:49, dopo l'attesa del carico): `mkdocs build` stretto con 0
+> WARNING; `check-links` 97 validi; `git diff --check` pulito; porta 6188 libera.
+>
+> **Checkpoint mandato al coordinatore** (02:5x). FROZEN.
+
+> **E-11 committato ed entrato** (coordinatore, 02:50):
+> - `18d945d2e` (fix), `f2b459ebe` (docs), `fdd4acc6d` (journal), in dev col merge `bca4bd6d3`;
+> - la riga 🐛 del CHANGELOG in `2818924b7`;
+> - il mio HEAD portato avanti con un fast-forward a `2818924b7`;
+> - la nota su `security.md` è andata ad H.
+
+### R13-SEC4 — Revisione di sicurezza di B4 (backup sicuri) e di A7b-2, prima dell'ingresso (2026-10-17, 02:51–)
+> **Il compito del coordinatore** (02:50): in sola lettura, nel formato di prima; i reperti a lui, nessuna correzione.
+> 1. **B4, i backup sicuri** (B, `6c72f0efe..97037bb2e`), **con priorità**:
+>    - l'involucro `.lfbk`: scrypt più AES-256-GCM a blocchi, i limiti dell'intestazione, la malleabilità e il
+>      troncamento;
+>    - l'esportazione della chiave d'istanza: solo quando è generata, mai dall'ambiente;
+>    - le cartelle `backups/.decrypt-*` e la loro pulizia;
+>    - `--password-file` e `--password-stdin`;
+>    - `NoInputEchoRoute` sulle rotte del backup;
+>    - `GET /backup/instance/options` su un'istanza bloccata.
+> 2. **A7b-2** (A, `ec73a49c1..f5a42a00e`): il ritiro dei link di setup e il gestore globale dei 422 senza `input`.
+>
+> **Dove si legge**: dagli oggetti git, mai dal worktree di B, che le regole vietano.
+> - Fra la fine di ogni intervallo e la punta del ramo ci sono solo merge di dev, e i file in revisione sono identici.
+> - Quindi rivedo le punte, cioè ciò che entra: B4 a `33275d9a6`, A7b-2 a `c9cb27e4c`.
+>
+> **Tre revisioni in parallelo** (la lezione di R13-SEC: B4 è grande, 320 righe di involucro, 662 di staging e 879 di
+> CLI):
+> - B4-cripto: involucro, chiave e creazione;
+> - B4-ripristino: staging, rotte, CLI e frontend;
+> - A7b-2.
+>
+> **Esito: nessun reperto sopra la soglia in B4 né in A7b-2** (03:05–03:17, tre `security-review` in background;
+> carico sopra 50, quindi uno snippet solo, quello del cripto, eseguito a carico 43).
+
+> **B4, cripto** (`envelope.py`, `secure.py`, la chiave, la creazione), tutto **sano**:
+> - **KDF**: i parametri si leggono prima di qualunque scrypt e sono limitati: log2 N fra 14 e 16, r ≤ 8, p ≤ 2,
+>   blocchi da 64 KiB a 16 MiB.
+>   - Provato su `envelope.py` preso da git, senza importare l'app: N=2^30, r=255, p=255 e blocchi da 0 o 2^31 danno
+>     `envelope_unsupported` in circa 0,0 s; il costo più alto ammesso prende 0,37 s.
+>   - `cryptography` non ha un `maxmem` pratico, quindi questi limiti sono la vera guardia.
+> - **Sale e nonce**: sale (16 B) e prefisso del nonce (7 B) vengono da `secrets.token_bytes`, freschi a ogni file.
+> - **Nonce**: prefisso, indice e flag dell'ultimo blocco; oltre 2^32 blocchi è un rifiuto.
+> - **STREAM**: l'intestazione di 52 B è l'AAD di ogni blocco, e sono provati troncamento, riordino, duplicazione,
+>   aggiunta in coda e modifica dell'intestazione.
+> - **Il chiaro**: va in `.part` (O_EXCL, O_NOFOLLOW, 0600) e si rinomina solo dopo l'ultimo blocco autenticato.
+> - **La chiave**: esportata solo con `source == "generated"`; l'ambiente vince sempre, e il `.zip` in chiaro non la
+>   porta mai.
+> - **La ricifratura al ripristino**: avviene in un SAVEPOINT, e il chiaro resta in memoria.
+>
+> Note:
+> 1. Lo scrypt scrive a 2^15, contro il 2^17 di OWASP e del piano §3.5: è la scelta P12 del developer. Chi legge si
+>    ferma a 2^16, quindi alzare il costo chiede prima un lettore nuovo.
+> 2. **Gestito**: con la chiave generata, l'admin che fa un backup sicuro riceve la chiave e può decifrare offline i
+>    segreti dei plugin di ogni utente (decisione 39). Niente obbliga il pannello a mettere
+>    `LIBREFOLIO_INSTANCE_KEY(_FILE)`.
+> 3. L'output di `backup decrypt` porta la chiave, e l'avviso (`backup_cli.py:765`) non dice che sblocca ogni chiave di
+>    provider salvata.
+> 4. Lo staging accetta la chiave anche da un `.zip` in chiaro (`staging.py:373-381`). È innocuo: la chiave decifra
+>    solo le righe della copia.
+> 5. Lo zip in chiaro, con la chiave, resta nella cartella del job fino alla pulizia; dopo un crollo, fino al backup
+>    successivo, un'ora dopo (`jobs.py:241-249`). Accettato in P12.
+> 6. Un file della chiave oltre 4096 B viene esportato, ma ogni ripristino poi lo rifiuta (`checksum_mismatch`).
+>    Succede solo con un file modificato a mano.
+> 7. Il rollback, cioè rimettere un `.lfbk` vecchio con la stessa password, è inerente al disegno.
+> 8. Un `check` modificato si legge come `wrong_password`: cosmetico.
+
+> **B4, ripristino, rotte, CLI e frontend**, tutto **sano**:
+> - **La password**: solo `SecretStr` in JSON (`extra=forbid`, al più 1024); l'upload è un octet-stream senza password.
+> - **`NoInputEchoRoute`** su tutti e due i router.
+> - **Nessun log, stato o risposta** con la password; i traceback sono senza variabili locali.
+> - **La cartella di stage**: 0700, e il file si pubblica solo autenticato.
+> - **Il decifrato** passa per gli stessi controlli di uno zip in chiaro; la voce della chiave è limitata e
+>   controllata, e non viene mai spacchettata.
+> - **`GET /backup/instance/options`**: `require_admin`, rende solo le regole della password, e l'elenco dei permessi
+>   la confronta per funzione.
+> - **La CLI**:
+>   - `--password-file` passa da `read_secret_file`;
+>   - non c'è nessuna sorgente in argv o nell'ambiente;
+>   - `inspect` lavora in un `mkdtemp` tolto nel `finally`.
+> - **Le regole degli account** non cambiano.
+> - **Il frontend**: la password vive solo nello stato del componente; nessun `{@html}`.
+>
+> Note:
+> 1. Nessuna pulizia all'avvio per `.restore/stage/<id>/archive.zip`, che porta la chiave d'origine, se il server muore
+>    fra la decifratura e l'unpack.
+> 2. Le cartelle `.decrypt-*` della CLI lasciate da un `inspect` interrotto restano in `backups/` fino a un `inspect`
+>    di almeno un'ora dopo, e il server non le toglie mai. Un operatore che sincronizza `backups/` altrove spedirebbe il
+>    chiaro.
+> 3. `autocomplete="off"` sui campi della password: i browser lo ignorano; `new-password` per i campi di creazione.
+> 4. `--password-stdin` usa `readline`, quindi su un terminale mostra la password mentre la si scrive: con `isatty`
+>    servirebbe `getpass`.
+
+> **A7b-2**: **nessun reperto sopra la soglia**. Le tre note delle mie revisioni precedenti sono **chiuse**.
+> - **A-31**: ogni attivazione e ogni password scritta ritirano i link di setup nella stessa transazione.
+>   - Le strade: `set_user_active`, `update_user_status`, `reset_password` (con `reset` e `reset-password` della CLI),
+>     `complete_password_reset`, `change_password`.
+>   - Un link ritirato ha `consumed_at` e `revoked_at`, e diventa `TOKEN_INVALID`.
+> - **LOW-2**: un link ritirato conta come consumato, quindi l'admin esce dall'«attesa»; il PATCH passa e
+>   `setup-link` dice che non c'è nessuno in attesa.
+> - **LOW-3**: `_follow_variables` revoca a un cambio vero e tiene i link a un cambio di sole maiuscole; `set-email` va
+>   per `update_profile`.
+> - **Il 422**: un gestore unico, installato prima dei router. Confermato su FastAPI 0.141.1 e pydantic 2.13.5.
+>
+> Note:
+> 1. **LOW, una corsa**: `issue_setup_link`, o il riarmo all'avvio, decidono «in attesa» da una lettura fatta prima
+>    del BEGIN differito. Se `/auth/setup` si chiude in quel millisecondo, resta un link vivo. La direzione: rifiutare
+>    se un altro link di setup dell'account è già consumato.
+> 2. **LOW**: la disattivazione non ritira. È sicuro perché ritirano le attivazioni, ma ritirare anche alla
+>    disattivazione coprirebbe i DB delle build 1.3 precedenti.
+> 3. **Gestito**: un admin aggira il 409 `PENDING_SETUP`: crea un link di reset per l'admin in attesa, lo spende (che
+>    ritira i link di setup), poi attiva col PATCH. Conta quando `account_protection` protegge l'admin che paga.
+> 4. **Il 422** toglie solo `input`. `msg` e `ctx` portano pezzi del valore dove un validatore lo formatta
+>    (`common.py:98`, `settings.py:434-459`, `refresh.py`, i motivi di `EmailStr`, `uuid_parsing`). Nessuno sta su
+>    credenziali oggi; servirebbe un test di regressione sulle rotte delle credenziali.
+> 5. Già prima di questo lotto (F02): il link di setup generato va nel log a WARNING, quindi chi legge il log prima
+>    dell'operatore prende l'admin iniziale. Non succede col token del pannello.
+> 6. Un admin che non ha mai finito il setup non si annulla: il PATCH inattivo lascia vivo il link, e un admin in
+>    attesa retrocesso si attiva lo stesso. Un vuoto d'intenzione, solo per gli admin.
+> 7. Fuori dal lotto: senza un gestore di `ResponseValidationError`, il traceback di uvicorn scrive l'`input` di ogni
+>    errore nel log del server.
+
+> **Al coordinatore**: l'esito, le note per B (cripto 2–3, ripristino 1–4) e per A (1–4, 6), le domande del cloud
+> (cripto 2, A7b-2 nota 3) e la nota 7 per chi tiene i gestori. Nessuna correzione da parte mia.
+
+> **R13-SEC4 committato ed entrato** (coordinatore, 03:08; dev `110125350`; HEAD portato avanti con un fast-forward).
+> Lo smistamento:
+> - B (B4b): i resti dopo un crollo, l'avviso di `decrypt`, `getpass`, `autocomplete`;
+> - A: la corsa, la disattivazione, il `msg` del 422, l'admin in attesa;
+> - H: `ResponseValidationError`, che diventa H-33;
+> - le 2 domande del cloud vanno al developer.
+
+### E-12 — Catch-all e sottodomini di Fastmail
+
+#### E-12.0 — Analisi ✅ (2026-10-17, 03:10–03:20)
+> **Il compito del coordinatore** (03:08): E-12, poi in attesa per R13-SEC5 (X-R38, C-97b, Z-20, J CP-10c).
+
+**Stato reale**: dopo E-9, `delivery.mailbox_budget_key()` unisce `+tag`, i punti di Gmail e `googlemail.com`. Restano
+due casi in cui ogni parte locale è una chiave nuova, e li limita solo il budget orario dell'istanza (50/h per
+processo):
+- **un dominio catch-all**, dove tutto `*@dominio` arriva a una casella;
+- **l'indirizzamento a sottodominio di Fastmail**: `qualsiasi@utente.fastmail.com` arriva a `utente@fastmail.com`.
+  - Una ricerca web lo conferma: vale per **tutti** i domini di Fastmail (`fastmail.com`, `fastmail.fm`,
+    `fastmail.co.uk`… sono decine) e per i domini personali dei clienti, con il DNS a posto.
+
+**Le strade**
+1. **Una regola Fastmail nella chiave** (`x@u.fastmail.com` → `u@fastmail.com`). È piccola, ma non si può fare
+   completa: decine di domini e i domini personali. Il catch-all resta. ✗
+2. **Un limite per dominio destinatario**, che coprirebbe catch-all e Fastmail insieme (`x@u.fastmail.com` ha dominio
+   `u.fastmail.com`). Ma su `gmail.com` unirebbe tutti gli utenti, e allora:
+   - (2a) un elenco di grandi provider esenti, che non è mai completo: un'istanza self-hosted pubblica con molti utenti
+     di un provider non in elenco verrebbe frenata;
+   - (2b) una variabile nuova, per esempio `LIBREFOLIO_SMTP_MAX_PER_DOMAIN`.
+     - Spenta di default, come chiede la regola della specifica.
+     - Il profilo `managed` avrebbe un default, per esempio 20/h, che sta largo sopra il traffico legittimo di
+       un'istanza piccola (`max_users`).
+     - È una scelta di prodotto, ed è un lotto piccolo-medio: variabile, controllo di configurazione, tre punti di
+       chiamata, test e docs con la riga di C-99.
+3. **Accettare il resto e chiudere E-12**, senza codice.
+
+**Proposta: (3).**
+- Dopo N62 queste email non portano testo dell'attaccante: sono messaggi di LibreFolio innocui, e il budget d'istanza
+  li limita.
+- Chi ha un catch-all è un utente tecnico, e il caso è raro.
+- La leva vera dell'abuso è la registrazione aperta. La domanda del cloud sul DoS del budget, già al developer
+  (captcha o proof-of-work, limiti alla registrazione), copre lo stesso terreno con una cura migliore.
+- La doc lo dice già, da E-9: in `admin/email.en.md`, «One mailbox, however its address is written», i catch-all e
+  Fastmail sono frenati solo dal limite orario.
+- **Se il coordinatore o il developer vogliono il codice**, la strada è la (2b), in un lotto suo.
+
+#### E-12.1 — Chiusa come accettata ✅ (2026-10-17, 03:10)
+> **Decisione del coordinatore** (03:10): chiudere E-12 come accettata, con la ragione nel backlog e un rimando a
+> **D-E9-1**, la domanda anti-abuso sulla registrazione aperta, che è col developer. Nessun codice. Il checkpoint del
+> journal lo committa lui al prossimo passaggio.
+>
+> **Fatto**: E-12 ✅ nel backlog, con le ragioni di «E-12.0», il rimando a D-E9-1 e la strada (2b) se il codice servirà.
+>
+> **Dopo**: in attesa degli SHA di R13-SEC5, verso le 04:00, a slot dopo il freeze finiti.
