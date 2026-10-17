@@ -9,14 +9,18 @@ opened. Non-retry cases avoid transient-retry keywords; the dedicated retry
 case stubs ``_time_mod.sleep`` and records the requested backoff delays. The
 «too many requests» cases (X-RL X3) replace it with a sleep that fails the
 test: a refusal leaves at once as ``AssetRateLimitedError``, after one request,
-and search and metadata no longer turn it into ``[]`` / ``None``.
+and search and metadata no longer turn it into ``[]`` / ``None``. The Z-33
+cases (N86) build their frames as yfinance 1.7.0 stamps them — midnight in the
+exchange's timezone — and pin the exchange-day dating, the declared timezone
+and the pure rule that re-dates what the old UTC rule stored.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import pytest
@@ -24,7 +28,7 @@ from yfinance.exceptions import YFRateLimitError
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
-from backend.app.schemas.prices import FAHistoricalData
+from backend.app.schemas.prices import FACurrentValue, FAHistoricalData
 from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.asset_source_providers.yahoo_finance import plugin as yfp
 from backend.app.services.asset_source_providers.yahoo_finance.plugin import YahooFinanceProvider
@@ -122,6 +126,16 @@ def _install_yf(monkeypatch, *, ticker=None, ticker_factory=None, search=None, s
 
 def _utc_index(days: list[str]):
     return pd.to_datetime(days).tz_localize("UTC")
+
+
+def _exchange_midnights(days: list[str], tz: str | None) -> pd.DatetimeIndex:
+    """``days`` stamped as yfinance 1.7.0 stamps a daily series (``scrapers/history.py``): midnight in the exchange's
+    timezone, its DST edges resolved as yfinance resolves them (``ambiguous=True``: the first of two midnights;
+    ``nonexistent="shift_forward"``: the first instant after a midnight the clocks skip). ``tz`` None: a tz-naive index."""
+    index = pd.to_datetime(days)
+    if tz is not None:
+        index = index.tz_localize(tz, ambiguous=True, nonexistent="shift_forward")
+    return pd.DatetimeIndex(index, name="Date")
 
 
 class _MalformedEventSeries:
@@ -230,7 +244,15 @@ def _ohlcv(dates: list[str], closes: list[float]) -> pd.DataFrame:
 
 
 @pytest.mark.asyncio
-async def test_history_finite_range_uses_exclusive_remote_end_and_inclusive_utc_dates(monkeypatch):
+async def test_history_finite_range_uses_exclusive_remote_end_and_inclusive_exchange_dates(monkeypatch):
+    """A finite range asks yfinance up to the day after ``end`` (its ``end`` is exclusive) and keeps the bars of the
+    exchange days from ``start`` to ``end``, both included, the days around them dropped.
+
+    Z-33 (N86 §1) rewrites this test: it pinned the UTC rule (a bar at 20:00 -05:00 counted for the next UTC day), which
+    the contract replaces with the exchange's own calendar. The bars are now stamped as yfinance stamps them, at midnight
+    in Milan. Red until Z-33: read in UTC each Milan bar is a day early, so the closes kept are those of the next day
+    (110 and 120 instead of 100 and 110).
+    """
     requested_start = date(2026, 1, 2)
     requested_end = date(2026, 1, 3)
     hist = pd.DataFrame(
@@ -241,23 +263,16 @@ async def test_history_finite_range_uses_exclusive_remote_end_and_inclusive_utc_
             "Close": [90.0, 100.0, 110.0, 120.0],
             "Volume": [900, 1000, 1100, 1200],
         },
-        index=pd.to_datetime(
-            [
-                "2026-01-01 18:00:00-05:00",  # 2026-01-01 UTC, outside
-                "2026-01-01 20:00:00-05:00",  # 2026-01-02 UTC, start boundary
-                "2026-01-03 18:00:00-05:00",  # 2026-01-03 UTC, end boundary
-                "2026-01-03 20:00:00-05:00",  # 2026-01-04 UTC, outside
-            ]
-        ),
+        # 2026-01-01 outside, 2026-01-02 the start, 2026-01-03 the end, 2026-01-04 outside
+        index=_exchange_midnights(["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"], "Europe/Rome"),
     )
-    ticker = _FakeTicker(history=hist, info={"currency": "USD"})
+    ticker = _FakeTicker(history=hist, info={"currency": "EUR"})
     _install_yf(monkeypatch, ticker=ticker)
 
-    result = await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, requested_start, requested_end)
+    result = await YahooFinanceProvider().get_history_value("ENI.MI", IdentifierType.TICKER, None, requested_start, requested_end)
 
     assert ticker.history_calls == [{"start": "2026-01-02", "end": "2026-01-04"}]
-    assert [point.date for point in result.prices] == [requested_start, requested_end]
-    assert [point.close for point in result.prices] == [Decimal("100.0"), Decimal("110.0")]
+    assert [(point.date, point.close) for point in result.prices] == [(requested_start, Decimal("100.0")), (requested_end, Decimal("110.0"))], "each Milan bar must count for its own exchange day"
 
 
 @pytest.mark.asyncio
@@ -860,6 +875,237 @@ async def test_history_of_a_london_line_reports_pence_while_its_points_carry_pou
         (date(2026, 1, 5), Decimal("7250.0"), "GBP"),
         (date(2026, 1, 6), Decimal("7268.5"), "GBP"),
     ]
+
+
+# ── Z-33: each bar, dividend and split on its exchange's own day (decision N86) ──
+#
+# yfinance 1.7.0 (``scrapers/history.py``) re-stamps every daily quote, dividend and split at midnight in the exchange's
+# timezone (``_exchange_midnights``). The plugin read that midnight in UTC (``tz_convert("UTC").date()``): the day before
+# for every exchange east of UTC — Milan all year, London in summer time, Tokyo —, right for New York and a 24/7 UTC line.
+# N86 §1: each index value is dated on its own wall calendar (a tz-naive one by ``.date()``); the history declares the
+# exchange's timezone as an IANA name (``FAHistoricalData.exchange_timezone``: the index's, else
+# ``info["exchangeTimezoneName"]``, else None); the current value dates ``regularMarketTime`` in that timezone (UTC when
+# unknown) and declares it too (``FACurrentValue.exchange_timezone``, None when unknown).
+#
+# N86 §2: what the old rule stored is re-dated by one pure function,
+# ``backend.app.utils.exchange_dates.local_date_of_legacy_utc_date(stored: date, tz: ZoneInfo) -> date``: a date S stored by
+# the old rule belongs to S + 1 when the exchange's UTC offset at local midnight of S + 1 is above 0, else to S. Pinned on
+# named cases, and zone by zone over a whole year against the old rule itself, applied to yfinance's own stamping.
+#
+# Red on HEAD 22b9b90ce: the plugin reads the dates in UTC, the two schemas declare no ``exchange_timezone``, the rule's
+# module does not exist, and a tz-naive index fails the whole history (a pandas ``Timestamp`` always has ``tz_convert``,
+# which refuses a naive one, so the plugin's own ``.date()`` branch is never reached: FETCH_ERROR). The cases named
+# ``-guard`` are green before and after: the contract must not move them.
+
+
+def _z33_declaring(model) -> None:
+    """Barrier, before the plugin is called: ``model`` has ``exchange_timezone``; until it does the test fails here."""
+    if "exchange_timezone" not in model.model_fields:
+        pytest.fail(f"red until Z-33: {model.__name__} declares no exchange_timezone (N86 §1)", pytrace=False)
+
+
+def _z33_rule():
+    """``local_date_of_legacy_utc_date`` (N86 §2); until its module exists the test fails here."""
+    try:
+        from backend.app.utils.exchange_dates import local_date_of_legacy_utc_date  # noqa: PLC0415 — red until Z-33: imported where it is called
+    except ImportError as exc:
+        pytest.fail(f"red until Z-33: no re-date rule, backend.app.utils.exchange_dates.local_date_of_legacy_utc_date ({exc})", pytrace=False)
+    return local_date_of_legacy_utc_date
+
+
+def _z33_ticker(days: list[str], tz: str | None, info: dict) -> _FakeTicker:
+    """A ticker answering as yfinance 1.7.0 does for ``days`` on an exchange of ``tz``: the daily frame (OHLCV, then
+    ``Dividends`` and ``Stock Splits``), a 0.5 dividend on the first day and a 2:1 split on the last, all stamped alike."""
+    closes = [100.0 + 10 * position for position in range(len(days))]
+    index = _exchange_midnights(days, tz)
+    hist = pd.DataFrame(
+        {
+            "Open": [close - 1 for close in closes],
+            "High": [close + 1 for close in closes],
+            "Low": [close - 2 for close in closes],
+            "Close": closes,
+            "Volume": [1000 + position for position in range(len(days))],
+            "Dividends": [0.5] + [0.0] * (len(days) - 1),
+            "Stock Splits": [0.0] * (len(days) - 1) + [2.0],
+        },
+        index=index,
+    )
+    dividends = pd.Series([0.5], index=_exchange_midnights(days[:1], tz), name="Dividends")
+    splits = pd.Series([2.0], index=_exchange_midnights(days[-1:], tz), name="Stock Splits")
+    return _FakeTicker(history=hist, info=info, dividends=dividends, splits=splits)
+
+
+async def _z33_history(monkeypatch, days: list[str], tz: str | None, info: dict) -> FAHistoricalData:
+    """The plugin's history of ``days`` (a week of margin each side, so a day read early or late is still in range)."""
+    _install_yf(monkeypatch, ticker=_z33_ticker(days, tz, info))
+    start, end = date.fromisoformat(days[0]) - timedelta(days=7), date.fromisoformat(days[-1]) + timedelta(days=7)
+    return await YahooFinanceProvider().get_history_value("Z33", IdentifierType.TICKER, None, start, end)
+
+
+@pytest.mark.parametrize(
+    ("tz", "days"),
+    [
+        pytest.param("Europe/Rome", ["2025-07-14", "2025-07-15"], id="milan-july"),
+        pytest.param("Europe/Rome", ["2026-01-12", "2026-01-13"], id="milan-january"),
+        pytest.param("Europe/London", ["2025-07-14", "2025-07-15"], id="london-july"),
+        pytest.param("Europe/London", ["2026-01-12", "2026-01-13"], id="london-january-guard"),
+        # Friday in GMT, then Monday 2025-03-31, the first in BST
+        pytest.param("Europe/London", ["2025-03-28", "2025-03-31"], id="london-spring-dst-monday-2025-03-31"),
+        # Friday 2025-10-24, the last in BST, then Monday 2025-10-27 in GMT
+        pytest.param("Europe/London", ["2025-10-24", "2025-10-27"], id="london-autumn-dst-2025-10-24-and-27"),
+        pytest.param("Asia/Tokyo", ["2025-07-14", "2025-07-15"], id="tokyo"),
+        # Sunday 2025-03-30 has no midnight in Beirut (00:00 → 01:00): yfinance stamps it 01:00, still that Sunday
+        pytest.param("Asia/Beirut", ["2025-03-28", "2025-03-30"], id="beirut-skipped-midnight"),
+        pytest.param("America/New_York", ["2025-07-14", "2025-07-15"], id="new-york-guard"),
+        # A Saturday and a Sunday: a line that trades every day, on UTC
+        pytest.param("UTC", ["2025-07-12", "2025-07-13"], id="utc-24-7-guard"),
+        pytest.param(None, ["2025-07-14", "2025-07-15"], id="tz-naive"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_z33_history_dates_each_bar_and_event_on_its_exchange_day(monkeypatch, tz, days):
+    """Z-33 (N86 §1): a history as yfinance 1.7.0 stamps it gives every price point, the dividend and the split the
+    exchange day they were stamped on, whatever the zone and its DST edges; a tz-naive index gives its own dates.
+
+    Red until Z-33 for every zone east of UTC: read in UTC, each day is the day before (Milan all year, London in summer
+    time only — around both 2025 changes one of the two days moves, the other does not —, Tokyo, Beirut). Red for the
+    tz-naive index too: the plugin fails the whole history (FETCH_ERROR, «Cannot convert tz-naive Timestamp»). The
+    ``-guard`` cases are green before and after.
+    """
+    result = await _z33_history(monkeypatch, days, tz, {"currency": "EUR"})
+
+    exchange_days = [date.fromisoformat(day) for day in days]
+    assert [point.date for point in result.prices] == exchange_days, f"each bar must be dated on its exchange day {exchange_days}"
+    assert sorted((event.date, str(event.type)) for event in result.events) == [(exchange_days[0], "DIVIDEND"), (exchange_days[-1], "SPLIT")], "the dividend and the split must be dated as the bars they were stamped with"
+
+
+@pytest.mark.parametrize(
+    ("tz", "info_tz", "declared"),
+    [
+        pytest.param("Europe/Rome", None, "Europe/Rome", id="the-index-zone"),
+        pytest.param("UTC", None, "UTC", id="a-utc-line"),
+        pytest.param("Europe/London", "Europe/Rome", "Europe/London", id="the-index-wins-over-info"),
+        pytest.param(None, "America/New_York", "America/New_York", id="naive-index-info-zone"),
+        pytest.param(None, None, None, id="naive-index-no-zone"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_z33_history_declares_the_exchange_timezone(monkeypatch, tz, info_tz, declared):
+    """Z-33 (N86 §1): the history declares the exchange's timezone as an IANA name — the index's own, else
+    ``info["exchangeTimezoneName"]`` —, and None when neither says: an unknown zone is never declared as UTC, which would
+    leave a legacy assignment's rows where they are.
+
+    Red until Z-33: ``FAHistoricalData`` has no ``exchange_timezone``.
+    """
+    _z33_declaring(FAHistoricalData)
+    info = {"currency": "EUR"} | ({"exchangeTimezoneName": info_tz} if info_tz else {})
+
+    result = await _z33_history(monkeypatch, ["2025-07-14", "2025-07-15"], tz, info)
+
+    assert result.exchange_timezone == declared
+
+
+_Z33_SYDNEY_MORNING = datetime(2026, 1, 14, 23, 30, tzinfo=UTC)  # 10:30 on Thursday 2026-01-15 in Sydney (AEDT, +11)
+
+
+@pytest.mark.parametrize(
+    ("info_tz", "expected"),
+    [
+        pytest.param("Australia/Sydney", date(2026, 1, 15), id="sydney-the-next-day"),
+        pytest.param(None, date(2026, 1, 14), id="unknown-zone-utc-guard"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_z33_current_value_is_dated_in_the_exchange_timezone(monkeypatch, info_tz, expected):
+    """Z-33 (N86 §1): ``regularMarketTime`` 23:30 UTC is 10:30 the next day in Sydney: the current value is dated that
+    next day, the exchange's; with no ``exchangeTimezoneName`` it is dated in UTC (the guard, green before and after).
+
+    Red until Z-33 for Sydney: the plugin dates the instant by UTC, the day before.
+    """
+    info = {"regularMarketPrice": 8.5, "currency": "AUD", "regularMarketTime": int(_Z33_SYDNEY_MORNING.timestamp())} | ({"exchangeTimezoneName": info_tz} if info_tz else {})
+    _install_yf(monkeypatch, ticker=_FakeTicker(info=info))
+
+    result = await YahooFinanceProvider().get_current_value("Z33.AX", IdentifierType.TICKER)
+
+    assert result.as_of_date == expected
+
+
+@pytest.mark.parametrize(("info_tz", "declared"), [pytest.param("Australia/Sydney", "Australia/Sydney", id="sydney"), pytest.param(None, None, id="unknown-zone")])
+@pytest.mark.asyncio
+async def test_z33_current_value_declares_the_exchange_timezone(monkeypatch, info_tz, declared):
+    """Z-33 (N86 §1): the current value declares ``info["exchangeTimezoneName"]`` as its ``exchange_timezone``, None when
+    Yahoo gives none (dated in UTC then, but not declared so).
+
+    Red until Z-33: ``FACurrentValue`` has no ``exchange_timezone``.
+    """
+    _z33_declaring(FACurrentValue)
+    info = {"regularMarketPrice": 8.5, "currency": "AUD", "regularMarketTime": int(_Z33_SYDNEY_MORNING.timestamp())} | ({"exchangeTimezoneName": info_tz} if info_tz else {})
+    _install_yf(monkeypatch, ticker=_FakeTicker(info=info))
+
+    result = await YahooFinanceProvider().get_current_value("Z33.AX", IdentifierType.TICKER)
+
+    assert result.exchange_timezone == declared
+
+
+@pytest.mark.parametrize(
+    ("zone", "stored", "belongs"),
+    [
+        pytest.param("Europe/Rome", "2025-07-14", "2025-07-15", id="rome-summer"),
+        pytest.param("Europe/Rome", "2026-01-12", "2026-01-13", id="rome-winter"),
+        pytest.param("Europe/Rome", "2025-03-29", "2025-03-30", id="rome-eve-of-summer-time"),
+        pytest.param("Asia/Tokyo", "2025-07-14", "2025-07-15", id="tokyo"),
+        pytest.param("Asia/Kolkata", "2025-07-14", "2025-07-15", id="kolkata-half-hour-offset"),
+        pytest.param("Australia/Sydney", "2026-01-14", "2026-01-15", id="sydney"),
+        pytest.param("America/New_York", "2025-07-15", "2025-07-15", id="new-york-summer-never"),
+        pytest.param("America/New_York", "2026-01-13", "2026-01-13", id="new-york-winter-never"),
+        pytest.param("UTC", "2025-07-12", "2025-07-12", id="utc-never"),
+        pytest.param("Europe/London", "2025-07-14", "2025-07-15", id="london-summer"),
+        pytest.param("Europe/London", "2026-01-12", "2026-01-12", id="london-winter"),
+        pytest.param("Europe/London", "2025-03-28", "2025-03-28", id="london-friday-before-summer-time"),
+        pytest.param("Europe/London", "2025-03-30", "2025-03-31", id="london-sunday-2025-03-30-is-monday-03-31"),
+        pytest.param("Europe/London", "2025-10-23", "2025-10-24", id="london-thursday-2025-10-23-is-friday-10-24"),
+        pytest.param("Europe/London", "2025-10-25", "2025-10-26", id="london-last-summer-midnight"),
+        pytest.param("Europe/London", "2025-10-26", "2025-10-26", id="london-first-winter-midnight-after"),
+        pytest.param("Europe/London", "2025-10-27", "2025-10-27", id="london-monday-2025-10-27-is-itself"),
+        # Local midnight of S + 1 skipped by the clocks: offsets +2 then +3 in Beirut, -1 then 0 in the Azores
+        pytest.param("Asia/Beirut", "2025-03-29", "2025-03-30", id="beirut-skipped-midnight"),
+        pytest.param("Atlantic/Azores", "2025-03-29", "2025-03-29", id="azores-skipped-midnight"),
+    ],
+)
+def test_z33_legacy_rule_named_cases(zone, stored, belongs):
+    """Z-33 (N86 §2): a date the old rule stored belongs to the next day when the exchange's UTC offset at local midnight
+    of that next day is above 0, else to itself — Rome and Tokyo always, New York and UTC never, London on its summer
+    side of each 2025 change only, and a midnight the clocks skip resolved like yfinance resolves it.
+
+    Red until Z-33: ``backend.app.utils.exchange_dates`` does not exist.
+    """
+    rule = _z33_rule()
+
+    assert rule(date.fromisoformat(stored), ZoneInfo(zone)) == date.fromisoformat(belongs)
+
+
+@pytest.mark.parametrize(
+    "zone",
+    ["Europe/Rome", "Europe/London", "Asia/Tokyo", "Asia/Kolkata", "Australia/Sydney", "Pacific/Auckland", "America/New_York", "America/Sao_Paulo", "America/Santiago", "UTC", "Asia/Beirut", "Atlantic/Azores"],
+)
+def test_z33_legacy_rule_inverts_the_old_dating_for_a_whole_year(zone):
+    """Z-33 (N86 §2), against the defect itself: every day of 2025, stamped as yfinance 1.7.0 stamps it and dated as the
+    plugin dated it before Z-33 (its UTC date), gives the date S a 1.2 install stored; the rule gives back the day the row
+    on S holds — the day itself, or, where two days were stored on one S, the later, whose row the upsert kept (London's
+    Monday 2025-03-31 stored on Sunday 03-30, where the Sunday's own bar would have been).
+
+    Red until Z-33: ``backend.app.utils.exchange_dates`` does not exist.
+    """
+    rule = _z33_rule()
+    tz = ZoneInfo(zone)
+    days = [date(2025, 1, 1) + timedelta(days=offset) for offset in range(365)]
+    held: dict[date, date] = {}
+    for day, stamped in zip(days, _exchange_midnights([day.isoformat() for day in days], zone), strict=True):
+        stored = stamped.tz_convert("UTC").date()  # the plugin's rule before Z-33
+        held[stored] = max(held.get(stored, day), day)
+
+    wrong = {stored.isoformat(): (rule(stored, tz).isoformat(), day.isoformat()) for stored, day in held.items() if rule(stored, tz) != day}
+    assert wrong == {}, f"{zone}: stored date → (the rule's day, the day the row holds), where they differ: {dict(list(wrong.items())[:6])} ({len(wrong)} in all)"
 
 
 if __name__ == "__main__":
