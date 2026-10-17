@@ -28,15 +28,21 @@
  * expected through the formatter `formatPrice` calls, `formatCurrencyAmountPlain(value, currency)` with no options, in
  * this runtime: the locale and the currency suffix are whatever the modal gets, never a frozen string. The missing
  * value is `formatPrice`'s own `—`, a literal: a placeholder has no locale. Nothing here reads translated text.
+ *
+ * C-97c-2 (the last block): the modal's quantities and prices per unit lose no digit. That block mounts lots with a
+ * history, because its subject is shown there; the opening value above does not depend on it.
  */
-import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {z} from 'zod';
 import {cleanup, render, screen, setupI18n, within} from '$test/component';
 import {schemas} from '$lib/api';
+import {uiLocale} from '$lib/stores/app/uiLocale';
+import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import LotCustodyModal from './LotCustodyModal.svelte';
 
 type LotSummary = z.infer<typeof schemas.LotSummarySchema>;
+type LotTimelineEvent = z.infer<typeof schemas.LotTimelineEventSchema>;
 
 /** The three amounts under test, as the API serialises them: Decimal strings, null where the backend has no value. */
 interface OpeningAmounts {
@@ -115,7 +121,8 @@ afterEach(() => {
  *
  * The history is left empty on purpose too. The opening value does not depend on it, and J's CP-7a (backend, entering
  * soon) changes the values the modal's history shows, its closure rows. Pinning those here would turn that change red
- * for a reason that is not this one. Nothing below reads the history section.
+ * for a reason that is not this one. Nothing in this block reads the history section (the C-97c-2 block, at the end of
+ * the file, does: its subject is shown there).
  */
 describe('LotCustodyModal — the opening value is the backend’s original_cost (Y12a, U8)', () => {
     // Red on d5c3c3ae3: the cell shows the product, 10 × 10 = 100.
@@ -144,5 +151,199 @@ describe('LotCustodyModal — the opening value is the backend’s original_cost
 
         expect(money(0), 'control: zero prints as an amount, not as the placeholder').not.toBe(MISSING);
         expect(shown(cell), 'a cost of zero is a value: zero formatted as money').toBe(money(0));
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C-97c-2 — the modal's quantities and prices per unit lose no digit
+// ---------------------------------------------------------------------------
+
+/**
+ * D-C97c-1 (the coordinator, 17/10), applied to the lots (BK). A lot quantity keeps the ten decimals of its column; a
+ * price per unit the decimals its first four significant digits need (`priceFractionDigits`, formatFixed.ts). Today the
+ * modal's `formatQuantity` hands a number to `formatExactDecimal(abs, {maxFrac: 8})`: 0.1234567891 is cut at the eighth
+ * decimal, and a quantity under 1e-6 goes through `String()`, so 0.0000001 reads `1e-7`. Its `formatUnitPrice`, the
+ * opening and the closing price per unit (public), writes two fixed decimals: 0.000003457312 EUR reads 0.00. The
+ * contract: the quantity through the lots' shared `formatLotQuantity` (up to ten decimals, never an exponent), the price
+ * per unit with `{minFraction, maxFraction}` from `priceFractionDigits(value)`. Totals stay money, as they are.
+ *
+ * Reds: a quantity of 0.1234567891 and one of 0.0000001 (10 satoshis), in every quantity cell the modal marks with a
+ * test id — the custody summary row, the custody fragment row, and the history's opening (BUY, signed) and departure
+ * (TRANSFER_DEPART) rows; a price per unit of 0.000003457312, in the history's opening (BUY) and closing (SELL) details.
+ * Guards, green today and after: a quantity of 2.5 in the same cells — the control that each cell is read where its
+ * quantity is — and a price per unit of 123.45 in both details. The summary's quantity and price cells carry no test id:
+ * they go through the same two functions, and are not read here.
+ *
+ * Fixtures, each parsed by the generated client's schemas, as the app receives it. An open lot in transit: bought at
+ * Broker Alfa at 1 EUR a unit (so its cost is its quantity), then sent off; its one custody slice is IN_TRANSIT, so no
+ * BrokerBadge is mounted (its icon would ask the API for the broker). A closed lot: 10 units bought and sold at one
+ * price, the sale carrying it as `close_unit_price` and `unit_price` alike (the modal reads the first, else the second),
+ * with the proceeds of 10 units at that price — a figure no price token can be mistaken for. The history rows come by
+ * date, so the opening is row 0.
+ *
+ * Reading. A cell by its test id inside the modal's own; a figure is matched as a whole number token in the cell's text —
+ * no digit, decimal mark or separator glued to either side — never as the full currency string, which stays the shared
+ * formatter's business. English UI: jsdom's browser is en-US, checked before each case, so the expected digits are typed.
+ */
+describe('LotCustodyModal — quantities and prices per unit lose no digit (C-97c-2, D-C97c-1)', () => {
+    const BROKER = {id: 61, name: 'Broker Alfa'} satisfies BrokerLike;
+    /** The transfer that sends the open lot off; the backend keys its departure row by the pair id. */
+    const TRANSFER_ID = 7_520;
+    /** The sale that closes the closed lot. */
+    const SALE_ID = 7_530;
+
+    /** A price per unit, and the value of 10 units at it, as decimal strings: the closed lot's figures. */
+    interface PriceCase {
+        price: string;
+        tenUnits: string;
+    }
+
+    /** Its first four significant digits are 0.000003457. */
+    const TINY_PRICE: PriceCase = {price: '0.000003457312', tenUnits: '0.00003457312'};
+    const PLAIN_PRICE: PriceCase = {price: '123.45', tenUnits: '1234.5'};
+
+    /** A number written in exponent notation, as `String()` writes one under 1e-6: `1e-7`. */
+    const EXPONENT = /\d[eE][-+]?\d/;
+
+    /** `digits` as a whole number in a text: no digit, decimal mark or group separator glued to either side. */
+    function numberToken(digits: string): RegExp {
+        return new RegExp(`(?<![\\d.,])${digits.replace(/\./g, '\\.')}(?![.,]?\\d)`);
+    }
+
+    /** A timeline event of the lot, as the generated client parses it. */
+    function timelineEvent(event: Record<string, unknown>): LotTimelineEvent {
+        return schemas.LotTimelineEventSchema.parse({lot_id: LOT_ID, ...event});
+    }
+
+    /** The text of the modal's element `testId`, whitespace runs collapsed. */
+    function textOf(testId: string): string {
+        return (within(screen.getByTestId('lot-custody-modal')).getByTestId(testId).textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** Mount the modal on an open LONG lot of `quantity`, bought at Broker Alfa at 1 EUR a unit and now in transit. */
+    function mountLotInTransit(quantity: string): void {
+        const lot = schemas.LotSummarySchema.parse({
+            lot_id: LOT_ID,
+            opening_transaction_id: LOT_ID,
+            asset_id: 9_031,
+            direction: 'LONG',
+            opening_broker_id: BROKER.id,
+            opening_date: '2025-02-03',
+            opening_unit_price: '1',
+            original_quantity: quantity,
+            original_cost: quantity, // 1 EUR a unit
+            open_quantity: quantity,
+            realized_quantity: '0',
+            states: ['LONG', 'OPEN', 'IN_TRANSIT'],
+            current_custody: [{custody_type: 'IN_TRANSIT', broker_id: null, quantity}],
+        });
+        const history = [
+            timelineEvent({date: '2025-02-03', kind: 'BUY', transaction_id: LOT_ID, broker_id: BROKER.id, quantity, unit_price: '1', opening_value: quantity}),
+            timelineEvent({
+                date: '2025-03-10',
+                kind: 'TRANSFER_DEPART',
+                transaction_id: TRANSFER_ID,
+                related_transaction_id: TRANSFER_ID,
+                broker_id: null,
+                source_broker_id: BROKER.id,
+                destination_broker_id: 62,
+                fragment_id: `lot:${LOT_ID}/transfer:${TRANSFER_ID}/transit`,
+                quantity,
+                unit_price: '1',
+            }),
+        ];
+        // Control: the client keeps the quantity as sent — the lot's, its custody slice's and both events'.
+        expect([lot.original_quantity, lot.open_quantity, lot.current_custody?.[0]?.quantity, ...history.map((event) => event.quantity)], 'control: the generated client keeps the quantity as sent').toEqual(new Array<string>(5).fill(quantity));
+        render(LotCustodyModal, {open: true, lot, history, brokers: [BROKER], currency: CURRENCY, onClose: vi.fn()});
+    }
+
+    /** What each quantity cell of the modal shows, by its test id. */
+    function quantityCells(): Record<string, string> {
+        return {
+            'custody summary': textOf('lot-custody-modal-custody-summary-row-0'),
+            'custody fragment': textOf('lot-custody-modal-custody-row-0'),
+            'history, opening': textOf('lot-custody-modal-history-row-0'),
+            'history, departure': textOf('lot-custody-modal-history-row-1'),
+        };
+    }
+
+    /** Mount the modal on a closed LONG lot: 10 units bought at Broker Alfa at `price`, sold at the same price. */
+    function mountLotClosedAt({price, tenUnits}: PriceCase): void {
+        const lot = schemas.LotSummarySchema.parse({
+            lot_id: LOT_ID,
+            opening_transaction_id: LOT_ID,
+            asset_id: 9_031,
+            direction: 'LONG',
+            opening_broker_id: BROKER.id,
+            opening_date: '2025-02-03',
+            closing_date: '2025-09-15',
+            opening_unit_price: price,
+            original_quantity: '10',
+            original_cost: tenUnits,
+            open_quantity: '0',
+            realized_quantity: '10',
+            realized_pnl: '0',
+            cumulative_proceeds: tenUnits,
+            states: ['LONG', 'CLOSED'],
+            current_custody: [],
+        });
+        const history = [
+            timelineEvent({date: '2025-02-03', kind: 'BUY', transaction_id: LOT_ID, broker_id: BROKER.id, quantity: '10', unit_price: price, opening_value: tenUnits}),
+            timelineEvent({date: '2025-09-15', kind: 'SELL', transaction_id: SALE_ID, broker_id: BROKER.id, quantity: '10', unit_price: price, open_unit_price: price, close_unit_price: price, proceeds: tenUnits, realized_pnl: '0'}),
+        ];
+        // Control: the client keeps the price as sent, in each field the modal reads it from.
+        expect([history[0].unit_price, history[1].close_unit_price, history[1].unit_price], 'control: the generated client keeps the price as sent').toEqual([price, price, price]);
+        render(LotCustodyModal, {open: true, lot, history, brokers: [BROKER], currency: CURRENCY, onClose: vi.fn()});
+    }
+
+    /** The details of the history's opening (BUY) and closing (SELL) rows, by their test ids. */
+    function priceDetails(): {opening: string; closing: string} {
+        return {opening: textOf('lot-custody-modal-history-details-0'), closing: textOf('lot-custody-modal-history-details-1')};
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the modal writes en-US, checked.
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    });
+
+    it('a quantity of 0.1234567891 reads whole in every quantity cell: the ten decimals of its column, not eight', () => {
+        mountLotInTransit('0.1234567891');
+
+        for (const [cell, shown] of Object.entries(quantityCells())) {
+            expect.soft(shown, `${cell}: ten decimals (today cut at the eighth: 0.12345678)`).toMatch(numberToken('0.1234567891'));
+        }
+    });
+
+    it('a quantity of 0.0000001, a lot of 10 satoshis, reads 0.0000001 in every quantity cell, never in exponent notation', () => {
+        mountLotInTransit('0.0000001');
+
+        for (const [cell, shown] of Object.entries(quantityCells())) {
+            expect.soft(shown, `${cell}: its seventh decimal (today 1e-7)`).toMatch(numberToken('0.0000001'));
+            expect.soft(shown, `${cell}: no exponent notation (today 1e-7: String() of a number under 1e-6)`).not.toMatch(EXPONENT);
+        }
+    });
+
+    it('guard: a quantity of 2.5 still reads 2.5 in every quantity cell — the control that each cell is read where its quantity is', () => {
+        mountLotInTransit('2.5');
+
+        for (const [cell, shown] of Object.entries(quantityCells())) {
+            expect.soft(shown, cell).toMatch(numberToken('2.5'));
+        }
+    });
+
+    it('a price per unit of 0.000003457312 EUR shows 0.000003457, opening and closing: four significant digits, not 0.00', () => {
+        mountLotClosedAt(TINY_PRICE);
+        const {opening, closing} = priceDetails();
+
+        expect.soft(opening, 'the opening price (today 0.00)').toMatch(numberToken('0.000003457'));
+        expect.soft(closing, 'the closing price (today 0.00)').toMatch(numberToken('0.000003457'));
+    });
+
+    it('guard: a price per unit of 123.45 EUR still shows 123.45, opening and closing', () => {
+        mountLotClosedAt(PLAIN_PRICE);
+        const {opening, closing} = priceDetails();
+
+        expect.soft(opening, 'the opening price').toMatch(numberToken('123.45'));
+        expect.soft(closing, 'the closing price').toMatch(numberToken('123.45'));
     });
 });

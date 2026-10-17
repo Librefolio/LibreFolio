@@ -22,7 +22,7 @@
 
 import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
-import {clamp} from './lotChartShared';
+import {clamp, LOT_QUANTITY_FRACTION_DIGITS} from './lotChartShared';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {themed} from '$lib/theme/themePair';
 import {CHART_GAIN_LOSS, LOT_GANTT_COLORS} from '$lib/theme/chartTheme';
@@ -101,11 +101,11 @@ export function firstPresentUnknown(...values: unknown[]): unknown {
 // ---------------------------------------------------------------------------
 
 /**
- * Format a quantity with up to 6 fraction digits. `locale` is exposed for
+ * Format a quantity with the lots' `LOT_QUANTITY_FRACTION_DIGITS`, up to 10 (C-97a, C-97c). `locale` is exposed for
  * deterministic tests; it defaults to the interface locale (`uiLocale()`, M-18).
  */
 export function formatQuantity(value: number, locale: string = uiLocale()): string {
-    return value.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6});
+    return value.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: LOT_QUANTITY_FRACTION_DIGITS});
 }
 
 /**
@@ -116,7 +116,7 @@ export function formatQuantity(value: number, locale: string = uiLocale()): stri
  */
 export function quantityPluralCount(value: number, locale: string = uiLocale()): number {
     if (!Number.isFinite(value)) return NaN;
-    const parts = new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6}).formatToParts(Math.abs(value));
+    const parts = new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: LOT_QUANTITY_FRACTION_DIGITS}).formatToParts(Math.abs(value));
     const whole = Number(
         parts
             .filter((part) => part.type === 'integer')
