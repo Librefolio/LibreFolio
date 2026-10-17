@@ -169,8 +169,8 @@ class PortfolioCalculationEngine:
         extra cost is negligible (pure bookkeeping capture, no new data resolution).
 
         ``period_start`` (MF-A) names the day whose end ``position_states_start`` is taken at — the start of the
-        caller's period while the replay runs from ``date_from`` (t=0 for the Dashboard). Without it the snapshot is
-        the first replayed day's. It is part of the blob-cache key, so a cached run never answers with another day's
+        caller's period while the states run from ``date_from`` (t=0 for the Dashboard). Without it the snapshot is
+        ``date_from``'s. It is part of the blob-cache key, so a cached run never answers with another day's
         snapshot.
         """
         # ── 1. Resolve target currency ──
@@ -302,14 +302,8 @@ class PortfolioCalculationEngine:
             if blob_from <= actual_from and blob_to == actual_to:
                 logger.debug("Portfolio blob cache hit (exact match)", user_id=user_id)
                 return cached_blob
-            # Forward extension: blob covers from start but needs more days at end
-            if blob_from <= actual_from and blob_to < actual_to and cached_blob.end_state is not None:
-                logger.debug("Portfolio blob cache forward extension", user_id=user_id, extending=f"{blob_to}..{actual_to}")
-                # Will proceed to full compute but with frame_start = blob_to + 1
-                # and initial accumulators from end_state
-                # (full extension with state resume deferred — for now recompute)
-            else:
-                logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id, blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
+            # A blob that ends earlier is not resumed (EngineEndState is kept for that): the range is recomputed.
+            logger.debug("Portfolio blob cache miss (range mismatch)", user_id=user_id, blob_range=f"{blob_from}..{blob_to}", requested=f"{actual_from}..{actual_to}")
 
         # ── 6. Preload prices (bulk) ──
         price_map: dict[int, list[tuple[date_type, Decimal, str]]] = {}

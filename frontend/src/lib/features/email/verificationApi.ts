@@ -39,15 +39,21 @@ export async function resendEmailVerification(username: string, password: string
 
 /** Why the link could not be sent again. */
 export interface ResendFailure {
-    /** `INVALID_CREDENTIALS` (401), the API's `error_code`, or `UNKNOWN` without an answer. */
+    /** `INVALID_CREDENTIALS` (the route's own 401), `INSTANCE_BLOCKED` (any other 401, or the 423 `instance_blocked`),
+     * the API's `error_code`, or `UNKNOWN` without an answer. */
     errorCode: string;
     /** `EMAIL_RATE_LIMITED`: seconds until a new request may go. */
     retryAfter?: number;
 }
 
+/** Why «send the link again» failed. The route answers its own 401 with `INVALID_CREDENTIALS`; it is a public route
+ * outside the block's allow-list, so any other 401 is the one an anonymous caller gets while the hosting provider blocks
+ * the instance, and the 423 `instance_blocked` the one a signed-in browser gets (workstream H; lot E-11). */
 export function readResendFailure(error: unknown): ResendFailure {
-    if (refusalStatus(error) === 401) return {errorCode: 'INVALID_CREDENTIALS'};
+    const status = refusalStatus(error);
     const fields = refusalDetail(error);
+    if (status === 401) return {errorCode: fields?.error_code === 'INVALID_CREDENTIALS' ? 'INVALID_CREDENTIALS' : 'INSTANCE_BLOCKED'};
+    if (isInstanceBlockedError(status, refusalBody(error))) return {errorCode: 'INSTANCE_BLOCKED'};
     if (fields === null) return {errorCode: 'UNKNOWN'};
     return {errorCode: typeof fields.error_code === 'string' && fields.error_code ? fields.error_code : 'UNKNOWN', retryAfter: retryAfterOf(fields)};
 }

@@ -137,9 +137,13 @@ async def _create_pending_admin(session: AsyncSession, config: AdminBootstrapCon
     return BootstrapResult(BootstrapAction.CREATED, user_id=user_id, username=username, link_token=None if given else issued.token, expires_at=expires_at)
 
 
-async def _follow_variables(session: AsyncSession, user: User, config: AdminBootstrapConfig, now: datetime) -> bool:
-    """The waiting account takes the username and email of the variables, unless another account holds them."""
-    changed = False
+async def _follow_variables(session: AsyncSession, user: User, config: AdminBootstrapConfig, now: datetime) -> tuple[bool, bool]:
+    """The waiting account takes the username and email of the variables, unless another account holds them.
+
+    Whether anything changed, and whether the address did, beyond its case: the setup links handed over went to the
+    earlier address, so they are revoked (A-33). The account still waits, for a link that reaches the new one.
+    """
+    changed = moved = False
     if user.username != config.username:
         if await user_service.get_user_by_username(session, config.username) is None:
             user.username, changed = config.username, True
@@ -147,20 +151,23 @@ async def _follow_variables(session: AsyncSession, user: User, config: AdminBoot
             logger.error("LIBREFOLIO_ADMIN_USERNAME belongs to another account: the waiting administrator keeps its username", user_id=user.id)
     if user.email != config.email:
         # The same address in another case is this account's (decision P18): it takes the variable's form.
-        if user_service.same_email(user.email, config.email) or await user_service.get_user_by_email(session, config.email) is None:
-            user.email, changed = config.email, True
+        same = user_service.same_email(user.email, config.email)
+        if same or await user_service.get_user_by_email(session, config.email) is None:
+            user.email, changed, moved = config.email, True, not same
         else:
             logger.error("LIBREFOLIO_ADMIN_EMAIL belongs to another account: the waiting administrator keeps its address", user_id=user.id)
+    if moved:
+        await token_service.revoke_tokens(session, user_id=user.id, purpose=_SETUP, now=now)
     if changed:
         user.updated_at = now
         session.add(user)
-    return changed
+    return changed, moved
 
 
 async def _keep_pending_admin(session: AsyncSession, user: User, config: AdminBootstrapConfig, now: datetime) -> BootstrapResult:
     """A restart while the administrator waits: follow the variables, re-arm with a new token, or say the link died."""
     user_id = user.id
-    renamed = await _follow_variables(session, user, config, now)
+    renamed, moved = await _follow_variables(session, user, config, now)
     username = user.username
     if config.token is not None and not await _token_known(session, config.token):
         await token_service.revoke_tokens(session, user_id=user_id, purpose=_SETUP, now=now)
@@ -176,7 +183,10 @@ async def _keep_pending_admin(session: AsyncSession, user: User, config: AdminBo
     if live_until is not None:
         return BootstrapResult(BootstrapAction.PENDING, user_id=user_id, username=username, expires_at=live_until)
     remedy = f"run {_SETUP_LINK_COMMAND}" + (f", or set a new {ADMIN_BOOTSTRAP_TOKEN_VARIABLE}" if config.token is not None else "")
-    logger.warning(f"The initial administrator's setup link has expired: {remedy}", user_id=user_id, username=username)
+    if moved:
+        logger.warning(f"The initial administrator's address changed: the setup link handed over before no longer works; {remedy}", user_id=user_id, username=username)
+    else:
+        logger.warning(f"The initial administrator's setup link has expired: {remedy}", user_id=user_id, username=username)
     return BootstrapResult(BootstrapAction.EXPIRED, user_id=user_id, username=username)
 
 
@@ -264,7 +274,8 @@ async def complete_admin_setup(session: AsyncSession, token: str, new_password: 
     """Spend a setup link: the password set, the account active, its sessions ended, its other links revoked; commits.
 
     None, and nothing changed, for a link that is not a live setup link. The link of an account already active is
-    refused too, and revoked: once the account is set up, by any path, its links must not set its password again.
+    refused too, and every setup link of the account retired (A-32): once the account is set up, by any path, its links
+    must not set its password again, and a later deactivation must not make it wait for its setup again.
     """
     moment = now or utcnow()
     # The write comes first, as for a reset link: it takes SQLite's write lock, and of two requests racing for the same
@@ -275,11 +286,11 @@ async def complete_admin_setup(session: AsyncSession, token: str, new_password: 
         await session.rollback()
         return None
     if user.is_active:
-        record_id, user_id = record.id, user.id
+        user_id = user.id
         await session.rollback()
-        await token_service.revoke_tokens(session, token_id=record_id, now=moment)
+        await token_service.retire_tokens(session, user_id=user_id, purpose=_SETUP, now=moment)
         await session.commit()
-        logger.warning("Setup link refused and revoked: the account is already active", user_id=user_id)
+        logger.warning("Setup link refused and retired: the account is already active", user_id=user_id)
         return None
     record.consumed_by_user_id = user.id
     session.add(record)

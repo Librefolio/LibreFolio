@@ -9,13 +9,28 @@
 import {isAxiosError} from 'axios';
 import type {z} from 'zod';
 import {schemas, zodiosApi} from '$lib/api';
+import type {PasswordRule} from '$lib/features/auth/passwordRules';
 
 export type InstanceBackupJob = z.infer<typeof schemas.InstanceBackupJob>;
 export type BackupPhase = NonNullable<InstanceBackupJob['phase']>;
 export type BackupWarning = InstanceBackupJob['warnings'][number];
 
-export function startInstanceBackup(): Promise<InstanceBackupJob> {
-    return zodiosApi.start_instance_backup_api_v1_backup_instance_post(undefined);
+/** Start a backup; with `password`, a secure one (an `.lfbk` envelope, lot B4). The password goes in this request only. */
+export function startInstanceBackup(password?: string): Promise<InstanceBackupJob> {
+    // No body (`null`, as the generated client types an optional body): a clear backup, the request of before.
+    return zodiosApi.start_instance_backup_api_v1_backup_instance_post(password === undefined ? null : {password});
+}
+
+export interface InstanceBackupOptions {
+    /** The rules of a secure backup's password: the accounts' rules, with a longer minimum (P12). */
+    password_rules: PasswordRule[];
+}
+
+/** What a secure backup asks of its password (`GET /backup/instance/options`): the server's rules, drawn as they come. */
+export function getInstanceBackupOptions(): Promise<InstanceBackupOptions> {
+    // The client's explicit type widens `value` to `number | null | Array<…>`, a branch its zod schema never lets through:
+    // the answer, once checked, is cast as it is (see `Unwidened` below).
+    return zodiosApi.get_instance_backup_options_api_v1_backup_instance_options_get() as Promise<InstanceBackupOptions>;
 }
 
 export function getInstanceBackupJob(jobId: string): Promise<InstanceBackupJob> {
@@ -96,8 +111,19 @@ export function uploadRestoreArchive(file: File, options: RestoreUploadOptions =
     });
 }
 
-export function startRestoreCheck(uploadId: string): Promise<RestoreStage> {
-    return zodiosApi.start_restore_check_api_v1_backup_restore_stage_post({upload_id: uploadId}) as Promise<RestoreStage>;
+/** Check an upload on a copy; a secure backup with its `password`, which the server checks at once (lot B4). */
+export function startRestoreCheck(uploadId: string, password?: string): Promise<RestoreStage> {
+    const body = password === undefined ? {upload_id: uploadId} : {upload_id: uploadId, password};
+    return zodiosApi.start_restore_check_api_v1_backup_restore_stage_post(body) as Promise<RestoreStage>;
+}
+
+/** The first bytes of a secure backup (an `.lfbk` envelope): «LFBK». */
+const ENVELOPE_MAGIC = [0x4c, 0x46, 0x42, 0x4b];
+
+/** Whether `file` is a secure backup, by its first four bytes, whatever its name. */
+export async function isEnvelopeFile(file: Blob): Promise<boolean> {
+    const head = new Uint8Array(await file.slice(0, ENVELOPE_MAGIC.length).arrayBuffer());
+    return head.length === ENVELOPE_MAGIC.length && ENVELOPE_MAGIC.every((byte, index) => head[index] === byte);
 }
 
 export function getRestoreCheck(stageId: string): Promise<RestoreStage> {
