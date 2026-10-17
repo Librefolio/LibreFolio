@@ -3653,6 +3653,12 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     potrebbe poi elencarli.
 
   Dettagli: piano H, §14, lotto «H-32».
+  - Cura fatta il 17/10 (lotto «H-34», piano H §14), con l'OK di scrittura del coordinatore.
+    - `FAProviderConfigBase.provider_params` (X) e `RiskAnalyticRequest.parameters` (J) hanno un
+      `field_validator(mode="before")` con `ensure_json_safe`. X e J rivedono.
+    - `ToolComputeItem.parameters` era già protetto: `JsonValue` rispetta l'`allow_inf_nan=False` del suo modello.
+    - La guardia di H-32 elenca ora le 5 posizioni libere, ognuna con la sua sonda. Il paragrafo di
+      `security.md#request-numbers` arriva con i documenti di H-39.
 - **H-35 · Dopo A8a: la docstring di `log_configuration_audit()` e la pulizia di `test_config_audit.py`** — minimo; H
   (review di A8a), via coordinatore, 17/10.
   - La docstring non nomina il `ValueError` di `LIBREFOLIO_LOGIN_LIMIT` né l'`AdminBootstrapConfigError` di F02.
@@ -3724,6 +3730,27 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     stessi file (`config_audit.py`, `test_config_audit.py`). La cura in prova è pronta in `files/h39/` della sessione H.
 
   Dettagli: piano H, §14, lotto «Z-24» (la nota di H-39).
+- **H-40 · IPv6 su Docker Engine: il visitatore arriva dal gateway della rete** — basso, documentazione; E, via
+  coordinatore, 17/10.
+  - `connection_checks.en.md:328-329` dice che Docker Engine su Linux tiene l'indirizzo del visitatore. Vale per IPv4
+    (DNAT). Un visitatore IPv6 verso un container senza IPv6 passa da `docker-proxy` e arriva dal gateway della rete,
+    senza header di inoltro. N70 non può vederlo, e tutti i visitatori IPv6 condividono un solo conteggio per
+    indirizzo (istanza esposta direttamente).
+  - Una frase nei documenti, da verificare su un host Linux, come H-38. Va con i documenti di H-39.
+- **H-41 · I `resolved_fields` di una promozione non sono validati** — medio, robustezza; W (trovato nel lotto H-34),
+  17/10.
+  - `TXPromoteBatchItem.resolved_fields: Dict[str, Any]` (`POST /transactions/validate` e `/commit`) è applicato così
+    com'è da `_apply_promote_resolved_fields` (`services/transactions/batch_creates.py`).
+  - `description` è assegnata senza controllare il tipo né la lunghezza (il create la limita a 500). Un numero,
+    `Infinity` compreso, finirebbe nella colonna `Text` e ogni lettura di quella transazione darebbe 500, perché il
+    modello di lettura vuole una stringa.
+  - `cost_basis_override` passa da `Currency.model_validate`, il cui errore probabilmente esce come 500. `date` passa
+    da `parse_ISO_date`.
+  - Cura possibile, a W: un modello tipato (`description: str` con la stessa lunghezza, `tags`, `date`,
+    `cost_basis_override: Currency`, `extra="forbid"`). È da W anche decidere se le liste di `dict` di
+    `TXMixedBatch` (righe validate dopo, una per una) entrano nella guardia delle posizioni libere.
+
+  Dettagli: piano H, §14, lotto «H-34».
 
 ## A · Account e accessi (fase 01)
 
