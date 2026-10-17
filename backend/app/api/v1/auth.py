@@ -13,6 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
+from backend.app.config.accounts import USERNAME_RESERVED_MESSAGE
 from backend.app.db.models import AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import (
@@ -242,6 +243,8 @@ _REGISTRATION_REFUSALS: dict[str, int] = {
     # Email verification is required and no email with a link can go now (workstream E): nobody gets an account they
     # cannot activate.
     "EMAIL_VERIFICATION_UNAVAILABLE": 409,
+    # A new username holding an @ (A-21a): the sign-in would read it as an email address
+    "USERNAME_INVALID": 400,
 }
 
 
@@ -438,6 +441,9 @@ async def update_profile(
     )
 
     if error:
+        # A new username holding an @ (A-21a) comes with its code, so the profile says it in the user's language
+        if error == USERNAME_RESERVED_MESSAGE:
+            raise HTTPException(status_code=400, detail={"error_code": "USERNAME_INVALID", "message": error})
         raise HTTPException(status_code=400, detail=error)
 
     if email_changes:

@@ -14,6 +14,7 @@
 
 import {type APIRequestContext, expect, type Page, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {openSettingsTab} from '../fixtures/settings-tabs';
 import {TEST_ADMIN} from '../fixtures/test-users';
 import {API_BASE, goToAssetDetailPage, openEditAssetModal} from '../assets/assets-helpers';
 import {eventSeq, waitForEvent} from '../fixtures/app-events';
@@ -29,7 +30,7 @@ import {eventSeq, waitForEvent} from '../fixtures/app-events';
 async function goToSchedulerSettings(page: import('@playwright/test').Page) {
     await login(page, TEST_ADMIN);
     await navigateTo(page, '/settings');
-    await page.getByTestId('settings-tab-admin').click();
+    await openSettingsTab(page, 'admin');
     await expect(page.getByTestId('global-settings-tab')).toBeVisible({timeout: 10_000});
 
     // Click the "Scheduler & Upload" category so the scheduler rows are visible.
