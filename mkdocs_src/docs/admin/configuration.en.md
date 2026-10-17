@@ -532,7 +532,9 @@ When the active accounts, the pending invitations, the accounts waiting for thei
 - an invitation link already sent still works: its place was counted when it was created;
 - administrators cannot create invitations or reactivate accounts, except from the
   [command line](cli_tools.md): `user create`, `user invite` and `user activate` print a warning,
-  then go ahead.
+  then go ahead. `user activate` prints none for an account that already holds its place: one
+  waiting for its email verification while its link is live, or the initial administrator waiting
+  for its setup.
 
 A place frees up when an account is deactivated or deleted, when an invitation is revoked or
 expires, or when the link of an account waiting for its email verification expires (see
