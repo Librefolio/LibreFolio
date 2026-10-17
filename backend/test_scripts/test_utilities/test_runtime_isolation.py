@@ -2379,6 +2379,17 @@ class TestGalleryHandsTheSetupToPlaywright:
 # `testing/helpers.ts`, `lib/tests/x.ts`, `lib/__tests__.ts`), and a folder
 # above `src`, in the checkout's own path, hides nothing.
 #
+# `frontend/static` is an input of the build as well (H-52): adapter-static
+# copies it into `frontend/build` as it is — `sw.js`, `offline.html`, the
+# icons, the emoji font and its stylesheet, `lf-flags.css`, the manifest — so a
+# file there edited after the last build leaves the app serving the old copy,
+# as `offline.html` did under an E2E. Its files count by the rule of `src`,
+# read relative to `static`; a hidden one — the Finder's `.DS_Store`, the font
+# cache's `.cache_manifest.json`, which `scripts/update_js_cache.py` rewrites
+# on every check — is never served from the build (H-28), so one newer than
+# the build must not force a rebuild. A folder's mtime counts no more there
+# than in `src`, and a project without `static` answers as before.
+#
 # The project root is a tree under `tmp_path` and every mtime is set with
 # `os.utime`: no clock, no sleep, no repository file touched.
 
@@ -2387,20 +2398,34 @@ BUILD_MTIME = 1_800_000_000
 OLDER_MTIME = BUILD_MTIME - 3600
 NEWER_MTIME = BUILD_MTIME + 3600
 
+#: The files of ``frontend/static`` that ``make_frontend_project`` writes, by their path relative to ``static``, each with
+#: what it is: adapter-static copies them into the build as they are, so each is an input of the build (H-52).
+STATIC_FILES = {
+    "offline.html": "the page the service worker falls back on offline",
+    "sw.js": "the service worker",
+    "icons/apple-touch-icon.png": "an icon, one folder down",
+    "fonts/noto-color-emoji/noto-color-emoji.css": "the emoji font's stylesheet from the JS cache, two folders down",
+}
+
 
 def make_frontend_project(monkeypatch, root: Path) -> dict[str, Path]:
     """A built frontend under the project root ``root``, every input an hour older than the build.
 
-    Inputs: one ``frontend/src`` file, ``frontend/package.json`` and the root
-    markdown files a test may move forward — the two changelogs and a README that
-    is not one. The Tool codegen inputs are absent here, verified rather than
-    assumed: they could otherwise answer either way for the guards below.
-    ``cli_base.get_project_root`` answers ``root`` for the rest of the test.
+    Inputs: one ``frontend/src`` file, ``frontend/package.json``, the files of
+    ``STATIC_FILES`` under ``frontend/static`` (keyed ``static/<path>``, their
+    folders an hour older as well, set last: writing the files moved their mtimes
+    to now) and the root markdown files a test may move forward — the two
+    changelogs and a README that is not one. The Tool codegen inputs are absent
+    here, verified rather than assumed: they could otherwise answer either way
+    for the guards below. ``cli_base.get_project_root`` answers ``root`` for the
+    rest of the test.
     """
+    static = root / "frontend" / "static"
     files = {
         "index.html": root / "frontend" / "build" / "index.html",
         "source": root / "frontend" / "src" / "app.html",
         "package.json": root / "frontend" / "package.json",
+        **{f"static/{relative}": static / relative for relative in STATIC_FILES},
         "CHANGELOG.md": root / "CHANGELOG.md",
         "CHANGELOG.it.md": root / "CHANGELOG.it.md",
         "README.md": root / "README.md",
@@ -2409,6 +2434,8 @@ def make_frontend_project(monkeypatch, root: Path) -> dict[str, Path]:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("synthetic build input\n", encoding="utf-8")
         os.utime(path, (OLDER_MTIME, OLDER_MTIME))
+    for folder in (static, *(entry for entry in static.rglob("*") if entry.is_dir())):
+        os.utime(folder, (OLDER_MTIME, OLDER_MTIME))
     os.utime(files["index.html"], (BUILD_MTIME, BUILD_MTIME))
     monkeypatch.setattr(cli_base, "get_project_root", lambda: root)
     assert [path for path in cli_base._tool_contract_sources(root) if path.exists()] == [], "a Tool codegen input exists under the fake root"
@@ -2419,6 +2446,37 @@ def make_frontend_project(monkeypatch, root: Path) -> dict[str, Path]:
 def frontend_project(monkeypatch, tmp_path) -> dict[str, Path]:
     """``make_frontend_project`` with ``tmp_path`` itself as the project root."""
     return make_frontend_project(monkeypatch, tmp_path)
+
+
+#: Hidden files of ``frontend/static``, by their path relative to ``static``, each with what it is: the build never serves
+#: a hidden file (H-28), so none of them is an input of it (H-52).
+HIDDEN_STATIC_FILES = {
+    "fonts/noto-color-emoji/.cache_manifest.json": "the JS cache's manifest, which scripts/update_js_cache.py rewrites on every check",
+    ".DS_Store": "the Finder's folder metadata",
+    "icons/.DS_Store": "the Finder's folder metadata, one folder down",
+}
+
+#: An input of each group the probe reads besides ``frontend/static``, by its path relative to the project root: the walk
+#: of ``src``, the config files, the Tool codegen inputs.
+INPUTS_BESIDE_STATIC = {
+    "frontend/src/app.html": "a source",
+    "frontend/package.json": "a config file",
+    "frontend/scripts/generate-tools-client.mjs": "a Tool codegen input",
+}
+
+
+def add_newer_static(project: dict[str, Path], relative: str) -> None:
+    """Write ``frontend/static/<relative>`` into a ``make_frontend_project`` tree as if it arrived after the build.
+
+    The file and every folder above it up to ``static``, ``static`` included, end an hour newer than the build: at least
+    every folder its arrival could move, so a probe that still leaves the build up to date does so whichever really moved.
+    """
+    static = project["static/offline.html"].parent  # the project's offline.html sits at the top of frontend/static
+    path = static / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("synthetic static file\n", encoding="utf-8")
+    for moved in (path, *(parent for parent in path.parents if parent.is_relative_to(static))):
+        os.utime(moved, (NEWER_MTIME, NEWER_MTIME))
 
 
 # The translation catalogue is an input of the build too (workstream U, step U-2): `src/lib/i18n/<lang>.json` is
@@ -2501,7 +2559,7 @@ def add_newer_source(project: dict[str, Path], relative: str) -> None:
 
 
 class TestFrontendBuildStaleness:
-    """``cli_base.check_frontend_needs_build()``: the build is stale once any input it bundles is newer than it."""
+    """``cli_base.check_frontend_needs_build()``: the build is stale once any input it bundles or copies is newer than it."""
 
     def test_every_input_older_than_the_build_leaves_it_up_to_date(self, frontend_project):
         assert cli_base.check_frontend_needs_build() is False
@@ -2581,6 +2639,67 @@ class TestFrontendBuildStaleness:
         os.utime(project["source"], (NEWER_MTIME, NEWER_MTIME))
 
         assert cli_base.check_frontend_needs_build() is True, f"frontend/src/app.html is an input of the bundle: {folder}, a folder above src, must not hide it"
+
+    def test_every_static_file_older_than_the_build_leaves_it_up_to_date(self, frontend_project, tmp_path):
+        # Green before H-52 and after it. Its premises keep it from passing on an empty `static`, or on folders the clock
+        # dated: every file and folder there is an hour older than the build.
+        static = tmp_path / "frontend" / "static"
+        entries = sorted(static.rglob("*"))
+        assert sorted(path.relative_to(static).as_posix() for path in entries if path.is_file()) == sorted(STATIC_FILES), "premise: frontend/static holds the files of STATIC_FILES"
+        assert [path for path in (static, *entries) if path.stat().st_mtime >= BUILD_MTIME] == [], "premise: every file and folder of frontend/static is older than the build"
+
+        assert cli_base.check_frontend_needs_build() is False, "H-52: no file of frontend/static is newer than the build, so none of them may make it stale"
+
+    @pytest.mark.parametrize("relative", list(STATIC_FILES))
+    def test_a_static_file_newer_than_the_build_needs_a_rebuild(self, frontend_project, relative):
+        # Red before H-52: the probe never read frontend/static, and an E2E ran against the offline.html of the last
+        # build. Only the file moves, its folders stay an hour older than the build: the answer comes from the file.
+        os.utime(frontend_project[f"static/{relative}"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, f"H-52: frontend/static/{relative} ({STATIC_FILES[relative]}) is copied into the build as it is: edited after the build, it must make the build stale"
+
+    @pytest.mark.parametrize("relative", list(HIDDEN_STATIC_FILES))
+    def test_a_hidden_static_file_newer_than_the_build_leaves_it_up_to_date(self, frontend_project, relative):
+        # Green before H-52 and after it: the walk of `static` leaves out what the build never serves, and no folder's
+        # mtime counts there — the file's arrival moved every folder above it, `static` included.
+        add_newer_static(frontend_project, relative)
+
+        assert cli_base.check_frontend_needs_build() is False, f"H-52: frontend/static/{relative} ({HIDDEN_STATIC_FILES[relative]}) is hidden, never served from the build: newer than it, it must not force a rebuild"
+
+    def test_a_hidden_static_file_is_skipped_and_the_scan_goes_on(self, frontend_project):
+        # Red before H-52. The hidden file sits at the top of `static`, the stylesheet two folders down: `rglob` yields the
+        # first before the second, so a rule that ended the walk at a file left out, instead of skipping it, would answer
+        # False here.
+        add_newer_static(frontend_project, ".DS_Store")
+        os.utime(frontend_project["static/fonts/noto-color-emoji/noto-color-emoji.css"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, "H-52: frontend/static/fonts/noto-color-emoji/noto-color-emoji.css is newer than the build: leaving frontend/static/.DS_Store out must not end the walk"
+
+    @pytest.mark.parametrize("folder", [".hidden-root", "__tests__"], ids=["a-hidden-folder", "a-tests-folder"])
+    def test_a_folder_above_static_hides_none_of_its_files(self, monkeypatch, tmp_path, folder):
+        # Red before H-52. As in `src`, each path is read relative to `static`: the checkout's own folder, here a hidden
+        # one or one named `__tests__`, hides none of its files.
+        project = make_frontend_project(monkeypatch, tmp_path / folder)
+        assert cli_base.check_frontend_needs_build() is False
+
+        os.utime(project["static/offline.html"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, f"H-52: frontend/static/offline.html is copied into the build: {folder}, a folder above static, must not hide it"
+
+    @pytest.mark.parametrize("relative", list(INPUTS_BESIDE_STATIC))
+    def test_without_static_the_other_inputs_still_decide(self, frontend_project, tmp_path, relative):
+        # Green before H-52 and after it. No frontend/static: nothing there can be newer, and the probe answers on its
+        # other inputs — one of each group it reads, wherever the walk of `static` sits among them: a walk that raised on
+        # the missing folder would turn, through the probe's blanket except, every answer after it into False.
+        shutil.rmtree(tmp_path / "frontend" / "static")
+        assert cli_base.check_frontend_needs_build() is False
+
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("synthetic build input\n", encoding="utf-8")
+        os.utime(path, (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, f"{relative} ({INPUTS_BESIDE_STATIC[relative]}) is newer than the build: without frontend/static the probe must still see it"
 
 
 # ── Frontend build staleness — the Tool codegen inputs, their listing recorded at build time (H-24 residual) ──

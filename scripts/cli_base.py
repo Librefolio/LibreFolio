@@ -706,7 +706,7 @@ _TEST_ONLY_FOLDERS = frozenset({"__tests__", "__mocks__"})
 
 
 def _counts_for_the_build(path: Path, src_dir: Path) -> bool:
-    """Whether a file under ``frontend/src`` is an input of the bundle, for ``check_frontend_needs_build()`` (H-24).
+    """Whether a file under ``frontend/src`` or ``frontend/static`` is an input of the build, for ``check_frontend_needs_build()`` (H-24, H-52).
 
     Not a generated file (``_BUILD_GENERATED_SOURCES``), nothing hidden — a name starting with ``.`` anywhere below
     ``src``: the Finder's ``.DS_Store``, ``.gitignore``, the i18n catalogue's ``.generated`` stamp —, no Vitest file
@@ -813,10 +813,13 @@ def check_frontend_needs_build() -> bool:
         if any(not path.exists() for path in generated_catalogs(project_root)):
             return True
 
-        # Check all source files: the ones the bundle can include (_counts_for_the_build)
-        for src_file in src_dir.rglob("*"):
-            if src_file.is_file() and _counts_for_the_build(src_file, src_dir) and src_file.stat().st_mtime > build_time:
-                return True
+        # Check all source files: the ones the bundle can include (_counts_for_the_build). And the static files, which
+        # adapter-static copies into the build as they are (sw.js, offline.html, icons, fonts), by the same rule: a hidden
+        # one, such as the font cache's .cache_manifest.json rewritten at every check, does not count (H-52)
+        for source_dir in (src_dir, project_root / "frontend" / "static"):
+            for src_file in source_dir.rglob("*"):
+                if src_file.is_file() and _counts_for_the_build(src_file, source_dir) and src_file.stat().st_mtime > build_time:
+                    return True
 
         # Also check config files
         config_files = [
