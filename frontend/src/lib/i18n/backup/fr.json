@@ -196,6 +196,7 @@
         "no_space": "Pas assez d'espace libre sur le serveur pour vérifier l'archive.",
         "stage_failed": "La copie n'a pas pu être écrite : le journal du serveur donne la cause.",
         "database_damaged": "La base de données de la sauvegarde est endommagée : elle ne peut pas être restaurée.",
+        "database_foreign_objects": "La base de données de la sauvegarde contient des déclencheurs, des vues ou d'autres objets que LibreFolio ne crée jamais : elle ne vient pas de LibreFolio, ou elle a été modifiée, et elle ne peut pas être restaurée.",
         "manifest_mismatch": "La base de données de la sauvegarde n'est pas celle que sa description indique.",
         "head_unknown": "Ce LibreFolio ne peut pas lire ses propres migrations : le journal du serveur donne la cause.",
         "revision_missing": "La base de données de la sauvegarde n'a pas de version.",
