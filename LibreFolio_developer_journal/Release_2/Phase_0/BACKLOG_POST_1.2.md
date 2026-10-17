@@ -3821,8 +3821,13 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     object-src 'none'; base-uri 'self'; form-action 'self'`. Le altre tengono solo `frame-ancestors 'self'`: Chromium
     tratta il visore PDF integrato come un plugin, e `object-src 'none'` sulla risposta di un PDF lo fermerebbe.
   - E2E con `page.route` come guardia permanente, perché una corsia non può accendere la protezione (vedi H-43).
-  - In corso (17/10): cura e test backend fatti, spec E2E scritto. Restano lo slot E2E e i documenti di
-    `security.md`.
+  - Cura fatta il 17/10 da H (lotto «H-42», piano H §14); E rivede. A protezione accesa, le risposte `text/html` hanno
+    `PAGE_POLICY`, le altre solo `frame-ancestors 'self'`. Test backend `services managed-headers` (256). Guardia nel
+    browser: `front-utility page-policy`, verde a 1 e a 4 worker, con i tre controlli positivi e documenti, PDF e
+    Dashboard senza violazioni.
+  - Nota per E: in Chromium 149, un `<object>` di un'immagine inserito nello stesso task di un `form.submit()` verso
+    un'altra origine parte come immagine, senza il controllo `object-src`. Plugin e documenti restano bloccati. Per
+    questo il controllo dello spec è un `<object>` `application/pdf`.
 
   Dettagli: piano H, §14, lotto «H-42».
 - **H-43 · Una corsia di test con il profilo managed, per gli E2E del cloud** — basso, runner; H (analisi di H-42),
@@ -3841,10 +3846,23 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - `serve_file` passa sempre `filename` a `FileResponse`, quindi la risposta è `Content-Disposition: attachment`, e un
     iframe con un allegato fa partire uno scaricamento.
   - È precedente a H-19 e H-42, e non è verificato in un browser.
+  - Solo la pagina File. Lo stesso componente, nei dialoghi d'import dei broker, riceve come `source_url`
+    `/api/v1/brokers/import/files/{id}/download?download=false` (`api/v1/brokers.py:750`), servito inline: lì il
+    ripiego mostra il PDF. Il confronto fra le due rotte indica la cura.
   - Legame con H-42: la CSP più stretta va solo sulle risposte `text/html` anche per questo caso. Un PDF mostrato inline
     non deve ricevere `object-src 'none'`, che può fermare il visore integrato di Chromium.
 
   Dettagli: piano H, §14, lotto «H-42».
+- **H-45 · `image/svg+xml` e `application/xhtml+xml` fuori dalla politica delle pagine** — basso, sicurezza; seguito di
+  H-42 per E, via coordinatore, 17/10. E lo giudica nella revisione di H-42.
+  - Con la protezione dai frame accesa, `PAGE_POLICY` va solo sulle risposte `text/html`. Un SVG o un XHTML, documenti
+    anche loro quando si aprono direttamente, tengono il solo `frame-ancestors 'self'`.
+  - Oggi gli SVG serviti sono quelli della build e dei documenti. Un SVG dell'utente arriva come `attachment`, dagli
+    upload e dai broker (`INLINE_SAFE_MEDIA_TYPES` di `api/v1/brokers.py` non ha `image/svg+xml`).
+  - Strada possibile: allargare `_is_html` di `security_headers.py` ai due tipi, con i casi per tipo di
+    `test_managed_headers.py`, (g).
+
+  Dettagli: piano H, §14, lotto «H-42», passo 7.
 
 ## A · Account e accessi (fase 01)
 
