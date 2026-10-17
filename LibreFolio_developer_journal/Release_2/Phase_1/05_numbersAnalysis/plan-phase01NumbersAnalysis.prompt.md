@@ -5982,3 +5982,80 @@ prossimo checkpoint.
   è anche una patch, `/tmp/libreFolio_j50_remedy_fix.patch`: solo i pezzi della cura, costruita da HEAD, controllata
   (`git apply --cached --check` ok; ruff, black e la scansione dei rimedi sulle versioni della sola cura). Ciò che resta
   dopo la patch è esattamente SEC8-1b.
+- ✅ **J-50b entrato da solo** (`d9da0ff54` → dev `ef74ff9fc`, porta rossa chiusa); **SEC8-1b entrato** dopo l'OK di E
+  (`949825b8b`, diario `9df95b5b6`; dev `a565e06d0`, CHANGELOG 🔒 `291a84646`); worktree in fast-forward a `291a84646`.
+  Nota cosmetica di E, facoltativa → **J-52** nell'indice (due convenzioni d'eco della finestra fuori dai limiti).
+- **Revisione di X-R49, regola (d)** (richiesta del coordinatore): regge; `split_guard.py`, `provider_management.py` e
+  `currency_change.py` non nominano mai `AssetEventType`, `"SPLIT"` né un confronto `.type ==`; la domanda dello SPLIT
+  passa solo da `financial_math/splits.py::costless_incoming_split_adjustments`, una delle case della regola (d);
+  `layer-boundaries` 52 sull'albero che contiene `589f15607`.
+- **Prossimo (coordinatore, 14:0x)**: la prossima voce senza decisioni della sezione J → **J-33** (lo storico della
+  performance dei lotti senza i giorni al costo), poi J-51, poi J-36.
+
+#### J-33 — la performance dei lotti nei giorni al costo (analisi 17/10 ~14:10, sola lettura; base `291a84646`)
+
+- **Stato reale.** `build_performance_history()` (`financial_math/lots/histories.py`) fa la NAV solo nei giorni con un
+  segno di prezzo e non riceve `at_cost_until`. La pagina lo dice («No at-cost day reaches `build_performance_history()`»).
+  - I flussi prima del primo giorno di NAV finiscono su quel giorno. Il TWRR prende il primo giorno come base e ne ignora
+    i flussi (`calculate_twrr_period_series`), quindi **il salto dal costo al primo prezzo resta fuori dalla catena**,
+    mentre il ROI lo vede: TWRR e ROI non coincidono nemmeno con un solo apporto.
+  - Una gamba letta al confine (J-10) o un trasferimento che attraversa il perimetro (rigioco sui broker accessibili, con
+    un filtro) in un giorno senza segno → `invalid_external_flow_from`: ROI e TWRR vuoti da quel giorno.
+  - `collect_performance_fx_needs()` non registra il cambio d'apertura dei lotti, che il valore al costo legge.
+- **Regola (la decisione (a) di J-17, già nelle storie del valore e del rendimento)**:
+  - P1, NAV: in un giorno ≤ `at_cost_until` (nessuna osservazione su o prima), la NAV è la somma, sui frammenti nel
+    perimetro attivi quel giorno, di `residual_cost(costo del lotto al cambio d'apertura, quantità, quantità originale)`;
+    se uno di quei frammenti è di un lotto SHORT o il costo non si converte, quel giorno resta senza punto (come oggi).
+    Dopo `at_cost_until` un segno `None` (cambio mancante) resta senza punto.
+  - P2, gamba al confine in un giorno al costo: in entrata, come ogni ADJUSTMENT-in, il suo costo convertito alla sua
+    data (senza costo: nessun flusso, il lotto conta 0 come nella storia del valore, J-35 aperta); in uscita
+    (`hands_over_at_own_cost`), il costo dei pezzi che escono, cioè la somma, sulle chiusure di quella riga, del loro
+    costo al cambio d'apertura: esattamente quanto perde la NAV al costo.
+  - P3, trasferimento che attraversa il perimetro nel rigioco in un giorno al costo: il costo dei pezzi spostati, letti
+    dai frammenti della coppia (`lot:{id}/transfer:{pair}/…`, il primo intervallo per lotto), al cambio d'apertura.
+  - P4: `collect_performance_fx_needs()` registra il cambio d'apertura di ogni lotto LONG quando `at_cost_until` c'è.
+- **Valori che cambiano (dichiarati prima del codice)**:
+  - V1, un asset il cui primo possesso precede la prima osservazione (una posizione iniziale inserita con una
+    rettifica): punti nei giorni al costo (ROI 0, TWRR 0), e il TWRR comprende il salto dal costo al primo prezzo.
+    Esempio: rettifica di 10 unità a costo 1 000 il giorno 0, prima quotazione 110 il giorno 5, 121 il giorno 10.
+    Oggi: ROI g5 +10 %, TWRR g5 assente, g10 ROI +21 %, TWRR +10 %. Dopo: g0–g4 ROI 0, TWRR 0 (dal g1); g5 +10 % e
+    +10 %; g10 +21 % e +21 %. Il ROI dei giorni osservati non cambia (dipende solo da NAV e flussi del giorno).
+  - V2, un asset senza nessuna osservazione: oggi nessun punto; dopo ROI 0 e TWRR 0 ogni giorno, la posizione al costo
+    come sulla Dashboard (con l'avviso `CURRENT_PRICE_ASSUMED_AT_COST` che già c'è).
+  - V3, un trasferimento che attraversa il perimetro in un giorno al costo (gamba al confine o rigioco con filtro):
+    oggi ROI e TWRR vuoti da quel giorno; dopo il trasferimento sposta il suo costo e la serie continua. Anche una gamba
+    datata prima del pavimento del 1900 (giorno al costo) non ferma più la serie.
+  - Non cambiano: le storie del valore, del rendimento e del prezzo, il riepilogo, la Dashboard, l'AI Export (i suoi
+    componenti dei lotti chiedono solo `LOT_SUMMARY`); i giorni con un lotto SHORT aperto; un cambio mancante dopo la
+    prima osservazione.
+- **Superfici**: `financial_math/lots/histories.py`, `financial_math/lots/conversions.py`, `lots_analysis_service.py`
+  (passa `at_cost_until`); doc `lots_analysis_service.md` (tabella di `at_cost_until`, il paragrafo «No at-cost day…»,
+  il pavimento, la gamba al confine), devWiki `entities/lots-analysis-service.md`; riga 🐛 del CHANGELOG. Il pannello
+  (Y) riceve solo più punti, stessi campi: nessun contratto cambia.
+- **Rossi (test-author)**: puri in `test_lots_analysis_pure.py` (V1 esatto, V2, SHORT e costo ignoto senza punto, cambio
+  mancante dopo la prima osservazione senza punto, P2 entrata/uscita, P3, P4); uno di servizio su un libro vero (una
+  rettifica prima della prima quotazione). Selettori: `services lots-analysis-pure`, `services roi-fifo-utils`.
+- **Coordinatore (14:0x)**: via al codice; V1–V3 come dichiarati, J-35 resta aperta; riga 🐛 del CHANGELOG nel
+  checkpoint; prima del checkpoint `schemas risk`, `roi-fifo-utils`, `lots-analysis-pure` e, nello slot,
+  `front-broker detail`.
+- ✅ **Rossi (test-author, corsa sul codice vecchio)**: puri `TestPerformanceHistoryAtCost` **11 rossi** (9 sulla chiamata
+  di `build_performance_history`, 2 su `collect_performance_fx_needs`; i valori di oggi scritti in ogni docstring, letti
+  chiamando il costruttore di oggi senza la parola chiave, fuori dalla corsia); servizio
+  `test_financial/test_lots_performance_history_at_cost.py` **1 rosso** (oggi il primo punto è la prima quotazione, e
+  l'ultimo giorno ROI 21 % ma TWRR 10 %). Le guardie hanno una barriera di presenza (g0–g1 al costo). Scelta lasciata a
+  me: un giorno al costo senza nulla di aperto nel perimetro dà NAV 0, come un giorno con un segno.
+- ✅ **Codice (14:13)**: `histories.py` — `build_performance_history(..., at_cost_until)` (parola chiave obbligatoria),
+  `_cost_at_opening()`, `_nav_at_cost()`, `_boundary_leg_cost()` (entrata: il suo costo; uscita: il costo dei pezzi che
+  chiude), `_moved_cost()` (i pezzi della coppia dai frammenti); `conversions.py` — `_need_cost_rates()` chiamato da
+  `collect_performance_fx_needs(..., at_cost_until=None)`; il servizio passa `at_cost_until` alle due chiamate.
+  > **⚠️ Fuori pista**: (1) C901 su `collect_performance_fx_needs` (era al limite, 10): la registrazione dei cambi in un
+  > aiuto che controlla `at_cost_until` da sé. (2) 22 test puri esistenti (`TestBuildPerformanceHistory`,
+  > `TestHandoverAtCostPerformanceHistory`, `TestTheCashFlowOfASale`) chiamavano il costruttore senza la parola chiave:
+  > il test-author ha passato `at_cost_until=None` nei 3 punti, con la premessa nella docstring di ogni classe.
+- ✅ **Verdi (14:14–14:19)**: mirati 11 + 1; `lots-analysis-pure` **192**, `roi-fifo-utils` **1367**, `financial-math`
+  **1211**, `schemas risk` **93**, check-orphans ✓, `mkdocs build` stretto ✓, check-links ✓; ruff e black puliti. Doc:
+  `lots_analysis_service.md` (tabella di `at_cost_until`, il paragrafo della performance, il pavimento, la gamba al
+  confine, i cambi); devWiki `entities/lots-analysis-service.md`. In attesa: lo slot `front-broker detail`.
+- ✅ **Slot (14:20–14:26, via del coordinatore, carico sotto 50)**: `front-broker detail` **40 passati** (2,7 min). Porta 6185
+  libera.
+- ⏳ **Checkpoint J-33** (FROZEN, in attesa del commit del coordinatore). Riga 🐛 proposta per il CHANGELOG.
