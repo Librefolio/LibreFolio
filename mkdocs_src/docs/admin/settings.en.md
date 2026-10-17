@@ -289,7 +289,11 @@ findings keep the order of this table.
 | Secrets set twice | ⚠️ A secret is set both directly and through its `_FILE` variable: the direct value wins | — |
 | Instance key | ❌ It cannot be used. ⚠️ Its folder or its file is open to other users | — |
 | Session cookie | ⚠️ `SESSION_COOKIE_SECURE=never`: the cookie also travels over plain HTTP | — |
+| Visitor's address | ⚠️ Since the start, requests came through a reverse proxy that LibreFolio does not trust: the limits per visitor's address do not apply to them. ℹ️ Since the start, forwarding headers from a public address were ignored. What to do: [The Visitor's Address](connection_checks.md#client-address) | — |
+| Frame protection | ⚠️ `LIBREFOLIO_FRAME_PROTECTION` is off in the `managed` profile: any site can show LibreFolio in a frame | — |
+| Report-only policy | ℹ️ `LIBREFOLIO_CSP_REPORT_ONLY` is off in the `managed` profile: browsers list nothing it would block | — |
 | Log level | ℹ️ `DEBUG` or `TRACE` | — |
+| Test mode | ❌ `LIBREFOLIO_TEST_MODE` is on outside LibreFolio's own test runs: data providers that exist only for the tests are served, and the data are kept in the test data folder | — |
 | Failed sign-ins | ⚠️ The limit is off: `LIBREFOLIO_LOGIN_LIMIT=off` | — |
 | Email server | ❌ A `LIBREFOLIO_SMTP_*` value cannot be used: email stays off until it is fixed | **Open the Email tab** |
 | Email encryption | ⚠️ Emails, their links and the SMTP password travel unencrypted to a server outside your local network | **Open the Email tab** |
