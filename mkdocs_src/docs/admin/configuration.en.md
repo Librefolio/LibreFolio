@@ -654,8 +654,11 @@ takes a place of `LIBREFOLIO_MAX_USERS`. Who hands over the link depends on the 
       with the reason, and the link in the log still works.
 
 A restart while the administrator waits issues nothing new, and does not write the link in the log
-again. Once no link works any more, each start logs the warning
-`The initial administrator's setup link has expired: run ./dev.py user setup-link…`: that command
+again. Once no link works any more, each start logs a warning:
+`The initial administrator's setup link has expired: run ./dev.py user setup-link…` when the link
+ran out, or
+`The initial administrator's setup link was withdrawn (cancelled, or its address changed): run ./dev.py user setup-link…`
+when it was [cancelled](users.md#cancel-setup) or the administrator's address changed. That command
 prints a new link ([A New Setup Link](cli_tools.md#setup-link)). A new value of
 `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` also gives a new link, at the next start. Changing the username
 or the email before the setup, and the rest of the provider's side:

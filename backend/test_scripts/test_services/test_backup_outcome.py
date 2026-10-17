@@ -37,27 +37,40 @@ outlives the restart, the swap, the commit and a rollback (``test_backup_apply.p
     same answer at every read until ``expires_at`` — a final answer lost on the way (a connection reset at the start) is
     read again, rather than the page falling back on a session the restore ended. One ticket follows its restore from
     ``pending`` to its commit, and reads it again after. The ticket goes when a new restart replaces it (b), a new
-    confirmation or a cancel removes it (``test_backup_apply.py`` (n)), or its holder presents it expired.
+    confirmation or a cancel removes it (``test_backup_apply.py`` (n)), or its holder presents it expired. B-41:
+    ``state`` may also be a reader of it, a function of no argument, as the route gives one: called once, and only for
+    the ticket that opens — once its form, ``.restore``, its file, the hashes and its expiry have let it through — never
+    for any other (none, malformed, another, expired, no file, a file not to be trusted, ``.restore`` a link or a file).
 (d) ``drop_ticket(*, data_dir)``: the file removed, nothing else; without one, nothing done and nothing created; it never
     raises (a file that cannot be removed is logged, as a warning or an error) and removes nothing through a link, in
     place of ``.restore`` or of the file.
 (e) Neither a ticket nor its hash is ever logged — issued, replaced, read (right, wrong, malformed, of another stage,
-    expired, final and read again) or dropped — in a structlog event or a stdlib record.
+    expired, final and read again), dropped, or presented to a file that cannot be used (B-42: an error, then a line at
+    debug) — in a structlog event or a stdlib record.
 (f) Without ``data_dir`` and ``now``: the configured data directory and the clock.
+(g) B-42, a ticket's file that cannot be used, which anyone reaches without a session with any well-formed ticket:
+    unreadable (an ``OSError``: a link in its place, opened without following it; mode 000; ``os.open`` refusing it),
+    over 4096 bytes, or not an ``OutcomeTicket``. However often it is read, it is one error, then nothing louder than
+    debug while the same failure — the same event and the same ``error`` — lasts. It is an error again once the file is
+    written (``issue_ticket``), read whole and valid, removed (``drop_ticket``) or found missing by a read, each alone;
+    and when it fails in another way, a return to the first failure included. Each data directory remembers its own: two
+    with the same failure, one error each. The answers never change: ``None``.
 
 How. Pure: every data directory under ``tmp_path``, its ``.restore`` made as ``ensure_private_dir`` makes it. The
 restore's state is a ``RestoreState`` built in the test as a start leaves it: ``read_outcome`` reads only the state it is
 given. The ticket file is always the product's, but where a case needs one the product never writes (an extra key, a
-folder, a link). The process's configured data directory is a folder of the test that must stay absent
-(``configured_data_dir`` of the staging tests, imported, autouse), but in (f), where it is the test's instance. ``now`` is
-given everywhere but in (f). Logs are read with ``structlog.testing.capture_logs`` and pytest's ``caplog``, each behind a
-barrier: a canary through a logger of ``outcome``'s name must reach it. Modes and links are POSIX-only. No database, no
-server, no network.
+folder, a link). A ticket's file that cannot be used (g) is the test's own as well: its bytes, a link, mode 000 (never
+as root), or ``os.open`` refusing that one path (EIO), every other path handed to the real one. The process's
+configured data directory is a folder of the test that must stay absent (``configured_data_dir`` of the staging tests,
+imported, autouse), but in (f), where it is the test's instance. ``now`` is given everywhere but in (f). Logs are read
+with ``structlog.testing.capture_logs`` and pytest's ``caplog``, each behind a barrier: a canary through a logger of
+``outcome``'s name must reach it. Modes and links are POSIX-only. No database, no server, no network.
 """
 
 from __future__ import annotations
 
 import ast
+import errno
 import hashlib
 import importlib
 import inspect
@@ -67,7 +80,7 @@ import os
 import re
 import secrets
 import stat
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -165,8 +178,9 @@ def issued(root: Path, stage_id: str = STAGE, *, now: datetime = ISSUED_AT) -> s
     return outcome_module().issue_ticket(stage_id, data_dir=root, now=now)
 
 
-def opened(ticket: str | None, state: RestoreState | None, root: Path, *, now: datetime = READ_AT) -> Any:
-    """What ``ticket`` opens in ``root`` at ``now`` for the restore ``state``: half-way through its hour, unless said."""
+def opened(ticket: str | None, state: RestoreState | Callable[[], RestoreState | None] | None, root: Path, *, now: datetime = READ_AT) -> Any:
+    """What ``ticket`` opens in ``root`` at ``now`` for the restore ``state`` — or, B-41, for the state its reader
+    returns: half-way through its hour, unless said."""
     return outcome_module().read_outcome(ticket, state, data_dir=root, now=now)
 
 
@@ -323,6 +337,108 @@ def leaked(events: list[dict[str, Any]], records: list[logging.LogRecord], hidde
 def warned(events: list[dict[str, Any]]) -> list[tuple[str, str]]:
     """What was logged in the block as a warning or worse, the canary left out: (level, message)."""
     return [(str(event.get("log_level")), str(event.get("event"))) for event in events if event.get("event") != LOG_CANARY and event.get("log_level") in ("warning", "error", "critical")]
+
+
+def lines(events: list[dict[str, Any]]) -> list[tuple[str, str, Any]]:
+    """Every line logged in the block, the canary left out — (level, message, ``error``) — for a failure to show."""
+    return [(str(event.get("log_level")), str(event.get("event")), event.get("error")) for event in events if event.get("event") != LOG_CANARY]
+
+
+# =============================================================================
+# A ticket's file that cannot be used (B-42)
+# =============================================================================
+
+#: B-42: what ``read_outcome`` logs for a ticket's file it cannot use, by failure — spelled out: these are the words an
+#: administrator looks for in the log.
+TICKET_CANNOT_BE_READ = "The restore outcome ticket cannot be read"
+TICKET_NOT_WRITTEN_HERE = "The restore outcome ticket is not one this LibreFolio wrote: it is ignored"
+TICKET_NOT_READABLE = "The restore outcome ticket is not one this LibreFolio can read: it is ignored"
+#: B-42: the most of a ticket's file ever read: one byte more, and it is not one this LibreFolio wrote.
+MAX_TICKET_FILE_BYTES = 4096
+#: B-42: the one way of breaking the file that is ``os.open``'s, not the disk's.
+REFUSED = "refused-EIO"
+
+
+def a_ticket_s_file() -> bytes:
+    """A valid ticket's file for ``SOME_TICKET``, as ``issue_ticket`` writes one, but written by the test: what a broken
+    file is made from, and a file a read finds whole and valid with nothing issued (B-42)."""
+    return new_name(outcome_module(), "OutcomeTicket").model_validate(a_record()).model_dump_json(indent=2).encode("utf-8") + b"\n"
+
+
+def _not_an_outcome_ticket(path: Path, pointed: Path) -> None:
+    path.write_bytes(b"{not a ticket")
+
+
+def _past_4096_bytes(path: Path, pointed: Path) -> None:
+    """A valid ticket's file padded past 4096 bytes: whole, it would read as valid; it is never read past its limit."""
+    path.write_bytes(a_ticket_s_file() + b" " * MAX_TICKET_FILE_BYTES)
+
+
+def _a_link_to_a_ticket_s_file(path: Path, pointed: Path) -> None:
+    """A link in its place to a valid ticket's file elsewhere: opened without following it (ELOOP)."""
+    pointed.write_bytes(a_ticket_s_file())
+    path.symlink_to(pointed)
+
+
+def _of_mode_000(path: Path, pointed: Path) -> None:
+    """A valid ticket's file nobody may read: the file system refuses it (EACCES); root reads it all the same."""
+    path.write_bytes(a_ticket_s_file())
+    path.chmod(0o000)
+
+
+def _refused_to_a_reader(path: Path, pointed: Path) -> None:
+    """A valid ticket's file, which ``os.open`` refuses to a reader (EIO): ``BrokenTicketFile`` refuses it."""
+    path.write_bytes(a_ticket_s_file())
+
+
+#: B-42: each way a ticket's file cannot be used: what makes it so, and what ``read_outcome`` logs for it. The same event
+#: with another ``error`` — a link (ELOOP), mode 000 (EACCES), an EIO — is another failure.
+BREAKING = {
+    "not-a-ticket": (_not_an_outcome_ticket, TICKET_NOT_READABLE),
+    "over-4096-bytes": (_past_4096_bytes, TICKET_NOT_WRITTEN_HERE),
+    "a-link": (_a_link_to_a_ticket_s_file, TICKET_CANNOT_BE_READ),
+    "mode-000": (_of_mode_000, TICKET_CANNOT_BE_READ),
+    REFUSED: (_refused_to_a_reader, TICKET_CANNOT_BE_READ),
+}
+#: B-42: the ways, as the tests take them: root reads a file of mode 000 all the same.
+BROKEN_WAYS = [pytest.param(way, id=way, marks=pytest.mark.skipif(AS_ROOT and way == "mode-000", reason="root reads a file of mode 000 all the same")) for way in BREAKING]
+#: B-42: a way for each event ``read_outcome`` logs for the file, wherever the tests run.
+EVERY_FAILURE = ("not-a-ticket", "over-4096-bytes", "a-link", REFUSED)
+
+
+class BrokenTicketFile:
+    """B-42: the ticket's file of the data directory ``root``, broken in one way of ``BREAKING`` each time the test says
+    so (``now``), whatever stood there (removed, a link never followed). ``refused-EIO`` is ``os.open`` refusing that one
+    path to anyone (EIO), every other path handed to the real one, until ``mend`` or the next ``now``; every other way
+    lies on disk, and what the product writes next replaces it."""
+
+    def __init__(self, root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.root = root
+        self.pointed = root.parent / f"{root.name}-pointed.json"
+        self.refusing = False
+        target = os.path.realpath(ticket_file(root))
+        real_open = os.open
+
+        def opening(path: Any, flags: int, mode: int = 0o777, *, dir_fd: int | None = None) -> int:
+            if self.refusing and dir_fd is None and os.path.realpath(path) == target:
+                raise OSError(errno.EIO, os.strerror(errno.EIO))
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+
+        monkeypatch.setattr(os, "open", opening)
+
+    def now(self, way: str) -> str:
+        """The ticket's file broken in ``way`` from now on: what ``read_outcome`` logs for it."""
+        make, failure = BREAKING[way]
+        self.refusing = False
+        path = ticket_file(self.root)
+        path.unlink(missing_ok=True)
+        make(path, self.pointed)
+        self.refusing = way == REFUSED
+        return failure
+
+    def mend(self) -> None:
+        """``os.open`` lets the file be read again; what lies on disk is left as it is."""
+        self.refusing = False
 
 
 # =============================================================================
@@ -785,6 +901,126 @@ def test_the_hashes_are_compared_in_constant_time():
     print_success("compare_digest")
 
 
+# (c) B-41: the state read for the ticket that opens, and for it only.
+
+
+def a_reader(state: RestoreState | None, calls: list[RestoreState | None]) -> Callable[[], RestoreState | None]:
+    """B-41: a reader of the restore's state, as the route gives one to ``read_outcome`` in place of the state: a function
+    of no argument that returns ``state``. It records each call in ``calls`` and never raises: a call is seen even where
+    the caller would swallow what it raised."""
+
+    def read() -> RestoreState | None:
+        calls.append(state)
+        return state
+
+    return read
+
+
+@pytest.mark.parametrize("found", ["its-own-restore", "no-restore", "a-restore-of-another-stage"])
+def test_the_state_may_be_a_reader_called_once_for_the_ticket_that_opens(tmp_path, found):
+    """(c) B-41: ``state`` may be a function of no argument that reads it, as the route gives it, so that the restore's
+    state is read for the ticket that opens, and for it only. For that ticket the reader is called exactly once, and the
+    outcome is that of the state it returns: ``pending`` for its own restore; ``None`` for no restore, or one of another
+    stage.
+
+    RED until B-41's code: ``read_outcome`` takes the reader for a state (``'function' object has no attribute
+    'stage_id'``)."""
+    print_section("(c) B-41: the state read for the ticket that opens, and for it only")
+    root = an_instance(tmp_path)
+    ticket = issued(root)
+    own = restore_in(root, "pending")
+    state = {"its-own-restore": own, "no-restore": None, "a-restore-of-another-stage": restore_in(root, "pending", stage_id=OTHER_STAGE)}[found]
+    calls: list[RestoreState | None] = []
+    outcome = opened(ticket, a_reader(state, calls), root)
+    assert len(calls) == 1, f"{found}: the reader of the state called exactly once: {len(calls)} calls"
+    expected = outcome_of(own) if found == "its-own-restore" else None
+    assert shown(outcome) == expected, f"{found}: the outcome of the state it read: {shown(outcome)}"
+    print_success(f"{found}: read once → {shown(outcome)}")
+
+
+@pytest.mark.parametrize("present", NOT_THE_TICKET)
+def test_what_is_not_the_ticket_never_calls_the_reader_of_the_state(tmp_path, present):
+    """(c) B-41, a GUARD: green before the code, and it must stay so. None, an empty or malformed ticket, its hash,
+    another one — whatever a caller without the ticket may present — opens nothing, and the reader of the state is never
+    called. The reader records every call and never raises: a call swallowed would still be seen (that it records one is
+    the red test's own assertion)."""
+    root = an_instance(tmp_path)
+    ticket = issued(root)
+    presented = present(ticket)
+    assert presented != ticket, "precondition: not the ticket"
+    calls: list[RestoreState | None] = []
+    assert opened(presented, a_reader(restore_in(root, "committed"), calls), root) is None, f"{presented!r}: opens nothing"
+    assert calls == [], f"{presented!r}: the reader of the state never called: {len(calls)} calls"
+    print_success("None, the state never read")
+
+
+@pytest.mark.parametrize("spoil", UNTRUSTED_FILES)
+def test_a_ticket_s_file_that_cannot_be_trusted_never_calls_the_reader_of_the_state(tmp_path, spoil):
+    """(c) B-41, a GUARD: the right ticket, its file not one to trust — not a ticket, a key more, a folder, a link in its
+    place —: nothing opens, and the reader of the state is never called."""
+    root = an_instance(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    ticket = issued(root)
+    spoil(ticket_file(root), ticket, elsewhere)
+    calls: list[RestoreState | None] = []
+    assert opened(ticket, a_reader(restore_in(root, "pending"), calls), root) is None, f"{spoil.__name__}: opens nothing"
+    assert calls == [], f"{spoil.__name__}: the reader of the state never called: {len(calls)} calls"
+    print_success(f"{spoil.__name__}: None, the state never read")
+
+
+def _without_its_file(root: Path, elsewhere: Path) -> None:
+    """``.restore`` without the ticket's file: a restart from the command line issues none."""
+    ensure_private_dir(restore_dir(root), root)
+
+
+def _without_restore(root: Path, elsewhere: Path) -> None:
+    """Nothing: the data directory of an instance that never restored anything."""
+
+
+#: B-41: no ticket's file to be found in the data directory: none, no ``.restore``, or ``.restore`` a link (to the folder
+#: of the presented ticket's valid file: followed, it would open) or a file (the builders of (b)).
+NO_TICKET_S_FILE = [
+    pytest.param(_without_its_file, id="no-ticket-file"),
+    pytest.param(_without_restore, id="no-restore-folder"),
+    pytest.param(_restore_a_link, id="restore-a-link"),
+    pytest.param(_restore_a_file, id="restore-a-file"),
+]
+
+
+@pytest.mark.parametrize("make", NO_TICKET_S_FILE)
+def test_without_a_ticket_s_file_the_reader_of_the_state_is_never_called(tmp_path, make):
+    """(c) B-41, a GUARD: a well-formed ticket whose valid file is in another data directory's ``.restore``, and here no
+    file to read: none, no ``.restore``, ``.restore`` a link to that folder (never followed: it would open) or a file.
+    Nothing opens, and the reader of the state is never called."""
+    elsewhere = an_instance(tmp_path, "elsewhere")
+    ticket = issued(elsewhere)
+    root = tmp_path / "instance"
+    root.mkdir()
+    make(root, restore_dir(elsewhere))
+    calls: list[RestoreState | None] = []
+    assert opened(ticket, a_reader(restore_in(root, "pending"), calls), root) is None, f"{make.__name__}: opens nothing"
+    assert calls == [], f"{make.__name__}: the reader of the state never called: {len(calls)} calls"
+    print_success(f"{make.__name__}: None, the state never read")
+
+
+#: B-41: the ticket's own file, expired: the cases of ``EXPIRY`` where it opens nothing.
+EXPIRED = [pytest.param(*case.values[:2], id=case.id, marks=case.marks) for case in EXPIRY if not case.values[2]]
+
+
+@pytest.mark.parametrize(("phase", "after"), EXPIRED)
+def test_an_expired_ticket_never_calls_the_reader_of_the_state_and_its_file_goes(tmp_path, phase, after):
+    """(c) B-41, a GUARD: the right ticket, at its ``expires_at`` or after: nothing opens, a final outcome neither, and
+    the reader of the state is never called; the expired ticket's file is removed, as before."""
+    root = an_instance(tmp_path)
+    ticket = issued(root)
+    calls: list[RestoreState | None] = []
+    assert opened(ticket, a_reader(restore_in(root, phase), calls), root, now=ISSUED_AT + after) is None, f"{phase}, {after} after its issue: expired, opens nothing"
+    assert calls == [], f"{phase}, {after} after its issue: the reader of the state never called: {len(calls)} calls"
+    assert not os.path.lexists(ticket_file(root)), f"{phase}, {after} after its issue: the expired ticket's file is removed, as before"
+    print_success(f"{phase}, {after} after: None, the state never read, the file removed")
+
+
 # =============================================================================
 # (d) drop_ticket
 # =============================================================================
@@ -886,7 +1122,8 @@ def test_a_ticket_that_cannot_be_removed_is_logged_and_drop_ticket_does_not_rais
 def test_neither_a_ticket_nor_its_hash_is_ever_logged(tmp_path, caplog, monkeypatch):
     """(e) Every path of the module, the stage id free to appear: a ticket issued then replaced; read wrong, malformed,
     for another stage, right, expired; another read twice once committed (N53: the same answer); another dropped
-    twice."""
+    twice; then (B-42) a ticket of the instance presented twice to its file broken in a way of each failure of (g): an
+    error, then a line at debug — the ticket the file was written for among those that must not appear."""
     print_section("(e) The logs")
     root = an_instance(tmp_path)
     pending, committed = restore_in(root, "pending"), restore_in(root, "committed")
@@ -904,7 +1141,13 @@ def test_neither_a_ticket_nor_its_hash_is_ever_logged(tmp_path, caplog, monkeypa
         dropped = issued(root, now=ISSUED_AT + timedelta(minutes=3))
         drop(root)
         drop(root)
-    tickets = [replaced, ticket, final, dropped]
+        broken = BrokenTicketFile(root, monkeypatch)
+        spoiled = issued(root, now=ISSUED_AT + timedelta(minutes=4))
+        for way in EVERY_FAILURE:
+            broken.now(way)
+            opened(spoiled, pending, root)
+            opened(spoiled, pending, root)
+    tickets = [replaced, ticket, final, dropped, spoiled, SOME_TICKET]
     hidden = tickets + [hash_of(value) for value in tickets]
     assert leaked(events, caplog.records, hidden) == [], "neither a ticket nor its hash is logged"
     print_success(f"{len(events)} events and {len(caplog.records)} records checked: no ticket, no hash")
@@ -936,3 +1179,130 @@ def test_without_data_dir_or_now_the_configured_data_directory_and_the_clock_are
     outcome.drop_ticket()
     assert not os.path.lexists(ticket_file(root)), "dropped from the configured data directory"
     print_success("the configured data directory, the clock")
+
+
+# =============================================================================
+# (g) B-42: a ticket's file that cannot be used, one error while the same failure lasts
+# =============================================================================
+
+
+@pytest.mark.parametrize("way", BROKEN_WAYS)
+def test_a_ticket_s_file_that_cannot_be_used_is_one_error_however_often_it_is_read(tmp_path, caplog, monkeypatch, way):
+    """(g) B-42: anyone, without a session, reaches the ticket's file with any well-formed ticket. Broken in ``way``, and
+    read three times, each with another well-formed ticket that is not the right one: ``None`` each time, and one error,
+    that failure's — nothing louder after it while it lasts (whether a line at debug is captured is not asserted).
+
+    RED until B-42's code: an error at every read, anybody's to repeat as often as they like."""
+    print_section("(g) B-42: a ticket's file that cannot be used")
+    root = an_instance(tmp_path)
+    broken = BrokenTicketFile(root, monkeypatch)
+    failure = broken.now(way)
+    state = restore_in(root, "pending")
+    with logs_of_outcome(caplog, monkeypatch) as events:
+        answers = [opened(secrets.token_urlsafe(32), state, root) for _ in range(3)]
+    assert answers == [None] * 3, f"{way}: None at every read: {answers}"
+    assert warned(events) == [("error", failure)], f"{way}: one error while the same failure lasts, not one per read: {lines(events)}"
+    print_success(f"{way}: read three times, one error")
+
+
+def _written_again(root: Path) -> None:
+    """A new restart: ``issue_ticket`` writes the ticket's file."""
+    issued(root, now=ISSUED_AT + timedelta(minutes=1))
+
+
+def _read_whole_and_valid(root: Path) -> None:
+    """A valid ticket's file put back by the test (nothing issued), then read whole and valid by a well-formed ticket that
+    is not its own: nothing opens, but the file was read."""
+    path = ticket_file(root)
+    path.unlink(missing_ok=True)
+    path.write_bytes(a_ticket_s_file())
+    assert opened(secrets.token_urlsafe(32), None, root) is None, "precondition: a ticket that is not the file's opens nothing"
+
+
+def _dropped(root: Path) -> None:
+    """A confirmation or a cancel: ``drop_ticket`` removes the file."""
+    drop(root)
+
+
+def _found_missing(root: Path) -> None:
+    """The file removed behind the product's back, then a read that finds none."""
+    ticket_file(root).unlink()
+    assert opened(secrets.token_urlsafe(32), None, root) is None, "precondition: without a file, nothing opens"
+
+
+#: B-42: what makes the same failure an error again, each alone: the file written by ``issue_ticket``, read whole and
+#: valid, removed by ``drop_ticket``, or found missing by a read.
+SEEN_CHANGED = [
+    pytest.param(_written_again, id="written"),
+    pytest.param(_read_whole_and_valid, id="read-whole-and-valid"),
+    pytest.param(_dropped, id="dropped"),
+    pytest.param(_found_missing, id="found-missing"),
+]
+
+
+@pytest.mark.parametrize("change", SEEN_CHANGED)
+@pytest.mark.parametrize("way", BROKEN_WAYS)
+def test_the_same_failure_is_an_error_again_once_the_file_is_written_read_or_removed(tmp_path, caplog, monkeypatch, way, change):
+    """(g) B-42: broken, read twice: one error. Then the failure mended and the file written, read whole and valid,
+    removed or found missing — each alone — and broken the same way again, read twice: one more error, for a file the
+    product saw change in between. ``None`` at every read.
+
+    RED until B-42's code: four errors."""
+    root = an_instance(tmp_path)
+    broken = BrokenTicketFile(root, monkeypatch)
+    state = restore_in(root, "pending")
+    with logs_of_outcome(caplog, monkeypatch) as events:
+        failure = broken.now(way)
+        answers = [opened(secrets.token_urlsafe(32), state, root) for _ in range(2)]
+        broken.mend()
+        change(root)
+        broken.now(way)
+        answers += [opened(secrets.token_urlsafe(32), state, root) for _ in range(2)]
+    assert answers == [None] * 4, f"{way}, {change.__name__}: None at every read: {answers}"
+    assert warned(events) == [("error", failure)] * 2, f"{way}, {change.__name__}: one error before, one again after: {lines(events)}"
+    print_success(f"{way}, {change.__name__}: an error again")
+
+
+#: B-42: failures one after the other, each read twice: another event (not a ticket, then over 4096 bytes), or the same
+#: event with another ``error`` (a link's ELOOP, then an EIO); then back to the first, another failure again.
+CHANGES_OF_FAILURE = [
+    pytest.param(("not-a-ticket", "over-4096-bytes", "not-a-ticket"), id="another-event-and-back"),
+    pytest.param(("a-link", REFUSED, "a-link"), id="the-same-event-another-error-and-back"),
+]
+
+
+@pytest.mark.parametrize("ways", CHANGES_OF_FAILURE)
+def test_a_failure_of_another_kind_is_an_error_even_back_to_the_first(tmp_path, caplog, monkeypatch, ways):
+    """(g) B-42: what is remembered is the failure that lasts, its event and its ``error``: each change of failure is an
+    error, a return to the first one included; its repeats are not. ``None`` at every read.
+
+    RED until B-42's code: six errors."""
+    root = an_instance(tmp_path)
+    broken = BrokenTicketFile(root, monkeypatch)
+    state = restore_in(root, "pending")
+    failures: list[str] = []
+    answers: list[Any] = []
+    with logs_of_outcome(caplog, monkeypatch) as events:
+        for way in ways:
+            failures.append(broken.now(way))
+            answers += [opened(secrets.token_urlsafe(32), state, root) for _ in range(2)]
+    sequence = " → ".join(ways)
+    assert answers == [None] * (2 * len(ways)), f"{sequence}: None at every read: {answers}"
+    assert warned(events) == [("error", failure) for failure in failures], f"{sequence}: an error at each change of failure, none for its repeats: {lines(events)}"
+    print_success(f"{sequence}: {len(failures)} errors")
+
+
+@pytest.mark.parametrize("way", BROKEN_WAYS)
+def test_each_data_directory_remembers_its_own_failure(tmp_path, caplog, monkeypatch, way):
+    """(g) B-42: two data directories, their ticket's files broken the same way, read in turn, twice each: one error each
+    — the memory of one is not the other's. ``None`` at every read.
+
+    RED until B-42's code: four errors."""
+    roots = [an_instance(tmp_path, "first"), an_instance(tmp_path, "second")]
+    breakers = [BrokenTicketFile(root, monkeypatch) for root in roots]
+    failures = [broken.now(way) for broken in breakers]
+    with logs_of_outcome(caplog, monkeypatch) as events:
+        answers = [opened(secrets.token_urlsafe(32), restore_in(root, "pending"), root) for _ in range(2) for root in roots]
+    assert answers == [None] * 4, f"{way}: None at every read: {answers}"
+    assert warned(events) == [("error", failure) for failure in failures], f"{way}: one error for each data directory: {lines(events)}"
+    print_success(f"{way}: two data directories, one error each")
