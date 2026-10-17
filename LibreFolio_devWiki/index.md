@@ -239,11 +239,8 @@
 
 | Page | Summary | Tags |
 |------|---------|------|
-<<<<<<< dev_release2
 | [[concepts/page-busy-refresh-button]] | **Y, Y11 (16–17/10).** One Refresh per page (decision 48 / P3): `pageBusy` tokens on the trigger, never inside a load function; `join` (N55); never for the poller, per-row refreshes, own-indicator actions or a reload after a catch-up or a sync; panels keep their own tokens; the button contract (`disabled`, `data-busy`, spin); the E2E pattern hold → expect → record → control | frontend, svelte, pagebusy, refresh, e2e |
-=======
 | [[concepts/fastapi-0141-routing-and-validation-gotchas]] | **Workstream H, lots H-32/H-33 (17/10).** FastAPI 0.141: `app.routes` hides included routers (walk with `iter_route_contexts`); `scope["route"]` lacks the include prefix (`endpoint_path` has it); infinity serialises as `null`; the stock 422 echoes the input (500 on a non-finite value); no `ResponseValidationError` handler | backend, fastapi, starlette, pydantic, testing |
->>>>>>> 3b8c9d2a1877a171d1aa6c6c009c4d40bb2fa37b
 | [[concepts/risk-contracts-k1-k9]] | **Folder 02, round 1.** The contracts K1–K9 between the Risk streams (histogram bins, asset types, benchmark selector, portfolio slice, primitives, simulation axes, doc slugs, acquired KPIs, replay) and where each lives today | — | risk, contracts |
 | [[concepts/risk-binding-decisions]] | **Folder 02.** The decisions that bind Risk work (D8…D384, the thesis, the 1.2 CHANGELOG rules), in English, with where each lives | — | risk, decisions |
 | [[concepts/marker-locale-for-catalogue-labels]] | Prove a label is not hardcoded: mount in the marker locale `qaa`, where every key shows as `⟦key⟧`; a literal shows itself; plus a test that the keys exist in the four catalogues | testing, i18n, frontend |
@@ -316,14 +313,11 @@
 
 | Page | Summary | Status | Tags |
 |------|---------|--------|------|
-<<<<<<< dev_release2
 | [[problems/direct-playwright-run-in-a-test-lane]] | **Y, Y-22 (17/10).** Running one E2E test by hand in a coordinated lane: without `LF_SETUP_DONE=1` global-setup runs `populate_mock_data --force` on the lane DB; a script edited while bash runs it skipped the lane's `export` (the webServer would have used 6041). Guarded script shape | workaround | e2e, playwright, test-lane, bash |
 | [[problems/e2e-chained-waits-outlast-the-test-budget]] | **Y, Y-21/Y-22 (16–17/10).** Waits chained past the 30 s test budget: under load the red says «Test timeout» instead of its step. A block budget (90 s, a budget not a wait), real `expect.poll` deadlines, and a tooltip retry whose per-attempt rest must hold a late delay | resolved | e2e, playwright, load, timeouts, triage |
-=======
 | [[problems/response-validation-error-wrote-the-response-to-the-log]] | **Workstream H, lot H-33 (E's R13-SEC4, 17/10).** No handler for `ResponseValidationError`: uvicorn's traceback carried `str(exc)`, every error with its `input`, the response itself; the handler logs method, full template, endpoint, `type` and `loc` only, and answers the same 500 | resolved | backend, api, fastapi, logging, security, privacy |
 | [[problems/static-site-served-hidden-build-files]] | **Workstream H, lots H-28/H-29 (17/10).** The catch-all served `/.build-debug`, `/.build-version`, `/.tool-contract-inputs`, `.cache_manifest.json`; `/_app` and `/mkdocs` had the same gap; now a hidden name gets each route's answer to a missing file | resolved | security, static-site, frontend-build |
 | [[problems/frontend-build-looked-stale-for-files-it-never-bundles]] | **Workstream H, lots H-24 and its residual (16–17/10).** A `.DS_Store`, a test file or a `__pycache__/` forced a frontend rebuild; `frontend/src` is filtered, and the Tool codegen inputs are judged against the listing the last successful build recorded in `frontend/build/.tool-contract-inputs`, because a folder's time cannot tell a `.DS_Store` from a removed file | resolved | testing, test-runner, frontend-build, mtime |
->>>>>>> 3b8c9d2a1877a171d1aa6c6c009c4d40bb2fa37b
 | [[problems/provider-event-dated-today-not-synced]] | **W, E1b (15/10).** A sync reads the history up to yesterday (`history_end`, `refresh.py:227`), and today's point comes from `get_current_value()`, which carries no events: a provider event dated today is written only by the first sync of a later day. Found by an E2E precondition (`events_fetched` 0); the test dates its event yesterday. Reported to the coordinator, X's area | open | backend, assets, sync, asset-events, scheduled-investment |
 | [[problems/select-list-under-the-sticky-table-header]] | **W, E1b (15/10), backlog W-B26.** A `SimpleSelect` list is `fixed z-[9999]` but not portalled: inside a `DataTable` row (a stacking context, z 1, 10 when focused) it stays under the sticky `th` (z 15) when it opens upward, so its options cannot be clicked. The E2E changes the amount instead of the type | open | frontend, datatable, simpleselect, z-index, stacking-context |
 | [[problems/testing-library-events-prop-read-as-mount-option]] | **W, E1b (15/10).** `render(C, {events, …})` in `@testing-library/svelte`: `events` is a Svelte mount option, so the object is read as mount options and the other props raise `UnknownSvelteOptionsError`. Props go under `{props: …}` | resolved | frontend, testing, vitest, svelte5, testing-library |
