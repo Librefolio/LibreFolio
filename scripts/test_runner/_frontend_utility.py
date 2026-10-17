@@ -682,6 +682,18 @@ def front_docs_offline_math(verbose: bool = False, ui: bool = False, headed: boo
     return _run_playwright("layout/docs-offline-math.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_page_policy(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the page policy of H-42, injected by the spec as the managed profile sends it: positive controls, then the documentation's search, the PDF preview and the Dashboard with no enforced violation."""
+    print_section("Frontend Page Policy Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/page-policy.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_datatable_mobile(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the DataTable's pinned selection and actions columns at phone width: header and cells scroll with the table, the header row still sticks (Y7, D-Y17)."""
     print_section("Frontend DataTable Mobile Tests")
@@ -1034,6 +1046,15 @@ def populate_registry(registry: dict) -> None:
         desc="The documentation draws its formulas without internet: on a nested page in English and its Italian twin a folder deeper, every origin but the lane's refused, lib-loader.js loads MathJax from the site's root (/mkdocs/javascripts/vendor/mathjax/tex-mml-chtml.js, 200), every formula gets its mjx-container, every MathJax font is a 200 from the site's copy (vendor/mathjax/output/chtml/fonts/woff-v2/) with at least one MJX face loaded and none in error, MathJax is never asked of another origin (jsDelivr included), and mathjax.js raises no typesetPromise page error (M-19, batch 25)",
         prereq="Docs site built with the MathJax copy and its fonts (dev.py cache js, then dev.py mkdocs build)",
         tests="layout/docs-offline-math.spec.ts",
+    )
+    add_test(
+        cat,
+        "page-policy",
+        front_page_policy,
+        name="Page Policy",
+        desc="The page policy of H-42 (PAGE_POLICY of security_headers.py: frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'), injected by the spec into every HTML document of the lane with service workers blocked, since the lane runs self-hosted; every securitypolicyviolation recorded in the page, only enforce counted. Positive controls first, on the sign-in page: the document reaches the browser with the policy, an injected <base> and a form posted to https://example.invalid and an <object> typed application/pdf on the lane each raise an enforced violation (base-uri, form-action, object-src), the base URL stays the lane's, no control request is made, and nothing else raises one. Then, each flow's page the only document, carrying the policy, and no enforced violation at its end: a nested documentation page and Material's search for 'conventions' (a result on screen), a one-page Latin PDF uploaded and previewed from the Files page to file-preview-pdf data-state=ready (deleted after the test), and the Dashboard's main view (dashboard-page settled, dashboard-overview-tab)",
+        prereq="Docs site built (dev.py mkdocs build), populated DB + test users (TEST_USER with no onboarding due)",
+        tests="layout/page-policy.spec.ts",
     )
     add_test(
         cat,
