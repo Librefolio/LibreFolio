@@ -6026,7 +6026,7 @@ sulla base `23f6578f3`.
     un'attenzione: un job della CLI si sposta fuori da `.jobs/` alla fine.
 
   Dettagli: piano 07, §13, B5a, terza tornata.
-- **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
+- ✅ **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
   - Oggi un `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile) si vede
     solo alla prima richiesta del pannello: 503 `backup_panel_unavailable` e una riga d'errore nel log.
   - All'avvio, `log_configuration_audit()` non lo nomina, e la futura scheda «Sicurezza» non lo mostrerà.
@@ -6035,6 +6035,15 @@ sulla base `23f6578f3`.
     chiavi `backup.checks.*` nelle 4 lingue.
 
   Dettagli: piano 07, §13, «B8 — il token del pannello, rimesso sopra `ef61f0e7f`».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 07:12), col controllo del limite di upload in più (coordinatore, 06:36). Il
+  modulo nuovo `instance_backup/checks.py` dà `backup.panel_token` e `backup.upload_limit`, in `CONFIG_CHECKS` dopo
+  `check_log_level` e prima dei controlli di E, che chiudono ancora la tupla. All'avvio un token o un limite
+  inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile; non intero, voce del profilo mancante o del tipo
+  sbagliato, H-27/H-37) è una riga ERROR che nomina la variabile, e la partenza continua. Il token non impostato è
+  `ok` (`.off`), non `info`: un avvio predefinito non scrive nulla di nuovo. Le chiavi `backup.checks.*` sono nei 4
+  cataloghi, per la scheda «Sicurezza» (A8b). Test: `services backup-checks` (57), più nel file di H le 2 voci di
+  `CHECK_IDS` e un blocco «Workstream B» in `_configure`. Dettagli: piano 07, «B-9».
 - **B-10 · Un pulsante del pannello che chiede all'istanza il link di reset dell'admin** — piccolo; B, 15/10 (decisione
   40, assegnata a B dal coordinatore). Recupero dell'admin dopo un ripristino o una password persa: oggi passa da
   «password dimenticata» via email (E), o dall'assistenza con `dev.py user reset-link`.
@@ -6245,6 +6254,12 @@ sulla base `23f6578f3`.
   esatta 1e70). Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J
   legge accanto a una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince
   `absent`.
+- **B-30 · La cartella degli upload creata su un disco pieno dà 500, non 507** — minimo; TA-B, 17/10 (B-9, rilettura
+  delle etichette di `test_backup_restore.py`). `UploadWriter` crea la cartella degli upload con `ensure_private_dir`
+  fuori dal `try` che riconosce lo spazio esaurito: un `ENOSPC` lì (il primo upload su un disco pieno) diventa
+  `500 backup_upload_failed`, mentre la creazione del file e la scrittura danno già `507 backup_no_space`
+  (`restore_jobs.py`, `_out_of_space`). Cura: lo stesso controllo attorno alla creazione della cartella, più un test.
+  Dettagli: piano 07, «B-9».
 
 ## E · Email (fase 01)
 

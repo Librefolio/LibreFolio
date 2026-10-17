@@ -1,9 +1,10 @@
 """Configuration checks: the settings that leave an instance weaker than it should be.
 
 Owner: workstream H (platform). Each check reads the configuration and returns its state as a ``ConfigCheck``: an id,
-a severity, the i18n key of its message for the admin interface (``instance.checks.*``, or ``email.checks.*`` for the
-checks of workstream E, written whole so the i18n audit sees it), the parameters of that message and an English summary
-for the log. A check changes nothing, never raises and never puts a secret value in its result.
+a severity, the i18n key of its message for the admin interface (``instance.checks.*``, or ``auth.checks.*``,
+``backup.checks.*`` and ``email.checks.*`` for the checks of workstreams A, B and E, written whole so the i18n audit sees
+it), the parameters of that message and an English summary for the log. A check changes nothing, never raises and never
+puts a secret value in its result.
 
 At startup, ``log_configuration_audit()`` first stops on a configured secret that cannot be used, then logs every check
 that is not ``ok``. The «Security» tab of the admin settings will evaluate the same checks on demand. A check may report
@@ -23,6 +24,7 @@ from backend.app.logging_config import get_logger
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
 from backend.app.services.platform.client_address import PUBLIC_FORWARDING_SUMMARY, UNTRUSTED_PROXY_SUMMARY, untrusted_forwarding_seen
+from backend.app.services.platform.instance_backup.checks import BACKUP_CONFIG_CHECKS
 from backend.app.services.platform.instance_key import InstanceKeyError, instance_key_status
 
 logger = get_logger(__name__)
@@ -163,6 +165,8 @@ CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (
     check_session_cookie,
     check_client_address,
     check_log_level,
+    # Workstream B: the hosting panel's backup token and the restore's upload limit (instance_backup/checks.py, B-9)
+    *BACKUP_CONFIG_CHECKS,
     # Workstream A: the limit on failed sign-ins (services/accounts/checks.py)
     *ACCOUNTS_CONFIG_CHECKS,
     # Workstream E: the SMTP configuration and its encryption (services/email/checks.py)

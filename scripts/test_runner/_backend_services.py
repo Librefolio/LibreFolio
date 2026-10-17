@@ -1415,6 +1415,14 @@ def services_backup_leftovers(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Backup leftovers tests", verbose=verbose)
 
 
+def services_backup_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the backup's configuration checks: the hosting panel's token and the restore's upload limit (lot B-9)."""
+    print_section("Services: Backup Configuration Checks")
+    print_info("Testing: backend/app/services/platform/instance_backup/checks.py, config_audit.py (BACKUP_CONFIG_CHECKS)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_checks.py", test_names)
+    return run_command(cmd, "Backup configuration checks tests", verbose=verbose)
+
+
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger and closing the handlers it removes."""
     print_section("Services: Credentials in uvicorn's Request Lines")
@@ -2529,6 +2537,15 @@ Note: No backend server required.
         # PURE: one alembic process makes the module's database on a tmp_path file; every file read is a copy under
         # tmp_path, with a production data directory of the test configured (which must stay absent). No lane DB, no
         # server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-checks",
+        services_backup_checks,
+        name="Backup Configuration Checks",
+        desc="Lot B-9 (instance_backup/checks.py, in the platform's CONFIG_CHECKS). check_panel_token, backup.panel_token: unset or blank ok .off (a default start logs nothing new), usable (32 characters included) ok, 31 characters tooShort {minimum: 32}, a space, a tab or a letter outside ASCII notVisibleAscii, a _FILE missing, blank or not UTF-8 unreadable with the reader's error as reason, the variable winning over its broken file. check_upload_limit, backup.upload_limit: 0 or unset self-hosted unlimited, a number or the managed 500 limited {limit_mb}, letters, negative or decimal invalid, H's managed entry of another type or removed profileTable (H-27, H-37), self-hosted reading no entry, the variable winning over a wrong table. Never raises on each documented error of its reader; no token in any result, record or event of the startup audit (canary); BACKUP_CONFIG_CHECKS in order, in CONFIG_CHECKS together before the email checks; either module imported first in a fresh interpreter; the startup audit logs an unusable configuration as one ERROR and goes on, a default start logs nothing about them; the nine messages in the four backup catalogues with their placeholders",
+        # PURE: variables through monkeypatch, secret files under tmp_path. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
