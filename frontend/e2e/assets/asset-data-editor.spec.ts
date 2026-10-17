@@ -228,11 +228,11 @@ test.describe('Asset Data Editor', () => {
         await openDataEditor(page);
         const panel = page.getByTestId('asset-detail-editor-panel');
         // Save button (initially disabled since no changes)
-        const saveBtn = panel.locator('button:has-text("Save")');
+        const saveBtn = panel.getByTestId('asset-editor-save-btn');
         await expect(saveBtn).toBeVisible();
         await expect(saveBtn).toBeDisabled();
         // Cancel button
-        const cancelBtn = panel.locator('button:has-text("Cancel")');
+        const cancelBtn = panel.getByTestId('asset-editor-cancel-btn');
         await expect(cancelBtn).toBeVisible();
     });
 
@@ -244,7 +244,7 @@ test.describe('Asset Data Editor', () => {
         const panel = page.getByTestId('asset-detail-editor-panel');
         await expect(panel).toBeVisible();
         // Click close button
-        await panel.locator('button:has-text("✕")').click();
+        await panel.getByTestId('asset-detail-editor-close').click();
         await expect(panel).not.toBeVisible();
     });
 
@@ -257,7 +257,7 @@ test.describe('Asset Data Editor', () => {
         // Click Add Row
         await page.getByTestId('fx-data-add-row-btn').click();
         // Save button should now show dirty count
-        const saveBtn = panel.locator('button:has-text("Save")');
+        const saveBtn = panel.getByTestId('asset-editor-save-btn');
         await expect(saveBtn).toBeEnabled();
     });
 
@@ -269,14 +269,14 @@ test.describe('Asset Data Editor', () => {
         const panel = page.getByTestId('asset-detail-editor-panel');
         // Add row in prices tab
         await page.getByTestId('fx-data-add-row-btn').click();
-        // Prices tab badge should show 1
+        // Prices tab badge should show 1 (TabBar publishes the count as data-badge)
         const pricesTab = page.getByTestId('asset-editor-prices-tab');
-        await expect(pricesTab.locator('span.rounded-full')).toHaveText('1');
+        await expect(pricesTab.getByTestId('tab-badge')).toHaveAttribute('data-badge', '1');
         // Switch to events tab and back
         await page.getByTestId('asset-editor-events-tab').click();
         await pricesTab.click();
         // Save button should still be enabled
-        const saveBtn = panel.locator('button:has-text("Save")');
+        const saveBtn = panel.getByTestId('asset-editor-save-btn');
         await expect(saveBtn).toBeEnabled();
     });
 
@@ -289,7 +289,7 @@ test.describe('Asset Data Editor', () => {
         // Add row
         await page.getByTestId('fx-data-add-row-btn').click();
         // Click cancel
-        await panel.locator('button:has-text("Cancel")').click();
+        await panel.getByTestId('asset-editor-cancel-btn').click();
         // Editor should be hidden
         await expect(panel).not.toBeVisible();
     });
@@ -304,8 +304,9 @@ test.describe('Asset Data Editor', () => {
         const textarea = modal.locator('textarea');
         await textarea.fill('date;currency;close;open;high;low;volume\n2020-06-10;USD;150.25;;;;\n2020-06-11;USD;151.30;;;;\n2020-06-12;EUR;148.90;;;;');
 
-        // Import button should show "Import (3)" for 3 valid rows
-        const importBtn = modal.locator('button', {hasText: /Import \(3\)/});
+        // The Import button counts 3 valid rows (data-valid-rows: the number its label shows, in any language)
+        const importBtn = modal.getByTestId('data-import-confirm');
+        await expect(importBtn).toHaveAttribute('data-valid-rows', '3');
         await expect(importBtn).toBeVisible();
     });
 
@@ -319,7 +320,8 @@ test.describe('Asset Data Editor', () => {
         await textarea.fill('date;currency;close;open;high;low;volume\n2020-06-10;USD;150.25;149.00;151.00;148.50;1200000');
 
         // Should show 1 valid row
-        const importBtn = modal.locator('button', {hasText: /Import \(1\)/});
+        const importBtn = modal.getByTestId('data-import-confirm');
+        await expect(importBtn).toHaveAttribute('data-valid-rows', '1');
         await expect(importBtn).toBeVisible();
     });
 
@@ -341,9 +343,11 @@ test.describe('Asset Data Editor', () => {
         // ...and the error badge is the one invalid mark without a ✗.
         await expect(modal.locator('[data-state="invalid"]', {hasNotText: '✗'})).toBeVisible();
 
-        // Import button should NOT show 3 valid rows (some are invalid)
-        const importBtnAll = modal.locator('button', {hasText: /Import \(3\)/});
-        await expect(importBtnAll).not.toBeVisible();
+        // None of the three rows is offered for import: the Import button counts no valid row, and is disabled.
+        // The ✗ marks above are the barrier: 0 is also the count before the text is parsed.
+        const importBtn = modal.getByTestId('data-import-confirm');
+        await expect(importBtn).toHaveAttribute('data-valid-rows', '0');
+        await expect(importBtn).toBeDisabled();
     });
 
     // ========================================================================
@@ -355,8 +359,9 @@ test.describe('Asset Data Editor', () => {
         const textarea = modal.locator('textarea');
         await textarea.fill('date;currency;close;open;high;low;volume\n2019-01-15;USD;99.99;;;;\n2019-01-16;USD;100.50;;;;');
 
-        // Click Import button
-        const importBtn = modal.locator('button', {hasText: /Import \(2\)/});
+        // Click Import button, once it counts the 2 valid rows
+        const importBtn = modal.getByTestId('data-import-confirm');
+        await expect(importBtn).toHaveAttribute('data-valid-rows', '2');
         await expect(importBtn).toBeVisible();
         await importBtn.click();
 
@@ -365,11 +370,13 @@ test.describe('Asset Data Editor', () => {
 
         // Save button should be enabled (dirty rows from import)
         const panel = page.getByTestId('asset-detail-editor-panel');
-        const saveBtn = panel.locator('button:has-text("Save")');
+        const saveBtn = panel.getByTestId('asset-editor-save-btn');
         await expect(saveBtn).toBeEnabled();
 
-        // Dirty count should include imported rows
-        await expect(saveBtn).toHaveText(/Save \(\d+\)/);
+        // Dirty count should include imported rows: the prices tab's badge is that count (priceDirtyCount). The
+        // editor opened clean, and each imported day is either appended or merged into the row of its date
+        // (DataEditor.handleImport): exactly the 2 imported rows are dirty.
+        await expect(panel.getByTestId('asset-editor-prices-tab').getByTestId('tab-badge')).toHaveAttribute('data-badge', '2');
     });
 
     // ========================================================================
@@ -381,8 +388,9 @@ test.describe('Asset Data Editor', () => {
         const textarea = modal.locator('textarea');
         await textarea.fill('date;currency;type;amount;notes\n2020-03-15;USD;DIVIDEND;1.25;Q1 payout\n2020-06-01;;SPLIT;2;2:1 split');
 
-        // Import button should show "Import (2)" for 2 valid rows
-        const importBtn = modal.locator('button', {hasText: /Import \(2\)/});
+        // The Import button counts 2 valid rows
+        const importBtn = modal.getByTestId('data-import-confirm');
+        await expect(importBtn).toHaveAttribute('data-valid-rows', '2');
         await expect(importBtn).toBeVisible();
     });
 
@@ -410,8 +418,9 @@ test.describe('Asset Data Editor', () => {
         const textarea = modal.locator('textarea');
         await textarea.fill('date;currency;type;amount;notes\n2019-12-15;USD;DIVIDEND;0.75;test dividend');
 
-        // Click Import
-        const importBtn = modal.locator('button', {hasText: /Import \(1\)/});
+        // Click Import, once it counts the valid row
+        const importBtn = modal.getByTestId('data-import-confirm');
+        await expect(importBtn).toHaveAttribute('data-valid-rows', '1');
         await expect(importBtn).toBeVisible();
         await importBtn.click();
 
@@ -420,7 +429,7 @@ test.describe('Asset Data Editor', () => {
 
         // Save button should be enabled
         const panel = page.getByTestId('asset-detail-editor-panel');
-        const saveBtn = panel.locator('button:has-text("Save")');
+        const saveBtn = panel.getByTestId('asset-editor-save-btn');
         await expect(saveBtn).toBeEnabled();
     });
 
@@ -475,7 +484,8 @@ test.describe('Asset Data Editor', () => {
         await textarea.fill('date;currency;close;open;high;low;volume\n2020-06-10;USD;150.25;;;;1500000');
 
         // Should accept as 1 valid row (optional columns skipped)
-        const importBtn = modal.locator('button', {hasText: /Import \(1\)/});
+        const importBtn = modal.getByTestId('data-import-confirm');
+        await expect(importBtn).toHaveAttribute('data-valid-rows', '1');
         await expect(importBtn).toBeVisible();
     });
 
@@ -489,7 +499,8 @@ test.describe('Asset Data Editor', () => {
         await textarea.fill('date;currency;type;amount;notes\n' + '2020-01-01;USD;DIVIDEND;1.00;\n' + '2020-02-01;EUR;INTEREST;0.50;\n' + '2020-03-01;;SPLIT;2;\n' + '2020-04-01;USD;PRICE_ADJUSTMENT;-5.00;\n' + '2020-05-01;USD;MATURITY_SETTLEMENT;100;final');
 
         // All 5 event types should be valid
-        const importBtn = modal.locator('button', {hasText: /Import \(5\)/});
+        const importBtn = modal.getByTestId('data-import-confirm');
+        await expect(importBtn).toHaveAttribute('data-valid-rows', '5');
         await expect(importBtn).toBeVisible();
     });
 
