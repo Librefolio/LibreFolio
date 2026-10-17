@@ -1655,3 +1655,87 @@ Quattro commit, uno per lotto che cambia numeri:
 - ⚠️ **Fuori pista — MF-J4** (test-author): l'avviso «share mismatch» del classificatore scatta solo per le coppie su
   giorni diversi. Riga nel backlog, non toccato.
 - **Da fare in slot**: `api portfolio` (combinato W56 + J2), `api portfolio-wac` (W56).
+
+#### W56 e J2 committati; aggiornamento di base 7 (17/10, 04:29) — MF-D resto
+
+- Coordinatore: `c129e82a9` (W56), `4a99eb8be` (J2 + giornale); merge di dev `ec6aa2007` pulito → HEAD **`b05b80201`**
+  verificata, albero pulito. `api portfolio-wac` + `api portfolio` nello slot 1 dopo la gallery; MF-J3 al developer,
+  MF-J4 a J. Prossimi: **MF-D resto** (sblocca CP-10d di J: lo spostamento di `series_preparation.py` in
+  `services/market_series.py`), poi MF-P2.
+- **Riverifica sul codice** (b05b80201):
+  - `series_preparation.py:67-82` `observed_annualization` e `:173-178` `_price_return_value` (già su
+    `returns.price_return`): la matematica che J vuole fuori prima dello spostamento (piano J, «Fuori da CP-10»).
+    Chiamanti di `observed_annualization`: `risk/results.py:92` (`portfolio_twrr_returns`, R6 di CP-9a),
+    `risk_plugins/comparison/plugin.py:234`; test `test_series_preparation.py:447`.
+  - `drawdown_context.py:498` **è già protetto**: i prezzi ≤ 0 danno la riga `UNAVAILABLE` prima (`:490`); l'audit
+    («senza guardia sullo zero») era impreciso. Resta una copia di `price_return` in float.
+  - Nota di J (18:40) confermata: CP-13a lascia `remaining_to_peak_ratio` null su una perdita totale (avviso
+    `total_loss_no_recovery`, `risk/metrics.py:400`), ma `DrawdownContextPayload._SUCCESS_REQUIRED_FIELDS` (`:151`) e
+    `PortfolioAssetDrawdownRow._validate_row` (`:446`) lo vogliono non null → la sezione cade. Raggiungibile solo per
+    arrotondamento (un rendimento che in float vale −1,0: prezzo che crolla di oltre 16 ordini; TWRR a −1 + 1e-16).
+  - R7–R9 (`risk/metrics.py`: `compounded_return`, `period_returns_from_cumulative`, `daily_risk_free_rate`,
+    `wealth_index`): nessuna pagina dev le nomina (grep vuoto).
+  - Versioni a v1.2.1 dei 4 componenti del drawdown: tutte 1 (`git show v1.2.1:…drawdown_context.py`).
+- **Proposta** (a J e al coordinatore, 04:3x):
+  - **D1, numeri identici**: `observed_annualization` (verbatim) e `float_price_return` (l'ex `_price_return_value`,
+    pubblico) in `financial_math/returns.py`; chiamanti `series_preparation.py`, `risk/results.py`,
+    `comparison/plugin.py`; nessuna riesportazione; test spostato (test-author); doc: mappa della casa + le gemelle
+    float del rischio dichiarate (docs-writer).
+  - **D2, AI Export**: perdita totale accettata (null solo con `current_drawdown_ratio <= -1`) nei due validatori;
+    `:498` → `float_price_return` sui close Decimal (stessa strada della serie del rischio); 4 componenti 1 → 2,
+    mappa compatta `[1, 2]` ×4 (annunciata al coordinatore prima di scriverla), segnaposto del catalogo, casi di
+    ripiego del renderer v2 → v3. Rossi prima.
+- **Via** (coordinatore, 04:3x): D1 e D2, comprese le 4 voci della mappa compatta («nessun altro ha
+  `snapshotDataRenderer.ts` aperto»); dopo l'ingresso di D2, J fa la sonda (un caso portafoglio + uno broker col
+  drawdown), come per E1. **J** (04:3x): D1 e D2 vanno bene, niente incrocia CP-10c, CP-10d, CP-13a; ordine **D1 prima,
+  poi CP-10d**; **non rinominare `_MIN_ANNUALIZATION_DAYS`** in `returns.py` (il test di parità di CP-14b,
+  `measureSignal.test.ts`, legge quel nome dal testo del file).
+- ✅ **Codice D1** (2026-10-17):
+  - `financial_math/returns.py`: `float_price_return(start, end) -> float` (l'ex `_price_return_value`, pubblico; il
+    messaggio dell'errore è nuovo, nessun test lo legge) e `observed_annualization` (verbatim); docstring del modulo.
+  - `series_preparation.py`: tolte le due funzioni, importate dalla casa; `__all__` senza `observed_annualization`
+    (nessuna riesportazione). `risk/results.py`, `risk_plugins/comparison/plugin.py`: import dalla casa. Import ordinati
+    (ruff I001), ruff/black puliti.
+  - Mappe della casa: `financial-math.instructions.md` (riga `returns.py`), `backend.instructions.md` (riga 80),
+    `financial_math/__init__.py`.
+- ✅ **Codice D2** (2026-10-17):
+  - `drawdown_context.py`: `_is_total_loss(current_drawdown_ratio)` (≤ −1); `DrawdownContextPayload._validate_success`
+    salta `remaining_to_peak_ratio` solo sulla perdita totale; `PortfolioAssetDrawdownRow._validate_row` idem (gruppi
+    con nome, non indici: un primo tentativo con `is not` sul valore era sbagliato — con il campo None avrebbe tolto ogni
+    None — corretto prima di ogni prova); `_observed_price_points` tiene i close Decimal; il rendimento di `:498` →
+    `float_price_return`; docstring del payload; 4 `ComponentSpec` `version=2`.
+  - `catalog.py`: `version=2` sui 4 segnaposto. `snapshotDataRenderer.ts`: 4 voci `[1, 2]` e il commento. ruff/black e
+    Prettier puliti.
+- In corso: test-author `mf-d-tests` (D1 `test_financial_math/test_series_returns.py`, spostamento del test di
+  `observed_annualization`; D2 rossi del drawdown, versioni, casi del renderer v2/v3), docs-writer `mf-d-docs`
+  (`financial_math.md` con le gemelle float R7–R9, `risk/architecture.md`, `ai_export_composition.md`). Script
+  `files/d.sh` (red1, red2, green1, green2, lint).
+- ⚠️ **Fuori pista — la caduta oltre 2⁵³** (test-author): la fixture 1e6 → 1e-11 dà un rendimento float di −1,0
+  esatto, la ricchezza va a 0 e `drawdown_episodes` solleva `ValueError` (`underwater_drawdown`, «finite and
+  positive»), già su HEAD: **una sola quotazione cattiva faceva cadere tutta la sezione** dello snapshot. Cura in D2
+  (stessa funzione, stesso aumento): la riga di quell'asset diventa `failed` con `risk_execution_error`, senza metriche,
+  e `logger.exception` — la regola del rischio per un guasto non dichiarato (`risk/service.py:218`: «nostro», loggato,
+  mai un verdetto sui dati); le altre righe e la sezione restano. Un primo giro la marcava `unavailable` con
+  `invalid_observed_prices`: corretto prima di ogni prova per coerenza col rischio. La fixture della perdita totale per
+  arrotondamento (riga OK con `remaining_to_peak_ratio` null) è quella già convalidata da CP-13a: 1 → 1E-10 → 1E-20.
+- **Riga del runner** (dichiarata): `AI_EXPORT_PURE_TEST_PATHS` (`services ai-export-pure`) + 
+  `test_ai_export_components_drawdown_total_loss.py`, primo elemento.
+- ✅ **Rossi** (2026-10-17, `files/d.sh`, carico < 50): **D1** (`red1`, patch D2 `9b1876ea…` e D1 `e3032ee3…` tolte,
+  rimesse con lo stesso sha): `financial-math test_series_returns` → errore di raccolta, `ImportError` di
+  `float_price_return` (atteso). **D2** (`red2`, solo D2 tolta): `ai-export-pure drawdown` **13 failed / 7 passed**
+  (4 `ValidationError` della perdita totale, 3 `ValueError` della caduta profonda, punti float, i 16 ulp del percorso
+  del rendimento −0.05296734734142261 vs …272, 4 versioni); `ai-export "drawdown or catalog"` **5 failed** (versioni);
+  `front-ai-export unit` **8 failed** (v2 → YAML di ripiego). Tutti per il motivo giusto.
+- ✅ **Verdi**: D1 — `financial-math` **847**, `series-preparation` **22**, `risk-all` (comparison, results,
+  annualizzazione, TWRR, KPI storici) **198**; D2 — `ai-export-pure` **323**, `ai-export "drawdown or catalog or
+  registry or version"` **183**, `front-ai-export unit` **585**; pezzi `ai-export` «portfolio or broker» **348**, «resto»
+  **648** (`structural_invariants` al cancello del coordinatore). ruff/black (8 file), Prettier puliti.
+- ✅ **Doc** (docs-writer): `financial_math.md` :41–58 (gemelle float dichiarate, `#float-twins`), :69, :111–122, :509,
+  :532; `risk/architecture.md` :59, :356–358; `ai_export_composition.md` :171 (ancora), :210–220, :226–238 (perdita
+  totale, percorso del rendimento, riga `failed`). `mkdocs build` stretto exit 0, `check-links` exit 0. Solo pagine dev
+  (nessun debito di traduzione).
+- **Copie rimaste** (grep): `schemas/risk.py:514`, `:595` ricalcolano il fattore per l'invariante del contratto (gli
+  schemi non importano servizi) → riga **MF-D3** nel backlog. `signals/risk_adapters.observed_annualization_factor`
+  legge il fattore preparato (non è una copia); `risk/quant/resampling.py:235` converte una lunghezza di blocco (altro).
+- ✅ **Slot 1** (05:05–05:11, su `b05b80201`, patch D messa da parte e rimessa, sha `1895560c…`): `api portfolio-wac`
+  **12**, `api portfolio` **51**; porta 6190 libera. W56 + J2 pronti all'ingresso.
