@@ -230,7 +230,8 @@ class FifoLotEngine:
                 events.append(FifoEvent(kind="ADJUSTMENT_IN", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=tx.quantity, unit_price=adjustment_unit_price, raw_transaction_ids=(tx.id,)))
             elif tx.type == "ADJUSTMENT" and tx.quantity < Decimal("0"):
                 # A negative ADJUSTMENT that carries a per-unit cost_basis_override hands its units over at
-                # that cost (_apply_adjustment_out); without the override it remains a zero-price correction.
+                # that cost (_apply_adjustment_out); without the override it remains a zero-price correction, unless it
+                # hands each fragment over at its own FIFO cost (hands_over_at_own_cost, J-10).
                 handover_unit_price = tx.cost_basis_override if tx.cost_basis_override is not None else Decimal("0")
                 events.append(FifoEvent(kind="ADJUSTMENT_OUT", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=handover_unit_price, raw_transaction_ids=(tx.id,)))
         self._classified_events_cache = sorted(events, key=self._event_sort_key)
@@ -393,6 +394,7 @@ class FifoLotEngine:
             transaction_id=event.transaction_id,
             close_reason="ADJUSTMENT_OUT",
             close_unit_price=_require_decimal(event.unit_price),
+            close_unit_price_of=_own_fifo_cost if tx.hands_over_at_own_cost else None,
             close_currency_of=lambda fragment: self._handover_currency(tx, fragment),
         )
         remainder = _require_decimal(event.quantity) - closed
@@ -420,9 +422,9 @@ class FifoLotEngine:
 
         With a cost basis, every fragment leaves at the row's per-unit cost basis — the value the row hands over, as
         the Dashboard reads it (J-24) — not at the fragment's own FIFO cost. That cost is in ``cost_basis_currency``,
-        or in the lot's when it has none. Without a cost the units leave at 0, in the lot's currency. Another currency
-        than the lot's leaves the native realized P&L unknown; the lots analysis converts each leg at its own date
-        (decision 26).
+        or in the lot's when it has none. Without a cost the units leave at 0 — or, ``hands_over_at_own_cost``, at
+        their own FIFO cost — in the lot's currency. Another currency than the lot's leaves the native realized P&L
+        unknown; the lots analysis converts each leg at its own date (decision 26).
         """
         lot_currency = self._lots[fragment.lot_id].currency
         if tx.cost_basis_override is None:
@@ -607,13 +609,14 @@ class FifoLotEngine:
         transaction_id: int,
         close_reason: Literal["SELL", "BUY", "ADJUSTMENT_OUT"],
         close_unit_price: Decimal,
+        close_unit_price_of: Callable[[FragmentInterval], Decimal] | None = None,
         close_currency: str | None = None,
         close_currency_of: Callable[[FragmentInterval], str | None] | None = None,
     ) -> Decimal:
         """Close up to ``quantity`` of the broker's open fragments, oldest lot first; the quantity closed.
 
-        Each fragment closes at ``close_unit_price``, in ``close_currency`` or in the one ``close_currency_of``
-        gives it.
+        Each fragment closes at ``close_unit_price``, or at the price ``close_unit_price_of`` gives it, in
+        ``close_currency`` or in the one ``close_currency_of`` gives it.
         """
         consumed = Decimal("0")
         remaining = quantity
@@ -627,7 +630,7 @@ class FifoLotEngine:
                 event_date=event_date,
                 transaction_id=transaction_id,
                 close_reason=close_reason,
-                close_unit_price=close_unit_price,
+                close_unit_price=close_unit_price if close_unit_price_of is None else close_unit_price_of(fragment),
                 close_currency=close_currency if close_currency_of is None else close_currency_of(fragment),
             )
             consumed += matched
@@ -1288,6 +1291,11 @@ def _unit_price(amount: Decimal, quantity: Decimal) -> Decimal:
     if quantity == Decimal("0"):
         raise ValueError("Unit price requires non-zero quantity")
     return abs(amount) / abs(quantity)
+
+
+def _own_fifo_cost(fragment: FragmentInterval) -> Decimal:
+    """A fragment's own FIFO unit cost: the price an ADJUSTMENT-out ``hands_over_at_own_cost`` closes it at."""
+    return fragment.unit_price
 
 
 def _new_economic_accumulator() -> dict[str, Decimal]:

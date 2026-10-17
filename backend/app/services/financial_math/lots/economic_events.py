@@ -124,7 +124,7 @@ def build_cost_economic_events(
 
 
 def build_engine_transactions(
-    transactions: Sequence[Transaction],
+    transactions: Sequence[Transaction | FifoInputTransaction],
     fx_resolver: FxRateResolver,
     asset_currency: str,
     target_currency: str,
