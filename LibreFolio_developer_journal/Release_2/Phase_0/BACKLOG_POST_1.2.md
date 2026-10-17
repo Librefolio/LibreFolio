@@ -5607,8 +5607,9 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - L'invariante: nessuna email che un estraneo può indirizzare porta testo scelto da lui.
     - Il DoS sul budget d'istanza, fatto con tante caselle diverse, è una domanda del cloud per il developer
       (coordinatore). Resta E-12.
-    - Dettagli: piano 08, «E-9.0» ed «E-9.1».
-- **E-11 · Su un'istanza bloccata, «Send the link again» legge il 401 del blocco come credenziali sbagliate** —
+    - Dettagli: piano 08, «E-9.0»…«E-9.2».
+    - Commit `3dd23eaa4` (codice), `bb392de35` (docs), `7fc549fea` (journal); in `dev_release2` col merge `49c07a95a`.
+- ✅ **E-11 · Su un'istanza bloccata, «Send the link again» legge il 401 del blocco come credenziali sbagliate** —
   minimo; E, 16/10 (E-10, nota del `test-author`).
   - `POST /email/verification/resend` è fuori da `ALLOWED_WHEN_BLOCKED`, quindi un chiamante anonimo riceve il 401 di
     `get_current_user`, e `readResendFailure()` legge ogni 401 come `INVALID_CREDENTIALS`: l'avviso dice che username
@@ -5623,6 +5624,16 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - leggere il testo di `detail`, che è fragile.
 
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-10».
+  - 17/10, E: chiusa.
+    - A7b non la risolve: A-13 tiene fuori dal redirect al login solo le pagine dei link, mentre «Send the link again»
+      sta su `/`.
+    - La strada scelta sta tutta nei file di E:
+      - il 401 della rotta è ora codificato (`{"error_code": "INVALID_CREDENTIALS", …}`);
+      - `readResendFailure()` legge ogni altro 401, o il 423 `instance_blocked`, come il blocco;
+      - l'avviso mostra `auth.instanceBlocked`, la chiave di A7b.
+    - Resta giusta anche se H darà un codice al rifiuto anonimo del blocco.
+    - EVA-017 fissa `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`.
+    - Dettagli: piano 08, «E-11.0» e seguenti.
 - **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
   `mailbox_budget_key()` unisce gli alias `+tag` e i punti di Gmail. Restano due casi:
   - un dominio catch-all, dove ogni parte locale arriva alla stessa casella;
