@@ -491,6 +491,10 @@ The fallback is the most recent `PriceHistory` row whose close reads a number
 number, reads `None` through `RealDecimal`
 ([Decimal Columns](../../architecture/database/index.md#decimal-columns)) and is passed over;
 before, `Decimal(str(None))` raised, and the whole bulk call, every asset, answered 500.
+The fallbacks are read once the live quotes are in (MF-SEC9c): `_last_readable_prices()` reads the latest row of
+every asset without a quote in one grouped query, and looks up alone, one after the other, only an asset whose latest
+close does not read. The quotes run in parallel and never touch the request's session: the fallbacks used to read it
+from those parallel tasks, which one `AsyncSession` does not allow.
 
 A successful provider quote dated today is written back to today's OHLC row:
 
