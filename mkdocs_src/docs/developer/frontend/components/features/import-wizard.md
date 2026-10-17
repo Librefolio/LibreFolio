@@ -790,9 +790,9 @@ Both frontend tiers are decided by `buildDedupKey` + `dedupKeysMatch`. The signa
 | Broker id | Same broker only |
 | Transaction type | `BUY` / `SELL` / `INTEREST` / … |
 | Date | Day granularity (first 10 chars) |
-| Quantity | Compared within `QUANTITY_TOLERANCE` (`0.0001`) |
-| Cash code + amount | Amount compared within `AMOUNT_TOLERANCE` (`0.01`) |
-| Per-unit cost override | Distinguishes cashless `ADJUSTMENT` legs booked at different prices (e.g. succession transfers) |
+| Quantity | `sameDedupQuantity`, the backend's rule (W-B51, W-B81): equal once both are rounded half-up to the decimals of the less precise one, and never more than `QUANTITY_TOLERANCE` (`0.0001`) apart. `0.00015` meets a stored `0.000153`; `0.00015123` and `0.00015098` stay apart. Read exactly from the decimal text, never as a float; a text that is no plain decimal forms no key, an empty one reads as `0` |
+| Cash code + amount | Amount within `AMOUNT_TOLERANCE` (`0.01`), computed exactly; an empty amount reads as `0` |
+| Per-unit cost override | Distinguishes cashless `ADJUSTMENT` legs booked at different prices (e.g. succession transfers); compared by `sameDedupQuantity` too |
 | Asset identity | ISIN / symbol / name / fake-id |
 
 !!! note "Description decides the tier, not the match"
