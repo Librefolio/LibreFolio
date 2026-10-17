@@ -30,6 +30,7 @@ from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.period_changes import get_period_changes_bulk
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, BulkTooManyDaysError, bulk_too_many_days_detail, bulk_too_many_items_detail
 
 logger = get_logger(__name__)
 
@@ -116,12 +117,23 @@ async def query_prices_bulk(
     Reads from DB only (no provider delegation). Uses a single SQL query
     for all assets, then applies backward-fill per asset.
     Analogous to POST /fx/currencies/convert for FX rates.
+
+    Limits (Z-25): at most ``MAX_BULK_ITEMS`` items (422 ``bulk_too_many_items``, before any read) and at most
+    ``MAX_BULK_ITEM_DAYS`` per-day points over all the fills (422 ``bulk_too_many_days``, counted once the prices are
+    read, before the fills). The web app's asset list sends one item per asset in a single request: an instance with
+    more than 1,000 assets gets ``bulk_too_many_items``, and today the page then shows its cards without prices, the error
+    reaching only the console (the ``catch`` of ``fetchAllPriceData``). An explicit message, and splitting the request,
+    are a follow-up of the web app.
     """
+    if len(requests) > MAX_BULK_ITEMS:
+        raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(requests), MAX_BULK_ITEMS))
     try:
         results = await AssetSourceManager.get_prices_bulk(requests, session)
         return FAPriceQueryResponse(items=results)
     except SignalRequestValidationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+    except BulkTooManyDaysError as e:
+        raise HTTPException(status_code=422, detail=bulk_too_many_days_detail(e.item_days, e.max_item_days)) from e
     except Exception as e:
         logger.exception(f"Error querying prices bulk: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
