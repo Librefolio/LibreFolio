@@ -3705,6 +3705,18 @@ Graph: not updated; graphify is not available in this worktree.
 execution to `signals/execution.py` and the output checks to `signals/validation.py`; the annotation helpers join
 `signals/annotations.py`. No behaviour change. Source-file rows point at the module that now holds the behaviour.
 Updated: [[domains/signals]], [[decisions/signal-backend-plugin-architecture]], [[decisions/drawdown-full-history-warmup]].
+## [2026-10-17] update | Domain: EMAIL — E-13: the per-address limits skip an untrusted local proxy
+Workstream E's lot E-13 (release 1.3), approved by the coordinator after H-36 and A8a+N70. The three per-address
+limits of E (forgot password, «send the link again», the registration emails) take workstream H's
+`rate_limit_address(request)` instead of `client_address(request)`: `None`, which each of them already read as «no
+count», behind a reverse proxy LibreFolio does not trust on a local address (the usual Docker setup), where one count
+would let 10 requests from anyone block the feature for everyone. The «Behind a proxy» limitation is rewritten: the
+local case skips, the public case (a CDN) still shares one count, `FORWARDED_ALLOW_IPS` takes networks; the old
+example «Fly's, without the variable» is dropped, since Fly's proxy may reach the app from a private address.
+Sources: plan 08 «E-13», H's `client_address.py`, `security.md` «The Client's Address».
+Updated: [[domains/email]].
+Graph: not updated; graphify is not available in this worktree.
+
 ## [2026-10-17] update | Domain: EMAIL — E-9 done as night decision N62 (aliases folded, no stranger's text)
 Workstream E's lot E-9 (release 1.3), done the night of 17/10 as the coordinator's night decision N62, to be reviewed
 by the developer. Checked in the code first: the three per-mailbox limits count on `delivery.mailbox_budget_key()`

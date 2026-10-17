@@ -153,14 +153,19 @@ the why.
   and the change notice's per-account limit — lives in each process: N uvicorn workers allow N times the limits, and a
   restart forgets them. Only the per-account limits of «forgot password» and of the verification emails, counted on
   their token rows in the database, hold across processes. The Email tab shows the budget of the process that answers.
-- **Behind a proxy.** The per-address limits read workstream H's `client_address(request)` (decision P17,
-  `services/platform/client_address.py`): the header a trusted proxy sets when `LIBREFOLIO_CLIENT_IP_HEADER` names it
-  (`Fly-Client-IP` on Fly.io), otherwise the connection's address, which uvicorn takes from `X-Forwarded-For` only
-  for the proxies listed in `FORWARDED_ALLOW_IPS`. Behind a proxy LibreFolio does not trust — Fly's, without the
-  variable — every client shares the proxy's address, so each per-address limit becomes instance-wide; for
-  registration emails, that means emails silently held after 10 sign-ups an hour. The variable is safe only when every
-  request crosses that proxy. The older `client_address()` of `utils/runtime/network.py`, which the connection
-  indicator uses ([[features/F-102]]), is advice only, never a limit key.
+- **Behind a proxy.** The per-address limits read workstream H's `rate_limit_address(request)` (decisions P17 and
+  N70, lot E-13, `services/platform/client_address.py`). It is `None`, which every per-address limit reads as «no
+  count», for a request that came through a reverse proxy LibreFolio does not trust **on a local address** (a
+  forwarding header from a loopback, private, link-local, unique-local or CGNAT peer, when neither
+  `LIBREFOLIO_CLIENT_IP_HEADER` nor uvicorn gave the visitor's address): the usual Docker setup. Otherwise it is
+  `client_address(request)`: the header a trusted proxy sets when `LIBREFOLIO_CLIENT_IP_HEADER` names it
+  (`Fly-Client-IP` on Fly.io), else the connection's address, which uvicorn takes from `X-Forwarded-For` only for the
+  proxies listed in `FORWARDED_ALLOW_IPS` (addresses or networks). Behind an untrusted local proxy only the
+  per-identifier, per-account and per-mailbox limits and the hourly budget hold. Behind an untrusted proxy **on a
+  public address** (a CDN) every client still shares the proxy's address, so each per-address limit becomes
+  instance-wide; for registration emails, that means emails silently held after 10 sign-ups an hour. The variable is
+  safe only when every request crosses that proxy. The older `client_address()` of `utils/runtime/network.py`, which
+  the connection indicator uses ([[features/F-102]]), is advice only, never a limit key.
 - **No queue, no retry.** The emails sent after an answer (forgotten password, verification at sign-up, change notice)
   are FastAPI background tasks of the answering process. A verification email that does not go leaves the account
   waiting, and «Send the link again» recovers it; a forgotten-password email that does not go revokes its new link, and
