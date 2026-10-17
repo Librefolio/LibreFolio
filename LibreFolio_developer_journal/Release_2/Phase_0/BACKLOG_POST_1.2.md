@@ -4610,7 +4610,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `test_upsert_multiple_pairs` e la fixture di modulo di `test_fx_conversion` committano tassi che non tolgono mai.
   - Inoltre le ragioni `exclusive_because` di `fx-core` e `fx-sync-service` nel runner descrivono ancora il troncamento
     di tutta la tabella, mentre le due fixture ora sono limitate alle loro righe.
-- ✅ **X-R43 · Impostazioni dei plugin: un intero di 401 cifre in `value` dà un 500** (consegnata il 17/10, 07:30; SHA all'ingresso) — basso, solo admin o proprietario; X,
+- ✅ **X-R43 · Impostazioni dei plugin: un intero di 401 cifre in `value` dà un 500** (chiusa il 17/10: entrata in dev `3e7948446`, fix e journal; E rivede a posteriori) — basso, solo admin o proprietario; X,
   17/10 (trovato con H-32, girato nel backlog dal coordinatore; lo stesso difetto nella R13-SEC7-2 di E).
   - `fields.py:324` passa il valore a `math.isfinite()`, che con un `int` più grande di un double solleva
     `OverflowError`. `service.py:255` cattura solo `SettingValueError`, quindi `PATCH /settings/plugins/bulk` risponde 500
@@ -4707,8 +4707,11 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     `InvalidOperation`: un valore ostile fa uscire l'eccezione grezza invece di `FXServiceError`, e si perde la valuta,
     forse tutto il fetch di ECB. ECB è il fornitore principale dei cambi.
   - Cura: saltare l'osservazione (`ArithmeticError`), come BOE, SNB e FED con X-R50. Un rosso in `test_fx_parse_errors.py`.
-- **X-R53 · Usare il campo dei periodi fissi (1D, 1W…) che MF porta nel backend** — medio, **quando MF manda il
+- ✅ **X-R53 · Usare il campo dei periodi fissi (1D, 1W…) che MF porta nel backend** (consegnata il 17/10, 08:40; SHA all'ingresso) — medio, **quando MF manda il
   contratto**; X, 17/10 (coordinatore).
+  - Fatto: `lib/utils/periodChanges.ts` legge le due rotte di MF; le pagine degli asset e dei cambi non calcolano più le
+    Δ (via `DELTA_PERIODS`, `computePeriodDelta` e la seconda copia); `/period-changes` non è una scrittura; riga 🐛
+    dell'ora legale nel CHANGELOG. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «X-R53».
   - Oggi la tabella dei periodi fissi di asset e cambi si calcola nel frontend (`lib/utils/assetPriceDerived.ts:193`,
     `AssetTable.svelte:239`, `routes/(app)/fx/+page.svelte:236`). MF, nel lotto MF-P, crea il campo nel backend.
   - Da fare: leggerlo da lì nei miei file, quando MF scrive col contratto. Non ora.
@@ -4736,6 +4739,29 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
       cambiano, e va una riga 🐛 nel CHANGELOG;
     - altre differenze: 1D c'è anche con un intervallo di un giorno; una serie nativa con valute miste, o una
       conversione fallita, dà null più un errore; un prezzo ≤ 0 dà null.
+- **X-R56 · Uno SPLIT di un provider con un rapporto non valido, salvato prima di X-R47, non si può correggere** — basso,
+  **dopo X-R53**, prima l'analisi; X, 17/10 (MF-D4, girato dal coordinatore).
+  - Non si modifica per id (`EVENT_NOT_EDITABLE`, è di un provider) e non si cancella finché ha transazioni collegate
+    (`EVENT_IN_USE`): la CTA `navigate_asset` del nuovo avviso `INVALID_SPLIT_RATIO` porta a un vicolo cieco.
+  - Direzione: un refresh del provider riscrive o scarta quell'evento (con la regola dei collegamenti), oppure una via
+    di recupero.
+- **X-R58 · Le liste di asset e cambi tacciono quando la richiesta bulk supera i limiti di Z-25** — piccolo, **subito
+  dopo X-R53, quando Z-25 entra**; X, 17/10 (coordinatore, N77).
+  - Z-25 aggiunge due 422 con codice a `POST /assets/prices/query` e `POST /fx/currencies/convert`:
+    `bulk_too_many_items` (più di 1000 voci) e `bulk_too_many_days` (più di 5 milioni di giorni-voce, contati dopo la
+    lettura). Oggi il `catch` di `fetchAllPriceData` (asset) e quello dei cambi tacciono: card senza prezzi.
+  - Cura: un messaggio esplicito col limite, una chiave i18n in 4 lingue, su quei codici. Serve il contratto di Z (la
+    forma del `detail` e i parametri del limite) quando Z-25 entra.
+- **X-R59 · La Δ sull'intervallo si calcola ancora nel browser** — basso, regola 10 (una casa sola per la matematica
+  finanziaria); X, 17/10 (trovata dal docs-writer di X-R53). Da assegnare: MF, che possiede la casa.
+  - Il cambio sull'intervallo scelto (le card delle due liste; le colonne Δ Abs e Δ % della tabella dei cambi) è
+    `computeDerivedPriceState()` (`lib/utils/assetPriceDerived.ts`) e `FxTable.getDelta()` → `displayFxDelta()`
+    (`lib/stores/fxStoreRegistry.ts`, anche nella card e nella pagina della coppia): ultimo / primo − 1, in float.
+  - X-R53 ha portato nel backend solo le colonne dei periodi fissi (1D…5Y).
+- **X-R57 · Il commento C-66 di `asset-detail.spec.ts` dà una ragione superata** — minimo; X, 17/10 (Z, dopo Z-3).
+  - Verso la riga 8672 di `e2e/assets/asset-detail.spec.ts` il commento dice «by its UTC reckoning…»; dopo Z-3 (dev
+    `0f55265a1`) le pagine degli asset leggono il giorno dell'utente (`todayIso()`). Lo stub resta giusto: cambia solo
+    la ragione scritta. Da fare al prossimo tocco di quel file.
 - **X-R55 · Intervalli senza tetto: una data estrema blocca l'istanza** — sicurezza, disponibilità; **passata a Z** (il
   coordinatore, 17/10 06:38: Z è libera; X rivede al checkpoint di Z, perché i file sono di X); X, 17/10 (J, lo stesso
   vettore di R13-SEC7-1; girato dal coordinatore). E rivede.

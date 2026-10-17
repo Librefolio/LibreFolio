@@ -5863,3 +5863,91 @@ oltre il double (circa 309 cifre) solleva `OverflowError`, che nessuno prende. L
   `mkdocs build` stretto ✅ (3085 URL relativi risolti), `check-links` ✅.
 - **Consegna** (07:32, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti
   `fix(plugin-settings): refuse integers past 2^53` e `docs(journal): X-R43`. Revisione: E (la sua R13-SEC7-2).
+
+### X-R53 — le colonne Δ (1D…5Y) dal backend di MF ✅ (2026-10-17, 07:35–08:45; consegnato)
+
+**Base**: `3e7948446` (X-R43 entrato), albero pulito. Il client generato ha già le due rotte (rigenerato dalla corsia
+alle 07:18): `POST /api/v1/assets/prices/period-changes` e `POST /api/v1/fx/currencies/period-changes`;
+`change_ratio` e `inverse_change_ratio` arrivano come stringhe decimali o null, i periodi con `key` e `days`.
+
+**Stato verificato**:
+- asset: `assetPriceDerived.ts` ha `DELTA_PERIODS` e `computePeriodDelta`; `computeDerivedPriceState` calcola le
+  `deltas` sul thread principale (prezzi in cache) e nel worker (`priceProcessing.worker.ts`). La pagina
+  (`assets/+page.svelte`) le mette nello stato di ogni asset (`AssetState.deltas`) e le azzera in tre punti (`deltas:
+  {}`); `visiblePeriods` filtra `DELTA_PERIODS` con i giorni dell'intervallo. Prezzi in valuta nativa (nessun
+  `target_currency`).
+- cambi: `fx/+page.svelte` ha la seconda copia (174–212) con l'inversione (`displayFxDelta`), usata solo lì;
+  `fetchAllPairData` carica tutte le coppie, `fetchPairData` una sola (dopo il sync o l'aggiunta di una coppia).
+- `AssetTable` e `FxTable` leggono `row.deltas[key]` (percentuali) e `visiblePeriods` (`{key, days}`): restano come
+  sono. Le celle hanno `data-column-id` (`delta_1D`, `delta_1W`…).
+- `data-busy` delle due pagine (`loading` più `loadingPrices`/`loading` delle righe) è il segnale «tutto caricato»
+  degli E2E: la nuova chiamata deve entrarci.
+
+**Disegno**:
+- modulo nuovo `lib/utils/periodChanges.ts`: `ratioToPercent`, `visiblePeriodColumns` (senza 1D, i periodi con
+  `days` ≤ i giorni dell'intervallo, la regola di oggi), `fetchAssetPeriodChanges(ids, asOf)` e
+  `fetchFxPeriodChanges(pairs, asOf)` (una chiamata bulk ciascuna, nessuna se la lista è vuota; i periodi dalla
+  risposta, come vuole MF: nessuna copia nel frontend);
+- pagina degli asset: `as_of` = `dateEnd`; le `deltas` in uno stato a parte (mappa per asset), fuori dal flusso dei
+  prezzi, con un contatore di versione contro le risposte superate; `fetchAllPriceData` aspetta prezzi e periodi
+  insieme; `periodChangesLoading` entra in `busy`;
+- pagina dei cambi: lo stesso, chiave `BASE/QUOTE`, `change_ratio` o `inverse_change_ratio` secondo l'inversione della
+  card; `fetchPairData` aggiorna i periodi della sua coppia;
+- `assetPriceDerived.ts`: via `DELTA_PERIODS`, `computePeriodDelta` e le `deltas` di `computeDerivedPriceState` (la
+  matematica ha una casa sola, nel backend); resta `deltaPeriodLabel`;
+- `portfolioMutation.ts`: `/period-changes` non è una scrittura;
+- CHANGELOG: la riga 🐛 dell'ora legale; documentazione: `domain-state.md` e le pagine che dicono dove si calcolano le Δ.
+
+> **⚠️ Fuori pista (07:45–08:05) — due revisioni a posteriori chieste dal coordinatore, fra i passi di X-R53.**
+> - **H-34** (`d5d080a84`, `FAProviderConfigBase.provider_params`): OK. Il validatore sta solo sui due modelli di
+>   richiesta; quelli di lettura non lo hanno (una riga vecchia con `Infinity` si legge null, mai un 500). Il 422 di
+>   FastAPI riporterebbe l'`inf` in `input`, e il renderer di Starlette (`allow_nan=False`) ne farebbe un 500; il gestore
+>   globale `_without_input` (A-35) lo toglie. Nessun `validate_params` dei plugin rilasciati porta i parametri a float.
+> - **X-R55** (`a71d23e7e`, Z nei miei file): OK. La scorciatoia di `_build_backward_filled_series` non cambia nulla
+>   (senza seme, prima del primo prezzo non si emetteva niente); tutti i chiamanti passano da `get_prices_bulk`;
+>   `needed_dates` resta un insieme di `date`. LOW per Z: `FXSignalQueryResult.date_range` riporta l'intervallo chiesto,
+>   non quello servito (nessun lettore nel frontend). INFO per E: il tetto è per voce; né `convert` né `prices/query`
+>   limitano il numero di voci, quindi N voci moltiplicano ancora il lavoro.
+> - Nel frattempo il coordinatore ha girato **X-R56** (MF-D4: uno SPLIT di un provider con rapporto non valido, salvato
+>   prima di X-R47, non si corregge), basso, dopo X-R53, prima l'analisi. Il commento C-66 di Z è diventato **X-R57**.
+- **Rossi** (test-author, 07:40–08:12; 5 file più uno nuovo):
+  - `periodChanges.test.ts` (nuovo, 320 righe): il modulo non esiste, il file non si carica. Il test-author segnala che
+    i miei due intervalli dell'ora legale (22→29/03 e 18→25/10) non attraversano davvero il cambio misurati dalla
+    mezzanotte locale (168 ore): li ha tenuti e ne ha aggiunti quattro che lo attraversano (167, 169, 145, 719 ore), col
+    processo in Europe/Rome;
+  - `portfolioMutation.test.ts`: 4 rossi (il percorso, l'URL intero con la query, la barra finale, l'ascoltatore);
+  - `assetPriceDerived.test.ts`: via i 5 test di `computePeriodDelta`; 2 rossi (il modulo non esporta più i periodi né
+    il calcolo; `computeDerivedPriceState` senza `deltas`);
+  - `AssetTable.test.ts`: un elenco locale al posto di `DELTA_PERIODS`, verde prima e dopo;
+  - E2E `asset-list.spec.ts` e `fx-list.spec.ts`, uno per pagina, con la risposta vera presa con `route.fetch()` e una
+    voce sostituita; i cambi usano la coppia EUR/USD del seed (le tabelle dei cambi sono globali) e lo scambio della riga
+    (stato del browser), con l'inverso che non è né l'inverso né l'opposto del diretto.
+  - **Rossi confermati** (08:14): Vitest 6 falliti su 61 più il file che non si carica, per la ragione giusta. Gli E2E
+    sono rossi per struttura: nessuna delle due pagine chiama `/period-changes` (grep: 0 righe); non ho speso uno slot.
+- **Codice** (08:15): `xr53_code.py`, 27 sostituzioni in 6 file più il modulo nuovo. Prima di applicarlo, nella bozza:
+  un controllo di andata e ritorno della data (`2026-13-01` dà `[]`, non gennaio 2027).
+  > **⚠️ Fuori pista (08:17)**: svelte-check, 5 errori: il tipo generato di un decimale è `string | (string | null)[] |
+  > null`, più largo dello schema Zod. Il modulo prende `unknown` e restringe al testo prima di convertire.
+- **Verdi** (08:15–08:24): colori puliti (`theme-roles.mjs --check`); Vitest 100 (i 4 file); `front check` 0 errori e 0
+  avvisi; `check-orphans` (registrato `periodChanges.test.ts` in `front-asset asset-unit`); `front-asset asset-unit`,
+  `front-portfolio store-unit`, `front-utility component-unit` verdi.
+- **Slot 7** (08:24–08:31): E2E `front-asset asset-list` 31 passati (compreso il nuovo, X-R53), `front-fx fx-list` 13
+  (compreso il nuovo); porta 6183 libera.
+  > **⚠️ Fuori pista — il cancello dello slot**: lo slot 7 è partito con il carico a 5 minuti a 67,7, contro la regola
+  > del coordinatore (sotto 50): `slot.sh` controllava solo il carico a 1 minuto (≤ 90); il cancello a 5 minuti degli
+  > slot 3 era nello script di quel giro. Corretto: `slot.sh` ora aspetta da sé il carico a 5 minuti sotto 50. Riferito
+  > al coordinatore nella consegna.
+- **Documentazione** (docs-writer, dalle 08:33): `domain-state.md` (la riga di `/prices/period-changes`), le sezioni
+  «Fixed-Period Changes» di asset e cambi (chi le legge), e le pagine che dicessero ancora che le Δ si calcolano nel
+  browser.
+- **Documentazione fatta** (08:33–08:41, docs-writer): `domain-state.md` (la riga: `/prices/period-changes` è una
+  lettura), le sezioni «Fixed-Period Changes» di asset e cambi (chi le legge e come), `app-state.md` e `risk-lab.md`
+  (numeri di riga delle due pagine, spostati dal lotto; quelli di `risk-lab.md` erano già indietro di 67). Le pagine
+  utente restano vere, nessun debito di traduzione. `mkdocs build` stretto ✅, `check-links` ✅.
+  > **⚠️ Fuori pista** — il docs-writer nota che la Δ sull'intervallo (le card, Δ Abs e Δ % della tabella dei cambi) si
+  > calcola ancora nel browser: regola 10, una copia da segnalare. Aperta **X-R59**, da assegnare (MF).
+- Nel frattempo il coordinatore ha aggiunto i messaggi dei limiti bulk di Z-25 (`bulk_too_many_items`,
+  `bulk_too_many_days`): non entrano qui, perché servono i codici e la forma del `detail`, che arrivano con Z-25.
+  Aperta **X-R58**, lotto piccolo subito dopo.
+- **Consegna** (08:45, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti
+  `fix(assets,fx): Δ columns from the server` e `docs(journal): X-R53, X-R56–X-R59`.

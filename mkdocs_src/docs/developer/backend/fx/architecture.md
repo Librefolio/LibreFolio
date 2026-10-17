@@ -177,6 +177,12 @@ linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
 Both are fractions, null when either rate is missing. A day without a rate adds *No B/Q rate on or before D* to
 `errors`.
 
+The FX list calls the endpoint through `fetchFxPeriodChanges()` (`frontend/src/lib/utils/periodChanges.ts`): one
+request for every configured pair, with `as_of` the end of the selected range, and one for a single pair when that pair
+reloads on its own (its **Reload**, or after its **Sync**: `fetchPairData()`). A pair shown swapped (⇄) reads
+`inverse_change_ratio`, the others `change_ratio`. Besides its fixed 1D column, the table shows each period whose
+`days` fit in the range's whole calendar days (`visiblePeriodColumns()`).
+
 ## 🧹 Rate writes clear the portfolio caches {: #portfolio-cache-invalidation }
 
 Every write that changes stored rates drops the two portfolio cache layers, `portfolio_layer2` and

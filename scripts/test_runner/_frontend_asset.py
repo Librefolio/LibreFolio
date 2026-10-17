@@ -16,6 +16,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "run",
         "src/lib/stores/__tests__/assetPriceStoreRegistry.test.ts",
         "src/lib/utils/__tests__/assetPriceDerived.test.ts",
+        "src/lib/utils/__tests__/periodChanges.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregationGolden.test.ts",
         "src/lib/components/charts/__tests__/lineChartHelpers.test.ts",
