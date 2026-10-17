@@ -105,7 +105,7 @@ $$
 t_{\mathrm{start}}=\max(t_{\mathrm{from}},\ t_{\mathrm{oldest\ open\ lot}})
 $$
 
-Lots are counted at each broker: a transfer opens a lot dated at its arrival at the receiving broker. A stock split rescales the open lots and keeps their dates, so it never shortens the window.
+Lots are counted at each broker: a transfer opens a lot dated at its arrival at the receiving broker. A stock split rescales the open lots and keeps their dates, so it never shortens the window. The oldest lots that together hold $10^{-5}$ units or fewer — the residual a sale leaves — are set aside, as a closed position counts such a residual as closed: a residual left years ago does not pull the window start back to its date, and a position holding nothing more than that residual has no open lot (MF-A7).
 
 Then:
 
