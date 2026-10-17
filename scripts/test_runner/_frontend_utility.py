@@ -1,5 +1,6 @@
 """Frontend utility & component E2E tests: auth, settings, files, select, image-crop, utilities."""
 
+import os
 import subprocess
 
 from . import _common
@@ -739,6 +740,54 @@ def front_page_policy(verbose: bool = False, ui: bool = False, headed: bool = Fa
     return _run_playwright("layout/page-policy.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+#: The cloud smoke (H-43): existing specs over the main pages and the surfaces the managed profile's policies touch (the
+#: PDF preview, forms, frames), run on a managed lane so that the report-only policy's violations reach the collector of
+#: e2e/fixtures/playwright.ts. Desktop only. layout/legal-and-managed.spec.ts stays out until its «lane's answer» tests
+#: (LGM-E-01, LGM-E-03) read the lane's profile: they pin a self-hosted lane, and fail on a managed one by design.
+CLOUD_SMOKE_SPECS = [
+    "auth.spec.ts",
+    "layout/page-policy.spec.ts",
+    "layout/csp-collector.spec.ts",
+    "portfolio/dashboard.spec.ts",
+    "portfolio/risk-analysis.spec.ts",
+    "assets/asset-modal.spec.ts",
+    "transactions/transactions-table.spec.ts",
+    "transactions/tx-brim-import.spec.ts",
+    "files.spec.ts",
+    "brokers/brokers.spec.ts",
+    "settings/security-tab.spec.ts",
+    "settings/admin-users.spec.ts",
+    "ai-export/ai-export-panel.spec.ts",
+]
+
+
+def front_csp_collector(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run H-43's collector of Content-Security-Policy violations: its helpers, synthetic pages with a policy of their own, and the app's two inline scripts as the baseline knows them."""
+    print_section("Frontend CSP Collector Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/csp-collector.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_cloud_smoke(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the cloud smoke (H-43) on a managed lane: CLOUD_SMOKE_SPECS, desktop, the collector failing on a violation of the report-only policy the baseline does not know."""
+    print_section("Frontend Cloud Smoke (managed lane)")
+    if os.environ.get("LIBREFOLIO_PROFILE") != "managed":
+        print_error("cloud-smoke runs on a managed lane: add --lane-setting LIBREFOLIO_PROFILE=managed")
+        return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright(CLOUD_SMOKE_SPECS, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_datatable_mobile(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the DataTable's pinned selection and actions columns at phone width: header and cells scroll with the table, the header row still sticks (Y7, D-Y17)."""
     print_section("Frontend DataTable Mobile Tests")
@@ -1116,9 +1165,28 @@ def populate_registry(registry: dict) -> None:
         "page-policy",
         front_page_policy,
         name="Page Policy",
-        desc="The page policy of H-42 (PAGE_POLICY of security_headers.py: frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'), injected by the spec into every HTML document of the lane with service workers blocked, since the lane runs self-hosted; every securitypolicyviolation recorded in the page, only enforce counted. Positive controls first, on the sign-in page: the document reaches the browser with the policy, an injected <base> and a form posted to https://example.invalid and an <object> typed application/pdf on the lane each raise an enforced violation (base-uri, form-action, object-src), the base URL stays the lane's, no control request is made, and nothing else raises one. Then, each flow's page the only document, carrying the policy, and no enforced violation at its end: a nested documentation page and Material's search for 'conventions' (a result on screen), a one-page Latin PDF uploaded and previewed from the Files page to file-preview-pdf data-state=ready (deleted after the test), and the Dashboard's main view (dashboard-page settled, dashboard-overview-tab)",
+        desc="The page policy of H-42 (PAGE_POLICY of security_headers.py: frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'), injected by the spec into every HTML document of the lane with service workers blocked, on any lane (a self-hosted one sends none; on a managed one the same policy replaces the lane's own); every securitypolicyviolation recorded in the page, only enforce counted. Positive controls first, on the sign-in page: the document reaches the browser with the policy, an injected <base> and a form posted to https://example.invalid and an <object> typed application/pdf on the lane each raise an enforced violation (base-uri, form-action, object-src), the base URL stays the lane's, no control request is made, and nothing else raises one. Then, each flow's page the only document, carrying the policy, and no enforced violation at its end: a nested documentation page and Material's search for 'conventions' (a result on screen), a one-page Latin PDF uploaded and previewed from the Files page to file-preview-pdf data-state=ready (deleted after the test), and the Dashboard's main view (dashboard-page settled, dashboard-overview-tab)",
         prereq="Docs site built (dev.py mkdocs build), populated DB + test users (TEST_USER with no onboarding due)",
         tests="layout/page-policy.spec.ts",
+    )
+    add_test(
+        cat,
+        "csp-collector",
+        front_csp_collector,
+        name="CSP Collector",
+        desc="H-43: the collector of Content-Security-Policy violations of e2e/fixtures/playwright.ts (e2e/fixtures/csp.ts, e2e/csp-baseline.json): its helpers, a report-only violation of a synthetic page recorded (the script still runs), one the baseline does not know failing the test, violations of two documents in a row, and on the app's index.html with the managed report-only policy exactly its two inline scripts, both known",
+        prereq="Populated DB + test users",
+        tests="layout/csp-collector.spec.ts",
+    )
+    add_test(
+        cat,
+        "cloud-smoke",
+        front_cloud_smoke,
+        name="Cloud Smoke (managed lane)",
+        desc="H-43: CLOUD_SMOKE_SPECS (sign-in, page policy, CSP collector, dashboard, risk, asset modal, transactions, BRIM import, files, brokers, security and users settings, AI Export) on desktop, on a lane started with --lane-setting LIBREFOLIO_PROFILE=managed (refused otherwise): frame protection and the report-only policy for real, the collector failing on any violation e2e/csp-baseline.json does not know",
+        prereq="--lane-setting LIBREFOLIO_PROFILE=managed; populated DB + test users",
+        tests=CLOUD_SMOKE_SPECS,
+        named_only=True,  # refused on a self-hosted lane, the default; every spec it runs has an action of its own
     )
     add_test(
         cat,
