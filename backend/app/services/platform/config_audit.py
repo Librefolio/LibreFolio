@@ -6,9 +6,10 @@ a severity, the i18n key of its message for the admin interface (``instance.chec
 it), the parameters of that message and an English summary for the log. A check changes nothing, never raises and never
 puts a secret value in its result.
 
-At startup, ``log_configuration_audit()`` first stops on a configured secret that cannot be used, then logs every check
-that is not ``ok``. The «Security» tab of the admin settings will evaluate the same checks on demand. A check may report
-what the server has met since it started, as ``platform.client_address`` does: at startup it has met nothing yet.
+At startup, ``log_configuration_audit()`` first stops on a configuration the server must not start with, then logs
+every check that is not ``ok``. ``GET /api/v1/security/checks`` (workstream A, ``api/v1/security.py``) evaluates the
+same checks on demand, for the «Security» tab of the admin settings. A check may report what the server has met since
+it started, as ``platform.client_address`` does: at startup it has met nothing yet.
 """
 
 from __future__ import annotations
@@ -233,8 +234,11 @@ def log_configuration_audit() -> None:
     A ``JWT_SECRET_FILE`` that cannot be read raises ``SecretFileError``, a configured instance key that cannot be
     used raises ``InstanceKeyError``: the admin asked for that source, so the server must not start without it. In the
     managed profile, a ``JWT_SECRET`` shorter than ``JWT_SECRET_MIN_LENGTH`` raises ``WeakSecretError``. A
-    ``LIBREFOLIO_BLOCKED`` or ``LIBREFOLIO_DELETION_DATE`` that cannot be read raises ``ValueError``. A generated key
-    file gone bad is logged as an error instead, and the start goes on.
+    ``LIBREFOLIO_BLOCKED`` or ``LIBREFOLIO_DELETION_DATE`` that cannot be read raises ``ValueError``, and so do a
+    ``LIBREFOLIO_ADMIN_*`` variable of the initial administrator that cannot be used (``AdminBootstrapConfigError``,
+    F02, workstream A) and a ``LIBREFOLIO_LOGIN_LIMIT`` other than ``on`` or ``off`` (F15, workstream A), each naming
+    its variable. A generated key file gone bad is logged as an error instead, like every check that is not ``ok`` (the
+    backup's token and upload limit included, workstream B), and the start goes on.
     """
     secret = configured_jwt_secret()
     if secret is not None and len(secret) < JWT_SECRET_MIN_LENGTH and get_settings().LIBREFOLIO_PROFILE == "managed":

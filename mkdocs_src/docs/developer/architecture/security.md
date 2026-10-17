@@ -8,7 +8,7 @@ LibreFolio is a **self-hosted** application. The primary security assumption is 
 
 ### ✅ In Scope
 
-- **🔐 Authentication**: Stateless JWT-based authentication via HTTP-only session cookies with configurable expiration, [session revocation](#session-revocation) per account, and a [limit on failed sign-ins](#login-limit).
+- **🔐 Authentication**: Stateless JWT-based authentication via HTTP-only session cookies with configurable expiration, [session revocation](#session-revocation) per account, a [limit on failed sign-ins](#login-limit), and an identifier that names [one account only](#sign-in-identifier): no username can stand in front of another account's email address.
 - **🛡️ Data Segregation**: Strict isolation between users via Role-Based Access Control (RBAC).
 - **✏️ Input Validation**: Preventing injection attacks via strict Pydantic schemas; a request that fails them gets a `422` that never sends its input back ([Validation Errors Without the Input](#validation-errors)).
 - **🧼 Output Escaping**: User- and provider-supplied text is escaped or sanitized before the browser can render it as HTML.
@@ -43,6 +43,59 @@ auth`, `TestSignInLogsNoTypedIdentifier` (LOGIN-027 to LOGIN-033, in-process).
 !!! success "Why cookies over Bearer headers?"
 
     HTTP-only cookies are **automatically sent** by the browser for all same-origin requests — including `<img src>`, `<link href>`, and AJAX calls. This means uploaded files and plugin assets are served securely without any special frontend handling.
+
+### 🪪 Which Account an Identifier Names {: #sign-in-identifier }
+
+The sign-in's field takes a username or an email address, and so do «forgot password» and «send the link again»
+([Email](../backend/email.md)): all three find the account with `user_service.get_user_by_username_or_email()`. Until
+lot A-21a (release 1.3), a username could be any 3 to 50 characters, `@` included, and that lookup was one query,
+`username = X OR lower(email) = lower(X)`, keeping the first row. So account A could take account B's email address as
+its username, at registration or with a rename in the Profile, which asks for no password, and SQLite then returned A
+for B's address. B could no longer sign in with its address: each try was checked against A's password and counted as
+a failure, up to the [failed sign-in limit](#login-limit), which then refused B's address altogether; and B's «forgot
+password» or «send the link again» could find A (workstream E's review, rated medium, 8/10). Three rules close it:
+
+1. **No `@` in a new username** (`USERNAME_RESERVED_CHARACTER` in `backend/app/config/accounts.py`). Refused by
+   `user_service.create_user()` (registration, open or by invitation, the first account included, and
+   `./dev.py user create`), by `user_service.update_profile()` for a username that changes (the name an account
+   already has is not checked again), and by `admin_bootstrap_config()` for `LIBREFOLIO_ADMIN_USERNAME`. Nothing else
+   changes: spaces, accents, `.`, `_`, `-` and `+` are still taken. `POST /api/v1/auth/register` and
+   `PUT /api/v1/auth/profile` answer `400` with
+   `{"error_code": "USERNAME_INVALID", "message": "A username cannot contain @: the sign-in reads it as an email address"}`
+   in `detail`: the message is `USERNAME_RESERVED_MESSAGE`, which `register_user()` raises as the `RegistrationError`
+   `USERNAME_INVALID` (listed in `_REGISTRATION_REFUSALS`) and the profile route recognizes. The command line prints
+   that message after `❌` and exits with `1`. A `LIBREFOLIO_ADMIN_USERNAME` with an `@` raises the
+   `AdminBootstrapConfigError` `ADMIN_USERNAME_INVALID`, whose message names the variable and the `@`, and stops the
+   start ([The Initial Administrator](access_control.md#initial-admin)): the administrator signs in with
+   `LIBREFOLIO_ADMIN_EMAIL` anyway. The registration card refuses the `@` before sending; the card and the Profile tab
+   word the server's refusal in the user's language, with `auth.validation.usernameNoAt`
+   ([Registration errors](../frontend/components/features/auth.md#registration-errors),
+   [ProfileTab](../frontend/components/features/settings.md#profiletab)).
+2. **No email address that is another account's username**, A–Z case aside (the fold of SQLite's `lower()`, decision
+   P18): `user_service.address_is_a_username()`, called by `create_user()` and, for an address that changes, by
+   `update_profile()` — so registration, the Profile's change of address, `./dev.py user create` and
+   `./dev.py user set-email`. The answer is the one of an address already registered: `400` *Email already registered*,
+   a plain string, and on the command line the same message after `❌`. An account may take its own username as its
+   address (`other_than`).
+3. **The lookup reads an address first.** An identifier holding `@` is the account whose email it is, in any A–Z case
+   (`get_user_by_email()`); only when no account has that address, the account whose username is exactly that string,
+   a legacy name. Without `@` it is a username only, compared exactly as before (`get_user_by_username()`), never an
+   address. Whichever row was written first, no username stands in front of another account's address.
+
+Usernames written before lot A-21a keep their `@`: nothing renames them. Their accounts sign in with their address, as
+every account has one, and with that exact name while no account has it as its address. A rename follows rule 1.
+Usernames are still compared exactly as written, capitals included. The administrator's side: «Usernames with an @»
+in [Users & Invitations](../../admin/users.md).
+
+Tests: `./dev.py test services username-rules` (`backend/test_scripts/test_services/test_username_rules.py`: the `@`
+refused by `user create` and in `LIBREFOLIO_ADMIN_USERNAME`, and nothing else of the character set; an address that is
+a username, in any A–Z case, refused by `register_user()`, `user set-email` and `user create`; a legacy name left as it
+is), `./dev.py test services username-lookup` (`test_username_lookup.py`: an address finds its owner before a legacy
+name written like it, in both orders of the rows; the exact legacy fallback; without `@` a username only, exact) and
+`./dev.py test api username-rules` (`backend/test_scripts/test_api/test_username_rules_api.py`, in-process: the
+registration, profile and login routes, workstream E's scenes); for the app, `./dev.py test front-utility core-unit`
+(`registrationErrors.test.ts`) and `./dev.py test front-utility component-unit` (`RegisterCard.test.ts`,
+`tabs/ProfileTab.test.ts`).
 
 ### 🗝️ JWT Secret
 
@@ -255,7 +308,8 @@ the current password and ends the account's other sessions. No other route chang
 | `400` | `{"error_code": "CURRENT_PASSWORD_REQUIRED", "message": …}` | An email change without `current_password`, left out or `null` |
 | `429` | `{"error_code": "TOO_MANY_ATTEMPTS", "message": …}`, with `Retry-After` | An email change with a `current_password`, while the account's username or the request's address is past the [failed sign-in limit](#login-limit): the password is not checked, nothing is written |
 | `400` | `{"error_code": "CURRENT_PASSWORD_INVALID", "message": …}` | A wrong `current_password`. Nothing is written, the failure counts toward the [failed sign-in limit](#login-limit) under the account's username, and the warning *Email change refused: wrong current password* goes to the log with `user_id` |
-| `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address belongs to another account, in any A–Z case, or the name does, compared exactly. Nothing is written |
+| `400` | `{"error_code": "USERNAME_INVALID", "message": …}` | A new `username` holding `@` ([rule 1](#sign-in-identifier), lot A-21a): the name the account already has is not checked again. After the password when the email changes too. Nothing is written |
+| `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address belongs to another account, in any A–Z case, or is another account's username, in any A–Z case too ([rule 2](#sign-in-identifier), lot A-21a), or the name belongs to another account, compared exactly. Nothing is written |
 | `422` | Validation errors | An empty `current_password`, an invalid `email`, a `username` outside 3–50 characters |
 | `200` | — | The change is committed. After an email change, the answer sets the new `session` cookie, and the log has *Email changed, other sessions ended* (`user_id`) |
 
@@ -300,7 +354,7 @@ session and the [failed sign-in limit](#login-limit)):
 
 | Entry point | Checked before |
 |-------------|----------------|
-| `POST /api/v1/auth/register` | The registration mode, the invitation, the user limit, and whether the username or the email is taken; for the first account of an empty instance too. A refused registration spends no invitation |
+| `POST /api/v1/auth/register` | The registration mode, the invitation, the user limit, a username holding `@` ([Which Account an Identifier Names](#sign-in-identifier)), and whether the username or the email is taken; for the first account of an empty instance too. A refused registration spends no invitation |
 | `POST /api/v1/auth/change-password` | The current password, and the rule that the new one must differ from it |
 | `POST /api/v1/auth/password-reset` ([reset links](access_control.md#reset-links)) | The link's token: with a weak password the link is not even read, so a valid link stays valid |
 | `POST /api/v1/auth/setup` ([setup link](access_control.md#initial-admin) of the initial administrator) | The link's token, likewise |
@@ -454,9 +508,13 @@ address `rate_limit_address(http_request)` gives, and workstream E's «send the 
 The login page already turns any `429` of the sign-in into `auth.tooManyAttempts` (`loginErrorKey()` in
 `frontend/src/lib/stores/app/auth.ts`, see [LoginCard](../frontend/components/features/auth.md)), and the
 verification notice words the resend's `EMAIL_RATE_LIMITED` with the minutes to wait, as before
-(`resendFailureMessage()`, [In the Frontend](../backend/email.md#verification-frontend)). The password-change modal and
-the Profile tab have no text of their own for `TOO_MANY_ATTEMPTS` yet. The administrator's side is
-[Configuration](../../admin/configuration.md), section «Failed Sign-ins».
+(`resendFailureMessage()`, [In the Frontend](../backend/email.md#verification-frontend)). Since lot A8b (C11), the
+password-change modal and the Profile tab word it too, as `settings.tooManyPasswordAttempts` (*Too many wrong
+passwords: wait a few minutes and try again.*): the modal for a `429` whose `detail.error_code` is `TOO_MANY_ATTEMPTS`,
+keeping its three fields; the tab for that code, published as `data-error-code`, keeping the new address and the typed
+password ([ProfileTab](../frontend/components/features/settings.md#profiletab)). While the limit is off, the «Security»
+tab of Settings › Administration lists the warning of `accounts.login_limit` and counts it in its badge. The
+administrator's side is [Configuration](../../admin/configuration.md), section «Failed Sign-ins».
 
 Tests: `./dev.py test services login-throttle` (`backend/test_scripts/test_services/test_login_throttle.py`: the two
 limits on an injected clock, the A–Z key, the IPv6 /64, no address and no shared count of «no address», a refusal not
@@ -477,7 +535,9 @@ address its own failures locked refuses its direct requests but not those the pr
 `./dev.py test utils rate-window` (RWL-024: a locked identifier stays locked through 1,000 fresh ones, see
 [The Sliding-Window Limiter](../backend/email.md#testing)), and
 `./dev.py test api security-checks` (`test_api/test_security_checks_api.py`, on the lane's server, where
-`accounts.login_limit` is a `warning` since the lane runs with the limit off).
+`accounts.login_limit` is a `warning` since the lane runs with the limit off). The frontend's words for the limit:
+`./dev.py test front-utility component-unit` (`PasswordChangeModal.test.ts` and `tabs/ProfileTab.test.ts`, both under
+`frontend/src/lib/features/settings/`).
 
 ### 💻 Using curl
 
@@ -540,7 +600,7 @@ builds the `apikey` engine, and `_build_engine()` in `backend/app/services/asset
 then logs `web_link_finder: <error>; disabling` and returns no engine, so that search finds no links.
 Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_config_state()` turns
 it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged at startup and shown to
-administrators in Settings › Email ([Email Service](../backend/email.md#config-state)).
+administrators in Settings › Administration › Email ([Email Service](../backend/email.md#config-state)).
 Nor does an unusable `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`: `backup_download_token()` in
 `backend/app/config/backup.py` reads it for the startup checks (`check_panel_token()`, `backup.panel_token`: one error
 line in the start log, never a stop; [Configuration Checks of the Backup](#backup-config-checks)) and at each call of
@@ -967,7 +1027,7 @@ at the hosting panel's first call or at the first restore upload.
   when a check runs, as E's `checks.py` does ([Email Service](../backend/email.md#configuration-checks)): either module
   can be imported first.
 - **The messages.** `backup.checks.*`, in the `backup` i18n subsystem, written whole in the module for the i18n usage
-  scan; no page shows them until the «Security» tab.
+  scan; the «Security» tab of Settings › Administration shows them, from [`GET /security/checks`](#security-checks-endpoint).
 
 Tests: `./dev.py test services backup-checks` (`backend/test_scripts/test_services/test_backup_checks.py`), and
 `./dev.py test services config-audit`.
@@ -981,7 +1041,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 24 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose nine messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). No page shows the `instance`, `auth` and `backup` messages yet: the checks reach the log, and [`GET /security/checks`](#security-checks-endpoint) returns them for the «Security» tab of the admin settings, which does not exist yet |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 24 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose nine messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all four subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -1059,7 +1119,8 @@ Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` inclu
 A's, then E's three; and the two checks of the managed profile's switches in every state, a `PROFILE_DEFAULTS` entry
 removed included); the stop on a `LIBREFOLIO_ADMIN_*` value is in `./dev.py test services admin-bootstrap`, the check
 `accounts.login_limit` and the stop on a `LIBREFOLIO_LOGIN_LIMIT` value in `./dev.py test services accounts-checks`.
-What the administrator sees and does is in [Configuration](../../admin/configuration.md), section «Startup Checks».
+What the administrator sees and does is in [Configuration](../../admin/configuration.md), section «Startup Checks»,
+and in the app in «Security» of [Global Settings](../../admin/settings.md).
 
 ### 🧩 Plugin Secrets Check {: #plugin-secrets-check }
 
@@ -1068,10 +1129,11 @@ What the administrator sees and does is in [Configuration](../../admin/configura
 lost `secrets/instance.key` generated again, data restored without its `secrets/`, another
 `LIBREFOLIO_INSTANCE_KEY`. It needs the database, and `CONFIG_CHECKS` run before the `database` step,
 so it cannot be one of them. `check_plugin_secrets(session) -> ConfigCheck` returns the `ConfigCheck`
-of `config_audit.py` all the same, so that the «Security» tab of the admin settings, which does not
-exist yet, can show it with the others; [`GET /security/checks`](#security-checks-endpoint) already
-returns it after them. Unlike the functions of `CONFIG_CHECKS`, it can raise, on a
-database error for one: the startup step below catches it.
+of `config_audit.py` all the same, so that the «Security» tab of Settings › Administration shows it
+with the others: [`GET /security/checks`](#security-checks-endpoint) returns it after them, and the tab
+links its finding to the Plugins tab ([SecurityTab](../frontend/components/features/settings.md#securitytab)).
+Unlike the functions of `CONFIG_CHECKS`, it can raise, on a database error for one: the startup step
+below catches it.
 
 It asks `plugin_secrets_key_status(session)` (`backend/app/services/plugin_settings/crypto.py`),
 which counts by `key_id`, without decrypting, the stored secrets of each scope that the current key
@@ -1118,9 +1180,11 @@ included, so that a page can show what is not:
 | `SecurityCheckRead` | `check_id`; `severity`, `ok`, `info`, `warning` or `error`; `i18n_key`; `detail`, the parameters of the message |
 
 An item never carries the English `summary`, which may name a host or a path (nor does
-[`GET /email/status`](../backend/email.md#api-status)), and never a secret value. The «Security» tab of the admin
-settings, which does not exist yet, is the page meant to read it. On a [blocked instance](#instance-block) the route is
-not on the allow-list: an administrator gets `423`.
+[`GET /email/status`](../backend/email.md#api-status)), and never a secret value. The «Security» tab of
+Settings › Administration reads it (lot A8b, [SecurityTab](../frontend/components/features/settings.md#securitytab)):
+once per page load, when an administrator first opens Settings, so that the tab's badge counts before the tab is
+opened, and again on «check again». On a [blocked instance](#instance-block) the route is not on the allow-list: an
+administrator gets `423`.
 
 Tests: `./dev.py test api login-throttle` (in-process: `401` and `403`, every check once, as `run_config_checks()` and
 `check_plugin_secrets()` evaluate them, `accounts.login_limit` `ok` with the limit on and a `warning` with `off`, no
@@ -1194,7 +1258,9 @@ more:
 - **It tells nothing new.** It reads the account's `is_superuser`, and the mode and whether
   `LIBREFOLIO_REGISTRATION` pins it, which `GET /system/instance` already publishes.
 
-The list of local hosts and the watcher:
+The «Security» tab of Settings › Administration lists the same warning among its findings, from the same
+`openRegistrationNoticeFor()`, whether or not the notice was closed
+([SecurityTab](../frontend/components/features/settings.md#securitytab)). The list of local hosts and the watcher:
 [Open-Registration Warning](../frontend/components/features/auth.md#open-registration-notice);
 administrator side: «The Open-Registration Warning» in [Global Settings](../../admin/settings.md).
 
@@ -1409,9 +1475,9 @@ backup of the instance: the user's `is_superuser`, so `true` for administrators 
 block page (`frontend/src/lib/features/instance/components/InstanceBlockedPage.svelte`) checks again
 that `billing_url` is an `http(s)` address, then shows an administrator a **Manage subscription** link
 to it, opened in a new tab (`rel="noopener noreferrer"`). When `backup_available` is `true`, and only
-then, it shows the backup card of **Settings › Backup** under the block message: the card's four
-`backup_instance` routes are on the list above, and nothing else on the server changes for it (see
-[Instance block](../frontend/state/app-state.md#instance-block)). A workstream that owns part of the
+then, it shows the backup card of **Settings › Administration › Backup** under the block message: the
+card's four `backup_instance` routes are on the list above, and nothing else on the server changes for
+it (see [Instance block](../frontend/state/app-state.md#instance-block)). A workstream that owns part of the
 block page adds one field there and fills it in `block.py` with one call to its service.
 
 **Changing the list.** The list is short on purpose. The two link endpoints joined it for someone who
@@ -1732,15 +1798,15 @@ only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error
 |-------|--------------|
 | `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)). At its start (its folders, its first state), `POST /backup/restore/stage` answers `507` `no_space`, the check's own code, on a full disk or quota, logged as a warning, `A check of a backup archive could not start: not enough free space`, and `500` `stage_failed` on any other failure of the file system (permissions, a read-only disk, `EIO`), logged as an error, `A check of a backup archive could not start`, with the error's type and the system's reason; either way the upload stays, for another try (lot B-30) |
 | `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
-| `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable` |
+| `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable`. A full disk or quota anywhere in the confirmation (the `.restore` folder, the lock, the state's write) is `507` `backup_no_space`, logged as a warning, `A restore could not be confirmed: not enough free space`; any other failure of the file system is `500` `restore_confirm_failed`, logged as an error, `A restore could not be confirmed`, with the error's type and the system's reason. Either way nothing is confirmed, as the state is written last and atomically, and the check and its copy stay: the same confirmation answers `202` once the failure is gone (lot B-31) |
 | `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting |
-| `DELETE /backup/restore/pending` | Drops the restore waiting (`204`) with its checked copy and its check record, as `backup pending --cancel` does (B-17): confirming that check again answers `404` `restore_stage_not_found`. `404` `restore_not_pending` |
-| `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `202` `RestoreRestartAccepted`: the `RestoreStatus` and `outcome_ticket`, with `Cache-Control: no-store`. `409` `restore_not_pending`; `500` `restore_restart_failed` when the ticket cannot be written, or `restore_folder_unusable`: no restart then |
+| `DELETE /backup/restore/pending` | Drops the restore waiting (`204`) with its checked copy and its check record, as `backup pending --cancel` does (B-17): confirming that check again answers `404` `restore_stage_not_found`. `404` `restore_not_pending`. A failure of the file system before the restore is dropped (its lock, or removing its state) is `500` `restore_cancel_failed`, logged as an error, `A pending restore could not be cancelled`: the restore still waits. Once the state is dropped, `apply.cancel_restore(drop_copy=True)`, behind the route and the command alike, logs a copy it cannot remove as a warning, `The copy of a cancelled restore could not be removed: it goes when its check expires`, with `stage_id` and the error, and never raises: the route answers `204`, and `prune` removes the copy at its age (lot B-31) |
+| `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `202` `RestoreRestartAccepted`: the `RestoreStatus` and `outcome_ticket`, with `Cache-Control: no-store`. `409` `restore_not_pending`; `500` `restore_restart_failed` when the ticket cannot be written, a full disk included, logged as an error, `The ticket of the restore's outcome could not be written: no restart`, with the error's type and the system's reason, or `restore_folder_unusable`: no restart then, no ticket, and the restore still waits. Lot B-31 pins it, and gives `restore_restart_failed` its sentence on the card |
 | `GET /backup/restore/outcome` | No session: the ticket of the restart in the `X-Restore-Ticket` header. `200` `RestoreOutcome`, `state` (`pending`, `in_progress`, `committed` or `rolled_back`), `reason` and `waiting` only, with `Cache-Control: no-store`, as often as asked until the ticket expires, a final outcome included; the same `404` `restore_outcome_not_found` for every ticket that does not give it. See [The Outcome Ticket](#backup-restore-outcome) |
 
 A full disk or quota that a backup route meets before it answers is a `507` (lot B-30), recognised by
 `jobs.out_of_space()`: `ENOSPC` or `EDQUOT` in the error or one of its causes, or SQLite's `SQLITE_FULL`. Its code is
-`backup_no_space` for an upload and at the start of a backup, and `no_space` at the start of a check, the code of a
+`backup_no_space` for an upload, at the start of a backup and at the confirmation of a restore (lot B-31), and `no_space` at the start of a check, the code of a
 check that runs out of space. For the upload,
 `UploadWriter` (`restore_jobs.py`) maps one met anywhere from the creation of its folder, `.restore/upload/`, to the end
 of the file, its `fsync` and `close` included (a network file system or a quota may report it only there), to
