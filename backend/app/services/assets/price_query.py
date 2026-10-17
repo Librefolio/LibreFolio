@@ -49,8 +49,7 @@ from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.series_preparation import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.service import SignalService
-from backend.app.utils.date_range_limits import latest_range_end
-from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.datetime_utils import latest_range_end, utcnow
 
 logger = structlog.get_logger(__name__)
 
