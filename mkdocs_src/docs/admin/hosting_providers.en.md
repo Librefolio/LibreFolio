@@ -83,7 +83,8 @@ Today the profile changes eleven things:
   log says so at every start, a warning for frame protection and an `info` for the policy, and so do
   the security checks: see «Startup Checks» in [Configuration](configuration.md).
 - **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
-  `Content-Security-Policy: frame-ancestors 'self'` to every response: a browser then shows
+  `Content-Security-Policy: frame-ancestors 'self'` to every response (to a `304 Not Modified`
+  only the first, so the browser keeps the policy of its cached copy): a browser then shows
   LibreFolio in a frame only inside LibreFolio's own pages, whose policy also carries
   `object-src 'none'; base-uri 'self'; form-action 'self'`, three directives that block nothing
   LibreFolio uses (see «Main Options» in [Environment Variables](configuration.md)). If your hosting
