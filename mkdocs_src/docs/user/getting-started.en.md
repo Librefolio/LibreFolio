@@ -76,8 +76,8 @@ after **Register**:
 - ⏱️ The link works once, for 24 hours.
 - 📭 No email? Look in the spam folder. Then, on the login page, sign in with your username and
   password: LibreFolio says that your address is not verified yet, and offers **Send the link
-  again**. A new link replaces the older ones. If you ask too often, the page tells you in how many
-  minutes you can ask again.
+  again**. A new link replaces the older ones. If you ask too often, or after too many wrong
+  passwords, the page tells you in how many minutes you can ask again.
 - ⌛ If the page says that the link has expired, sign in the same way: you are offered a new link.
   If the instance has no free place left meanwhile, ask your administrator.
 - ✅ If the page says that the link has already been used, your account is probably active already:
@@ -96,6 +96,13 @@ first: see [If LibreFolio Asks You to Confirm Your Email](#verify-email).
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
+
+!!! note "Too many login attempts"
+
+    After 10 wrong passwords in 15 minutes for the same username or email address, or 50 from the
+    same IP address, the login page says *Too many login attempts: wait a few minutes and try
+    again.* Until the wait is over, even the right password is refused: wait up to 15 minutes, then
+    log in. Your administrator can also let you in at once, by restarting LibreFolio.
 
 ### 📧 If You Forgot Your Password {: #forgot-password }
 
