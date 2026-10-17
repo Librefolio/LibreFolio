@@ -161,6 +161,7 @@
         "waitingTitle": "LibreFolio si sta riavviando",
         "waiting": "Il suo avvio applica il ripristino. Questa pagina aspetta che torni.",
         "slow": "LibreFolio non è ancora tornato. Se niente lo riavvia da solo, avvialo tu: il ripristino si applica a quell'avvio.",
+        "notStopped": "LibreFolio non si è fermato. Se non si riavvia da solo, riavvialo tu: il ripristino si applica a quell'avvio.",
         "rolledBack": "I dati sono come prima: {reason}.",
         "stillPending": "LibreFolio si è riavviato, ma il ripristino non è stato applicato. {waiting}",
         "back": "Torna al backup",

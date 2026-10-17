@@ -14,10 +14,11 @@ graph TD
     FirstWait -->|startup| Run["⚙️ run_due_jobs(reason)"]
     User["👤 User request after 60s of silence"] -.->|nudge| Wait
     Wake["⏰ POST /system/wake-sync"] -.->|wake| Run
-    Run -->|"return, wake: wait 2s first"| Lock["🔒 Run lock"]
+    Run -->|"return, wake: wait 2s first"| Lock["🔒 Run lock of the process"]
     Lock --> Checks{"🚦 May it run?"}
-    Checks -->|"No: disabled, blocked or not_leader"| Report["📋 RunReport"]
-    Checks -->|Yes| Jobs["⚡ Each due job in turn: current price, then history sync"]
+    Checks -->|"No: disabled, blocked, or not_leader without fcntl"| Report["📋 RunReport"]
+    Checks -->|Yes| FileLock["🗝️ With fcntl: .scheduler.lock, one run at a time across the workers"]
+    FileLock -->|"state and time read after the wait"| Jobs["⚡ Each due job in turn: current price, then history sync"]
     Jobs --> Report
     Report -->|"startup, tick, return"| Wait["💤 Wait 60s, a nudge or the shutdown"]
     Wait -->|"60s: tick"| Run
@@ -51,25 +52,26 @@ Each run has a reason (`RunReason`), which its log line carries; any other value
 ### 🔒 One Run at a Time {: #run-lock }
 
 * **Run lock:** `run_due_jobs()` takes an `asyncio.Lock`, one per event loop, for its checks and its jobs, so two runs of the process never overlap. The second one waits, then loads the state the first one saved, and does not run again what the first one just ran.
-* **Busy work:** from its start to its end — the clock settle and the wait for the lock included, whether it returns, raises or is cancelled — the run is busy work on the activity record (`current_activity().busy("scheduler")`): for the [idle suspension](../../admin/sleep_wake.md#idle-suspend), a scheduler run is work in progress, so the idle monitor never suspends the machine in the middle of a run.
-* **Clock settle:** a `return` or `wake` run first waits `CLOCK_SETTLE_SECONDS` (2 s), before the lock and before it reads the time; `startup` and `tick` never wait. After a Fly.io resume the wall clock is corrected within a few hundred milliseconds, and a request may be served before that: the wait lets the due checks read the corrected time.
+* **Across processes:** where Python has `fcntl`, the runs of different worker processes take turns the same way, on an exclusive `flock` of `.scheduler.lock` in the data directory, which a run takes after its [checks](#run-checks): one run at a time for the data directory, in whichever worker it starts. See [Several Workers](#leader-election).
+* **Busy work:** from its start to its end — the clock settle and the waits for both locks included, whether it returns, raises or is cancelled — the run is busy work on the activity record (`current_activity().busy("scheduler")`): for the [idle suspension](../../admin/sleep_wake.md#idle-suspend), a scheduler run is work in progress, so the idle monitor never suspends the machine in the middle of a run.
+* **Clock settle:** a `return` or `wake` run first waits `CLOCK_SETTLE_SECONDS` (2 s), before the locks and before it reads the time; `startup` and `tick` never wait. After a Fly.io resume the wall clock is corrected within a few hundred milliseconds, and a request may be served before that: the wait lets the due checks read the corrected time.
 
 ### 🚦 Inside a Run {: #run-checks }
 
-Under the lock, a run checks four things, in this order. The first one that stops it gives the run's status: no job runs, and the state is not loaded.
+Under the run lock of its process, a run goes through these checks, in this order. The first one that stops it gives the run's status: no job runs, and the state is not loaded.
 
 1. The scheduler is off, `LIBREFOLIO_NO_SCHEDULER` (`scheduler_disabled()`): `disabled`.
 2. The instance is blocked, `LIBREFOLIO_BLOCKED` (`instance_blocked()`): `blocked`. A blocked instance runs no job at all, so its prices and exchange rates are not updated; once the block is lifted (a restart), the first run catches up the history-sync slot missed in the meantime (decision D-Z3-4, and [missed slots](#history-sync)).
-3. This process is not the leader worker (`am_i_leader()`, see [Leader Election](#leader-election)): `not_leader`.
+3. Only where Python has no `fcntl` (Windows): this process is not the leader worker (`am_i_leader()`, see [Leader Election](#leader-election-fallback)): `not_leader`. With `fcntl` (Linux, macOS) this check does not exist and `am_i_leader()` is never called: any worker may run the jobs.
 4. The `scheduler_enabled` setting is off: `disabled`. The settings are read from the database (`load_scheduler_settings()`) at each run that gets this far.
 
-Otherwise the run loads the state (`load_state()`), reads the wall clock once (`utc_now()`) for both due checks, and takes the jobs of `JOBS` in order, `current_price` then `history_sync`. A job that is not due is reported `not_due`. A due job runs on the loaded state, and the state is saved right after it (`save_state()`). `am_i_leader()`, `load_state()` and `save_state()` block on the process table or on the disk, so they run off the event loop (`asyncio.to_thread()`).
+Otherwise, where Python has `fcntl`, the run takes the [lock across processes](#cross-process-lock) (`scheduler_run_lock()`), waiting while another worker's run holds it; without `fcntl` there is no such lock. Then, holding it where there is one, the run loads the state (`load_state()`), reads the wall clock once (`utc_now()`) for both due checks, and takes the jobs of `JOBS` in order, `current_price` then `history_sync`. A job that is not due is reported `not_due`. A due job runs on the loaded state, and the state is saved right after it (`save_state()`). So a run that waited for another worker's run reads the state that run saved, and the time after the wait: what that run just did is `not_due`. `am_i_leader()`, each attempt at the lock across processes, `load_state()` and `save_state()` block on the process table or on the disk, so they run off the event loop (`asyncio.to_thread()`).
 
 Each job runs in its own `try`:
 
 * A job that raises, or the save after it, is reported `error` with the exception's class name only. The message and the traceback stay in the server log (`Scheduler job failed`, with `job` and `reason`), never in the outcome, which a caller may pass on. The next job still runs. The failure is recorded in the job's state, saved at once: the job keeps the `last_run_at` of its last run that ended, so its regular rule still finds it due, but it is not tried again before a wait that doubles at each failure in a row (see [Provider Pauses and Failures](#pauses-and-failures)).
-* A cancellation is not caught: it goes through, and the run releases its lock and its busy span. It records no failure, so no wait. A job it cuts before its state is saved stays due, so after a shutdown the next start runs it again.
-* An exception outside the jobs — the settings or the state cannot be read — leaves `run_due_jobs()`: the loop logs it (`Scheduler run failed`) and goes on.
+* A cancellation is not caught: it goes through, and the run releases its locks, the one across processes included, and its busy span. It records no failure, so no wait. A job it cuts before its state is saved stays due, so after a shutdown the next start runs it again.
+* An exception outside the jobs — the settings or the state cannot be read, or the lock across processes cannot be taken (a symlink in its place, a permission problem) — leaves `run_due_jobs()`: the loop logs it (`Scheduler run failed`) and goes on, and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync-answer) answers `status: "error"` with its class name.
 
 ### ⏸️ Provider Pauses and Failures {: #pauses-and-failures }
 
@@ -110,8 +112,8 @@ A job that ends — that returns instead of raising — writes a new `JobState`,
 
 Each run returns a `RunReport(reason, status, started_at, finished_at, jobs)`. It is generic: a future job — notifications, say — is one more entry of `JOBS`, and one more outcome.
 
-* `status`: `ok` when no job ran or every job that ran is `ok`, `error` when every job that ran is `error`, `partial` otherwise; or the check that stopped the run, `disabled`, `blocked` or `not_leader`, with `jobs` empty.
-* `started_at` and `finished_at`: in UTC, from the moment the run holds the lock.
+* `status`: `ok` when no job ran or every job that ran is `ok`, `error` when every job that ran is `error`, `partial` otherwise; or the check that stopped the run, `disabled`, `blocked` or, without `fcntl` only, `not_leader`, with `jobs` empty.
+* `started_at` and `finished_at`: in UTC, from the moment the run holds the run lock of its process, before its checks: a wait for another worker's run falls between them.
 * `jobs`: one `JobOutcome(name, status, started_at, duration_s, items_ok, items_err, error, items_deferred, retry_at)` per job, in order, with `status` `ok`, `partial`, `error` or `not_due`. A job that ran reports what its `JobState` holds after it: status (`ok` when it wrote none), duration, item counts (the deferred ones in `items_deferred`), error and `retry_at`. A job that raised reports `error`, its duration, the exception's class name in `error`, and the end of its wait (`next_attempt_at`) in `retry_at`. A job not due reports its name, `not_due` and, in `retry_at`, the end of a wait after a failure if it is still ahead, else a deferred retry still ahead, else `None`. `retry_at` is a `datetime` in UTC (see [Provider Pauses and Failures](#pauses-and-failures)).
 
 The loop logs each report, `Scheduler run finished` with the reason, the status and the jobs that ran: at INFO when a job ran, at DEBUG otherwise, so the runs with nothing due stay out of an INFO log.
@@ -153,7 +155,7 @@ sequenceDiagram
 `PRICE_REFRESH` is a `PriceRefreshTracker` (`scheduler.py`): one per process, in memory, behind a `threading.Lock`, since the loop, the activity record and the route (a plain `def`, which FastAPI runs in its thread pool) reach it from different threads. `price_refresh_progress()` returns its state now, a `PriceRefreshProgress(state, reason, job, since, last_finished_at, last_refreshed)`.
 
 * **Pending.** A catch-up is pending from `announce(reason)` or `run_started(reason)`, whichever comes first, until the last run counted by `run_started()` has ended (`run_finished()`). The loop announces `startup` as it starts, `FIRST_RUN_DELAY_SECONDS` (5 s) before its first run; the return listener announces `return` on the request's thread, before the request runs. `run_due_jobs()` calls `run_started(reason)` for a catch-up reason before the clock settle, and `run_finished()` in a `finally`, so also when the run raises or is cancelled: that is how a wake-up begins one. Runs overlap: a wake-up during a return run is a second counted run, and the catch-up ends with the last of them. A catch-up announced while another is pending changes nothing: the first reason and its start (`since`) stay.
-* **States.** `starting` while a catch-up is pending and no job runs: from the announcement through the settle, the wait for the lock and the [checks](#run-checks), and between two jobs. `running` while it is pending and a job runs, with the job's name. `idle` otherwise.
+* **States.** `starting` while a catch-up is pending and no job runs: from the announcement through the settle, the [checks](#run-checks) and the waits for the locks, another worker's run included, and between two jobs. `running` while it is pending and a job runs, with the job's name. `idle` otherwise.
 * **Jobs.** `_run_job()` calls `job_started(name)` before each job of every run, and `job_finished(items_ok)` after it, `None` when the job is cancelled. A job that finishes while a catch-up is pending counts for it, a tick's included: the user waits for the prices, whatever run brings them. So when a user comes back while a tick's job runs, the state is `running` at once, with that job.
 * **The end.** When the last counted run ends, the catch-up is over and the state is `idle`. If at least one job finished while it was pending, the tracker keeps when the catch-up ended (`last_finished_at`) and whether one of those jobs brought an item up to date (`last_refreshed`: an `items_ok` above 0; a job that raised reports 0, and a [deferred](#pauses-and-failures) item is not brought up to date). A catch-up that ran no job — nothing due, or a run stopped by its checks with `disabled`, `blocked` or `not_leader` — leaves both as they were.
 * **Guards.** `announce()` and `run_started()` refuse a reason outside `CATCH_UP_REASONS`, `tick` included, with `ValueError`; `run_finished()` without a counted run does nothing. `reset()` forgets everything: the loop calls it as it stops.
@@ -200,7 +202,7 @@ The last two describe the last catch-up that ran a job, also while another one i
 
 ### 👥 One Process, Several Workers {: #price-refresh-workers }
 
-The tracker belongs to its process, like the loop and the activity record. With several workers, each one runs its loop and announces its own catch-ups, but only the [leader](#leader-election) runs the jobs: a follower's runs end `not_leader`, so its catch-ups go from `starting` to `idle` and it never answers `running`. Its header says `starting` for a few seconds, and a question it answers may end the web app's tracking early: the notice may be missing, never stuck. The Docker image runs one worker.
+The tracker belongs to its process, like the loop and the activity record. With several workers, each one runs its loop and announces its own catch-ups, and the jobs run in the worker whose run holds the [lock across processes](#cross-process-lock): the notice shows on that worker's answers only, as it did on the leader's. Another worker's catch-up stays `starting` while its run waits for that lock, then finds its jobs `not_due` and goes back to `idle` without ever answering `running`; a worker with no catch-up pending answers `idle`. A question that one of these workers answers may end the web app's tracking early: the notice may be missing, never stuck. Without `fcntl`, only the [leader](#leader-election-fallback) runs the jobs, and the other workers' runs end `not_leader` within seconds. The Docker image runs one worker.
 
 With the scheduler off there is no notice either. With `LIBREFOLIO_NO_SCHEDULER` the loop does not start, so the header is never registered and the web app never asks: the test runner's server and the gallery, both started without the scheduler, never show the notice. With the **Scheduler Enabled** setting off, the loop still announces its catch-ups, whose runs end `disabled` without a job: the answers say `starting` for a few seconds, and the notice never shows.
 
@@ -208,13 +210,35 @@ Tests: `./dev.py test services scheduler-price-refresh` (the tracker, the wiring
 
 ---
 
-## 👑 Leader Election (`leader.py`) {: #leader-election }
+## 🔐 Several Workers (`run_lock.py`, `leader.py`) {: #leader-election }
 
-To prevent multiple processes from running duplicate sync jobs when uvicorn runs several workers, only one process — the leader — executes the jobs. `am_i_leader()` decides at every run with `psutil`, without any lock file; it reads the process table, so `run_due_jobs()` calls it off the event loop (`asyncio.to_thread()`):
+With several uvicorn workers (`./dev.py server --workers N`), each worker is a process of its own, with its own loop, its own run lock and its own activity record. Two mechanisms keep their runs from doing the same jobs at once, and `cross_process_lock_available()` (`run_lock.py`) says which one applies: it is true where Python has `fcntl`.
+
+* **With `fcntl`** (Linux and macOS, so the Docker image too): a [lock across processes](#cross-process-lock). Any worker runs the jobs, one run at a time for the data directory.
+* **Without `fcntl`** (Windows): the [leader election](#leader-election-fallback). One worker, the leader, runs the jobs; the others answer `not_leader`.
+
+### 🗝️ The Lock Across Processes (`run_lock.py`) {: #cross-process-lock }
+
+`scheduler_run_lock()` (`backend/app/services/platform/scheduler/run_lock.py`), an async context manager, holds an exclusive `flock` on `.scheduler.lock`, at the root of the data directory next to `scheduler_state.json` (`run_lock_path()`). `_run_locked()` takes it after its [checks](#run-checks), and holds it while it loads the state, reads the time and runs the due jobs, each one saving the state after it.
+
+* **The wait.** Each attempt opens the file and tries the lock without blocking, in a thread (`asyncio.to_thread()`); while another process holds it, the run tries again every `POLL_SECONDS` (0.2 s). No thread stays blocked on the lock, and the wait can be cancelled — at shutdown, when the deadline cuts the `scheduler` step — without leaving the lock held: an attempt still running when the wait is cancelled releases the lock if it got it. The release, in a `finally`, runs in a thread too.
+* **Whoever comes second.** A run that waited for another worker's run reads the state that run saved, and the time after the wait: what that run just did is `not_due`, and only what is still due runs.
+* **Where the jobs run.** In any worker: the one whose loop ticks, the one that received `wake-sync`, or the one that served a user's return, which runs the catch-up at once (after the [clock settle](#run-lock)) instead of waiting for another worker's tick. A `wake-sync` that reaches a worker while another one runs the jobs waits for that run, then answers, its jobs `not_due`. Its `409` (`wake_in_progress`) stays per process: a second call that reaches another worker is not refused, it waits for the run in progress.
+* **The file.** Hidden and empty, created with mode `0600` and opened with `O_NOFOLLOW`: a symlink in its place is refused with an `OSError`, and nothing behind the link is created or locked. It is never deleted: a worker that opened the file before its removal and another that created it again after would hold two different locks, and two runs would overlap. Leave it in place, and never delete it while LibreFolio runs ([Data Directory on Disk](../architecture/database/index.md#data-directory)).
+* **A crash.** The kernel releases a `flock` when its process dies: a worker killed in the middle of a run leaves no stale lock. The next run, in any worker, goes ahead, and runs again a job whose state the dead worker did not save.
+* **An error.** A lock that cannot be taken (a symlink, a permission problem) raises like any other error outside the jobs: the loop logs it and goes on, and `wake-sync` answers `status: "error"` with the class name ([Inside a Run](#run-checks)).
+
+### 👑 Without `fcntl`: Leader Election (`leader.py`) {: #leader-election-fallback }
+
+Where Python has no `fcntl`, `_run_locked()` asks `am_i_leader()` instead, right after the `blocked` check, and only the leader runs the jobs; with `fcntl`, `am_i_leader()` is never called. It decides at every run with `psutil`, without any lock file; it reads the process table, so it runs off the event loop (`asyncio.to_thread()`):
 
 * Among the running, non-zombie children of the uvicorn master, the process with the **lowest PID** is the leader. If it dies, the next run promotes the new lowest PID.
 * Fast paths return `True`: no parent process (e.g. PID 1 in a container), a parent started with `--reload` (one logical worker), a single sibling, or any introspection error — safe because the jobs are idempotent.
-* Another worker answers `not_leader` and runs no job. Each worker has its own loop and its own activity record, so a return nudges only the worker that served the request: when that one is not the leader, the catch-up waits for the leader's next tick, within 60 seconds. Each worker also has its own catch-up tracker, so the web app may miss the notice: see [One Process, Several Workers](#price-refresh-workers). A lock shared between the processes is in the backlog (Z-11). The Docker image runs a single worker (its `CMD` starts `uvicorn` without `--workers`); `./dev.py server --workers N` starts several.
+* Another worker answers `not_leader` and runs no job. A return nudges only the worker that served the request: when that one is not the leader, the catch-up waits for the leader's next tick, within 60 seconds.
+
+### 🧩 Per Process, Either Way {: #workers-per-process }
+
+The catch-up tracker (`PRICE_REFRESH`, and its header `X-LibreFolio-Price-Refresh`), the activity record and the idle monitor stay per process. With several workers, the notice **Updating prices…** shows on the answers of the worker that runs the jobs, as it did on the leader's, and may be missing ([One Process, Several Workers](#price-refresh-workers)); each worker counts only its own requests for the [idle suspension](../../admin/sleep_wake.md#idle-suspend-timing). The Docker image runs a single worker (its `CMD` starts `uvicorn` without `--workers`), and so does a Fly.io machine that runs it; `./dev.py server --workers N` starts several.
 
 ---
 
