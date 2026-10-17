@@ -43,8 +43,8 @@
  *     `forgotFailureMessage` one per failure — one `…errors.unavailable` for both ways the instance cannot send, the
  *     minutes for a rate limit, `…errors.generic` for anything else, a 422 included, and the code of the hold lot E4b
  *     removed with its message (`FORGOT_PASSWORD_DISABLED`) too —; every key they produce, and the components' own, is
- *     in the four catalogues with exactly the placeholders the code fills (`{to}` for «sent», `{minutes}` for the rate
- *     limits).
+ *     in the four catalogues with exactly the placeholders the code fills (`{to}` and `{language}` for «sent»,
+ *     `{minutes}` for the rate limits).
  *
  * The translator is a recording fake that answers a marker of its own, so a case reads which key and which values
  * were asked for, never a sentence. The catalogue block reads the generated catalogues (`$lib/i18n/<lang>.json`,
@@ -475,9 +475,9 @@ describe('«send by email» and «forgot password» (lot E4a) — their words', 
         },
     );
 
-    it('ETX-14: the components’ own keys are in the four catalogues: «sent» names the {to} it fills, the others nothing', () => {
-        expectInEveryCatalogue('email.sendLink.sent', ['to']);
-        for (const key of ['button', 'sending', 'toLabel', 'toPlaceholder', 'resetTarget', 'publicUrlHint']) expectInEveryCatalogue(`email.sendLink.${key}`, []);
+    it('ETX-14: the components’ own keys are in the four catalogues: «sent» names the {to} and {language} it fills, the others nothing', () => {
+        expectInEveryCatalogue('email.sendLink.sent', ['language', 'to']);
+        for (const key of ['button', 'sending', 'toLabel', 'toPlaceholder', 'languageLabel', 'languageInstance', 'resetTarget', 'publicUrlHint']) expectInEveryCatalogue(`email.sendLink.${key}`, []);
         for (const key of ['label', 'submit', 'sending', 'accepted']) expectInEveryCatalogue(`email.forgot.${key}`, []);
     });
 });
