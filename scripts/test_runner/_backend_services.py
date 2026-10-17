@@ -418,6 +418,22 @@ def services_scheduled_investment_cost_bounds(verbose: bool = False, test_names:
     return run_command(cmd, "Scheduled investment cost bounds tests", verbose=verbose)
 
 
+def services_scheduled_investment_min_start(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-SI1: the Scheduled Investment history from "min"."""
+    print_section('Services: Scheduled Investment History From "min" (MF-SI1)')
+    print_info('Testing: scheduled_investment/plugin.py get_history_value(start_date="min"), explicit-start parity')
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_min_start.py", test_names)
+    return run_command(cmd, "Scheduled investment min start tests", verbose=verbose)
+
+
+def services_scheduled_investment_late_alignment(verbose: bool = False, test_names: list = None) -> bool:
+    """J's note on R13-SEC7-2: one late value per day, whoever reads it."""
+    print_section("Services: Scheduled Investment Late Alignment")
+    print_info("Testing: scheduled_investment/plugin.py COMPOUND late interest: current value = history close = settlement = closed form, by str")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_late_alignment.py", test_names)
+    return run_command(cmd, "Scheduled investment late alignment tests", verbose=verbose)
+
+
 def services_synthetic_yield_integration(verbose: bool = False, test_names: list = None) -> bool:
     """Test E2E synthetic yield integration scenarios."""
     print_section("Services: Synthetic Yield Integration E2E")
@@ -498,6 +514,26 @@ def services_account_tokens(verbose: bool = False, test_names: list = None) -> b
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_tokens.py", test_names)
     return run_command(cmd, "Account token service tests", verbose=verbose)
+
+
+def services_login_throttle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the limit on failed sign-ins (F15): per identifier and per address, its switch."""
+    print_section("Services: Login Throttle")
+    print_info("Testing: backend/app/services/accounts/login_throttle.py")
+    print_info("Tests: 10 failures per identifier and 50 per address in 15 minutes, a refusal not counted, a success forgets the identifier, LIBREFOLIO_LOGIN_LIMIT=off")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_login_throttle.py", test_names)
+    return run_command(cmd, "Login throttle service tests", verbose=verbose)
+
+
+def services_accounts_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the accounts' configuration check and its switch: LIBREFOLIO_LOGIN_LIMIT."""
+    print_section("Services: Accounts Configuration Checks")
+    print_info("Testing: backend/app/config/accounts.py (login_limit_enabled), backend/app/services/accounts/checks.py")
+    print_info("Tests: on/off/invalid, the check in CONFIG_CHECKS, the startup audit stopping on an invalid value")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_accounts_checks.py", test_names)
+    return run_command(cmd, "Accounts configuration check tests", verbose=verbose)
 
 
 def services_registration(verbose: bool = False, test_names: list = None) -> bool:
@@ -978,6 +1014,15 @@ def services_current_price_storable(verbose: bool = False, test_names: list = No
     print_info("Tests: an unstorable quote never served nor cached (database fallback) and logged once per value, a valid one served and cached as the database keeps it, a refresh's changed_points and current-value cache limited to what is stored, a fallback past an unreadable close")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_price_storable.py", test_names)
     return run_command(cmd, "Current price storable tests", verbose=verbose)
+
+
+def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R47: a SPLIT event's ratio checked when it is written, manual SPLITs of 0 or below refused, a provider's dropped; and R13-SEC7: the P-10 refusal shows only the caller's transactions."""
+    print_section("Services: Event Split Ratio")
+    print_info("Testing: backend/app/services/assets/event_store.py (bulk_upsert_events, _upsert_asset_events, _reject_split_retype_without_costs), backend/app/api/v1/assets/events.py")
+    print_info("Tests: a manual SPLIT of ratio 0 or below refused with EVENT_INVALID_SPLIT_RATIO (HTTP 400) in every way it is written, nothing written; a provider's dropped with one warning; valid ratios accepted; the P-10 refusal naming only the caller's transactions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_event_split_ratio.py", test_names)
+    return run_command(cmd, "Event split ratio tests", verbose=verbose)
 
 
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
@@ -1483,6 +1528,15 @@ def services_ai_export_pure(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "AI Export pure contract tests", verbose=verbose)
 
 
+def services_ai_export_period_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the AI Export period bound (R13-SEC7-1): the period a snapshot hands its components (no DB, no network)."""
+    print_section("Services: AI Export Period Bounds (R13-SEC7-1)")
+    print_info("Testing: backend/app/services/ai_export/runtime_service.py (prepare_request, build_snapshot)")
+    print_info("Tests: period end clamped to tomorrow, start to 100 years before it, extreme periods bounded fast")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_ai_export_period_bounds.py", test_names)
+    return run_command(cmd, "AI Export period bound tests", verbose=verbose)
+
+
 def services_provider_errors(verbose: bool = False, test_names: list = None) -> bool:
     """Run the provider error-path contracts (no DB, no server, no network)."""
     print_section("Services: Provider Error Paths")
@@ -1730,7 +1784,11 @@ Note: No backend server required.
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
-    add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in one pass, linear day counts, cache cap, horizon")
+    add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in closed form per date, bounded day counts, cache cap, horizon")
+    # Pure: no lane DB, no server, no network; each test deletes its own process-local _CACHE entry before and after.
+    add_test(cat, "scheduled-investment-min-start", services_scheduled_investment_min_start, name="Scheduled Investment Min Start", desc='MF-SI1: history from "min" = from the earliest value or manual event, as the explicit-start call', isolation="pure")
+    # Pure: the plugin's date_type is swapped in-process for one with-block; each test deletes its own _CACHE entry.
+    add_test(cat, "scheduled-investment-late-alignment", services_scheduled_investment_late_alignment, name="Scheduled Investment Late Alignment", desc="COMPOUND late interest: current value = history close = settlement = closed form, by str", isolation="pure")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(
         cat,
@@ -1756,6 +1814,25 @@ Note: No backend server required.
         desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs; the pages of token_path are the API client's LINK_PAGES (A7b)",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The concurrency test races two connections on that private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "login-throttle",
+        services_login_throttle,
+        name="Login Throttle",
+        desc="F15 (A8a): 10 failed sign-ins per identifier (A–Z folded) and 50 per address (IPv6 by /64) in 15 minutes; a refusal is not counted, a success forgets the identifier only, the longer wait wins; LIBREFOLIO_LOGIN_LIMIT=off records and refuses nothing",
+        # PURE: module limiters replaced by fresh ones on an injected clock; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "accounts-checks",
+        services_accounts_checks,
+        name="Accounts Configuration Checks",
+        desc="LIBREFOLIO_LOGIN_LIMIT (A8a): unset/on/off, any other value a ValueError; accounts.login_limit ok/warning/error in CONFIG_CHECKS; the startup audit stops on an invalid value before logging anything",
+        # PURE: environment through monkeypatch, the audit's logger recorded; three fresh interpreters check the import
+        # order, as email-checks does. No DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -2153,6 +2230,20 @@ Note: No backend server required.
         # log-once keys are the test's own; the cache's set is patched for one test only (monkeypatch).
         # Nothing here counts or reads a row it did not write.
     )
+    add_test(
+        cat,
+        "event-split-ratio",
+        services_event_split_ratio,
+        name="Event Split Ratio",
+        desc="X-R47: a manual SPLIT whose ratio is not valid (0, -2, -0.000001) refused with EVENT_INVALID_SPLIT_RATIO before anything of the request is written -- new (upsert or create), upserted on the key of a stored SPLIT, edited by id, or turned into a SPLIT by an edit -- its details naming the item and every offending event (event_index, date, type), HTTP 400 with each ratio as sent; a provider's SPLIT with an invalid ratio dropped by _upsert_asset_events (a stored SPLIT on its key kept), the other events written, one warning naming it and the asset; valid ratios (2, 0.5, 1.5, 0.000001) accepted manual in every way or from a provider, other event types of 0 and a SPLIT edited into a DIVIDEND of 0 accepted. R13-SEC7: given the caller (current_user_id, which POST /assets/events passes), the P-10 refusal EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST lists only the costless adjustments on a broker the caller holds an access to and counts the others in hidden_transactions_count, the message unchanged, nothing written; X-R47b: without a caller it names none and counts them all (fail closed). The split predicate financial_math.splits.is_split_event_type (rule d of the layer boundaries): the member and text reading SPLIT in any case, blanks around ignored, are a split; anything else, None and non-text included, is not, and it never raises",
+        # WRITE-SCOPED, the category default, as asset-digit-limits: every row is this unit's own -- two assets
+        # created under a unique name, the first assigned to a provider code of the unit's own that no provider has,
+        # two users and two brokers under the same marker with one access each, and only the events of those assets
+        # and the transactions on those brokers, written, read and wiped by asset and broker id; the log capture is the
+        # test's own (structlog's testing capture, proved live by a barrier event); the route runs in process on an app
+        # of the call's own, get_current_user overridden there and never on the shared app. Nothing here counts or
+        # reads a row it did not write.
+    )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, one replay from the first movement")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
@@ -2491,6 +2582,14 @@ Note: No backend server required.
         services_ai_export_pure,
         name="AI Export Pure Contracts",
         desc="Payload/aggregate invariants, observed FX math, shared technical helpers",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "ai-export-period-bounds",
+        services_ai_export_period_bounds,
+        name="AI Export Period Bounds",
+        desc="R13-SEC7-1: the period a snapshot hands its components ends at tomorrow at the latest and spans 100 years at most (mocked session, test-owned registry)",
         isolation="pure",
     )
     add_test(

@@ -89,6 +89,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import BrokerBreakdown, PortfolioSummary
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.services.portfolio_service import PortfolioService
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 from backend.test_scripts.test_utils import print_section, print_success
 
 EUR = "EUR"
@@ -417,6 +418,15 @@ async def _summary(session: AsyncSession, scenario: _Scenario) -> PortfolioSumma
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the foreign-cash-revalued scenario lives in 2046, after tomorrow, so the range bound is lifted for the
+    whole module, before any fixture builds data (see ``lift_range_bound``)."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")

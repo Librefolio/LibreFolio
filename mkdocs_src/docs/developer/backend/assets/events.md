@@ -142,8 +142,14 @@ The data editor saves its Events tab this way, in one request: the rows marked d
 In both modes, an event in a currency other than the asset's is refused
 (`EVENT_CURRENCY_MISMATCH`), and so is a value with more than 12 digits before the decimal
 point, 6 decimal places or 15 significant digits, or one that is not finite, which is never
-rounded (`EVENT_TOO_MANY_DIGITS`, C-97; the digits before the point since W-B58). Each result
-carries `event_ids`: the id of the event each point of
+rounded (`EVENT_TOO_MANY_DIGITS`, C-97; the digits before the point since W-B58). So is a
+`SPLIT` whose ratio, its value, is not a number above 0 (`EVENT_INVALID_SPLIT_RATIO`, X-R47),
+however it is written: added, matched on its date and type, or edited by `id`, including an edit
+that turns another type into a `SPLIT`. Until X-R47 such a split was stored, and as soon as a
+transaction linked it the portfolio engine raised (`financial_math/portfolio/engine.py`): the
+Dashboard report answered 500.
+
+Each result carries `event_ids`: the id of the event each point of
 the item wrote, in request order. An edit keeps its id, an event matched on its date and type gets
 the id of the row it updated, and an added event the id of its new row. `deleted_ids` lists the
 ids of `delete_ids`, all deleted, in request order; `success_count` also counts an item that only
@@ -151,10 +157,14 @@ deletes.
 
 A provider's event never meets these refusals: `_upsert_asset_events()`, which a sync calls,
 first drops every event whose value `asset_events.value` cannot hold — not finite, or past 12
-digits before the decimal point (`_storable_events()`, `integer_digits_issue()`) — then writes
-the others (W-B58: a value past a double's range, stored as a REAL inf, broke every response of
+digits before the decimal point (`_storable_events()`, `integer_digits_issue()`) — and, among the
+others, every `SPLIT` whose ratio is not above 0 (`is_valid_split_ratio()`, X-R47), then writes
+the rest (W-B58: a value past a double's range, stored as a REAL inf, broke every response of
 the asset's events, for every user). A dropped event is only logged, as a warning: the sync
-result does not report it, and its `events_fetched` still counts it.
+result does not report it, and its `events_fetched` still counts it. A call logs at most one
+warning per reason, *Events skipped: no event value can keep them* for the values and *Splits
+skipped: a split's ratio must be a number above 0* for the splits, each with `asset_id`, `count`
+and the first five dropped (`events`).
 
 Every refusal below stops the whole request:
 
@@ -172,6 +182,7 @@ Every refusal below stops the whole request:
 | An id of `delete_ids` whose event a transaction is linked to | HTTP 409 `EVENT_IN_USE`; `params.events`: one `{id, date, type, linked_transactions}` per such event, ordered by date, type and id. Counts only, no transaction id: the transactions may belong to other users |
 | An event in a currency other than the asset's | HTTP 400 `EVENT_CURRENCY_MISMATCH`; `params`: `expected` (the asset's currency) and `events`, one `{event_index, date, type, currency}` per such event of the item |
 | An event whose value has more than 12 digits before the decimal point, more than 6 decimal places or more than 15 significant digits, trailing zeros not counted, or is not finite (`_reject_too_many_digits()`, the limits of `asset_events.value`) | HTTP 400 `EVENT_TOO_MANY_DIGITS`; `params`: `max_integer_digits` (12), `max_decimal_places` (6), `max_significant_digits` (15) and `events`, one `{event_index, date, type}` per such event of the item |
+| A `SPLIT` whose ratio, its value, is not a number above 0: new, matched on its date and type, or edited by `id`, another type the edit turns into a `SPLIT` included (`_reject_invalid_split_ratios()`; the rule is `is_valid_split_ratio()` of `financial_math/splits.py`, the portfolio engine's own) | HTTP 400 `EVENT_INVALID_SPLIT_RATIO`; `params.events`: one `{event_index, date, type, ratio}` per such split of the item, in request order, `type` always `SPLIT` and `ratio` the value sent, as a string. A value that is not finite or has too many digits is refused first, with `EVENT_TOO_MANY_DIGITS` |
 | An `id` that is unknown, belongs to another asset, or names a provider event | HTTP 400 `EVENT_NOT_EDITABLE`; `params.ids`: those ids |
 | An edit that changes its date or type (a *mover*) landing on a key another edit of the item ends on, or on a key held by a manual row the item does not edit | HTTP 400 `EVENT_KEY_CONFLICT`; `params`: the `date` and `type` of the key |
 | An event without `id` on a key an edit of the item ends on | HTTP 400 `EVENT_KEY_CONFLICT`; `params`: `date` and `type` |

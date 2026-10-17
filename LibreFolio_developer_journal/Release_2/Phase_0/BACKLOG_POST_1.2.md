@@ -470,6 +470,11 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   developer, 16/10. Un solo lotto di documentazione del coordinatore, quando i lotti cloud di H, A, B, E e Z sono entrati.
   Struttura, regola provvisoria per i figli e requisiti (link vecchi funzionanti, controllo delle variabili,
   `.env.example` diviso): piano generale della 1.3, §6, «Manuale admin: la struttura finale».
+- **C-100 · Regola di review: un campo di sicurezza nuovo dichiara il suo valore managed** — minimo, regola; E e
+  coordinatore, 17/10 (revisione di H-37, R13-SEC7). Un campo `Settings` di sicurezza nuovo dichiara il suo valore in
+  `PROFILE_DEFAULTS["managed"]` nello stesso lotto, e chi rivede lo controlla; il test (a) di `MANAGED_DEFAULTS` non lo
+  vede se lista e test cambiano insieme. La riga gemella sta in `backend.instructions.md` (H-39), che aggiunge anche
+  l'avviso quando la protezione dei frame è spenta in managed.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -3703,6 +3708,22 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `docker_advanced`.
 
   Dettagli: piano H, §14, lotto «H-36».
+- **H-39 · Il profilo managed senza protezione dai frame non si vede** — basso, sicurezza; E (review di H-37, decisione
+  su `PROFILE_DEFAULTS`), via coordinatore, 17/10.
+  - Una voce managed persa in `PROFILE_DEFAULTS`, o un pannello che spegne `LIBREFOLIO_FRAME_PROTECTION`, riporta
+    in silenzio al default del codice. E non vuole una chiusura a runtime, ma un controllo che si veda.
+  - Cosa serve:
+    - un controllo `platform.frame_protection`: spento in managed è un warning, all'avvio e nella scheda Sicurezza;
+    - `platform.csp_report_only`: spento in managed è un info;
+    - il self-hosted è sempre ok.
+    - Le aspettative di managed stanno scritte nel controllo, non lette dalla tabella.
+  - In più, una regola di review: un campo `Settings` di sicurezza nuovo dichiara il suo valore managed nello stesso
+    lotto.
+  - Stato al 17/10: la regola è scritta in `.github/instructions/backend.instructions.md`, e la riga accanto a C-99 la
+    scrive il coordinatore. I due controlli, i test e le chiavi i18n aspettano l'ingresso di B-9, che scrive negli
+    stessi file (`config_audit.py`, `test_config_audit.py`). La cura in prova è pronta in `files/h39/` della sessione H.
+
+  Dettagli: piano H, §14, lotto «Z-24» (la nota di H-39).
 
 ## A · Account e accessi (fase 01)
 
@@ -4031,7 +4052,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     setup già consegnato al vecchio indirizzo resta buono; lo stesso per `user set-email` sull'account in attesa.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
     contratto».
-- **A-34 · `end_sessions` incrementa la copia in memoria: due incrementi concorrenti ne contano uno** — basso;
+- ✅ **A-34 · `end_sessions` incrementa la copia in memoria: due incrementi concorrenti ne contano uno** — basso;
+  chiusa il 17/10 in A8a (commit del coordinatore): `await end_sessions(session, user)`, un `UPDATE … RETURNING` Core
+  sulla connessione della sessione più `set_committed_value`; due richieste → +2 (`services session-version`).
   dalla revisione di E («R13-SEC»), tramite il coordinatore (16/10). Valutata in A7b-2 e lasciata: non costa poco
   (`test_session_version.py` ne fissa la forma sincrona, contratto 5; 9 chiamate da rendere asincrone). Con A8.
   - `user_service.end_sessions` fa `user.session_version += 1` sull'oggetto: due richieste quasi simultanee
@@ -4049,6 +4072,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     propria (`_NoInputEchoRoute` in `api/v1/plugin_settings.py`).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
     contratto».
+- **A-36 · Il Profilo nasconde la password attuale che il server chiede** — basso (UX, nessun aggiramento); dalla
+  revisione di E di A-25 («R13-SEC3»), tramite il coordinatore (17/10, 04:54). Dopo A7b-2.
+  - `ProfileTab` decide se l'indirizzo cambia sul testo grezzo (`sameEmail` di `features/auth/emailCase.ts`: solo
+    A–Z ripiegate); il server confronta il valore già normalizzato da `EmailStr` (spazi, NFC, IDNA) con quello salvato
+    (`user_service.same_email`). Dove divergono — spazi, una forma NFD, un dominio internazionale, un indirizzo salvato
+    prima della normalizzazione — il server risponde 400 `CURRENT_PASSWORD_REQUIRED` mentre il campo resta nascosto:
+    un vicolo cieco. Direzione: il client chiede la password anche quando il 400 arriva (mostrare il campo su quel
+    codice), oppure confronta come il server.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-25».
 - **A-37 · Togliere `NoInputEchoRoute` dopo l'ingresso di B4 e di A7b-2** — minimo; dal coordinatore (17/10).
   B4 sposta la `route_class` delle impostazioni dei plugin in `backend/app/api/no_echo.py` (`NoInputEchoRoute`, con
   `test_no_echo_route.py`); il gestore globale di A-35 (`api/validation_errors.py`) la rende un doppione. Quando sono
@@ -4056,6 +4088,49 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   aggiornare `developer/architecture/patterns/plugin_settings.md` (riga sulla classe). Il test di
   `test_plugin_settings_api.py` resta: passa dal server vero. Dettagli: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Decisioni del coordinatore».
+- **A-39 · `admin/configuration`: l'avviso del link scaduto e quello del cambio d'indirizzo** — minimo (doc, con
+  traduzioni); dal `docs-writer` di A7b-2, tramite il coordinatore (17/10). La pagina dice che ogni avvio senza un link
+  vivo scrive l'avviso di scadenza; dopo A-33 l'avvio che applica un indirizzo nuovo scrive invece «The initial
+  administrator's address changed: the setup link handed over before no longer works; …», e quelli dopo l'avviso di
+  scadenza. Una frase, e la stessa nelle tre traduzioni. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2.2».
+- **A-40 · `user activate` sull'admin in attesa avvisa del limite di utenti anche se il suo posto è già contato** —
+  minimo; dal `docs-writer` di A7b-2, tramite il coordinatore (17/10); preesistente. A istanza piena il CLI scrive
+  l'avviso del limite (che supera), ma l'admin in attesa era già contato fra i posti (D-A10): l'attivazione non ne
+  occupa uno nuovo. Cura possibile: nel CLI, nessun avviso quando l'account era in attesa. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2.2».
+- **A-41 · Un limite per indirizzo sui token sbagliati (inspect, setup, reset, invito)** — basso; proposto in A8 (C2) e
+  tenuto fuori dal coordinatore (17/10): i token sono lunghi (256 bit) e casuali, la forza bruta non è praticabile, e un
+  limite per indirizzo rischia di bloccare utenti dietro lo stesso NAT. Da riprendere solo se compare un motivo nuovo
+  (per esempio token più corti). Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+  «A8 — Analisi e contratto».
+- **A-38 · Il 422 toglie solo `input`: `msg` e `ctx` portano parti del valore dove un validatore lo formatta** — basso;
+  dalla revisione di E di A7b-2 («R13-SEC4»), tramite il coordinatore (17/10).
+  - Esempi: `schemas/common.py:98` (valuta), `schemas/settings.py:434-459` (orari, giorni, fuso, valuta), `uuid_parsing`.
+    Nessuno tocca una credenziale oggi (verificato in A7b-2: `ctx.error` esce vuoto, il valore passa da `msg`).
+  - In parte già coperto: `test_validation_errors_api.py` vuole il segnale assente da **tutta** la risposta sulle otto
+    rotte con credenziali, ma solo per le forme d'errore che esercita. Cura: una regola in `security.md#validation-errors`
+    («un validatore non mette il valore nel messaggio») e, se serve, un test che la imponga per ogni campo segreto.
+- **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; dalla revisione di E di A7b-2 («R13-SEC4»).
+  `issue_setup_link` e il riarmo all'avvio decidono «in attesa» da una lettura fatta prima del BEGIN differito: un
+  `POST /auth/setup` chiuso in quella finestra lascia un link vivo all'account appena attivato. Cura proposta da E: rifiutare
+  il consumo (e il rilascio) quando un altro link di setup dell'account è già consumato.
+- **A-43 · La disattivazione non tocca i link di setup (con A-44: annullare l'admin iniziale)** — basso; dalla revisione
+  di E di A7b-2 («R13-SEC4»); A-44 unita qui dal coordinatore (17/10, 03:09). Dopo A8a.
+  - Disattivare l'admin **in attesa** è l'annullamento: i suoi link si **revocano** (non si ritirano: resta in attesa,
+    così `user setup-link`, la via dell'operatore, gli dà ancora un link nuovo; un ritiro lo toglierebbe dall'attesa e
+    `setup-link` non lo troverebbe più).
+  - Disattivare un account **non** in attesa **ritira** i link di setup che avesse (i database delle build precedenti
+    della 1.3, con link vivi su account già attivati).
+  - Cambiano per costruzione: UADM-062 e UADM-067 (`{is_active: false}` sull'admin in attesa: resta in attesa, ma il
+    link non vale più), le varianti di UADM-069 e SETUP-016 che lo disattivano.
+- ✅ **A-44 · L'admin iniziale che non ha mai fatto il setup non si può annullare** — unita ad **A-43** dal coordinatore
+  (17/10, 03:09): disattivarlo è l'annullamento. Dettagli delle voci di E: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Revisione di E».
+- **A-45 · `developer/api/index.md`: `/auth` «token refresh» non esiste** — minimo (doc, solo inglese); dal
+  `docs-writer` di A8a (17/10). La riga del router dice «Authentication (login, token refresh)»: non c'è nessun
+  refresh, il cookie dura `session_ttl_hours` (`security.md` «Token Expiration»). Lasciata fuori da A8a perché
+  estranea. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A8a.6».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -4530,12 +4605,20 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Cura: mostrare il `detail` del 400 e gli `errors` del 200 (per data), contarli a parte. Prove: Vitest e
     `front-fx fx-editor`. Poi la frase della pagina utente (`user/fx/detail/data-editor.en.md`) può dire «con un messaggio
     che nomina la data».
-- **X-R47 · Il rapporto di uno SPLIT non è mai validato** — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
+- ✅ **X-R47 · Il rapporto di uno SPLIT non è mai validato** (consegnata il 17/10, 06:00; committata `5f68a8db0`; l'ingresso aspetta la cura della regola (d) e X-R47b, stesso lotto; gli SPLIT già salvati sono MF-D4) — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
   V-4 di CP-14a, F4, girato dal coordinatore).
   - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
     il report della Dashboard risponde 500.
   - Cura: validare il rapporto alla scrittura dell'evento. Al via, verificare col coordinatore chi possiede i file degli
     eventi (consegnati a W dopo CP2b).
+  - Rosso della regola (d) dei confini dello strato (J, 17/10 06:20): `event_store.py` nominava `AssetEventType.SPLIT`.
+    Cura: il predicato `financial_math.splits.is_split_event_type` (file di J, J rivede).
+- ✅ **X-R47b · Senza chiamante il rifiuto di P-10 mostrava tutti gli id** (consegnata il 17/10, 06:54; SHA all'ingresso) — piccolo, sicurezza (LOW); X, 17/10 (E,
+  revisione di `5f68a8db0`, girato dal coordinatore). Nello stesso lotto della cura della regola (d).
+  - Cura: la rotta passa `_current_user.id`; senza chiamante nessun id, solo `hidden_transactions_count`. I test P-10 di
+    J (file di W) rispondono a un utente che vede le transazioni: J e W rivedono. Nello stesso lotto, la nota LOW di W:
+    il rapporto nel messaggio d'errore scritto nella lingua dell'interfaccia (`formatExactDecimal`). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+    sezione «X-R47b».
 - **X-R48 · `market-data/wipe` cancella gli SPLIT collegati a rettifiche senza costo** — **prima del rilascio, dopo
   l'ingresso di CP-14a di J**; X, 17/10 (J, F1, girato dal coordinatore).
   - `POST /assets/{id}/market-data/wipe` (il flusso del cambio di valuta, ma si può chiamare anche da solo) scollega ogni
@@ -4591,6 +4674,30 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     - `target_currency` col cambio di ogni giorno;
     - MF scrive il backend (moduli nuovi, rotte e schemi aggiunti nei miei file) e io lo rivedo; il frontend è mio, dopo
       l'ingresso di MF.
+  - Contratto di MF (05:50, backend al checkpoint):
+    - `POST /api/v1/assets/prices/period-changes` prende `[{asset_id, as_of, target_currency?}]` e restituisce per
+      voce `{asset_id, as_of, currency, periods[{key, days, change_ratio}], errors[]}`;
+    - `POST /api/v1/fx/currencies/period-changes` prende `[{base, quote, as_of}]` (422 se base = quote) e restituisce
+      `periods[{…, inverse_change_ratio}]`;
+    - i periodi arrivano in ordine (1D … 5Y); i valori sono frazioni, da moltiplicare per 100; null = non disponibile.
+  - Da fare nel lotto frontend:
+    - `isPortfolioAffectingMutation()` (`lib/stores/portfolio/portfolioMutation.ts:102-107`) deve escludere
+      `/period-changes`, altrimenti ogni chiamata segna come vecchie le viste del portafoglio. Aggiornare anche la riga
+      di `developer/frontend/state/domain-state.md`. Di chi è il file, da verificare all'avvio;
+    - via le due copie di `computePeriodDelta`. Calcolavano il giorno di riferimento in ora locale del browser e, a cavallo
+      dell'ora legale, sbagliavano di un giorno. Il backend conta giorni di calendario esatti: alcuni riferimenti
+      cambiano, e va una riga 🐛 nel CHANGELOG;
+    - altre differenze: 1D c'è anche con un intervallo di un giorno; una serie nativa con valute miste, o una
+      conversione fallita, dà null più un errore; un prezzo ≤ 0 dà null.
+- **X-R55 · Intervalli senza tetto: una data estrema blocca l'istanza** — sicurezza, disponibilità; **passata a Z** (il
+  coordinatore, 17/10 06:38: Z è libera; X rivede al checkpoint di Z, perché i file sono di X); X, 17/10 (J, lo stesso
+  vettore di R13-SEC7-1; girato dal coordinatore). E rivede.
+  - `services/assets/price_query.py` `_build_backward_filled_series`: un punto per giorno su qualunque intervallo chiesto
+    (API dei prezzi degli asset, ambiti degli asset del rischio, segnali).
+  - `api/v1/fx/currencies.py` (~427 e ~471): il ciclo di `convert` sull'intervallo della richiesta.
+  - Una richiesta con `end` 9999-12-30 o `start` 0001-01-01 blocca l'istanza.
+  - Direzione, come J: la fine limitata a oggi + 1 (margine per i fusi orari); l'inizio limitato al primo dato o a un
+    arco di 100 anni. Prima i rossi con date moderate, poi le date estreme come guardie con un limite di tempo.
 
 ## W · Import e transazioni (fase 01)
 
@@ -5643,6 +5750,13 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - Due gambe collegate dello stesso giorno, fra broker con quote di proprietà diverse, non producono nessun avviso
     (`share_mismatch_warnings`, `schemas/portfolio.py:239`).
   - Cura: l'avviso esce dal ramo delle date diverse e resta una volta per coppia. Prima il rosso.
+  - **Analisi di J (17/10, 05:55): l'avviso non esce mai dal classificatore, in nessuna data.** `engine.py:246` non
+    legge `classification.warnings`; `build_data_quality_report(classifier_warnings=…)` non ha chiamanti che lo
+    passino; `DataQualityReport.share_mismatch_warnings` (e `in_transit_cost_basis_warnings`) non li riempie nessuno,
+    da `77b976ebc` (giugno). Il modello è voluto (D-MF4 = a: lo scarto fra quote diverse è P&L), quindi l'avviso è
+    l'unica spiegazione per l'utente. **J-43a** (come scritta) subito; **J-43b** (portarlo nel rapporto, issue INFO
+    `TRANSFER_SHARE_MISMATCH` in 4 lingue, o togliere i campi morti) aspetta il via del coordinatore. Dettagli:
+    [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-43».
 - **J-44 · Il Δ% del tooltip del grafico dà 0 % quando il primo valore è 0** — minimo, numeri; J, 17/10, letto nel
   codice durante CP-14b. `components/charts/priceChartHelpers.ts::buildDeltaHtml` calcola il Δ% dal primo valore del
   grafico e, per scelta scritta nel suo JSDoc, dà 0 % su un primo valore 0. È lo stesso numero sbagliato che la
@@ -5650,6 +5764,15 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Da instradare: il file ha storia dei colori (lotto B) e di X (helper della pagina asset). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «CP-14b».
   - 17/10, coordinatore: **a J**, dopo F5, riusando `changePct` di `MeasureSignal.ts` (stessa regola di N65); X rivede in sola lettura, nessuna classe di colore toccata.
+- **J-45 (SEC7-1b) · Il rigioco del motore del portafoglio gira sul ciclo degli eventi** — medio, sicurezza
+  (disponibilità); J, 17/10, nell'analisi di R13-SEC7-1. `PortfolioCalculationEngine.calculate` chiama
+  `builder.build()` (`engine.py:424`), lavoro di CPU sincrono, dentro una funzione `async`: un rapporto lungo ferma
+  tutte le richieste dell'istanza per la sua durata. SEC7-1 toglie le date senza limite, non questo. Portarlo in
+  `asyncio.to_thread` non è gratis: il costruttore legge oggetti ORM (`Transaction`) i cui attributi pigri potrebbero
+  toccare la sessione asincrona da un altro thread; serve prima staccare i dati (valori semplici) dalla sessione.
+  Decisione del coordinatore (17/10): nell'indice, non in SEC7-1. **→ MF** (coordinatore, 17/10 07:00: `run_in_executor` con un
+  pool dedicato, `max_workers=2`, insieme a MF-D4 dopo l'ingresso di J-43/SEC7-1; J rivede). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «R13-SEC7-1».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -5838,7 +5961,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   `scheduler/run_lock.py`. Un modulo comune li unirebbe; tocca file di più sessioni (fra cui B per il backup).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra
   processi: analisi».
-- **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — minimo, facoltativo; Z, 17/10
+- ✅ **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — **chiusa il 17/10 da H** (dev `36a487e84`): `managed_paths` di `validate_test_data_dir()` + test di symlink e hardlink. Era: minimo, facoltativo; Z, 17/10
   (Z-11, segnalato da test-author). `validate_test_data_dir` (`backend/app/config/__init__.py`, file di H) elenca i
   percorsi gestiti che una cartella di test non può condividere con la produzione: c'è `scheduler_state.json`, non
   il nuovo `.scheduler.lock`. Rischio basso: un symlink al suo posto è già rifiutato (`O_NOFOLLOW`), e un hardlink al
@@ -6200,6 +6323,11 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   rivedere). L'azione manda l'invito sempre nella lingua predefinita dell'istanza; `POST /email/links` accetterebbe
   `language`, ma la 1.3 non mostra un selettore. Da aggiungere se serve invitare chi parla un'altra lingua.
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E4.1».
+  - 17/10, E: analisi fatta; il coordinatore ha deciso con la decisione notturna **N69**: il default resta la lingua
+    dell'istanza, il selettore cambia solo la lingua dell'email, e l'esito mostra la lingua usata. Il codice va dopo
+    A8b, insieme all'allineamento del percorso «Settings › Email» all'etichetta del gruppo di A8b (coordinatore, 17/10:
+    26 punti tra i18n, docs, `EmailSettingsTab.svelte` e devWiki, elencati nel piano). Dettagli: piano 08, «E-8.0»,
+    «E-8.1» e la nota «Il percorso Settings › Email dopo A8b».
 - ✅ **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
   sicurezza finale, nota sotto la soglia). `strip().casefold()` fa di `victim+1@…` e `victim+2@…` caselle diverse:
   con la registrazione aperta si può puntare il budget orario dell'istanza su una casella sola, e ogni email porta lo
@@ -6587,3 +6715,8 @@ punto di partenza, l'audit dello stesso giorno:
   (`start_date < min(cached.keys())`) e filtra gli eventi con `start_date` invece di `effective_start`: solleva
   `CALCULATION_ERROR`, su HEAD come dopo SEC7-2. La via del refresh può passare `"min"`. Cura: `effective_start` in quei
   due punti, rossi prima. Dettagli: piano MF, sezione «R13-SEC7-2».
+- **MF-SI2 · Scheduled Investment: un tetto agli `asset_events` e un limite per utente alla sonda** — basso,
+  sicurezza sotto soglia; E, 17/10 (revisione di R13-SEC7-2). Gli eventi manuali di un piano non hanno un numero
+  massimo (costo lineare, solo il corpo della richiesta li limita), e `POST /assets/provider/probe` non ha un limite
+  per utente. Proposta: un tetto agli eventi (p. es. 10 000) nello schema, e il limite della sonda dove vivono gli altri
+  limiti delle richieste. Dettagli: piano MF, sezione «SEC7-2 entrato; MF-SI1».
