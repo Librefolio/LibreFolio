@@ -22,6 +22,7 @@ from backend.app.config.platform import configured_jwt_secret, configured_jwt_se
 from backend.app.logging_config import get_logger
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
 from backend.app.services.platform.client_address import PUBLIC_FORWARDING_SUMMARY, UNTRUSTED_PROXY_SUMMARY, untrusted_forwarding_seen
+from backend.app.services.platform.instance_backup.checks import BACKUP_CONFIG_CHECKS
 from backend.app.services.platform.instance_key import InstanceKeyError, instance_key_status
 
 logger = get_logger(__name__)
@@ -162,6 +163,8 @@ CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (
     check_session_cookie,
     check_client_address,
     check_log_level,
+    # Workstream B: the hosting panel's backup token and the restore's upload limit (instance_backup/checks.py, B-9)
+    *BACKUP_CONFIG_CHECKS,
     # Workstream E: the SMTP configuration and its encryption (services/email/checks.py)
     *EMAIL_CONFIG_CHECKS,
 )

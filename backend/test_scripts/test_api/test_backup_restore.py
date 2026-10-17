@@ -44,20 +44,20 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
     binary and required, the four operations carry the ``Backup & Export`` tag and document their answers.
 (e) ``backup_max_upload_mb()``: unset or blank, 0 self-hosted and 500 managed; a whole number of ASCII digits, spaces
     around allowed, wins over the profile; anything else raises ``BackupConfigError`` ``BACKUP_MAX_UPLOAD_MB_INVALID``,
-    naming the variable. The managed value is the entry of H's profile table, read at each call (a guard of lot B4,
-    green from the start for an entry written there; the entry removed raises, never gives 0: H-37, below). An entry of
-    that table of another type than the code's default (``"500"``, ``None``, ``500.0``, ``True``), on which H's
-    ``profile_default`` raises ``ProfileDefaultError`` (H-27), is a limit that cannot be read, as a variable that cannot
-    be (B-21, RED until the routes catch it; until then each answers a plain 500): the upload 503
-    ``backup_upload_unavailable``, nothing written; ``GET /backup/restore/status`` (lot B3's route) 200 with
-    ``upload_limit_mb`` null; each with one error logged, the line of a limit that cannot be read, naming the variable.
-    A missing managed entry is the same: H's ``profile_default`` raises ``ProfileDefaultError`` for a variable a profile
-    other than ``selfhosted`` does not list (H-37; E, R13-SEC7), so the upload is 503 and the status null, never no
-    limit (RED until H's cure: until then the entry removed gives the code's own 0, no limit at all, a fail-open).
-(f) Found while writing the second round, RED until the product changes, each with the fix it suggests: an upload whose
-    file cannot be created (a folder that cannot be written) is a plain 500 without a code, not ``backup_upload_failed``;
-    a drop follows a link in place of ``.restore`` or ``checks/`` and removes the state of a check in the link's target;
-    a check removed by another request while a poll probes its lock reads as still running instead of not found.
+    naming the variable. The managed value is the entry of H's profile table, read at each call (a guard of lot B4, which
+    H-37 extended: the entry removed raises, never gives 0, below). An entry of that table of another type than the
+    code's default (``"500"``, ``None``, ``500.0``, ``True``), on which H's ``profile_default`` raises
+    ``ProfileDefaultError`` (H-27), is a limit that cannot be read, as a variable that cannot be (B-21: the routes catch
+    H's error as they catch ``BackupConfigError``, never a plain 500): the upload 503 ``backup_upload_unavailable``,
+    nothing written; ``GET /backup/restore/status`` (lot B3's route) 200 with ``upload_limit_mb`` null; each with one
+    error logged, the line of a limit that cannot be read, naming the variable. A missing managed entry is the same: H's
+    ``profile_default`` raises ``ProfileDefaultError`` for a variable a profile other than ``selfhosted`` does not list
+    (H-37; E, R13-SEC7: fail closed, where the code's own 0 would be no limit at all), so the upload is 503 and the
+    status null, never no limit.
+(f) Found while writing the second round, each fixed since; what each pins now: an upload whose file cannot be created
+    (a folder that cannot be written) is 500 ``backup_upload_failed``, as the same failure a byte later; a drop through a
+    link in place of ``.restore`` or ``checks/`` removes and changes nothing in the link's target (behind a link a check
+    is not found); a check removed by another request while a poll probes its lock is not found, never still running.
 (g) The ledger's control totals (lot B-13): a done check's report carries ``control_totals`` (``same`` for a backup as
     recorded; ``changed`` with its differences, each with its six fields, and the warning ``control_totals_changed``;
     ``absent`` and ``other_version`` without a warning; ``unreadable`` with ``control_totals_unreadable``),
@@ -1402,8 +1402,8 @@ def test_the_variable_and_the_managed_default_are_the_documented_ones():
 
 
 def test_the_managed_limit_is_the_entry_of_the_profile_table_read_at_each_call(monkeypatch):
-    """(e) A GUARD of lot B4 (the note of H-17), green from the start for the entry written, with H-37 now part of it:
-    the entry removed is RED until H's ``profile_default`` fails closed (E, R13-SEC7). The managed limit is whatever
+    """(e) A GUARD of lot B4 (the note of H-17), extended by H-37 (E, R13-SEC7): H's ``profile_default`` fails closed on
+    the entry removed. The managed limit is whatever
     H's ``ENVIRONMENT_PROFILE_DEFAULTS["managed"]`` holds for the variable, read through ``profile_default`` at each
     call. With the managed profile and ``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`` unset, 123 written in the table's entry is the
     limit, and the entry removed raises H's ``ProfileDefaultError``, never gives the code's own fallback 0, which is no
@@ -1471,10 +1471,10 @@ def limit_errors(events: list[dict]) -> list[tuple[object, bool]]:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("value", WRONG_TABLE_LIMITS)
 async def test_a_wrong_entry_in_the_profile_table_is_503_and_nothing_is_written(instance, monkeypatch, value):
-    """(e) B-21, RED until ``_upload_limit`` catches H's error: a limit that cannot be read, so the upload is refused as
-    for a variable that cannot be read, never taken without a limit: 503 ``backup_upload_unavailable``, nothing written,
-    one error logged, the same line, naming the variable. Until then H's ``ProfileDefaultError`` escapes the route: a
-    plain 500."""
+    """(e) B-21: ``_upload_limit`` catches H's ``ProfileDefaultError`` (an entry of another type, H-27, or none, H-37) as
+    it catches ``BackupConfigError``: a limit that cannot be read, so the upload is refused as for a variable that cannot
+    be read, never taken without a limit: 503 ``backup_upload_unavailable``, nothing written, one error logged, the same
+    line, naming the variable; never the plain 500 of an error escaping the route."""
     wrong_table_entry(monkeypatch, value)
     with capture_logs() as events:
         response = await upload(b"an archive")
@@ -1487,9 +1487,9 @@ async def test_a_wrong_entry_in_the_profile_table_is_503_and_nothing_is_written(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("value", WRONG_TABLE_LIMITS)
 async def test_a_wrong_entry_in_the_profile_table_leaves_the_status_answering_with_a_null_limit(instance, monkeypatch, value):
-    """(e) B-21, RED until ``_readable_limit_mb`` catches H's error: ``GET /backup/restore/status`` still answers, 200,
-    ``upload_limit_mb`` null, as for a variable that cannot be read; one error logged, the same line, naming the variable.
-    Until then H's ``ProfileDefaultError`` escapes the route: a plain 500."""
+    """(e) B-21: ``_readable_limit_mb`` catches H's ``ProfileDefaultError`` as it catches ``BackupConfigError``:
+    ``GET /backup/restore/status`` still answers, 200, ``upload_limit_mb`` null, as for a variable that cannot be read;
+    one error logged, the same line, naming the variable; never the plain 500 of an error escaping the route."""
     wrong_table_entry(monkeypatch, value)
     with capture_logs() as events:
         response = await call("GET", STATUS)
@@ -1536,7 +1536,7 @@ def test_anything_but_ascii_digits_is_refused_naming_the_variable(monkeypatch, v
 
 
 # =============================================================================
-# (f) Found while writing the second round: RED until the product changes
+# (f) Found while writing the second round, each fixed since
 # =============================================================================
 
 
@@ -1544,14 +1544,12 @@ def test_anything_but_ascii_digits_is_refused_naming_the_variable(monkeypatch, v
 @pytest.mark.asyncio
 @pytest.mark.parametrize("read_only", [".restore", "upload"])
 async def test_an_upload_whose_file_cannot_be_created_is_500_backup_upload_failed(instance, read_only):
-    """(f) RED on the product of the second round. A folder of the restore the server cannot write in (owned by another
+    """(f) Found in the second round, fixed since. A folder of the restore the server cannot write in (owned by another
     user, a read-only mount: here really, mode 0500): the upload's file cannot be created, and the ``OSError`` comes from
-    the creation of the ``UploadWriter``, before ``_receive``. ``upload_restore_archive`` maps only ``BackupPathError``
-    and the limit's and space's errors there, so the answer is a plain 500 without a code, unlike the same failure a
-    byte later (``backup_upload_failed``).
-
-    Suggested fix: in ``upload_restore_archive``, map an ``OSError`` raised while the writer is created through
-    ``_upload_failure`` as well (and one that is a lack of space, ``_out_of_space``, to 507 ``backup_no_space``)."""
+    the creation of the ``UploadWriter``, before ``_receive``. ``upload_restore_archive`` maps it through
+    ``_upload_failure``, as the same failure a byte later: 500 ``backup_upload_failed``, nothing written, which this test
+    pins. Before the fix it mapped only ``BackupPathError`` and the limit's and space's errors there, and the answer was
+    a plain 500 without a code."""
     root = instance.root
     folder = ensure_private_dir(RESTORE_FOLDERS[read_only](root), root)
     folder.chmod(0o500)
@@ -1567,15 +1565,13 @@ async def test_an_upload_whose_file_cannot_be_created_is_500_backup_upload_faile
 @pytest.mark.asyncio
 @pytest.mark.parametrize("linked", [".restore", "checks"])
 async def test_a_drop_never_removes_through_a_link(instance, head_archive, tmp_path, linked):
-    """(f) RED on the product of the second round. ``prune`` and ``remove_stage`` leave alone a restore folder that is a
-    link; a drop does not. ``DELETE /stage/{id}`` reads the check through the link (``_read_state`` opens
+    """(f) Found in the second round, fixed since. ``prune`` and ``remove_stage`` leave alone a restore folder that is a
+    link; a drop did not: ``DELETE /stage/{id}`` read the check through the link (``_read_state`` opens
     ``.restore/checks/<id>.json`` with ``O_NOFOLLOW``, which guards the last part of the path only), then ``_remove``
-    unlinks its state there, and its upload through ``upload/`` likewise; only its copy is spared, by ``remove_stage``.
-    A poll of a check left running would write its interrupted end through the link as well.
-
-    Suggested fix: read and write the state of a check, and remove its state and its upload, only while ``.restore`` and
-    the folder concerned (``checks/``, ``upload/``) are plain folders (``is_plain_dir``, as ``_checks`` does): behind a
-    link a check is not found, 404."""
+    unlinked its state there, and its upload through ``upload/`` likewise; a poll of a check left running wrote its
+    interrupted end through the link as well. The fix: the state of a check is read, written and removed only while
+    ``.restore`` and the folder concerned are plain folders (``_plain_folders``): behind a link a check is not found,
+    and a drop removes and changes nothing in the link's target, which this test pins."""
     root = instance.root
     done = await ended(head_archive.path.read_bytes())
     elsewhere = tmp_path / "elsewhere"
@@ -1589,12 +1585,12 @@ async def test_a_drop_never_removes_through_a_link(instance, head_archive, tmp_p
 
 @pytest.mark.asyncio
 async def test_a_check_dropped_while_a_poll_probes_its_lock_is_not_found(instance, head_archive, monkeypatch):
-    """(f) RED on the product of the second round, minor. ``read_check`` reads a running state, probes the lock and finds
+    """(f) Found in the second round, minor, fixed since. ``read_check`` reads a running state, probes the lock and finds
     it free, reads again: if the check was dropped in between (by another request: it ended, then the user discarded
-    it), the second read finds nothing, and ``read_check`` returns the first state, still running. The poll answers that
-    a check which no longer exists runs; a drop in that window answers 409 ``restore_stage_running`` for it.
-
-    Suggested fix: in ``read_check``, a second read that finds nothing raises ``CheckNotFoundError`` (404)."""
+    it), the second read finds nothing. ``read_check`` used to return the first state, still running: the poll answered
+    that a check which no longer exists runs, and a drop in that window answered 409 ``restore_stage_running`` for it.
+    The fix: that second read raises ``CheckNotFoundError``, and the poll answers 404 ``restore_stage_not_found``, which
+    this test pins."""
     instance.threads.hold = True
     stage_id = (await started(head_archive.path.read_bytes()))["stage_id"]
     probe = restore_jobs._a_check_runs
@@ -1622,7 +1618,7 @@ TOTALS_DIFFERENCE_FIELDS = {"kind", "broker_id", "currency", "asset_id", "before
 def totals_of(report: dict) -> tuple[str, list[dict], int]:
     """What a done check's report says of the ledger's totals: the status, the differences, how many in all."""
     missing = [field for field in cases.TOTALS_FIELDS if field not in report]
-    assert not missing, f"the report has no {', '.join(missing)}: lot B-13 is not written yet: {sorted(report)}"
+    assert not missing, f"the report has no {', '.join(missing)}, the totals' fields of lot B-13: {sorted(report)}"
     return report["control_totals"], report["control_totals_differences"], report["control_totals_differences_count"]
 
 
@@ -1679,7 +1675,7 @@ async def test_a_check_whose_report_was_written_before_the_totals_answers_them_a
     state = await ended(head_archive.path.read_bytes())
     path = stage_dir(instance.root, state["stage_id"]) / STAGE_REPORT_FILE
     written = json.loads(path.read_text(encoding="utf-8"))
-    assert set(cases.TOTALS_FIELDS) <= set(written), f"precondition: report.json has the totals' fields: lot B-13 is not written yet: {sorted(written)}"
+    assert set(cases.TOTALS_FIELDS) <= set(written), f"precondition: report.json has the totals' fields of lot B-13: {sorted(written)}"
     path.write_text(json.dumps({key: value for key, value in written.items() if key not in cases.TOTALS_FIELDS}, indent=2) + "\n", encoding="utf-8")
     response = await poll(state["stage_id"])
     report = response.json()["report"]

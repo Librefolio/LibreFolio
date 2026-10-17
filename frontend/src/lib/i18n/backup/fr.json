@@ -224,6 +224,21 @@
         "submit": "Vérifier la sauvegarde",
         "cancel": "Annuler"
       }
+    },
+    "checks": {
+      "panelToken": {
+        "ok": "Le jeton de sauvegarde du panneau de l'hébergeur est défini et utilisable.",
+        "off": "Aucun jeton de sauvegarde n'est défini pour un panneau d'hébergeur : les routes de sauvegarde du panneau sont désactivées.",
+        "notVisibleAscii": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN contient des caractères qu'un en-tête de requête ne transporte pas tels quels (espaces, tabulations ou caractères hors de l'ASCII visible) : les routes de sauvegarde du panneau répondent 503 tant qu'il n'est pas corrigé.",
+        "tooShort": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN est trop court : utilisez au moins {minimum} caractères aléatoires. Les routes de sauvegarde du panneau répondent 503 tant qu'il n'est pas corrigé.",
+        "unreadable": "Le jeton de sauvegarde du panneau ne peut pas être lu : {reason}"
+      },
+      "uploadLimit": {
+        "limited": "Une restauration accepte des archives jusqu'à {limit_mb} Mo.",
+        "unlimited": "Une restauration accepte des archives de toute taille.",
+        "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB est inutilisable (un nombre entier de mégaoctets, 0 pour aucune limite) : les téléversements pour une restauration sont refusés tant qu'il n'est pas corrigé.",
+        "profileTable": "Les valeurs par défaut du profil de LibreFolio ne donnent aucune valeur à la limite de téléversement, ou une valeur du mauvais type, donc les téléversements pour une restauration sont refusés : définissez LIBREFOLIO_BACKUP_MAX_UPLOAD_MB à un nombre entier de mégaoctets et signalez l'erreur."
+      }
     }
   }
 }

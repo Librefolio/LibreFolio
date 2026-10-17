@@ -70,8 +70,10 @@ MAX_UPLOAD_VARIABLE = "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"
 def backup_max_upload_mb() -> int:
     """``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB``: the largest archive a restore accepts, in megabytes; ``0`` is no limit.
 
-    Unset or blank: the active profile's value (``profile_default``: 500 in the managed profile), else ``0``, the
-    self-hosted default. Anything but a whole number of ASCII digits raises ``BackupConfigError``.
+    Unset or blank: ``0`` in the ``selfhosted`` profile, the self-hosted default; in any other profile, the profile's
+    value (``profile_default``: 500 in the managed profile), and a profile that gives it none, or one of another type,
+    raises ``ProfileDefaultError`` (H-37, H-27) rather than give the self-hosted ``0``, which is no limit. Anything but
+    a whole number of ASCII digits raises ``BackupConfigError``.
     """
     raw = os.environ.get(MAX_UPLOAD_VARIABLE, "").strip()
     if not raw:
