@@ -5041,3 +5041,48 @@ non sposti il registro.
 >   - (b) niente username case-insensitive finché `ix_users_username` è BINARY: «Bob» e «bob» convivono;
 >   - (c) i test, in entrambi gli ordini di registrazione;
 >   - (d) facoltativo, per H: il conteggio delle collisioni legacy nel controllo di sicurezza.
+
+> **La revisione di N70 a posteriori** (07:2x, sola lettura). I commit: A `b0d3d2d4f` (`rate_window.py`), `c11a98e18`
+> (`auth.py` e `login_throttle.py`) e `5225f4f05` (docs); H-36 `36cc0119d`. Sono entrati in dev con `440616c61`.
+> **Nessun reperto sopra la soglia.**
+> - **Il codice è sano.**
+>   - `_evict_one` non sfratta mai la chiave nuova e termina sempre: oltre `max_keys` chiavi ce n'è sempre un'altra.
+>   - Giudica «piena» sui colpi vivi e sul `limit` del costruttore. L'unico limitatore con un limite per chiamata è
+>     `INSTANCE_BUDGET`, che ha una chiave sola e non sfratta mai.
+>   - Le tre rotte di `auth.py` e le tre di E passano `rate_limit_address`; con `None`, `login_throttle` conta solo
+>     l'identificativo.
+>   - Il rilevamento di H-36 tiene: peer locale, header di inoltro, e né `LIBREFOLIO_CLIENT_IP_HEADER` né uvicorn
+>     hanno dato l'indirizzo. Tiene anche il controllo `platform.client_address`, che riporta solo i nomi degli header.
+> - **K resta 32.** Misurato con la classe vera (`files/e9/n70_evict_cost.py`, in memoria, orologio finto; log in
+>   `files/logs/n70_evict_cost.log`), con limite 10, finestra 900 s e `max_keys` 10 000:
+>
+> | Scenario | Richieste per sfrattare un identificativo bloccato |
+> |---|---|
+> | LRU semplice | 10 000 |
+> | N70, K=32, spruzzo ingenuo | mai (fermato a 60 000) |
+> | N70, K=32, mirato (31 chiavi piene, poi lo spruzzo) | 10 279 |
+> | N70, K=128, mirato | 11 143 |
+>
+>   Il costo è circa `max_keys` + 10·(K−1), quindi K non è la leva. Il lock nel caso peggiore (ogni chiave piena), per
+>   chiave nuova: 39 µs con K=32, 98 µs con K=128, 7 ms senza tetto.
+> - **La leva vera** (LOW, sotto la soglia) è un indice O(1) delle chiavi non piene: si sfratta la meno usata tra le
+>   aperte, e una piena solo se non ce n'è nessuna aperta.
+>   - Il prototipo è nella cartella di sessione (`files/e9/n70_open_index.py`, mai nel repo). Lo sfratto mirato costa
+>     100 000 richieste (10×); lo spruzzo ingenuo non sfratta mai; il lock nel caso peggiore scende a 9,9 µs. In
+>     memoria costa un `OrderedDict` in più, circa 1 MB a 10 000 chiavi.
+>   - Nel cloud i limiti per indirizzo sono attivi (`Fly-Client-IP`: 50 ogni 15 minuti per /64). Oggi un /56, cioè 256
+>     /64, basta per circa uno sfratto ogni 15 minuti, e raddoppia i tentativi su un identificativo. Con l'indice ne
+>     servirebbero circa 2 000.
+>   - Dietro un proxy locale non fidato (limiti per indirizzo saltati, H-36 avvisa), a R richieste al secondo: oggi
+>     circa 84·R tentativi in più al giorno, con l'indice circa 8·R.
+>   - La proposta è **E-14** nel backlog: piccola, circa 30 righe nel mio file più i test RWL. Dopo la 1.3, o nella
+>     1.3 se il developer la vuole.
+> - **Docs da precisare.** `developer/backend/email.md:1352-1354` è una pagina mia, la frase è di A: confronta «about
+>   310 failures» con «about 100,000». Ma i 310 si aggiungono ai circa 10 000 dello spruzzo, che serve a ogni sfratto.
+>   `security.md:436-437` («about 310 failures more») è giusta se «more» vuol dire «oltre lo spruzzo». Le correggo nel
+>   prossimo lotto (E-14 o E-8); `security.md` con l'ok di A.
+> - **Nota per H**, che non viene da N70: `connection_checks.en.md:328-329` dice «Docker Engine on Linux keeps the
+>   visitor's address». Vale per IPv4 (DNAT). Per quel che so, un visitatore IPv6 che raggiunge un container senza
+>   IPv6 passa da `docker-proxy` e arriva dal gateway della rete, senza header di inoltro. N70 non lo vede, e tutti i
+>   visitatori IPv6 condividono un conteggio per indirizzo: il DoS di R13-SEC6, solo per IPv6 e solo con l'esposizione
+>   diretta, senza reverse proxy. La proposta è una frase nei docs, da verificare su un host Linux.
