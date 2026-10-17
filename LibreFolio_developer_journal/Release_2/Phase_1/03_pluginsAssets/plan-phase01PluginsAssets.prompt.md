@@ -6019,3 +6019,44 @@ alla conferma e mostra `currencyChange.failed: <messaggio del server>` in ingles
   aperto e un test che non esiste più (di J). `mkdocs build` stretto ✅, `check-links` ✅.
 - **Consegna** (09:46, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti
   `fix(assets): wipe refuses splits with costless adjustments` e `docs(journal): X-R48, X-R60`.
+
+### X-R44 — un fornitore di test (`mockprov`, `MOCKFX`) servito anche fuori dalla modalità di test ✅ (2026-10-17, 09:45–10:30; consegnato)
+
+**Base**: `2ea54ff76` (X-R48 entrato), albero pulito.
+
+**Stato verificato**: `test_only` (dal mixin delle impostazioni) nasconde `mockprov` e `MOCKFX` solo dagli elenchi
+(`api/v1/assets/providers.py:64`, `api/v1/fx/providers.py:81`, la ricerca senza `providers`, `search.py:29`). Ogni altra
+strada lo serve: la ricerca che lo nomina, l'assegnazione (`FAProviderConfigBase` controlla solo che il codice esista:
+`get_provider_instance`), il probe, il refresh, il prezzo corrente, i metadati, il catalogo delle impostazioni; e per i
+cambi `MOCKFX` come fonte di una coppia (i tassi sono globali). La modalità di test è `config.is_test_mode()`
+(`LIBREFOLIO_TEST_MODE`), letta alla chiamata; ogni corsa di pytest del runner la accende (`_executor`, `_common`,
+`_consolidate_backend`), e anche il server di test.
+
+**Disegno**: un punto solo, nel registro (`provider_registry.py`, le basi): fuori dalla modalità di test un plugin
+`test_only` non esiste — `get_plugin` dà `None` (quindi anche `get_plugin_instance`/`get_provider_instance`),
+`list_plugin_codes` e `list_providers` non lo elencano. Tutte le strade si chiudono insieme, per asset e cambi, come
+un codice sconosciuto (l'assegnazione: 422 «Unknown provider code»; il refresh di un asset già assegnato: il fornitore
+non c'è, nessuna cancellazione). Le famiglie senza `test_only` (BRIM, segnali, rischio, strumenti) non cambiano. È il
+primo pezzo del punto unico di F05 (`is_allowed`), che resta bloccato sull'helper di H.
+- **Rossi** (test-author, 09:47–10:02): file nuovo `test_test_only_providers.py` (507 righe, 29 voci, PURE; registrato
+  `services test-only-providers`). Produzione simulata in processo (`monkeypatch.context()` con `LIBREFOLIO_TEST_MODE=0`
+  in un blocco, dopo la scoperta in modalità di test) e il passo delle impostazioni (`configure_instance`) sostituito da
+  un registratore, così niente DB. In più della mia lista: `MOCKFX_FAIL`, la versione FX di `configured_provider`, e un
+  registro usa-e-getta sulla base (`AbstractPluginRegistry`). **Rossi confermati** (10:03): 9 falliti su 29, 20 guardie
+  verdi.
+- **Codice** (10:04): `xr44_code.py`, 6 sostituzioni in 3 file (`provider_registry.py`: `_withheld`, `get_plugin`,
+  `list_plugin_codes`, `list_providers`; le docstring di `test_only` in `contract.py` e `assets/base.py`).
+- **Verdi** (10:04–10:11): `test-only-providers` 29, `provider-registry`, `provider-registry-misc`,
+  `plugin-settings-{service,contract,runtime}`, `utils gate-plugin-layout`, `gate-plugin-i18n-ownership`,
+  `asset-source`, `fx-sync-service`, `brim-provider-base`, `signal-registry`.
+- Nel frattempo, dalla revisione di J su X-R48: **X-R48b** (la modale non avvisa prima della conferma), basso, nel
+  backlog.
+- **Slot 9** (10:11–10:18, cancello a 5 minuti): `api assets-provider` 24, `api fx-sync` 10; porta 6183 libera.
+- **CHANGELOG**: una riga sotto `#### 🔒 Security` (i doppi di test erano raggiungibili anche nelle istanze 1.2).
+- **Documentazione** (docs-writer, 10:19–10:27): `plugin_settings.md` (la sezione «Test-Only Plugins» riscritta: mai
+  elencato; fuori dalla modalità di test non servito; in modalità di test come prima; più il punto di «Configure»),
+  `asset_plugin_guide.md` e `fx_plugin_guide.md` (la riga di `test_only`), `registry_pattern.md` (una frase), e
+  `backend/assets/system_providers.md` (diceva che `mockprov` si registra solo in modalità di test: falso prima e
+  impreciso ora; corretto). Solo inglese. `mkdocs build` stretto ✅, `check-links` ✅.
+- **Consegna** (10:30, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti
+  `fix(plugins): no test-only provider outside test mode` e `docs(journal): X-R44, X-R48b`.

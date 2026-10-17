@@ -1067,6 +1067,15 @@ def services_current_price_storable(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Current price storable tests", verbose=verbose)
 
 
+def services_test_only_providers(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R44: outside test mode a test-only provider (mockprov, MOCKFX) is not served by its registry."""
+    print_section("Services: Test-Only Providers")
+    print_info("Testing: backend/app/services/provider_registry.py (get_plugin, list_plugin_codes, list_providers), assets/core.configured_provider, fx/runtime, schemas/provider.py")
+    print_info("Tests: outside test mode mockprov/MOCKFX found by no lookup or list and refused as an unknown provider; in test mode, and for real providers or families without the flag, nothing changes")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_test_only_providers.py", test_names)
+    return run_command(cmd, "Test-only provider tests", verbose=verbose)
+
+
 def services_market_data_wipe_split_guard(verbose: bool = False, test_names: list = None) -> bool:
     """Run X-R48: the market-data wipe refuses while a SPLIT of the asset has incoming adjustments without a purchase cost."""
     print_section("Services: Market Data Wipe Split Guard")
@@ -2328,6 +2337,15 @@ Note: No backend server required.
         # wiped by asset id. The provider codes are unique per test, so the current-value cache entries and the
         # log-once keys are the test's own; the cache's set is patched for one test only (monkeypatch).
         # Nothing here counts or reads a row it did not write.
+    )
+    add_test(
+        cat,
+        "test-only-providers",
+        services_test_only_providers,
+        name="Test-Only Providers",
+        desc="X-R44: outside test mode (LIBREFOLIO_TEST_MODE off, simulated in process) a plugin flagged test_only — mockprov, MOCKFX, MOCKFX_FAIL — is found by no registry lookup or list, configured by no runtime, and an assignment or probe naming it is refused as an unknown provider; in test mode, for real providers (yfinance, justetf, ECB) and for a family without the flag (signals) nothing changes",
+        # PURE: nothing is written; production is simulated with monkeypatch inside a block, and the settings step
+        # (configure_instance) is replaced by a recorder, so no database, server or network is touched.
     )
     add_test(
         cat,
