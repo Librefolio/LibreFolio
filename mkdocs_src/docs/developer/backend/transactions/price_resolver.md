@@ -66,7 +66,9 @@ Only the portfolio engine (`financial_math/portfolio/engine.py`) passes it, and 
 which `POST /api/v1/portfolio/report` requests through `include_pnl_candles`. The Growth chart asks
 for it lazily — when the user switches to the P&L **Candles** submode and no candles are loaded yet —
 on the Dashboard and on a broker page (see the
-[Portfolio Growth Chart](../../../user/dashboard/charts.md#portfolio-growth-chart)).
+[Portfolio Growth Chart](../../../user/dashboard/charts.md#portfolio-growth-chart)); a failed
+request is asked again at most three times, 2, 4 and 8 s later
+([Lazy sections after a failure](../../frontend/state/domain-state.md#lazy-report-retry)).
 The engine builds the map from the `price_history` rows it already loads, with no extra query, and
 composes one synthetic P&L candle per day:
 

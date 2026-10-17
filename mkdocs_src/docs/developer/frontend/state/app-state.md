@@ -585,12 +585,12 @@ the call where the user's request arrives:
 
 | Trigger | Examples |
 |:--------|:---------|
-| The first load, in `onMount` | `dashboard-first-load` (`routes/(app)/dashboard/+page.svelte:835`), `broker-first-load` (`routes/(app)/brokers/[id]/+page.svelte:279`), `asset-first-load` (`routes/(app)/assets/[id]/+page.svelte:1145`) |
-| The Refresh handler | `handleSync()` → `dashboard-refresh` (`dashboard/+page.svelte:714`), `handleRefresh()` → `broker-refresh` (`brokers/[id]/+page.svelte:434`). On an asset's page the token sits on the button's `onrefresh`, `asset-refresh` (`assets/[id]/+page.svelte:2316`), because `handleRefresh()` also runs after a sync |
-| A change of period, currency, scope, filter or tab | `createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()))` (`dashboard/+page.svelte:175`), `dashboard-scope` after the broker filter's debounce (`dashboard/+page.svelte:709`), `broker-period` in `handleDateChange()` (`brokers/[id]/+page.svelte:431`); on an asset's page `asset-period`, `asset-currency`, and the chart's view and calendar window, `asset-mode` and `asset-calendar-window` (`assets/[id]/+page.svelte:1806`, `:1217`, `:393`, `:421`) |
+| The first load, in `onMount` | `dashboard-first-load` (`routes/(app)/dashboard/+page.svelte:858`), `broker-first-load` (`routes/(app)/brokers/[id]/+page.svelte:299`), `asset-first-load` (`routes/(app)/assets/[id]/+page.svelte:1145`) |
+| The Refresh handler | `handleSync()` → `dashboard-refresh` (`dashboard/+page.svelte:734`), `handleRefresh()` → `broker-refresh` (`brokers/[id]/+page.svelte:468`). On an asset's page the token sits on the button's `onrefresh`, `asset-refresh` (`assets/[id]/+page.svelte:2316`), because `handleRefresh()` also runs after a sync |
+| A change of period, currency, scope, filter or tab | `createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()))` (`dashboard/+page.svelte:176`), `dashboard-scope` after the broker filter's debounce (`dashboard/+page.svelte:729`), `broker-period` in `handleDateChange()` (`brokers/[id]/+page.svelte:465`); on an asset's page `asset-period`, `asset-currency`, and the chart's view and calendar window, `asset-mode` and `asset-calendar-window` (`assets/[id]/+page.svelte:1806`, `:1217`, `:393`, `:421`) |
 | A reload after a save in a window | `assets-reload` after a create, an edit or a merge on the Assets list (`routes/(app)/assets/+page.svelte:967`, `:1968`, `:1984`); `asset-reload` after an edit, a new FX pair or the data editor's save on an asset's page (`assets/[id]/+page.svelte:2795`, `:1785`, `:2679`): the page rebuilds what the user just changed |
 | A panel that opens, changes its inputs, or follows the page's Refresh | `lib/features/brokers/lots/LotsAnalysisPanel.svelte:362-390` (`lots-panel-load`, `lots-selection-load`, and `lots-*-refresh` on `refreshVersion`); `lib/features/risk/riskPanelController.svelte.ts` (`risk-load` in `applyBaseSignature()`, l.594; `risk-refresh` on `refreshVersion`, l.658); on the Assets list's Correlation tab, `AssetSetRiskPanel.reload()` (`lib/features/risk/AssetSetRiskPanel.svelte:224`) hands each section a new `refreshVersion`, so «Reload All» waits for their `risk-refresh` |
-| A load that completes what the page is doing: `join` | The lazy loads a panel asks by itself: `dashboard-pnl-candles`, `dashboard-contribution` (`dashboard/+page.svelte:1043`, `:1060`); `broker-pnl-candles`, `broker-contribution` (`brokers/[id]/+page.svelte:675`, `:704`). The Δ over the range on an asset's or an FX pair's page (X-R59), from an `$effect`: `asset-detail-range-delta` (`assets/[id]/+page.svelte:545`), `fx-detail-range-delta` (`routes/(app)/fx/[pair]/+page.svelte:327`) |
+| A load that completes what the page is doing: `join` | The lazy loads a panel asks by itself: `dashboard-pnl-candles`, `dashboard-contribution` (`dashboard/+page.svelte:1066`, `:1083`); `broker-pnl-candles`, `broker-contribution` (`brokers/[id]/+page.svelte:712`, `:741`). The Δ over the range on an asset's or an FX pair's page (X-R59), from an `$effect`: `asset-detail-range-delta` (`assets/[id]/+page.svelte:545`), `fx-detail-range-delta` (`routes/(app)/fx/[pair]/+page.svelte:327`) |
 
 Inside an `$effect`, read the inputs tracked and start the load untracked, as the lots panel does:
 
@@ -610,13 +610,13 @@ $effect(() => {
 - per-card and per-row refreshes, and the small background reads;
 - a background reload. On `{kind: 'prices'}` from the portfolio bus (the end of a price catch-up,
   Z-13), `reloadAfterPriceCatchUp()` calls `loadAll()` or `loadOverview()` without a token
-  (`dashboard/+page.svelte:732`, `brokers/[id]/+page.svelte:449`), and the risk controller's own sync,
+  (`dashboard/+page.svelte:755`, `brokers/[id]/+page.svelte:486`), and the risk controller's own sync,
   `handleSynced()` (l.612), reloads without a token too. See
   [How a page uses the cache](domain-state.md#how-a-page-uses-the-cache).
 - the reload after a sync on an asset's page: `handlePageSyncComplete()` and
   `handleFxPairCreationSynced()` call `handleRefresh()` without a token
   (`assets/[id]/+page.svelte:1752`, `:1780`). A sync can still make the button wait for a panel: the
-  Dashboard's banner syncs bump `refreshVersion` (`dashboard/+page.svelte:389`, `:465`) and the asset
+  Dashboard's banner syncs bump `refreshVersion` (`dashboard/+page.svelte:396`, `:472`) and the asset
   page's `handleRefresh()` bumps `riskRefreshVersion`, so an open lots panel or Risk tab reloads under
   its own token.
 
@@ -624,7 +624,11 @@ $effect(() => {
 positions panel, and a panel left on that view asks for them again at once. After the user's period,
 currency, scope or Refresh the page is busy, so that load takes a token of its own and the button
 waits for it too; after a background reload the page is idle, the load runs without a token, and the
-button stays still. The Δ over the range on an asset's or an FX pair's page (X-R59) joins too:
+button stays still. A retry after a failed load (Y-24,
+[Lazy sections after a failure](domain-state.md#lazy-report-retry)) calls the same `join` when it
+falls due, seconds after the failure, on a page normally idle by then: it takes no token, and the
+button does not spin for a request the user did not ask for (P3). The Δ over the range on an asset's
+or an FX pair's page (X-R59) joins too:
 `handleRefresh()` asks it again, and also runs after a sync without a token (above), so with `join`
 the Δ waits under the user's Refresh, a change of period and, on an asset's page, a change of asset or
 the first load, and runs without a token after a sync, where a `track` would spin the button (P3). One
@@ -662,8 +666,8 @@ icon. Trimmed from the Dashboard's:
 
 | Page | Test id | Where |
 |:-----|:--------|:------|
-| Dashboard | `sync-button` | `routes/(app)/dashboard/+page.svelte:1000` |
-| Broker detail | `broker-refresh` | `routes/(app)/brokers/[id]/+page.svelte:624` |
+| Dashboard | `sync-button` | `routes/(app)/dashboard/+page.svelte:1023` |
+| Broker detail | `broker-refresh` | `routes/(app)/brokers/[id]/+page.svelte:661` |
 | Brokers list | `brokers-refresh` | `routes/(app)/brokers/+page.svelte:384` |
 | Transactions | `tx-refresh-button` | `routes/(app)/transactions/+page.svelte:768` |
 | Files | `files-refresh-button` | `routes/(app)/files/+page.svelte:783` |
