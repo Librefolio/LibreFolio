@@ -14,12 +14,13 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     warning; a ``DEBUG`` or ``TRACE`` log level info. Every other state of these checks is ok; (f) and (g) give the
     states of the client address check and of the two managed switches.
 (b) A check never puts a secret in its result: recognisable values for ``JWT_SECRET``, the instance key and the content
-    of the secret files appear in no field of any result, in no log record and in no startup error.
+    of the secret files appear in no field of any result, in no log record and in no startup error, with the test mode
+    check of (h) speaking beside them too (H-46).
 (c) A check changes nothing: ``run_config_checks`` evaluates every check in the order of ``CONFIG_CHECKS``, leaves the
     environment as it was and generates no key file. ``CONFIG_CHECKS`` is the platform's checks (the two of (g) right
-    after the client address check), then workstream B's ``BACKUP_CONFIG_CHECKS``, then workstream A's
-    ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it; it holds no check without an id here (a new check comes
-    with its tests), and each result carries the id of its check.
+    after the client address check, the test mode check of (h) last), then workstream B's ``BACKUP_CONFIG_CHECKS``, then
+    workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it; it holds no check without an id here (a new
+    check comes with its tests), and each result carries the id of its check.
 (d) ``log_configuration_audit``: a ``JWT_SECRET_FILE`` that cannot be read stops the start (``SecretFileError``), and so
     does a configured instance key that cannot be used (``InstanceKeyError``), since the admin asked for that source and
     the server must not start without it; nothing is logged first, and a blank ``NAME`` beside the file hides nothing. A
@@ -64,12 +65,29 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     entry of the table, no file. Both run right after ``check_client_address``, frame protection first, then the
     report-only policy, before ``check_log_level``. At startup, in ``managed`` with both switches off, the warning then
     the info are logged, in that order, and the start goes on; self-hosted with both off, its default, logs neither.
+(h) Test mode outside a test lane (H-46). A test lane always owns ``LIBREFOLIO_TEST_LANE_ID``
+    (``scripts/cli_base.configure_test_runtime``) and ``dev.py server`` turns test mode off, but the Docker image starts
+    uvicorn itself: a ``LIBREFOLIO_TEST_MODE`` left on in a container's environment serves the test-only providers, keeps
+    the data in the test data directory and stops ``.env`` from being read. ``check_test_mode`` (``platform.test_mode``)
+    gives the same result in every profile. Test mode off, as ``is_test_mode()`` reads it (unset, ``0``, ``on``, `` 1``
+    included), is ok, ``instance.checks.testMode.off``, whatever the lane id holds; on with a lane id that is not blank,
+    ok, ``instance.checks.testMode.testLane``; on with the lane id unset, empty or blank, an error,
+    ``instance.checks.testMode.outsideTestLane``, whose detail ``data_dir`` is the test data directory (``get_data_dir()``)
+    and whose summary is ``TEST_MODE_OUTSIDE_LANE_SUMMARY`` filled with it. An ok state has no detail and no summary. The
+    check runs last of the platform's, right after ``check_log_level``. At startup, in ``managed``, its error stops the
+    start (``ManagedTestModeError``, a ``RuntimeError``, its message word for word) right after the short-key stop of
+    (e), which stays first: before the block's warning, nothing logged first. Self-hosted, the profile unset included, it
+    is logged as an error and the start goes on. ``_configure`` puts every test-mode configuration in this file's own
+    lane, ``FAKE_LANE_ID``, and production in none, so no case depends on the runner's environment.
 
 Pure: the data directory is in ``tmp_path``, every variable the checks read is set or removed through ``monkeypatch``
 (environment values win over a ``.env``), the forwarding notes of (f) are emptied the same way, and the module's logger
 is replaced by a recorder. No database, no server, no network, nothing written in the repository. A key file that cannot
 be reached is set up in a production data directory in ``tmp_path`` (``LIBREFOLIO_TEST_MODE=0``): in test mode the guard
-of test roots stops on it first, by a rule of its own.
+of test roots stops on it first, by a rule of its own. The names H-46 adds to the module (``check_test_mode``,
+``ManagedTestModeError``, ``TEST_MODE_OUTSIDE_LANE_SUMMARY``) are read by name, with ``getattr``, in the tests that need
+them (``_h46``), as ``test_managed_headers.py`` reads H-42's ``PAGE_POLICY``: before H-46 those tests fail naming it,
+while every other test still collects and runs.
 """
 
 from __future__ import annotations
@@ -80,10 +98,12 @@ import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from backend.app.config import PROFILE_DEFAULTS, SECRET_FILE_MAX_BYTES, SecretFileError, get_settings
+from backend.app.config import PROFILE_DEFAULTS, SECRET_FILE_MAX_BYTES, SecretFileError, get_data_dir, get_settings, is_test_mode
+from backend.app.config.platform import instance_blocked
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS, check_login_limit
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS, check_email_links, check_smtp_configuration, check_smtp_encryption
 from backend.app.services.platform import config_audit
@@ -113,6 +133,10 @@ needs_posix_modes = pytest.mark.skipif(not POSIX, reason="file modes are POSIX o
 needs_permission_checks = pytest.mark.skipif(not POSIX or os.geteuid() == 0, reason="needs POSIX permissions, which root bypasses")
 needs_posix_paths = pytest.mark.skipif(not POSIX, reason="Windows reports a path below a file as missing, not as ENOTDIR")
 
+#: H-46: the test mode check of (h), read by name so that this file collects before the module has it. ``None`` until
+#: then: ``CHECK_IDS`` leaves it out, and the tests of its place, in (c) and (h), fail naming H-46 (``_h46``).
+_TEST_MODE_CHECK: Callable[[], ConfigCheck] | None = getattr(config_audit, "check_test_mode", None)
+
 #: The id of every check, in the order of ``CONFIG_CHECKS`` (c): the platform's, then workstream B's, A's and E's.
 CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_jwt_secret: "platform.jwt_secret",
@@ -123,6 +147,8 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_frame_protection: "platform.frame_protection",
     check_csp_report_only: "platform.csp_report_only",
     check_log_level: "platform.log_level",
+    # H-46: the platform's last check, right after the log level's; left out while the module has no check_test_mode
+    **({_TEST_MODE_CHECK: "platform.test_mode"} if _TEST_MODE_CHECK is not None else {}),
     check_panel_token: "backup.panel_token",
     check_upload_limit: "backup.upload_limit",
     check_restore_limit: "backup.restore_limit",
@@ -138,6 +164,15 @@ GOOD_JWT_SECRET = "jwt-signing-key-of-a-careful-admin-0123456789"
 GOOD_INSTANCE_KEY = "instance-key-of-a-careful-admin-0123456789"
 #: Marks every secret of the leak tests: no field of a result, no log record, no startup error may contain it.
 CANARY = "Zq7canary"
+#: H-46: the lane of every test-mode configuration here (``_configure``), so that no case depends on the runner's
+#: environment; clearly fake, and not the 32 hexadecimal characters ``ensure_test_lane_id()`` makes.
+FAKE_LANE_ID = "h46-fake-lane-0123456789abcdef"
+#: H-46: the names the module gains, each with what it is, for the message of a test that reads one before it exists.
+H46_NAMES = {
+    "check_test_mode": "the check of LIBREFOLIO_TEST_MODE outside a test lane (platform.test_mode), the platform's last check, right after check_log_level",
+    "ManagedTestModeError": "the RuntimeError that stops a managed start with LIBREFOLIO_TEST_MODE on outside a test lane, right after the short-key stop",
+    "TEST_MODE_OUTSIDE_LANE_SUMMARY": "the summary of check_test_mode outside a test lane, with the data directory as {data_dir}",
+}
 
 
 @dataclass
@@ -175,7 +210,8 @@ class Configuration:
 
 
 def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: bool) -> Configuration:
-    """No secret set either way, cookie ``auto``, log level ``INFO``, profile ``selfhosted``, frame protection and the report-only policy unset, not blocked, nothing noted about forwarding headers, no key yet, a data directory in ``tmp_path``."""
+    """No secret set either way, cookie ``auto``, log level ``INFO``, profile ``selfhosted``, frame protection and the report-only policy unset, not blocked, nothing noted about forwarding headers, no key yet, a data directory in ``tmp_path``.
+    H-46: test mode in this file's own lane, ``FAKE_LANE_ID``, production in none, whatever the runner exported."""
     for variable in [name for name in os.environ if name.endswith("_FILE") and (name == "JWT_SECRET_FILE" or name.startswith("LIBREFOLIO_"))]:
         monkeypatch.delenv(variable)
     for variable in ("JWT_SECRET", "LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_LOG_LEVEL", "LIBREFOLIO_DATA_DIR", "LIBREFOLIO_TEST_DATA_DIR", "LIBREFOLIO_BLOCKED", "LIBREFOLIO_DELETION_DATE"):
@@ -194,6 +230,12 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
     for variable in ("LIBREFOLIO_FRAME_PROTECTION", "LIBREFOLIO_CSP_REPORT_ONLY"):
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "0" if production else "1")
+    # H-46: test mode in a lane of this file's own, production in none, whatever the runner exported, so the test mode
+    # check is ok
+    if production:
+        monkeypatch.delenv("LIBREFOLIO_TEST_LANE_ID", raising=False)
+    else:
+        monkeypatch.setenv("LIBREFOLIO_TEST_LANE_ID", FAKE_LANE_ID)
     monkeypatch.setenv("LIBREFOLIO_DATA_DIR" if production else "LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "auto")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
@@ -210,7 +252,7 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
 
 @pytest.fixture
 def configuration(monkeypatch, tmp_path) -> Configuration:
-    """Test mode: every check is ok but JWT_SECRET, which is unset (info)."""
+    """Test mode, in a test lane: every check is ok but JWT_SECRET, which is unset (info)."""
     return _configure(monkeypatch, tmp_path, production=False)
 
 
@@ -251,6 +293,13 @@ def _assert_check(result: ConfigCheck, check: Callable[[], ConfigCheck], severit
     assert all(isinstance(value, str | int) for value in result.detail.values()), f"the parameters of an i18n message are strings or integers: {result.detail}"
     if severity != "ok":
         assert result.summary.strip(), f"{check.__name__}() is {severity} without a summary for the log"
+
+
+def _h46(name: str) -> Any:
+    """``config_audit.<name>``, a name H-46 adds, read when the test runs (as ``test_managed_headers.py`` reads H-42's ``PAGE_POLICY``): until the module has it, the test fails naming H-46, while the rest of this file collects and runs."""
+    value = getattr(config_audit, name, None)
+    assert value is not None, f"H-46: config_audit has no {name}, {H46_NAMES[name]}"
+    return value
 
 
 # =============================================================================
@@ -482,6 +531,12 @@ def _generated_key_open_to_others(configuration: Configuration) -> list[str]:
     return [key_file.read_text(encoding="ascii").rstrip("\n")]
 
 
+def _damaged_key_file_outside_a_test_lane(configuration: Configuration) -> list[str]:
+    """H-46: the damaged generated key, with test mode on outside a test lane: the test mode check speaks too, naming a path, and the start goes on, so its log is read as well."""
+    configuration.monkeypatch.delenv("LIBREFOLIO_TEST_LANE_ID", raising=False)
+    return _secret_in_a_damaged_key_file(configuration)
+
+
 @pytest.mark.parametrize(
     "configure",
     [
@@ -489,6 +544,7 @@ def _generated_key_open_to_others(configuration: Configuration) -> list[str]:
         pytest.param(_secrets_in_files_that_cannot_be_read, id="files-that-cannot-be-read"),
         pytest.param(_secret_in_a_damaged_key_file, id="damaged-generated-key"),
         pytest.param(_generated_key_open_to_others, id="generated-key-open-to-others"),
+        pytest.param(_damaged_key_file_outside_a_test_lane, id="damaged-generated-key-outside-a-test-lane"),
     ],
 )
 def test_no_secret_value_reaches_a_result_a_log_record_or_a_startup_error(configuration, logged, configure):
@@ -520,13 +576,16 @@ def test_no_secret_value_reaches_a_result_a_log_record_or_a_startup_error(config
 
 
 def test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing(configuration):
-    """(c) The order of CONFIG_CHECKS, each result what the check alone returns; no variable changed, no key generated. Which checks CONFIG_CHECKS holds, where, with which ids: the next test."""
+    """(c) The order of CONFIG_CHECKS, each result what the check alone returns, the test mode check's right after the log level's (H-46); no variable changed, no key generated. Which checks CONFIG_CHECKS holds, where, with which ids: the next test."""
     print_section("Configuration checks: run_config_checks")
     environment = dict(os.environ)
 
     results = run_config_checks()
 
     assert results == [check() for check in CONFIG_CHECKS], "run_config_checks must return what each check returns on its own, in the order of CONFIG_CHECKS"
+    ids = [result.check_id for result in results]
+    log_level = ids.index("platform.log_level")
+    assert ids[log_level + 1 : log_level + 2] == ["platform.test_mode"], f"H-46: run_config_checks must evaluate the test mode check, platform.test_mode, right after the log level check, last of the platform's: {ids}"
     assert all(result.severity in SEVERITIES for result in results), f"unknown severity in {results}"
     assert dict(os.environ) == environment, "a configuration check changed the environment"
     assert not configuration.data_dir.exists(), f"a configuration check created files: {list(configuration.data_dir.rglob('*'))}"
@@ -534,8 +593,10 @@ def test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing(co
 
 
 def test_config_checks_holds_every_check_in_its_place_with_its_id(configuration):
-    """(c) ``CONFIG_CHECKS`` is the platform's checks, then workstream B's ``BACKUP_CONFIG_CHECKS``, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it (``test_email_checks.py``, EMK-010); it holds every check with an id here, in the order of ``CHECK_IDS``, and no other — a new check comes with its tests —; ``run_config_checks`` gives each result the id of its check."""
+    """(c) ``CONFIG_CHECKS`` is the platform's checks, the test mode check last (H-46), then workstream B's ``BACKUP_CONFIG_CHECKS``, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it (``test_email_checks.py``, EMK-010); it holds every check with an id here, in the order of ``CHECK_IDS``, and no other — a new check comes with its tests —; ``run_config_checks`` gives each result the id of its check."""
     print_section("Configuration checks: CONFIG_CHECKS whole")
+    # H-46: CHECK_IDS holds the test mode check, the platform's last, only once the module has it
+    _h46("check_test_mode")
     sections = (*BACKUP_CONFIG_CHECKS, *ACCOUNTS_CONFIG_CHECKS, *EMAIL_CONFIG_CHECKS)
     platform = tuple(check for check in CHECK_IDS if check not in sections)
 
@@ -1096,3 +1157,269 @@ def test_startup_logs_neither_switch_off_in_the_selfhosted_profile(configuration
     flagged = [(level, fields.get("check")) for level, _, fields in logged]
     assert flagged == [("info", "platform.jwt_secret")], f"self-hosted with both switches off: neither check is logged, only the unset JWT secret's info: {logged}"
     print_success(f"LIBREFOLIO_PROFILE={profile!r}, {variables or 'both unset'}: neither switch logged")
+
+
+# =============================================================================
+# (h) Test mode outside a test lane (H-46)
+# =============================================================================
+
+
+#: (h) The summary of the test mode check outside a test lane, word for word, its ``{data_dir}`` to fill
+#: (``config_audit.TEST_MODE_OUTSIDE_LANE_SUMMARY``).
+TEST_MODE_OUTSIDE_LANE = "LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory {data_dir} and .env is not read; unset it on a production instance"
+#: (h) The error that stops a managed start with test mode on outside a test lane, word for word, its ``{data_dir}`` to
+#: fill (``config_audit.ManagedTestModeError``).
+MANAGED_TEST_MODE_STOP = "In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): test-only providers would be served and the data kept in the test data directory {data_dir}; unset LIBREFOLIO_TEST_MODE"
+#: (h) A lane id that gives no lane: unset, empty or blank.
+NO_LANE = [pytest.param(None, id="lane-unset"), pytest.param("", id="lane-empty"), pytest.param("   ", id="lane-blank")]
+
+
+def _outside_a_test_lane(configuration: Configuration, lane: str | None = None) -> str:
+    """(h) Test mode on without a lane: ``LIBREFOLIO_TEST_LANE_ID`` removed (``None``) or set to ``lane``, empty or blank.
+    Returns the data directory the check names, verified to be this test's own test data directory."""
+    if lane is None:
+        configuration.monkeypatch.delenv("LIBREFOLIO_TEST_LANE_ID", raising=False)
+    else:
+        configuration.set(LIBREFOLIO_TEST_LANE_ID=lane)
+    assert is_test_mode(), f"Precondition: LIBREFOLIO_TEST_MODE={os.environ.get('LIBREFOLIO_TEST_MODE')!r} must turn test mode on"
+    data_dir = str(get_data_dir())
+    assert data_dir == str(configuration.data_dir), f"Precondition: in test mode the data directory must be this test's test data directory, {configuration.data_dir}, not {data_dir}"
+    return data_dir
+
+
+def test_the_test_mode_summary_is_pinned_by_value():
+    """(h) H-46: ``TEST_MODE_OUTSIDE_LANE_SUMMARY`` is this string, word for word: what test mode outside a lane serves,
+    where it keeps the data, and what the admin must do."""
+    print_section("H-46: test mode outside a test lane")
+
+    summary = _h46("TEST_MODE_OUTSIDE_LANE_SUMMARY")
+
+    assert summary == TEST_MODE_OUTSIDE_LANE, f"H-46: config_audit.TEST_MODE_OUTSIDE_LANE_SUMMARY must be, word for word:\n  expected {TEST_MODE_OUTSIDE_LANE!r}\n  got      {summary!r}"
+    print_success(f"TEST_MODE_OUTSIDE_LANE_SUMMARY = {summary!r}")
+
+
+def test_managed_test_mode_error_is_a_runtime_error():
+    """(h) H-46: ``ManagedTestModeError``, the managed start's stop on test mode outside a lane, is a ``RuntimeError``,
+    as ``SecretFileError`` and ``InstanceKeyError`` are."""
+    error = _h46("ManagedTestModeError")
+
+    assert isinstance(error, type) and issubclass(error, RuntimeError), f"H-46: config_audit.ManagedTestModeError must be a class derived from RuntimeError, not {error!r}"
+    print_success(f"{error.__name__}: {[cls.__name__ for cls in error.__mro__]}")
+
+
+def test_the_test_mode_check_runs_last_of_the_platform_checks():
+    """(h) H-46: registered in CONFIG_CHECKS right after check_log_level, so the platform's last check, right before
+    workstream B's first."""
+    check_test_mode = _h46("check_test_mode")
+    index = CONFIG_CHECKS.index(check_log_level)
+
+    following = CONFIG_CHECKS[index + 1 : index + 3]
+
+    assert following == (check_test_mode, BACKUP_CONFIG_CHECKS[0]), f"H-46: CONFIG_CHECKS must run check_test_mode right after check_log_level, then B's first check, {BACKUP_CONFIG_CHECKS[0].__name__}: {[check.__name__ for check in CONFIG_CHECKS]}"
+    print_success(f"{[check.__name__ for check in CONFIG_CHECKS[index : index + 3]]}")
+
+
+@pytest.mark.parametrize("lane", [pytest.param(FAKE_LANE_ID, id="with-a-lane"), pytest.param(None, id="without-a-lane")])
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(None, id="test-mode-unset"),
+        pytest.param("", id="test-mode-empty"),
+        pytest.param("0", id="test-mode-0"),
+        pytest.param("false", id="test-mode-false"),
+        pytest.param("no", id="test-mode-no"),
+        pytest.param("on", id="test-mode-on-is-not-a-true-spelling"),
+        pytest.param(" 1", id="test-mode-padded-1-is-not-stripped"),
+    ],
+)
+def test_the_test_mode_check_is_ok_with_test_mode_off(production_configuration, value, lane):
+    """(h) H-46: test mode off, as ``is_test_mode()`` reads it (``on`` and `` 1`` included), is ok,
+    ``instance.checks.testMode.off``, with no detail and no summary, whatever the lane id holds."""
+    check_test_mode = _h46("check_test_mode")
+    configuration = production_configuration
+    if value is None:
+        configuration.monkeypatch.delenv("LIBREFOLIO_TEST_MODE", raising=False)
+    else:
+        configuration.set(LIBREFOLIO_TEST_MODE=value)
+    if lane is None:
+        configuration.monkeypatch.delenv("LIBREFOLIO_TEST_LANE_ID", raising=False)
+    else:
+        configuration.set(LIBREFOLIO_TEST_LANE_ID=lane)
+    assert not is_test_mode(), f"Precondition: is_test_mode() must read LIBREFOLIO_TEST_MODE={value!r} as off"
+
+    result = check_test_mode()
+
+    _assert_check(result, check_test_mode, "ok", "testMode.off", {})
+    assert result.summary == "", f"an ok check has no summary: {result.summary!r}"
+    print_success(f"LIBREFOLIO_TEST_MODE={value!r}, LIBREFOLIO_TEST_LANE_ID={lane!r}: ok {result.i18n_key}")
+
+
+@pytest.mark.parametrize("value", [pytest.param(value, id=f"test-mode-{value}") for value in ("1", "true", "TRUE", "yes", "Yes")])
+def test_the_test_mode_check_is_ok_in_a_test_lane(configuration, value):
+    """(h) H-46: test mode on, in each spelling ``is_test_mode()`` reads as on, in a lane, as the runner always gives it:
+    ok, ``instance.checks.testMode.testLane``, with no detail and no summary."""
+    check_test_mode = _h46("check_test_mode")
+    configuration.set(LIBREFOLIO_TEST_MODE=value)
+    assert is_test_mode(), f"Precondition: is_test_mode() must read LIBREFOLIO_TEST_MODE={value!r} as on"
+    assert os.environ.get("LIBREFOLIO_TEST_LANE_ID") == FAKE_LANE_ID, "Precondition: _configure puts every test-mode configuration in this file's own lane"
+
+    result = check_test_mode()
+
+    _assert_check(result, check_test_mode, "ok", "testMode.testLane", {})
+    assert result.summary == "", f"an ok check has no summary: {result.summary!r}"
+    print_success(f"LIBREFOLIO_TEST_MODE={value!r} in a test lane: ok {result.i18n_key}")
+
+
+@pytest.mark.parametrize("lane", NO_LANE)
+@pytest.mark.parametrize("value", [pytest.param("1", id="test-mode-1"), pytest.param("TRUE", id="test-mode-TRUE")])
+def test_the_test_mode_check_is_an_error_outside_a_test_lane(configuration, value, lane):
+    """(h) H-46: test mode on with the lane id unset, empty or blank, as in a container started with it: an error,
+    ``instance.checks.testMode.outsideTestLane``, naming the test data directory in its detail and in its summary."""
+    check_test_mode = _h46("check_test_mode")
+    summary = _h46("TEST_MODE_OUTSIDE_LANE_SUMMARY")
+    configuration.set(LIBREFOLIO_TEST_MODE=value)
+    data_dir = _outside_a_test_lane(configuration, lane)
+
+    result = check_test_mode()
+
+    _assert_check(result, check_test_mode, "error", "testMode.outsideTestLane", {"data_dir": data_dir})
+    expected = summary.format(data_dir=data_dir)
+    assert result.summary == expected, f"check_test_mode() outside a test lane: its summary must be TEST_MODE_OUTSIDE_LANE_SUMMARY with the data directory, word for word:\n  expected {expected!r}\n  got      {result.summary!r}"
+    print_success(f"LIBREFOLIO_TEST_MODE={value!r}, LIBREFOLIO_TEST_LANE_ID={lane!r}: error {result.i18n_key}")
+
+
+@pytest.mark.parametrize("profile", [pytest.param(None, id="profile-unset"), pytest.param("selfhosted", id="selfhosted"), pytest.param("managed", id="managed")])
+def test_the_profile_does_not_change_the_test_mode_check(configuration, profile):
+    """(h) H-46: outside a lane the check is the same ``ConfigCheck`` in every profile, managed included: the profile
+    decides what the start does with it, not what it says."""
+    check_test_mode = _h46("check_test_mode")
+    summary = _h46("TEST_MODE_OUTSIDE_LANE_SUMMARY")
+    data_dir = _outside_a_test_lane(configuration)
+    _profile(configuration, profile)
+    assert get_settings().LIBREFOLIO_PROFILE == (profile or "selfhosted"), f"Precondition: Settings must read LIBREFOLIO_PROFILE={profile!r} as {profile or 'selfhosted'}"
+
+    result = check_test_mode()
+
+    expected = ConfigCheck("platform.test_mode", "error", "instance.checks.testMode.outsideTestLane", {"data_dir": data_dir}, summary.format(data_dir=data_dir))
+    assert result == expected, f"LIBREFOLIO_PROFILE={profile!r}: check_test_mode() outside a test lane must be the same in every profile:\n  expected {expected}\n  got      {result}"
+    print_success(f"LIBREFOLIO_PROFILE={profile!r}: {result.severity} {result.i18n_key}")
+
+
+@pytest.mark.parametrize("state", [pytest.param("off", id="test-mode-off"), pytest.param("testLane", id="in-a-test-lane"), pytest.param("outsideTestLane", id="outside-a-test-lane")])
+def test_the_test_mode_check_changes_nothing(monkeypatch, tmp_path, state):
+    """(h) H-46: the check reads the environment and, outside a lane, the test data directory, and leaves both as they
+    were: no variable changed, no file written, the same result twice."""
+    check_test_mode = _h46("check_test_mode")
+    configuration = _configure(monkeypatch, tmp_path, production=state == "off")
+    if state == "outsideTestLane":
+        _outside_a_test_lane(configuration)
+    environment = dict(os.environ)
+
+    results = [check_test_mode(), check_test_mode()]
+
+    assert results[0] == results[1], f"the same configuration gives the same result: {results}"
+    assert results[0].i18n_key == f"instance.checks.testMode.{state}", f"the check must be in the state of this case, {state}: {results[0]}"
+    assert dict(os.environ) == environment, "check_test_mode() changed the environment"
+    assert not configuration.data_dir.exists(), f"check_test_mode() created files: {list(configuration.data_dir.rglob('*'))}"
+    print_success(f"{state}: unchanged")
+
+
+@pytest.mark.parametrize("profile", [pytest.param(None, id="profile-unset"), pytest.param("selfhosted", id="selfhosted")])
+def test_startup_logs_test_mode_outside_a_test_lane_as_an_error_and_goes_on(configuration, logged, profile):
+    """(h)(d) H-46: self-hosted, the profile unset included, test mode outside a lane is logged once as an error, with its
+    summary and the data directory, in the order of the checks; the start goes on."""
+    print_section("Configuration checks: test mode outside a test lane at startup")
+    summary = _h46("TEST_MODE_OUTSIDE_LANE_SUMMARY")
+    data_dir = _outside_a_test_lane(configuration)
+    _profile(configuration, profile)
+    assert get_settings().LIBREFOLIO_PROFILE == "selfhosted", f"Precondition: Settings must read LIBREFOLIO_PROFILE={profile!r} as selfhosted"
+
+    returned = log_configuration_audit()
+
+    assert returned is None, f"self-hosted, the start goes on: log_configuration_audit() returns None, not {returned!r}"
+    order = [(level, fields.get("check")) for level, _, fields in logged]
+    assert order == [("info", "platform.jwt_secret"), ("error", "platform.test_mode")], f"the unset JWT secret's info, then the test mode error, each once, in the order of the checks: {logged}"
+    expected = ("error", summary.format(data_dir=data_dir), {"check": "platform.test_mode", "detail": {"data_dir": data_dir}})
+    records = [record for record in logged if record[2].get("check") == "platform.test_mode"]
+    assert records == [expected], f"one error record for platform.test_mode, with its summary, its id and its detail:\n  expected {[expected]}\n  got      {records}"
+    print_success(f"LIBREFOLIO_PROFILE={profile!r}: {order}, the start went on")
+
+
+@pytest.mark.parametrize(
+    ("profile", "production", "state"),
+    [
+        pytest.param(None, False, "testLane", id="profile-unset-in-a-test-lane"),
+        pytest.param("selfhosted", False, "testLane", id="selfhosted-in-a-test-lane"),
+        pytest.param("managed", False, "testLane", id="managed-in-a-test-lane"),
+        pytest.param("selfhosted", True, "off", id="selfhosted-test-mode-off"),
+        pytest.param("managed", True, "off", id="managed-test-mode-off"),
+    ],
+)
+def test_startup_goes_on_and_logs_nothing_about_test_mode_in_a_test_lane_or_off(monkeypatch, tmp_path, logged, profile, production, state):
+    """(h)(d) H-46: in a test lane, or with test mode off as in production, the start goes on in every profile, managed
+    included, with nothing logged about test mode; barriers: the check evaluated ok, the JWT secret's info heard."""
+    _h46("check_test_mode")
+    configuration = _configure(monkeypatch, tmp_path, production=production)
+    _profile(configuration, profile)
+    states = {result.check_id: (result.severity, result.i18n_key) for result in run_config_checks() if result.check_id == "platform.test_mode"}
+    expected_states = {"platform.test_mode": ("ok", f"instance.checks.testMode.{state}")}
+    assert states == expected_states, f"Precondition: the audit evaluates check_test_mode, ok here as {state}: {states}"
+
+    returned = log_configuration_audit()
+
+    assert returned is None, f"the start goes on: log_configuration_audit() returns None, not {returned!r}"
+    checks = [fields.get("check") for _, _, fields in logged]
+    assert "platform.jwt_secret" in checks, f"Barrier: the audit's record of the unset JWT secret must reach the recorder, or the silence about test mode proves nothing: {logged}"
+    assert "platform.test_mode" not in checks, f"test mode {state}: nothing about it is logged: {logged}"
+    print_success(f"LIBREFOLIO_PROFILE={profile!r}, test mode {state}: the start went on, nothing logged about it")
+
+
+@pytest.mark.parametrize(
+    ("lane", "blocked", "profile"),
+    [
+        pytest.param(None, None, "managed", id="lane-unset"),
+        pytest.param("", None, "managed", id="lane-empty"),
+        pytest.param("   ", None, "managed", id="lane-blank"),
+        pytest.param(None, "true", "managed", id="lane-unset-instance-blocked"),
+        pytest.param(None, None, " MANAGED ", id="lane-unset-managed-in-any-case"),
+    ],
+)
+def test_startup_stops_on_test_mode_outside_a_test_lane_in_the_managed_profile(configuration, logged, lane, blocked, profile):
+    """(h)(e) H-46: managed, as Settings reads it, test mode outside a lane stops the start with ``ManagedTestModeError``,
+    its message word for word, right after the short-key stop: before the block's warning, with nothing logged."""
+    error = _h46("ManagedTestModeError")
+    data_dir = _outside_a_test_lane(configuration, lane)
+    configuration.set(LIBREFOLIO_PROFILE=profile)
+    if blocked is not None:
+        configuration.set(LIBREFOLIO_BLOCKED=blocked)
+    assert get_settings().LIBREFOLIO_PROFILE == "managed", f"Precondition: Settings must read LIBREFOLIO_PROFILE={profile!r} as managed"
+    assert instance_blocked() == (blocked is not None), f"Precondition: with LIBREFOLIO_BLOCKED={blocked!r} instance_blocked() must be {blocked is not None}: a blocked instance logs a warning unless the stop comes first"
+    assert getattr(config_audit.logger, "records", None) is logged, "Precondition: the module's logger is this test's recorder, so a record logged before the stop would be heard"
+
+    with pytest.raises(error) as raised:
+        log_configuration_audit()
+
+    expected = MANAGED_TEST_MODE_STOP.format(data_dir=data_dir)
+    assert str(raised.value) == expected, f"the startup error must say why and what to do, word for word:\n  expected {expected!r}\n  got      {str(raised.value)!r}"
+    assert logged == [], f"nothing is logged before the start is stopped, the block's warning included: {logged}"
+    print_success(f"start stopped: {raised.value}")
+
+
+def test_a_short_jwt_secret_stops_a_managed_start_before_test_mode_outside_a_test_lane(configuration, logged):
+    """(h)(e) H-46: managed with both stops armed, a JWT_SECRET of 31 characters and test mode outside a lane: the short
+    key's ``WeakSecretError`` still comes first, with nothing logged."""
+    check_test_mode = _h46("check_test_mode")
+    stops = (WeakSecretError, _h46("ManagedTestModeError"))
+    _outside_a_test_lane(configuration)
+    configuration.set(LIBREFOLIO_PROFILE="managed", JWT_SECRET="x" * 31)
+    armed = [(result.check_id, result.severity) for result in (check_jwt_secret(), check_test_mode())]
+    assert armed == [("platform.jwt_secret", "error"), ("platform.test_mode", "error")], f"Precondition: both stops armed, each check an error on its own: {armed}"
+
+    with pytest.raises(stops) as raised:
+        log_configuration_audit()
+
+    assert isinstance(raised.value, WeakSecretError), f"the short key's stop stays first, before the test mode's: {raised.value!r}"
+    expected = "In the managed profile the session signing key from JWT_SECRET must be at least 32 characters long; it is 31"
+    assert str(raised.value) == expected, f"the startup error must be the short key's:\n  expected {expected!r}\n  got      {str(raised.value)!r}"
+    assert logged == [], f"nothing is logged before the start is stopped: {logged}"
+    print_success(f"start stopped first by the short key: {raised.value}")

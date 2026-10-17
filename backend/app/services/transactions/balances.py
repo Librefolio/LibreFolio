@@ -15,6 +15,8 @@ from backend.app.schemas.transactions.batch import TXValidationCode
 from backend.app.services.financial_math.ledger_totals import position_quantities
 from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, native_balances
 from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
+from backend.app.services.transactions.unreadable_rows import UnreadableLedgerError, count_unreadable_rows
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 
 class TransactionBalancesMixin:
@@ -38,7 +40,9 @@ class TransactionBalancesMixin:
     ) -> None:
         """Validate cash and asset balances for a broker from a given date.
 
-        Walks the days with transactions, and ``from_date``: the balances change on no other day (R13-SEC7-3).
+        Walks the days with transactions, and ``from_date``: the balances change on no other day (R13-SEC7-3). A broker
+        whose transactions hold a value that is no number has no known balances, so its replay is refused, never run
+        wrong (``ledgerUnreadable``, W-B74).
 
         Args:
             batch_tx_ids: mapping of tx.id → (operation, batch_index) for batch transactions.
@@ -50,6 +54,21 @@ class TransactionBalancesMixin:
 
         if broker.allow_cash_overdraft and broker.allow_asset_shorting:
             return
+
+        # W-B74: a quantity or amount that cannot be read (it reads None since W-B58) was skipped by the starting balances
+        # — a wrong balance, the batch checked against it — and broke the walk past it (a codeless error). Every row of the
+        # broker counts: the starting balances read the ones before from_date, the walk the others.
+        unreadable = await count_unreadable_rows(self.session, Transaction.broker_id == broker_id)
+        if unreadable:
+            raise BalanceValidationError(
+                broker_id=broker_id,
+                date=from_date if from_date is not None else EARLIEST_RANGE_START,
+                currency_or_asset="",
+                balance=Decimal("0"),
+                message=f"The balances of broker {broker_id} cannot be checked: {unreadable} of its transactions hold a value that is not a number",
+                code=TXValidationCode.LEDGER_UNREADABLE.value,
+                params={"brokerId": broker_id, "count": unreadable},
+            )
 
         if from_date is None:
             cash_balances: Dict[str, Decimal] = {}
@@ -154,7 +173,18 @@ class TransactionBalancesMixin:
 
         The rows dated up to ``as_of`` included, never ``as_of`` + 1 day: the gap-fix's ``as_of`` comes from the request,
         and the day after the calendar's last raised (W-B71).
+
+        Raises:
+            UnreadableLedgerError: rows of those, without ``exclude_tx_ids``, hold a value that is no number (W-B74): the
+                sums would skip them and answer a wrong balance.
         """
+        where = [Transaction.broker_id == broker_id, Transaction.date <= as_of]
+        excluded = list(exclude_tx_ids)
+        if excluded:
+            where.append(Transaction.id.notin_(excluded))
+        unreadable = await count_unreadable_rows(self.session, *where)
+        if unreadable:
+            raise UnreadableLedgerError(broker_id, unreadable)
         return await self._get_balances_before_date(broker_id, as_of, exclude_tx_ids, through=True)
 
     # =========================================================================

@@ -94,7 +94,9 @@ A sync passes the assignment's id. This ensures:
 A parametric provider (Scheduled Investment) derives its whole series from its parameters. When they
 change, or when the asset leaves it for another provider, `provider_management.py` deletes the
 asset's prices and that assignment's events, first unlinking the transactions that pointed to them
-(`asset_event_id = NULL`); manual events stay.
+(`asset_event_id = NULL`); manual events stay. While a `SPLIT` among those events has linked
+incoming adjustments without a cost, the change is refused with a 409 and nothing is deleted
+([Parametric Provider Change](#parametric-provider-change)).
 
 The data editor shows these events read-only: the events of `POST /assets/prices/query` carry
 `is_auto` (`provider_assignment_id IS NOT NULL`). An edit would be overwritten by the next sync.
@@ -261,10 +263,12 @@ The wipe refuses while a `SPLIT` of the asset, manual or from a provider, has a 
 `ADJUSTMENT` (quantity above 0) without a `cost_basis_override`; a cost of 0 is a cost. Linked to
 the split, such a row only rescales the position; unlinked and with the split deleted, it would be
 an acquisition of unknown cost (`MISSING_COST_BASIS`). This is the rule of P-10, which refuses a
-retype of such a split (`EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, above), and the same function finds
-the rows: `costless_incoming_split_adjustments()`. `_reject_wipe_of_costless_split_adjustments()`
-runs before any write, so a refused wipe writes nothing. It answers HTTP 409 with
-`detail = {error_code, message, params}`:
+retype of such a split (`EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, above).
+`_reject_wipe_of_costless_split_adjustments()` finds and names the rows through
+`splits_with_costless_adjustments()` of `assets/split_guard.py`, built on the retype's own
+function, `costless_incoming_split_adjustments()`, and shared with the
+[parametric provider change](#parametric-provider-change). It runs before any write, so a refused
+wipe writes nothing. It answers HTTP 409 with `detail = {error_code, message, params}`:
 
 - `error_code`: `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`;
 - `params.splits`: one `{event_id, date, transaction_ids, hidden_transactions_count}` per such
@@ -282,6 +286,66 @@ an error toast, one sentence in the interface language built by `wipeRefusalMess
 (`currencyChangeErrors.ts`): the first split's date, its adjustments without a cost, the hidden
 ones among them, and how many more splits have some. Then it stops: no `PATCH /assets`, no sync,
 and the dialog stays open. Any other error keeps the dialog's generic message.
+
+### 🔁 Parametric Provider Change {: #parametric-provider-change }
+
+`POST /api/v1/assets/provider` (`assign_providers_bulk()` in `api/v1/assets/providers.py`,
+`bulk_assign_providers()` in `assets/provider_management.py`) saves its items in order and commits
+once, after the last. For an asset that already has an assignment, an item that gives a parametric
+provider (`FAProviderKind.PARAMETRIC_GENERATION`: today only Scheduled Investment) new
+`provider_params`, or moves the asset away from one, wipes the asset's market data (#R3-4, #R6-4):
+every price of the asset, manual ones included, and every event of the assignment
+(`provider_assignment_id` its id), after unlinking their transactions (`asset_event_id = NULL`),
+then the cache entries of the old parameters. Manual events (`provider_assignment_id IS NULL`)
+survive, and new parameters of an online provider wipe nothing. `_wipe_reason()` decides, one answer for the write loop and for the
+check below: `"params changed"`, `"provider changed"`, or `""` for no wipe.
+
+Among those events can be a `SPLIT`. The plan editor (`ScheduledInvestmentEditor.svelte`) offers
+only Interest, Price Adjustment and Maturity Settlement events, but the schema
+(`FAScheduledInvestmentSchedule.asset_events`) accepts a `SPLIT`, so a plan's split comes through
+the API; the sync stores it under the assignment, as the plan's other events. Its linked incoming
+`ADJUSTMENT`s (quantity above 0) without a `cost_basis_override` (a cost of 0 is a cost) would be
+acquisitions of unknown cost once the wipe deletes it: the rule of P-10, as in the
+[Market-Data Wipe](#market-data-wipe). Before the request's first write,
+`_reject_wipes_of_costless_split_adjustments()` follows the items in order, as the write loop does
+(an asset named twice is compared with its previous item), and for each item that would wipe reads
+the events of that assignment and passes them to `split_guard.splits_with_costless_adjustments()`.
+Manual events are not read: they survive the wipe. When a `SPLIT` among them has such adjustments,
+the whole request is refused and nothing of it is written, the items before the refused one
+included. The route answers HTTP 409 with `detail = {error_code, message, params}`:
+
+- `error_code`: `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`;
+- `params.asset_id` and `params.item_index`: the refused item's asset and its position in the
+  request, from 0. The market-data wipe has neither: its request names a single asset;
+- `params.splits`: exactly as the market-data wipe's, one
+  `{event_id, date, transaction_ids, hidden_transactions_count}` per such split, ordered by date,
+  then id; `transaction_ids` lists, sorted, only the adjustments the caller can see (a
+  `BrokerUserAccess` row for the transaction's broker), and `hidden_transactions_count` counts the
+  others. The route passes `current_user_id=_current_user.id`; the service called without
+  `current_user_id` names none and counts them all;
+- `message`: the English text, which starts with the code and gives only the totals, how many
+  splits and how many adjustments.
+
+Any other error of the endpoint keeps its answer, a 500 with a string `detail`.
+
+In the asset form (`AssetModal.svelte`, in `frontend/src/lib/components/assets/`), `saveEdit()`
+first PATCHes the asset's fields (step 1), then assigns the provider (step 2). A step-2 refusal with this code is shown inline, in the form's
+error banner (`formError`, `data-form-error`): one sentence in the interface language built by
+`wipeRefusalMessage()` (`currencyChangeErrors.ts`, which maps each code to its key:
+`MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST` to
+`assetDetail.currencyChange.splitAdjustmentsWithoutCost`,
+`PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` to `assets.modal.planSplitAdjustmentsWithoutCost`):
+the first split's date, its adjustments without a cost, the hidden ones among them, and how many
+more splits have some. Then it stops: no toast, no automatic sync, the form stays open, and the
+next save asks its confirmation again. What step 1 saved stays saved: only the provider and its
+parameters are unchanged, as the sentence says. The `catch` sits in `saveEdit()` itself, so the
+sentence is the same on every way in: the regenerate confirmation (new parameters), the
+switch-away confirmation (another provider), and the plain save, where `doSave()` would read the
+409 as a duplicate name. Any other error keeps its handling.
+
+Tests: `backend/test_scripts/test_services/test_provider_wipe_split_guard.py`
+(`./dev.py test services provider-wipe-split-guard`); in the frontend,
+`currencyChangeErrors.test.ts` and `AssetModal.providerLifecycle.test.ts`, in the same folder.
 
 ---
 
