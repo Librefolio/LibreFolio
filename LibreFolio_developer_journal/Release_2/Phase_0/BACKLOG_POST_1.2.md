@@ -3040,7 +3040,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > **Stato al 16/10, 18:30:** area migrata, tutto nel target (`c179a5144`): m1 da 1.946 a 170, m2 da 6 a 0. Restano
 > solo classi annotate: AF-1 (aspetta la designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T); da
 > chiudere AF-8 (conferma) e AF-10 (ruolo di T). La sera del 16/10 il lotto dei component tokens di file, media e menu
-> contestuale (piano AF, passo 16) lascia AF-11; il suo slot pesante segnala AF-12 e AF-13.
+> contestuale (piano AF, passo 16) lascia AF-11; il suo slot pesante segnala AF-12 e AF-13. Nella notte del 17/10
+> `lib/theme/drawnColors.ts` passa ai ruoli (piano AF, passo 17) e lascia AF-14.
 > Il piano: `../Phase_1/10_colorSystem/AF-assetFxColors/`. Gli ID di questa sezione sono `AF-n`.
 
 - **AF-1 · Accenti degli strumenti della barra del grafico** — basso; AF, 16/10. Restano legacy, perché sono tinte che
@@ -3109,6 +3110,12 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   compresi: un `.DS_Store` toccato da macOS ha fatto rifare la build a metà di uno slot (circa 7 minuti col carico a
   160). Va escluso, insieme agli altri file nascosti; tocca al proprietario del runner. Dettagli: piano AF, passo 16.4.
   Si è ripetuto nello slot di recupero (23:52, una build in più all'avvio di `asset-list`; piano AF, passo 16.6).
+- **AF-14 · Il foglio di calcolo in chiaro resta sul tema della libreria** — minimo; AF, 17/10. Con `drawnColors.ts` sui
+  ruoli, l'anteprima dei fogli (`FilePreviewModal`, cheetah-grid) disegna il tema scuro tutto dai ruoli, mentre in chiaro
+  tiene `MATERIAL_DESIGN` della libreria (fondo, testo, selezione blu) con i soli due bordi sui ruoli: una scelta
+  provvisoria, nel punto 35 della raccolta per la designer, insieme alla riga indicata su `mark` e all'iniziale degli
+  avatar con `readableText`. Un tema unico dai ruoli per i due temi è la sua decisione (riga 10 del rapporto di L).
+  Dettagli: piano AF, passo 17.
 
 ---
 
@@ -3584,6 +3591,15 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     base, o `Decimal` dove sono soldi.
 
   Dettagli: piano H, §14, lotto «H-29 e H-30».
+  - Cura fatta il 17/10 (lotto «H-32», piano H §14).
+    - Inventario sull'app vera: 6 `float` raggiungibili da una richiesta. 5 erano già finiti (i segnali,
+      `FiniteFloat`); il sesto, `PluginSettingPlainValue` di X, ora ha `AllowInfNan(False)`.
+    - Niente nella base `StrictModel`, che regge anche le risposte e i modelli interni.
+    - Guardia `services request-float-inputs`: percorre tutte le rotte con barriere.
+    - Il 500 di A vale solo per le rotte senza `response_model`: con FastAPI 0.141 quelle con `response_model`
+      rispondono `null`.
+    - Trovato strada facendo: con il gestore standard dei 422, un valore non finito su un campo già finito dà un 500,
+      perché l'errore ripete l'`input`. Lo cura il gestore globale di A7b-2, che toglie l'`input`.
 - **H-33 · Senza un gestore di `ResponseValidationError`, il log del server contiene la risposta** — basso,
   sicurezza (log); E (R13-SEC4), via coordinatore, 17/10.
   - Quando una risposta non passa il suo `response_model`, FastAPI alza `ResponseValidationError`. Nessuno la gestisce,
@@ -3592,6 +3608,20 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     errori senza il valore e risponde 500.
 
   Dettagli: piano H, §14, lotto «H-29 e H-30».
+- **H-34 · Il JSON libero di una richiesta accetta `Infinity` e `NaN` al suo interno** — basso, API; H (residuo di
+  H-32, dal test-author e dal docs-writer), 17/10.
+  - La regola di H-32 riguarda i campi `float`. I campi `Any` o `JsonValue` raggiungibili da una richiesta accettano
+    numeri non finiti al loro interno:
+    - `FAProviderAssignmentItem.provider_params` e `FAProviderProbeRequest.provider_params` (`dict[str, Any]`, X:
+      `POST /assets/provider` e `/assets/provider/probe`);
+    - `RiskAnalyticRequest.parameters` (`JsonValue`, J: `POST /risk/query`), senza validatore.
+    - `ToolComputeItem.parameters` sta in un modello con `allow_inf_nan=False`: da verificare che valga anche dentro
+      `JsonValue`.
+    - `SignalRequest.params` è già protetto (`ensure_json_safe`).
+  - Cura proposta, a ciascun proprietario: un validatore come `ensure_json_safe` sui campi liberi; la guardia di H-32
+    potrebbe poi elencarli.
+
+  Dettagli: piano H, §14, lotto «H-32».
 
 ## A · Account e accessi (fase 01)
 
@@ -3892,6 +3922,59 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   Oggi l'admin iniziale in attesa riceve un link nuovo solo da `dev.py user setup-link` (o dal pannello di chi ospita):
   la scheda Utenti mostra il suggerimento, nessun pulsante. Dettagli: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b — Analisi e contratto».
+- **A-31 · Il ripristino revoca il link di setup che l'avvio ha appena riarmato** — basso, non è un difetto della 1.3;
+  da B tramite il coordinatore (16/10); A e B insieme.
+  - Il caso: un archivio con l'admin iniziale ancora in attesa **e** un altro admin attivo, ripristinato su
+    un'istanza con `LIBREFOLIO_ADMIN_EMAIL` e un token mai visto. Con l'ordine d'avvio della decisione N57
+    (`global-settings` → `admin-bootstrap` → `restore-commit` → `plugin-secrets-check`) il bootstrap riarma il link di
+    setup e il commit del ripristino, che revoca ogni link vivo di qualunque scopo, lo revoca subito: serve
+    `./dev.py user setup-link`, e il log dell'avvio successivo lo dice.
+  - Cura possibile (B): nel commit, risparmiare i link emessi dall'avvio in corso.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Dopo A7b — A-31».
+- ✅ **A-32 · Un admin iniziale disattivato si riattiva con il suo vecchio link di setup** — medio (sicurezza, confidenza
+  5/10); chiusa il 17/10 in A7b-2 (commit del coordinatore); dalla revisione di sicurezza di E («R13-SEC»), tramite il
+  coordinatore (16/10).
+  - Cura (N60): `token_service.retire_tokens` (revocato e consumato insieme) a ogni attivazione e a ogni password data,
+    e nel rifiuto di `complete_admin_setup`; per ogni account con un link di setup.
+  - `complete_admin_setup` rifiuta solo un account attivo; le altre attivazioni (PATCH dell'admin, `user activate`) e
+    gli altri modi di dare una password (`user reset`, link di reset, cambio password) non toccano i link
+    `ADMIN_SETUP`: attivato per altra via e poi disattivato entro le 72 h, l'account torna «in attesa» e chi ha il link
+    (anche dal log) lo riattiva con una password sua.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- ✅ **A-33 · Cambiare l'indirizzo dell'admin in attesa non revoca il link già mandato al vecchio** — basso (sicurezza,
+  confidenza 5/10); chiusa il 17/10 in A7b-2 (commit del coordinatore); dalla revisione di E («R13-SEC»), tramite il
+  coordinatore (16/10). Cura: un cambio vero dell'indirizzo revoca i link di setup (`_follow_variables`,
+  `update_profile`); l'account resta in attesa.
+  - `_follow_variables` cambia l'email dell'account in attesa quando cambia `LIBREFOLIO_ADMIN_EMAIL`, ma il link di
+    setup già consegnato al vecchio indirizzo resta buono; lo stesso per `user set-email` sull'account in attesa.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- **A-34 · `end_sessions` incrementa la copia in memoria: due incrementi concorrenti ne contano uno** — basso;
+  dalla revisione di E («R13-SEC»), tramite il coordinatore (16/10). Valutata in A7b-2 e lasciata: non costa poco
+  (`test_session_version.py` ne fissa la forma sincrona, contratto 5; 9 chiamate da rendere asincrone). Con A8.
+  - `user_service.end_sessions` fa `user.session_version += 1` sull'oggetto: due richieste quasi simultanee
+    scrivono lo stesso valore, e un cookie riemesso fra le due (cambio password) sopravvive alla seconda. Finestra
+    sotto il secondo. Cura: l'incremento in SQL (`session_version = session_version + 1`), 9 chiamate.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- ✅ **A-35 · Una risposta 422 rimanda indietro la password** — medio (sicurezza); chiusa il 17/10 in A7b-2 (commit del
+  coordinatore); dal coordinatore (16/10). Cura (D2): `api/validation_errors.py`, `install_validation_error_handler`
+  in `main.py`, toglie `input` da ogni errore del 422 di tutta l'app.
+  - Il gestore predefinito di FastAPI mette `input` in ogni errore di validazione: un campo troppo corto rimanda il suo
+    valore, e un campo **mancante** rimanda tutto il corpo, password e token compresi (provato in processo con
+    FastAPI 0.141.1). Vale per login, registrazione, cambio password, reset, setup, profilo, eliminazione dell'account,
+    e per le rotte degli altri con segreti nel corpo. Le impostazioni dei plugin lo evitano già con una `route_class`
+    propria (`_NoInputEchoRoute` in `api/v1/plugin_settings.py`).
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- **A-37 · Togliere `NoInputEchoRoute` dopo l'ingresso di B4 e di A7b-2** — minimo; dal coordinatore (17/10).
+  B4 sposta la `route_class` delle impostazioni dei plugin in `backend/app/api/no_echo.py` (`NoInputEchoRoute`, con
+  `test_no_echo_route.py`); il gestore globale di A-35 (`api/validation_errors.py`) la rende un doppione. Quando sono
+  dentro entrambi: togliere la classe e il suo uso in `api/v1/plugin_settings.py`, adattare `test_no_echo_route.py`,
+  aggiornare `developer/architecture/patterns/plugin_settings.md` (riga sulla classe). Il test di
+  `test_plugin_settings_api.py` resta: passa dal server vero. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Decisioni del coordinatore».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -5250,6 +5333,15 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     known price, a carried quote or a trade price»; «no price on or before the opening day — the relative return uses
     the lot's own price, when it has one»), e il prezzo convertito con la sua valuta; quattro lingue.
   - Dettagli: piano J, §10 «CP-7b — codice».
+- **J-38 · La guida dei plugin dei segnali descrive male l'ordine del taglio e il piano** — minimo, documentazione; J,
+  17/10 (docs-writer di CP-10c). Pagina `developer/architecture/patterns/signal_plugin_guide.md`, solo inglese.
+  - Il diagramma di sequenza del grafico disegna «Slice to visible range and assign status» dopo le annotazioni. Nel
+    codice, prima e dopo CP-10c, taglio e stato avvengono per ogni calcolo dentro `execute_planned_signal`; le
+    annotazioni si attaccano dopo, sulle serie intere tenute da parte. Il testo «3. Annotations» («before output is
+    sliced») è impreciso allo stesso modo.
+  - La sezione del piano non dice che un lotto incoerente solleva `SignalRequestValidationError` e ferma tutto il lotto,
+    a differenza dei fallimenti preliminari, che restano per istanza.
+  - Preesistenti, non legati al taglio. Dettagli: piano J, §10 «CP-10c».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -5400,23 +5492,30 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   SDB-032 tolto). `Cooldowns.reset(key)` resta, eccezione di N58 scritta nel docstring: nessun metodo pubblico dà a
   PCD-011 lo stesso stato pulito. `lint --dead-code` non segnala più le due funzioni.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A», decisione N-ZA-6.
-- **Z-20 · Disaccoppiare `zodios-client` dai moduli con le rune** — basso; coordinatore, 16/10 (riga J-26, assegnata
-  a Z). Il ponte della sonda dell'AI Export (`frontend/scripts/run-ai-export-render-prompt-probe.mjs`) carica il
-  renderer fuori da SvelteKit; la sonda importa `$lib/api`, quindi `lib/api/zodios-client.ts`, che importa
-  `priceRefresh.ts` (Z5, `3b016dd4e`, 16/10 11:18) e con lui `instanceNotices.svelte.ts`, un modulo con le rune: il
-  ponte moriva con `rune_outside_svelte`. J l'ha corretto in `985b10cbd` compilando le rune nel ponte
-  (`@sveltejs/vite-plugin-svelte`). Cura: il client non importa moduli con le rune, così il ponte può fare a meno del
-  plugin; per esempio `priceRefresh` riceve l'area degli avvisi da chi la registra all'avvio dell'app. Attenzione
-  (letto nel codice, non provato): sullo stesso percorso c'è `instanceBlock.svelte.ts` di H, con `$state` al primo
-  livello, importato da `zodios-client.ts` dal 15/10 (`cb34327e9`), sulla riga dopo `priceRefresh`: disaccoppiare
-  il solo `instanceNotices` non basta a togliere il plugin, serve anche H. Dettagli:
-  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Wiki-file di Z-3 e Z-20/Z-21».
+- ✅ **Z-20 · Disaccoppiare `zodios-client` dai moduli con le rune** — basso; coordinatore, 16/10 (riga J-26, assegnata
+  a Z). **Chiusa il 17/10 col lotto Z-20** (il commit è del coordinatore; H e J hanno scelto): il client delle API e
+  l'ingresso della sonda non importano più moduli con le rune. `instanceBlock` è diviso in `instanceBlockState.ts`
+  (semplice: le costanti, `isInstanceBlockedError`, il segnale, il reset di sessione), che il client segna, e
+  `instanceBlock.svelte.ts`, la faccia reattiva del layout, allineata in modo sincrono (opzione A di H, con le sue
+  quattro condizioni); il pozzo degli avvisi di `priceRefresh` carica `instanceNotices.svelte` al primo uso. Il ponte
+  della sonda non ha più il plugin di Svelte (sì di J) e il cancello `apiClientRuneFree.gate.test.ts` (`core-unit`) lo
+  tiene vero, da `$lib/api` e dall'ingresso della sonda. Era: dal 16/10 11:18 (Z5) il ponte moriva con
+  `rune_outside_svelte`, e J l'aveva riparato compilando le rune (`985b10cbd`). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-20 — analisi».
 - ✅ **Z-21 · N58: altre quattro funzioni di Z usate solo dai test** — basso; Z, 16/10 (lotto A, `lint --dead-code`).
   **Chiusa il 17/10 col lotto Z-21** (il commit è del coordinatore): tolte `cooldown_snapshot()`, la proprietà
   `ShutdownWatchdog.armed_at`, `current_shutdown_watchdog()` e `Activity.is_busy()`, con le due menzioni del runner. I
   test leggono l'istanza in uso, il `deadline`, `shutdown_budget._watchdog` e `busy_reasons()`; nessun caso tolto.
   `lint --dead-code` non le segnala più. Nata come Z-20, rinominata il 16/10 (il numero era già di J-26). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-21».
+- ✅ **Z-22 · `instanceBlock.svelte.ts`: un ascoltatore in più a ogni aggiornamento a caldo** — basso, solo sviluppo;
+  H, 17/10 (revisione di Z-20). **Chiusa il 17/10 col lotto Z-22** (il commit è del coordinatore): ogni copia della
+  faccia ferma la precedente passandosi la funzione per `import.meta.hot.data`; la build toglie il blocco. La riga
+  proposta, `import.meta.hot?.dispose(stop)`, qui non scatta: Vite chiama `dispose()` solo sul modulo attraverso cui
+  l'aggiornamento è accettato, cioè il layout (provato col Vite del repo: 1→4 ascoltatori in tre modifiche, col
+  passaggio sempre 1). Era: la faccia si iscriveva a `instanceBlockState` all'import, e a ogni aggiornamento a caldo
+  del file la copia vecchia restava iscritta. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-22».
 
 ## B · Backup e Docker (fase 01)
 
@@ -5555,6 +5654,79 @@ sulla base `23f6578f3`.
   `security.md`), e la scheda smette di chiamare `dropCheck` (i suoi casi tornano «nessuna cancellazione della
   copia»). Da fare insieme al biglietto dell'esito (B5c, se scelto): toccano la stessa API. Dettagli: piano 07, §13,
   «B5b».
+- **B-18 · `restore --instance-key-file`: ricifrare i segreti di un archivio in chiaro con la copia della chiave
+  vecchia** — piccolo; B, 16/10 (analisi di B4, d'accordo il coordinatore: backlog). Un archivio in chiaro non porta la
+  chiave d'istanza, e i segreti dei plugin restano «impostati ma illeggibili». Chi ha conservato la chiave vecchia (la
+  copia di `secrets/instance.key`, o il vecchio `LIBREFOLIO_INSTANCE_KEY`, per esempio consegnato dal pannello all'uscita
+  dal cloud) potrebbe darla alla CLI, che la usa per il rekey come quella di un backup sicuro (`derive_key_from`, la
+  strada già descritta nella docstring di H). Solo CLI, mai un upload della chiave dalla UI. Dettagli: piano 07, «B4 —
+  analisi sulla base nuova».
+- **B-19 · `backup decrypt` lanciato da root scrive uno zip di root** — minimo; B, 17/10 (docs-writer, B4). Gli altri
+  comandi di `dev.py backup` lavorano come il proprietario della cartella dei dati (`_drop_root_privileges`); `decrypt`
+  non legge la cartella dei dati, quindi con `docker compose exec` lo zip appartiene a root. La guida lo dice. Proposta:
+  se la cartella dei dati esiste, `decrypt` passa al suo proprietario come gli altri; senza, resta l'utente che lo
+  lancia (per decifrare su un portatile). Dettagli: piano 07, «B4 — analisi sulla base nuova» e seguenti.
+- **B-20 · knip segnala `RESTORE_TICKET_HEADER` come export inutilizzato** — minimo; B, 17/10 (controlli statici di
+  B4). L'export è di B5c (`frontend/src/lib/features/backup/backupApi.ts`). Il suo test lo legge con un cast sul modulo,
+  scritto quando era ancora rosso, e knip non lo conta come uso. Correzione: il test lo importa per nome. Non è un
+  gate: `lint --dead-code` era già rosso prima, per voci di altri. Dettagli: piano 07, «B4 — analisi sulla base nuova»
+  e seguenti.
+- **B-21 · Le due rotte del ripristino non prendono `ProfileDefaultError`** — minimo; H tramite il coordinatore, 17/10
+  (H-27, dev `bfdc1f72c`). `profile_default()` ora solleva `ProfileDefaultError`, un `TypeError`, quando la tabella dei
+  profili dà un valore del tipo sbagliato. `backup_max_upload_mb()` la chiama, e le sue due sole chiamate, in
+  `api/v1/backup/restore.py`, prendono solo `BackupConfigError`:
+  - `_upload_limit()` (`PUT /restore/upload`) risponderebbe 500 invece del 503 `backup_upload_unavailable`;
+  - `_readable_limit_mb()` (`GET /restore/status`) risponderebbe 500 invece di `upload_limit_mb: null`, e la scheda non
+    leggerebbe più lo stato del ripristino.
+
+  Correzione: prendere anche `ProfileDefaultError` nei due punti, con un caso per rotta. Si fa dopo l'ingresso di
+  H-27 nel ramo di B. Il test di guardia H-17 mette `123`, un intero: resta compatibile. Dettagli: piano 07, «B4
+  committato; validazione combinata…».
+- **B-22 · `totals.py` ripete la regola degli importi «testo decimale semplice» di J** — minimo; J tramite il
+  coordinatore, 17/10 (J-27). J-27 è già nella base di B: `7336722ad`, entrato con `e221a0544`.
+  `ledger_totals._as_amount` (la casa) rifiuta ogni testo che non sia decimale semplice prima di `Decimal()`, con la
+  stessa regola (precisione 60). Così `_plain` e `_PLAIN_AMOUNT` in `instance_backup/totals.py` sono un doppione, e anche
+  i loro controlli di struttura (righe che non sono una lista, una riga che non è un oggetto) finiscono in un
+  `ValueError` di `from_json`. **Decisione di B: si tolgono** («una regola, una casa»). Lo stato resta `absent` in ogni
+  caso. Da adattare: i casi di `test_backup_totals.py` che fissano «deciso prima che `from_json` veda il documento»
+  diventano «rifiutato da J»; il fixture `j_reads` resta la difesa contro l'espansione nel test. Nel lotto B4b, dopo
+  l'ingresso di B4. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
+- **B-23 · Dopo un crash restano file in chiaro, e nessuno li toglie all'avvio** — piccolo; E (R13-SEC4, piano 08 in
+  dev `110125350`), 17/10, più il punto (c) di B. Oggi la pulizia gira solo quando parte un nuovo controllo
+  (`restore_jobs.prune` in `start_check`) o un nuovo backup (`remove_expired_jobs` in `_prepare`):
+  - (a) `.restore/stage/<id>/archive.zip`, l'archivio decifrato con la chiave di origine, se il server muore fra la
+    decifratura e lo spacchettamento;
+  - (b) le cartelle `backups/.decrypt-*` di un `inspect` interrotto: il server non le toglie mai, la CLI solo al prossimo
+    `inspect`. Chi sincronizza `backups/` altrove si porta dietro il chiaro;
+  - (c) i file di lavoro di un job di backup interrotto, cioè lo zip in chiaro di un backup sicuro e la copia del DB in
+    `backups/.jobs/<id>/`: `get_job` segna `backup_interrupted` ma non li toglie.
+
+  Direzione: una pulizia all'avvio di (a), (b) e (c), con le regole della pulizia di B4: solo cartelle vere, mai un link;
+  per `.decrypt-*` la regola dell'ora, perché un `inspect` può girare mentre il server parte; lo stato del job resta.
+  Tocca la lista condivisa `STARTUP_STEPS` (`app_lifespan.py`, e i passi in `overview.md`): un passo nuovo dopo
+  `restore-commit`, o dentro il suo. Lotto B4b. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
+- **B-24 · Il messaggio di `backup decrypt` non dice che lo zip apre anche le chiavi salvate** — minimo; E (R13-SEC4),
+  17/10. Oggi dice: «It holds every user's data in clear». Uno zip decifrato di un backup che portava la chiave
+  d'istanza contiene anche quella chiave, che apre ogni chiave dei fornitori salvata. Da aggiungere al messaggio e alla
+  guida (`admin/backup_restore.en.md`, sezione `backup decrypt`). Lotto B4b.
+- **B-25 · `--password-stdin` su un terminale mostra la password; i campi della creazione hanno `autocomplete="off"`** —
+  minimo; E (R13-SEC4), 17/10. `--password-stdin` legge con `sys.stdin.readline()` (`scripts/backup_cli.py:100`) anche
+  quando lo standard input è un terminale, e lì la password si vede mentre la si scrive: con `isatty()` va letta con
+  `getpass`. Da decidere nell'analisi: alla creazione una o due volte. Nella scheda, i due campi della password di un
+  backup sicuro passano a `autocomplete="new-password"`: i gestori delle password ignorano spesso `off` e proporrebbero
+  quella dell'account. Lotto B4b.
+- **B-26 · Un file della chiave oltre 4096 byte si esporta, poi ogni ripristino lo rifiuta** — minimo; E (R13-SEC4),
+  17/10. La creazione legge `secrets/instance.key` con `read_secret_file` (fino a 64 KiB); la lettura dall'archivio si
+  ferma a `INSTANCE_KEY_MAX_BYTES` (4096, `archive.py`). Va rifiutato già all'esportazione: chiave non inclusa e avviso
+  `instance_key_unusable`, come per le altre chiavi inutilizzabili. Lotto B4b.
+- **B-27 · Dopo un ripristino riuscito la scheda Backup non dice nulla** — piccolo; G (G-20) tramite il coordinatore,
+  17/10, decisione notturna N67 (la rivede il developer). Dopo un ripristino `committed` la pagina va al login senza
+  dire niente (FBKP-107), e al rientro la scheda tace: `restore-last-result` c'è solo per `rolled_back`
+  (`RestoreCard.svelte:64`). Si aggiunge l'avviso «applied on {date}, backup of {date} (LibreFolio {version}),
+  confirmed by {user}», in un ruolo info. Resta fino al ripristino seguente, come `rolled_back`. Solo frontend:
+  `GET /restore/status` dà già `finished_at`, `backup_created_at`, `backup_app_version` e `confirmed_by`. Con i casi
+  Vitest, una chiave i18n in 4 lingue, un E2E su uno stato finto (come FBKP-103, e dà la foto a G) e una riga nella
+  guida. Dopo B4b. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
 
 ## E · Email (fase 01)
 
@@ -5664,7 +5836,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - EVA-017 fissa `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`.
     - Dettagli: piano 08, «E-11.0» e seguenti.
     - Commit `18d945d2e` (codice), `f2b459ebe` (docs), `fdd4acc6d` (journal); in `dev_release2` col merge `bca4bd6d3`.
-- **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
+- ✅ **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
   `mailbox_budget_key()` unisce gli alias `+tag` e i punti di Gmail. Restano due casi:
   - un dominio catch-all, dove ogni parte locale arriva alla stessa casella;
   - gli indirizzi a sottodominio di Fastmail (`qualsiasi@utente.fastmail.com`).
@@ -5672,6 +5844,18 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   In questi casi ogni parte locale è una chiave nuova, e li limita solo il budget orario dell'istanza. Un limite per
   dominio colpirebbe i grandi provider condivisi, quindi servirebbe un elenco di domini o un'altra idea. Dettagli:
   [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-9.0», «Resti fuori da E-9».
+  - 17/10, coordinatore: chiusa, il limite è accettato. Nessun codice.
+    - Una regola Fastmail nella chiave non può essere completa: l'indirizzamento a sottodominio vale su tutti i domini
+      di Fastmail, che sono decine, e sui domini personali dei clienti. Il catch-all resterebbe comunque.
+    - Un limite per dominio destinatario vorrebbe un elenco di provider esenti, mai completo, oppure una variabile
+      nuova: una scelta di prodotto per poco guadagno.
+    - Dopo N62 queste email non portano testo dell'attaccante, e il budget orario dell'istanza le limita. La doc lo
+      dice da E-9.
+    - La leva vera è la registrazione aperta: la domanda anti-abuso **D-E9-1** (captcha o proof-of-work, limiti alla
+      registrazione) è al developer.
+    - Se il codice servirà, la strada è `LIBREFOLIO_SMTP_MAX_PER_DOMAIN`, spenta di default, con un default per il
+      profilo `managed`, in un lotto suo.
+    - Dettagli: piano 08, «E-12.0» ed «E-12.1».
 
 ## Y · Cruscotto e grafici (fase 01)
 
