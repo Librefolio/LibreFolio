@@ -1,6 +1,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
+    import {donationsVisible} from '$lib/features/support/donations.svelte';
     import {onMount} from 'svelte';
     import {Book, Bug, ChevronDown, Coffee, Download, ExternalLink, HelpCircle, MessageCircle} from 'lucide-svelte';
 
@@ -146,15 +147,18 @@
                 <ExternalLink size={14} class="text-lf-muted opacity-0 group-hover:opacity-100 transition-opacity" />
             </a>
 
-            <div class="border-t border-lf-subtle my-1"></div>
+            <!-- F05 (workstream A): only once the server said self-hosted -->
+            {#if donationsVisible()}
+                <div class="border-t border-lf-subtle my-1"></div>
 
-            <a href={bmcUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-4 py-2.5 text-sm text-lf-primary hover:bg-lf-hover transition-colors group" role="menuitem">
-                <div class="flex items-center space-x-3">
-                    <Coffee size={18} class="text-lf-donate" />
-                    <span>{$_('help.buyMeACoffee')}</span>
-                </div>
-                <ExternalLink size={14} class="text-lf-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-            </a>
+                <a href={bmcUrl} target="_blank" rel="noopener noreferrer" class="flex items-center justify-between px-4 py-2.5 text-sm text-lf-primary hover:bg-lf-hover transition-colors group" role="menuitem" data-testid="help-donate-link">
+                    <div class="flex items-center space-x-3">
+                        <Coffee size={18} class="text-lf-donate" />
+                        <span>{$_('help.buyMeACoffee')}</span>
+                    </div>
+                    <ExternalLink size={14} class="text-lf-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                </a>
+            {/if}
         </div>
     {/if}
 </div>

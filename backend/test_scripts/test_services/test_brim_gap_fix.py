@@ -36,6 +36,12 @@ Covered, by item of the A3 interface:
    I order and consistency: input order, one import against three, a removed
      proposal (D-S24), two sets on an empty broker (scenario 8).
 
+Added later, red-first as well: W-B71, the calendar's last day (its own section,
+before the fixture guards): the end of a day becomes an inclusive query
+(``date <= as_of``), so ``get_balances_at_end_of`` answers 9999-12-31 instead of
+raising OverflowError and counts every row through it, one dated that day
+included; ``compute_gap_fix`` answers a checkpoint or a verification dated that day.
+
 Every test gets a private in-memory SQLite database with the ORM schema
 (``db_session``), holding two brokers and three assets: never the shared test
 database. All data is synthetic. Amounts and quantities are compared as numbers,
@@ -1530,6 +1536,168 @@ class TestOrderAndConsistency:
         assert _cash_rows(second) == {"EUR": _cash_row("700", "700", "0")}
         assert _position_rows(second) == {ASSET_A: _position_row("exact", "15", "15", "0")}
         assert _verified(response, _d("2026-12-31")).ok is True
+
+
+# =============================================================================
+# W-B71 — THE CALENDAR'S LAST DAY
+# =============================================================================
+#
+# ``get_balances_at_end_of(broker_id, as_of)`` reads the end of a day as the eve of the next one, the balance before
+# ``as_of`` + 1 day, and the gap-fix calls it with the ``as_of`` of every checkpoint and verification of the request.
+# 9999-12-31 has no next day: OverflowError, a 500 of ``POST /brokers/import/gap-fix``. The cure (W-B71) shifts no date:
+# the end of a day becomes an inclusive query, every row dated through ``as_of`` (``date <= as_of``), so at the end of
+# 9999-12-31 every row of the broker counts, one dated that very day included. Written red-first, before the cure; the
+# tests whose docstring starts with "Guard" sit inside the edges and pass before and after it.
+#
+# The save refuses the dates 9999-12-30 and 9999-12-31 today (N74), but an older version may have stored them, and they
+# are rows of the broker like any other. The bank's figures match LibreFolio's on purpose: the subject is that the truth
+# point is answered with every row counted, not the corrections (one dated 9999-12-31 is refused by the save,
+# ``dateOutOfRange``).
+
+LAST_DAY = date.max  # 9999-12-31
+LAST_EVE = date(9999, 12, 30)
+#: The own broker at the end of 9999-12-30 (``_seed_far_ledger``): the section 1 ledger (EUR 590, USD 20, A 8, B 3), then the BUY of 9999-12-30, EUR -12 and C +4.
+FAR_CASH = {"EUR": Decimal("578"), "USD": Decimal("20")}
+FAR_ASSETS = {ASSET_A: Decimal("8"), ASSET_B: Decimal("3"), ASSET_C: Decimal("4")}
+#: The same at the end of 9999-12-31, with the SELL of that very day (``last_day_row``): EUR +5, C -1.
+LAST_DAY_CASH = {"EUR": Decimal("583"), "USD": Decimal("20")}
+LAST_DAY_ASSETS = {ASSET_A: Decimal("8"), ASSET_B: Decimal("3"), ASSET_C: Decimal("3")}
+
+
+async def _seed_far_ledger(session: AsyncSession, *, last_day_row: bool = False) -> None:
+    """The section 1 ledger, a BUY dated the eve of the calendar's last day (EUR -12, C +4) and, with ``last_day_row``, a SELL dated the last day itself (EUR +5, C -1)."""
+    await _seed_ledger(session)
+    rows = [_saved(BUY, LAST_EVE.isoformat(), amount="-12", currency="EUR", asset_id=ASSET_C, quantity="4")]
+    if last_day_row:
+        rows.append(_saved(SELL, LAST_DAY.isoformat(), amount="5", currency="EUR", asset_id=ASSET_C, quantity="-1"))
+    await _add(session, *rows)
+
+
+def _exactness(asset_id: int) -> str:
+    """How the bank proves each position here: C as a minimum, the others exactly."""
+    return "at_least" if asset_id == ASSET_C else "exact"
+
+
+def _bank_cash(cash: Dict[str, Decimal]) -> List[BRIMTruthCash]:
+    """The cash the bank states, per currency."""
+    return [_truth(currency, str(amount)) for currency, amount in cash.items()]
+
+
+def _bank_positions(assets: Dict[int, Decimal]) -> List[BRIMTruthPosition]:
+    """The positions the bank proves, each as ``_exactness`` says."""
+    return [_position(asset_id, str(quantity), _exactness(asset_id)) for asset_id, quantity in assets.items()]
+
+
+def _agreeing_cash_rows(cash: Dict[str, Decimal]) -> Dict[str, Tuple[Decimal, Decimal, Decimal]]:
+    """``_cash_rows`` of a truth point where the bank and LibreFolio both hold ``cash``."""
+    return {currency: _cash_row(str(amount), str(amount), "0") for currency, amount in cash.items()}
+
+
+def _agreeing_position_rows(assets: Dict[int, Decimal]) -> Dict[int, Tuple[str, Decimal, Decimal, Decimal]]:
+    """``_position_rows`` of a checkpoint where the bank proves and LibreFolio holds ``assets``."""
+    return {asset_id: _position_row(_exactness(asset_id), str(quantity), str(quantity), "0") for asset_id, quantity in assets.items()}
+
+
+def _last_day_overflow(what: str, exc: OverflowError) -> NoReturn:
+    """Fail naming W-B71: ``what`` ran past the calendar's last day."""
+    pytest.fail(
+        f"W-B71: {what} raised OverflowError ({exc}), a 500 of POST /brokers/import/gap-fix: get_balances_at_end_of reads the end of a day as the eve of the next one, as_of + 1 day, and 9999-12-31 has none. The end of a day must be an inclusive query (date <= as_of): every row through as_of counts, those dated 9999-12-31 included",
+        pytrace=False,
+    )
+
+
+class TestCalendarsLastDay:
+    """W-B71 — the end of 9999-12-31 counts every row of the broker through that day, its own included (an inclusive query, not the eve of a next day), and the gap-fix answers a truth point dated that day."""
+
+    @pytest.mark.asyncio
+    async def test_balances_at_the_end_of_the_last_day_count_every_row(self, db_session: AsyncSession) -> None:
+        """RED until W-B71: at the end of 9999-12-31 the broker holds every row of its own — the 2024 ledger and the BUY of 9999-12-30 — and none of the other broker's."""
+        at_end_of = _balances_at_end_of(db_session)
+        await _seed_far_ledger(db_session)
+
+        try:
+            cash, assets = await at_end_of(BROKER_ID, LAST_DAY)
+        except OverflowError as exc:
+            _last_day_overflow("TransactionService.get_balances_at_end_of(broker_id, 9999-12-31)", exc)
+
+        assert (_nonzero(cash), _nonzero(assets)) == (FAR_CASH, FAR_ASSETS)
+
+    @pytest.mark.asyncio
+    async def test_a_row_dated_the_last_day_counts_at_its_end(self, db_session: AsyncSession) -> None:
+        """RED until W-B71: a SELL dated 9999-12-31 itself (EUR +5, C -1), stored directly as an older version could have, counts at the end of 9999-12-31.
+
+        The end of a day is every row through it (``date <= as_of``). Cutting the next day at the calendar's edge instead
+        (``shift_date``, then ``date < 9999-12-31``) would answer, but leave this row out.
+        """
+        at_end_of = _balances_at_end_of(db_session)
+        await _seed_far_ledger(db_session, last_day_row=True)
+
+        try:
+            cash, assets = await at_end_of(BROKER_ID, LAST_DAY)
+        except OverflowError as exc:
+            _last_day_overflow("TransactionService.get_balances_at_end_of(broker_id, 9999-12-31), on a ledger with a SELL dated 9999-12-31,", exc)
+
+        got, expected = (_nonzero(cash), _nonzero(assets)), (LAST_DAY_CASH, LAST_DAY_ASSETS)
+        assert got == expected, f"W-B71: the SELL dated 9999-12-31 (EUR +5, C -1) must count at the end of 9999-12-31, an inclusive query (date <= as_of): expected {expected}, got {got}; without that row {(FAR_CASH, FAR_ASSETS)}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("day", "cash", "assets"),
+        [
+            pytest.param(date.min, {}, {}, id="the-first-day"),
+            pytest.param(LAST_EVE, FAR_CASH, FAR_ASSETS, id="the-eve-of-the-last-day"),
+        ],
+    )
+    async def test_guard_balances_inside_the_edges(self, db_session: AsyncSession, day: date, cash: Dict[str, Decimal], assets: Dict[int, Decimal]) -> None:
+        """Guard (passes before and after W-B71): at the end of 0001-01-01 the broker holds nothing yet; at the end of 9999-12-30 every row through that day counts, its BUY included and the SELL of 9999-12-31 not yet."""
+        at_end_of = _balances_at_end_of(db_session)
+        await _seed_far_ledger(db_session, last_day_row=True)
+
+        got_cash, got_assets = await at_end_of(BROKER_ID, day)
+
+        assert (_nonzero(got_cash), _nonzero(got_assets)) == (cash, assets)
+
+    @pytest.mark.asyncio
+    async def test_gap_fix_checkpoint_on_the_last_day(self, db_session: AsyncSession) -> None:
+        """RED until W-B71: a checkpoint dated 9999-12-31 is compared with every row of the broker through that day, its SELL included, and the bank agrees: nothing to propose."""
+        await _seed_far_ledger(db_session, last_day_row=True)
+
+        try:
+            response = await _run(db_session, checkpoints=[_checkpoint(LAST_DAY, cash=_bank_cash(LAST_DAY_CASH), positions=_bank_positions(LAST_DAY_ASSETS))])
+        except OverflowError as exc:
+            _last_day_overflow("compute_gap_fix with a checkpoint dated 9999-12-31", exc)
+
+        result = _at(response, LAST_DAY)
+        assert (_cash_rows(result), _position_rows(result)) == (_agreeing_cash_rows(LAST_DAY_CASH), _agreeing_position_rows(LAST_DAY_ASSETS))
+        assert (result.kind, result.proposals, result.todos, result.explanation.unexplained_cash) == ("gap", [], [], [])
+        assert response.verifications == []
+
+    @pytest.mark.asyncio
+    async def test_gap_fix_verification_on_the_last_day(self, db_session: AsyncSession) -> None:
+        """RED until W-B71: a verification dated 9999-12-31 is compared with every row of the broker through that day, its SELL included, and it is ok."""
+        await _seed_far_ledger(db_session, last_day_row=True)
+
+        try:
+            response = await _run(db_session, verifications=[_verification(LAST_DAY, *_bank_cash(LAST_DAY_CASH))])
+        except OverflowError as exc:
+            _last_day_overflow("compute_gap_fix with a verification dated 9999-12-31", exc)
+
+        verification = _verified(response, LAST_DAY)
+        assert (verification.ok, _cash_rows(verification)) == (True, _agreeing_cash_rows(LAST_DAY_CASH))
+        assert response.checkpoints == []
+
+    @pytest.mark.asyncio
+    async def test_guard_gap_fix_on_the_eve_of_the_last_day(self, db_session: AsyncSession) -> None:
+        """Guard (passes before and after W-B71): a checkpoint and a verification dated 9999-12-30 are answered with every row through that day, the SELL of 9999-12-31 not yet."""
+        await _seed_far_ledger(db_session, last_day_row=True)
+
+        response = await _run(db_session, checkpoints=[_checkpoint(LAST_EVE, cash=_bank_cash(FAR_CASH), positions=_bank_positions(FAR_ASSETS))], verifications=[_verification(LAST_EVE, *_bank_cash(FAR_CASH))])
+
+        result = _at(response, LAST_EVE)
+        assert (_cash_rows(result), _position_rows(result)) == (_agreeing_cash_rows(FAR_CASH), _agreeing_position_rows(FAR_ASSETS))
+        assert (result.kind, result.proposals, result.todos, result.explanation.unexplained_cash) == ("gap", [], [], [])
+        verification = _verified(response, LAST_EVE)
+        assert (verification.ok, _cash_rows(verification)) == (True, _agreeing_cash_rows(FAR_CASH))
 
 
 # =============================================================================

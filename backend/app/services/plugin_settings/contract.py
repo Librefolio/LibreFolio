@@ -5,7 +5,8 @@ Every family base that supports settings (``AssetSourceProvider``, ``FXRateProvi
 
 - ``settings_fields``: the fields the plugin declares (``fields.py``), empty by default: a plugin that declares none
   is called exactly as before, with no database read and no key;
-- ``test_only``: a plugin that exists for the tests, never listed to users (catalogue, provider lists, settings);
+- ``test_only``: a plugin that exists for the tests, never listed to users (catalogue, provider lists, settings), and
+  outside test mode not served at all: the registries do not find it (X-R44);
 - ``settings``: the values the core bound to this instance (``runtime.py``), or, on an instance nobody configured,
   the declared defaults and no secret.
 

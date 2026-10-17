@@ -48,11 +48,12 @@
  * A saved incoming ADJUSTMENT without a cost basis cannot be created plainly through the public
  * API: a create without one is refused with `costBasisRequired` itself (backend test B2.8); Auto
  * mode stores the computed average cost (0 for an empty pool) or refuses with `wacFxUnavailable`;
- * and an update cannot clear a cost basis (`None` there means "not sent"). The one such row the
+ * and an update that clears it is refused with `costBasisRequired` too (since decision P5 an
+ * explicit `null` removes a cost basis: `_apply_update_values()`, `batch_edits.py`). The one such row the
  * app itself stores is an ADJUSTMENT linked to a SPLIT asset event and saved in Auto mode, whose
  * cost the engines derive from the split ratio (`_compute_wac_for_auto_items`, `is_split_linked`;
  * backend test
- * `test_forward_split_relabelled_as_price_adjustment_becomes_an_unknown_cost_acquisition` asserts
+ * `test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one` asserts
  * `cost_basis_override is None`). The form saves the same row whenever a positive ADJUSTMENT is
  * linked to a split.
  *

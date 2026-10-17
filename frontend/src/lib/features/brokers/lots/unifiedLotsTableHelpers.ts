@@ -16,6 +16,11 @@
  * here anyway, because the rule they carry — partial lots keep their open share under
  * privacy — is logic worth a unit test.
  *
+ * @financial-math-exception The lots table footer (D-MF6(b)): sums, value-weighted averages and the total and net
+ * return over the summed opening value, of the rows the user selects, else of every row the filters keep (on every
+ * page). It aggregates what the user chooses, which no backend field can hold; the fixed total of every lot is the
+ * backend's (`LotSummarySchema`).
+ *
  * @module brokers/lots/unifiedLotsTableHelpers
  */
 

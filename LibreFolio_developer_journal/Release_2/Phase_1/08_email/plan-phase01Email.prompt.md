@@ -4585,6 +4585,135 @@ non sposti il registro.
 > **Non eseguite**: le spec E2E `email-send-link` (parti 1 e 2) e `email-tab` (titoli dei `describe` cambiati), nello
 > slot in coda.
 
+#### E-8.5 — Due rossi Vitest in dev, dal gate G ✅ (2026-10-17, 10:31–10:41)
+> **Il compito del coordinatore** (10:31, urgente, prima di E-15 e di X-R44). Il gate G (`front-utility`, dev
+> `91f4de9cb`) è rosso in due file di E. Log: `…/928ffa97-…/files/logs/gate-g.log`.
+> 1. **`emailText.test.ts` ETX-14** (core-unit): si aspetta ancora `['to']` per `email.sendLink.sent`, che da E-8 nomina
+>    anche `{language}`.
+> 2. **`linkShareRegistration.test.ts`** (component-unit) non si carica: `No "DEFAULT_LOCALE" export is defined on the
+>    "$lib/i18n" mock`.
+>    - Il componente prende `SimpleSelect` dal barile `$lib/components/ui/select`, che carica anche
+>      `CurrencySearchSelect.svelte`.
+>    - Quello importa `stores/app/language.ts`, che costruisce il suo store all'import e legge `DEFAULT_LOCALE`.
+>    - Il mock del test dà solo `_`.
+>
+> **⚠️ Fuori pista**: un errore mio. In E-8 ho fatto girare solo `SendLinkByEmail.test.ts` e `sendLinkApi.test.ts`, non
+> tutta la cartella `features/email`, che ha altri test sulle stesse chiavi e sullo stesso componente. **D'ora in poi**:
+> dopo ogni modifica a un componente o a una chiave di E, gira tutta la cartella `features/email`.
+>
+> **La cura**, solo nei test (decisione del coordinatore), dal `test-author`:
+> - ETX-14: `sent` nomina `['language', 'to']`, e `languageLabel` e `languageInstance` entrano nella lista delle chiavi
+>   senza argomenti;
+> - `linkShareRegistration.test.ts`: il mock di `$lib/i18n` diventa parziale (`importOriginal`), come in
+>   `SendLinkByEmail.test.ts:73-76`, con `_` che resta un traduttore identità. Anche così nessun catalogo si carica,
+>   perché `i18n/index.ts` registra solo dei loader pigri.
+>
+> **La base**: chiesto al coordinatore l'avanzamento rapido a dev `91f4de9cb`. I 40 commit di dev non toccano
+> `features/email`, il barile delle select, `language.ts` né l'indice i18n.
+> - Per lasciarlo passare ho tolto dal backlog la mia riga E-15, non committata; è salvata in
+>   `files/e15_backlog_line.diff`.
+> - La riscrivo per la cura (1) dopo l'avanzamento. Fatto: riscritta in questo checkpoint.
+> - Il coordinatore ha avanzato il ramo a dev **`46bbbb1e3`** (10:35), tenendo sporco il piano 08. Verificato: da
+>   `73decbb99` dev non tocca `features/email`, il barile, `language.ts`, l'indice i18n, `conftest.py` né `cli_base.py`.
+> - I rossi DataTable (Y-27) dello stesso log erano una corsa del gate: Y-27 è entrato a metà run, e sulla punta sono
+>   64/64 (coordinatore).
+>
+> **Note implementazione** (test-author `1b425722`, diff rivisto da me):
+> - `emailText.test.ts`:
+>   - ETX-14 vuole `['language', 'to']` per `sent`;
+>   - `languageLabel` e `languageInstance` sono tra le chiavi senza argomenti;
+>   - il titolo del test e il commento di testa dicono «`{to}` e `{language}`».
+> - `linkShareRegistration.test.ts`:
+>   - il mock di `$lib/i18n` è parziale (`importOriginal`), e `_` resta il traduttore identità;
+>   - il paragrafo «Mocks:» dice perché è parziale e perché nessun catalogo si carica: loader pigri e niente
+>     `initI18n()`. Inoltre lo store della lingua non imposta la lingua, perché `browser` è `false` nel mock di
+>     `$app/environment` (verificato: `src/__mocks__/$app/environment.ts`).
+>
+> **I vicini**: altri 7 test arrivano alla feature email, e 4 di loro mockano `$lib/i18n`. Sono tutti in
+> `front-utility`, che il gate G aveva già verde.
+> - `LinkShare.component.test.ts` dà un mock completo (con `DEFAULT_LOCALE`) e finge lo store della lingua.
+> - `page.tabs.test.ts` sostituisce ogni scheda con un componente vuoto.
+> - Li ho fatti girare lo stesso.
+>
+> **Prove** (10:38–10:40, `files/tools/e8fix_checks.sh`, carico 30–40, nessun server):
+>
+> | Controllo | Esito |
+> |---|---|
+> | Vitest, i 2 file curati | 282 / 282 |
+> | Vitest, tutta la cartella `features/email` (12 file) | 858 / 858 |
+> | Vitest, i 7 vicini: `LinkShare.component`, `page.tabs`, `settingsTabs`, `apiClientRuneFree.gate`, `auth.verification`, `ForgotPasswordCard.email`, `LoginCard.verification` | 161 / 161 |
+> | prettier sui 2 file | pulito |
+> | `git diff --check` | pulito |
+> | porta 6188 | libera |
+
+### E-15 — I limiti dei login accesi in silenzio nei run combinati (`email-verification` rosso solo in `all-backend`)
+
+#### E-15.0 — Triage ✅ (2026-10-17, 09:56–10:30; skill `test-triage`)
+> **Il compito del coordinatore** (09:56). Nell'`all-backend --workers 2` di W su `5ece98c29`, `email-verification` è
+> rosso solo nel run combinato: 21 fallimenti nei servizi e 7 nelle API, tutti `EmailRateLimitedError` con
+> `retry_after` di circa 899 s. Da soli, le due unità passano (gate D e F). Log:
+> `…/e71e0e34-…/files/logs/allb_sec73_0855.log`.
+>
+> **Le prove, lette prima di rilanciare** (§0):
+> - Nel worker 0 (95 unità), il primo rosso è EMV-033; tutti i rossi sono nello stesso modulo, il terzo della lista.
+> - **Il rifiuto non viene dal limite per indirizzo di E** (EMV-033 usa un `resend_limit` privato), ma da
+>   **`login_throttle.refusal()`** (`verification.py:379`), il limite dei login, che `conftest.py` spegne per i test.
+> - La sequenza: 9 password sbagliate e il 10° tentativo rifiutato. EVA-009 (worker API) riceve un 429 dove si aspetta
+>   un 401.
+> - **Quindi, in quei processi, il limite dei login era acceso.**
+>
+> **Le ipotesi, in ordine, ognuna con una prova** (corsia 6188, carico sotto 50):
+>
+> | Prova | Esito | Cosa dice |
+> |---|---|---|
+> | il modulo da solo, `LIBREFOLIO_LOGIN_LIMIT=on`, con `dev.py` | 127 passati | non prova niente: `configure_test_runtime()` toglie ogni `LIBREFOLIO_*` della shell |
+> | le 3 unità del worker 0 con pytest diretto, `=on` | **21 falliti**, gli stessi | col limite acceso il rosso si riproduce |
+> | le stesse 3 unità, variabile tolta | 267 passati | le prime due unità non c'entrano |
+> | il modulo più `test_user_profile.py` (dopo), variabile tolta | **21 falliti**, gli stessi | **il meccanismo** |
+>
+> **Il meccanismo**:
+> 1. `backend/test_scripts/conftest.py:15` mette `LIBREFOLIO_LOGIN_LIMIT=off` con `os.environ.setdefault`, una volta
+>    sola, all'avvio della sessione.
+> 2. **60 moduli di test** chiamano `setup_test_database()` all'import. La chiamata passa per `get_test_db_path()` e
+>    `get_test_data_dir()` fino a `scripts.cli_base.configure_test_runtime()`, che con `_test_lane_drops()` toglie ogni
+>    `LIBREFOLIO_*` che la corsia non tiene (`TEST_LANE_KEEPS`, `LIBREFOLIO_TEST_*`). Tra questi c'è il nostro `off`.
+> 3. Succede **alla raccolta**, prima di ogni test, ovunque stia il modulo: in un processo combinato il limite dei login
+>    è acceso per tutti i test.
+> 4. Con il limite acceso, l'ultima password sbagliata di EMV-032 per `zq_alice` più le 9 di EMV-033 fanno 10, e il
+>    10° tentativo è rifiutato (`retry_after` = 900 − 1).
+> 5. Da solo il modulo non chiama `setup_test_database()`, quindi resta `off` e passa.
+>
+> **Verdetto**: **stato condiviso**, non flaky. Un vicino (l'import di un modulo che prepara il DB) toglie dal processo
+> la variabile da cui il test dipende.
+>
+> **Le cure**:
+> - **(A) la radice**, infrastruttura di test condivisa, da proporre al coordinatore: un fixture autouse in
+>   `backend/test_scripts/conftest.py` che, prima di ogni test, rimette `off` se la variabile manca (con
+>   `monkeypatch`). Così «un valore esplicito vince ancora», e un test che la toglie apposta la toglie dopo. In
+>   alternativa: `configure_test_runtime()` rimette `off` dopo i drop, come fa già `dev.py` per il server. **Ogni
+>   modulo che si affida a `off` è esposto**, non solo i miei.
+> - **(B) i miei moduli**, ora, dal `test-author`: un fixture autouse che fissa `LIBREFOLIO_LOGIN_LIMIT=off` con
+>   `monkeypatch`. I moduli sono `test_email_verification.py` (servizi), `test_email_verification_api.py`,
+>   `test_email_change_notice_api.py` e `test_email_verification_hooks_api.py`; `test_email_delivery.py` da verificare
+>   (le sue «password sbagliate» sono forse quelle SMTP).
+> - **Accettazione**: la coppia «modulo più `test_user_profile.py`, variabile tolta» deve passare, per ognuno dei moduli
+>   toccati.
+
+#### E-15.1 — Decisione del coordinatore ✅ (2026-10-17, 10:29)
+> **(1), il fixture autouse in `backend/test_scripts/conftest.py`**. Nessun ramo lo tocca, ed è mio per questo lotto.
+> **(B) cade**: i fixture per modulo sarebbero ridondanti.
+> - Il `test-author` di (B) è stato fermato prima di toccare qualcosa: nessun file cambiato.
+> - Il suo appunto utile per (1): EMV-034 manda 12 reinvii con password sbagliata per `zq_alice` senza indirizzo, quindi
+>   col limite acceso è rosso anche da solo. E `test_email_verification_api.py` monta i router veri nel processo di
+>   pytest, quindi ne segue l'ambiente.
+>
+> **Accettazione**:
+> - le coppie «modulo più `test_user_profile.py`, variabile tolta» (`files/tools/e15_pairs.sh`);
+> - più un run combinato delle 3 unità del worker 0, variabile tolta.
+>
+> **L'ordine**: prima la revisione X-R44 (blocca un ingresso), se (1) non è già a metà. Poi, alle 10:31, l'urgenza
+> E-8.5 ha preceduto entrambe.
+
 ### R13-SEC6 — A8a (il limite dei login falliti, `security/checks`) e i miei file (2026-10-17, 05:03–)
 > **Il compito del coordinatore** (05:02): A8a, cioè il codice `66873b0c9`, le docs `4a93f1f54` e il merge di dev
 > `125c19f0e`, con E-11 in `email.md`. Letto dagli oggetti git, mai dal worktree di A. Due parti:

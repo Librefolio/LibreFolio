@@ -34,6 +34,7 @@ def run_fifo_lot_engine(
     reference_price_lookup: ReferencePriceLookup | None = None,
     economic_events: Sequence[EconomicEvent] = (),
     target_currency: str = "",
+    replay_until: date | None = None,
 ) -> FifoEngineResult:
 ```
 
@@ -48,6 +49,7 @@ def run_fifo_lot_engine(
 | `reference_price_lookup` | Optional pure lookup used by current implementation when `ADJUSTMENT_IN` opens a new LONG lot. The lots analysis passes one that reads the asset's daily marks (see [Reference Price](lots_analysis_service.md#reference-price)); without a lookup, or when it returns `None`, the lot gets `reference_price_source = "unavailable"`. |
 | `economic_events` | Asset-linked `DIVIDEND` / `INTEREST` / `FEE` / `TAX` as `EconomicEvent`s, each with its native amount and the target-currency amount its caller resolved; consumed by the [economic allocation stage](#economic-allocation-stage). |
 | `target_currency` | The caller's report currency; each `EconomicEvent` also carries its own `target_currency`. `_close_position_piece()` also reads it: a lot or a closing price without a currency counts in it when a closure's currency is compared with its lot's (see [Closure currency](#closure-currency)). |
+| `replay_until` | The last day the replay reaches; `None` reaches every event. An event dated after it is neither applied nor returned in `classified_events`: a lots analysis passes its `date_to`, so a transfer whose arriving leg is dated later departs and stays `IN_TRANSIT` (see [Transfers In Transit at the End](lots_analysis_service.md#in-transit-at-date-to)). The pairing still reads both legs. |
 
 ### 📤 Output
 

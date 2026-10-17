@@ -78,7 +78,7 @@ from backend.app.services.platform.instance_backup.paths import (
 )
 from backend.app.services.platform.instance_backup.snapshot import DatabaseDescription, describe_database
 from backend.app.services.platform.instance_backup.totals import TotalsComparison, TotalsDifference, TotalsStatus, compare_totals, ledger_totals_of
-from backend.app.services.platform.instance_key import InstanceKeyError, derive_key_from
+from backend.app.services.platform.instance_key import INSTANCE_KEY_MIN_LENGTH, InstanceKeyError, derive_key_from
 from backend.app.services.plugin_settings.crypto import SUBKEY_LENGTH, SUBKEY_PURPOSE, count_unreadable_secrets, rekey_plugin_secrets, settings_subkey
 
 logger = get_logger(__name__)
@@ -205,11 +205,14 @@ def new_stage_id() -> str:
     return uuid4().hex
 
 
-def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = None, progress: StageProgress | None = None, lock: _RunLock | None = None, key: EnvelopeKey | None = None) -> StagingReport:
+def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = None, progress: StageProgress | None = None, lock: _RunLock | None = None, key: EnvelopeKey | None = None, instance_key: str | None = None) -> StagingReport:
     """Check the archive at ``archive_path`` for a restore into ``data_dir``, on a copy, and return the report.
 
     ``key``: the key of a secure backup (``envelope.unlock``); without it, such an archive is refused
-    (``password_required``).
+    (``password_required``). ``instance_key``: the instance key of the installation the archive came from, for an
+    archive that does not carry its own (``dev.py backup restore --instance-key-file``, B-18): its saved plugin secrets
+    are re-encrypted from it with this instance's key; the archive's own key wins. Not a key: ``StagingError``
+    ``instance_key_invalid``, before anything is created, its text in no message.
 
     The copy and its report stay in ``.restore/stage/<stage id>/``; on any refusal nothing of them is left. One archive
     is checked at a time: ``StagingBusyError`` while another is. ``StagingError`` says why an archive is refused.
@@ -217,6 +220,7 @@ def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = 
     checks in a thread). The caller keeps it and releases it itself, once the check's end is recorded: until then, a
     reader must find it held. Without one, the lock is taken and released here.
     """
+    _refuse_unusable_instance_key(instance_key)
     stage_id = stage_id or new_stage_id()
     owned = lock is None
     if owned:
@@ -228,7 +232,7 @@ def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = 
         root = stage_dir(data_dir, stage_id)
         root.mkdir(mode=0o700)
         try:
-            report = _stage(archive_path, root, stage_id, progress if progress is not None else _no_progress, key)
+            report = _stage(archive_path, root, stage_id, progress if progress is not None else _no_progress, key, instance_key)
         except BaseException:
             shutil.rmtree(root, ignore_errors=True)
             raise
@@ -276,7 +280,18 @@ def _no_progress(phase: StagePhase, done: int, total: int) -> None:
     return None
 
 
-def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgress, key: EnvelopeKey | None = None) -> StagingReport:
+def _refuse_unusable_instance_key(instance_key: str | None) -> None:
+    """An instance key given for the restore (B-18) that is not one is refused before anything is created; never its
+    text in a message."""
+    if instance_key is None:
+        return
+    try:
+        derive_key_from(instance_key, SUBKEY_PURPOSE, SUBKEY_LENGTH)
+    except InstanceKeyError:
+        raise StagingError("instance_key_invalid", f"The instance key given is too short: an instance key has at least {INSTANCE_KEY_MIN_LENGTH} characters") from None
+
+
+def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgress, key: EnvelopeKey | None = None, instance_key: str | None = None) -> StagingReport:
     data_root = root / STAGE_DATA_FOLDER
     encrypted = is_envelope(archive_path)
     if encrypted:
@@ -286,7 +301,8 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
         manifest = _read_manifest(archive)
         entries = _checked_entries(archive, manifest)
         _check_space(root, manifest)
-        archive_key = _archive_instance_key(archive, manifest) if INSTANCE_KEY_ENTRY in entries else None
+        # The archive's own key wins over one given for the restore (B-18, decision D1).
+        archive_key = _archive_instance_key(archive, manifest) if INSTANCE_KEY_ENTRY in entries else instance_key
         _unpack(archive, manifest, entries, root, data_root, progress)
     if encrypted:
         archive_path.unlink(missing_ok=True)

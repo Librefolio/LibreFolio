@@ -128,6 +128,8 @@ class TXValidationCode(StrEnum):
     INTEGER_DIGITS_EXCEEDED = "integerDigitsExceeded"
     # N74 (R13-SEC7-3): a date outside 1900-01-01 … today + 1 year, params {min, max} (ISO dates).
     DATE_OUT_OF_RANGE = "dateOutOfRange"
+    # W-B69: an Auto cost over a pool holding rows that cannot be read, params {count}.
+    AUTO_COST_UNREADABLE = "autoCostUnreadable"
 
 
 class TXValidationCodeInfo(StrictModel):

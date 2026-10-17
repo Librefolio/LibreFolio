@@ -480,7 +480,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
                 item_days += (requested_end - signal_start).days + 1
 
         if item_days > MAX_BULK_ITEM_DAYS:
-            raise HTTPException(status_code=422, detail=bulk_too_many_days_detail(item_days, MAX_BULK_ITEM_DAYS))
+            raise HTTPException(status_code=422, detail=bulk_too_many_days_detail(item_days, MAX_BULK_ITEM_DAYS, at_least=True))
 
     for kind, original_idx, block_conversion, amount, first_day, last_day in day_blocks:
         current_date = first_day

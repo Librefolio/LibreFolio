@@ -6,6 +6,9 @@ run the jobs: one that comes second waits, reads the state the first one saved, 
 releases the lock when its process dies, so no lock outlives a crash. The file stays: deleting a lock file in use
 would let another process lock a new file of the same name.
 
+A wait for the lock may end at a deadline (Z-26, night decision N79): the scheduler gives each run one, at most
+``LOCK_WAIT_SECONDS`` away, so that a job stuck in another process cannot park this one's runs for good.
+
 Where ``fcntl`` is missing (Windows), runs are serialised per process only, and the scheduler falls back on the leader
 election (``leader.py``). The lock follows the pattern of the backup runs (``instance_backup/jobs.py``, ``_RunLock``).
 """
@@ -13,6 +16,7 @@ election (``leader.py``). The lock follows the pattern of the backup runs (``ins
 import asyncio
 import contextlib
 import os
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -27,6 +31,13 @@ except ImportError:  # pragma: no cover - not POSIX: the scheduler falls back on
 LOCK_FILE_NAME = ".scheduler.lock"
 #: Seconds between two attempts while another process holds the lock.
 POLL_SECONDS = 0.2
+#: The longest a scheduler run waits for another run, its two waits together (this process's lock, then this one): ten
+#: minutes, well past a normal run. The scheduler reads it by name, for its deadline (Z-26, N79).
+LOCK_WAIT_SECONDS = 600.0
+
+
+class SchedulerRunLockTimeout(TimeoutError):
+    """Another process held the scheduler's lock past the deadline of the wait: the block never ran."""
 
 
 def cross_process_lock_available() -> bool:
@@ -71,12 +82,16 @@ def _release_if_taken(attempt: asyncio.Future) -> None:
 
 
 @contextlib.asynccontextmanager
-async def scheduler_run_lock(path: Path | None = None) -> AsyncIterator[None]:
+async def scheduler_run_lock(path: Path | None = None, *, deadline: float | None = None) -> AsyncIterator[None]:
     """Hold the scheduler's lock across processes for the block; wait for it while another process holds it.
 
     Each attempt opens the file and tries the lock in a thread: the event loop never touches the file. The wait polls
     every ``POLL_SECONDS`` and can be cancelled; an attempt still in flight then releases the lock if it took it. A
     symlink at the path raises ``OSError`` (``O_NOFOLLOW``). Only where ``cross_process_lock_available()``.
+
+    ``deadline``, an instant of ``time.monotonic()``, ends the wait (Z-26): an attempt that finds the lock held once it
+    has passed raises ``SchedulerRunLockTimeout``, its descriptor closed and no attempt in flight. There is always one
+    attempt, so a free lock is taken even past the deadline. ``None`` waits as long as needed.
     """
     target = run_lock_path() if path is None else path
     fd: int | None = None
@@ -88,7 +103,13 @@ async def scheduler_run_lock(path: Path | None = None) -> AsyncIterator[None]:
             attempt.add_done_callback(_release_if_taken)
             raise
         if fd is None:
-            await asyncio.sleep(POLL_SECONDS)
+            if deadline is None:
+                await asyncio.sleep(POLL_SECONDS)
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise SchedulerRunLockTimeout("another process held the scheduler's lock past the deadline of the wait")
+            await asyncio.sleep(min(POLL_SECONDS, remaining))
     try:
         yield
     finally:

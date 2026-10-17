@@ -111,7 +111,8 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` (both
       also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
       `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`,
-      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_LOGIN_LIMIT`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
+      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_LOGIN_LIMIT`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TOS_URL`,
+      `LIBREFOLIO_PRIVACY_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
       job or `./dev.py docker build` freezes), `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`,
       `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`), the variables of the plugin
       settings (`LIBREFOLIO_PLUGIN_*` and the aliases of secret fields, all also as `_FILE`), the order
@@ -145,14 +146,16 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `mailto:` and one email address, the scheme in any case: `?`, `#`, `%`, `,`, `;`, `<`, `>`, `"`,
       `/` and any whitespace are refused before pydantic's `EmailStr` reads the address, without DNS,
       and it returns `mailto:` and the address as `EmailStr` normalizes it. `env_url()` itself stays
-      http(s) only.
+      http(s) only, and so do `tos_url()` and `privacy_url()`, in the same module, which return
+      `env_url()` of their variable.
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, the address reader `env_url()`, `Settings` and `get_settings()`. New variables
       go into one section module per topic, owned by the workstream of that area. Seven exist today:
       `platform.py` (H: `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
-      `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`, `support_url()`),
+      `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`, `support_url()`, and
+      `tos_url()` and `privacy_url()`, the legal pages, written by A),
       `accounts.py` (A: `donation_popup_disabled()`, `registration_mode_override()`,
       `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`,
       `login_limit_value()` and `login_limit_enabled()`, the switch of the
@@ -187,7 +190,11 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       ([Registration Modes](access_control.md#registration-modes)). An invalid
       `LIBREFOLIO_SUPPORT_URL` does not either: `support_link()`
       (`services/platform/instance_links.py`) logs it once, and `GET /system/instance` answers
-      `support_url: null`, so the app keeps its link to the project's GitHub issues. An unusable
+      `support_url: null`, so the app keeps its link to the project's GitHub issues. Nor does an
+      invalid `LIBREFOLIO_TOS_URL` or `LIBREFOLIO_PRIVACY_URL`: `terms_link()` and `privacy_link()`,
+      in the same module, log it once per process, the same `Invalid instance link` error with its
+      own `consequence`, and `GET /system/instance` answers `null` for that link in `legal`: the legal
+      notice shows without it. An unusable
       `LIBREFOLIO_ADMIN_*` value does stop it, as `admin_bootstrap_config()` runs in the startup audit,
       and so does a `LIBREFOLIO_LOGIN_LIMIT` other than `on` or `off`: `login_limit_enabled()` runs
       right after it.
@@ -344,13 +351,15 @@ explicit user choice always wins afterwards.
 instance before anyone signs in. The app reads it at startup: the `(app)` layout calls
 `instanceConfig.load()` when it mounts, before the auth check, and works with a self-hosted default
 until the server answers (see [Instance configuration](../frontend/state/app-state.md#instance-config)).
-Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has three fields:
+Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has five fields:
 
 | Field | Values | Source |
 |-------|--------|--------|
-| `profile` | `selfhosted`, an install run by its owner, or `managed`, an instance a hosting provider runs for its customers | `LIBREFOLIO_PROFILE`, a field of `Settings`, so it comes from `.env` or the environment like `PORT`. Default `selfhosted`; case and spaces around the value are ignored, and any other value stops the startup. Admin side: [Configuration](../../admin/configuration.md). |
+| `profile` | `selfhosted`, an install run by its owner, or `managed`, an instance a hosting provider runs for its customers | `LIBREFOLIO_PROFILE`, a field of `Settings`, so it comes from `.env` or the environment like `PORT`. Default `selfhosted`; case and spaces around the value are ignored, and any other value stops the startup. Admin side: [Configuration](../../admin/configuration.md). The web app shows the **Buy Me a Coffee** links of the header, the Help menu, the sign-in pages and Settings › About, the update check (at an administrator's sign-in, and **Check for updates** in the changelog) and the server commands of **Forgot Password?** only once the answer says `selfhosted`: see [Instance configuration](../frontend/state/app-state.md#instance-config). |
 | `accounts` | `{registration_mode, registration_locked, first_account_open, password_rules}` (`AccountsInstanceConfig`, `backend/app/schemas/auth.py`): the registration mode in force, `open`, `invite` or `disabled`; whether `LIBREFOLIO_REGISTRATION` pins it; whether the instance has no account yet, so that the next registration creates the first account, an administrator, whatever the mode; and the rules every new password must meet, in order, `[{code, value}]` (`PasswordRuleRead`, `value` only for `min_length`) | `effective_registration_mode()` (workstream A, `registration_service.py`): the variable, otherwise the `registration_mode` row, so the endpoint is `async`, with a database session. `first_account_open()`, in the same module: true while the `users` table is empty, an inactive account counted; optional in the schema, default `false`. `password_rules_public()` (`password_policy.py`): the same list on every instance; optional in the schema, default empty, and the app then assumes the rules of release 1.3. No count and no limit. Details: [Registration Modes](access_control.md#registration-modes); why the flag may be public: [The First-Account Flag](security.md#first-account-open); the rules: [Password Rules](security.md#password-rules). |
 | `email` | `{available, links}` (`EmailInstanceConfig`, `backend/app/schemas/email.py`): `available`, whether the instance can send emails now, an SMTP server set and every `LIBREFOLIO_SMTP_*` variable usable; `links`, whether emails with a link can go out too, `LIBREFOLIO_PUBLIC_URL` set to an http(s) address; never the configuration itself | `email_instance_config()` (workstream E, `services/email/links.py`), run in a worker thread since it may read the password file. Both booleans default to `false`, so the field is optional in the schema. Details: [Email Service](../backend/email.md#instance-email). |
+| `support_url` | Where the users ask for help: an `http(s)` page, or `mailto:` and one email address; `null` when unset or invalid | `support_link()` (workstream H, `services/platform/instance_links.py`), from `LIBREFOLIO_SUPPORT_URL` through `support_url()` (`config/platform.py`, above). Optional in the schema, default `null`. Its reader is the asset search's «Let us know» row: [Asset Search & Link-Finder](../backend/assets/search_link_finder.md). |
+| `legal` | `{terms_url, privacy_url}` (`LegalInstanceConfig`, `backend/app/schemas/system.py`): the instance's own terms of service and privacy policy, each an `http(s)` page or `null` | `terms_link()` and `privacy_link()` (workstream A, F09, `services/platform/instance_links.py`), from `LIBREFOLIO_TOS_URL` and `LIBREFOLIO_PRIVACY_URL` through `tos_url()` and `privacy_url()` (`config/platform.py`: the rule of `env_url()`, no `mailto:`). They never raise: a value they cannot use is logged once per process, `Invalid instance link` with its `consequence`, and published as `null`, as an unset one is. Both default to `null`, so the field is optional in the schema. Its readers are the two components of the legal notice, `LegalNotice` and `LegalLinks` ([Settings Components](../frontend/components/features/settings.md#legal-notice)). Admin side: [Hosting for Others](../../admin/hosting_providers.md#legal-pages). |
 
 The rule for a workstream that owns part of the public configuration:
 
@@ -362,6 +371,13 @@ The rule for a workstream that owns part of the public configuration:
 
 After `./dev.py api sync`, the field appears in the frontend type `InstanceConfig`, inferred from the
 generated client.
+
+The `legal` part has two runner entries of its own: `./dev.py test services legal-links`
+(`backend/test_scripts/test_services/test_legal_links.py`: the two variables by the rule of
+`env_url()`, published without ever raising, an invalid one logged once without its secret) and
+`./dev.py test api instance-legal` (`backend/test_scripts/test_api/test_instance_config_legal_api.py`:
+the field set, unset and invalid, `null` and still `200`, the schema and the OpenAPI document, and one
+anonymous read on the lane's server, which sets neither variable).
 
 ## 🧹 Related: cache administration
 

@@ -15,9 +15,13 @@
  *     as the configuration changes.
  * Only E's entry is asserted, never the registry's length: the registry is A's, and other entries may join it.
  *
- * Mocks: the instance configuration is a fake whose `config` the test sets, as `sendLinkApi.test.ts` does; `$lib/i18n` an
- * identity translator and `notify` a spy, so that importing the component loads no catalogue. Nothing is mounted: the
- * jsdom environment is for the component's module only, compiled for the browser as every component test compiles it.
+ * Mocks: the instance configuration is a fake whose `config` the test sets, as `sendLinkApi.test.ts` does, and `notify`
+ * a spy. `$lib/i18n` is the real module with `_` replaced by an identity translator — partial, because the component's
+ * language picker and the select family it imports read `DEFAULT_LOCALE`, `SUPPORTED_LOCALES`, `LANGUAGE_OPTIONS` and
+ * `LOCALE_NAMES` from it (the language store is built at import). Importing it still loads no catalogue: the module
+ * only registers lazy loaders and never calls `initI18n()`, and the language store sets no locale while `browser` is
+ * false, as under Vitest. Nothing is mounted: the jsdom environment is for the component's module only, compiled for
+ * the browser as every component test compiles it.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -30,9 +34,9 @@ vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
         },
     },
 }));
-vi.mock('$lib/i18n', async () => {
+vi.mock('$lib/i18n', async (importOriginal) => {
     const {readable} = await import('svelte/store');
-    return {_: readable((key: string) => key)};
+    return {...(await importOriginal<typeof import('$lib/i18n')>()), _: readable((key: string) => key)};
 });
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
 
