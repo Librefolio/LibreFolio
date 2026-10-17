@@ -29,7 +29,7 @@ from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.accounts.settings_service import get_effective_base_currency
 from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, ReferencePriceResolution
+from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, ReferencePriceResolution, fails_the_replay
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, build_broker_wac_history, build_cumulative_wac_history
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs, convert_closure, needs_market_series, unconvertible_ids
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics, build_cost_economic_events, build_engine_transactions, build_income_economic_events, extract_cost_outputs, extract_income_outputs, map_economic_groups, withheld_economics
@@ -63,6 +63,9 @@ _WARNING_ISSUE_CODES = {
     IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS,
     IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS,
 }
+
+# The analyses a FAILED replay still answers (J-12): the average-cost lines come from the transactions, not from the lots.
+_AVERAGE_COST_ANALYSES = frozenset({LotAnalysisType.BROKER_WAC_HISTORY, LotAnalysisType.CUMULATIVE_WAC_HISTORY})
 
 _ORPHAN_ISSUE_CODES = {
     IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS,
@@ -229,6 +232,10 @@ class LotsAnalysisService:
             target_currency=target_currency,
             replay_until=actual_to,
         )
+        # J-12 (N81): a FAILED replay is unreliable as a whole, so no lot figure leaves the analysis: only the failure, the
+        # row to fix, and the average-cost lines, which do not come from the replay. From here on only those analyses run.
+        failed = engine_result.analysis_status == "FAILED"
+        shown_analyses = [analysis for analysis in normalized_analyses if analysis in _AVERAGE_COST_ANALYSES] if failed else normalized_analyses
 
         lots_by_id = {lot.lot_id: lot for lot in engine_result.lots}
         selected_ids = self._resolve_selected_lot_ids(selected_lot_ids, lots_by_id)
@@ -257,7 +264,7 @@ class LotsAnalysisService:
             tx_by_id=tx_by_id,
             boundary_legs=boundary.legs,
         )
-        if LotAnalysisType.PERFORMANCE_HISTORY in normalized_analyses and broker_ids is not None:
+        if LotAnalysisType.PERFORMANCE_HISTORY in shown_analyses and broker_ids is not None:
             accessible_broker_ids = await self._get_scope_broker_ids(user_id=user_id, broker_ids=None)
             if accessible_broker_ids != scope_broker_ids:
                 accessible_transactions = await self._load_transactions(asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
@@ -288,7 +295,7 @@ class LotsAnalysisService:
 
         collect_fx_needs(
             fx_resolver=fx_resolver,
-            analyses=normalized_analyses,
+            analyses=shown_analyses,
             lots_by_id=lots_by_id,
             selected_ids=selected_ids,
             transactions=transactions,
@@ -304,13 +311,13 @@ class LotsAnalysisService:
         )
         collect_performance_fx_needs(
             fx_resolver=fx_resolver,
-            analyses=normalized_analyses,
+            analyses=shown_analyses,
             transactions=performance_context.transactions,
             closures=performance_context.engine_result.closures,
             lots_by_id=performance_context.lots_by_id,
             asset_currency=asset.currency,
         )
-        if needs_income_alloc and at_cost_until is not None:
+        if needs_income_alloc and not failed and at_cost_until is not None:
             # Estimated-at-cost values the open portion at converted opening cost -> needs fx@opening.
             for lot in lots_by_id.values():
                 fx_resolver.need(lot.currency, lot.opening_date)
@@ -319,8 +326,11 @@ class LotsAnalysisService:
         income_by_lot, income_prefix_by_lot, income_events_payload = extract_income_outputs(engine_result, income_events_input, withheld)
         fees_by_lot, taxes_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot = extract_cost_outputs(engine_result)
 
-        data_quality = self._build_data_quality_report(engine_result.issues, engine_result.economic_allocation_groups, withheld)
-        if at_cost_until is not None and needs_market_series(normalized_analyses):
+        # On FAILED the other engine issues speak of lots and of an eligibility the response withholds (J-12).
+        engine_issues = [issue for issue in engine_result.issues if fails_the_replay(issue.code)] if failed else engine_result.issues
+        dates_by_id = {tx.id: tx.date for tx in [*transactions, *late_legs] if tx.id is not None}
+        data_quality = self._build_data_quality_report(engine_issues, engine_result.economic_allocation_groups, withheld, dates_by_id=dates_by_id)
+        if at_cost_until is not None and needs_market_series(shown_analyses):
             # [computed_from, at_cost_until] has no observation (no quote, no BUY or SELL), so it is valued at
             # cost: the whole window when the asset has none. Surface it in the message so the user knows which
             # period is uncovered (per user feedback on delisted/matured titles).
@@ -335,8 +345,8 @@ class LotsAnalysisService:
             )
         # The histories read every day's price, the summary only the last one: value no other day, so the
         # report never holds the gap of a day nobody reads.
-        daily_series = any(analysis in normalized_analyses for analysis in (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY))
-        active_price_dates = history_dates if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in normalized_analyses else [])
+        daily_series = any(analysis in shown_analyses for analysis in (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY))
+        active_price_dates = history_dates if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in shown_analyses else [])
         # Both the open-lot valuation (``market_prices`` -> NAV / value / return / performance) and the
         # chart price line (``estimated_market_prices``) read the series built above. Each native mark is
         # converted to the target currency at *its own valuation date* (per-day FX, never frozen at the
@@ -355,7 +365,7 @@ class LotsAnalysisService:
             if converted is not None:
                 estimated_market_prices[current_date] = (converted, mark.estimated)
         average_cost_lines: dict[int | str, AverageCost] = {}
-        if LotAnalysisType.BROKER_WAC_HISTORY in normalized_analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in normalized_analyses:
+        if LotAnalysisType.BROKER_WAC_HISTORY in shown_analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in shown_analyses:
             average_cost_lines = await self._compute_average_cost_lines(
                 transactions=transactions,
                 split_ratios_by_tx_id=split_ratios_by_tx_id,
@@ -364,7 +374,7 @@ class LotsAnalysisService:
             )
 
         lots = None
-        if LotAnalysisType.LOT_SUMMARY in normalized_analyses:
+        if LotAnalysisType.LOT_SUMMARY in shown_analyses:
             lots = self._build_lot_summaries(
                 engine_result=engine_result,
                 lots_by_id=lots_by_id,
@@ -383,12 +393,12 @@ class LotsAnalysisService:
             )
 
         gantt_segments = None
-        if LotAnalysisType.GANTT_TOPOLOGY in normalized_analyses:
+        if LotAnalysisType.GANTT_TOPOLOGY in shown_analyses:
             gantt_segments = self._build_gantt_segments(engine_result.fragment_intervals, selected_ids, lots_by_id, fx_resolver)
 
         # Event rows are built only when returned: the report holds no gap of a figure nobody asked for.
         lot_events: list[LotTimelineEventSchema] = []
-        if LotAnalysisType.CUSTODY_HISTORY in normalized_analyses or LotAnalysisType.EVENT_HISTORY in normalized_analyses:
+        if LotAnalysisType.CUSTODY_HISTORY in shown_analyses or LotAnalysisType.EVENT_HISTORY in shown_analyses:
             lot_events = self._build_lot_event_rows(
                 engine_result=engine_result,
                 selected_ids=selected_ids,
@@ -397,15 +407,15 @@ class LotsAnalysisService:
             )
 
         custody_history = None
-        if LotAnalysisType.CUSTODY_HISTORY in normalized_analyses:
+        if LotAnalysisType.CUSTODY_HISTORY in shown_analyses:
             custody_history = [row for row in lot_events if row.kind in _CUSTODY_KINDS]
 
         event_history = None
-        if LotAnalysisType.EVENT_HISTORY in normalized_analyses:
+        if LotAnalysisType.EVENT_HISTORY in shown_analyses:
             event_history = lot_events
 
         value_history = None
-        if LotAnalysisType.VALUE_HISTORY in normalized_analyses:
+        if LotAnalysisType.VALUE_HISTORY in shown_analyses:
             value_history = trim_dates(
                 build_value_history(
                     selected_ids=selected_ids,
@@ -427,7 +437,7 @@ class LotsAnalysisService:
             )
 
         return_history = None
-        if LotAnalysisType.RETURN_HISTORY in normalized_analyses:
+        if LotAnalysisType.RETURN_HISTORY in shown_analyses:
             return_history = trim_dates(
                 build_return_history(
                     selected_ids=selected_ids,
@@ -450,7 +460,7 @@ class LotsAnalysisService:
             )
 
         price_history = None
-        if LotAnalysisType.PRICE_HISTORY in normalized_analyses:
+        if LotAnalysisType.PRICE_HISTORY in shown_analyses:
             price_history = trim_dates(
                 build_price_history(
                     selected_ids=selected_ids,
@@ -465,7 +475,7 @@ class LotsAnalysisService:
             )
 
         broker_wac_history = None
-        if LotAnalysisType.BROKER_WAC_HISTORY in normalized_analyses:
+        if LotAnalysisType.BROKER_WAC_HISTORY in shown_analyses:
             broker_wac_history = trim_dates(
                 build_broker_wac_history(scope_broker_ids, average_cost_lines, history_dates),
                 display_from,
@@ -473,7 +483,7 @@ class LotsAnalysisService:
             )
 
         cumulative_wac_history = None
-        if LotAnalysisType.CUMULATIVE_WAC_HISTORY in normalized_analyses:
+        if LotAnalysisType.CUMULATIVE_WAC_HISTORY in shown_analyses:
             cumulative_wac_history = trim_dates(
                 build_cumulative_wac_history(average_cost_lines, history_dates),
                 display_from,
@@ -481,7 +491,7 @@ class LotsAnalysisService:
             )
 
         performance_history = None
-        if LotAnalysisType.PERFORMANCE_HISTORY in normalized_analyses:
+        if LotAnalysisType.PERFORMANCE_HISTORY in shown_analyses:
             performance_history = trim_dates(
                 build_performance_history(
                     scope_broker_ids=scope_broker_ids,
@@ -497,13 +507,13 @@ class LotsAnalysisService:
             )
 
         income_events = None
-        if LotAnalysisType.INCOME_EVENTS in normalized_analyses:
+        if LotAnalysisType.INCOME_EVENTS in shown_analyses:
             # Only markers within the visualized window; events before display_from already
             # contributed to the opening state and would clutter the chart.
             income_events = [event for event in income_events_payload if display_from <= event.date <= actual_to]
 
         economic_allocation_groups = None
-        if LotAnalysisType.LOT_SUMMARY in normalized_analyses and engine_result.economic_allocation_groups:
+        if LotAnalysisType.LOT_SUMMARY in shown_analyses and engine_result.economic_allocation_groups:
             economic_allocation_groups = map_economic_groups(engine_result.economic_allocation_groups, withheld)
 
         # Every builder has converted what it needed: report, once, what could not be converted or costed.
@@ -539,9 +549,9 @@ class LotsAnalysisService:
             performance_history=performance_history,
             income_events=income_events,
             economic_allocation_groups=economic_allocation_groups,
-            asset_orphan_income=None if "income" in withheld.orphan_unknown else engine_result.asset_orphan_income,
-            asset_orphan_fees=None if "fees" in withheld.orphan_unknown else engine_result.asset_orphan_fees,
-            asset_orphan_taxes=None if "taxes" in withheld.orphan_unknown else engine_result.asset_orphan_taxes,
+            asset_orphan_income=None if failed or "income" in withheld.orphan_unknown else engine_result.asset_orphan_income,
+            asset_orphan_fees=None if failed or "fees" in withheld.orphan_unknown else engine_result.asset_orphan_fees,
+            asset_orphan_taxes=None if failed or "taxes" in withheld.orphan_unknown else engine_result.asset_orphan_taxes,
         )
 
     async def _get_base_currency(self, user_id: int) -> str:
@@ -1119,11 +1129,21 @@ class LotsAnalysisService:
         issues: Sequence[FifoDataQualityIssue],
         groups: Sequence[EconomicAllocationGroup] = (),
         withheld: WithheldEconomics = NOTHING_WITHHELD,
+        *,
+        dates_by_id: Mapping[int, date_type] | None = None,
     ) -> DataQualityReport:
+        """The engine's issues as data-quality issues.
+
+        An issue that fails the replay also names the date of the row to fix (``transaction_date``, from
+        ``dates_by_id``) and says it fails the analysis (``fails_analysis``), so a reader needs no list of codes (J-12).
+        """
         mapped = []
         for issue in issues:
             code = IssueCode(issue.code)
             params = self._orphan_issue_params(issue, groups, withheld) if code in _ORPHAN_ISSUE_CODES else issue.params
+            if fails_the_replay(issue.code):
+                row_date = (dates_by_id or {}).get(issue.transaction_id) if issue.transaction_id is not None else None
+                params = {**params, "transaction_date": row_date.isoformat() if row_date is not None else None, "fails_analysis": True}
             mapped.append(
                 DataQualityIssue(
                     domain=IssueDomain.PORTFOLIO,
@@ -1188,6 +1208,12 @@ async def get_lots_analysis(
         selected_lot_ids=selected_lot_ids,
         requested_analyses=requested_analyses,
     )
+
+
+def analysis_failure_codes(response: LotsAnalysisResponse) -> list[str]:
+    """The sorted unique codes of the issues that failed the replay of ``response`` (``fails_analysis``, J-12)."""
+    issues = response.data_quality.issues if response.data_quality is not None else ()
+    return sorted({str(issue.code) for issue in issues if issue.message_params.get("fails_analysis") is True})
 
 
 def _message_key_for_issue(code: IssueCode) -> str:
