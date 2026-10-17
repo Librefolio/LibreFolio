@@ -128,9 +128,10 @@ your users sign in again after each restart. See
 - A restart policy that starts LibreFolio again when it stops by itself: `restart: unless-stopped`
   in Docker Compose (the compose files LibreFolio ships use it) or `always`, `Restart=always` with
   systemd, the `always` policy on a Fly.io Machine. An administrator who confirmed a restore can stop
-  the server so that its next start applies it, with **Restore and restart** in Settings › Backup
-  (`POST /api/v1/backup/restore/restart`): a clean stop, which a policy that restarts only after a
-  failure (`on-failure`, the default of `fly deploy`) does not follow with a start.
+  the server so that its next start applies it, with **Restore and restart** in
+  Settings › Administration › Backup (`POST /api/v1/backup/restore/restart`): a clean stop, which a
+  policy that restarts only after a failure (`on-failure`, the default of `fly deploy`) does not
+  follow with a start.
 
 ---
 
@@ -346,9 +347,9 @@ After signing in, users get a full page instead of the app, **This instance is b
   administrators also get a **Manage subscription** link to your subscription page, which opens in
   a new tab; the other users do not see it;
 - administrators also get a second card under the message, **Keep a copy of the data**: the backup
-  card of **Settings › Backup**, to back up the whole instance, follow the backup, download the
-  archive before the instance is gone, and delete it from the server. The other users do not see it:
-  their text tells them to ask their administrator for a backup;
+  card of **Settings › Administration › Backup**, to back up the whole instance, follow the backup,
+  download the archive before the instance is gone, and delete it from the server. The other users
+  do not see it: their text tells them to ask their administrator for a backup;
 - **Logout** signs out.
 
 The card makes, by default, the same archive as your [hosting panel](#panel-backups): it leaves out
@@ -525,8 +526,9 @@ The `code` comes in the `detail` of the answer, with a `message` in English:
 
 ## 📤 The Upload Limit of a Restore {: #restore-upload-limit }
 
-To check an archive for a restore, an administrator uploads it to the instance from Settings › Backup
-([Restore from Settings › Backup](backup_restore.md#restore-settings)), through
+To check an archive for a restore, an administrator uploads it to the instance from
+Settings › Administration › Backup
+([Restore from Settings › Administration › Backup](backup_restore.md#restore-settings)), through
 `PUT /api/v1/backup/restore/upload`; the instance then checks it on a copy, as
 `backup restore --dry-run` does on the [command line](cli_tools.md). On an instance you host, the
 administrator is your customer: `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is how you cap the size of the
@@ -561,8 +563,8 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
   `backup_upload_failed`, and the log has the cause.
 - An administrator reads the limit in force in `upload_limit_mb` of
   `GET /api/v1/backup/restore/status`: `0` for no limit, `null` when the value cannot be read.
-  Settings › Backup shows it on its restore card, such as *Archives up to 500 MB.*, and refuses a
-  larger file before sending it.
+  Settings › Administration › Backup shows it on its restore card, such as *Archives up to 500 MB.*,
+  and refuses a larger file before sending it.
 - On a [blocked instance](#instance-block), the upload is refused like the rest of the app, and so
   are the check and the restore: the block lets the data leave, never come in.
 
