@@ -5640,3 +5640,74 @@ response format». Script `files/checks/xr52_code.py`, una sostituzione, provato
 > quelli di oggi); la regola delle colonne resta; il cambio di ogni giorno. MF scrive il backend, in modo additivo, e io
 > lo rivedo; il frontend è mio. L'ho detto al coordinatore, e i dettagli sono nel backlog, X-R53.
 - **Consegna** (05:35, FROZEN): commit proposti `fix(fx): ECB skips a non-number day` e `docs(journal): X-R52, X-R53`.
+
+**X-R52 entrato** (coordinatore, 05:24): dev `56d13a448`; HEAD avanzato, pulito. Il congelamento di FE8b è finito
+(`31335fe26`): ho controllato che le mie tre registrazioni Vitest in `_frontend_utility.py` sono intatte in dev.
+
+### X-R47 — il rapporto di uno SPLIT non è mai validato ✅ (2026-10-17, 05:25–06:00; consegnato, W e J rivedono)
+
+**Decisioni del coordinatore** (05:25 e 05:32):
+- lo scrivo io, da capo a fondo: backend (`event_store.py`, `events.py`) e frontend (il `case` in `eventSaveError.ts`, la
+  chiave `events.saveError.invalidSplitRatio` in 4 lingue con `dev.py i18n`, un caso Vitest);
+- W rivede, J per la convivenza con P-10;
+- gli SPLIT già salvati con un rapporto ≤ 0 sono di MF (MF-D4): il motore li tratterà come mancanti, con un avviso di
+  qualità dei dati, invece di sollevare.
+
+**Disegno**:
+- manuali: `_reject_invalid_split_ratios(item.events)` subito dopo `_reject_too_many_digits`. Copre creazioni, upsert e
+  modifiche sul posto, perché una modifica porta la riga intera (anche quando un altro tipo diventa SPLIT). Usa
+  `financial_math.splits.is_valid_split_ratio`, lo stesso del motore. Il rifiuto è `EVENT_INVALID_SPLIT_RATIO`, coi
+  dettagli per evento (indice, data, tipo, rapporto); tutto o niente;
+- provider: `_storable_events` scarta uno SPLIT non valido, con un avviso a parte;
+- `events.py`: 400 in `_REFUSAL_STATUS`, più un punto nella docstring;
+- frontend: il `case` col primo evento e `more`, come per `EVENT_TOO_MANY_DIGITS`; i testi usano `{type}` (l'etichetta
+  tradotta), `{date}`, `{ratio}` e un plurale ICU, con il ramo `many` in francese.
+- Script: `files/checks/xr47_code.py` (backend, 8 sostituzioni; la prima prova a secco ha trovato l'import mancante di
+  `AssetEventType`, aggiunto) e `files/checks/xr47_frontend.py` (il `case`, poi `i18n add`). Entrambi provati a secco:
+  ruff, black e prettier puliti.
+- **Rossi**: un test-author per il backend (file nuovo `test_event_split_ratio.py`, runner `services event-split-ratio`:
+  i file di test degli eventi restano di W), un altro per il caso Vitest in `eventSaveError.test.ts`.
+- **Rossi** (prima del codice, tutti per la ragione giusta):
+  - Vitest `eventSaveError.test.ts` 1/71 (oggi la chiave generica col testo inglese del server);
+  - `services event-split-ratio` 27/51 (file nuovo, 662 righe: creazioni, upsert, modifiche sul posto, un DIVIDEND che
+    diventa SPLIT, tutto o niente, la rotta in processo con 400 e `ratio` come stringa, la mappa degli stati, gli eventi
+    dei provider con l'avviso); le 24 guardie verdi.
+- **Codice** (05:46): `xr47_code.py` (8 sostituzioni) e `xr47_frontend.py` (il `case`, poi `i18n add`: la chiave è
+  finita nel sottosistema `assets`, 4 lingue, una riga per lingua); ruff, black, import puliti.
+- **Verdi** (05:46–05:50, carico < 50):
+  - `event-split-ratio` 51/51, `asset-event-store` 71 (il file di W, con P-10 di J), `asset-digit-limits` 76;
+  - `utils gate-i18n-catalog` 176, `gate-i18n-usage` 195, `dev.py i18n check` stretto (4970 chiavi);
+  - Vitest 88/88 (`eventSaveError` più `catalogIcuLocale`);
+  - `front check`: svelte-check 0 errori e 0 avvisi, prettier pulito.
+- Non girati, perché vogliono uno slot: `api assets-events` e `events-suggest`. La rotta è provata in processo nel file
+  nuovo.
+- CHANGELOG: una riga 🐛 in coda a «Fixed».
+- Documentazione: un docs-writer su `backend/assets/events.md` (più le pagine frontend che citano i codici).
+> **⚠️ Fuori pista (05:50) — MF-P2 pronto.** MF ha mandato il contratto del backend dei periodi fissi. Le note per il mio
+> lotto frontend sono nel backlog, X-R53: l'esclusione da `isPortfolioAffectingMutation`, la correzione dell'ora legale
+> con la sua riga nel CHANGELOG, e le altre differenze. Lo rivedo quando me lo chiede il coordinatore.
+- Documentazione (docs-writer, 05:50–06:00): `backend/assets/events.md` (i rifiuti del salvataggio manuale, gli eventi
+  dei provider, la riga della tabella dei codici) e `frontend/components/core-ui/data-editor.md` (il codice nel punto «A
+  refused save»). `transaction-form.md` non è toccata: la modale «+ New event» non può mandare uno SPLIT. `mkdocs build`
+  stretto ✅, `check-links` ✅.
+- Nota del docs-writer: MF-D4 non è ancora in questo albero, quindi uno SPLIT già salvato con un rapporto ≤ 0, se
+  collegato, fa ancora fallire il report. La documentazione non ne parla finché MF-D4 non entra.
+- **Consegna** (06:00, FROZEN): commit proposti `fix(events): refuse a split ratio not above 0` e `docs(journal): X-R47,
+  X-R53 contract`.
+
+> **⚠️ Fuori pista (06:05) — R13-SEC7-1, dentro X-R47, dalla revisione di E.** Il 409
+> `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` di P-10 (`475bb9270`, di J) restituiva i `transaction_ids` delle rettifiche
+> senza costo di **ogni** utente collegate allo SPLIT, e chiunque poteva provocarlo su un asset globale. Cura:
+> - `bulk_upsert_events(…, *, current_user_id=None)` porta il chiamante fino a `_reject_split_retype_without_costs`.
+>   Con un chiamante, `transaction_ids` tiene solo le transazioni che lui vede (`BrokerUserAccess`, come
+>   `delete_events_bulk`) e `hidden_transactions_count` conta le altre; il messaggio dà solo il totale;
+> - senza chiamante (test, codice interno), i dettagli restano come prima: i test di servizio di J non cambiano. Se E
+>   preferisce che senza chiamante non si mostri nessun id, servono ritocchi alla fixture di W;
+> - la rotta tiene il nome `_current_user`, come le altre del file, e passa `getattr(_current_user, "id", None)`.
+>   Rinominarlo avrebbe rotto le due chiamate dirette di `test_asset_digit_limits.py` (di W), segnalate dal test-author.
+> - Rossi (06:15): 2 su 54, per la ragione giusta (la keyword sconosciuta; il 409 che mostra `[3, 4]`). Verdi: 54/54,
+>   `asset-event-store` 71, `asset-digit-limits` 76. `test_portfolio_wac.py:636` (di J, `api`) prende
+>   `"hidden_transactions_count": 0` e va provato in uno slot.
+> - Niente CHANGELOG: P-10 non è mai uscito.
+- **Consegna di X-R47 con R13-SEC7** (06:20, FROZEN). Commit proposti: `fix(events): refuse a split ratio not above 0`,
+  `fix(events): P-10 refusal shows only the caller's transactions`, `docs(journal): X-R47, X-R53, X-R55`.
