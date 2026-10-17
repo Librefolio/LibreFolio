@@ -85,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
 - The Dashboard warns when transactions are dated before 1900: they still count, but the history starts on 1 January 1900.
 - Testing a provider's settings is limited to 30 times a minute per user (`LIBREFOLIO_PROBE_RATE_LIMIT`, `0` turns it off); a scheduled investment holds at most 10,000 manual events.
 - `./dev.py user deactivate` on the administrator still waiting for its setup cancels its setup link; `./dev.py user demote` refuses it.
