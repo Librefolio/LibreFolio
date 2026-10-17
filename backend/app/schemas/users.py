@@ -7,7 +7,7 @@ schemas distinct from general user info schemas.
 
 from typing import Optional
 
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, model_validator
 
 from backend.app.db.models import OnboardingFlow
 from backend.app.schemas.common import BaseListResponse, StrictModel
@@ -69,6 +69,17 @@ class AdminUserUpdateRequest(StrictModel):
 
     is_active: Optional[bool] = None
     is_superuser: Optional[bool] = None
+    cancel_setup: bool = Field(
+        False,
+        description="True when this deactivation is the cancellation of the setup link of the initial administrator waiting for it: refused with 409 SETUP_COMPLETED when the account no longer waits. Only with is_active false.",
+    )
+
+    @model_validator(mode="after")
+    def _cancel_setup_is_a_deactivation(self) -> "AdminUserUpdateRequest":
+        """``cancel_setup`` deactivates the waiting administrator: it goes only with ``is_active`` false (A-51)."""
+        if self.cancel_setup and self.is_active is not False:
+            raise ValueError("cancel_setup goes only with is_active false")
+        return self
 
 
 class InviteRead(StrictModel):
