@@ -41,17 +41,19 @@ LIBREFOLIO_PROFILE=managed
 
 Case and spaces around the value do not matter; any other value stops the server at startup.
 
-Today the profile changes ten things:
+Today the profile changes eleven things:
 
 | | `selfhosted` | `managed` |
 | --- | --- | --- |
 | `GET /api/v1/system/instance` answers | `{"profile": "selfhosted"}` | `{"profile": "managed"}` |
 | A `JWT_SECRET` shorter than 32 characters | A warning in the startup log | The server does not start |
+| `LIBREFOLIO_TEST_MODE` on, outside LibreFolio's own test runs | An error in the startup log | The server does not start |
 | A plugin setting set by an environment variable | Shown read-only in **Settings › Plugins**, *Set by the server*, and listed by `GET /api/v1/settings/plugins` | Not shown in **Settings › Plugins** nor listed, and a save to it is refused as if it did not exist |
 | Invitations to donate: the **Buy Me a Coffee** link in the page header, on the sign-in pages, in the **Help & Support** menu and in Settings › About, and the donation popup after a sign-in | Shown | None: Settings › About keeps its share buttons |
 | The check for a newer LibreFolio release: at an administrator's sign-in, and **Check for updates** in the changelog | On | Off: you update the instance |
 | **Forgot Password?** on the sign-in page | The command that resets a password on the server, under the email form in a closed panel when emails with a link can go out | No command, but *Ask your administrator for a password-reset link: they can create one for your account.* The email form stays when emails with a link can go out |
 | The largest archive uploaded for a restore, while `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not set | No limit | 500 MB: see [The Upload Limit of a Restore](#restore-upload-limit) |
+| What an archive unpacks to while a restore checks it, while `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` is not set | No limit | 8 times the upload limit: 4000 MB with the 500 MB above, none when the upload limit is `0` |
 | Idle risk workers (simulations and optimizations) stop after | 600 seconds | 60 seconds |
 | Frame protection: only the app's own pages may show it in a frame | Off | On |
 | A report-only Content-Security-Policy on the pages of the web app | Off | On |
@@ -66,6 +68,12 @@ Today the profile changes ten things:
   those three rows take away.
 - Plugin settings and their variables: see «Plugin Settings» in
   [Environment Variables](configuration.md).
+- **Test mode** (`LIBREFOLIO_TEST_MODE`) is for LibreFolio's own test runs, which turn it on and off by themselves. A
+  server started without `./dev.py` takes it from its environment, your panel's included: it would serve data
+  providers that exist only for the tests, and keep the instance's data in a test folder instead of its data
+  directory. So a managed instance does not start with it, and says why:
+  `In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters): …; unset LIBREFOLIO_TEST_MODE`.
+  Remove the variable, then start again. See «Startup Checks» in [Configuration](configuration.md).
 - Like the upload limit, the last three rows are defaults, each set on its own by its variables, in
   either profile: `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS` and `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS`
   for the idle risk workers, then `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` (see
@@ -76,10 +84,13 @@ Today the profile changes ten things:
   log says so at every start, a warning for frame protection and an `info` for the policy, and so do
   the security checks: see «Startup Checks» in [Configuration](configuration.md).
 - **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
-  `Content-Security-Policy: frame-ancestors 'self'` to every response: a browser then shows
-  LibreFolio in a frame only inside LibreFolio's own pages. If your hosting panel, or any page at
-  another address, shows the app in a frame, the browser refuses to display it there: set
-  `LIBREFOLIO_FRAME_PROTECTION=false` for those instances.
+  `Content-Security-Policy: frame-ancestors 'self'` to every response (to a `304 Not Modified`
+  only the first, so the browser keeps the policy of its cached copy): a browser then shows
+  LibreFolio in a frame only inside LibreFolio's own pages, whose policy also carries
+  `object-src 'none'; base-uri 'self'; form-action 'self'`, three directives that block nothing
+  LibreFolio uses (see «Main Options» in [Environment Variables](configuration.md)). If your hosting
+  panel, or any page at another address, shows the app in a frame, the browser refuses to display it
+  there: set `LIBREFOLIO_FRAME_PROTECTION=false` for those instances.
 - **The report-only Content-Security-Policy** blocks nothing. On the pages of the web app (not the
   documentation, not the API), it tells the browser where a page may load its content from; the
   browser lists what falls outside in its developer console and sends no report anywhere: LibreFolio
@@ -196,8 +207,8 @@ minute.
 
 - ⏱️ The link works once, for 72 hours from that first start. A restart changes nothing: the link
   you sent keeps working until it is used or expires, unless you give the administrator a new
-  address ([A New Link](#initial-admin-new-link)) or the account is set up another way
-  ([Once the Account Is Active](#initial-admin-active)).
+  address or cancel the link ([A New Link](#initial-admin-new-link)), or the account is set up
+  another way ([Once the Account Is Active](#initial-admin-active)).
 - 🔒 The token travels after the `#` of the link, a part that browsers never send to the server, so
   it stays out of the access logs of the server and of every proxy on the way. Keep it as private as
   a password until your customer has used it.
@@ -232,7 +243,7 @@ When the setup cannot go through, the page says why:
 
 | The page shows | When | What to do |
 | --- | --- | --- |
-| *This link has expired.*, *This link has already been used.*, *This link has been withdrawn.*, *This link is not valid.* or *This link is incomplete: open it again from the message you received.*, then *Ask your hosting provider for a new link. On your own server, run `dev.py user setup-link`.* | The link is more than 72 hours old, was used, was replaced by a newer one, was withdrawn when the administrator's address changed or when the account was set up another way, is unknown to the instance, or lost its token when it was copied; also a link that stops working while the form is open | Give your customer a new link: [A New Link](#initial-admin-new-link). An account set up another way gets none: see [Once the Account Is Active](#initial-admin-active) |
+| *This link has expired.*, *This link has already been used.*, *This link has been withdrawn.*, *This link is not valid.* or *This link is incomplete: open it again from the message you received.*, then *Ask your hosting provider for a new link. On your own server, run `dev.py user setup-link`.* | The link is more than 72 hours old, was used, was replaced by a newer one, was cancelled, was withdrawn when the administrator's address changed or when the account was set up another way, is unknown to the instance, or lost its token when it was copied; also a link that stops working while the form is open, and a link left over on an account already set up, which the setup refuses once the form is sent | Give your customer a new link: [A New Link](#initial-admin-new-link). An account already set up, another way or through another of its links, gets none: see [Once the Account Is Active](#initial-admin-active) |
 | *The link could not be checked. Try again in a moment.*, with **Retry** | The instance did not answer the check | **Retry** once the instance answers |
 | *Password does not meet security requirements* | The password misses one of the instance's rules | Choose a password that meets the rules shown under the field |
 | That the setup is refused while the instance is blocked, and no button to send the form any more | The instance is [blocked](#instance-block): the form opens, and the setup is refused once it is sent | Unblock the instance: your customer then opens the link again, within its 72 hours |
@@ -254,6 +265,16 @@ Either way gives a new link, which works for 72 hours, and ends the earlier ones
   [CLI Admin Tools](cli_tools.md).
 
 Both work before the link expires too, to replace a link that went astray.
+
+To stop a link that went astray without sending a new one yet, cancel it from a shell on the
+server, with the administrator's username (`admin` unless `LIBREFOLIO_ADMIN_USERNAME` names
+another): `docker compose exec librefolio python dev.py user deactivate <username>`. Another
+administrator of the instance can do the same with **Cancel setup link** in
+[Users & Invitations](users.md#cancel-setup). The link you sent stops working at once, and every
+other setup link of the account with it, while the account keeps waiting for its setup: when you
+are ready, give a new link in one of the two ways above. Until then, each start logs the warning
+above. Restarting with the same `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives no new link: the instance
+has already seen that token.
 
 To change the address or the username before your customer activates the account, change
 `LIBREFOLIO_ADMIN_EMAIL` or `LIBREFOLIO_ADMIN_USERNAME` and restart: the waiting account takes the
@@ -587,6 +608,34 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
   and refuses a larger file before sending it.
 - On a [blocked instance](#instance-block), the upload is refused like the rest of the app, and so
   are the check and the restore: the block lets the data leave, never come in.
+
+The upload limit bounds the archive as it is sent, compressed: a zip can unpack to far more than its
+own size, and the check unpacks it on the disk of the data directory.
+`LIBREFOLIO_BACKUP_MAX_RESTORE_MB` bounds what an archive unpacks to, from the sizes its manifest
+declares, before the check unpacks anything.
+
+| `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` | Largest size an archive unpacks to |
+| --- | --- |
+| Not set, or empty | No limit on a `selfhosted` instance; in the [managed profile](#managed-profile), 8 times the upload limit: 4000 MB with its default 500 MB, 16384 MB with the `2048` above, none when the upload limit is `0` |
+| `0` | No limit, in both profiles |
+| A whole number, such as `16384` | That many megabytes, of 1024 × 1024 bytes each |
+
+- Why 8: a database shrinks to about a quarter of its size in an archive, and uploaded images, PDF
+  files and spreadsheets barely shrink. An archive heavy with its database unpacks to about four
+  times its size, so 8 leaves it twice that room, and still bounds what any archive unpacks to at
+  4000 MB with the default, where a zip can otherwise unpack to about a thousand times its size.
+- An archive over the limit is refused before anything is unpacked: the check fails with the code
+  `unpacked_too_large`, and nothing of its copy is left. A secure archive is decrypted first, which
+  takes about its own size, then measured the same way.
+- A value you set always wins, `0` included. `backup restore` on the command line follows the same
+  limit; whoever runs the server lifts it for one command with `LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0`
+  in front of it («Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)).
+- A value other than a whole number does not stop the server: the start log already has an error,
+  `LIBREFOLIO_BACKUP_MAX_RESTORE_MB cannot be used: …` (`check` is `backup.restore_limit`), then each
+  check, `POST /api/v1/backup/restore/stage`, answers `503` with the code
+  `backup_restore_unavailable`, the archive kept, and the log has an error. While this variable is
+  unset in the managed profile, an upload limit that cannot be used refuses the checks the same way,
+  and the start log's line names `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` instead.
 
 ---
 

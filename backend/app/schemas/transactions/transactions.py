@@ -87,6 +87,7 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
     asset_event_id: Optional[int],
     cost_basis_mode: Optional[str],
     changed_fields: Optional[frozenset[str]] = None,
+    cost_basis_set: bool = False,
 ) -> List[PydanticCustomError]:
     """Per-type business rules (Rules 5-12) evaluated on the FINAL normalized
     transaction state (type + asset_id + cash + quantity + asset_event_id +
@@ -109,6 +110,10 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
     them: an update passes the fields it changed, compared by value with the row as stored before the batch
     (``changed_rule_fields``), a promote ``{"type"}``. ``None``, CREATE's call, leaves them to CREATE's own rules 2, 3
     and 3b.
+
+    Rule 12b (N78, W-B72) reads ``cost_basis_set``, whether the request sets a non-null ``cost_basis_override``: it may
+    set one only where a cost basis is allowed (``cost_basis_allowed``), or on an ADJUSTMENT taking units out, whose
+    cost is decision 47's handover cost. A cost basis the row already stores is never judged.
     """
     t = tx_type.value  # shorthand for error params
     errors: List[PydanticCustomError] = []
@@ -174,6 +179,17 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
             PydanticCustomError(
                 "costBasisModeIncompatible",
                 "cost_basis_mode is not valid for {type} with qty={qty}: that type and side take no cost basis",
+                {"type": t, "qty": str(quantity)},
+            )
+        )
+    # Rule 12b (N78, W-B72): a cost basis the request sets without a mode (with one, rule 12 has spoken) only where one is
+    # allowed, or on an ADJUSTMENT taking units out: its cost is decision 47's handover cost, at which the lots hand the
+    # units over, and an update of the split's own batch may set it (decision 4; the coordinator's refined N78, 17/10).
+    elif cost_basis_set and not cost_basis_allowed(tx_type, quantity) and not (tx_type == TransactionType.ADJUSTMENT and quantity < zero):
+        errors.append(
+            PydanticCustomError(
+                "costBasisNotAllowed",
+                "{type} with qty={qty} takes no cost basis",
                 {"type": t, "qty": str(quantity)},
             )
         )
@@ -328,6 +344,7 @@ class TXCreateItem(StrictModel):
                 cash=self.cash,
                 asset_event_id=self.asset_event_id,
                 cost_basis_mode=self.cost_basis_mode,
+                cost_basis_set=self.cost_basis_override is not None,
             )
         )
 

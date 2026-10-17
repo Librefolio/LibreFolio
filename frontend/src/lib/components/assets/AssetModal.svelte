@@ -39,6 +39,8 @@
     import {userSettings} from '$lib/stores/app/settings';
     import {get} from 'svelte/store';
     import {trySave} from '$lib/utils/trySave';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {wipeRefusalMessage} from './currencyChangeErrors';
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import {columnsToIdentifierRows, fieldToIdType, identifierValue, withIdentifier, mergeOtherIdentifierValues, withElectedPrimary} from './assetIdentifiers';
     import {searchResultAssetType, searchResultIdentifier, searchResultProviderParams} from './assetSearchSelection';
@@ -1387,7 +1389,21 @@
             });
         } else if (hasProvider) {
             const assignPayload = [buildProviderAssignItem(assetId, providerAssignment())];
-            await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
+            try {
+                await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
+            } catch (assignErr: unknown) {
+                // X-R49: a change refused because a split the provider generated has adjustments without a purchase cost
+                // is said here, inline and in the user's language, and the modal stays open (every way in: the regenerate
+                // and switch-away confirms, and the plain save, whose 409 would read «duplicate name»). Any other error goes on.
+                const refusal = wipeRefusalMessage(assignErr, $t, (iso) => formatDay(iso));
+                if (refusal === null) throw assignErr;
+                formError = refusal;
+                pendingSaveAssetId = null;
+                setTimeout(() => {
+                    document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }, 50);
+                return;
+            }
         }
 
         // #R3-4 — after a confirmed scheduled_investment regenerate, trigger an

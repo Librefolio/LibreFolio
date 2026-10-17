@@ -247,7 +247,10 @@
       "significantDigitsExceeded": "Al massimo {max} cifre significative",
       "integerDigitsExceeded": "Al massimo {max} cifre prima della virgola",
       "dateOutOfRange": "Tra {min} e {max}",
-      "autoCostUnreadable": "Costo automatico non disponibile: {count, plural, one {# transazione usata} other {# transazioni usate}} per il costo medio di questo asset {count, plural, one {contiene} other {contengono}} un valore che non è un numero. Inserisci il costo a mano."
+      "autoCostUnreadable": "Costo automatico non disponibile: {count, plural, one {# transazione usata} other {# transazioni usate}} per il costo medio di questo asset {count, plural, one {contiene} other {contengono}} un valore che non è un numero. Inserisci il costo a mano.",
+      "ledgerUnreadable": "I saldi di {brokerName} non si possono verificare: {count, plural, one {# sua transazione contiene} other {# sue transazioni contengono}} un valore che non è un numero. Chiedi all'amministratore di sistemare i dati.",
+      "costBasisNotAllowed": "❌ <b>{type}</b> qui non prende un costo base: toglilo. Lo portano solo le unità che entrano con una <b>Rettifica</b> o un <b>Trasferimento Asset</b>.",
+      "costBasisModeIncompatible": "❌ <b>{type}</b> qui non prende un costo base, quindi nessuna modalità <b>Auto</b> o <b>Manuale</b>: toglila."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",

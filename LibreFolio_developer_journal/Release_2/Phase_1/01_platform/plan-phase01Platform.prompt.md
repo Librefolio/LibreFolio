@@ -5784,7 +5784,7 @@ backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check
    - Per H-42 vuole prima l'analisi, e per gli E2E preferisce un header vero se il runner lo permette in modo pulito,
      altrimenti `page.route`.
 
-### Lotto «H-42: tre direttive della CSP imposte accanto a `frame-ancestors`» (E, LOW, 2026-10-17, mattina) — analisi
+### Lotto «H-42: tre direttive della CSP imposte accanto a `frame-ancestors`» (E, LOW, 2026-10-17, mattina) — ✅ provato
 
 > Suggerimento di E dopo la chiusura di H-39: imporre già, nello stesso header di `frame-ancestors`, `object-src 'none';
 > base-uri 'self'; form-action 'self'` (iniezione di `<base>`, esfiltrazione con un form). `script-src` resta in sola
@@ -5842,6 +5842,154 @@ backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check
 - Documenti: `security.md#managed-headers`, la riga di `LIBREFOLIO_FRAME_PROTECTION` in `configuration`,
   `hosting_providers`; CHANGELOG 🔒 (cambia anche il self-hosted di chi accende l'interruttore).
 - Serve: l'OK di scrittura sulla registrazione dello spec (`_frontend_utility.py`) e uno slot E2E.
+
+**Via del coordinatore** (17/10, mattina): «OK a 1 e 2».
+- Le tre direttive solo su `text/html`, `frame-ancestors` su ogni risposta.
+- L'E2E con `page.route` come guardia permanente: `serviceWorkers: 'block'`, prima i controlli positivi con `<object>`
+  e `<base>`, poi documenti, PDF e dashboard senza violazioni.
+- OK di scrittura su `_frontend_utility.py`, per una registrazione in aggiunta.
+- La corsia managed per gli E2E del cloud diventa una riga sua del backlog (**H-43**).
+- Lo slot E2E arriva più tardi, in coda.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla), in `test_managed_headers.py`, selettore
+   `services managed-headers` (puro, senza slot):
+   - `test_page_policy_is_pinned_by_value`: il valore esatto, direttiva per direttiva e nell'ordine. `PAGE_POLICY` si
+     legge per nome, con `getattr`: prima della cura fallisce lui solo, nominando H-42, e il resto del file si
+     raccoglie e gira;
+   - (g) `test_the_enforced_policy_follows_the_type_of_the_response`. I modi sono quelli con l'interruttore acceso
+     (managed, e self-hosted con `LIBREFOLIO_FRAME_PROTECTION=true`), per 10 risposte tipizzate:
+     - `text/html` in quattro forme (`charset`, maiuscolo, misto; su `/`, una rotta lato client, `/mkdocs/user/` e la
+       Swagger UI) prende `PAGE_POLICY`;
+     - un PDF dei broker, un'immagine, un chunk JavaScript, un CSS, il JSON delle API e una 204 senza `Content-Type`
+       tengono `frame-ancestors 'self'` soltanto;
+   - `test_an_html_page_keeps_the_policy_its_route_set`: una CSP messa dalla rotta su una pagina HTML vince ancora;
+   - (a) e i test della rotta, aggiornati: le pagine HTML con la politica intera, il resto come prima; l'interruttore
+     spento non mette nulla.
+   - Rosso (`files/runs/h42/red-managed-headers.log`): **29 failed / 227 passed**:
+     - 18 di (a), le pagine HTML;
+     - 8 di (g), le quattro forme HTML per due modi;
+     - 1 il pin;
+     - 2 di `test_a_header_the_route_set_is_kept_and_the_others_are_added`.
+   - Già verdi prima della cura, come devono: le 12 risposte non HTML e la CSP della rotta.
+2. ✅ **Cura** (`files/h42/apply.py`: prova, poi `--apply`, i tre file identici alle copie di prova):
+   - `security_headers.py`: `PAGE_POLICY` (`frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action
+     'self'`) e `PAGE_FRAME_HEADERS`;
+   - `_is_html(headers)`, per `content-type`, che ora usa anche `_is_web_app_page`;
+   - il middleware si costruisce `self.page_headers` una volta, accanto a `self.headers`, e a ogni risposta sceglie
+     `page_headers` se è HTML. Una CSP messa dalla rotta resta la sua, come prima;
+   - docstring del modulo: perché solo l'HTML (il visore PDF di Chromium è un plugin);
+   - i commenti di `LIBREFOLIO_FRAME_PROTECTION` in `config/__init__.py` (docstring e campo) e in `.env.example`.
+     Le righe non commentate di `.env.example` non cambiano.
+3. ✅ **Verdi** (`files/runs/h42-backend.sh`, cancello del carico):
+
+   | Selettore | Esito |
+   |---|---|
+   | `services managed-headers` | 256 passed |
+   | `services security-headers` | 15 |
+   | `services config-env-example` | 38 |
+   | `services config-package` | 863 |
+   | `services config-audit` | 156 |
+
+   - ruff e black puliti sui 3 file Python;
+   - porta 6181 libera.
+4. ✅ **Documenti per l'admin** (docs-writer, solo inglese, nessun timbro):
+   - `configuration.en.md`, la riga di `LIBREFOLIO_FRAME_PROTECTION`;
+   - `hosting_providers.en.md`, il punto «Frame protection», con il link alla sola pagina `configuration.md`. Una
+     pagina non tradotta che punta a un'ancora di `configuration` rompe la build stretta, perché le traduzioni non
+     hanno le ancore nuove.
+   - Il debito di traduzione di `configuration` va in H-5.
+5. ✅ **Spec E2E** (test-author), `frontend/e2e/layout/page-policy.spec.ts`:
+   - `serviceWorkers: 'block'`; la politica iniettata in ogni documento della corsia con `route.fetch({maxRedirects:
+     0})`; uno script d'avvio che registra ogni `securitypolicyviolation`, contando solo quelle imposte;
+   - **controlli positivi** sulla pagina d'accesso: il documento arriva con la politica; un `<base>` iniettato, un form
+     inviato a `https://example.invalid` e un `<object>` sulla corsia danno ciascuno la sua violazione (`base-uri`,
+     `form-action`, `object-src`); l'URL base resta quello della corsia; nessuna richiesta di controllo parte;
+     nient'altro viola;
+   - poi tre flussi, ciascuno con un solo documento che porta la politica e nessuna violazione alla fine:
+     - una pagina annidata dei documenti e la ricerca di Material di «conventions», con un risultato a schermo;
+     - un PDF di una pagina caricato e aperto in anteprima dalla pagina File, fino a `file-preview-pdf`
+       `data-state="ready"`, poi cancellato in `afterEach`;
+     - la vista principale della Dashboard (`dashboard-page` assestata, `dashboard-overview-tab`).
+6. ✅ **Registrazione** (dopo il ff a `9b23bdbfe`; `files/h42/register.py`: prova, `--apply`, `cmp`):
+   - `front_page_policy` dopo `front_docs_offline_math`;
+   - `add_test(cat, "page-policy", …)` dopo `docs-offline-math`, con il prerequisito dei documenti costruiti.
+
+   Controlli leggeri (`files/runs/h42-light.sh`, cancello del carico):
+   - Prettier pulito sullo spec;
+   - `tsc --noEmit`: 0 errori nello spec. Le 61 righe d'errore stanno tutte in file che H-42 non tocca, quindi c'erano
+     già;
+   - ruff e black puliti su `_frontend_utility.py`;
+   - `check-orphans`: 140 spec registrati, tutti raggiungibili da `all`;
+   - `front-utility --help` elenca `page-policy`.
+   > **⚠️ Fuori pista**: il test-author ha scritto le righe di registrazione senza toccare il file, perché
+   > `_frontend_utility.py` arrivava cambiato con il ff di H-19; le ho aggiunte io dopo il ff.
+7. ✅ **Documenti per sviluppatori** (docs-writer, solo inglese; `security.md` non ha traduzioni, quindi nessun
+   debito):
+   - `security.md#managed-headers`:
+     - la riga della CSP della tabella diventa due: `PAGE_POLICY` sulle risposte HTML, `frame-ancestors 'self'` sul
+       resto;
+     - il punto «Frame protection» spiega `_is_html()` (prefisso `text/html`, qualsiasi maiuscola, con parametri);
+     - due punti nuovi: «Three more directives on documents (H-42)» e «Why HTML only»;
+     - il paragrafo dei test di `managed-headers`, e uno nuovo sullo spec Playwright.
+   - Fuori da questa sezione `frame-ancestors` non compariva altrove.
+   - Due ritocchi miei:
+     - davanti al percorso dello spec il comando del runner, che il docs-writer non poteva citare prima della
+       registrazione;
+     - «Swagger UI and ReDoc» diventa «the pages FastAPI writes for Swagger UI and ReDoc». L'HTML di FastAPI l'ho
+       verificato (`get_swagger_ui_html`, `get_redoc_html`: niente `<object>`, `<embed>`, `<base>`, form né `action`);
+       i bundle che caricano da jsDelivr no.
+   - Controlli (`files/runs/h42-docs.sh`, cancello del carico):
+     - `mkdocs build` stretto: rc 0, nessun warning;
+     - `check-links`: 97 link validi;
+     - `git diff --check` pulito.
+   > **⚠️ Fuori pista: l'analisi, punto 3, era sbagliata sui file dei broker** (trovato dal docs-writer, verificato).
+   > `api/v1/brokers.py:750` costruisce lo stesso `source_url` dell'anteprima, `…/download?download=false`, e il
+   > frontend lo usa, nei dialoghi d'import dei broker (`BrokerImportFilesModal`, `ImportWizardModal`): il PDF arriva
+   > inline. Il caso di un PDF mostrato in un `<iframe>` esiste quindi già oggi, nel ripiego dell'anteprima, e la scelta
+   > «solo HTML» lo protegge davvero. Il test (g) usa proprio quella rotta. H-44 precisato nel backlog: riguarda solo la
+   > pagina File (`uploads/file`, sempre `attachment`).
+   > **Lacuna dichiarata nei documenti** (dal docs-writer): `image/svg+xml` e `application/xhtml+xml`, documenti
+   > anche loro, tengono il solo `frame-ancestors`. Gli SVG serviti sono quelli della build e dei documenti, e un SVG
+   > dell'utente arriva come `attachment`, dagli upload e dai broker (`INLINE_SAFE_MEDIA_TYPES` di `brokers.py` non ha
+   > `image/svg+xml`). Allargare `_is_html` non rientra nel disegno approvato: lo propongo a E come possibile seguito.
+8. ⏳ **Slot E2E** («GO 6181», 10:19–10:27, partito con il carico a 5 minuti a 47,7; `files/runs/h42-slot.sh`):
+   - la build di debug ricostruita dal runner (era vecchia dal ff);
+   - `--fresh-run front-utility page-policy`: **1 failed / 3 passed**; con `--workers 4`: lo stesso. Porta libera.
+   - **Verdi in tutti e due**: i tre flussi veri sotto la politica, senza nessuna violazione imposta (la ricerca dei
+     documenti, l'anteprima PDF fino a `data-state="ready"`, la Dashboard). È la verifica che conta per H-42.
+   - La regressione di `files-pdf-offline` e `docs-offline-math` è tolta (coordinatore: la ragione regge, la corsia
+     manda gli stessi header di prima).
+   - **Rosso**: il controllo positivo dell'`<object>`. `base-uri` e `form-action` scattano, `object-src` no.
+   > **⚠️ Fuori pista: un comportamento di Chromium 149, non della politica.** Sonde fuori corsia
+   > (`files/h42/probe/*.cjs`, Playwright 1.61, headless shell; nessuna porta, origine finta servita da `route`):
+   > - su una pagina banale ogni `<object>` è controllato, in ogni sequenza, anche fuori schermo
+   >   (`object-src.out`, `sequence.out`, `offscreen.out`);
+   > - sulla **build vera** della SPA servita dalle rotte (`realapp.out`, `realapp-bisect.out`):
+   >   - `<object>` di un'immagine da solo, o con il `<base>`: violazione, nessuna richiesta;
+   >   - **`<object>` di un'immagine più `form.submit()` nello stesso task**: nessuna violazione, e il PNG **parte come
+   >     immagine** (lo ferma solo la rotta dello spec);
+   >   - lo stesso `<object>` col form un secondo dopo: violazione;
+   >   - `<object>` tipizzato `application/pdf` o `text/html` nella sequenza esatta dello spec: violazione, nessuna
+   >     richiesta.
+   >
+   > La politica blocca quindi ciò per cui `object-src` esiste (plugin e documenti). Il buco riguarda solo
+   > un'immagine, che un `<img>` potrebbe caricare comunque (`img-src` non è nella politica imposta). Lo dico a E.
+   - **Riparazione** (test-author, che non ha lanciato nulla): il controllo diventa un `<object>` `application/pdf`
+     su `/lf-page-policy-control.pdf?lf-page-policy-control`, con il perché nella JSDoc di `CONTROL_OBJECT_PATH`.
+     Stesso ordine, stesse asserzioni. Per l'oggetto la prova è la violazione imposta: nessuna richiesta l'avrebbe
+     comunque mostrata, perché il headless non ha il visore PDF.
+   - Ritocchi miei:
+     - la frase dello spec in `security.md`, con il perché in una riga;
+     - la descrizione del runner («an <object> typed application/pdf»).
+   - Prettier pulito.
+9. ✅ **Secondo slot** («GO 6181», 10:47–10:51, carico a 5 minuti 36,9; `files/runs/h42-slot.sh`; i log del rosso
+   tenuti come `e2e-page-policy-{1,4}-red.log`):
+   - `--fresh-run front-utility page-policy`: **4 passed**;
+   - con `--workers 4`: **4 passed**;
+   - nessun retry; porta 6181 libera.
+   - Dopo la riparazione: `mkdocs build` stretto pulito, 97 link validi, ruff e black puliti su `_frontend_utility.py`,
+     `git diff --check` pulito (`files/runs/h42-docs2.sh`).
+   - Il comportamento di Chromium va nel checkpoint, come nota per la revisione di E (coordinatore).
 
 ### H-3, opzione A: il contesto per la decisione P24 (2026-10-17, mattina) — analisi, decisione del developer
 
@@ -5924,3 +6072,523 @@ rimandarla dopo la 1.3, salvo una scelta diversa del developer. Per ora H-3 rest
    > **⚠️ Fuori pista** (dal docs-writer di H-42): il ripiego dell'anteprima PDF (`FilePreviewModal`, un `<iframe>`
    > su `/api/v1/uploads/file/{id}`) riceve sempre `attachment`, quindi probabilmente scarica invece di mostrare. È
    > precedente, senza proprietario: registrato come **H-44** (decisione del coordinatore), con il legame a H-42.
+
+### Review di B-18 (`restore --instance-key-file`, commit `7b1911fd6` sul ramo di B) (2026-10-17, 10:55) — ✅ OK, una nota LOW e due nit
+
+> Chiesta dal coordinatore: blocca l'ingresso di B. Sola lettura (`git show`/`git diff` sul ramo di B), più una sonda
+> pura nella cartella della sessione (`files/b18review/probe_not_created.py`, una cartella dati temporanea, nessuna
+> porta). B-18 non tocca file di H: usa le mie API, `read_secret_file`, `derive_key_from`, `instance_key_status`.
+
+**Verificato, va bene:**
+1. `_refuse_unusable_instance_key` (in `staging.py`), prima del lock e della cartella della copia.
+   - Il mio `_checked` solleva `InstanceKeyError` solo per la lunghezza (`_length_problem`), quindi «too short» è
+     esatto.
+   - `TypeError` e `ValueError` dalla CLI non si raggiungono: la chiave è sempre un testo, scopo e lunghezza sono
+     costanti.
+   - Il messaggio non porta né la chiave né la sua lunghezza.
+2. **D1**: `archive_key = … if INSTANCE_KEY_ENTRY in entries else instance_key`.
+   - `instance_key_included` resta `manifest.instance_key.included`: una chiave data non risulta mai «included».
+   - `archive_key` serve solo a `_plugin_secrets` e non si scrive mai nella cartella dei dati.
+3. **Ordine nella CLI**: `_restore_keys` legge prima il file della chiave, poi la password, e solo dopo
+   `_data_dir_for` → `_drop_root_privileges`.
+   - `read_secret_file(…, "instance key file")`: i miei messaggi alla lettera, più `(instance_key_unreadable)`; la
+     chiave mai stampata.
+   - Stessa regola di lettura del file generato e di `LIBREFOLIO_INSTANCE_KEY_FILE` (BOM, a capo finali): la copia di
+     `secrets/instance.key` dà lo stesso testo.
+4. `instance_key_status()` è usata come documentato (non crea, non solleva). `--test-db` è già impostato da
+   `_data_dir_for`, quindi la cartella dei dati è la stessa del controllo.
+5. **Test**:
+   - solo nomi pubblici miei;
+   - il test della CLI confronta il messaggio con quello di `read_secret_file` stessa, non con un letterale copiato;
+   - `no_inherited_instance_key` (autouse) toglie `LIBREFOLIO_INSTANCE_KEY(_FILE)`; `setenv` via `monkeypatch`.
+6. **Doc**:
+   - i messaggi di `cli_tools.en.md` coincidono con `read_secret_file` (65536 = `SECRET_FILE_MAX_BYTES`);
+   - `/app/backend/data/prod-docker` è il `LIBREFOLIO_DATA_DIR` del Dockerfile e del compose, dove è montato
+     `./LibreFolio-data`;
+   - un `old-instance.key` lasciato in `backups/` non si archivia mai (un backup prende solo `sqlite` e
+     `ARCHIVED_FOLDERS`) e non si scarica mai (i download vanno per id del job).
+7. **Unione con H-42**: si sovrappongono backlog, `security.md` e `_frontend_utility.py` (gli ultimi due arrivano da
+   dev nella base di B; B-18 non li tocca). `git merge-file`: 0 conflitti su tutti e tre.
+
+**LOW-1 (codice di B, non blocca)**: la riga D2 accusa la chiave data quando la chiave di questa istanza non si è potuta
+*generare*.
+- Se l'istanza non ha ancora la chiave (il caso tipico della migrazione dal cloud a un server nuovo, dove la chiave
+  nasce al primo uso), il controllo prova a crearla (`settings_subkey` → `_instance_key` → `_create_key_file`).
+- Se non ci riesce (`secrets/` non scrivibile, file system in sola lettura), `_plugin_secrets` conta tutto
+  illeggibile.
+- `instance_key_status()` dice ancora `not_created`, `problem=None`, quindi `_print_given_key` stampa la riga D2.
+- Sonda (`probe_not_created.out`): `settings_subkey()` → «the instance key cannot be generated (Permission denied)»;
+  `instance_key_status()` prima e dopo → `not_created`, `problem=None` → ramo D2.
+- Cura proposta, in una riga: in `_print_given_key`, prendere il ramo dell'eccezione anche per
+  `source == "not_created"`, con una frase che nomina la cartella. Quando si arriva a D2 la copia ha segreti, quindi
+  il controllo ha già provato a derivare la chiave: se dopo non esiste, non si è potuta generare. Più un caso di test
+  accanto a c7.
+
+**Nit di doc** (facoltativi, di B):
+- `cli_tools.en.md`, il punto 📄: «The line breaks at its end do not count» → aggiungere che nemmeno un BOM iniziale
+  conta, e che gli spazi invece contano. Un vecchio `LIBREFOLIO_INSTANCE_KEY` vale «as written, spaces included»
+  (`env_secret`).
+- `backup_restore.en.md`: finché sta in `LibreFolio-data/backups/`, il file della chiave vecchia con `chmod 600`.
+
+**Per H** (nessuna richiesta a B): la docstring di `derive_key_from` descrive già questa strada; nominare
+`--instance-key-file` lì è un ritocco mio facoltativo, in un lotto futuro.
+
+### Lotto «H-46: `LIBREFOLIO_TEST_MODE` acceso fuori da una corsia di test» (E, review di X-R44, LOW, 2026-10-17) — ✅ provato
+
+> Dal coordinatore (17/10, 10:52), dalla review di X-R44 di E: nessun controllo segnala `LIBREFOLIO_TEST_MODE` su
+> un'istanza in esercizio, e da X-R44 (dev `5a8c64c5c`) i doppi di test restano irraggiungibili solo a test mode
+> spento. Voce H nuova: un controllo della configurazione, di livello `error` quando test mode è acceso fuori dal
+> server di test. Da prendere dopo H-42, se è piccolo.
+
+**Analisi** (sola lettura, dev `1c8eba6f5`):
+1. **Cosa cambia `is_test_mode()`** (`1`, `true` o `yes`, letto solo dall'ambiente, mai da `.env`):
+   - `get_data_dir()` passa alla cartella di test (`LIBREFOLIO_TEST_DATA_DIR`, o `backend/data/test/`). Nell'immagine
+     è `/app/backend/data/test`, **fuori dal volume** `/app/backend/data/prod-docker`: i dati restano nel container e
+     si perdono quando lo si ricrea. In più `ensure_data_dirs` non scrive il marcatore di produzione;
+   - `Settings` non legge più `.env` (`settings_customise_sources`);
+   - X-R44: `mockprov` e `mockfx` (`test_only`) tornano visibili a ricerca, assegnazione, probe, refresh e
+     impostazioni. Quindi prezzi e cambi finti in un portafoglio vero, e rifiuti simulati;
+   - innocui: il prewarm di BRIM acceso per default, la riga `test_mode=True` del log d'avvio, la stampa di
+     `main.py`. `test-lane-health` vuole anche il lane id: senza, risponde 404.
+2. **Come ci si arriva in produzione**:
+   - `dev.py server` lo spegne sempre: `configure_server_runtime` scrive `LIBREFOLIO_TEST_MODE=0` e toglie
+     `LIBREFOLIO_TEST_LANE_ID`;
+   - **l'immagine parte invece con `uvicorn` diretto** (il `CMD` del Dockerfile). Un `LIBREFOLIO_TEST_MODE=1`
+     nell'ambiente del container lo accende: `environment:` del compose, `env_file: .env` (per esempio un `.env` da
+     sviluppatore riusato), il pannello di un hoster, `uvicorn` lanciato a mano;
+   - oggi nessun controllo lo dice: solo la riga del log d'avvio.
+3. **Il discriminante «server di test»**: `LIBREFOLIO_TEST_LANE_ID` (`owning_test_lane_id()`, `config/platform.py`).
+   - Lo mette `configure_test_runtime` → `ensure_test_lane_id()`, per `dev.py test` (il runner, il server condiviso, i
+     pytest in processo), per `dev.py server --test` (dev.py:205) e per la galleria;
+   - lo toglie `configure_server_runtime`; una produzione avviata con `uvicorn` non lo ha;
+   - non ferma un attaccante, perché chi scrive l'ambiente è l'operatore: serve a vedere un errore di configurazione.
+4. **Chi se ne accorge nei test**:
+   - i test del frontend (`securityChecks*.test.ts`, `SecurityTab.test.ts`) usano liste di controlli loro, e la scheda
+     Sicurezza mostra i controlli per chiave i18n, senza codice per id: un id nuovo non tocca il frontend;
+   - `test_config_audit.py`: `_configure` fissa `LIBREFOLIO_TEST_MODE` per caso ma eredita il lane id dal runner. Va
+     reso esplicito.
+
+**Proposta** (piccola, tutto in file di H):
+- `check_test_mode()` in `config_audit.py`, id `platform.test_mode`, dopo `check_log_level` (in fondo al blocco della
+  piattaforma, prima di B). In ogni profilo:
+  - spento → `ok`, `instance.checks.testMode.off`;
+  - acceso, con un lane id non vuoto → `ok`, `instance.checks.testMode.testLane`;
+  - acceso senza lane id → **`error`**, `instance.checks.testMode.outsideTestLane`, `detail` `{"data_dir": …}` (la
+    cartella di test in uso). Summary: «LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are
+    served, the data live in the test data directory <path> and .env is not read; unset it on a production
+    instance».
+  - Il server parte comunque, come per gli altri `error` dei controlli: errore nel log d'avvio e nella scheda
+    Sicurezza.
+- **Opzione per E**, fuori dal default: nel profilo managed fermare l'avvio, come `WeakSecretError`. H-43 (una corsia
+  managed) avrebbe il lane id, quindi non ne sarebbe toccata.
+- **i18n**: 3 chiavi nelle 4 lingue, in `lib/i18n/instance/` (`./dev.py i18n add`).
+- **Test** (test-author), in `test_config_audit.py`:
+  - `CHECK_IDS` +1; `_configure` mette il lane id (non produzione) e lo toglie (produzione);
+  - i casi: spento, acceso con il lane id, acceso senza, lane id vuoto, le grafie di `is_test_mode`;
+  - il `detail` e il summary esatti; all'avvio una riga `error` e l'avvio che continua.
+- **Doc** (docs-writer):
+  - `security.md`: una riga della tabella dei controlli e una frase;
+  - `configuration.en.md`: la riga di `LIBREFOLIO_TEST_MODE` (pagina tradotta: debito per H-5);
+  - il commento di `.env.example`, riga 38.
+- **Selettori**: `services config-audit`, `services config-env-example`, `utils gate-i18n-catalog`,
+  `utils gate-i18n-usage`, `mkdocs build` stretto. Nessuno slot.
+
+**Via del coordinatore** (17/10, ~11:10): «go», con l'opzione managed già dentro, senza aspettare E. Nel profilo managed,
+test mode acceso senza lane id **ferma l'avvio**, come un `JWT_SECRET` corto. Altrove resta un controllo `error` e il
+server parte. E lo vede nella revisione del checkpoint.
+
+**Contratto** (`files/h46/apply.py`, provato in copia: le tre copie di prova):
+- `config_audit.py`:
+  - `check_test_mode()` (`platform.test_mode`) dopo `check_log_level`, con le chiavi `off`, `testLane` e
+    `outsideTestLane`; `detail` `{"data_dir": str(get_data_dir())}`; `TEST_MODE_OUTSIDE_LANE_SUMMARY`;
+  - `_test_mode_outside_a_lane()`: `is_test_mode()` e un `owning_test_lane_id()` nullo o bianco;
+  - `ManagedTestModeError(RuntimeError)`, sollevata in `log_configuration_audit()` subito dopo `WeakSecretError` e
+    prima di ogni riga dei controlli, se il profilo è `managed`;
+  - `get_data_dir()` senza `try`, come in `check_instance_key`: un server la cui cartella di test è rifiutata
+    (`validate_test_data_dir` solleva solo `ValueError`) non parte proprio.
+- `.env.example`: due righe di commento sotto quella di test mode; nessuna riga non commentata nuova.
+- `config/__init__.py`: la riga di `LIBREFOLIO_TEST_MODE` nella docstring.
+- i18n: `files/h46/i18n.sh` (3 chiavi, `dev.py i18n add`, poi `i18n check`). Il tono rispetta le voci vicine: l'IT
+  dà del tu («Togli»), il FR del voi («Retirez»), l'ES del tu («Quita»).
+- Verificati non toccati:
+  - `test_backup_checks.py` di B: la sua fixture `platform` tiene il lane id del runner e i suoi assert filtrano le
+    righe del backup;
+  - `test_security_checks_api.py` di A: guarda solo che certi id ci siano, una volta ciascuno, sul server della
+    corsia, che ha il lane id (lo vuole anche la sonda `test-lane-health` del runner);
+  - `test_managed_headers.py` e `test_instance_block.py`: il lifespan non gira.
+- In corso: i rossi (test-author, `h46-reds`) e la doc (docs-writer, `h46-docs`), in parallelo su file distinti.
+
+> **⚠️ Fuori pista: la premessa dell'immagine nell'analisi era sbagliata** (trovato dal docs-writer, verificato da me).
+> - `backend/data/` non entra nell'immagine (`.dockerignore`), e `entrypoint.sh` crea e cede all'utente del server
+>   solo `LIBREFOLIO_DATA_DIR`. Quindi `/app/backend/data` è di root.
+> - `configure_logging()` crea `get_data_dir()/logs` mentre si importa `backend.app.main`, senza `try`.
+> - Sonda (`files/h46/probe/import_unwritable.sh`, nessuna porta): l'import in test mode, con la cartella madre della
+>   cartella di test non scrivibile, si ferma su `PermissionError` in `get_log_directory()`, prima di ogni controllo.
+> - Quindi **nell'immagine così com'è test mode ferma il server all'import**: niente doppi serviti, niente dati persi.
+>   È dedotto dai file e riprodotto fuori da un container; in un container non è provato (Docker spento): va con CP7a.
+> - Il controllo serve dove il server parte: `uvicorn` lanciato a mano o da un'unità di servizio, un'immagine con un
+>   suo comando o con una cartella di test scrivibile. Il nome del problema resta giusto.
+> - Corretti:
+>   - la docstring di `check_test_mode` in `apply.py` (non ancora applicata);
+>   - `security.md`, il paragrafo «Where it matters», con l'immagine dichiarata «not yet tried in a container»;
+>   - `configuration.en.md`, due righe;
+>   - `hosting_providers.en.md`, il punto «Test mode».
+>   Il messaggio dell'analisi al coordinatore va corretto nel checkpoint.
+> - Residuo per CP7a: provarlo in un container. Se confermato, valutare un messaggio chiaro prima di
+>   `configure_logging()`, al posto del traceback di `PermissionError`.
+
+**Documenti** (docs-writer, solo inglese, nessun timbro; più le correzioni sopra, mie, con `files/h46/docs_fix.py`):
+- `security.md`:
+  - la riga `platform.test_mode` nella tabella dei controlli;
+  - il conto dei messaggi `instance.checks.*`, da 24 a 27;
+  - due paragrafi dopo quello di H-39;
+  - lo stop `ManagedTestModeError` come passo 2 di `log_configuration_audit()`; gli altri passi rinumerati.
+- `configuration.en.md` (tradotta: debito per H-5):
+  - la riga di `LIBREFOLIO_PROFILE`;
+  - una riga ❌ nella tabella «Startup Checks», dopo il livello di log;
+  - un paragrafo sullo stop managed;
+  - la riga di `LIBREFOLIO_TEST_MODE`.
+- `hosting_providers.en.md`: «eight things», una riga della tabella e il punto «Test mode».
+- `settings.en.md`, pagina di A (A8b), tradotta: la riga «Test mode» in «What It Lists».
+  - Più, mie, le tre righe che mancavano dei miei controlli H-36 e H-39 (`platform.client_address`,
+    `platform.frame_protection`, `platform.csp_report_only`), nell'ordine di `CONFIG_CHECKS`: la pagina dice che i
+    rilievi seguono l'ordine della tabella.
+  - Mancano anche i due controlli di B (`backup.panel_token`, `backup.upload_limit`): li segnalo al coordinatore,
+    non li scrivo io.
+- Note del docs-writer verificate:
+  - X-R44 non è nel mio HEAD. Su dev `plugin_settings.md#test-only` e `system_providers.md:31` dicono già «served only
+    when `LIBREFOLIO_TEST_MODE` is on»: coerenti dopo l'aggiornamento di base;
+  - un lane id di soli spazi esportato prima di un run romperebbe già la corsia: la sonda `test-lane-health` vuole un
+    token di almeno 16 caratteri;
+  - «The image has no test mode» (`docker_advanced`, `dev_workflow`): resta vero, anzi lo conferma la sonda.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla), in `test_config_audit.py`:
+   - `_configure` mette un lane id finto in test mode e lo toglie in produzione: nessun caso dipende più dall'ambiente
+     del runner;
+   - `CHECK_IDS` prende `check_test_mode` con `getattr`: il file si raccoglie anche prima della cura;
+   - i due test d'ordine in (c) vogliono `platform.test_mode` dopo `platform.log_level`;
+   - la sezione nuova (h), 12 funzioni e 47 casi:
+     - spento: 7 grafie per 2 stati del lane id;
+     - corsia: 5 grafie;
+     - fuori dalla corsia: 2 grafie per 3 lane id;
+     - lo stesso esito in ogni profilo;
+     - nulla creato;
+     - l'avvio self-hosted, con una riga `error` che continua;
+     - lo stop managed col messaggio esatto, anche con l'istanza bloccata e con `" MANAGED "`;
+     - lo stop del JWT corto resta primo.
+   - Una barriera prima di ogni stato: `is_test_mode()`, e `get_data_dir()` nel `tmp_path`.
+2. ✅ **Run** (`files/runs/h46-backend.sh`, cancello del carico, nessuno slot):
+
+   | Passo | Esito |
+   |---|---|
+   | rosso `services config-audit` | **49 failed / 155 passed**, tutti col nome di H-46 |
+   | cura `files/h46/apply.py --apply` | i tre file identici alle copie di prova |
+   | i18n `files/h46/i18n.sh` | 3 chiavi in 4 lingue |
+   | verde `config-audit` | **204** |
+   | `config-env-example` | 38 |
+   | `config-package` | 863 |
+   | `backup-checks` (B) | 57 |
+   | `accounts-checks` (A) | 76 |
+   | `email-checks` (E) | 87 |
+   | `gate-i18n-catalog` | 176 |
+   | `gate-i18n-usage` | 195 |
+
+   - ruff e black puliti sui 3 file Python; porta libera.
+   - B, A ed E restano verdi: i loro test ereditano il lane id del runner.
+3. ✅ **Documenti** (sopra): `mkdocs build` stretto pulito, 97 link validi, `git diff --check` pulito
+   (`files/runs/h46-docs.sh`). I messaggi `instance.checks.*` sono 27 nelle 4 lingue, come dice `security.md`.
+4. **Previsione di unione** con dev `2f4ef68e6`. Base `fb8661dd2`, cioè dev contiene già H-42.
+   - 0 conflitti: `.env.example`, backlog, `security.md`.
+   - `configuration.en.md`, 1 conflitto: la riga di `LIBREFOLIO_PROFILE`, cambiata da A9 (cosa cambia per gli utenti
+     di un'istanza managed). Cura: la riga di dev, più la mia clausola accanto a quella del `JWT_SECRET` corto.
+   - `hosting_providers.en.md`, 1 conflitto: «ten things» (dev) contro «eight things» (mio). Cura: «eleven things»;
+     le righe della tabella si uniscono da sole.
+   - Gli altri file non sono toccati da dev.
+5. **Note per E**, dal test-author:
+   - un profilo managed scritto solo in `.env` non si vede in test mode, perché `Settings` non legge `.env`: allora
+     niente stop, solo l'`error`. I compose mettono `env_file:` nell'ambiente del processo; la doc lo dice;
+   - `ensure_test_lane_id()` tiene un lane id di soli spazi, ma la sonda di prontezza del runner vuole almeno 16
+     caratteri: una corsia così non partirebbe comunque;
+   - `get_data_dir()` può sollevare in test mode (`validate_test_data_dir`), ma allora fallisce già l'import di
+     `backend.app.main`: come per `check_instance_key`, nessun caso nuovo.
+
+### Lotto «H-45: la politica delle pagine anche sui documenti SVG e XML; nessuna CSP su un 304» (E, LOW, 2026-10-17) — ✅ provato
+
+> Dal coordinatore (17/10, dopo H-46), con la specifica di E:
+> - riconoscere `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml` e i tipi `+xml`;
+> - i PDF restano fuori; il report-only resta su `text/html`;
+> - un caso per tipo in `test_managed_headers.py`;
+> - facoltativa: nessuna CSP su un 304 (un rischio latente se si aggiorna Starlette), con un test.
+
+**Analisi** (HEAD `3bd1098ad`, dev con H-42 e H-46; Starlette 1.6.0):
+1. **Chi risponde 304 oggi**:
+   - `/`, la SPA e le pagine di `/mkdocs` passano da `_revalidated_file()`, cioè `FileResponse`. In Starlette 1.6 non
+     gestisce `If-None-Match` (gestisce solo `Range` e `If-Range`): risponde sempre 200;
+   - solo `StaticFiles` (il mount `/_app`, `ImmutableStaticFiles`) risponde 304, con `NotModifiedResponse`, senza
+     `Content-Type`. Sotto `/_app` non ci sono pagine HTML;
+   - quindi **H-42 oggi non perde nulla**. Correggo l'avviso che avevo dato al coordinatore al momento dell'unione:
+     le pagine dei documenti non ricevono mai un 304.
+2. **Il meccanismo è reale** (sonda `files/h45/probe/`: un server di sola libreria standard sulla porta 6181, poi
+   Chromium 149, sia col profilo in memoria sia con uno persistente; `run3.out`):
+   - una pagina servita 200 con `PAGE_POLICY`, poi rivalidata (`reload`, e `goto` di nuovo) con un 304;
+   - 304 con `frame-ancestors 'self'` da solo, cioè quello che il middleware mette oggi su un 304: la pagina presa
+     dalla cache **prende la CSP del 304**. Il `<base>` iniettato cambia l'URL base, e nessuna violazione scatta;
+   - 304 senza CSP, oppure con `PAGE_POLICY`: la pagina resta protetta;
+   - le prime due sonde non vedevano nessun 304: il server rispondeva in HTTP/1.0 e Chromium non mandava
+     `If-None-Match`. Con HTTP/1.1 e un'immagine di controllo la cache si vede.
+3. **Documenti SVG e XML serviti oggi**:
+   - nessun SVG nella build, nei documenti costruiti, né nei plugin;
+   - l'unico XML è `sitemap.xml` dei documenti (`FileResponse`, sempre 200);
+   - un SVG dell'utente non arriva mai inline:
+     - l'originale è sempre `attachment`;
+     - l'anteprima `img_preview` passa da Pillow, che non apre gli SVG, e risponde 500;
+     - i broker hanno `INLINE_SAFE_MEDIA_TYPES` senza SVG;
+   - la rotta degli asset dei plugin (`/api/v1/uploads/plugin/…`) servirebbe inline un SVG fornito con il plugin.
+     Oggi non ce n'è nessuno.
+   - Quindi H-45 è difesa in profondità, senza effetti visibili oggi.
+4. **Con H-45 la guardia del 304 diventa necessaria**, anche se ancora latente:
+   - un SVG sotto `/_app`, rivalidato, perderebbe la politica come nella sonda;
+   - lo stesso varrebbe per ogni pagina se un aggiornamento di Starlette desse a `FileResponse` i 304.
+
+**Proposta** (solo file di H):
+- `security_headers.py`:
+  - `_media_type(headers)`: il primo `content-type`, prima del `;`, senza spazi, in minuscolo;
+  - `_is_document()`: `text/html`, `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml`, e ogni
+    tipo che finisce in `+xml`. Prende `PAGE_POLICY`;
+  - `_is_html()` resta, sul tipo esatto `text/html`, e serve solo al report-only (le pagine della web app);
+  - **un 304 non riceve né `Content-Security-Policy` né `Content-Security-Policy-Report-Only`**: il browser tiene
+    quella della risposta in cache. `X-Frame-Options`, `nosniff` e `Referrer-Policy` restano come oggi.
+- **Test** (test-author), `test_managed_headers.py`:
+  - un caso per tipo (con `charset` e maiuscole), i PDF e il JSON fuori;
+  - un SVG su un percorso della web app: `PAGE_POLICY` sì, report-only no;
+  - il 304 con il middleware da solo, anche con un `Content-Type` HTML (lo Starlette di domani), nei due profili;
+  - un 304 vero da `StaticFiles` nello stack.
+- **Doc**: `security.md#managed-headers` (anche la frase «Not covered: …» di H-42 e il paragrafo dei test), la riga
+  di `LIBREFOLIO_FRAME_PROTECTION` in `configuration.en.md` (debito per H-5), il commento in `.env.example` e in
+  `config/__init__.py`.
+- **E2E**: nessuno. Lo spec di H-42 copia la regola dell'HTML, che non cambia, e nessun documento XML viene servito
+  inline. Lo slot non serve.
+- **Selettori**: `services managed-headers`, `security-headers`, `config-env-example`, `config-package`; `mkdocs
+  build` stretto e `check-links`.
+- **CHANGELOG**: proposta 🔒, ma oggi niente cambia per l'utente: decide il coordinatore.
+
+### Review di A9 (le righe di A nei miei file) e di Z-28 (la parte della post-migrazione) (2026-10-17, 12:10) — ✅ OK
+
+**A9** (`3c9303cf2`, entrato con `ba8f3b06e`): `LIBREFOLIO_TOS_URL` e `LIBREFOLIO_PRIVACY_URL`.
+- `config/platform.py`: `tos_url()` e `privacy_url()` passano da `env_url`, come `support_url()`; i nomi sono
+  costanti letterali, quindi la guardia di `.env.example` le vede.
+- `instance_links.py`: `terms_link()` e `privacy_link()` non sollevano mai e scrivono l'errore una volta per
+  processo, con il loro costo, attraverso `_report_invalid` (`functools.cache` sulla coppia problema-costo).
+- `schemas/system.py`: `LegalInstanceConfig`, due campi nulli per default; `legal` con `default_factory`.
+- `api/v1/system/instance.py`: nessun I/O sull'event loop, perché `env_url` legge solo l'ambiente.
+- `.env.example`: due righe commentate accanto a `LIBREFOLIO_SUPPORT_URL`; nessuna riga non commentata nuova.
+- Verdi sul HEAD unito (`files/runs/a9review.sh`): `services legal-links` 56, `services config-package` 864 (una più
+  di prima di A9). `api instance-legal` non l'ho lanciato: vuole un server di corsia, e A l'ha fatto al suo
+  checkpoint.
+- **Nota, nessuna richiesta ad A**: `env_url` toglie una barra finale («so a path can be appended»), pensato per
+  `LIBREFOLIO_PUBLIC_URL`. Per un link a una pagina (supporto, termini, privacy) `…/terms/` diventa `…/terms`. Quasi
+  tutti i server rispondono con un redirect, quindi è innocuo in pratica. È una regola mia (`support_url`): la segnalo
+  al coordinatore e non apro una voce.
+
+**Z-28** (`3a3d5ab1c`), il mio pezzo: `_exclusive_run` in `db/post_migration/__init__.py`.
+- `os.open(…, O_RDWR | O_CREAT | O_NOFOLLOW, 0o600)`:
+  - un link, pendente o no, dà `OSError` prima che si apra il database;
+  - dietro un link pendente non si crea nulla;
+  - il file nuovo nasce `0600`, e un lock già esistente tiene il suo modo (la doc lo dice: «when missing»);
+  - il descrittore si chiude sempre e il `flock` si rilascia nel `finally`;
+  - senza POSIX esce prima (`fcntl is None`): `getattr(os, "O_NOFOLLOW", 0)` non serve lì, ma non nuoce.
+- Le due frasi della doc sono vere:
+  - all'avvio `run_post_migration_fixes_at_startup` (`database_bootstrap.py`, mio) prende ogni `Exception` e scrive
+    il WARNING «Post-migration fixes could not run; starting normally»;
+  - lo script offline (`__main__.py`, riga 36) chiama fuori da ogni `try`: traceback, uscita 1.
+- `O_RDWR` vuole il permesso di scrittura come prima l'`"a+"`: nessuna regressione.
+- Verde sul HEAD unito: `db post-migration` 44.
+
+**Via del coordinatore** (17/10, ~12:00): «OK, go», con la guardia del 304 dentro; CHANGELOG 🔒 breve, sì.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla), in `test_managed_headers.py`, 99 casi nuovi:
+   - (g) esteso: 11 risposte tipizzate nuove nei 6 modi:
+     - 8 documenti: XHTML, SVG anche con `charset` e in maiuscolo, `application/xml`, `text/xml`, Atom, RSS con
+       `charset`;
+     - 3 no: `application/problem+json`, `text/plain`, `text/htmlx`;
+   - il pin di `DOCUMENT_MEDIA_TYPES` e del suffisso, letti con `getattr`;
+   - il report-only resta su `text/html` esatto: SVG, XHTML e `text/htmlx` su un percorso della web app;
+   - il 304 col middleware da solo, in 4 forme per 6 modi: senza `Content-Type`, HTML, con la CSP della rotta, con il
+     report-only della rotta. Prima una barriera a 200;
+   - un 304 vero da `ImmutableStaticFiles`, di un chunk JS e di un SVG aggiunto alla build finta
+     (`_app/immutable/assets/logo.a1b2.svg`), con le barriere su 304, ETag e `Cache-Control`.
+2. ✅ **Run** (`files/runs/h45-backend.sh`, cancello del carico, nessuno slot):
+
+   | Passo | Esito |
+   |---|---|
+   | rosso `services managed-headers` | **34 failed / 321 passed**, come previsto: 18 (g), 1 pin, 4 report-only, 9 sul 304, 2 sul 304 vero |
+   | cura `files/h45/apply.py --apply` | i tre file identici alle copie di prova |
+   | verde `managed-headers` | **355** |
+   | `security-headers` | 15 |
+   | `config-env-example` | 38 |
+   | `config-package` | 864 |
+
+   - ruff e black puliti sui 3 file Python; porta libera.
+   - La cura, in `security_headers.py`:
+     - `DOCUMENT_MEDIA_TYPES` e `DOCUMENT_MEDIA_TYPE_SUFFIX`;
+     - `_media_type()`: il primo `content-type`, prima del `;`, senza spazi, minuscolo, decodificato latin-1;
+     - `_is_document()`; `_is_html()` esatto;
+     - `self.not_modified_headers`: un 304 riceve gli header senza CSP, e nessun report-only;
+     - più la docstring del modulo.
+   - I commenti di `LIBREFOLIO_FRAME_PROTECTION` in `config/__init__.py` e in `.env.example`.
+3. ✅ **Documenti** (docs-writer, solo inglese, nessun timbro):
+   - `security.md#managed-headers`:
+     - la tabella (documenti; il 304);
+     - «Frame protection», con `_media_type`, `_is_document` e `_is_html`;
+     - «Why documents only», con ciò che si serve oggi;
+     - un punto nuovo «No policy on a `304`», con la sonda;
+     - «Where the report-only policy goes»;
+     - i test.
+   - `configuration.en.md`, la riga di `LIBREFOLIO_FRAME_PROTECTION`: anche SVG e XML, e la nota del 304. Debito di
+     traduzione per H-5.
+   - `hosting_providers.en.md`: la nota del 304.
+   - Controlli (`files/runs/h45-docs.sh`): `mkdocs build` stretto pulito, 97 link validi, Prettier pulito sullo spec,
+     `git diff --check` pulito.
+4. ✅ **Lo spec di H-42**: solo il commento di `isHtml`. Prima diceva «la regola del server», ma da H-45 il server dà
+   `PAGE_POLICY` a ogni documento (`_is_document`). Il codice resta com'è, perché ogni flusso dello spec apre solo
+   pagine HTML: lo slot non serve.
+   > **⚠️ Fuori pista** (dal docs-writer, verificato): `FileResponse` di Starlette 1.6 non risponde «sempre 200». A un
+   > `Range` risponde 206 (`multipart/byteranges` per più intervalli), 416 o 400, e rispetta `If-Range`. **Non risponde
+   > mai 304**, che è il punto. Corretti la docstring della cura (prima di applicarla) e questa analisi.
+   > - Un 206 con più intervalli prende `frame-ancestors 'self'` da solo, ma i browser non chiedono intervalli di un
+   >   documento: nessuna guardia, una nota sola.
+   > - `/mkdocs/sitemap.xml.gz` esce come `text/xml`: per `mimetypes` il `.gz` è una codifica, e `FileResponse` tiene
+   >   solo il tipo. Con H-45 prende `PAGE_POLICY`: innocuo, ed è documentato.
+
+### Lotto «H-49 e H-48: il lane id nei limiti della sonda; i link tengono la barra finale» (2026-10-17) — H-49 ✅ provato, H-48 rimandato
+
+> Dal coordinatore (17/10, dopo H-45): due voci piccole insieme, se costano poco.
+> - Il lane id di almeno 16 caratteri in `platform.test_mode`: è la nota di E su H-46; diventa **H-49**.
+> - La barra finale di `env_url` sui link: **H-48**.
+
+**Analisi** (sola lettura, HEAD `77e9611e0`):
+- **H-49**:
+  - il runner crea il lane id con `secrets.token_hex(16)`, cioè 32 caratteri (`ensure_test_lane_id`,
+    `scripts/cli_base.py`);
+  - la sonda di prontezza accetta un token da 16 a 128 caratteri (`Query(min_length=16, max_length=128)`,
+    `api/v1/system/health.py`);
+  - oggi H-46 conta come corsia ogni lane id non bianco: uno di 3 caratteri passerebbe, ma nessun runner potrebbe
+    usarlo.
+- **H-48**:
+  - `env_url` toglie una barra finale («so a path can be appended»). Serve solo a `LIBREFOLIO_PUBLIC_URL` (A, base
+    dei link delle email);
+  - i quattro lettori di link: `support_url` (H), `tos_url` e `privacy_url` (A9, nel mio `config/platform.py`),
+    `billing_url` (A, `config/accounts.py`);
+  - i test che fissano il taglio:
+    - `test_legal_links.py` (A): le righe `stripped-without-its-trailing-slash` e `ipv4-with-a-port`, più il confronto
+      con `env_url`;
+    - `test_instance_block.py` (mio, CP6): la riga `https-one-trailing-slash-removed` di `LIBREFOLIO_BILLING_URL`;
+  - la doc: `architecture/settings.md` riga ~141 (la regola) e `hosting_providers.en.md` riga ~637 (TOS e privacy).
+
+**Proposta**:
+- **H-49**:
+  - `TEST_LANE_ID_MIN_LENGTH = 16` e `TEST_LANE_ID_MAX_LENGTH = 128` in `config/platform.py`, accanto a
+    `owning_test_lane_id()`. Li usano la sonda (`health.py`, gli stessi valori: OpenAPI invariata, la rotta è fuori
+    dallo schema) e `_test_mode_outside_a_lane()`;
+  - è una corsia un lane id che, tolti gli spazi, sta fra 16 e 128 caratteri: quello che la sonda accetterebbe.
+    Fuori da quei limiti è «fuori corsia»: `error`, e nel profilo managed lo stop.
+- **H-48**:
+  - `env_link(name)` in `config/__init__.py`: la stessa regola di `env_url` (`http(s)`, host, niente credenziali né
+    spazi), ma l'indirizzo resta com'è scritto, tolti solo gli spazi intorno. `env_url` resta com'è per le basi;
+  - `support_url`, `tos_url`, `privacy_url` e `billing_url` passano a `env_link`. `public_url` resta su `env_url`.
+- **Test** (test-author):
+  - H-49 in `test_config_audit.py`;
+  - H-48 in `test_config_package.py` (`env_link` e il supporto) e in `test_instance_block.py` (la fatturazione);
+  - in `test_legal_links.py`, le due righe e il confronto con `env_link`, con l'OK di A.
+- **Doc**: `security.md` (la regola della corsia di H-46), `architecture/settings.md` (`env_link`),
+  `hosting_providers.en.md` (TOS e privacy).
+- **Selettori**: `services config-audit`, `config-package`, `legal-links`, `config-env-example`, `api instance-block`
+  (vuole un server di corsia? da verificare). Altrimenti tutti puri.
+- **Serve**: l'OK di scrittura di A su `config/accounts.py` (una riga in `billing_url`) e su `test_legal_links.py`.
+
+**Via del coordinatore** (~12:55): un lotto solo, con l'OK di scrittura di A su `config/accounts.py` (`billing_url`) e su
+`test_legal_links.py` (le due righe e `env_link`), e uno slot di ~3 min per `api instance-block`.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla):
+   - H-49: la sezione nuova (i) di `test_config_audit.py`:
+     - il pin dei due limiti;
+     - la sonda che usa gli stessi limiti, letta dai metadati di `Query`;
+     - gli id di 15 e 129 caratteri, e uno di 15 con spazi intorno: errore e stop managed;
+     - gli id di 16 e 128 caratteri, e uno di 16 con spazi intorno: corsia.
+   - H-48: in `test_config_package.py`, `test_instance_block.py` e `test_legal_links.py`.
+   > **⚠️ Fuori pista: H-48 non era piccolo.** Dalla test-author: la cura avrebbe fatto diventare rossi altri 9 test,
+   > fuori dall'OK:
+   > - di A: 2 in `test_legal_links.py`, 2 in `test_instance_config_legal_api.py` (`api instance-legal`) e 4 in
+   >   `test_registration_service.py`;
+   > - mio: 1 in `test_system_api.py` (`api system`).
+   >
+   > Più uno slot di ~8 min. **Decisione del coordinatore** (~13:00, la mia strada 2): H-49 da solo ora, H-48 dopo la
+   > 1.3, con l'elenco dei test nella sua riga del backlog.
+   > - Il lavoro in corso di H-48 (486 righe: i test, la doc e `apply_h48.py`) è salvato fuori dal repo, in
+   >   `files/h48-wip/`.
+   > - I 5 file sono tornati come in HEAD con `git show HEAD:<file> > <file>`, solo git in lettura: `test_config_package.py`,
+   >   `test_instance_block.py`, `test_legal_links.py` di A (toccato solo da me, sotto l'OK), `architecture/settings.md` e
+   >   `hosting_providers.en.md`.
+   > - La cura è stata divisa in `apply_h49.py` e `apply_h48.py`.
+   > **⚠️ Fuori pista: il messaggio dello stop managed** diceva «(no LIBREFOLIO_TEST_LANE_ID)», falso per un id presente
+   > ma fuori dai limiti. Ora dice «(no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters)», costruito dalle costanti.
+   > Aggiornati il pin `MANAGED_TEST_MODE_STOP`, `security.md`, `hosting_providers.en.md` e `configuration.en.md`
+   > (debito per H-5).
+2. ✅ **Run H-49** (`files/runs/h49-run.sh`, cancello del carico, nessuno slot):
+
+   | Passo | Esito |
+   |---|---|
+   | rosso `services config-audit` | **15 failed / 205 passed**: i 10 di (i), più i 5 stop di H-46 che fissano il messaggio |
+   | cura `files/h49/apply_h49.py --apply` | i tre file uguali alle copie di prova; `config/__init__.py` e `accounts.py` riscritti identici, verificato con `git diff` |
+   | verde `config-audit` | **220** |
+   | `config-package` | 866 |
+   | `config-env-example` | 38 |
+
+   - ruff pulito. black voleva andare a capo nel `raise` dello stop (più di 300 caratteri): applicato `black` al file,
+     poi ruff e black puliti e `config-audit` di nuovo **220**. Porta libera.
+   - La cura:
+     - `TEST_LANE_ID_MIN_LENGTH` e `TEST_LANE_ID_MAX_LENGTH` in `config/platform.py`;
+     - la sonda di `health.py` li usa: gli stessi valori, quindi niente cambia per la sonda;
+     - `_test_mode_outside_a_lane()`, l'id senza spazi fra i due limiti;
+     - la docstring di `check_test_mode`;
+     - il messaggio dello stop.
+3. ✅ **Documenti** (miei, solo inglese, nessun timbro): `security.md` (la riga, il paragrafo della corsia, le sezioni
+   (h) e (i), il messaggio), `hosting_providers.en.md` e `configuration.en.md` (il messaggio).
+- Note della test-author, nessuna azione:
+  - la sonda confronta il token grezzo, il controllo lo prende senza spazi;
+  - `ensure_test_lane_id()` tiene un id ereditato di qualsiasi lunghezza (in `scripts/cli_base.py`, condiviso), ma uno
+    fuori dai limiti fa fallire la sonda.
+
+### La nota in `settings.md` dopo B-35, la clausola di `--instance-key-file`, la review di B-35 (2026-10-17, 13:15) — ✅
+
+> Dal coordinatore (dopo l'ingresso di H-49, dev `96da36422`):
+> - una frase in `developer/architecture/settings.md` (la voce del limite di upload nel profilo managed);
+> - la review dopo l'ingresso del lettore di B-35 e della sua modifica alla mappa degli id nel mio
+>   `test_config_audit.py`;
+> - facoltativa: una clausola in `configuration.en.md` «Saved Secrets and the Instance Key» che rimandi a
+>   `--instance-key-file` (B-18).
+>
+> La richiesta di review di B-18 è arrivata una seconda volta, uguale. B-18 è già entrato (`5c4d7456a`). La mia review
+> delle 10:55 vale ancora: il LOW-1 e i due appunti sono la voce B-34 di B, e i cambi successivi sulle mie superfici
+> (`max_unpacked` di B-35 in `staging.py`, `_restore_limit` nella CLI) non toccano la strada della chiave d'istanza.
+
+- **Review di B-35** (`32739feaa`): OK.
+  - `backup_max_restore_mb()` (`config/backup.py`):
+    - non impostato: `0` in `selfhosted`, come prima della 1.3; altrove `RESTORE_TO_UPLOAD_RATIO` (8) volte
+      `backup_max_upload_mb()`, quindi 4000 MB in `managed`;
+    - fallisce chiuso con gli errori di quel lettore; un valore esplicito vince sempre;
+    - la CLI e `check_restore_limit` prendono gli stessi errori;
+    - da sapere: in `managed`, un `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=0` esplicito toglie anche il limite del restore, se
+      questo non è impostato. B lo scrive nella docstring; ora lo dice anche `settings.md`.
+  - La mappa degli id nel mio test: l'import e `check_restore_limit: "backup.restore_limit"` dopo l'upload, nell'ordine
+    di `CONFIG_CHECKS`. I test della tupla leggono `BACKUP_CONFIG_CHECKS`, quindi prendono da sé il terzo controllo.
+  - **Reperto mio, corretto**: `_configure` toglieva il token e il limite di upload di B, ma non
+    `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`. Un valore rimasto nell'ambiente, fuori dal runner (che lo toglie già), avrebbe
+    reso rosso `backup.restore_limit` nei casi «tutto ok». Aggiunto, con il commento «three checks».
+- **Doc** (mia, solo inglese, nessun timbro):
+  - `architecture/settings.md`, dopo la voce del limite di upload: la frase di B-35;
+  - `configuration.en.md`, «Saved Secrets and the Instance Key»: la clausola su `backup restore --instance-key-file`,
+    con il link a `cli_tools.md#backup-restore-instance-key`. Debito di traduzione per H-5.
+- **Controlli** (`files/runs/b35note.sh`):
+  - `services config-audit` 220; ruff e black puliti;
+  - `mkdocs build` stretto pulito, 97 link validi, `git diff --check` pulito; porta libera.

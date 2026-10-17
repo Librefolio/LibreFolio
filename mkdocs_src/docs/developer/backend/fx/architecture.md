@@ -135,7 +135,7 @@ converted; exactly 1,000 pass. The handler then plans the conversions one by one
 range, signal plan and warm-up — and counts the daily items and the one-unit signal items, warm-up
 included, that each would build; a conversion that starts after the cut counts zero, and its
 signals still run on an empty series. At the end of a conversion, a running total over
-`MAX_BULK_ITEM_DAYS` (5,000,000) gets a 422
+`MAX_BULK_ITEM_DAYS` (1,000,000, lowered by R13-SEC9-2) gets a 422
 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`, `item_days` being the
 count through that conversion: more than the budget, a lower bound of the request's total. The
 `message` says so, «this one would build at least N» (`bulk_too_many_days_detail()` with
@@ -143,7 +143,9 @@ count through that conversion: more than the budget, a lower bound of the reques
 is built or converted until the whole request is within the budget; only then are the planned
 blocks expanded day by day, in request order and each conversion's daily items before its signal
 items, and converted in one `convert_bulk()` call. A refused request costs its planning, not its
-items. Like the ceiling, the caps are the endpoint's: `convert_bulk()` has none.
+items. Like the ceiling, the caps are the endpoint's: `convert_bulk()` has none. The FX list sends
+its conversions in batches under both (Z-27,
+[Bulk requests in batches](../../frontend/state/registries.md#bulk-requests-in-batches)).
 {: #convert-request-limits }
 
 ### 🪟 Loading only the usable rate window {: #convert-bulk-window }

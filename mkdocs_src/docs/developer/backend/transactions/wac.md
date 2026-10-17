@@ -569,11 +569,21 @@ Rule 12 of `validate_transaction_business_rules()`
 `cost_basis_allowed()`: a row sent with a `cost_basis_mode` is refused
 (`costBasisModeIncompatible`) when the rule of its side — picked at call time by
 `_cost_basis_rule()`, shared with `cost_basis_required()` — is `forbidden`, or
-`required_qty_pos` without a positive quantity. It is the test the frontend makes
-before sending a cost basis (`cbAllowed` in
-`frontend/src/lib/features/transactions/txPayloadHelpers.ts`), and with today's
-table it admits exactly the rows that need an override: a `TRANSFER` or
-`ADJUSTMENT` adding quantity.
+`required_qty_pos` without a positive quantity. Rule 12b (W-B72, night decision
+N78) holds to the same test the non-null `cost_basis_override` a create or an
+update sets without a mode — with one, rule 12 speaks alone — and refuses it with
+`costBasisNotAllowed`, params `{type, qty}`. Its exception is an `ADJUSTMENT` taking
+units out, whose cost is the handover cost of decision 47, which an update of the
+split's own batch may set (decision 4; see
+[Split & Promote](split_promote.md#transfer-giving-leg)). Rule 12b never judges a
+cost basis the row already stores, nor an explicit `null`; before W-B72, a cost
+basis sent without a mode was stored on any type (see
+[Per-type rules](service.md#per-type-rules), and
+[Promote boundary](#promote-boundary) for the cost basis a promote resolves).
+`cost_basis_allowed()` is the test the frontend makes before sending a cost basis
+(`cbAllowed` in `frontend/src/lib/features/transactions/txPayloadHelpers.ts`), and
+with today's table it admits exactly the rows that need an override: a `TRANSFER`
+or `ADJUSTMENT` adding quantity.
 
 The batch rejects such a row without an override (`costBasisRequired`) when it is
 created or made the receiving side of a promoted pair (see
@@ -595,10 +605,16 @@ unknown cost therefore comes from:
   split its units would have an unknown cost. Since P-10 the app refuses to take
   the split away while such a row has no cost: the retype answers 409
   `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, the market-data wipe of a currency change
-  409 `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`; once the row has a cost, 0
-  included, both go through
+  409 `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`, and new parameters for a
+  Scheduled Investment plan, or leaving the plan for another provider, 409
+  `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` when the split is one the plan
+  generated (see
+  [Parametric Provider Change](../assets/events.md#parametric-provider-change));
+  once the row has a cost, 0 included, all three go through
   (`test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`
-  in `backend/test_scripts/test_api/test_portfolio_wac.py`).
+  in `backend/test_scripts/test_api/test_portfolio_wac.py` for the retype;
+  `test_market_data_wipe_split_guard.py` and `test_provider_wipe_split_guard.py` in
+  `backend/test_scripts/test_services/` for the two wipes).
 
 **An explicit `null` in an update** (decision P5, coordinator reading B, 16/10).
 An update that leaves out `cost_basis_override` changes nothing. One that sends it
@@ -722,7 +738,8 @@ counted at zero. An Auto cost averaged from that pool would be written on the ro
 wrong for good.
 
 So `_auto_cost()` (`auto_cost.py`, W-B69) first counts the unreadable rows of the
-pool with `_unreadable_pool_rows()`: the rows `compute_wac_iterative()` loads — same
+pool with `_unreadable_pool_rows()` — through `count_unreadable_rows()`
+(`unreadable_rows.py`), the count the balance replay makes too (W-B74): the rows `compute_wac_iterative()` loads — same
 broker and asset, a date up to the pool's date, a quantity not `NULL` and not zero —
 minus the excluded ids, whose quantity or amount reads `None`, or whose
 `cost_basis_override` is stored (not `NULL` in SQL) but reads `None`. A `NULL` cost
@@ -761,7 +778,10 @@ sender ends without one: before it applies
 `resolved_fields`, `apply_promotes()` clears `cost_basis_override` and
 `cost_basis_currency` on a side whose new type takes none (`cost_basis_allowed()`),
 such as an `ADJUSTMENT` taking units out that a split left with a cost (decision
-47).
+47). A cash pair (`CASH_TRANSFER`, `FX_CONVERSION`) has no leg that takes one: a
+non-null value refuses the promote with `costBasisNotAllowed`
+(`_resolved_cost_issues()`, W-B72), where it was written on both legs before; a
+`null` passes.
 
 Rows that are also present in `creates[]` or `updates[]` enter auto-WAC only
 because that create/update item requested an auto mode, never because of the

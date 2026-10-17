@@ -55,8 +55,14 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     to read — a trigger whose row claims ``type = 'table'`` (revision 05:30 of the contract: «malformed database
     schema»), a row whose SQL does not parse — is ``database_damaged``, also before anything else opens the copy. This
     LibreFolio's own schema, the head made by alembic, holds only tables and indexes, which the refusal lets through.
-    Every connection a check opens on its copy through ``staging``, ``snapshot`` and ``totals`` turns ``trusted_schema``
-    off before any other statement; the first of them reads the schema, read only, and runs nothing of it.
+    Every connection a check opens on its copy through ``staging``, ``snapshot``, the post-migration fixes (lot B-37)
+    and ``totals`` turns ``trusted_schema`` off before any other statement; the first of them reads the schema, read
+    only, and runs nothing of it. The upgrade's own process is read in ``test_dev_cli_db_path.py`` (its ``env.py``).
+(m) Lot B-35, a cap on what an archive unpacks to (``stage_archive(..., max_unpacked=)``, bytes): the declared total
+    (the manifest's sizes, which the zip's headers equal) at the cap or under it is checked as without one; above it,
+    ``unpacked_too_large`` in the contract's words, once the entries are checked and before the free space is asked or a
+    byte written — never unpacked, the progress never past ``checking``, nothing left. A secure archive is decrypted
+    first, then refused the same way. ``None``: no limit, the check as before.
 
 Real databases: two, made once for the module by ``alembic upgrade`` in a process of their own (at the head, and at
 ``OLDER``), then copied for every data directory and given accounts by SQL. Two more ``alembic`` processes
@@ -68,10 +74,13 @@ process, for one test: ``staging.subprocess`` (an ``alembic`` that ends badly, t
 ``staging.MAX_ENTRIES`` and ``ledger_totals_of`` (as ``staging`` and ``totals`` name it). ``instance_backup.totals`` is
 imported by the tests that need it, never at collection: until lot B-13 writes it, each of them fails on its own.
 (l) replaces ``describe_database`` as ``staging`` imports it with a function that fails the test, and wraps ``connect``
-where ``staging`` and ``snapshot`` look up ``sqlite3`` and ``totals`` looks up ``aiosqlite``, to record the statements
-of each connection from its very first (a trace set as the connection is made). Two of its archives are a real backup
+where ``staging``, ``snapshot`` and ``post_migration`` look up ``sqlite3`` and ``totals`` looks up ``aiosqlite``, to
+record the statements of each connection from its very first (a trace set as the connection is made); the fixes'
+backup copy, a new file beside the copy, is no connection to it. Two of its archives are a real backup
 whose database was then edited through ``writable_schema``: SQLite refuses their schema, so no backup is made of them.
-``staging._refuse_foreign_objects`` is looked up by the test that needs it, never at collection.
+``staging._refuse_foreign_objects`` is looked up by the test that needs it, never at collection. (m) replaces
+``staging._unpack`` with a function that fails the test, and ``staging._check_space`` with a disk without room; each
+of its cases asks ``stage_archive`` for ``max_unpacked`` first, so that until lot B-35 each fails on its own.
 
 Pure: every data directory, database and archive lives in ``tmp_path``. This process and every process it starts are
 configured with a production data directory of the test (``LIBREFOLIO_TEST_*`` removed, ``LIBREFOLIO_DATA_DIR`` set and
@@ -86,6 +95,7 @@ import ast
 import errno
 import hashlib
 import importlib
+import inspect
 import json
 import os
 import re
@@ -113,9 +123,10 @@ import pytest
 from structlog.testing import capture_logs
 
 from backend.app.config import get_data_dir
+from backend.app.db import post_migration
 from backend.app.db.post_migration.base import PostMigrationReport
 from backend.app.services.financial_math.ledger_totals import CONTROL_TOTALS_VERSION, ControlTotals, control_totals
-from backend.app.services.platform.instance_backup import snapshot, staging
+from backend.app.services.platform.instance_backup import envelope, snapshot, staging
 from backend.app.services.platform.instance_backup.archive import BuiltArchive, build_archive
 from backend.app.services.platform.instance_backup.jobs import _RunLock
 from backend.app.services.platform.instance_backup.manifest import MANIFEST_MAX_BYTES, BackupManifest, ManifestDatabase, ManifestFile
@@ -2494,13 +2505,16 @@ class RecordingConnect:
 
 
 def recorded_connections(patch: pytest.MonkeyPatch) -> list[Opened]:
-    """Every connection opened through ``connect`` where ``staging`` and ``snapshot`` look up ``sqlite3`` and ``totals``
-    looks up ``aiosqlite``, in the order they open. The post-migration fixes and the upgrade connect on their own, which
-    §2 of the contract leaves out: not recorded."""
+    """Every connection opened through ``connect`` where ``staging``, ``snapshot`` and the post-migration fixes
+    (``post_migration``, lot B-37) look up ``sqlite3`` and ``totals`` looks up ``aiosqlite``, in the order they open.
+    The upgrade runs in a process of its own: not recorded here (``test_dev_cli_db_path.py`` reads its ``env.py``). The
+    fixes' backup copy (a new ``.bak`` file beside the copy) is recorded too, and is no connection to the copy:
+    ``on_the_copy`` leaves it out by its path."""
     opened: list[Opened] = []
     totals = totals_module()
     patch.setattr(staging, "sqlite3", RecordingConnect(sqlite3, "staging", opened))
     patch.setattr(snapshot, "sqlite3", RecordingConnect(sqlite3, "snapshot", opened))
+    patch.setattr(post_migration, "sqlite3", RecordingConnect(sqlite3, "post_migration", opened))
     patch.setattr(totals, "aiosqlite", RecordingConnect(totals.aiosqlite, "totals", opened))
     return opened
 
@@ -2599,9 +2613,11 @@ def test_this_librefolio_s_own_schema_holds_only_tables_and_indexes_which_the_re
 
 def test_every_connection_a_check_opens_on_its_copy_turns_trusted_schema_off_before_anything_else(instance, older_archive, monkeypatch):
     """(l) §2 A whole check of an older backup, every phase run (its upgrade simulated, as in (c): the upgrade's own
-    process is not this lot's). Every connection opened on the copy where ``staging`` and ``snapshot`` look up
-    ``sqlite3`` and ``totals`` looks up ``aiosqlite`` runs ``PRAGMA trusted_schema=OFF`` before any other statement: the
-    copy's schema (its views, triggers, checks, defaults) can reach no function or virtual table that is not harmless."""
+    process is read in ``test_dev_cli_db_path.py``). Every connection opened on the copy where ``staging``,
+    ``snapshot`` and the post-migration fixes (lot B-37) look up ``sqlite3`` and ``totals`` looks up ``aiosqlite`` runs
+    ``PRAGMA trusted_schema=OFF`` before any other statement: the copy's schema (its views, triggers, checks, defaults)
+    can reach no function or virtual table that is not harmless. Red before B-37: the fixes' connection begins with
+    their integrity check."""
     opened = recorded_connections(monkeypatch)
     monkeypatch.setattr(staging, "_upgrade", stamp_head)
     stage_id = new_stage_id()
@@ -2609,8 +2625,8 @@ def test_every_connection_a_check_opens_on_its_copy_turns_trusted_schema_off_bef
     report = stage_archive(older_archive.path, instance.root, stage_id=stage_id, progress=progress)
     assert (report.action, progress.phases, report.control_totals) == ("upgrade", PHASES, "same"), f"precondition: a whole check, the totals read on the copy: {report.action}, {progress.phases}, {report.control_totals}"
     on_copy = on_the_copy(opened, instance.root, stage_id)
-    silent = {"staging", "snapshot", "totals"} - {record.by for record in on_copy}
-    assert not silent, f"precondition: each of the three opens the copy during a check, yet {sorted(silent)} opened nothing recorded: {first_statements(opened)}"
+    silent = {"staging", "snapshot", "post_migration", "totals"} - {record.by for record in on_copy}
+    assert not silent, f"precondition: each of the four opens the copy during a check, yet {sorted(silent)} opened nothing recorded: {first_statements(opened)}"
     trusting = [record for record in on_copy if not turns_trust_off_first(record)]
     assert not trusting, f"every connection to the copy turns trusted_schema off first: {len(trusting)} of {len(on_copy)} did not: {first_statements(trusting)}"
     print_success(f"{len(on_copy)} connections to the copy, each trusted_schema=OFF first")
@@ -2629,3 +2645,119 @@ def test_a_check_first_reads_the_schema_of_its_copy_read_only_and_runs_nothing_o
     assert first.opened_read_only, f"read only: a file: URI with mode=ro, opened as a URI: {first.target!r}, uri={first.uri}"
     assert turns_trust_off_first(first) and all(statement.lstrip().upper().startswith("SELECT") for statement in first.statements[1:]), f"trusted_schema off, then reads only: {first.statements}"
     print_success(f"first on the copy: {first.statements}")
+
+
+# =============================================================================
+# (m) Lot B-35: a cap on what an archive unpacks to
+# =============================================================================
+#
+# The upload limit bounds the compressed archive only; the check unpacks what the manifest declares (equal to the zip's
+# headers). ``stage_archive(..., max_unpacked=)``, in bytes: the declared total above it is refused once the entries are
+# checked, before the free space and before a byte is written.
+
+#: What the check says of an archive whose files, unpacked, are more than this LibreFolio accepts (contract §2).
+UNPACKED_TOO_LARGE = "unpacked_too_large"
+UNPACKED_TOO_LARGE_MESSAGE = "Unpacked, the archive is larger than this LibreFolio accepts for a restore"
+#: The password of (m)'s secure archive: a test's, not a secret.
+B35_PASSWORD = "Correct-Horse-Battery-35"
+#: Caps the module's head archive is within: one byte above its declared total, and the total itself.
+CAPS = [pytest.param(1, id="cap-one-byte-above-the-total"), pytest.param(0, id="cap-equal-to-the-total")]
+#: Caps it is over, from its declared total: one byte under it, and a cap of one byte in all.
+OVER_THE_CAP = [pytest.param(lambda total: total - 1, id="cap-one-byte-under-the-total"), pytest.param(lambda total: 1, id="a-cap-of-one-byte")]
+
+
+def b35_parameter() -> None:
+    """``stage_archive`` takes ``max_unpacked``, which lot B-35 adds: each case of (m) asks it first."""
+    assert "max_unpacked" in inspect.signature(stage_archive).parameters, "[new] stage_archive() has no parameter 'max_unpacked' yet: lot B-35 adds it (contract §2)"
+
+
+def declared_total(archive: BuiltArchive) -> int:
+    """What ``archive`` declares its files unpack to: the sum of its manifest's sizes, which the zip's headers equal."""
+    return sum(entry.size for entry in archive.manifest.files)
+
+
+def never_unpacked(patch: pytest.MonkeyPatch) -> list[tuple]:
+    """``staging._unpack`` failing the test if a check reaches it: an archive refused for its size is refused before a
+    byte of it is written (no ``data/``). The calls, kept."""
+    calls: list[tuple] = []
+
+    def unpack(*args: object) -> None:
+        calls.append(args)
+        pytest.fail("the archive was unpacked before its declared size was refused (B-35)")
+
+    patch.setattr(staging, "_unpack", unpack)
+    return calls
+
+
+def no_room(patch: pytest.MonkeyPatch) -> list[object]:
+    """``staging._check_space`` answering as a disk without room (``no_space``); the manifests it was asked about."""
+    asked: list[object] = []
+
+    def check_space(root: Path, manifest: object) -> None:
+        asked.append(manifest)
+        raise StagingError("no_space", "Not enough free space to check the archive")
+
+    patch.setattr(staging, "_check_space", check_space)
+    return asked
+
+
+@pytest.mark.parametrize("margin", CAPS)
+def test_an_archive_whose_files_unpack_to_the_cap_or_less_is_checked(instance, head_archive, margin):
+    """(m) B-35 §2 The declared total under the cap, or equal to it: the check goes on as without one — unpacked,
+    verified, restorable."""
+    print_section("B-35: a cap on what an archive unpacks to")
+    b35_parameter()
+    progress = Progress()
+    report = stage_archive(head_archive.path, instance.root, progress=progress, max_unpacked=declared_total(head_archive) + margin)
+    assert (report.action, report.restorable, progress.phases) == ("same", True, ["checking", "unpacking", "verifying"]), f"checked as without a cap: {report.action}, {report.blockers}, {progress.phases}"
+    print_success(f"cap {declared_total(head_archive) + margin} bytes for {declared_total(head_archive)}: checked")
+
+
+@pytest.mark.parametrize("cap_of", OVER_THE_CAP)
+def test_an_archive_whose_files_unpack_to_more_than_the_cap_is_refused_before_a_byte_is_written(instance, head_archive, monkeypatch, cap_of):
+    """(m) B-35 §2 The declared total above the cap: ``StagingError`` ``unpacked_too_large`` in the contract's words,
+    once the entries are checked and before any is written — never unpacked (no ``data/``), the progress never past
+    ``checking``; the stage removed, the lock free, no path said, the archive only read."""
+    b35_parameter()
+    limit = cap_of(declared_total(head_archive))
+    original = sha256(head_archive.path.read_bytes())
+    unpacked = never_unpacked(monkeypatch)
+    error, progress = refused(head_archive.path, instance, max_unpacked=limit)
+    assert (error.code, str(error)) == (UNPACKED_TOO_LARGE, UNPACKED_TOO_LARGE_MESSAGE), f"{error.code}: {error}"
+    assert (progress.phases, unpacked) == (["checking"], []), f"refused before a byte is written: {progress.phases}"
+    assert sha256(head_archive.path.read_bytes()) == original, "the archive is only read"
+    print_success(f"cap {limit} bytes for {declared_total(head_archive)}: unpacked_too_large")
+
+
+def test_the_cap_is_checked_before_the_free_space(instance, head_archive, monkeypatch):
+    """(m) B-35 §2 After the entries, before ``_check_space``: with no room on the disk, an archive over the cap is
+    refused for its size, the free space never asked. The control: at the cap, the disk without room is what refuses it
+    (``no_space``), so the stand-in is the one the check calls."""
+    b35_parameter()
+    asked = no_room(monkeypatch)
+    error, progress = refused(head_archive.path, instance, max_unpacked=declared_total(head_archive) - 1)
+    assert (error.code, progress.phases, asked) == (UNPACKED_TOO_LARGE, ["checking"], []), f"the cap first, the free space never asked: {error.code}, {progress.phases}, asked {len(asked)} times"
+    control, _progress = refused(head_archive.path, instance, max_unpacked=declared_total(head_archive))
+    assert (control.code, len(asked)) == ("no_space", 1), f"barrier: at the cap, the disk without room refuses it: {control.code}, asked {len(asked)} times"
+    print_success("unpacked_too_large before no_space")
+
+
+def test_a_secure_archive_is_decrypted_then_refused_the_same_way(instance, head_archive, tmp_path, monkeypatch):
+    """(m) B-35 §2 A secure archive (the module's head archive in an envelope): decrypted first, then its declared total
+    refused as a zip's — ``unpacked_too_large``, never unpacked, the stage (the decrypted archive with it) removed."""
+    b35_parameter()
+    secure = tmp_path / "head.lfbk"
+    envelope.encrypt_file(head_archive.path, secure, B35_PASSWORD, log2_n=envelope.MIN_LOG2_N)
+    unpacked = never_unpacked(monkeypatch)
+    error, progress = refused(secure, instance, key=envelope.unlock(secure, B35_PASSWORD), max_unpacked=declared_total(head_archive) - 1)
+    assert (error.code, progress.phases, unpacked) == (UNPACKED_TOO_LARGE, ["decrypting", "checking"], []), f"decrypted, then refused before a byte is written: {error.code}, {progress.phases}"
+    print_success("decrypted, then unpacked_too_large")
+
+
+def test_no_cap_is_today_s_check(instance, head_archive):
+    """(m) B-35 §2 ``max_unpacked=None``: no limit, the check as it was before B-35."""
+    b35_parameter()
+    progress = Progress()
+    report = stage_archive(head_archive.path, instance.root, progress=progress, max_unpacked=None)
+    assert (report.action, report.restorable, progress.phases) == ("same", True, ["checking", "unpacking", "verifying"]), f"the check as before: {report.action}, {report.blockers}, {progress.phases}"
+    print_success("no cap: checked as before")

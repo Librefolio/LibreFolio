@@ -5643,6 +5643,197 @@ prossimo checkpoint.
   - Nessun codice frontend cambiato (solo il commento della spec E2E): niente corse frontend.
 - **Checkpoint J-47 consegnato (17/10 ~10:44)**: FROZEN. Dopo il commit, il coordinatore unisce dev (che ha cambiato
   `BACKLOG_POST_1.2.md` e `wac.md`): i conflitti sono miei.
+- ✅ **J-47 entrata (coordinatore 10:43)**: `f40c598ba`, `469e9f6b8`, `9bbc220fc` → dev `647efcc28`, senza conflitti;
+  CHANGELOG 🐛 `d67ac4603`; worktree portato avanti a `d67ac4603`. Nessuno slot API. Prossimi: J-12, J-50 (se piccola,
+  prima di SEC8-1b), SEC8-1b.
+
+#### J-12 — il pannello dei lotti con l'analisi `FAILED` (analisi 17/10 ~10:50, sola lettura; base `d67ac4603`)
+
+- **Cosa resta `FAILED` dopo J-10 e J-47**: dati davvero rotti.
+  - `FIFO_SOURCE_QUANTITY_MISSING`: una vendita oltre il posseduto. È il caso comune con gli import parziali.
+  - `TRANSFER_PAIR_MISSING`: una gamba sola, per esempio un'uscita rimasta TRANSFER perché le mancava un cambio (V-3).
+  - I due `SHORT_*_NOT_SUPPORTED`.
+  - `_QUANTITATIVE_FAILURE_CODES` dice già che la ricostruzione intera non è affidabile.
+- **Oggi**:
+  - il pannello (`LotsAnalysisPanel.svelte:476-480`) mostra l'avviso rosso e poi disegna lo stesso grafici, tabella e
+    confronti;
+  - il banner dei lotti scrive «(broker 7)», un id: nessun nome, nessuna data, nessun collegamento alla transazione;
+  - l'AI Export (`broker.fifo_summary`/`fifo_lots`, `portfolio.fifo_summary`/`fifo_lots`) passa all'AI le righe di un
+    asset `FAILED` con cifre sbagliate e nessuno stato (T8 di J-47 l'ha visto: riga presente, cifre del lotto fermo).
+- **Il precedente**: lo YoC, sullo stesso rigioco FIFO, quando fallisce non dà il numero («non disponibile», motivo
+  «failed»: `yield_on_cost._component_replay_failure`). Ed è la regola del progetto: un dato che manca si dichiara,
+  non si mostra sbagliato (E1: un cambio mancante non vale zero).
+- **Opzione A (consigliata), un solo punto nel backend.**
+  - Con `FAILED` la risposta dei lotti tiene stato, problemi, metadati, la storia dei prezzi e le linee WAC (che non
+    vengono dalla FIFO). Non dà le sezioni che vengono dai lotti: `lots`, Gantt, eventi, custodia, valori, rendimenti,
+    performance, eventi di reddito (vuote).
+  - **AI Export**: nei 4 componenti FIFO l'asset `FAILED` resta come riga con `reconstruction_status: "FAILED"` e le
+    cifre nulle, o in una lista a parte con il motivo. È un cambio di contratto: +1 di versione ai 4 componenti, la
+    documentazione, i test di contratto e una sonda di resa (la copia privata non ha casi `FAILED`).
+  - **Pannello**: niente grafici né tabelle dei lotti con `FAILED`. Al loro posto una spiegazione per chi non è
+    esperto e, per ogni problema, nome del broker, data e collegamento alla transazione da correggere.
+  - Rischio: chi è esperto perde il quadro parziale che aiutava a capire. I problemi nominano comunque la transazione.
+- **Opzione B, solo il pannello**: nasconde e spiega. L'AI Export continua a dare cifre sbagliate senza segnale.
+- **Opzione C, tutte e due ma le cifre restano nell'API** per la diagnosi: il pannello nasconde, l'AI Export marca.
+  Costa come A, e un consumatore futuro può ancora mostrare le cifre.
+- **Rossi da chiedere** (con A): il servizio con `FAILED` (una vendita oltre il posseduto, una gamba sola) dà le
+  sezioni vuote; guardia: prezzi e WAC restano; guardia `DEGRADED`: niente cambia. Poi l'AI Export con lo stato nei 4
+  componenti. Poi in Vitest: il pannello non disegna e spiega, con nome del broker, data e collegamento.
+- Decisione: al coordinatore (o al developer); in attesa preparo J-50.
+- **Decisione N81 (coordinatore 10:55, per il developer)**: **A**. È la regola del progetto (un dato che manca si
+  dichiara, non si mostra sbagliato) e il precedente dello YoC. Nel lotto entrano anche l'AI Export (+1 di versione
+  ai 4 componenti FIFO), i suoi test di contratto e la documentazione. La sonda di resa gira nella mia corsia con le
+  fixture; ciò che chiede gli account del developer va nella lista dopo l'ingresso. Ordine: prima J-50, poi J-12.
+
+#### J-50 — `BulkTooManyDaysError` (Z-25) diventa un rifiuto con codice nel rischio e nell'AI Export (17/10, dalle 10:58)
+
+- **Stato reale (base `d67ac4603`)**: `get_prices_bulk` alza `BulkTooManyDaysError` oltre `MAX_BULK_ITEM_DAYS`
+  (5 M giorni-asset, `utils/date_range_limits.py`). L'API dei prezzi la traduce in 422; i chiamanti interni no.
+  - **Rischio**: `risk/scope.py:339` (`prepare_asset_series`).
+    - Nel percorso principale di `RiskService.execute` (`service.py:120`) la chiamata sta fuori dal `try` di ogni
+      analitica, e la route mappa solo 403/404: quindi un **500**.
+    - Nel rigioco storico (`replay.py:98`) la chiamata sta dentro il `try`, ma l'errore non è un
+      `RiskUnavailableError`: anche lì un 500.
+  - **AI Export**: `asset_resources.py:268`, `technical_shared.py:399` e `:578`. Un componente richiesto che fallisce
+    diventa `RequiredComponentBuildError` → **503** `snapshot_source_failure`, senza `reason_code`.
+- **Scelte (registrate, si va avanti)**:
+  - **Rischio: la convenzione D379, non un 422.** Ogni analitica risulta `unavailable` con `RESOURCE_LIMIT` e
+    `details = {metric: "price_item_days", actual, limit, remedy: "period_or_assets"}`; la richiesta risponde 200 come
+    per ogni altro limite di dimensione.
+    - Così il frontend la scrive già con una frase precisa (`errorDisplayCode.ts`), con il rimedio nuovo
+      `period_or_assets` e la chiave `risk.errors.resource_limit_period_or_assets` in 4 lingue.
+    - Un 422 a livello di richiesta finirebbe nello stato d'errore generico del pannello.
+  - **AI Export: 422 `selection_not_applicable` con `reason_code: "too_many_price_days"`**, invece del 503. Nessun
+    modello nuovo nell'API, quindi niente `api sync`. In `ui.ts` una frase propria (`aiExport.tooManyPriceDays`, 4 lingue).
+- **Rossi da chiedere**:
+  - il servizio del rischio: percorso principale e rigioco;
+  - il servizio dell'AI Export: 422 al posto del 503; guardia sui componenti facoltativi;
+  - in Vitest, `errorDisplayCode` e `getAiExportErrorMessage`;
+  - il tetto si abbassa in modo locale ai test, con monkeypatch di `price_query.MAX_BULK_ITEM_DAYS`.
+- ✅ **Rossi (test-author 10:59–11:15; motivi riletti da me 11:16)**: **18 rossi, 10 guardie verdi**. Le corse
+  backend usano un SQLite privato sotto `tmp_path`, come Z-25.
+  - `test_services/test_risk_price_day_budget.py`: 2 rossi (`BulkTooManyDaysError(item_days=31, max_item_days=30)`
+    sale da `RiskService.execute`; per il rigioco 305 su 100, da `service.py:170 → replay.py:98 → scope.py:339`) e 4
+    guardie (senza tetto e al tetto esatto).
+  - `test_services/test_ai_export_price_day_budget.py`: 3 rossi (`AiExportSnapshotSourceError` senza `reason_code`
+    su `asset.market_history` con tetto 10 e 100, e su `asset.position_review` che vuole il codice di applicabilità
+    dell'analisi stessa, `requires_position`) e una guardia: un componente facoltativo oltre il tetto viene tolto e
+    lo snapshot si costruisce.
+  - Frontend: `risk/levels/levelHelpers.test.ts` esteso, 7 rossi (il rimedio nella lista, `errorDisplayCode`,
+    `translateErrorCode`, le 4 chiavi); `ai-export/__tests__/aiExportTooManyPriceDays.test.ts` nuovo, 6 rossi e 5
+    guardie.
+  - Registrati: una riga ciascuno in `RISK_SERVICE_TEST_PATHS`, `AI_EXPORT_SERVICE_TEST_PATHS` (backend) e
+    `AI_EXPORT_UNIT_TEST_PATHS` (frontend).
+- ✅ **Codice (11:16–11:20)**:
+  > - `risk/scope.py::prepare_asset_series`: `BulkTooManyDaysError` → `RiskUnavailableError(RESOURCE_LIMIT,
+  >   {metric: "price_item_days", actual, limit, remedy: "period_or_assets"})`.
+  > - `risk/service.py::execute`: alla preparazione principale ogni analitica pianificata riceve quel rifiuto (una
+  >   già rifiutata tiene il suo); la coda della risposta sta in `_response`, condivisa.
+  > - `ai_export/runtime_service.py`: radice `BulkTooManyDaysError` → `AiExportSelectionNotApplicableError(<codice
+  >   di applicabilità>, "too_many_price_days")`, quindi 422.
+  > - Frontend: `errorDisplayCode.ts` (rimedio `period_or_assets`, commento in testa); `ai-export/ui.ts::problemMessage`
+  >   (`aiExport.tooManyPriceDays` per quel motivo).
+  > - i18n con `dev.py i18n add`: `risk.errors.resource_limit_period_or_assets` e `aiExport.tooManyPriceDays` in 4
+  >   lingue.
+  > - Documenti: `risk/architecture.md` (riga della tabella dei limiti, paragrafo dei rimedi), `ai_export_composition.md`
+  >   (la mappatura e la tabella dei fallimenti), `ai_export_snapshot.md` (la riga del 422).
+  > - Mirati: rischio **6**, AI Export **4**, `risk-levels-unit` **515**, `front-ai-export unit` **608**; ruff, black e
+  >   Prettier puliti.
+- **J-12: contratto con Y (metà pannello, dal coordinatore), 11:30**. Y ha proposto, io ho risposto sì con correzioni:
+  - con `FAILED` sono `null` (il default, come `_empty_response`) `lots`, `gantt_segments`, `custody_history`,
+    `lot_events`, `value_history`, `return_history`, `performance_history`, `income_events`,
+    `economic_allocation_groups`, e anche `price_history`, che è per lotto (`LotPriceHistoryPoint.lot_id`, dalla vita
+    di ogni lotto). Gli orfani (`asset_orphan_*`) sono `null`, cioè sconosciuti. Restano le linee WAC (costo medio),
+    `quote_base_quantity`, i metadati e la qualità dei dati con tutte le issue;
+  - sulle issue dei codici di `_QUANTITATIVE_FAILURE_CODES`, `message_params` porta in più `transaction_date` (ISO) e
+    `fails_analysis: true`;
+  - il nome del broker lo risolve Y dalla lista del pannello; i tre testi «(broker {broker_id})» li riscrive Y;
+    `message_i18n_key` invariata;
+  - documenti: io `lots_analysis_service.md` e l'AI Export, Y `lots-analysis.md` e `positions.en.md`;
+  - (a) `transaction_id` è sempre una riga vera del perimetro. Correzione mia, con un rosso: un trasferimento che parte
+    oltre il posseduto (e `SHORT_TRANSFER_NOT_SUPPORTED`) nomina la gamba che dà, non l'id più basso della coppia. Mai
+    collegare `related_transaction_id`;
+  - (b) di regola una issue per riga e codice.
+- **Scoperta per J-12**: l'AI Export legge i lotti in **cinque** componenti, non quattro. C'è anche `asset.lot_detail`
+  (v3, facoltativo, `asset_resources.load_asset_lots`): anche lui avrà +1 di versione e lo stato.
+- ✅ **Verdi interi (11:22–11:45)**:
+  - backend: `services risk-all` **908** (906 + 2), AI Export **351 + 436 + 283 = 1070** (1067 + 3);
+  - frontend: `front-portfolio risk-levels-unit` **515**, `front-ai-export unit` **608**, `front-utility core-unit`
+    **8181**, `component-unit` **4638**, `gate-i18n-catalog` **176**, `gate-i18n-usage` **195**, `front check` **0/0**;
+  - resto: `check-orphans` ok, `mkdocs build` stretto ok, `check-links` **97**; `git diff --check` pulito; porta 6185
+    libera.
+- **Checkpoint J-50 consegnato (17/10 ~11:46)**: FROZEN.
+- ✅ **J-50 entrata (coordinatore 11:50)**: `11ef9ab6f` + `5b05eac25` → dev `5bfdbe0af`; CHANGELOG `2f4ef68e6`; worktree
+  portato avanti a `2f4ef68e6`.
+- **Revisione della parte AI Export di A9 (`2811d5756`, 11:52, sola lettura)**: OK. `legal_notice` sta subito prima di
+  `response_language` nelle analisi ed è l'ultima sezione in `data_only`; testi statici, nessun URL; tutti e due i
+  chiamanti passano `translate`. Nota bassa: nei test restano 5 commenti «// red until A9».
+
+#### J-12 — backend e AI Export (N81, opzione A; 17/10, dalle 11:55; base `2f4ef68e6`)
+
+- **Versioni, secondo la regola** (`ai-development.instructions.md` «Versions», decisione della devWiki
+  `ai-export-version-bump-once-per-release`: al massimo +1 sull'ultima versione rilasciata, cioè `v1.2.1`):
+  - `portfolio.fifo_summary` e `broker.fifo_summary` sono v2 in 1.2.1 e già v3 in questo ciclo (J-17): restano **v3**
+    e prendono il campo nuovo;
+  - `portfolio.fifo_lots` e `broker.fifo_lots` passano da v2 a **v3**;
+  - `asset.lot_detail` passa da v3 a **v4**;
+  - `COMPACT_COMPONENT_VERSIONS` si muove nello stesso cambio.
+  Corregge il «+1 a tutti e quattro» del coordinatore: lo segnalo.
+- **Forma**, sul modello dei contatori di traccia già esistenti («0 incluso»):
+  - nei 4 componenti multi-asset, `failed_reconstruction_asset_count` (sempre presente) e `failed_lot_reconstructions`,
+    una riga `{asset_id, asset_name, asset_ticker, failure_codes}` per asset; l'asset `FAILED` non ha righe di lotti;
+  - in `asset.lot_detail`, `lot_reconstruction_status` (COMPLETE/DEGRADED/FAILED) e `failure_codes`.
+- **Coordinatore (11:58)**: versioni e forma approvate. Da N81, da fissare nei test di contratto: le cifre di un asset
+  `FAILED` sono nulle ovunque compaiano, mai numeri sbagliati. Applicato anche ai **totali del perimetro** di
+  `fifo_summary`, con la regola del payload stesso («una somma con una parte sconosciuta è None, mai una somma
+  parziale»): con almeno un asset fallito sono `None` `total_residual_cost_basis` e i conteggi
+  `total_open/partial/closed_lots`. `asset_count` resta il numero delle righe affidabili.
+- **Y (12:00), le issue con `FAILED`**: accolta la sua proposta, come regola del backend. Restano le bloccanti
+  (`fails_analysis`) e le lacune delle righe WAC (`_report_gaps`: cambi delle righe WAC, `MISSING_COST_BASIS`).
+  Vanno via `REFERENCE_PRICE_*`, `ASSET_*_NO_ELIGIBLE_LOTS` e `CURRENT_PRICE_ASSUMED_AT_COST`, che parlano di lotti
+  nascosti o di un'idoneità inaffidabile, e le lacune di cambio delle cifre dei lotti (sezioni non calcolate).
+  L'AI Export porta solo i `failure_codes`.
+- **devWiki (Y, 12:16)**: Y ha aggiunto a `decisions/fifo-v4-gross-net-status-model.md` una revisione del 17/10 per
+  le due metà (N81 supera il «warn but show» del 22/07), col contratto concordato. **Quella pagina non la tocco**; per il
+  backend aggiorno, se serve, `entities/lots-analysis-service.md`.
+- ✅ **Rossi (test-author, dalle 11:56; aggiunte delle 11:59 e delle 12:01)**, ognuno col motivo letto:
+  - servizio `test_financial/test_lots_failed_analysis_withholding.py`: 9 rossi, 9 guardie;
+  - motore `test_financial_math/test_fifo_transfer_issue_names_the_giving_leg.py`: 4 rossi, 4 guardie;
+  - AI Export `test_ai_export_fifo_failed_reconstruction.py`: 11 rossi, 2 guardie; spilli aggiornati
+    (`TestFifoComponentVersion` fifo_lots → 3; `TestLotDetail…v4` (4, 4); in `snapshotDataRenderer.test.ts` i casi di
+    ricaduta passati a v5/v4);
+  - frontend `snapshotDataRendererFailedLots.test.ts`: 4 rossi, 2 guardie; registrazioni nel runner
+    (`AI_EXPORT_SERVICE_TEST_PATHS`, `AI_EXPORT_UNIT_TEST_PATHS`).
+- ✅ **Codice (17/10, 12:05–12:35)**.
+  > **Note implementazione**:
+  > - motore: `_apply_transfer_depart` nomina la gamba che dà (`raw_transaction_ids[0]`) nelle due issue
+  >   (`SHORT_TRANSFER_NOT_SUPPORTED`, `FIFO_SOURCE_QUANTITY_MISSING`); `fails_the_replay(code)` pubblica in `models.py`;
+  > - servizio: subito dopo il motore `failed` e `shown_analyses` (con `FAILED` solo `_AVERAGE_COST_ANALYSES`); le 22
+  >   letture a valle passano a `shown_analyses` (i metadati tengono le richieste); le issue del motore filtrate da
+  >   `fails_the_replay`; `_build_data_quality_report(..., dates_by_id=)` aggiunge `transaction_date` e
+  >   `fails_analysis: true`; orfani `None`; `analysis_failure_codes(response)` legge i codici;
+  > - AI Export: `FifoFailedReconstructionRow` (4 chiavi esatte), `split_failed_reconstructions()` e
+  >   `fifo_scope_totals()` (la regola dei totali in un posto) in `payloads/portfolio_broker.py`; i 4 costruttori
+  >   multi-asset li usano; `asset.lot_detail` con `lot_reconstruction_status` e `failure_codes`, nessun lotto se
+  >   `FAILED`; versioni nello spec e nel segnaposto del catalogo (fifo_lots 3, lot_detail 4); frontend
+  >   `COMPACT_COMPONENT_VERSIONS` {1,2,3} e {1,2,3,4}. Nessun modello entra in `openapi.json`: niente `api sync`.
+  > - Mirati: motore 8/8, servizio 18/18, AI Export 18/18, `front-ai-export unit` 616/616.
+- ✅ **Documentazione (12:35–12:50)**: `fifo_lot_engine.md` (gamba che dà, ancora `#depart` esplicita),
+  `lots_analysis_service.md` (sezione nuova «A Failed Reconstruction», riga dello stato, frase delle sezioni),
+  `ai_export_composition.md` (la dichiarazione, le versioni); devWiki `entities/lots-analysis-service.md` (nota J-12, e
+  le righe J-10/J-47 che mancavano) e `log.md`; `check_source_paths`: 7 percorsi mancanti, tutti preesistenti.
+  > **⚠️ Fuori pista**: la pagina dell'entità non diceva nulla di J-10 e J-47: due righe aggiunte, nessun'altra modifica.
+- ✅ **Verdi (17/10, 12:31–12:51, corsia 6185, carico < 50)**: financial-math 1153, roi-fifo-utils 1312, lots-pure 181,
+  portfolio-engine 41, AI Export 351 + 449 + 283 (= 1083), core-unit 8203, `front check` 0/0, check-orphans ✓,
+  `mkdocs build` stretto ✓, check-links 97 ✓; ruff, black, prettier e `git diff --check` puliti. Porta 6185 libera.
+  > **⚠️ Fuori pista**: il primo `front check` ha dato 2 errori in `features/legal/` (A9): il client generato (ignorato
+  > da git) era delle 09:49, prima del campo `legal` di A9. `dev.py api sync` lo ha rigenerato senza toccare file
+  > tracciati (i modelli di J-12 non entrano in `openapi.json`); il secondo giro è 0/0.
+  > **Sonda**: quella reale vuole gli utenti del developer (`alfy`, `marco`) su una copia di produzione → lista
+  > post-ingresso. Il rendering è provato dal renderer ufficiale sui payload della forma esatta del backend
+  > (`snapshotDataRendererFailedLots.test.ts`); con un ticker il nome e il ticker vanno nella ENTITY DIRECTORY e la
+  > tabella resta `row | asset_ref | failure_codes`.
+- ⏳ **Checkpoint J-12** (FROZEN, in attesa del commit del coordinatore).
 - **Revisione di MF, J-45 `43a7f0156` (08:20, sola lettura; `ae4f41297` è il merge di dev)**: OK. Verificati:
   `run_in_executor` + `copy_context().run` su un pool dedicato; la chiusura della sessione dell'API fa solo `close()`
   (niente rollback, niente scadenze), quindi una richiesta annullata non crea gare; nessun `gather`, `wait_for` o

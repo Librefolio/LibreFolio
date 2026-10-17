@@ -5366,6 +5366,290 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-36 + B-37 — nomi quotati e `trusted_schema` spento anche nelle correzioni e nell'upgrade (2026-10-17, 13:09-13:33) — ✅ 🧊 FROZEN (checkpoint delle 13:33)
+
+> **B-39 entrato** (coordinatore, 13:09): `c8fc32bfa` → dev `25d00f192`, CHANGELOG 🔒 `bbfb76e38`; HEAD portata in
+> avanti. Via a B-36 + B-37; rivede H.
+> - Permesso di scrittura (11:59) su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette e
+>   per `trusted_schema=OFF`.
+>
+> **Stato reale** (13:00-13:10):
+> - Solo `_row_counts` costruisce SQL con nomi che vengono dall'archivio. `autoincrement.py` usa la tupla costante
+>   `AUTOINCREMENT_TABLES`; la connessione di `_backup` scrive un file `.bak` nuovo.
+> - Il test di B-28 «every connection … trusted_schema off first» lascia fuori apposta le correzioni e l'upgrade (§2):
+>   «not recorded».
+> - `security.md` l.1821-1827 lo dice.
+>
+> **Contratto** (`b36-37-contract.md`):
+> 1. **B-36**: un `_quoted()` locale, che raddoppia `"`, in `_row_counts`.
+> 2. **B-37**: `PRAGMA trusted_schema=OFF` subito dopo la connessione di `run_post_migration_fixes`, dentro il `try`,
+>    anche sul database vivo: lo schema di LibreFolio contiene solo tabelle e indici, e le funzioni predefinite di
+>    SQLite sono innocue.
+> 3. **B-37**: un listener `connect` (`_schema_untrusted`) in `env.py`, registrato prima di `connectable.connect()`, per
+>    ogni URL.
+>
+> - **Codice pronto** in `b36-wip/apply_b36.py`: 5 operazioni in 2 file; ruff e black puliti sulla copia emessa.
+> - **Rossi in scrittura** (TA-S):
+>   - `test_post_migration.py` (`db post-migration`);
+>   - il registratore di (l) esteso a `post_migration` (`services backup-staging`);
+>   - un controllo statico di `env.py` (`utils dev-cli-db-path`).
+>   Doc: `security.md` l.1821-1827 (docs-writer).
+> - ✅ **Rossi scritti** (TA-S, 13:10-13:15):
+>   - `test_post_migration.py` §17: un 1.1 portato all'ultima migrazione (correzione autoincrement pendente), più le
+>     tabelle `x"y` e `a" WHERE 1 --`, che oggi diventa `FROM "a" WHERE 1 --"` («no such table: a»). Una spia su
+>     `_row_counts`;
+>   - il registratore (l) di `test_backup_staging.py` registra anche `post_migration`; la copia `.bak` resta fuori per il
+>     filtro del percorso;
+>   - DBP-j in `test_dev_cli_db_path.py`: un controllo AST di `env.py`. Un'esecuzione vera di Alembic non può mostrare
+>     il pragma: è uno stato della connessione, dentro un processo che finisce.
+> - ✅ **Rossi** (corsia 6187, 13:15-13:19): `db post-migration` **1 fallito** (44 passati), `services backup-staging`
+>   **1 fallito** (167), `utils dev-cli-db-path` **2 falliti** (15). Sono esattamente i 4 attesi.
+> - ✅ **Patch applicata** (13:19:19): 5 operazioni in 2 file; ruff e black puliti.
+> - ✅ **Verdi** (13:19-13:23):
+>   - `db`: `post-migration` 45, `post-migration-event-types` 36, `post-migration-orphan-pairs` 47,
+>     `autoincrement-schema` 4, `migration-008` 23, `migration-009` 11;
+>   - `services backup-staging` 168, che comprende l'upgrade vero in un processo a parte;
+>   - utils: `dev-cli-db-path` 17, `backup-cli-restore` 107.
+>   Porta libera.
+> - ✅ **Doc** (13:30-13:32): `security.md` l.1821-1832 e il paragrafo dei test l.1838-1841 (docs-writer); `mkdocs
+>   build` strict (61 s), `check-links`, gate 63.
+> - ✅ **Controlli statici**: ruff e black sui 7 file Python, tranne `_backend_db.py`, che era già sporco prima di B (tre
+>   `PLC0415`, e black che lo riformatterebbe), con una sola riga di desc aggiunta. `git diff --check` pulito.
+> - **Per H**:
+>   - le due modifiche nei suoi file (`post_migration/__init__.py`, `env.py`);
+>   - `database/index.md` l.203-204, che potrebbe dire «with `trusted_schema` off first» (nota del docs-writer).
+> - **Backlog**: B-36 ✅, B-37 ✅.
+
+### B-39 — formule nei CSV esportati, con un ritorno esatto (2026-10-17, 12:43-13:09) — ✅ 🧊 FROZEN (checkpoint delle 13:09)
+
+> **B-35 entrato** (coordinatore, 12:43): merge `d7efb5805` → dev `9fafc79b5`, CHANGELOG 🔒; HEAD portata in avanti
+> a `e3ef5c9a6`. Via a B-39.
+>
+> **Stato reale** (12:44-12:52):
+> - `series_export.stream_rows_as_csv` scrive le celle così come sono: un testo che comincia con `=` diventa una
+>   formula in un foglio di calcolo. Le uniche colonne di testo libero sono le `notes` degli eventi; le altre sono
+>   codici, date e numeri.
+> - **L'export degli eventi è fatto per tornare indietro**: `EventDataImportModal` legge `value` come alias di `amount`
+>   e legge `notes`. Un `'` aggiunto solo all'export resterebbe nella nota dopo una reimportazione.
+> - `CsvColumnDef` ha già un `parse` per colonna, che `CsvEditor` chiama sulle celle non vuote e senza spazi ai bordi.
+> - L'altro scrittore di CSV (`brim_provider.write_combined_csv`) non è di B: contiene i dati del broker dell'utente
+>   stesso, quindi al più un danno a sé. Solo una nota.
+>
+> **Contratto** (approvato dal coordinatore, 12:55, con il permesso di scrivere sul modale per l'hook di `notes`;
+> rivede X):
+> 1. All'export, un testo che corrisponde a `'*[=+\-@\t\r]` all'inizio riceve un `'` in più, salvo un numero puro
+>    (`[+-]?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`), di qualunque tipo. Il JSON non cambia.
+> 2. All'import, `notes` toglie esattamente un `'` iniziale davanti a quel motivo (`unescapeFormulaText`, nello script
+>    di modulo del modale). Il ritorno è esatto, anche per una nota che comincia già con apostrofi (`'=x` →
+>    `''=x` → `'=x`).
+>
+> - **Codice pronto** in `b39-wip/apply_b39.py`: 5 operazioni in 2 file; ruff, black e prettier puliti.
+>   Prova a mano sulla copia emessa: `=1+1` → `'=1+1`, `'=x` → `''=x`, `-1.5` resta, `a = b` resta.
+> - **Rossi in scrittura**:
+>   - TA-S: un file nuovo, `test_series_export_csv.py`, con la sua voce `services series-export-csv`;
+>   - TA-F: i casi di Vitest (finiti in `DataEditor.test.ts`, vedi sotto);
+>   - docs-writer: le pagine della doc.
+> - ✅ **Rossi scritti** (12:44-12:54):
+>   - **TA-S**: `test_series_export_csv.py`, nuovo, registrato come `services series-export-csv` (isolamento pure):
+>     6 funzioni e 30 casi (11 rossi, 19 guardie). Asserisce sulle celle rilette da `csv.reader`; un valore non di
+>     testo il cui testo sembra una formula viene scappato anche lui.
+>   - **TA-F**: 22 casi in `DataEditor.test.ts`, non in un file nuovo. Quel file è già registrato, e ha già il blocco
+>     del modale degli eventi; un file nuovo avrebbe chiesto una riga in `_frontend_utility.py`. I casi: la funzione,
+>     la tabella del ritorno (con anche `'\r=1`), e il modale che reimporta tre note.
+>   - **Docs-writer**:
+>     - `data-editor.md` (dev) l.123-128;
+>     - `user/assets/detail/data-editor.en.md` l.80, perché `events.en.md` non descrive il formato (debito di
+>       traduzione);
+>     - `security.md` «🧼 Output Escaping», l.2256-2267.
+> - **⚠️ Fuori pista — gli apostrofi già presenti (12:58)**: una nota che comincia già con `'=x` sarebbe tornata
+>   `=x`. L'export scappa ora anche una serie di apostrofi davanti a un carattere di formula (`'*[=+\-@\t\r]`, `'=x`
+>   → `''=x`), e l'import ne toglie esattamente uno: il ritorno è esatto per ogni testo.
+> - ✅ **Rossi** (corsia 6187, 12:54-12:55): `services series-export-csv` **11 falliti** e 19 passati; Vitest
+>   `DataEditor.test.ts` **22 falliti** e 88 passati.
+> - ✅ **Codice applicato** (12:55:44): 5 operazioni in 2 file.
+>   - `series_export.py`: `_FORMULA_LIKE`, `_PLAIN_NUMBER`, `_csv_cell`;
+>   - `EventDataImportModal.svelte`: `<script module>` con `unescapeFormulaText`, e `parse:` su `notes`.
+>   Ruff, black e prettier puliti.
+> - ✅ **Verdi**: `services series-export-csv` 30; Vitest su `ui/data-editor/` e `components/assets/`, **1560 su
+>   1560** in 38 file.
+> - ✅ **Doc** (12:57-12:59): `mkdocs build` strict (70 s), `check-links`, gate 63. Controlli statici puliti, porta
+>   6187 libera.
+> - ✅ **Slot 2** (coordinatore, 13:04), regressione API:
+>   - `api backup-export-extras` **8 passati** (13:04-13:07; il frontend ricostruito, svelte-check 0 errori con lo
+>     script di modulo del modale);
+>   - `api asset-prices-export` **5 passati**.
+>   Porta 6187 libera.
+> - Proposta di CHANGELOG 🔒 (docs-writer): «CSV exports are safe to open in a spreadsheet…».
+> - **Backlog**: B-39 ✅.
+
+### B-35 — un tetto a quello che un archivio scompatta (2026-10-17, 11:59-12:36) — ✅ 🧊 FROZEN (checkpoint delle 12:36)
+
+> **Coordinatore** (11:59): BZ parte 1 va bene. Ordine:
+> 1. B-35 (da solo, prima);
+> 2. B-39;
+> 3. B-36 e B-37 (scrittura permessa su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette
+>    e `trusted_schema=OFF`; H rivede);
+> 4. B-38 lato CLI;
+> 5. B-34, poi le righe di «What It Lists» (B-40).
+>
+> Forma di B-35: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`, sul totale dichiarato, prima di `_check_space`.
+> - Self-hosted: nessun default.
+> - Profilo ospitato: K volte il limite di caricamento, con K scelto e giustificato da me.
+> - Un valore esplicito vince sempre.
+> - Decisione N82, nella lista del developer.
+>
+> - **K = 8, misurato** (12:05): l'archivio comprime con deflate livello 6. Il database di test passa 4,1:1, una storia
+>   di prezzi sintetica di 52 MB 3,9:1; immagini e PDF restano vicini a 1:1.
+>   - Con K = 4 un archivio pesante di database verrebbe rifiutato proprio al limite di caricamento.
+>   - 8 lascia il doppio di margine e taglia comunque il caso peggiore di deflate (circa 1000:1) di oltre 100 volte.
+>   - Ospitato: 500 MB → 4000 MB. Approvato dal coordinatore (12:15).
+> - **Contratto** (`b35-contract.md`, 12:10, con §1b alle 12:16):
+>   - il lettore `backup_max_restore_mb()` in `config/backup.py`: nel profilo ospitato, se non impostato, vale
+>     `8 × backup_max_upload_mb()`. Eredita da lì il `ProfileDefaultError`, quindi fallisce chiuso; non va nella tabella
+>     di H, perché è un multiplo che segue il limite del fornitore;
+>   - in staging, `max_unpacked` → `unpacked_too_large`, prima dello spazio, dichiarato in `RestoreErrorCode`;
+>   - l'avvio della verifica risponde 503 `backup_restore_unavailable`;
+>   - la CLI segue la stessa regola, con `=0` per un comando;
+>   - 2 codici × 4 lingue;
+>   - una riga in `.env.example`;
+>   - **§1b**: il controllo della configurazione `backup.restore_limit`, chiesto subito dal coordinatore, con il
+>     permesso di ritoccare la tupla in `test_config_audit.py` di H. Se il limite di caricamento non si legge, il
+>     controllo nomina comunque la variabile giusta (`{variable}`);
+>   - doc: anche le tre righe di B in `settings.en.md` «What It Lists» (B-40).
+> - **Codice pronto** in `b35-wip/apply_b35.py`: 30 operazioni in 9 file più i 4 cataloghi; ruff, black e prettier
+>   puliti sulla copia emessa.
+> - **Rossi in scrittura**:
+>   - TA-S: il lettore e il controllo in `test_backup_checks.py`, la mappa in `test_config_audit.py`, staging;
+>   - TA-B: l'API in `test_backup_restore.py`;
+>   - TA-E: la CLI, sezione (i);
+>   - TA-F: Vitest, 7 casi rossi, scritti;
+>   - docs-writer: 5 pagine più `settings`.
+> - ✅ **Rossi scritti** (12:00-12:08):
+>   - **TA-S**:
+>     - `test_backup_checks.py` (h): il lettore e il controllo; (c), (e) a tre, (f) e (g) aggiornati;
+>     - `test_config_audit.py` (di H): l'import e la voce della mappa, nient'altro. L'ordine resta simbolico;
+>     - `test_backup_staging.py` (m).
+>   - **TA-B**: `test_backup_restore.py` (h), con archivi di dimensione esatta (8 MiB, e 8 MiB + 1 byte) che fissano
+>     K = 8 e i MiB; la fixture `instance` pulisce la nuova variabile.
+>   - **TA-E**: (i), 5 casi, con `no_inherited_restore_limit`.
+>   - **TA-F**: 6 casi.
+>   - **Docs-writer**: le 6 pagine più «Startup Checks».
+> - **⚠️ Fuori pista — `{variable}` (12:20)**: nel profilo ospitato, con la variabile non impostata, un
+>   `BackupConfigError` può venire dalla variabile del caricamento. Il controllo prende quindi il nome da
+>   `exc.variable`, nel messaggio e nel riassunto. Contratto §1b corretto, TA-S e il docs-writer avvisati. Il
+>   riassunto `profileTable` sta in una costante: la riga superava 300 caratteri.
+> - ✅ **Rossi** (corsia 6187):
+>   - `services backup-checks`: 45 falliti e 48 passati;
+>   - `services backup-staging`: 7 falliti e 161 passati;
+>   - `services config-audit`: errore di raccolta, atteso, perché il file di H importa il nuovo controllo in cima;
+>   - `utils backup-cli-restore`: 5 falliti e 102 passati;
+>   - Vitest: 6 falliti e 350 passati;
+>   - `api backup-restore` (slot 2, 12:11-12:17): **10 falliti** e 151 passati.
+> - ✅ **Patch applicata** (12:17:49): 30 operazioni in 9 file più 4 cataloghi. `i18n build` 5033 chiavi e
+>   `i18n check` strict puliti; ruff e black puliti.
+> - **⚠️ Fuori pista — un sostituto di `stage_archive` (12:22)**: il primo verde di `api backup-restore` dava
+>   1 fallito. Il sostituto in `test_a_check_that_fails_otherwise_ends_failed_with_its_code` non aveva la keyword
+>   nuova: `TypeError`, poi `stage_failed`. TA-B ci ha aggiunto `instance_key=None, max_unpacked=None`; l'altro
+>   sostituto prende già `**kwargs`.
+> - ✅ **Verdi**:
+>   - API: `api backup-restore` **161** (12:24) e `api backup-restore-apply` **170**; `api sync` uscita 0. Slot
+>     liberato alle 12:24:26;
+>   - servizi (12:24-12:28): `backup-checks` 93, `backup-staging` 168, `config-audit` 156, `config-env-example` 38,
+>     `profile-defaults` 112, `accounts-checks` 76, `email-checks` 87, `backup-secure` 77;
+>   - utils (12:28-12:30): `backup-cli-restore` 107, `backup-cli` 102, `backup-cli-secure` 66;
+>   - Vitest (12:32): la cartella `backup` più `GlobalSettingsTab.test.ts`, **982 su 982**.
+> - ✅ **Doc** (12:32-12:34): `mkdocs build` strict (66 s), `check-links`, gate 63.
+> - ✅ **Controlli statici**: ruff e black su tutti i 15 file Python cambiati; prettier sui file del frontend;
+>   `git diff --check` pulito. Porta 6187 libera.
+> - **Per H** (revisione dopo l'entrata):
+>   - il lettore non passa da `profile_default`: segue il limite di caricamento, che ci passa;
+>   - la voce nella mappa di `test_config_audit.py`;
+>   - `developer/architecture/settings.md` l.79-84: inoltrato al coordinatore.
+> - **Backlog**: B-35 ✅, B-40 ✅ (le righe di B in «What It Lists»).
+> - **Merge di dev in B-35** (coordinatore, 12:36): dev `9e8f6e8dc` dentro `32739feaa`, con 3 conflitti di doc
+>   risolti tenendo entrambe le parti:
+>   - `configuration.en.md`, la riga `LIBREFOLIO_PROFILE`: quella di dev più la mia frase, verificata contro la base
+>     (stage 1);
+>   - `settings.en.md`, «What It Lists»: «Test mode» di H, poi le tre righe di B, nell'ordine del `CONFIG_CHECKS`
+>     fuso;
+>   - `security.md`, la riga `i18n_key`: il 4 → 7 di dev più il mio nine → thirteen.
+>   Cancelli sulla revisione combinata (12:37-12:42): `services config-audit` 204, `backup-checks` 93, `mkdocs build`
+>   strict (123 s), `check-links`, gate 63. Merge `d7efb5805` → dev `9fafc79b5`; CHANGELOG 🔒 dentro.
+
+### B-18, riparazione — il cancello G rosso: `instance_key_invalid` non dichiarato (2026-10-17, 11:40-11:52) — ✅ 🧊 FROZEN
+
+> **Coordinatore, urgente prima di BZ** (11:40): il cancello G (`api backup-restore`) è rosso su
+> `test_backup_restore.py::test_every_code_a_check_can_end_with_is_one_the_api_declares`, con
+> `(produced, not declared): ['instance_key_invalid']`.
+>
+> **Causa**: la guardia legge con l'AST ogni `StagingError("<codice>")` di `staging.py` e vuole lo stesso insieme di
+> `RestoreErrorCode`, nei due versi. B-18 ha aggiunto `StagingError("instance_key_invalid", …)` senza dichiararlo. Non
+> l'avevo visto perché nessun run `api` faceva parte del lotto: niente slot, e i servizi non bastavano.
+>
+> **Scelta: dichiararlo** (la prima cura proposta dal coordinatore). Nessun test cambia, e la guardia resta stretta: se
+> un giorno l'API desse una chiave alla verifica, il codice sarebbe già dichiarato.
+> - Oggi non può arrivare da un GET: l'API non passa mai `instance_key`, e la CLI chiama `stage_archive` direttamente,
+>   senza registro della verifica.
+> - Il commento sopra `RestoreErrorCode` lo dice.
+> - La scheda non lo mostra: le liste del frontend sono scritte a mano, non derivate dall'enum generato, e
+>   `restoreErrorKey` prende una stringa. Quindi niente chiave i18n e niente `ERROR_KEYS`.
+>
+> - ✅ `backend/app/schemas/backup.py`: `instance_key_invalid` in coda a `RestoreErrorCode`, con il commento. Ruff e
+>   black puliti.
+> - ✅ `api backup-restore` (11:44:59-11:51:07, attesa del carico; svelte-check 0 errori nel build): **146 passati**,
+>   la guardia compresa.
+> - ✅ `api sync` (11:51:07-11:51:42), uscita 0: `openapi.json` e `generated.ts`, ignorati da git, lo contengono.
+> - Porta 6187 libera. Nessun tipo del frontend è esaustivo su `RestoreErrorCode` (grep), quindi niente `front check`
+>   a parte.
+> - **Lezione**: un codice nuovo di `StagingError` richiede `api backup-restore`, anche in un lotto «solo CLI».
+
+### BZ, parte 1 — revisione di sicurezza di ciò che è consegnato (2026-10-17, 10:55-11:58) — ✅ inviata al coordinatore, sola lettura
+
+> **Coordinatore** (10:53):
+> - B-20 committato, `7b13e4d43`, sopra B-18 `7b1911fd6`; entrano insieme dopo la revisione di H su B-18.
+> - Ora la **parte 1 di BZ**, in sola lettura: le superfici di backup e ripristino consegnate in dev (B-9, B-16, B-19,
+>   B-28…B-32) e B-18/B-20 sul mio ramo, cioè rotte, CLI da root, biglietti, staging, lettura degli archivi, segreti.
+> - Le scoperte vanno nella mia sezione del backlog come voci B nuove, ognuna con gravità e cura proposta. **Niente
+>   codice prima del suo OK.** La parte 2 (la consegna finale) viene alla fine, dopo B7 e B9.
+>
+> Base: HEAD `7b13e4d43`, albero pulito. Superficie: circa 6800 righe:
+> - `instance_backup/*.py` e `api/v1/backup/*.py`;
+> - `scripts/backup_cli.py`;
+> - `instance_key.py` e `plugin_settings/crypto.py`, solo come consumatore.
+> Delegata all'agente `security-review`.
+>
+> - **B-18 e B-20 entrati** (coordinatore, 10:56): dev `5c4d7456a`, CHANGELOG ✨ `582cfb6b0`; HEAD portata in avanti.
+>   La revisione di H su B-18 è OK, con un LOW-1 e due appunti della doc, registrati come **B-34**.
+> - **⚠️ Fuori pista — l'agente non parte (10:56)**: la sua richiesta portava con sé il contesto della sessione,
+>   243 035 token contro un limite di 128 000. Nessuna lettura è stata fatta. Riprovo dopo la compattazione del contesto.
+>   Secondo tentativo (11:00), con un prompt corto e il brief in un file (`bz-security-brief.md` nella cartella della
+>   sessione): stesso errore, 293 779 token. L'agente eredita il contesto della mia sessione, e un prompt più corto non
+>   basta. Chiesto al coordinatore come procedere (tier a contesto lungo, o lancio da una sessione fresca).
+> - **Coordinatore** (11:35):
+>   - né l'opzione 1 né la 3: il permesso per il contesto lungo può darlo solo il developer, e la domanda va nella sua
+>     lista;
+>   - la revisione la faccio **io, direttamente**, in sola lettura, dal brief, area per area (rotte, CLI da root,
+>     biglietti e staging, lettura degli archivi, segreti), con un agente `explore` per un'area stretta se parte.
+>   Le scoperte diventano voci B con gravità e cura; niente codice prima del suo OK. Registro in corso nella cartella
+>   della sessione: `bz-findings.md`.
+> - **Metodo** (11:36-11:58): revisione diretta, area per area.
+>   - Un agente `explore` (partito senza problemi) ha raccolto i fatti della lettura degli archivi: nomi, estrazione,
+>     limiti, manifest, chiave, SQLite, Alembic, involucro, fughe. Ho verificato io i punti decisivi: `env.py` fa vincere
+>     l'URL di `-x`; `_row_counts` di post_migration.
+>   - Le altre aree le ho lette io: rotte e autenticazione, upload, download, pannello, biglietto dell'esito, CLI da
+>     root, password e KDF dei backup sicuri, controlli di B-9, esportazioni.
+>   - **Garanzia più bassa** di un agente `security-review` dedicato. La domanda sul contesto lungo è nella lista del
+>     developer, se vuole un secondo passaggio.
+> - **Scoperte** (5), registrate come voci B nel backlog:
+>   - 🟡 **B-35** (F3): lo scompattamento non è limitato dal tetto di caricamento. MEDIO nel cloud;
+>   - ⚪ **B-36** (F1): nomi di tabella non quotati in `post_migration._row_counts`; proprietario fuori da B;
+>   - ⚪ **B-37** (F2): `trusted_schema` acceso sulle connessioni di post_migration e di Alembic alla copia; fuori da B;
+>   - ⚪ **B-38** (F4): la CLI da root legge i file dei segreti attraverso link e FIFO, mentre la guida mette la chiave in
+>     `backups/`;
+>   - ⚪ **B-39** (F5): formule nei CSV esportati (le `notes` degli eventi).
+>   Nessuna critica né alta. Niente codice prima del via del coordinatore.
+> - **Sano**: l'elenco con le righe sta in `bz-findings.md`, sezione «Checked and sound».
+
 ### B-20 — knip e `RESTORE_TICKET_HEADER` (2026-10-17, 10:50-10:54) — ✅ 🧊 FROZEN (checkpoint delle 10:54)
 
 > **B-18 committato** (coordinatore, 10:50): `7b1911fd6`, albero pulito, merge-tree con dev pulito. Il testo del

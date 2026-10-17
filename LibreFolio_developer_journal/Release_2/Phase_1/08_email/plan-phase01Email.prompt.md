@@ -4714,6 +4714,77 @@ non sposti il registro.
 > **L'ordine**: prima la revisione X-R44 (blocca un ingresso), se (1) non è già a metà. Poi, alle 10:31, l'urgenza
 > E-8.5 ha preceduto entrambe.
 
+#### E-15.2 — La cura alla radice ✅ (2026-10-17, 10:5x–11:27)
+> **Il disegno**, prima di scrivere: chi altro dipende dalla variabile.
+> - **I moduli di A** (`test_login_throttle.py:136`, `test_accounts_checks.py:152`) hanno un fixture autouse, di
+>   funzione, che la *toglie*: per i loro casi il limite è acceso di default. `test_login_throttle_api.py` e
+>   `test_config_audit.py:190` la mettono o la tolgono dentro il test.
+>   - Il fixture nuovo deve quindi girare **prima** di loro: di funzione, nel `conftest.py` radice. Pytest esegue gli
+>     autouse del conftest prima di quelli del modulo, a parità di scope.
+>   - Deve agire **solo se la variabile manca**.
+>   - Mai in un hook, mai di modulo o di sessione.
+> - **«Un valore esplicito vince ancora»** (il commento di `conftest.py`). Un fixture che rimette sempre `off`
+>   romperebbe un run diretto di pytest con `=on`, perché anche il valore esplicito sparisce nel drop.
+>   - Quindi il fixture rimette **il valore della sessione**: il ritorno di `setdefault`, cioè il valore esplicito o
+>     `off`.
+> - Con `monkeypatch`: nessun test chiama `monkeypatch.undo()` (verificato), quindi il valore resta per tutto il test.
+> - **SC-LANE-01** (`test_security_checks_api.py`, di A):
+>   - `_expected_login_limit()` legge la variabile al momento del test, e il server nel processo la legge a ogni
+>     richiesta: restano d'accordo in entrambi i modi.
+>   - Ma il ramo «da solo, senza server condiviso, variabile tolta → `ok`», con le righe 16-18 della sua docstring,
+>     descrive proprio l'effetto del drop: da solo ora vede `off` e si aspetta `warning`. Verde, ma il racconto
+>     invecchia. È il file di A: lo segnalo come sovrapposizione semantica, non lo tocco.
+> - **I docs**: `security.md` descriveva il `setdefault` una volta sola in due punti (:479 e :655). Riscritti: una
+>   volta all'import, e rimesso prima di ogni test che non ce l'ha più. La pagina è di A, che la rivede al checkpoint.
+>
+> **Il codice**: dal `test-author` `c212c89c`, solo `conftest.py`.
+> - `_SESSION_LOGIN_LIMIT = os.environ.setdefault(...)`;
+> - il fixture `restore_login_limit`, autouse, di funzione: se la variabile manca, rimette il valore della sessione,
+>   e lo toglie a fine test;
+> - il commento riscritto.
+>
+> **Note implementazione**:
+> - **Una deviazione del `test-author`, che approvo**: il fixture usa un `pytest.MonkeyPatch.context()` suo, non il
+>   fixture `monkeypatch`.
+>   - Chiesto da un autouse del conftest radice, `monkeypatch` verrebbe preparato prima di ogni altro fixture di
+>     funzione, in tutta la suite.
+>   - Il suo `undo` girerebbe allora dopo il teardown di tutti gli altri fixture, invece che prima: un cambio d'ordine
+>     su migliaia di test.
+>   - Con un contesto suo, l'ordine degli altri resta com'è.
+> - **L'ordine verificato** in pytest 9.1.1 (dal `test-author`):
+>   - gli autouse del conftest radice girano prima di quelli del modulo, a parità di scope, quindi i fixture di A che
+>     tolgono la variabile vincono ancora, e così `_no_inherited_variables` di `test_username_rules_api.py`;
+>   - `_aiosqlite_leak_guard` resta il primo (ordine alfabetico nel conftest).
+> - **Il limite noto**: i fixture di modulo e di sessione girano prima di un fixture di funzione. In un run combinato
+>   vedono ancora la variabile tolta, cioè il limite acceso.
+>   - Oggi è innocuo: una password giusta non è mai rifiutata.
+>   - I fallimenti registrati allora non rifiutano i test, che girano con `off`, e con `off` `refusal()` è `None`.
+>   - I test del limite usano limitatori loro.
+> - **SC-LANE-01** (`test_security_checks_api.py`, di A), da solo e senza server condiviso: ora vede `off` e verifica
+>   `warning`. È verde, ma la docstring, righe 16-18, racconta ancora «da solo, variabile tolta → `ok`». Lo segnalo
+>   ad A come sovrapposizione semantica; non tocco il file.
+>
+> **Prove** (11:01–11:27, `files/tools/e15_accept.sh`): pytest diretto con l'ambiente della corsia 6188, variabile
+> tolta salvo dove detto. Il «grilletto» è `test_user_profile.py`, che chiama `setup_test_database()` all'import.
+> Una sola invocazione alla volta, ognuna partita col carico sotto 50.
+>
+> | Run | Prima (triage) | Dopo |
+> |---|---|---|
+> | (a) `test_email_verification.py` più il grilletto | **21 falliti**, 158 passati | **179 passati** |
+> | (a) `test_email_verification_api.py` più il grilletto | — | 112 passati |
+> | (a) `test_email_change_notice_api.py` più il grilletto | — | 66 passati |
+> | (a) `test_email_verification_hooks_api.py` più il grilletto | — | 78 passati |
+> | (b) le 3 unità del worker 0 (chiesto dal coordinatore; nessun grilletto tra loro) | 267 passati | 267 passati |
+> | (c) le 3 unità del worker 0 più il grilletto | — | **319 passati** |
+> | (d) tutti i 13 moduli di E più il grilletto, un solo processo | — | 1 453 passati |
+> | (e) i moduli del limite di A (`login_throttle`, `accounts_checks`, `config_audit`, `login_throttle_api`) più il grilletto | — | 372 passati |
+> | (f) guardia: `LIBREFOLIO_LOGIN_LIMIT=on` esplicito più il grilletto | 21 falliti | **gli stessi 21** (insieme identico, `diff`): il valore esplicito vince ancora |
+> | (g) `dev.py test … --no-shared-server api security-checks` | — | 3 passati (`accounts.login_limit: warning`) |
+>
+> - `ruff` e `black` su `conftest.py`: puliti. `git diff --check`: pulito. Porta 6188: libera.
+> - **Non eseguito**: `mkdocs build`. In `security.md` cambia solo la prosa di due punti di elenco, senza link né
+>   ancore.
+
 ### R13-SEC6 — A8a (il limite dei login falliti, `security/checks`) e i miei file (2026-10-17, 05:03–)
 > **Il compito del coordinatore** (05:02): A8a, cioè il codice `66873b0c9`, le docs `4a93f1f54` e il merge di dev
 > `125c19f0e`, con E-11 in `email.md`. Letto dagli oggetti git, mai dal worktree di A. Due parti:
@@ -5613,3 +5684,477 @@ non sposti il registro.
 > | `front-utility email-tab` (con i titoli «Settings › Administration › Email») | 5 passati | 87 s |
 >
 > La porta 6188 è libera alla fine (09:55). E-8 è pronto all'ingresso.
+
+> **La revisione di X-R44** (`59f5bcfdc`, il ramo di X; 10:2x–10:5x, sola lettura dagli oggetti git, interrotta alle
+> 10:31 dall'urgenza E-8.5 e ripresa dopo): **chiusa, nessun reperto bloccante.** È la cura della mia nota di R13-SEC5:
+> `mockprov`, `MOCKFX` e `MOCKFX_FAIL` erano raggiungibili sulle istanze di produzione.
+> - **Le quattro porte nascondono i doppi**: `get_plugin`, `get_plugin_instance`/`get_provider_instance`,
+>   `list_plugin_codes` e `list_providers` non danno le classi `test_only` fuori dal test mode. `is_test_mode()` è
+>   letto a ogni chiamata.
+>   - Nessuna sottoclasse ridefinisce le porte.
+>   - Nessun codice di prodotto legge `_providers` o `_plugins` direttamente, salvo `shutdown_all_providers` (nota 3).
+> - **Ogni chiamante gestisce il nuovo `None`**:
+>   - il validatore di assegnazione e sonda: «Unknown provider code», un 422;
+>   - le rotte FX (`fx/providers.py:201-227`): «Unknown provider(s)»;
+>   - la ricerca e i link: saltati;
+>   - il refresh e il sync FX: «not found» o saltati;
+>   - la capacità dei segnali (`price_query.py:212`): chiude in sicurezza;
+>   - la policy dei provider: annotato nel log e scartato;
+>   - le impostazioni dei plugin, `_plugins()`: assente, quindi 404.
+> - **Il blocco «produzione» del test non può toccare i dati veri.** Fuori dal test mode `get_data_dir()` punta a
+>   `backend/data/prod/` e `Settings` legge il `.env`, quindi l'ho verificato:
+>   - i costruttori dei provider fanno solo cache in memoria;
+>   - `configure_instance`, l'unico che legge il DB, è sostituito da un registratore;
+>   - `monkeypatch.context()` rimette la variabile anche se il test fallisce.
+> - **Note**, correzione in avanti facoltativa:
+>   1. **LOW, i dati già scritti.** La cura ferma le scritture nuove, ma le righe che un doppio ha già scritto su
+>      un'istanza rilasciata con più utenti restano, e niente le segnala. Si trovano:
+>      `price_history.source_plugin_key='mockprov'`, `fx_rates.source IN ('MOCKFX','MOCKFX_FAIL')`, le assegnazioni a
+>      `mockprov`, le rotte che nominano `MOCKFX`.
+>      - Il minimo: una frase nel CHANGELOG su come controllare.
+>      - Meglio, e generico: un controllo di qualità dei dati che elenca assegnazioni, rotte e righe il cui codice nessun
+>        registro serve. Copre anche i plugin rimossi.
+>   2. **LOW, irrobustimento, per H.** Nessun controllo di sicurezza segnala `LIBREFOLIO_TEST_MODE` su un'istanza in
+>      esecuzione, e ora l'irraggiungibilità dei doppi dipende da quella variabile.
+>   3. **Info.** `shutdown_all_providers` (`provider_registry.py:402`) istanzia ancora i doppi allo spegnimento, senza
+>      `_withheld`. Innocuo: costruttori in memoria.
+>   4. **Nit.** Il CHANGELOG nomina la serie di prezzi inventata ma non la rotta FX (`MOCKFX`: 1,2345 in ogni
+>      conversione di tutti), che la docstring del commit stesso descrive.
+> - Verdetto mandato al coordinatore alle 10:5x.
+> - **Addendum** (11:3x, la richiesta del coordinatore delle 11:28, incrociata col verdetto): **resta OK**, con una
+>   correzione.
+>   - **⚠️ Fuori pista, un errore mio**: avevo scritto «nessun codice legge `_providers`/`_plugins` direttamente».
+>     L'espressione usava `\b`, che `git grep -E` qui non onora, e la ricerca è tornata vuota senza errori.
+>   - Rifatta senza `\b`, legge la memoria direttamente:
+>     - il registro BRIM (`auto_detect_plugin`, `get_compatible_plugins`, `list_plugin_info`);
+>     - i cataloghi di risk e signals;
+>     - il registro dei tools, la cui `get_plugin_instance` passa dal suo snapshot.
+>   - Solo `mockprov`, `MOCKFX` e `MOCKFX_FAIL` hanno il flag: oggi nessuna esposizione.
+>   - Latente (LOW): un plugin di test futuro in quelle famiglie sarebbe servito. Proposto un test di guardia: solo
+>     asset e FX dichiarano `test_only`.
+>   - **Regola d'ora in poi**: in `git grep -E` niente `\b` né `\s`. Si scrive `[^A-Za-z_]`, `[[:space:]]` o una
+>     ricerca semplice, e ogni assenza va provata con un controllo che dovrebbe trovare qualcosa.
+>   - **Il CHANGELOG 🔒** sottovaluta la portata. `POST /fx/providers/routes` chiede solo `get_current_user`, quindi
+>     prima della cura qualunque utente poteva instradare una coppia su `MOCKFX`, cioè 1,2345 nei cambi di tutti.
+>     Proposta una frase con le due vie.
+>   - Confermati gli altri punti chiesti:
+>     - nessun import diretto delle classi;
+>     - il catalogo delle impostazioni è filtrato;
+>     - la catena FX usa solo porte filtrate.
+
+> **La revisione di H-42** (11:4x, sola lettura dagli oggetti git, ramo di H: `7903bbe72` il codice, `84c71a0c7` la
+> guardia E2E, `fb8661dd2` i docs; più H-45, il seguito SVG/XHTML che H mi ha girato): **OK, nessun reperto
+> bloccante.**
+> - **Verificato**:
+>   - `_is_html()` riconosce `text/html` in ogni maiuscola e con ogni parametro;
+>   - le risposte non HTML tengono solo `frame-ancestors`;
+>   - la CSP messa da una rotta resta;
+>   - i test coprono ogni grafia, più PDF, immagine, JS, CSS, JSON, 204, gzip, Swagger, ReDoc e il 404 HTML.
+> - **Ogni pagina riceve sempre la politica**:
+>   - pagine e docs passano da `_revalidated_file()`, un `FileResponse` semplice, che in Starlette 1.6 non gestisce le
+>     richieste condizionali: risponde sempre 200 con `text/html`;
+>   - i soli 304 vengono da `StaticFiles` su `/_app`, dove non c'è HTML;
+>   - il service worker (`static/sw.js`) fa passare le navigazioni da `fetch()`, con un `offline.html` in cache che
+>     tiene i suoi header.
+> - **I docs** sono esatti e dichiarano la lacuna SVG/XHTML.
+> - **La nota di H su Chromium** (un `<object>` d'immagine senza tipo, caricato senza controllo se un form parte
+>   nello stesso task): d'accordo, non è un buco. È un'immagine, che un `<img>` caricherebbe comunque. Il controllo
+>   tipizzato `application/pdf` prova ciò per cui `object-src` esiste.
+> - **H-45, il mio giudizio**: da fare, LOW, non bloccante.
+>   - Oggi nessuna esposizione, verificato da me:
+>     - `uploads/file` è sempre `attachment`;
+>     - `img_preview` serve l'originale solo dopo che Pillow l'ha aperto, e un SVG non si apre (500);
+>     - l'anteprima di testo è `text/plain` con nosniff;
+>     - `INLINE_SAFE_MEDIA_TYPES` dei broker non ha SVG, HTML né XML;
+>     - gli asset dei plugin vengono dall'immagine.
+>   - Proposto: allargare a `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml` e ai tipi `+xml`.
+>     I PDF restano fuori, e il report-only resta su `text/html`.
+> - **Nota latente** (info): se un aggiornamento di Starlette desse i 304 a `FileResponse`, il 304 di una pagina
+>   avrebbe il solo `frame-ancestors`. Il browser aggiorna gli header salvati da un 304 (RFC 9111 §3.2), quindi la
+>   politica sparirebbe ai caricamenti rivalidati. Non provato in un browser. La guardia: nessuna CSP su un 304.
+> - Verdetto mandato alle 11:4x.
+
+> **La revisione di A9 `ForgotPasswordCard`** (`b1b647edc`, già in dev; 11:5x): **OK per E, un reperto LOW di UX.**
+> - **OK**:
+>   - il form di E è intatto, e resta il primo quando i link per email ci sono;
+>   - in managed «chiedi all'amministratore» prende il posto del pannello dei comandi;
+>   - il self-hosted non cambia;
+>   - prima della risposta del server non compare nessuno dei due.
+> - **Vitest** su `da02ed816`, 5 file, **331 / 331**: `ForgotPasswordCard.email`, `ForgotPasswordCard.managed`,
+>   `ForgotPasswordEmailForm`, `forgotPasswordApi` ed `emailText`. A9 era entrato dopo il mio run dei vicini di E-8.5.
+> - **Reperto, LOW** (file di A): se `GET /system/instance` fallisce, lo store mette `failed` ma mai `loaded`, e la
+>   scheda resta vuota.
+>   - L'utente vede solo il logo e «Back to login».
+>   - Prima di A9 il ramo `{:else}` mostrava l'avviso e i comandi.
+>   - FPM-03 fissa «prima della risposta, nessuno dei due», e nessun test usa `failed: true`.
+>   - Proposto: con `failed`, mostrare `askAdmin`, vero in entrambi i profili, più un FPM-08.
+> - Il coordinatore (11:4x): il LOW va ad A come correzione in avanti.
+> - **Le due frasi di A9 nei miei docs** (12:1x, revisione dopo l'ingresso): **OK.**
+>   - `admin/email.en.md`: in managed «né il comando né l'avviso», al loro posto la frase di `auth.askAdminToResetPassword`,
+>     citata esatta dal catalogo EN. Vale nei due rami: con i link il pannello dei comandi lascia il posto ad
+>     `askAdmin`, senza i link anche l'avviso.
+>   - `developer/backend/email.md`: il pannello in self-hosted e `forgot-ask-admin` in managed. Esatto.
+>   - Il link `hosting_providers.md#managed-profile` tiene in ogni lingua: anche `hosting_providers` è solo inglese,
+>     quindi il ripiego è la pagina EN, che ha l'ancora. Non è la trappola di `#client-address`.
+>   - Quando A curerà il LOW, la frase dell'admin potrà dire anche il caso di una configurazione non letta.
+
+> **H-42, punto 4 del coordinatore** (11:39, la stessa richiesta incrociata col mio verdetto): **i bundle CDN sono
+> puliti.**
+> - Scaricati i bundle esatti che FastAPI 0.141 carica: `swagger-ui-dist@5/swagger-ui-bundle.js` e
+>   `redoc@2/bundles/redoc.standalone.js`. Cercati, poi cancellati.
+> - **Nessun `<object>`, `<embed>` o `<base>` creato.** Le stringhe `"object"`/`"embed"` sono i casi degli eventi di
+>   React DOM e le liste di tag di DOMPurify.
+> - **I soli form**:
+>   - il modale Authorize di Swagger (`createElement("form", {onSubmit: this.submitAuth})`, senza `action`), e
+>     `submitAuth` comincia con `preventDefault()`;
+>   - l'elemento staccato di DOMPurify, che non viene mai inviato.
+> - Resta solo il rischio dei tag mobili (`@5`, `@2`): un bundle futuro può cambiare.
+
+### R13-SEC9 — Revisione di sicurezza delle entrate di oggi non ancora riviste (2026-10-17, 11:4x–12:3x)
+> **Il compito del coordinatore** (11:4x, sola lettura, stesso formato di SEC7 e SEC8: reperti con gravità e
+> proprietario, niente codice):
+> - **A9** (dev `ba8f3b06e`): gli URL legali e il profilo managed;
+> - **Z-25** (`d0bc7a547`) e **MF-P2b** (`c9b1162d4`): i limiti delle richieste in blocco e dei period-changes;
+> - **MF X-R59** (`a8de6b584`, sul ramo di MF, non ancora entrato): `/prices/current?range_start`;
+> - **W-B71** (`1431e20df`, la saturazione delle date) e **la metà batch di W-B69** (`eee5dad17`);
+> - **J-47** (`647efcc28`);
+> - **B-32** (`7af21a5c1`) e **B-18** (`5c4d7456a`), solo una scorsa: B fa la sua revisione dei backup.
+>
+> **⚠️ Fuori pista, un errore mio**: nel primo comando ho messo un `git fetch -q` che non serviva, perché gli oggetti
+> sono nel deposito locale condiviso. L'ho fermato dopo 30 s. Tocca solo i riferimenti remoti, mai un ramo locale, e non
+> è rimasto nessun processo. D'ora in poi: mai `fetch` in una revisione.
+>
+> **Come**: l'agente `security-review` in background (`041059bc`) ha fatto il giro sistematico, e io in parallelo il
+> mio. Ho guardato gli URL legali di A9, il nuovo `range_start` di X-R59, W-B71, W-B69, J-47 e la scorsa di B. Poi ho
+> verificato i suoi reperti nel codice.
+> - Durante la mia lettura ho trovato `/prices/current` senza limite e l'ho segnalato all'agente da misurare.
+> - **⚠️ Fuori pista dell'agente**, dichiarato da lui: una taratura è partita col carico a 55,8 (la lettura prima era
+>   38,7), e un run è arrivato al suo timeout di 100 s, oltre i 60 s che gli avevo dato. Nessun file scritto, solo DB in
+>   memoria.
+>
+> **Esito: nessun reperto di injection, XSS, authz, segreti, percorsi, file, stato o TOCTOU. Due reperti MEDIUM di
+> esaurimento, misurati.**
+>
+> | ID | Gravità | Proprietario | Dove | Il problema | La cura proposta |
+> |---|---|---|---|---|---|
+> | **SEC9-1** | MEDIUM 9/10 | **Z** (i limiti di Z-25); **MF** tocca la stessa funzione con X-R59 | `api/v1/assets/prices.py:144-187`, `price_query.py:837-935` e `_live_quote_item` (:88) | `POST /assets/prices/current` è l'unica lista in blocco senza limite (Z-25 ha limitato `/prices/query`, `convert` e period-changes) e senza dedup. | 422 `bulk_too_many_items` oltre `MAX_BULK_ITEMS`, prima di ogni lettura. Poi una richiesta per id distinto, rimappata nell'ordine. Infine la cache riletta dopo il semaforo, o un single-flight per chiave. X-R59: `range_change` una volta per id distinto. Insieme o prima di X-R59. |
+> | **SEC9-2** | MEDIUM 8/10 | **Z** | `utils/date_range_limits.py:21` (`MAX_BULK_ITEM_DAYS = 5_000_000`); i controlli in `price_query.py:397` e `fx/currencies.py:483` | Il limite di Z-25 tiene esatto (`_fill_span` coincide con il riempimento), ma il **livello** è troppo alto: a 5 000 000 punti costa circa 120 s di riempimento più 130 s di serializzazione sul loop, e da 11,7 a circa 35 GB. | Abbassare il budget di uno o due ordini di grandezza, e dividere o paginare la lista degli asset nella web app. Già il «All, 300 asset ≈ 2,9 M punti» della docstring chiede circa 7 GB. |
+>
+> - **SEC9-1, il dettaglio** (verificato da me nel codice):
+>   - ogni voce è un task, una query propria nel ripiego sul DB e, sulla strada del provider, una chiamata in uscita;
+>   - `_live_quote_item` legge la cache di 2 minuti **prima** di `async with semaphore`, e non la rilegge dopo: un
+>     `gather` di N duplicati la manca tutto insieme, poi chiama il provider N volte, 5 alla volta, 10 s di timeout
+>     ciascuna;
+>   - così arriva al 429 del provider, e il raffreddamento condiviso ferma quel provider **per tutti gli utenti**;
+>   - il limite da solo non basta: 1 000 duplicati sono ancora 1 000 chiamate;
+>   - N è limitato solo dalle variabili di SQLite nella `IN` (32 766 di default, 250 000 nelle build Debian come
+>     l'immagine);
+>   - misurato sul codice vero, ripiego DB, un id ripetuto: 8k id → 7,9 s e +382 MB; 16k → 44,5 s e +754 MB, con stalli
+>     del loop fino a 1,9 s; 32 766 → oltre 89 s. Circa 48 KB per voce, quindi 250k ≈ 11,8 GB, fuori memoria;
+>   - F.2/F.3 con duplicati non corrompe niente: il vincolo unico respinge la riga doppia, che viene annullata e
+>     annotata; F.3 è un solo UPDATE.
+> - **SEC9-2, il calcolo** coincide con la mia misura di SEC8 (25,5 µs e circa 1,9 KB per giorno). L'innesco: 1 000 voci
+>   per un asset, 5 000 giorni ciascuna, con un prezzo più vecchio dell'inizio. Sono 5,0 M punti esatti, accettati.
+>
+> **Note sotto la soglia** (con il proprietario):
+> - **MF/Z**:
+>   - `convert_bulk` aggiunge un termine OR per coppia distinta (`fx/conversion.py:207`): da circa 990 coppie SQLite
+>     risponde «Expression tree is too large», un 500 non gestito su `period-changes` e `convert` FX, limitati a 1 000;
+>   - `_first_rate_days_inside` di X-R59 (`fx/period_changes.py:40`) ripete lo schema;
+>   - misurato: 980 coppie OK, 990 → 500;
+>   - cura: blocchi da 500 o meno, oppure una join su `VALUES`.
+> - **Z**: `/prices/query` e `/prices/current` rispondono a un'eccezione inattesa con un 500 il cui `detail` è
+>   `str(e)`: un errore SQL ripete il testo della query. Schema pubblico, nessun segreto, ma un messaggio generico è
+>   meglio.
+> - **Z**: `/prices/query` carica tutte le righe salvate degli asset chiesti (da `date.min` se un segnale vuole tutta la
+>   storia) prima del controllo del budget. È limitato dal contenuto del DB, non dalla richiesta.
+> - **Z/H**: un plugin con impostazioni SYSTEM aprirebbe una connessione SQLite per voce di `/current` in
+>   `configure_instance`, prima del semaforo. Oggi solo `mockprov`; si somma a SEC9-1.
+> - **MF (X-R59)**: `/prices/current?range_start` ha il pavimento del 1900 ma nessun tetto. Una data futura dà solo
+>   cambi vuoti (verificato: la lista dei prezzati si svuota prima di ogni query); un 422 sarebbe coerente con
+>   period-changes.
+> - **A**: gli interruttori del profilo managed (F05) sono solo nella UI. `GET /system/container-image-status` resta
+>   chiamabile in managed; va solo su GHCR con un tag controllato da regex, quindi niente esposto.
+> - **B**: l'anonimo `GET /backup/restore/outcome` legge lo stato prima del ticket. Con lo stato illeggibile ogni
+>   chiamata annota un errore: solo rumore nei log, come prima di B-32.
+>
+> **Controllati e puliti** (agente più me):
+> - **A9**:
+>   - `env_url` accetta solo `http(s)://` con un host, rifiuta ogni spazio (Unicode compreso), userinfo e `@`, e se non
+>     riesce a leggere chiude. Provati `javascript:` (anche con spazio o `\x01` davanti), `//`, `https:evil`,
+>     `https:\\`, `data:`, `vbscript:`, userinfo, backslash con `@`, U+3000, U+2028 e tab: tutti `null`;
+>   - i link sono resi solo come `href` con `target=_blank rel="noopener noreferrer"`, e niente `{@html}`;
+>   - il prompt dell'AI aggiunge solo testo del catalogo, mai un URL;
+>   - l'endpoint pubblico aggiunge solo i due URL legali, e `_report_invalid` (in cache) annota un valore invalido una
+>     volta per processo.
+> - **Z-25**: i limiti di voci e giorni su `/prices/query` e `/convert` sono controllati prima di costruire; il riscaldo
+>   FX è limitato a `date.min`; i 422 portano solo numeri.
+> - **MF-P2b**: il pavimento di `as_of` è un AfterValidator (422, mai 500), al massimo 5 giorni `as_of` distinti, e
+>   10 001 voci → 422.
+> - **X-R59**:
+>   - `range_start` ha il pavimento (422), e su period-changes dev'essere ≤ `as_of`;
+>   - `range_change` controlla None e valori ≤ 0, quindi niente ZeroDivision né InvalidOperation;
+>   - su `/current` aggiunge due query raggruppate per richiesta, dentro un try/except;
+>   - period-changes resta limitato: al massimo 55 query di giorno più 25 coppie inizio/`as_of`.
+> - **W-B71**:
+>   - `shift_date` prende anche l'overflow del `timedelta` stesso;
+>   - le tolleranze sono limitate (0–30 e 0–7);
+>   - `through=True` legge le stesse righe di prima;
+>   - promote filtra sui broker accessibili, e il gap-fix vuole l'editor del broker.
+> - **W-B69 metà batch**: N74 (dal 1900-01-01 a oggi più un anno) vale su creazioni, aggiornamenti con una data e date
+>   di promote. Ogni riga passa da `batch_creates` o da `execute_batch`, e il pool illeggibile riporta solo un conteggio.
+> - **J-47**: le gambe tardive vengono solo dai broker del chiamante e dall'asset chiesto, vanno solo al motore e sono
+>   tagliate da `replay_until`. Nessuna nuova camminata.
+> - **B-32/B-18** (scorsa):
+>   - le rotte sono `require_admin`, e `outcome` confronta il ticket in HMAC;
+>   - il file della chiave è letto da `read_secret_file` (64 KiB al massimo, gli errori nominano il percorso, mai il
+>     contenuto), mai stampato né salvato;
+>   - il file di stato è letto con `lstat` e `O_NOFOLLOW`.
+>
+> **Lo smistamento di SEC9** (coordinatore, 12:2x):
+> - SEC9-1, i blocchi degli OR, `str(e)` e il tetto di `range_start` vanno a **MF**, prima dell'ingresso di X-R59;
+> - SEC9-2 (il budget più basso) va a **Z**, dentro Z-27;
+> - le impostazioni SYSTEM per voce vanno nel backlog di H, il rumore di `/restore/outcome` in quello di B.
+>
+> Rivedo ognuno al suo checkpoint.
+>
+> **Addendum a SEC9: H-46** (`3cce3a2b8`, già in dev con `b7dcd3a25`; 12:2x, chiesto dal coordinatore con la correzione
+> di H). È la mia nota 2 di X-R44. **OK, nessun reperto.**
+> - **Il controllo** `platform.test_mode`:
+>   - `ok` con il test mode spento, `ok` dentro una corsia (un `LIBREFOLIO_TEST_LANE_ID` non vuoto), `error` fuori, in
+>     ogni profilo;
+>   - in managed, `log_configuration_audit()` ferma l'avvio (`ManagedTestModeError`), subito dopo lo stop della chiave
+>     corta;
+>   - visibile solo agli admin; il `{data_dir}` che mostra è un percorso che l'admin vede già.
+> - **Che cosa cambia il test mode fuori da una corsia**, verificato su tutto `backend/app`: i doppi (X-R44), la
+>   cartella dei dati di test, `.env` non letto e il prewarm BRIM acceso di default.
+>   - Nessuna rotta distruttiva.
+>   - `/system/test-lane-health` resta chiusa senza il token della corsia.
+>   - In self-hosted resta un errore senza stop, per la regola «il self-hosted non cambia»: accettato.
+> - **La correzione di H** regge. Nell'immagine il test mode si ferma all'import, perché `configure_logging()` crea
+>   `<dati di test>/logs` dove non si può scrivere. Il controllo conta dove il server parte: `uvicorn` a mano, un'unità
+>   di servizio, un comando dell'immagine personalizzato, oppure un `LIBREFOLIO_TEST_DATA_DIR` scrivibile.
+> - **Note** (info):
+>   1. il controllo si fida di **qualunque** `LIBREFOLIO_TEST_LANE_ID` non vuoto, mentre il runner ne genera di 32
+>      caratteri esadecimali (`ensure_test_lane_id`, `token_hex(16)`). Un valore corto rimasto per sbaglio (un `=1` in
+>      un'unità di servizio) lo zittisce. Chiedere la forma del runner (16 caratteri o più, come dice H stesso) lo
+>      terrebbe utile contro gli incidenti; zittirlo apposta è dell'operatore;
+>   2. il profilo managed messo solo in `.env` non si vede in test mode, quindi niente stop, solo l'errore: documentato
+>      da H, accettato. Il cloud imposta l'ambiente vero.
+
+### E-16 — Le due frasi di E sulla «password dimenticata» dopo FPM-08 (2026-10-17, 12:3x)
+
+#### E-16.0 — Analisi ✅ (2026-10-17, 12:3x; sola lettura, HEAD `c2021cb52`)
+> **Il compito del coordinatore** (12:20): la prossima voce aperta di E che non chiede una decisione del developer, con
+> una breve analisi; altrimenti restare fermo.
+>
+> **Le voci aperte di E**: nessuna è libera.
+> - E-2, E-3 ed E-6 sono rimandate alla 1.4 dal coordinatore, perché toccano file condivisi. E-3 ed E-6 chiedono anche
+>   una scelta.
+> - E-7 è fuori dalla 1.3, per sua decisione.
+> - E-9 è fatta: la chiave degli alias è nella N62. Il suo seguito, il limite per dominio di E-12, aspetta D-E9-1, che
+>   è del developer.
+> - E-10, E-13, E-14 ed E-15 sono chiuse.
+>
+> **L'unica cosa libera, nuova**: il seguito della mia nota su A9. La correzione di A (`d04ffde90`, FPM-08, in dev)
+> mostra solo «Ask your administrator…» quando `GET /system/instance` fallisce prima di ogni risposta, in tutti e due
+> i profili. Con la richiesta fallita, `email.links` non c'è, quindi neanche il form di E.
+> - A ha allineato le sue pagine (`frontend/components/features/auth.md`, `state/app-state.md`), non le mie due.
+> - `admin/email.en.md:370-380` descrive self-hosted e managed, non la richiesta fallita.
+> - `developer/backend/email.md:1256-1260` (il punto «The «forgot password» form»): lo stesso.
+> - Le altre pagine che nominano il flusso sono di A o generali; `user/getting-started.en.md:117-134` cita già il
+>   consiglio di managed.
+>
+> **La proposta**:
+> - una frase per pagina:
+>   - admin: «When the page cannot read the instance's configuration from the server, it shows that same advice, in
+>     either profile»;
+>   - developer: «and when `GET /system/instance` fails before any answer (`instanceConfig.failed`), only
+>     `forgot-ask-admin` (FPM-08)»;
+> - pagine solo inglesi: niente traduzioni né stamp;
+> - controlli: `mkdocs build` stretto e `check-links`, col carico sotto 50; niente codice né test;
+> - nessun conflitto, nessuna superficie condivisa;
+> - peso: minimo, circa 10 minuti.
+>
+> **In attesa del via del coordinatore.** Dato alle 12:22: «Go E-16 (two sentences, strict build + check-links),
+> then FROZEN checkpoint».
+
+#### E-16.1 — Le due frasi ✅ (2026-10-17, 12:22–12:24)
+> **Note implementazione**:
+> - `admin/email.en.md:378-379`: «When the page cannot read the instance's configuration from the server, it shows
+>   only that advice, in either profile.»
+> - `developer/backend/email.md:1260-1262`: «When the request fails before any answer (`instanceConfig.failed`, never
+>   `loaded`), `email.links` is unknown: the card shows only `forgot-ask-admin`, the advice that holds in both profiles
+>   (FPM-08, workstream A).»
+> - Verificato sul codice di A (`d04ffde90`): il ramo `(!instanceConfig.loaded && instanceConfig.failed)` mostra solo
+>   `askAdmin()`. Se la configurazione era già stata letta, resta in vigore l'ultima.
+>
+> **Prove** (12:22–12:24, `files/tools/e16_docs.sh`, carico 27–42):
+>
+> | Controllo | Esito |
+> |---|---|
+> | `mkdocs build` stretto | rc 0, 0 righe WARNING/ERROR, 3 085 URL relativi risolti |
+> | `check-links` | 97 link validi |
+> | `git diff --check` | pulito |
+> | porta 6188 | libera |
+>
+> Pagine solo inglesi: niente traduzioni né stamp.
+
+### X-R49 — La vista del chiamante (2026-10-17, 12:2x; dopo l'ingresso, sola lettura dagli oggetti git)
+> **Il compito del coordinatore** (12:25): X-R49 (dev `e710cf552`, commit `589f15607`). Il controllo
+> `_reject_wipes_of_costless_split_adjustments()` di `provider_management.py` gira prima della prima scrittura, e il
+> 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` porta `params.splits` con gli id visibili al chiamante e un
+> conteggio dei nascosti, come X-R48.
+>
+> **Esito: OK, nessun reperto.**
+> - **La vista del chiamante**: `split_guard.splits_with_costless_adjustments` nomina solo le transazioni di un broker
+>   dove il chiamante ha una riga `BrokerUserAccess`, di qualunque ruolo, e conta le altre.
+>   - È la regola del progetto (`get_accessible_broker_ids`).
+>   - Il modello non ha accessi in attesa o rifiutati: una riga è un accesso.
+>   - Senza chiamante non nomina nessuno.
+>   - L'unica rotta (`assign_providers_bulk`) passa il chiamante, e anche X-R48 (`currency_change.py`) lo passa ora
+>     dall'aiuto condiviso.
+> - **Il messaggio** dà solo i totali. `asset_id` e `item_index` vengono dalla richiesta del chiamante; `event_id` e
+>   `date` sono eventi di un asset globale.
+> - Il conteggio dei nascosti dice che altri utenti hanno aggiustamenti senza costo su un asset globale: è il minimo,
+>   per scelta (X-R48, R13-SEC7).
+> - **Nessuna scrittura prima del rifiuto**, nemmeno per le voci precedenti della richiesta. Un asset nominato due volte
+>   è confrontato con la sua voce precedente, come fa il ciclo di scrittura.
+> - **Il frontend**: il rifiuto è una frase i18n con valori, dentro `formError`. Nessun `{@html}` nel commit, e solo i
+>   codici propri della mappa (`hasOwnProperty`).
+> - Un provider solo per i test fuori dal test mode non è parametrico (X-R44 dà `None`), quindi nessun motivo di
+>   cancellazione.
+>
+> **Nota** (info, la stessa classe di A-42 e di X-R48): il controllo legge prima del BEGIN differito. Un aggiustamento
+> senza costo collegato a uno SPLIT generato, salvato da un altro utente nella finestra fra il controllo e la
+> cancellazione, sfugge.
+> - La finestra è di millisecondi.
+> - La cura, se la si vuole: ripetere il controllo dopo la prima scrittura, sotto il lock, come A-42.
+
+### H-45 — La revisione (2026-10-17, 12:3x; sola lettura, ramo di H: `3553c7870` codice e test, `77e9611e0` docs)
+> **Esito: OK, nessun reperto.** È il seguito che avevo proposto in H-42, più la mia nota latente sul 304.
+> - **`_is_document()`**: il tipo della risposta (il primo `content-type`, senza parametri, in minuscolo) è in
+>   `DOCUMENT_MEDIA_TYPES` (`text/html`, XHTML, SVG, `application/xml`, `text/xml`) o finisce in `+xml`.
+>   - PDF, JSON e `+json` restano fuori.
+>   - Il report-only vuole `text/html` esatto.
+> - **Il 304 non riceve nessuna CSP**: resta quella della copia in cache, e il report-only lo stesso. `X-Frame-Options`
+>   su un 304 è inerte. Chromium 149 sostituisce la CSP salvata con quella di un 304: H l'ha provato nel browser, io
+>   l'avevo detto solo dalla RFC.
+> - **Le note di H**:
+>   - il 206 multi-range (`multipart/byteranges`) tiene il solo `frame-ancestors`, ma non si raggiunge come documento:
+>     una navigazione non manda `Range`, e con nosniff quel tipo non si rende come markup. Accettato;
+>   - il sitemap (`text/xml`, e `.xml.gz` con lo stesso tipo) ha ora la politica, innocua: niente `<object>`, `<base>`
+>     o form, e il visore XML non ne risente;
+>   - la frase dei docs «nessun SVG servito oggi» regge, verificata: l'unico SVG nei sorgenti,
+>     `frontend/src/lib/assets/favicon.svg` (quello del modello di SvelteKit), non lo importa nessuno, quindi non è
+>     nella build.
+> - **HEAD**: una risposta HEAD porta il suo `content-type`, quindi la stessa politica del 200; nessuna perdita da lì.
+> - Il cambio dello spec E2E è solo nella JSDoc.
+
+### E-17 — Due errori di `tsc -p frontend/tsconfig.e2e.json` (2026-10-17, 12:3x–12:5x)
+> **Il compito del coordinatore** (12:35, un riempitivo in attesa di A-42/A-43): due errori preesistenti, di nessun
+> ramo attivo.
+> - `e2e/onboarding-tour.spec.ts:863` TS2322 (da `580bd504f`, onboarding).
+> - `src/lib/types/files.ts:9` TS2307 `$lib/api/generated` (da `ff38088b9`): `tsconfig.e2e.json` non ha `$lib`.
+> - La richiesta: correggerli al minimo (solo tipi nella spec; `paths` o `include` nel tsconfig), senza cambi a
+>   runtime, fino a `tsc` pulito, più Prettier; poi FROZEN. Nessun E2E se cambiano solo tipi e configurazione.
+>
+> **Riprodotto** (HEAD `ac3c03177`): **5 errori**, non 2. Gli altri 3 sono TS2769 in `e2e/assets/asset-list.spec.ts:1046`
+> e `e2e/fixtures/sync-overwrite.ts:89,125`.
+> - Prima ipotesi: il mio `generated.ts` (09:49) era vecchio. Rigenerato con `dev.py api sync` (36 s; scrive solo file
+>   ignorati, verificato con `git check-ignore` e `git status`): i 3 restano.
+> - **La causa**: `schemas.FAPriceQueryResponse.parse()` porta l'allargamento di E-2 (`backward_fill_info` diventa
+>   `X | (X | null)[] | null`). Contro di lui va il parametro di `isStoredPoint` di C-66 (`c18517e31`, 11:03, in dev).
+> - Sono di un ramo attivo: non li tocco, li segnalo.
+>
+> **Le cure**:
+> - **TS2322** (riga 863): `TRANSACTION_FORM_GUIDE_STEPS` è `as const`, e nessuno dei quattro passi ha `placement`.
+>   Quindi `'placement' in guideStep` restringe a `Record<"placement", unknown>`: il codice era scritto per un passo
+>   futuro.
+>   - La cura senza cast: tipizzare la lista con le opzioni della funzione che la riceve,
+>     `ReadonlyArray<Pick<Parameters<typeof expectGuideStep>[1], 'stepId' | 'pointer' | 'highlight' | 'placement' |
+>     'allowTargetOverlap'> & {targetId: string}>`.
+>   - **⚠️ Fuori pista**: corretto quello, `tsc` mostra l'errore che copriva, TS2345 alla riga 858. La chiamata non
+>     passa `backdrop`, che `expectGuideStep` vuole. Oggi `options.backdrop` è `undefined`, e la funzione lo legge solo
+>     in `if (options.backdrop)`, quindi va nel ramo «nessun backdrop».
+>   - **`backdrop: false`** prende lo stesso ramo: comportamento identico, ed è quello che passano esplicitamente gli
+>     altri 18 chiamanti.
+>   - Renderlo facoltativo nella firma avrebbe indebolito il tipo di tutti e 19.
+> - **TS2307**: `"paths": {"$lib": ["./src/lib"], "$lib/*": ["./src/lib/*"]}` in `tsconfig.e2e.json`, come i `$lib` di
+>   `.svelte-kit/tsconfig.json`. TypeScript 5.9.3 non vuole `baseUrl`.
+> - **Nessun cambio a runtime**:
+>   - `playwright.config.ts` non nomina un tsconfig, quindi a runtime Playwright risolve `$lib` da `tsconfig.json`, che
+>     estende quello di SvelteKit;
+>   - `files.ts` è raggiunto solo da un `import type` (`e2e/files-uploader.spec.ts:14`);
+>   - nessun runner, gate o script di `package.json` usa `tsconfig.e2e.json`.
+>
+> **Prove** (12:4x–12:5x, carico sotto 50):
+>
+> | Controllo | Esito |
+> |---|---|
+> | `tsc -p tsconfig.e2e.json`, prima | 5 errori (`files/logs/e17_tsc_before.log`) |
+> | dopo `api sync` | gli stessi 5 |
+> | dopo le cure | **3**, solo i TS2769 di C-66 (`e17_tsc_after2.log`); i due assegnati spariti, e nessuno nuovo |
+> | Prettier su spec e tsconfig | pulito; `--write` ha anche raccolto l'array `include` su una riga (il file non era conforme) |
+> | `git diff --check` | pulito |
+>
+> **Non eseguito**: nessun E2E (solo tipi, configurazione e un `false` che prende lo stesso ramo di `undefined`).
+
+### A-42/A-43 — La revisione preparata (2026-10-17, 12:2x; sola lettura, A sta scrivendo il codice)
+> **Il compito del coordinatore**: guardare ora A-42/A-43, cioè le mie note 1, 2 e 6 di R13-SEC4, così la revisione è
+> pronta al checkpoint di A. Niente codice.
+>
+> **Il contratto di A** (`02_accounts`, «A-42 + A-43», approvato dal coordinatore alle 10:36; letto dal ramo di A):
+> 1. il rilascio scrive prima, poi ricontrolla «in attesa» sotto il lock;
+> 2. il consumo rifiuta se un altro link di setup è già consumato;
+> 3. disattivare l'admin in attesa **revoca** i suoi link (l'annullamento), un account non in attesa **ritira**;
+> 4. la retrocessione dell'admin in attesa: 409 `PENDING_SETUP`;
+> 5. nella UI «Annulla il link di setup».
+>
+> Coincide con le mie note.
+>
+> **Verificato ora, sulla base** (`c2021cb52`):
+> - `revoke_tokens` è **un solo `UPDATE`**, senza lettura prima: prende il lock di scrittura di SQLite anche quando non
+>   tocca righe. Il punto 1 regge, a patto che resti così.
+> - `consume_token` è un UPDATE condizionato, quindi il controllo del punto 2, fatto dopo, sta dentro la transazione di
+>   scrittura.
+> - Le strade che spengono un account sono tre:
+>   - `update_user_status` (il PATCH) e `set_user_active` (la CLI): sono quelle del punto 3;
+>   - la terza è la mia attesa della verifica (`verification.py:186`), che vale solo dentro `register_user`, su un
+>     account nuovo e mai il primo. Non incontra mai un link di setup: non si applica.
+> - L'annullamento è un PATCH su un account **già** inattivo: il `deactivate` di oggi
+>   (`request.is_active is False and user.is_active`) è falso.
+>
+> **La lista per il checkpoint**:
+> - **A-42, rilascio**:
+>   - il ricontrollo sta dopo l'UPDATE di `revoke_tokens`, nella stessa transazione, in `issue_setup_link` e nel riarmo
+>     all'avvio (`_keep_pending_admin`);
+>   - nessun link stampato, annotato o mandato per email (`deliver_setup_link`) se il ricontrollo dice di no;
+>   - la CLI dice che nessuno aspetta.
+> - **A-42, consumo**:
+>   - la query «un altro consumato» esclude il token appena consumato (`id != record.id`);
+>   - conta i ritirati (`consumed_at` pieno), non i soli revocati: altrimenti un annullamento seguito da un nuovo
+>     `setup-link` verrebbe rifiutato;
+>   - la risposta è identica a un link non valido (`TOKEN_INVALID`): nessun oracolo, e niente bcrypt in nessuno dei
+>     due;
+>   - l'avviso nel log senza il token.
+> - **A-43**:
+>   - l'annullamento si decide dalla richiesta e dallo stato «in attesa», non dalla transizione;
+>   - dopo l'annullamento l'account resta in attesa, il vecchio link dà `TOKEN_INVALID`, e `setup-link` ne rilascia
+>     uno buono;
+>   - un account non in attesa ritira i link mai consumati;
+>   - il PATCH e la CLI si comportano allo stesso modo.
+> - **La domanda aperta** «`PENDING_SETUP` contro `account_protection`», che è dello sviluppatore: oggi `_protected`
+>   scatta solo su una transizione. L'annullamento dell'admin protetto in managed passerebbe. Conta solo se l'operatore
+>   ha creato un altro admin prima del setup del proprietario.
+> - **La retrocessione**: 409 `PENDING_SETUP` nell'API e in `user demote`.
+> - **I test**: UADM-062/067/069 e SETUP-016 cambiati per costruzione. Poi i nuovi:
+>   - la lettura vecchia simulata (nessun link);
+>   - il link rimasto (consumato più vivo, account disattivato → 400, nulla cambiato, il vivo ritirato);
+>   - l'annullamento dal PATCH e dalla CLI;
+>   - il ritiro alla disattivazione di un account non in attesa;
+>   - la retrocessione rifiutata.
+> - **I docs**: `security.md` (il ciclo di vita del link di setup), `access_control.md`, `admin/users.en.md`,
+>   `admin/cli_tools.en.md`.
+> - **Dalla parte di E**: nessun cambio. Da verificare solo che il riarmo non mandi un'email con un link poi annullato
+>   da un rollback, cioè l'invio dopo il commit.

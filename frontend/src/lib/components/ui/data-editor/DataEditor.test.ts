@@ -29,7 +29,7 @@ import type {CsvColumnDef, CsvIdentityDef, ParsedRow} from './CsvEditor.svelte';
 import DataImportModal from './DataImportModal.svelte';
 import DistributionDataImportModal from '$lib/components/assets/DistributionDataImportModal.svelte';
 import DistributionEditor from '$lib/components/ui/input/DistributionEditor.svelte';
-import EventDataImportModal from '$lib/components/assets/EventDataImportModal.svelte';
+import EventDataImportModal, {unescapeFormulaText} from '$lib/components/assets/EventDataImportModal.svelte';
 import PriceDataImportModal from '$lib/components/assets/PriceDataImportModal.svelte';
 import DataEditorImportHarness from '$test/harness/DataEditorImportHarness.svelte';
 import en from '$lib/i18n/en.json';
@@ -833,6 +833,91 @@ describe('EventDataImportModal — a file written by the events export imports b
         const rows = importedRows(onimport);
         expect(rows).toHaveLength(1);
         expect(rows[0]).toMatchObject({kind: 'dated', date: '2026-03-16', values: {type: 'DIVIDEND', amount: 1.5}});
+    });
+});
+
+// =====================================================================================================================
+// B-39 — a formula-like text, escaped by the export, imports back as it was written (written red first)
+// =====================================================================================================================
+
+/*
+ * The series export writes a text a spreadsheet would run as a formula (one starting with `=`, `+`, `-`, `@`, a tab or
+ * a CR, after any apostrophes; a plain number never) with one more leading `'`. The events import drops exactly one
+ * again: the module script of EventDataImportModal.svelte exports `unescapeFormulaText(raw)`, and the modal's `notes`
+ * column parses with it (CsvEditor calls a string column's `parse` only for a non-empty, trimmed cell).
+ *
+ * Red today: the modal exports no `unescapeFormulaText`. Vite reads a missing export of a module it transforms as
+ * `undefined`, so each case of the function fails on its own call and the rest of this file runs as before; the
+ * modal's case is red because the `notes` column hands the apostrophe on.
+ */
+
+/** As the export writes it, then as the import must read it: exactly one leading apostrophe dropped. */
+const ONE_APOSTROPHE_DROPPED: Array<[string, string]> = [
+    ["'=1+1", '=1+1'],
+    ["'@x", '@x'],
+    ["'-2+3", '-2+3'],
+    ["'+cmd", '+cmd'],
+    ["''=x", "'=x"],
+    ["'''@y", "''@y"],
+    ["'\t=1", '\t=1'],
+    ["'\r=1", '\r=1'],
+];
+
+/** Texts the import leaves as they are: no apostrophe stands before a formula character. */
+const UNCHANGED: Array<[string, string]> = [
+    ['an apostrophe before a letter', "'hello"],
+    ['a formula with no apostrophe to drop', '=1'],
+    ['a plain number, which the export never escapes', '-1.5'],
+    ['an equals sign inside the text', 'a = b'],
+    ['two apostrophes and nothing after them', "''"],
+];
+
+/** The originals the export escapes, each written with one more leading apostrophe (its Python: `"'" + text`). */
+const ESCAPED_BY_THE_EXPORT: Array<[string, string]> = [
+    ['a formula', '=1+1'],
+    ['an at sign', '@x'],
+    ['a minus that starts no number', '-2+3'],
+    ['a plus', '+cmd'],
+    ['a formula behind one apostrophe', "'=x"],
+    ['an at sign behind two apostrophes', "''@y"],
+    ['a tab', '\t=1'],
+    ['a carriage return', '\r=1'],
+];
+
+describe('B-39 — unescapeFormulaText: the events import drops the one apostrophe the export added', () => {
+    it.each(ONE_APOSTROPHE_DROPPED)('%j → %j: one apostrophe dropped', (exported, expected) => {
+        expect(unescapeFormulaText(exported)).toBe(expected);
+    });
+
+    it.each(UNCHANGED)('%s (%j): unchanged', (_what, text) => {
+        expect(unescapeFormulaText(text)).toBe(text);
+    });
+
+    it.each(ESCAPED_BY_THE_EXPORT)('the round trip of %s (%j): exported with one more apostrophe, imported as the original', (_what, original) => {
+        expect(unescapeFormulaText(`'${original}`), 'export, then import').toBe(original);
+    });
+});
+
+describe('B-39 — EventDataImportModal: the notes column drops the apostrophe the export added', () => {
+    it('a note the export escaped imports back as it was written; a note it left alone stays as it is', async () => {
+        const {onimport} = eventImportModal();
+        // The header the events export writes (the case above), and three notes as it writes them.
+        const csv = [
+            'date;type;value;currency;source;provider_assignment_id;notes;created_at;updated_at',
+            "2026-03-15;DIVIDEND;0.37;USD;MANUAL;;'=1+1;2026-03-15T10:00:00;2026-03-15T10:00:00",
+            "2026-03-16;DIVIDEND;0.38;USD;MANUAL;;''@y;2026-03-16T10:00:00;2026-03-16T10:00:00",
+            "2026-03-17;DIVIDEND;0.39;USD;MANUAL;;'hello;2026-03-17T10:00:00;2026-03-17T10:00:00",
+        ].join('\r\n');
+        const confirm = await enterDistributionCsv(csv);
+
+        await expectImportValidation(confirm, {validRows: 3, errors: 0});
+        await fireEvent.click(confirm);
+
+        expect(importedRows(onimport)).toMatchObject([
+            {kind: 'dated', date: '2026-03-15', values: {notes: '=1+1'}},
+            {kind: 'dated', date: '2026-03-16', values: {notes: "'@y"}},
+            {kind: 'dated', date: '2026-03-17', values: {notes: "'hello"}},
+        ]);
     });
 });
 
