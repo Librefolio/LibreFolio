@@ -246,8 +246,9 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
     # Workstream E: email off whatever the environment holds, so its three checks are ok
     for variable in [name for name in os.environ if name.startswith("LIBREFOLIO_SMTP_")]:
         monkeypatch.delenv(variable)
-    # Workstream B: no panel token and no upload limit whatever the environment holds, so its two checks are ok
-    for variable in ("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN", "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"):
+    # Workstream B: no panel token, no upload limit and no restore limit (B-35) whatever the environment holds, so its
+    # three checks are ok
+    for variable in ("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN", "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB", "LIBREFOLIO_BACKUP_MAX_RESTORE_MB"):
         monkeypatch.delenv(variable, raising=False)
     # Workstream A: the login limit on whatever the environment holds (the lane's server runs with it off), so its check
     # is ok and the variable cannot stop the audit
