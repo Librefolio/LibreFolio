@@ -8170,7 +8170,8 @@ punto di partenza, l'audit dello stesso giorno:
   `round_computed_value(…, Transaction, "cost_basis_override")` (D6), mai nella casa (`average_cost` resta esatto). Di
   MF dopo MF-E, rossi prima. Dettagli: piano MF, sezione «MF-W56».
   **Chiusa** il 17/10: dev `04a5088ff` (commit `c129e82a9`).
-- **MF-A2 · Documentare l'annualizzato delle posizioni chiuse nel periodo e la definizione del non realizzato** — basso,
+- ✅ **MF-A2 · Documentare l'annualizzato delle posizioni chiuse nel periodo e la definizione del non realizzato** — basso,
+  **chiusa il 17/10**: dev `4507f7507` (J: le tre pagine coincidono col motore).
   doc; MF (docs-writer), 17/10. `period-pnl`/`net-annualized-return` non dicono che una posizione chiusa nel periodo
   annualizza sul costo venduto e sul suo tempo di volo; `portfolio-engine/index` §5 definisce il non realizzato come
   NAV − Book (transito incluso) mentre il periodo usa valore di mercato − costo aperto (§7 ora lo dice). Dettagli:
@@ -8272,12 +8273,14 @@ punto di partenza, l'audit dello stesso giorno:
   **Entrata la prima parte** il 17/10 (dev `dd416f5bb`, E OK); il resto — `brim_provider.py` (soglia reale ~90 titoli
   con ISIN, ticker e nome: l'`or_()` annidato del nome conta 7 termini) e `wac.py`, più il ciclo di conteggio di
   `delete_rates_bulk` per bisezione (LOW-1 di E) — col lotto «BRIM/WAC/SEC9c».
-- **MF-SEC9e · `bulk_delete_prices` conta con una query per intervallo** — basso, prestazioni; E, 17/10 (revisione di
+- ✅ **MF-SEC9e · `bulk_delete_prices` conta con una query per intervallo** — basso, prestazioni; E, 17/10 (revisione di
+  **chiusa il 17/10**: conteggi esatti dalle righe lette a blocchi, dev `4507f7507`.
   MF-SEC9a). Prima del DELETE a blocchi, i conteggi per asset sono una `COUNT` attesa per intervallo: fino a 10 000
   query al tetto `MAX_BULK_WRITE_ITEMS`. Lento, non blocca il ciclo degli eventi. Cura possibile: contare dalle righe
   lette a blocchi (id per asset), che rende esatti anche gli intervalli sovrapposti (oggi contati due volte).
   Dettagli: piano MF, sezione «MF-SEC9a».
-- **MF-SEC9g · La classificazione dei candidati BRIM ferma il ciclo degli eventi** — medio, carico; E, 17/10 (revisione
+- ✅ **MF-SEC9g · La classificazione dei candidati BRIM ferma il ciclo degli eventi** — medio, carico; E, 17/10 (revisione
+  **chiusa il 17/10**: classificazione in `asyncio.to_thread` con indici ISIN/ticker esatti, dev `650c02b17`.
   del resto di MF-SEC9a). In `search_asset_candidates_bulk` (`brim_provider.py` ~2073) la catena di priorità in memoria
   scorre l'universo più volte per titolo, con 8 `_contains` per nome: O(titoli × universo) in Python sul ciclo. Misure di
   E con 5 000 asset: dati realistici 1 000 titoli 0,5 s, 3 000 4,5 s; nomi generici 90 titoli 7,9 s, 1 000 104 s. Prima
@@ -8299,16 +8302,21 @@ punto di partenza, l'audit dello stesso giorno:
   la sua base (il costo delle vendite) resta il costo storico. Esempio: comprato a 500 da A, spostato a B quando vale
   600, venduto da B a 660: +60 su 500 = 12 %, il giusto 60/600 = 10 %. **In corso (17/10)**: Σ(V_arrivo − C_spostato)
   dei tratti ricevuti nella base (la scelta preferita da J). Dettagli: piano MF, «MF-A8».
-- **MF-A9 · Una riga ricevente ancora aperta annualizza sul costo storico** — basso, numeri (proposta);
-  **Pronto (17/10, CHECKPOINT READY)**, nella 1.3 (coordinatore): solo righe senza valore iniziale e senza uscite nel periodo.
+- ✅ **MF-A9 · Una riga ricevente ancora aperta annualizza sul costo storico** — basso, numeri (proposta);
+  **chiusa il 17/10**: base `end_cost + Σ(V_a − C_a)` per le righe senza valore iniziale e senza uscite nel periodo,
+  dev `130002b5c` (clausola CHANGELOG `5726486bc`).
   MF, 17/10 (MF-A8). Una posizione aperta nel periodo che ha ricevuto unità da un tratto contato e le tiene alla fine è
   annualizzata sul costo alla fine (storico), mentre il suo risultato le conta dal valore all'arrivo: nella catena
   A→B→C la riga di C dà 5/500 invece di 5/645. Cura possibile, il rovescio di MF-A8 sul costo alla fine:
   `annualized_period_return(..., end_cost + Σ(V_a − C_a))`. Rossi prima. Dettagli: piano MF, «MF-A8».
 - **MF-A6 · La polvere rompe l'identità del §7** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di MF-A2). Lo stato
+  **Lato doc pronto (17/10, con MF-A7)**: §7 e `period-pnl` dicono «polvere a parte»; l'allineamento di
+  `daily_state.py` alla stessa soglia resta dopo la 1.3 (coordinatore).
   giornaliero valuta ogni quantità > 0, le righe considerano ≤ 1e-5 come non tenuta: la stessa soglia dai due lati, o il
   §7 dice «polvere a parte». Dettagli: piano MF, «MF-A5».
 - **MF-A7 · `oldest_open_lot_date` senza soglia della polvere** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di
+  **Pronto (17/10, nella 1.3 per il coordinatore)**: i lotti più vecchi che insieme tengono la polvere o meno sono messi
+  da parte, None se la posizione tiene solo polvere.
   MF-A2). Un residuo di polvere può spostare l'inizio della finestra di ricaduta dell'annualizzato. Dettagli: piano MF,
   «MF-A5».
 - **MF-SEC9f · Altri OR per elemento, censiti da E** — minimo, informazione; E, 17/10 (revisione di MF-SEC9a).
