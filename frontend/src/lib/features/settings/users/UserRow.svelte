@@ -6,7 +6,7 @@ the row only turns off, with the reason, what would certainly be refused. One's 
 managed from the Profile tab.
 -->
 <script lang="ts">
-    import {ChevronRight, KeyRound, LogOut, RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX} from 'lucide-svelte';
+    import {ChevronRight, KeyRound, Link2Off, LogOut, RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCheck, UserX} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import type {AdminAccount, UserAction} from './types';
@@ -23,26 +23,29 @@ managed from the Profile tab.
 
     let {account, isSelf, isOnlyActiveAdmin, full, onAction}: Props = $props();
 
-    type Reason = 'protected' | 'last-admin' | 'limit' | 'demote-first';
+    type Reason = 'protected' | 'last-admin' | 'limit' | 'demote-first' | 'pending-setup';
 
     const REASON_KEY: Record<Reason, string> = {
         protected: 'settings.usersTab.reasons.protected',
         'last-admin': 'settings.usersTab.reasons.lastAdmin',
         limit: 'settings.usersTab.reasons.limit',
         'demote-first': 'settings.usersTab.reasons.demoteFirst',
+        'pending-setup': 'settings.usersTab.reasons.pendingSetup',
     };
 
     const uid = $props.id();
     let expanded = $state(false);
 
+    // The initial administrator waiting for its setup (F02) activates through its link only: no reactivation, no reason
+    // for one; it keeps its role until then, and deleting it needs no demotion (A-43)
+    const pendingSetup = $derived(account.pending_setup === true);
     const deactivateReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_superuser && isOnlyActiveAdmin ? 'last-admin' : null);
     // An account waiting for its email verification with a live link already holds its place (workstream E)
     const reactivateReason = $derived<Reason | null>(full && !account.holds_place ? 'limit' : null);
-    const demoteReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_active && isOnlyActiveAdmin ? 'last-admin' : null);
-    const deleteReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_superuser ? 'demote-first' : null);
-    // The initial administrator waiting for its setup (F02) activates through its link only: no reactivation, no reason for one
-    const pendingSetup = $derived(account.pending_setup === true);
-    const reasons = $derived([...new Set([account.is_active ? deactivateReason : pendingSetup ? null : reactivateReason, account.is_superuser ? demoteReason : null, deleteReason].filter((reason): reason is Reason => reason !== null))]);
+    const cancelReason = $derived<Reason | null>(account.protected ? 'protected' : null);
+    const demoteReason = $derived<Reason | null>(account.protected ? 'protected' : pendingSetup ? 'pending-setup' : account.is_active && isOnlyActiveAdmin ? 'last-admin' : null);
+    const deleteReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_superuser && !pendingSetup ? 'demote-first' : null);
+    const reasons = $derived([...new Set([account.is_active ? deactivateReason : pendingSetup ? cancelReason : reactivateReason, account.is_superuser ? demoteReason : null, deleteReason].filter((reason): reason is Reason => reason !== null))]);
 
     const ACTION_BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-lf-input bg-lf-card px-2.5 py-1.5 text-xs font-medium text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50';
     const DANGER_BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-lf-danger-line bg-lf-danger-soft px-2.5 py-1.5 text-xs font-medium text-lf-danger-on-soft disabled:cursor-not-allowed disabled:opacity-50';
@@ -98,7 +101,12 @@ managed from the Profile tab.
                         <button class={ACTION_BUTTON} data-disabled-reason={deactivateReason ?? undefined} data-testid="users-action-deactivate" disabled={deactivateReason !== null} onclick={() => onAction('deactivate', account)} type="button">
                             <UserX class="h-3.5 w-3.5" />{$_('settings.usersTab.actions.deactivate')}
                         </button>
-                    {:else if !pendingSetup}
+                    {:else if pendingSetup}
+                        <!-- The waiting initial administrator's setup link revoked: the cancellation (A-43) -->
+                        <button class={ACTION_BUTTON} data-disabled-reason={cancelReason ?? undefined} data-testid="users-action-cancel-setup" disabled={cancelReason !== null} onclick={() => onAction('cancel-setup', account)} type="button">
+                            <Link2Off class="h-3.5 w-3.5" />{$_('settings.usersTab.actions.cancelSetup')}
+                        </button>
+                    {:else}
                         <button class={ACTION_BUTTON} data-disabled-reason={reactivateReason ?? undefined} data-testid="users-action-reactivate" disabled={reactivateReason !== null} onclick={() => onAction('reactivate', account)} type="button">
                             <UserCheck class="h-3.5 w-3.5" />{$_('settings.usersTab.actions.reactivate')}
                         </button>
