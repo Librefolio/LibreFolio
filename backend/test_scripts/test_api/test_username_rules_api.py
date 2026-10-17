@@ -1,4 +1,4 @@
-"""A-21a over HTTP: no new username with an @, no address that is another account's username, and a sign-in that reads an address first (release 1.3, workstream A, lot A-21a; workstream E's review, point c).
+"""A-21a over HTTP: no new username with an @, no address that is another account's username, and a sign-in that reads an address first (release 1.3, workstream A, lot A-21a; workstream E's review, point c). A-47 over HTTP: the answer to an @ is USERNAME_INVALID by its code, not by its text; and A-46's length stays the schemas' 422 (lots A-46 and A-47; A-47 is workstream E's LOW).
 
 Until A-21a ``POST /auth/register`` and ``PUT /auth/profile`` take any username of 3 to 50 characters, ``@`` included,
 and ``POST /auth/login`` looks what is typed up as a username OR an address
@@ -26,6 +26,20 @@ signs in with B's address and A's password, and B, typing its own address, gets 
    - The reverse case: a legacy name with an ``@`` that is nobody's address still signs its account in, typed exactly;
      in another A–Z case it is 401 — the fallback is exact (GUARD).
 
+A-47 over HTTP (workstream E's LOW), and A-46's length. Until A-47 ``PUT /auth/profile`` and ``register_user`` pick
+``USERNAME_INVALID`` by comparing the service's message with the ``USERNAME_RESERVED_MESSAGE`` they imported; after it
+they branch on the refusal's ``code`` (``user_service.AccountError``):
+
+- A new username with an ``@`` is 400 ``{"error_code": "USERNAME_INVALID", "message": …}`` on both routes —
+  ``POST /auth/register`` on an instance with an account, registration ``open``; ``PUT /auth/profile`` signed in —, even
+  once ``user_service`` words the refusal otherwise: reworded there only, by ``monkeypatch``, so the constant the routes
+  imported no longer equals it; the message is then the reworded text. Without the rewording it is
+  ``USERNAME_RESERVED_MESSAGE``, as today (GUARD). Every other refusal keeps its plain 400, ``detail`` the message —
+  pinned on the lane: REG-002 of ``test_auth_api.py``, PROF-008 of ``test_profile_api.py``.
+- A-46's length never reaches the service over HTTP: a username of 2 or 51 characters is the schemas' 422 about
+  ``username`` on both routes, and 3 or 50 characters go through (GUARD). So the service's ``USERNAME_INVALID``, which
+  the app translates as «no @», never answers a length here.
+
 Every refusal leaves the database unchanged: every row of every table, ``sqlite_sequence`` included, read by SQLite from
 the file before and after. Each refusal carries a barrier, run after it: the same request with the ``@`` replaced, or
 with a fresh address, goes through — so the refusal is the rule's, not the scene's.
@@ -38,7 +52,8 @@ place for them. Process-wide state is replaced through ``monkeypatch`` and put b
 hash of cost 4 (the process's cached one is left as it was: LOGIN-024 of ``test_auth_api.py`` reads its cost); the two
 limiters of ``login_throttle`` by fresh ones of the shipped size, so no failure here counts in the process's own (the
 limit stays on, as it ships); the session cookie's Secure mode on ``auto`` (plain HTTP here; the cookie is read from
-``Set-Cookie`` and sent explicitly); ``get_async_engine`` a tripwire in the session module and in workstream E's modules.
+``Set-Cookie`` and sent explicitly); ``get_async_engine`` a tripwire in the session module and in workstream E's modules;
+for UNAME-API-12, the ``@``'s message in ``user_service``.
 The accounts and email variables of the shell are removed: email is off, so registration verifies nothing and the
 notice of an address change sends nothing. Every request comes from one documentation address of this file's own and
 carries no forwarding header. Every name and address carries a random tag. Nothing waits.
@@ -46,6 +61,10 @@ carries no forwarding header. Every name and address carries a random tag. Nothi
 Red until A-21a, each test on its own, at its first assertion: today the registration with an ``@`` answers 201
 (UNAME-API-01 and 08), with a legacy name for address 201 (UNAME-API-03), the profile 200 (UNAME-API-04 and 06), and B's
 sign-in 401 (UNAME-API-09). UNAME-API-02, 05, 07, 10 and 11 are GUARDS, green today and to stay green.
+
+Red until A-47, at the code — the reworded message in the answer is asserted first, so the test cannot pass by not
+rewording: today the profile answers a plain 400 whose ``detail`` is the reworded text, and the registration its
+``ACCOUNT_EXISTS``, the same plain 400 (UNAME-API-12). UNAME-API-13 and 14 are GUARDS, green today and to stay green.
 """
 
 from __future__ import annotations
@@ -55,7 +74,7 @@ import functools
 import os
 import sqlite3
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -70,12 +89,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlalchemy.pool import NullPool
 
 from backend.app.api.v1 import auth as auth_api
-from backend.app.config import API_V1_PREFIX
+from backend.app.config import API_V1_PREFIX, accounts
 from backend.app.db import session as db_session
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import AccountTokenPurpose, GlobalSetting, User
 from backend.app.db.session import get_session_generator
-from backend.app.services.accounts import auth_service, login_throttle, token_service
+from backend.app.services.accounts import auth_service, login_throttle, token_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.email import flows as email_flows
 from backend.app.services.email import verification as email_verification
@@ -108,6 +127,16 @@ ALLOWED_USERNAMES = [
     pytest.param("Zoë_Ångström-{tag}", id="accents-underscore-hyphen"),
     pytest.param("first.last+{tag}", id="dot-and-plus"),
 ]
+#: A-47: the code of a new username refused by the service, on both routes (``user_service.AccountError``).
+USERNAME_INVALID = "USERNAME_INVALID"
+#: The ``@``'s message as ``user_service`` might word it one day: reworded there only (UNAME-API-12).
+REWORDED_RESERVED_MESSAGE = "Reworded for A-47: a new username holds no at sign"
+#: The two routes that take a new username, and the status of each when it takes one.
+REGISTER_ROUTE, PROFILE_ROUTE = "POST /auth/register", "PUT /auth/profile"
+ROUTES = [pytest.param(REGISTER_ROUTE, id="register"), pytest.param(PROFILE_ROUTE, id="profile")]
+TAKEN_STATUS = {REGISTER_ROUTE: 201, PROFILE_ROUTE: 200}
+#: (a username length the schemas refuse, A-46's rule after them; the barrier's length): one character nearer, a boundary.
+OUTSIDE_LENGTHS = [pytest.param(2, 3, id="2-characters"), pytest.param(51, 50, id="51-characters")]
 
 REGISTER = f"{API_V1_PREFIX}/auth/register"
 LOGIN = f"{API_V1_PREFIX}/auth/login"
@@ -151,6 +180,16 @@ def _named(template: str) -> str:
 def _without_at(name: str) -> str:
     """The barrier's name: ``name`` with each ``@`` replaced, nothing else changed."""
     return name.replace(AT, NOT_AT)
+
+
+def _of_length(length: int) -> str:
+    """A fresh name of exactly ``length`` characters, random hex: nothing but its length for a rule to refuse."""
+    return "".join(uuid.uuid4().hex for _ in range(length // 32 + 1))[:length]
+
+
+def _to_length(name: str, length: int) -> str:
+    """The barrier's name: ``name`` cut, or carried on with fresh characters, to exactly ``length`` characters."""
+    return name[:length] if len(name) >= length else name + _of_length(length - len(name))
 
 
 def _ascii_fold(text: str) -> str:
@@ -433,6 +472,42 @@ def _assert_email_taken(response: httpx.Response, request: str) -> None:
     assert response.json().get("detail") == EMAIL_TAKEN_DETAIL, f"{request}: the refusal must be the answer to an address already registered, {EMAIL_TAKEN_DETAIL!r}: {response.text}"
 
 
+Send = Callable[[str], Awaitable[httpx.Response]]
+
+
+async def _username_route(private: _Private, route: str) -> Send:
+    """The scene of ``route``, and how to send it a username: ``POST /auth/register`` on an instance with an account, registration ``open``, a fresh address each time; ``PUT /auth/profile`` as a signed-in account."""
+    if route == REGISTER_ROUTE:
+        await _admission(private, with_invitation=False)
+        return lambda name: _register(private, name, _address("newcomer"))
+    _member, cookie = await _signed_in(private, username=f"member_{_tag()}", email=_address("member"))
+    return lambda name: _request(private, "PUT", PROFILE, cookie=cookie, json={"username": name})
+
+
+def _error_code(response: httpx.Response) -> Optional[str]:
+    """``detail.error_code`` of a coded refusal; None for a plain one, whose ``detail`` is a string."""
+    detail = response.json().get("detail")
+    return detail.get("error_code") if isinstance(detail, dict) else None
+
+
+def _said(response: httpx.Response) -> Any:
+    """What a refusal says: ``detail.message`` when it is coded, ``detail`` itself when it is plain."""
+    detail = response.json().get("detail")
+    return detail.get("message") if isinstance(detail, dict) else detail
+
+
+def _about_username(response: httpx.Response) -> bool:
+    """Whether a 422 places one of its errors at ``username``."""
+    return any("username" in error.get("loc", []) for error in response.json().get("detail", []))
+
+
+def _reword_reserved_message(monkeypatch: pytest.MonkeyPatch) -> str:
+    """The ``@``'s message reworded in ``user_service`` only — the namespace ``create_user`` and ``update_profile`` read it from at each call —, so the constant the routes imported no longer equals what the service answers. The reworded text."""
+    assert hasattr(user_service, "USERNAME_RESERVED_MESSAGE"), "setup: user_service no longer reads USERNAME_RESERVED_MESSAGE from its own namespace: reword the message where the refusal now takes it"
+    monkeypatch.setattr(user_service, "USERNAME_RESERVED_MESSAGE", REWORDED_RESERVED_MESSAGE)
+    return REWORDED_RESERVED_MESSAGE
+
+
 # =============================================================================
 # RULE 1 — NO @ IN A NEW USERNAME: POST /auth/register
 # =============================================================================
@@ -638,3 +713,61 @@ async def test_a_legacy_name_with_an_at_that_is_nobodys_address_still_signs_in(p
 
     _assert_signed_in_as(await _login(private, name, PASSWORD), legacy, f"POST /auth/login as {name!r}, L's legacy name, nobody's address")
     _assert_invalid_credentials(await _login(private, name.upper(), PASSWORD), f"POST /auth/login as {name.upper()!r}, L's legacy name in another A–Z case")
+
+
+# =============================================================================
+# A-47 — AN @ IS USERNAME_INVALID BY ITS CODE; A-46 — THE SCHEMAS' 422 ANSWERS A LENGTH FIRST
+# =============================================================================
+
+
+# red until A-47
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", ROUTES)
+async def test_an_at_is_username_invalid_whatever_the_service_says(private: _Private, monkeypatch: pytest.MonkeyPatch, route: str) -> None:
+    """UNAME-API-12 — A-47, NEW, red until A-47 (today a plain 400 whose ``detail`` is the reworded text: the profile compares the message with the constant it imported, the registration answers its ``ACCOUNT_EXISTS``): the ``@``'s message reworded in ``user_service`` only; ``POST /auth/register`` — an instance with an account, registration ``open`` — or ``PUT /auth/profile`` — signed in — with a new username holding an ``@`` is 400 ``USERNAME_INVALID``, its message the reworded text: the refusal's code decides, not its wording. Every row of every table is as it was. The service's 400 carrying the reworded text is asserted first, so the test cannot pass by not rewording. Barrier: the same request with the ``@`` replaced goes through, 201 or 200."""
+    print_section(f"UNAME-API-12: {route} with an @, the message reworded in user_service")
+    send = await _username_route(private, route)
+    reworded = _reword_reserved_message(monkeypatch)
+    name = _named("squat.{tag}@example.com")
+    before = _rows(private.db_path)
+
+    refused = await send(name)
+
+    assert refused.status_code == 400 and _said(refused) == reworded, f"setup: {route} as {name!r} must be the service's 400 carrying the reworded text — the rewording reached it —, or this test proves nothing: {refused.status_code} {refused.text}"
+    assert _error_code(refused) == USERNAME_INVALID, f"red until A-47: {route} must answer {USERNAME_INVALID} by the refusal's code, whatever its wording: got {refused.status_code} {refused.text}"
+    assert _changed(before, _rows(private.db_path)) == [], f"a refused request must write nothing: {_changed(before, _rows(private.db_path))}"
+    allowed = await send(_without_at(name))
+    assert allowed.status_code == TAKEN_STATUS[route], f"barrier: {route} with the @ replaced must go through, {TAKEN_STATUS[route]}: {allowed.status_code} {allowed.text}"
+    print_success(f"{route}: 400 {USERNAME_INVALID}, the reworded message carried")
+
+
+# GUARD — green today, must stay green
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", ROUTES)
+async def test_a_new_username_with_an_at_answers_username_invalid(private: _Private, route: str) -> None:
+    """UNAME-API-13 — A-21a's answer, GUARD (green today; red if A-47 loses the code, or the message parts from ``USERNAME_RESERVED_MESSAGE``): nothing reworded, ``POST /auth/register`` — an instance with an account, registration ``open`` — or ``PUT /auth/profile`` — signed in — with a new username holding an ``@`` is 400, ``detail.error_code`` ``USERNAME_INVALID`` — the code the app translates — and ``detail.message`` ``USERNAME_RESERVED_MESSAGE``, as today."""
+    send = await _username_route(private, route)
+    name = _named("name@{tag}")
+
+    refused = await send(name)
+
+    assert refused.status_code == 400 and _error_code(refused) == USERNAME_INVALID, f"{route} as {name!r} must be 400 {USERNAME_INVALID}, as today: {refused.status_code} {refused.text}"
+    assert _said(refused) == accounts.USERNAME_RESERVED_MESSAGE, f"{route}: the message must be USERNAME_RESERVED_MESSAGE, as today: {refused.text}"
+
+
+# GUARD — green today, must stay green
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("length", "boundary"), OUTSIDE_LENGTHS)
+@pytest.mark.parametrize("route", ROUTES)
+async def test_a_username_outside_3_to_50_characters_is_still_the_schemas_422(private: _Private, route: str, length: int, boundary: int) -> None:
+    """UNAME-API-14 — A-46 over HTTP, GUARD (green today; red if the schemas stop answering first: the service's 400 ``USERNAME_INVALID``, which the app translates as «no @», would then answer a length): ``POST /auth/register`` — an instance with an account, registration ``open`` — or ``PUT /auth/profile`` — signed in — with a username of 2 or 51 characters is 422 about ``username``, and every row of every table is as it was. Barrier: the same request with the name one character nearer — 3 or 50 characters, the boundaries — goes through, 201 or 200."""
+    send = await _username_route(private, route)
+    name = _of_length(length)
+    before = _rows(private.db_path)
+
+    refused = await send(name)
+
+    assert refused.status_code == 422 and _about_username(refused), f"{route} with a username of {length} characters must be the schema's 422 about username: {refused.status_code} {refused.text}"
+    assert _changed(before, _rows(private.db_path)) == [], f"a refused request must write nothing: {_changed(before, _rows(private.db_path))}"
+    allowed = await send(_to_length(name, boundary))
+    assert allowed.status_code == TAKEN_STATUS[route], f"barrier: {route} with a username of {boundary} characters must go through, {TAKEN_STATUS[route]}: {allowed.status_code} {allowed.text}"

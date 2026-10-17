@@ -15,7 +15,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
-from backend.app.config.accounts import USERNAME_RESERVED_CHARACTER, USERNAME_RESERVED_MESSAGE
+from backend.app.config.accounts import USERNAME_LENGTH_MESSAGE, USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, USERNAME_RESERVED_CHARACTER, USERNAME_RESERVED_MESSAGE
 from backend.app.db.models import AccountTokenPurpose, Broker, BrokerUserAccess, Transaction, User, UserRole, UserSettings
 from backend.app.services.accounts import token_service
 from backend.app.services.accounts.auth_service import hash_password
@@ -37,6 +37,33 @@ class AccountDeletion:
 
 class AccountDeletionError(Exception):
     """A broker of the account could not be released: nothing was deleted."""
+
+
+class AccountError(str):
+    """A refusal of ``create_user`` or ``update_profile``: the message as before, with its ``code`` (A-47).
+
+    A ``str``, so a caller that reads or compares the message keeps working; the API answers with ``code``, which a change
+    of wording cannot break: ``USERNAME_INVALID`` (a new username against its rules), ``USERNAME_TAKEN``, ``EMAIL_TAKEN``,
+    ``USER_NOT_FOUND``.
+    """
+
+    code: str
+
+    def __new__(cls, code: str, message: str) -> "AccountError":
+        error = super().__new__(cls, message)
+        error.code = code
+        return error
+
+
+def _new_username_refusal(username: str) -> Optional[AccountError]:
+    """Why a NEW username cannot be taken, or None: no ``@`` (A-21a, rule 1: the sign-in reads an identifier with one as
+    an address first), and 3 to 50 characters (A-46). A username an account keeps is never checked again.
+    """
+    if USERNAME_RESERVED_CHARACTER in username:
+        return AccountError("USERNAME_INVALID", USERNAME_RESERVED_MESSAGE)
+    if not USERNAME_MIN_LENGTH <= len(username) <= USERNAME_MAX_LENGTH:
+        return AccountError("USERNAME_INVALID", USERNAME_LENGTH_MESSAGE)
+    return None
 
 
 @dataclass(frozen=True)
@@ -240,7 +267,7 @@ async def create_user(
     is_superuser: bool = False,
     is_active: bool = True,
     commit: bool = True,
-) -> tuple[Optional[User], Optional[str]]:
+) -> tuple[Optional[User], Optional[AccountError]]:
     """
     Create a new user.
 
@@ -256,21 +283,21 @@ async def create_user(
         is_active: Whether user is active
 
     Returns:
-        Tuple of (User, None) on success or (None, error_message) on failure
+        Tuple of (User, None) on success or (None, AccountError) on failure: the message, with its code (A-47)
     """
-    # A new username holds no @: the sign-in reads an identifier with one as an address first (A-21a, rule 1)
-    if USERNAME_RESERVED_CHARACTER in username:
-        return None, USERNAME_RESERVED_MESSAGE
+    # A new username: no @ (A-21a, rule 1), 3 to 50 characters (A-46)
+    if (refusal := _new_username_refusal(username)) is not None:
+        return None, refusal
 
     # Check if username exists
     existing = await get_user_by_username(session, username)
     if existing:
-        return None, "Username already taken"
+        return None, AccountError("USERNAME_TAKEN", "Username already taken")
 
     # Check if email exists, or is the username of an account from before A-21a (rule 2): the same answer
     existing = await get_user_by_email(session, email)
     if existing or await address_is_a_username(session, email):
-        return None, "Email already registered"
+        return None, AccountError("EMAIL_TAKEN", "Email already registered")
 
     # Create user
     user = User(
@@ -552,7 +579,7 @@ async def update_profile(
     user_id: int,
     username: str | None = None,
     email: str | None = None,
-) -> tuple[Optional[User], Optional[str]]:
+) -> tuple[Optional[User], Optional[AccountError]]:
     """
     Update user profile (username and/or email).
 
@@ -565,24 +592,24 @@ async def update_profile(
         email: New email (optional)
 
     Returns:
-        Tuple of (updated_user, None) on success or (None, error_message) on failure
+        Tuple of (updated_user, None) on success or (None, AccountError) on failure: the message, with its code (A-47)
     """
     # Get current user
     user = await get_user_by_id(session, user_id)
     if not user:
-        return None, "User not found"
+        return None, AccountError("USER_NOT_FOUND", "User not found")
 
     # Nothing to update
     if username is None and email is None:
         return user, None
 
-    # Check username uniqueness (if changing); a new name holds no @ (A-21a, rule 1), the name kept keeps its own
+    # Check username uniqueness (if changing); a new name follows the rules (A-21a, A-46), the name kept keeps its own
     if username is not None and username != user.username:
-        if USERNAME_RESERVED_CHARACTER in username:
-            return None, USERNAME_RESERVED_MESSAGE
+        if (refusal := _new_username_refusal(username)) is not None:
+            return None, refusal
         existing = await get_user_by_username(session, username)
         if existing:
-            return None, "Username already taken"
+            return None, AccountError("USERNAME_TAKEN", "Username already taken")
         user.username = username
 
     # Check email uniqueness (if changing): the same address in another case is no change (decision P18). The username
@@ -591,7 +618,7 @@ async def update_profile(
     if email_changed:
         existing = await get_user_by_email(session, email)
         if existing or await address_is_a_username(session, email, other_than=user.id):
-            return None, "Email already registered"
+            return None, AccountError("EMAIL_TAKEN", "Email already registered")
         user.email = email
         # A new address is not verified (E5), every session opened with the old one ends (A6e), and so does every live
         # password-reset link (A-27: whoever holds the old mailbox cannot use one asked for before): committed below,

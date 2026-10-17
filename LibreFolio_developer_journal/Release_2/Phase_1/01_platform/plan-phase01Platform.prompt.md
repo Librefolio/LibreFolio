@@ -6803,3 +6803,125 @@ server parte. E lo vede nella revisione del checkpoint.
      form names the event and how many transactions to unlink first.»
    - Nota per X: cambiare un piano scollega le transazioni, togliere il provider le rifiuta. X può chiedere la simmetria.
    - La riga X-R62 sta nella sezione di X del backlog: la chiude il coordinatore.
+
+### Review di B-36/B-37 (`2eff9e623`, in dev `d1976bca8`) (2026-10-17, 14:40) — ✅ OK, un appunto di testo, un nit, un residuo (→ H-51)
+
+Fatta durante W-B75, su richiesta del coordinatore. Sola lettura; sonde su file temporanei in `files/b36review/`.
+
+- **B-36**: `_quoted` è corretto (doppi apici, con quelli interni raddoppiati). In `post_migration` è l'unico nome che
+  arriva dal `sqlite_master` dell'archivio dentro un SQL; `autoincrement.py` interpola solo nomi della tupla fissa
+  `AUTOINCREMENT_TABLES`.
+  - Nit, per B: due `_quoted` con contratti diversi. `snapshot._quoted` non mette gli apici esterni,
+    `post_migration._quoted` sì.
+- **B-37**:
+  - il PRAGMA è la prima istruzione dopo il connect;
+  - la connessione di `_backup` è solo la destinazione della backup API;
+  - il listener di `env.py` è registrato prima del primo connect, solo su quel motore, e con `NullPool` vale per ogni
+    connessione; la modalità offline non ne apre.
+- **Sonde**:
+  - SQLAlchemy 2.0.52 registra `regexp` e `floor` in Python su ogni connessione;
+  - `trusted_schema` vale 1 di default;
+  - prima di B-37, il `regexp` gira da un CHECK dell'archivio;
+  - con il listener, ogni istruzione fallisce («malformed database schema … unsafe use of REGEXP()»);
+  - la head 009 usa solo `lower()`.
+- **Appunto di testo**, per B: la frase «nessuna funzione dell'app è registrata lì» non vale per il motore di Alembic.
+  Il listener di `env.py` è quindi una cura vera.
+- **Residuo → H-51**: il motore del server vivo ha `trusted_schema` a 1 e i due Python. Un archivio con
+  `DEFAULT (regexp(…))` passa il controllo del ripristino (`integrity_check` `ok`; un CHECK invece fallisce, «unknown
+  function»). Nel server, a ogni insert che omette quella colonna, gira il `regexp` Python; lo prova anche il motore
+  async.
+- **Decisioni del coordinatore** (14:45):
+  - H-51 è un lotto mio, dopo W-B75, con la riscrittura della frase di `security.md` r.706 (B-18) e la frase su Alembic;
+  - nello slot di verifica, le suite delle migrazioni e `api backup-restore`;
+  - l'appunto di testo e il nit li passa lui a B.
+
+### Lotto «W-B75: l'errore di campo di un plugin BRIM non rende più il parse non serializzabile» (dalla coda di W, 2026-10-17) — analisi e passi
+
+> Dal coordinatore (14:20), dopo l'entrata di X-R62 (dev `0c035651e`):
+> - BRIM `_create_transaction` copia in `params` il contesto di ogni errore singolo, quindi l'oggetto eccezione di un
+>   `value_error` renderebbe la risposta del parse un 500;
+> - cura come `_lone_error_params` di W-B72: solo il contesto fatto di dati semplici, `None` per gli errori di campo e
+>   per `value_error`. Un rosso con un `value_error` forzato.
+>
+> Analisi prima solo se il lavoro tocca più dei percorsi di creazione di `brim`. W rivede.
+
+**Analisi** (sola lettura, HEAD `0c035651e`):
+1. **Un solo punto**: BRIM costruisce issue da errori pydantic solo in `BRIMProvider._create_transaction`
+   (`services/brim/brim_provider.py`).
+   - Il ramo dell'errore singolo passa `params=err_ctx` così com'è.
+   - I sotto-errori di `multipleBusinessRuleErrors` e il ramo `unexpected_error` non c'entrano.
+2. **I `value_error` raggiungibili**: `Currency.amount` (`check_decimal_exponent`, R13-SEC7-3, e «Cannot convert»),
+   `Currency.code`, i `tags`.
+   - Si raggiungono solo quando un plugin passa un dict invece di un'istanza di `Currency`.
+   - Oggi i plugin passano istanze, che non si rivalidano: il difetto è latente.
+3. **La regola esatta di W-B72** («`None` per gli errori di campo») in BRIM oggi non cambia nulla di visibile:
+   - `ParseDetailModal.svelte` risolve con `resolveIssueMessage({code, params, error})`, senza `field`;
+   - i soli messaggi che leggono i `params` di un errore di campo sono `transactions.pydantic.{greaterThan,
+     greaterThanEqual, lessThan, lessThanEqual}` (`{gt}`…), e nessun campo di `TXCreateItem` o di `Currency` ha
+     `gt/ge/lt/le`;
+   - gli altri errori di campo raggiungibili non hanno chiave, e si mostra il loro inglese, che ha già il numero:
+     `string_too_long` di `description` e `link_uuid`, `literal_error` di `cost_basis_mode`, `enum` di `type`;
+   - ogni contesto delle regole di business è fatto di dati semplici (`{type}`, `{type, qty: str}`,
+     `{type, allowed}`, `{broker_id}`): un errore singolo tiene i suoi `params`.
+4. **Nota per W** (latente; riguarda il batch, ed era così già prima di W-B72, quando si passava `params=None`): con
+   la stessa regola, un `greater_than` di campo del batch arriva senza `{gt}`, e `transactions.pydantic.greaterThan`
+   lo mostrerebbe grezzo. Succede con `id_a` o `from_tx_id` = 0 in uno split o in una promozione. Si raggiunge solo
+   via API.
+
+**Proposta**:
+- `BRIMProvider._lone_error_params(err)`, uno staticmethod gemello di `_loc_to_field`, con la regola di W-B72 e
+  `_PLAIN_PARAM_TYPES` locali. Il ramo singolo la usa.
+- Niente import dal modulo del batch, che è privato e di un altro dominio. Restano due copie piccole e allineate,
+  come già per `_loc_to_field`; unificarle è un riordino a parte, da concordare con W.
+- **Test** (test-author) nel file esistente `test_services/test_brim_create_transaction.py`
+  (`services brim-create-transaction`):
+  - rossi: un `value_error` forzato sul plugin finto; un errore di campo con un contesto semplice;
+  - la funzione provata su dict sintetici;
+  - guardie: la regola singola e i sotto-errori tengono il loro contesto.
+- **Doc**: una frase nella riga di `_create_transaction` di `brim_plugin_guide.md`.
+- Nessuna API, nessuna i18n, nessuno slot.
+
+**Passi**:
+
+1. ✅ (2026-10-17, 14:35) **Rossi** (test-author, nessuna esecuzione): +18 test in `test_brim_create_transaction.py`.
+   - `TestCreateTransactionIssueParams`:
+     - un `value_error` forzato da tre fonti: l'esponente di `cash.amount`, il codice vuoto di `cash.code`, `tags` in
+       una tupla. Ogni caso ha un solo issue, `params is None` e quattro serializzazioni (`model_dump(mode="json")`,
+       `model_dump_json()`, `BRIMParseOutput`, `BRIMParseResponse`);
+     - `string_too_long` di `description` dà `params is None`;
+     - guardie: due regole singole che tengono il loro contesto (`broker_id`; `{type, qty}`) e le regole impacchettate.
+   - `TestLoneErrorParams`: 11 casi sulla funzione, con dict sintetici.
+   - **Evidenza** (`files/runs/wb75-reds.sh`): ruff e black puliti; `services brim-create-transaction` 15 failed /
+     17 passed. Sono esattamente le previsioni, tutti FAILED e nessun ERROR.
+   > **⚠️ Fuori pista**: test-author, verificato da me sul codice. Il parse non dà un 500.
+   > - `response.model_dump(mode="json")` (`api/v1/brokers.py` r. 1047) sta dentro il `try` della rotta, e
+   >   `PydanticSerializationError` è un `ValueError`: si risponde 400, con il testo «Unable to serialize unknown type:
+   >   <class 'ValueError'>».
+   > - Il file è già passato in `parsed` (r. 1021), e `move_to_failed` sposta solo da `UPLOADED`: il file resta `PARSED`,
+   >   senza risultato salvato.
+   > - La riga W-B75 della sezione di W dice «un 500»: lo segnalo, non la tocco.
+2. ✅ (2026-10-17, 14:37) **Cura, verdi e doc**.
+   - Applicata con `files/wb75/apply.py`, prima a secco poi `--apply`; `cmp` OK.
+   - `brim_provider.py`:
+     - `_PLAIN_PARAM_TYPES` a livello di modulo;
+     - `BRIMProvider._lone_error_params`, uno staticmethod con la regola di W-B72;
+     - il ramo singolo la usa, e la docstring di `_create_transaction` lo dice;
+     - il ramo `multipleBusinessRuleErrors` resta com'era.
+   - `brim_plugin_guide.md`: la riga di `_create_transaction` dice cosa porta ogni issue e rimanda a «Per-type rules».
+   - **Evidenza** (`files/runs/wb75-greens.sh`):
+     - ruff e black puliti;
+     - `services brim-create-transaction` 32 passed, `brim-report-sets` 274, `external brim-providers` 736 passed,
+       1 skipped. Lo skip è previsto: un campione che Windows-1252 non sa rappresentare;
+     - `mkdocs build` stretto senza avvisi; `check-links` 97; `git diff --check` pulito.
+3. ✅ (2026-10-17, 14:40) **Checkpoint**.
+   - Commit proposti:
+     - `fix(brim): plain-data params on lone parse errors` (codice, test, guida);
+     - `docs(journal): W-B75, B-36/B-37 review, H-51` (piano e backlog: H-47 con la corsa, H-51).
+   - Nessuna voce nel CHANGELOG: il difetto è latente, e oggi nessun plugin lo raggiunge.
+   - Note per W:
+     1. Ho applicato la regola esatta di W-B72. Oggi non cambia niente di visibile.
+     2. La correzione «400, non 500», con lo stato `PARSED` che resta.
+     3. Il ramo impacchettato, qui e nel batch, copia il contesto dei sotto-errori senza filtro. È sicuro finché ogni
+        regola usa str e int.
+     4. Nel batch un `greater_than` di campo arriva senza `{gt}`, già prima di W-B72.
+     5. Ci sono due copie della regola, come per `_loc_to_field`: unificarle si fa a parte.

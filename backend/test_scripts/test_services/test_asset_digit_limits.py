@@ -65,14 +65,27 @@ declaration: written by ``bulk_upsert_events`` and read back through the events 
 ``POST /assets/events/query`` answers), it is 12345678901.234500, with 6 decimals as today; what reads well today keeps
 its form (1.5 reads 1.500000, 0.000001 reads 0.000001). Compared as text, so the 6 decimals are pinned.
 
+W-B68 (17/10): a provider's event value is stored as the column keeps it. Measured before the cure: ``_storable_events``,
+the provider path of ``_upsert_asset_events`` (``refresh.py``), drops an event no value can keep (W-B58) and a SPLIT whose
+ratio is not above 0 (X-R47), but never cuts the others as a provider price is cut (``storable_price``): a dividend of
+784.0774475 EUR is written whole and reads back 784.077448 (the double rounded half-even at 6 decimals), so the row the
+refresh's session holds is not the row read back; a SPLIT of ratio 0.0000001 is stored and reads back 0, the ratio X-R47
+drops. The cure's contract: ``storable_value(amount, AssetEvent, "value")``; None drops the event as today; otherwise the
+event takes the value cut ROUND_DOWN at 6 decimals, then at 15 significant digits (784.077447, 0.123456, 123456789012.123),
+and a value that already fits keeps its form (1.5 stays 1.5); a SPLIT's ratio is judged once cut, so 0.0000001 is dropped
+as an invalid split, the other events of the call written. Manual events never get there (C-97a refuses them first). These
+tests carry ``wb68`` in their names (``-k WB68``); the rows of the refresh's session are held from its flushes, never
+reloaded, and compared as ``Decimal`` with a fresh query's.
+
 Each red says what the user faces; a GUARD passes before and after the cure. A refusal is looked for
 as the router meets it: nobody commits after a refused call, the session just closes, so "nothing
 written" sees exactly what the service committed by itself.
 
 Isolation: write-scoped, the services default (as ``asset-source``). Every row is this unit's own: two EUR CRYPTO assets
 created under a unique name, and only their prices and events are written, read and wiped, by asset id; and, for the
-tests that need one, an assignment of the PEPE asset to a provider code of the test's own, deleted at teardown. Nothing
-here counts or reads a row it did not write.
+tests that need one, an assignment of the PEPE asset to a provider code of the test's own, deleted at teardown. The W-B68
+tests write provider events of the PEPE asset alone, under that assignment, and capture the logs with structlog's testing
+capture, proved live by a barrier event. Nothing here counts or reads a row it did not write.
 """
 
 import asyncio
@@ -87,6 +100,7 @@ from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
+from structlog.testing import capture_logs
 
 from backend.app.config import PROJECT_ROOT
 
@@ -100,14 +114,16 @@ setup_test_database()
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import delete, select, text
+from sqlalchemy.event import listen
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.assets import events as events_api
-from backend.app.db.models import Asset, AssetEvent, AssetProviderAssignment, AssetType, PriceHistory, ProviderInputType
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, PriceHistory, ProviderInputType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.assets.events import FAEventQueryItem, FAEventUpsert
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint, FAUpsert
+from backend.app.services.assets import event_store
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.manager import AssetSourceManager
@@ -1097,6 +1113,244 @@ async def test_a_provider_event_the_schema_refuses_is_dropped_and_the_others_are
     written = [(row.date, str(row.type), row.value, row.provider_assignment_id) for row in rows]
     expected = [(_day(0), "DIVIDEND", Decimal("1.5"), assigned.assignment_id), (_day(2), "INTEREST", Decimal("2.25"), assigned.assignment_id)]
     assert written == expected, f"{story}, were written as {_describe_events(rows)}: expected the two others alone"
+
+
+# --------------------------------------------------------------------------- #
+# W-B68: a provider's event value stored as the column keeps it, so what is read back is what was written
+# --------------------------------------------------------------------------- #
+
+#: An event sent through event_store.py's own logger inside every W-B68 capture, then looked for.
+_WB68_BARRIER = "W-B68 capture barrier"
+
+#: Values within every limit of ``AssetEvent.value`` for the W-B68 guards — (type, value delivered, the form it reads back
+#: in today, id) —: 1.5, 6 decimals, 15 significant digits with the 12 integer digits, a SPLIT's ratio of 2.
+_WB68_FITTING = [
+    ("DIVIDEND", "1.5", "1.500000", "dividend-1.5"),
+    ("DIVIDEND", "0.123456", "0.123456", "dividend-0.123456-6-decimals"),
+    ("DIVIDEND", "123456789012.123", "123456789012.123000", "dividend-123456789012.123-15-significant-digits"),
+    ("SPLIT", "2", "2.000000", "split-ratio-2"),
+]
+
+
+@dataclass(frozen=True)
+class _Held:
+    """An event row as the refresh's session holds it right after the write."""
+
+    id: int
+    day: date
+    kind: str
+    value: Decimal
+
+
+def _provider_event(offset: int, kind: str, amount: str) -> dict:
+    """One event as a provider delivers it to a refresh (``FAHistoricalData.events``), in the asset's currency."""
+    return {"date": _day(offset), "type": kind, "value": {"code": "EUR", "amount": amount}}
+
+
+async def _refresh_events(owned: _Owned, assigned: _Assigned, events: list[dict], story: str) -> tuple[dict[tuple[date, str], _Held], list[dict]]:
+    """What a refresh does with its provider's events (``refresh.py``: ``_upsert_asset_events`` under the assignment,
+    committed slice by slice). Returns the rows its session wrote, by (date, type), as that session holds them right after
+    the write, and the log events captured meanwhile.
+
+    The rows are held from the session's flushes (``before_flush``: its new and changed events), so they are the very
+    objects written, never reloaded: a row nothing holds leaves the session's identity map, and a query of the same session
+    would read the database instead. A barrier event, sent through ``event_store``'s own logger inside the capture, proves
+    the capture live. An exception fails the test naming it: the refresh would report «Event upsert failed».
+    """
+    held: dict[int, AssetEvent] = {}
+
+    def hold(session, _flush_context, _instances) -> None:
+        for row in (*session.new, *session.dirty):
+            if isinstance(row, AssetEvent):
+                held.setdefault(id(row), row)
+
+    with capture_logs() as captured:
+        event_store.logger.warning(_WB68_BARRIER)
+        try:
+            async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+                listen(session.sync_session, "before_flush", hold)
+                await EventStoreOperations._upsert_asset_events(session, owned.asset_id, events, assigned.assignment_id, "EUR")
+                written = {(row.date, str(row.type)): _Held(row.id, row.date, str(row.type), row.value) for row in held.values()}
+        except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+            pytest.fail(f"{story}: _upsert_asset_events raised {exc!r}: the refresh reports «Event upsert failed» and keeps none of the provider's events (W-B68: cut the values, drop what cannot be kept, write the others)")
+    assert any(entry.get("event") == _WB68_BARRIER for entry in captured), f"barrier: the log capture saw no event of event_store.py's logger: {captured}"
+    return written, captured
+
+
+async def _read_back(owned: _Owned, offset: int, kind: str) -> list[tuple[Decimal, int | None]]:
+    """The (value, provider assignment) of every event of the PEPE asset on day ``offset`` of type ``kind``, read back by a
+    fresh query through the column's type, as the neighbours read a stored event (``_stored_events``)."""
+    return [(row.value, row.provider_assignment_id) for row in await _stored_events(owned) if (row.asset_id, row.date, str(row.type)) == (owned.asset_id, _day(offset), kind)]
+
+
+async def _seed_provider_dividend(owned: _Owned, assigned: _Assigned, offset: int, amount: str) -> int:
+    """A dividend of ``amount`` EUR on day ``offset``, stored under the assignment as an earlier refresh left it; its id."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        row = AssetEvent(asset_id=owned.asset_id, date=_day(offset), type=AssetEventType.DIVIDEND, value=Decimal(amount), currency="EUR", provider_assignment_id=assigned.assignment_id)
+        session.add(row)
+        await session.commit()
+        return row.id
+
+
+def _flat(value: object) -> str:
+    """A log event as plain text — a date in its ISO form, containers flattened — so what it names is found whatever form
+    the logger was given it in."""
+    if isinstance(value, dict):
+        return " ".join(f"{key}={_flat(item)}" for key, item in value.items())
+    if isinstance(value, list | tuple | set):
+        return " ".join(_flat(item) for item in value)
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)
+
+
+def _split_ratio_warnings(captured: list[dict], offset: int) -> list[dict]:
+    """The warnings, and worse, among ``captured`` that name the SPLIT of day ``offset`` for its ratio — its date and the
+    words split and ratio — whatever their text; the barrier left out. A drop for the digits (W-B58) names no ratio."""
+    day = _day(offset).isoformat()
+
+    def names_the_ratio(entry: dict) -> bool:
+        flat = _flat(entry).lower()
+        return day in flat and re.search(r"\bsplit", flat) is not None and re.search(r"\bratios?\b", flat) is not None
+
+    return [entry for entry in captured if entry.get("log_level") in ("warning", "error", "critical") and entry.get("event") != _WB68_BARRIER and names_the_ratio(entry)]
+
+
+def _names_the_asset(entry: dict, asset_id: int) -> bool:
+    """Whether a log event names asset ``asset_id``: the id right after the word asset — a field ``asset_id``, or «asset 12»
+    in its text. A bare number is no name: with the small ids of a fresh lane, «count=1» is not asset 1."""
+    return re.search(r"\basset(?:[ _]?id)?\W{0,3}" + str(asset_id) + r"(?!\d)", _flat(entry), re.IGNORECASE) is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("delivered", "expected", "before"),
+    [
+        pytest.param("784.0774475", "784.077447", "784.077448", id="784.0774475"),
+        pytest.param("0.1234567", "0.123456", "0.123457", id="0.1234567"),
+    ],
+)
+async def test_wb68_a_provider_event_value_past_6_decimals_is_stored_cut_at_6(owned, assigned, delivered, expected, before):
+    """Red today: ``_storable_events`` lets the dividend through as it comes, and ``RealDecimal(18, 6)`` reads the double
+    back rounded half-even at 6 decimals: 784.0774475 reads back 784.077448 and 0.1234567 reads back 0.123457 (``before``).
+
+    Contract (W-B68): cut as a provider price is cut (``storable_value``), ROUND_DOWN at the 6 decimals of
+    ``AssetEvent.value``: stored under the assignment and read back as ``expected``, 784.077447 and 0.123456.
+    """
+    story = f"a provider dividend of {delivered} EUR on {_day(0)}"
+
+    await _refresh_events(owned, assigned, [_provider_event(0, "DIVIDEND", delivered)], story)
+
+    found = await _read_back(owned, 0, "DIVIDEND")
+    cut = [(Decimal(expected), assigned.assignment_id)]
+    assert found == cut, f"W-B68: {story} reads back as {found} (value, assignment): expected {expected} under assignment {assigned.assignment_id}, cut ROUND_DOWN at the 6 decimals AssetEvent.value keeps, as a provider price is; before the cure it read back {before}, the double rounded on read"
+
+
+@pytest.mark.asyncio
+async def test_wb68_a_provider_event_value_past_15_significant_digits_is_stored_cut_at_15(owned, assigned):
+    """Red today: a dividend of 123456789012.123999 EUR — 12 integer digits, the limit, and 6 decimals, but 18 significant
+    digits — is written as it comes, and the double it becomes reads back 123456789012.124000: rounded up, not cut.
+
+    Contract (W-B68): ROUND_DOWN at 6 decimals, then at 15 significant digits, what a REAL gives back: stored and read back
+    123456789012.123. The backlog's 123456789012.123456 cannot be red here: its 16th significant digit is a 4, so the read's
+    rounding already lands on the cut value today; it is red in ``test_wb68_what_a_refresh_writes_is_what_is_read_back``.
+    """
+    delivered, expected, before = "123456789012.123999", "123456789012.123", "123456789012.124000"
+    story = f"a provider dividend of {delivered} EUR on {_day(0)}"
+
+    await _refresh_events(owned, assigned, [_provider_event(0, "DIVIDEND", delivered)], story)
+
+    found = await _read_back(owned, 0, "DIVIDEND")
+    cut = [(Decimal(expected), assigned.assignment_id)]
+    assert found == cut, f"W-B68: {story} reads back as {found} (value, assignment): expected {expected} under assignment {assigned.assignment_id}, cut ROUND_DOWN at 15 significant digits; before the cure it read back {before}, whatever the REAL made of the 18 digits written"
+
+
+@pytest.mark.asyncio
+async def test_wb68_a_provider_split_whose_ratio_cuts_to_0_is_dropped_the_others_written_and_one_warning_names_it(owned, assigned):
+    """Red today: a SPLIT of ratio 0.0000001 is above 0, so X-R47 lets it through, and it is written as it comes: it reads
+    back 0.000000, the very ratio X-R47 drops (linked to a transaction, a ratio of 0 made the portfolio engine raise).
+
+    Contract (W-B68): the ratio is judged as the column keeps it, cut ROUND_DOWN at 6 decimals: 0, so the SPLIT (day 1) is
+    dropped as an invalid split — no row on its key — and one warning names it (its date, the words split and ratio) and
+    the asset; the other events of the call — a dividend (day 0), an interest (day 2), a SPLIT of 2 (day 3) — are written
+    under the assignment; nothing raises.
+    """
+    events = [_provider_event(0, "DIVIDEND", "1.5"), _provider_event(1, "SPLIT", "0.0000001"), _provider_event(2, "INTEREST", "2.25"), _provider_event(3, "SPLIT", "2")]
+    story = f"a refresh delivering a SPLIT of ratio 0.0000001 on {_day(1)} beside a dividend, an interest and a SPLIT of 2"
+
+    _written, captured = await _refresh_events(owned, assigned, events, story)
+
+    split = await _read_back(owned, 1, "SPLIT")
+    assert not split, f"W-B68: {story} stored that SPLIT, read back as {split} (value, assignment): a ratio of 0, the very case X-R47 drops; expected it dropped, its ratio judged once cut to the 6 decimals AssetEvent.value keeps"
+    rows = await _stored_events(owned)
+    written = sorted((row.date, str(row.type), row.value, row.provider_assignment_id) for row in rows)
+    expected = [(_day(0), "DIVIDEND", Decimal("1.5"), assigned.assignment_id), (_day(2), "INTEREST", Decimal("2.25"), assigned.assignment_id), (_day(3), "SPLIT", Decimal("2"), assigned.assignment_id)]
+    assert written == expected, f"{story} wrote {_describe_events(rows)}: expected the three others alone"
+    warnings = _split_ratio_warnings(captured, 1)
+    assert len(warnings) == 1, f"{story} logged {len(warnings)} warning(s) naming the SPLIT of {_day(1)} and its ratio: expected one, so the operator learns the provider's split was dropped as invalid: {warnings}"
+    assert _names_the_asset(warnings[0], owned.asset_id), f"{story}: the warning about the dropped SPLIT of {_day(1)} does not name asset {owned.asset_id}: {warnings[0]}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("existing", [pytest.param(False, id="inserted"), pytest.param(True, id="updated-in-place")])
+@pytest.mark.parametrize(
+    ("delivered", "before"),
+    [
+        pytest.param("784.0774475", "784.077448", id="784.0774475"),
+        pytest.param("0.1234567", "0.123457", id="0.1234567"),
+        pytest.param("1.23456789", "1.234568", id="1.23456789"),
+        pytest.param("123456789012.123456", "123456789012.123000", id="123456789012.123456"),
+    ],
+)
+async def test_wb68_what_a_refresh_writes_is_what_is_read_back(owned, assigned, delivered, before, existing):
+    """Red today: the refresh's session holds the dividend as delivered, 784.0774475, while a fresh query reads the row back
+    784.077448 (``before``): the row says one value to the session that wrote it and another to every later read. The
+    backlog's 123456789012.123456 reads back 123456789012.123: there the read is right, and the row written is not.
+
+    Contract (W-B68): the value is cut before it is written, so the row the session holds right after the write equals, as a
+    ``Decimal``, the row a fresh query reads back; as a new row, and as the provider's row of the key updated in place.
+    """
+    seeded = await _seed_provider_dividend(owned, assigned, 0, "1.5") if existing else None
+    story = f"a provider dividend of {delivered} EUR on {_day(0)}" + (f", over the provider's stored dividend {seeded} of 1.5 EUR" if seeded is not None else "")
+
+    written, _captured = await _refresh_events(owned, assigned, [_provider_event(0, "DIVIDEND", delivered)], story)
+
+    held = written.get((_day(0), "DIVIDEND"))
+    assert held is not None, f"barrier: {story}: the refresh's session wrote no dividend on {_day(0)}: {sorted(written)}"
+    assert seeded is None or held.id == seeded, f"barrier: {story}: the refresh wrote the row {held.id} instead of updating the stored dividend {seeded} in place"
+    read = [value for value, _assignment in await _read_back(owned, 0, "DIVIDEND")]
+    assert read == [held.value], f"W-B68: {story} is held by the refresh's session as {held.value} right after the write, and read back as {read}: what is read back must be what was written (before the cure: written {delivered}, read back {before})"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("kind", "delivered", "form"), [pytest.param(kind, delivered, form, id=name) for kind, delivered, form, name in _WB68_FITTING])
+async def test_wb68_guard_a_provider_event_value_that_fits_reads_back_unchanged(owned, assigned, kind, delivered, form):
+    """Guard: green today and after. A value within every limit of ``AssetEvent.value`` — 1.5, 0.123456 (6 decimals),
+    123456789012.123 (15 significant digits, 12 integer digits), a SPLIT's ratio of 2 — is stored under the assignment and
+    read back unchanged, in today's form (``form``): nothing to cut, and a SPLIT of 2 is a valid split, never dropped."""
+    story = f"a provider {kind} of {delivered} on {_day(0)}"
+
+    await _refresh_events(owned, assigned, [_provider_event(0, kind, delivered)], story)
+
+    found = await _read_back(owned, 0, kind)
+    assert found == [(Decimal(delivered), assigned.assignment_id)], f"{story} reads back as {found} (value, assignment): expected {delivered} under assignment {assigned.assignment_id}"
+    assert str(found[0][0]) == form, f"{story} reads back as {found[0][0]}: expected {form}, today's form"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("kind", "delivered"), [pytest.param(kind, delivered, id=name) for kind, delivered, _form, name in _WB68_FITTING])
+async def test_wb68_guard_a_provider_event_value_that_fits_keeps_its_form_in_the_refresh_session(owned, assigned, kind, delivered):
+    """Guard: green today and after; the clause «a value that already fits keeps its form» of the W-B68 contract. The row the
+    refresh's session holds right after the write carries the value as the provider gave it, form included: 1.5 stays 1.5
+    and a ratio of 2 stays 2, never the 1.500000 and 2.000000 that ``truncate_to_db_precision`` (so ``storable_value``)
+    makes of them. The cut is for a value that does not fit."""
+    story = f"a provider {kind} of {delivered} on {_day(0)}"
+
+    written, _captured = await _refresh_events(owned, assigned, [_provider_event(0, kind, delivered)], story)
+
+    held = written.get((_day(0), kind))
+    assert held is not None, f"barrier: {story}: the refresh's session wrote no {kind} on {_day(0)}: {sorted(written)}"
+    assert str(held.value) == delivered, f"W-B68: {story} is held by the refresh's session as {held.value}: a value that already fits keeps its form, {delivered}"
 
 
 # --------------------------------------------------------------------------- #

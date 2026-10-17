@@ -16,6 +16,7 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerWacContext,
 )
 from backend.app.services.pac_allocator.source.keys import WAC_PROVENANCE_ID, asset_key, broker_key, field_issue, holding_key, normalized_fx_pair, validated_currency, wac_key
+from backend.app.utils.sql_chunks import chunks
 
 
 def _rates_match(left: Decimal, right: Decimal) -> bool:
@@ -30,22 +31,27 @@ async def _load_wac_fx_rows(
     *,
     keys: set[tuple[str, str, date_type]],
 ) -> dict[tuple[str, str, date_type], FxRate]:
-    """The saved rows at exactly the (base, quote, date) the cost conversions used, in one read.
+    """The saved rows at exactly the (base, quote, date) the cost conversions used, in one read per chunk.
 
     The average cost already chose each rate (``convert_bulk``, with its backward fill): this only reads that row back,
-    for its source and to fail closed when it has changed or gone since. No window, no backward fill of its own.
+    for its source and to fail closed when it has changed or gone since. No window, no backward fill of its own. One OR
+    term per key, read ``OR_TERMS_PER_QUERY`` at a time (MF-SEC9a): SQLite refuses an OR of a thousand terms, and weekly
+    foreign buys over twenty years are as many keys.
     """
 
     if not keys:
         return {}
-    stored_rows = (
-        await session.execute(
-            select(FxRate).where(
-                or_(*[and_(FxRate.base == base, FxRate.quote == quote, FxRate.date == rate_date) for base, quote, rate_date in sorted(keys)]),
+    rows: dict[tuple[str, str, date_type], FxRate] = {}
+    for chunk in chunks(sorted(keys)):
+        stored_rows = (
+            await session.execute(
+                select(FxRate).where(
+                    or_(*[and_(FxRate.base == base, FxRate.quote == quote, FxRate.date == rate_date) for base, quote, rate_date in chunk]),
+                )
             )
-        )
-    ).scalars()
-    return {key: row for row in stored_rows if (key := (row.base, row.quote, row.date)) in keys}
+        ).scalars()
+        rows.update({key: row for row in stored_rows if (key := (row.base, row.quote, row.date)) in keys})
+    return rows
 
 
 async def build_planner_wac_contexts(  # noqa: C901 — sequential WAC/evidence mapping is intentionally fail-closed

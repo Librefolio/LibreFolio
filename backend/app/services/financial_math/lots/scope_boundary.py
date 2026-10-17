@@ -15,6 +15,9 @@ so nothing of the other broker enters the figures. A pair that is really missing
 is: the engine reports it. A reading is a detached copy; the scope's rows are never changed. Every reader of the
 analysis takes the same list, and the performance history moves a read leg's market value across the scope, as it does
 for a transfer whose two legs it replays (``histories.build_performance_history``).
+
+The yield on cost reads the arrivals alone (``read_arrivals_at_scope_boundary``, J-51): it needs quantities only, and
+it keeps a departure's partner, because units in transit count for the broker they left.
 """
 
 from __future__ import annotations
@@ -90,7 +93,7 @@ def read_transfers_at_scope_boundary(
             read.append(tx)
             continue
         if tx.quantity > 0:
-            read.append(_read(tx, tx.id, tx.asset_id, cost_basis_override=tx.cost_basis_override, cost_basis_currency=tx.cost_basis_currency))
+            read.append(_read_arrival(tx, tx.id, tx.asset_id))
             legs[tx.id] = BoundaryLeg(transaction_id=tx.id, direction="IN")
             continue
         mark = price_series.resolve(tx.date)
@@ -100,6 +103,36 @@ def read_transfers_at_scope_boundary(
             read.append(_read(tx, tx.id, tx.asset_id, cost_basis_override=compute_holding_value(_ONE_UNIT, mark.unit_price, quote_base_quantity), cost_basis_currency=mark.currency))
         legs[tx.id] = BoundaryLeg(transaction_id=tx.id, direction="OUT")
     return ScopeBoundaryReading(transactions=read, legs=legs)
+
+
+def read_arrivals_at_scope_boundary(
+    transactions: Sequence[TransactionLike],
+    *,
+    partners: Mapping[int, TransferPartner],
+    scope_broker_ids: Collection[int],
+) -> ScopeBoundaryReading:
+    """Read only the arriving TRANSFER legs whose partner pairs back from a broker outside ``scope_broker_ids``; keep every
+    other row, departures included.
+
+    An arrival reads as in ``read_transfers_at_scope_boundary``: an ADJUSTMENT-in of its units, on its date, at its own
+    cost basis. No price is needed. For the yield on cost (J-51), which keeps a departure's partner instead.
+    """
+    scope = set(scope_broker_ids)
+    read: list[TransactionLike | FifoInputTransaction] = []
+    legs: dict[int, BoundaryLeg] = {}
+    for tx in transactions:
+        partner = partners.get(tx.related_transaction_id) if _type_of(tx) == _TRANSFER and tx.related_transaction_id is not None else None
+        if tx.id is None or tx.asset_id is None or partner is None or not tx.quantity or tx.quantity < 0 or not _pairs_across(tx, partner, scope):
+            read.append(tx)
+            continue
+        read.append(_read_arrival(tx, tx.id, tx.asset_id))
+        legs[tx.id] = BoundaryLeg(transaction_id=tx.id, direction="IN")
+    return ScopeBoundaryReading(transactions=read, legs=legs)
+
+
+def _read_arrival(tx: TransactionLike, tx_id: int, asset_id: int) -> FifoInputTransaction:
+    """An arriving leg read at the edge: an ADJUSTMENT-in at its own cost basis (none, on old data: a costless one)."""
+    return _read(tx, tx_id, asset_id, cost_basis_override=tx.cost_basis_override, cost_basis_currency=tx.cost_basis_currency)
 
 
 def _type_of(row: TransactionLike | TransferPartner) -> str:

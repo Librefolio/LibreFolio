@@ -28,6 +28,12 @@ MAX_BULK_ITEMS = 1_000
 #: `frontend/src/lib/api/bulkBatches.ts`); the in-process callers (risk, AI Export) share it: about 100 assets over
 #: "All" (from 2000, nearly 9,800 days each), about 550 over five years.
 MAX_BULK_ITEM_DAYS = 1_000_000
+#: How many items one bulk write of rates or prices may hold (MF-SEC9a, from E's review of R13-SEC9): the rates of
+#: ``POST /fx/currencies/rate``, the deletions of ``DELETE /fx/currencies/rate``, and the date ranges of
+#: ``DELETE /assets/prices``, all assets together. Higher than ``MAX_BULK_ITEMS``: the FX page saves a CSV import in one
+#: request, and daily rates since 1999 are about 7 000 rows. The statements behind them run in chunks
+#: (``utils/sql_chunks``), so the cap bounds the request, not SQLite.
+MAX_BULK_WRITE_ITEMS = 10_000
 
 
 class BulkTooManyDaysError(Exception):
