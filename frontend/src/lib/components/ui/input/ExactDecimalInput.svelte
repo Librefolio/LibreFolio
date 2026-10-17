@@ -1,7 +1,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {expandScientificNotation, exponentNotReadable, filterDecimalInput, MAX_DECIMAL_EXPONENT, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {decimalDigitCounts, expandScientificNotation, exponentNotReadable, filterDecimalInput, MAX_DECIMAL_EXPONENT, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {ArrowHold} from '$lib/utils/core/arrowHold';
 
     interface ExactDecimalValidity {
@@ -150,13 +150,14 @@
                 valid: false,
             };
         }
-        const unsigned = normalized.startsWith('-') ? normalized.slice(1) : normalized;
-        const [integer = '', fraction = ''] = unsigned.split('.');
-        const digitsValid = (integer || '0').length <= maxIntegerDigits && fraction.length <= maxFractionDigits;
-        // Within the budget only: past it the value is refused anyway, and the comparison builds a BigInt of every pasted
-        // digit (W-B66).
-        const belowMin = digitsValid && min !== undefined && compareExact(normalized, min) === -1;
-        const aboveMax = digitsValid && max !== undefined && compareExact(normalized, max) === 1;
+        // Counted as the backend counts them (W-B64): `0.10000000000` holds one decimal, `5.0` none, `007` one integer digit.
+        const counts = decimalDigitCounts(normalized);
+        const digitsValid = counts !== null && counts.integerDigits <= maxIntegerDigits && counts.fractionDigits <= maxFractionDigits;
+        // Within the budget only, and on the value without the zeros it does not count: past the budget the value is
+        // refused anyway, and the comparison builds a BigInt of every digit it is given (W-B66).
+        const stripped = counts?.stripped ?? normalized;
+        const belowMin = digitsValid && min !== undefined && compareExact(stripped, min) === -1;
+        const aboveMax = digitsValid && max !== undefined && compareExact(stripped, max) === 1;
         const rangeValid = !belowMin && !aboveMax;
         return {
             normalized,
@@ -172,10 +173,11 @@
     let parsedValue = $derived(normalizedParts(value));
     let locallyInvalid = $derived(!parsedValue.valid || externalInvalid);
     // C-97b: a fraction past the budget is flagged (``digitsValid``) and said under the field, the value kept as typed. No
-    // maxlength: a browser cut a longer paste down to it in silence, into a number that looked valid.
+    // maxlength: a browser cut a longer paste down to it in silence, into a number that looked valid. Its trailing zeros
+    // are not counted (W-B64).
     let fractionOverflow = $derived.by(() => {
         if (parsedValue.empty || !parsedValue.syntaxValid) return false;
-        return (parsedValue.normalized.split('.')[1] ?? '').length > maxFractionDigits;
+        return (decimalDigitCounts(parsedValue.normalized)?.fractionDigits ?? 0) > maxFractionDigits;
     });
     // W-B66: a text with an exponent the field cannot read exactly stays as typed, refused, and says why.
     let exponentRefused = $derived(exponentNotReadable(value));
@@ -305,6 +307,20 @@
         return candidate;
     }
 
+    /** What an arrow steps from (W-B64): a value whose text is longer than the budget, valid only because the zeros it
+     *  ends or starts with are not counted (`5.` and 40 000 zeros), steps from the value without them, so no BigInt is
+     *  as long as its text; any other value steps from its text, its typed places kept (`1.50` → `2.50`). */
+    function stepBase(candidate: string): string {
+        const normalized = normalizeDecimalInput(candidate);
+        const counts = decimalDigitCounts(normalized);
+        if (!counts) return candidate;
+        const unsigned = normalized.startsWith('-') ? normalized.slice(1) : normalized;
+        const dot = unsigned.indexOf('.');
+        const integerText = dot < 0 ? unsigned.length : dot;
+        const fractionText = dot < 0 ? 0 : unsigned.length - dot - 1;
+        return integerText > maxIntegerDigits || fractionText > maxFractionDigits ? counts.stripped : candidate;
+    }
+
     function stepValue(event: KeyboardEvent): void {
         if (readOnly || disabled) {
             restoreDomValue();
@@ -312,8 +328,9 @@
         }
         // W-B66: neither a value past the digit budget (its BigInt would be as long as the paste) nor a text kept for its
         // exponent, which an arrow would replace with a number, is stepped.
-        if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && (!parsedValue.digitsValid || exponentRefused)) return;
-        const next = acceleratedArrowStep(event, value);
+        const arrow = event.key === 'ArrowUp' || event.key === 'ArrowDown';
+        if (arrow && (!parsedValue.digitsValid || exponentRefused)) return;
+        const next = acceleratedArrowStep(event, arrow ? stepBase(value) : value);
         if (next === null) {
             if (event.key === 'Enter') commit();
             return;
