@@ -6878,7 +6878,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     di qualità dei dati. Parere: (c) nella 1.3 se serve, (b) dopo.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «GBp — i dividendi Yahoo e
   `quote_base_quantity`: verifica».
-- **Z-33 · I prezzi Yahoo delle borse a est di UTC salvati un giorno prima** — **alto**, dati; Z, 17/10 (trovato da
+- ✅ **Z-33 · I prezzi Yahoo delle borse a est di UTC salvati un giorno prima** — **alto**, dati; Z, 17/10 (trovato da
   test-author scrivendo la guardia di Z-32, confermato da Z e dal coordinatore). Proprietario Z; X rivede il plugin.
   Nella 1.3, subito dopo il checkpoint di Z-32 (c).
   - yfinance 1.7.0 (`scrapers/history.py:494–501`) data le barre giornaliere, i dividendi e gli split a mezzanotte
@@ -6887,7 +6887,29 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   - Il prezzo salvato al giorno D è la chiusura vera di D+1; righe di domenica; dividendi e split un giorno prima.
   - La correzione del codice è semplice (la data locale); la riparazione dei dati già salvati è da decidere
     (sviluppatore): righe in più nei giorni senza borsa, eventi forse doppi a una risincronizzazione.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33».
+  - **Decisione N86** (coordinatore, 17/10), nella forma D″: il controllo una volta, in linea, nel refresh, insieme
+    alla correzione; la storia intera di Yahoo solo come calendario (i valori non cambiano mai); migrazione 011
+    (`exchange_timezone`, col segno `'legacy-utc'` sulle assegnazioni yfinance esistenti); anche la data del valore
+    corrente. **Chiusa il 17/10 col lotto Z-33** (il commit è del coordinatore; revisori X, H, MF, W).
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-33 — … analisi» e
+  «Z-33 — … lavoro».
+- **Z-35 · Le chiusure Yahoo salvate con la rettifica del giorno in cui sono state lette** — medio, dati, **dopo la
+  1.3**, decisione dello sviluppatore; proprietari X e MF; Z, 17/10 (trovato nell'analisi di Z-33, archiviato dal
+  coordinatore).
+  - Il plugin chiama `ticker.history(...)` senza `auto_adjust`; yfinance 1.7.0 rettifica di default
+    (`auto_adjust=True`): OHLC salvati rettificati per dividendi e split al momento della lettura. Lo scheduler
+    rilegge solo 14 giorni: le righe vecchie restano con rettifiche vecchie, le nuove con quella di oggi (una toppa).
+  - Le metriche di rendimento possono contare due volte i dividendi: già nei prezzi rettificati e negli eventi.
+  - Da decidere: `auto_adjust=False` (prezzi di borsa veri, split a parte) e la riscrittura della storia.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
+- **Z-34 · Il rapporto (C) delle righe Yahoo rimaste spostate** — basso, dati, **dopo la 1.3**; Z, 17/10 (decisione
+  N86, D4).
+  - La ridatazione di Z-33 avviene al primo giro di ogni assegnazione yfinance segnata dalla migrazione 011. Restano
+    spostate le righe degli asset la cui assegnazione yfinance è stata tolta prima dell'aggiornamento, o prima del
+    suo primo giro dopo; e quelle di un cambio di identificativo fra fusi di segno diverso prima di quel giro.
+  - Proposta: un comando che le elenca (asset, righe `yfinance` senza assegnazione o col segno ancora presente,
+    domeniche senza sabati come indizio) e, con la rete, le ridata con la stessa regola.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33 — … lavoro».
 
 ## B · Backup e Docker (fase 01)
 
