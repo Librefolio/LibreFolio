@@ -74,6 +74,19 @@ Lot A7b (plan phase01Accounts, «A7b — Analisi e contratto», contract C5, its
     link. Its link live or expired, alike. Every other inactive account is activated as before, and a ``PATCH`` that
     leaves the pending administrator waiting still answers 200.
 
+Lot A7b-2 (plan phase01Accounts, «A7b-2 — Analisi e contratto», C1 and C2: A-32; decision N60) adds:
+
+15. An account set up another way than its setup link waits for it no more. At every activation (``PATCH``, through
+    ``user_service.update_user_status``; ``./dev.py user activate``) and at every password set (``./dev.py user
+    reset``; a reset link — which ``POST /users/{user_id}/password-reset-link`` issues for the pending administrator
+    too —; ``POST /auth/change-password``) its unconsumed ``admin_setup`` links are retired, revoked and consumed in the
+    same transaction (``token_service.retire_tokens``); and so are they when ``POST /auth/setup`` refuses the link of
+    an account already active (night decision 6, completed). Its old link then inspects ``revoked``, ``POST
+    /auth/setup`` with it is 400 ``TOKEN_INVALID`` and changes nothing, and the account, inactive again, is listed
+    ``pending_setup: false`` and reactivated by ``PATCH {is_active: true}`` (200, not point 14's 409). What leaves it
+    waiting — nothing done, a reset link issued and not spent, a demotion, ``{is_active: false}`` — keeps both its link
+    and point 14's refusal.
+
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` gives ``ACCOUNT_DISABLED`` and
 ``test_registration_api.py`` reads; the administrator's ``USER_LIMIT_REACHED`` carries ``limit``, ``used`` and
 ``billing_url`` in the same ``detail``.
@@ -114,7 +127,9 @@ the bootstrap itself makes it — ``run_admin_bootstrap`` on the instance still 
 service with a token the test holds, so that ``POST /auth/setup`` can spend it; run the link's lifetime and a minute
 ago when the case wants that link expired —, and every other state of a setup link is a row and tokens of the token
 service, an expired link issued the same way, never waited for. Its cleanup is the private file's. On the lane, the
-field is read by UADM-003, UADM-007 and UADM-008: false on every account they own.
+field is read by UADM-003, UADM-007 and UADM-008: false on every account they own. A7b-2's cases run there too, for the
+same reason; ``./dev.py user activate`` and ``./dev.py user reset`` are the calls the commands make
+(``user_service.set_user_active``, ``user_service.reset_password``), on the private file.
 
 The unit is therefore write-scoped (the ``api`` category's default), with no ``exclusive_because``. bcrypt runs at its
 lowest cost in this process (``auth_service.BCRYPT_ROUNDS = 4``, as in ``test_registration_api.py``); the lane's server
@@ -125,6 +140,10 @@ UADM-050 to UADM-054, and the ``protected`` field UADM-003, UADM-007, UADM-008 a
 Red until A7b: UADM-060 to UADM-065, on the missing ``pending_setup`` and the missing refusal; and UADM-003, UADM-007,
 UADM-008 and UADM-028 again, whose accounts must now be exactly nine fields. UADM-066 and UADM-067 are the guards of
 UADM-065, green today: what the refusal must not reach.
+
+Red until A7b-2: UADM-068, UADM-070 and UADM-071 — nothing retires a setup link today: the old link takes the account
+over (``POST /auth/setup`` answers 200), and an account set up another way waits again once deactivated
+(``pending_setup`` true, the reactivation 409) —. UADM-069 is their guard, green today: what must retire nothing.
 """
 
 import ast
@@ -2505,3 +2524,221 @@ class TestThePendingAdministratorInTheUsersTab:
         _expect(violations, user_id in await _pending_admin_ids(private), "the account must still wait for its setup: pending_admin_filter() no longer selects it")
         assert not violations, f"A PATCH that leaves the pending administrator waiting must still go through:{_verdict(violations)}"
         print_success("200, still waiting")
+
+
+# ============================================================================
+# IN-PROCESS: THE SETUP LINK OF AN ACCOUNT SET UP ANOTHER WAY (lot A7b-2, A-32)
+# ============================================================================
+
+
+#: The password ``./dev.py user reset`` gives the pending administrator (UADM-068); it meets the rules.
+COMMAND_PASSWORD = "Reset-By-Command-2026"
+#: What POST /auth/tokens/inspect shows of a retired setup link (``_inspected``): revoked, its purpose, nothing more.
+RETIRED = (200, {"status": "revoked", "purpose": "admin_setup"})
+#: How the pending administrator is set up without its link (A-32), ending inactive as it began (``_set_up_another_way``).
+SET_UP_ANOTHER_WAY = ["a-reset-link-from-the-users-tab", "user-reset", "user-activate-then-deactivated-by-root"]
+#: What root does that leaves the pending administrator waiting (UADM-069): the method, the path after /users/{id}, the body, the status it answers.
+WAITING_ACTIONS: dict[str, tuple[str, str, Optional[dict[str, bool]], int]] = {
+    "a-reset-link-issued-not-spent": ("POST", "/password-reset-link", None, 201),
+    "demoted-by-root": ("PATCH", "", {"is_superuser": False}, 200),
+    "deactivated-by-root-while-already-inactive": ("PATCH", "", {"is_active": False}, 200),
+}
+#: UADM-069's cases — WAITING_ACTIONS, and nothing done —, with whether the account is an administrator afterwards.
+LEAVE_IT_WAITING = [
+    pytest.param("nothing-done", True, id="nothing-done"),
+    pytest.param("a-reset-link-issued-not-spent", True, id="a-reset-link-issued-not-spent"),
+    pytest.param("demoted-by-root", False, id="demoted-by-root"),
+    pytest.param("deactivated-by-root-while-already-inactive", True, id="deactivated-by-root-while-already-inactive"),
+]
+
+
+async def _cli_set_active(private: _Private, username: str, active: bool) -> None:
+    """``./dev.py user activate`` or ``deactivate``: the call the command makes, ``user_service.set_user_active``. It ends on its promise: done, the account active or not as asked."""
+    async with AsyncSession(private.engine) as session:
+        done = await user_service.set_user_active(session, username, active)
+        is_active = (await session.execute(select(User.is_active).where(User.username == username))).scalar_one()
+    assert (done, bool(is_active)) == ((True, None), active), f"Setup: user_service.set_user_active({username!r}, {active}) must succeed and leave the account so: answered {done}, is_active {is_active}"
+
+
+async def _cli_reset_password(private: _Private, username: str, password: str) -> None:
+    """``./dev.py user reset``: the call the command makes, ``user_service.reset_password``. It ends on its promise: done, ``password`` the account's."""
+    async with AsyncSession(private.engine) as session:
+        done = await user_service.reset_password(session, username, password)
+        hashed = (await session.execute(select(User.hashed_password).where(User.username == username))).scalar_one()
+    assert done == (True, None) and auth_service.verify_password(password, hashed), f"Setup: user_service.reset_password({username!r}) must succeed and set the password: answered {done}"
+
+
+async def _inspect_setup_link(private: _Private, token: str) -> httpx.Response:
+    """POST /auth/tokens/inspect with ``purpose: admin_setup``, from a client without a session: whoever holds the link."""
+    return await _call(private, "POST", "/auth/tokens/inspect", json={"token": token, "purpose": "admin_setup"})
+
+
+def _inspected(response: httpx.Response) -> tuple[int, dict[str, Any]]:
+    """What an inspection shows: its status code, and the fields of its answer that carry a value (the body whole, under ``body``, when it is not an object)."""
+    status, body = _answer(response)
+    shown = {key: value for key, value in body.items() if value is not None} if isinstance(body, dict) else {"body": body}
+    return status, shown
+
+
+async def _setup_with(private: _Private, token: str) -> httpx.Response:
+    """POST /auth/setup with ``token`` and SETUP_PASSWORD, from a client without a session: whoever holds the link."""
+    return await _call(private, "POST", "/auth/setup", json={"token": token, "new_password": SETUP_PASSWORD})
+
+
+async def _set_up_another_way(private: _Private, cookie: str, pending: _PendingAdmin, way: str) -> Optional[str]:
+    """The pending administrator set up another way than its link, as ``way`` says, root acting with ``cookie``: the password that way set, None when it sets none. It ends on its promise: the account inactive, as it began.
+
+    ``a-reset-link-from-the-users-tab``: root's ``POST /users/{id}/password-reset-link``, spent through ``POST
+    /auth/password-reset``. ``user-reset``: ``./dev.py user reset``. ``user-activate-then-deactivated-by-root``:
+    ``./dev.py user activate``, then root's ``PATCH {is_active: false}``.
+    """
+    assert way in SET_UP_ANOTHER_WAY, f"no such way: {way!r}"
+    user_id = pending.account.user_id
+    password: Optional[str] = None
+    if way == "a-reset-link-from-the-users-tab":
+        created = await _call(private, "POST", f"/users/{user_id}/password-reset-link", cookie=cookie)
+        assert created.status_code == 201, f"Setup: root's POST /users/{{the pending administrator}}/password-reset-link: {created.status_code} {created.text}"
+        spent = await _call(private, "POST", "/auth/password-reset", json={"token": created.json()["token"], "new_password": NEW_PASSWORD})
+        assert spent.status_code == 200, f"Setup: POST /auth/password-reset with that link: {spent.status_code} {spent.text}"
+        password = NEW_PASSWORD
+    elif way == "user-reset":
+        await _cli_reset_password(private, F02_USERNAME, COMMAND_PASSWORD)
+        password = COMMAND_PASSWORD
+    else:
+        await _cli_set_active(private, F02_USERNAME, True)
+        off = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json={"is_active": False})
+        assert off.status_code == 200, f"Setup: root's PATCH {{is_active: false}} after ./dev.py user activate: {off.status_code} {off.text}"
+    assert not (await _private_user(private, user_id))[0], f"Setup: set up another way ({way}), the account must end inactive, as it began"
+    return password
+
+
+async def _leave_it_waiting(private: _Private, cookie: str, user_id: int, action: str) -> None:
+    """Root's ``action`` on the pending administrator (WAITING_ACTIONS; ``nothing-done``: none). It ends on its promise: the status the request answers, the account still inactive."""
+    if action != "nothing-done":
+        method, suffix, body, expected = WAITING_ACTIONS[action]
+        response = await _call(private, method, f"/users/{user_id}{suffix}", cookie=cookie, json=body)
+        assert response.status_code == expected, f"Setup: {action}: expected {expected}, got {response.status_code} {response.text}"
+    assert not (await _private_user(private, user_id))[0], f"Setup: after {action} the pending administrator must still be inactive"
+
+
+class TestTheSetupLinkOfAnAccountSetUpAnotherWay:
+    """Lot A7b-2 (A-32, decision N60): set up another way than its link — activated, or given a password —, an account waits for its setup no more, and its old link sets nothing, the account deactivated again too. In-process only, as A7b's: a pending administrator never enters the lane's database."""
+
+    # red until A7b-2
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("way", SET_UP_ANOTHER_WAY)
+    async def test_an_account_set_up_another_way_waits_no_more_and_its_old_link_sets_nothing(self, private: _Private, way: str) -> None:
+        """UADM-068 (A-32): the bootstrap's pending administrator set up another way than its link, inactive at the end as it began — root's reset link (POST /users/{id}/password-reset-link) spent through POST /auth/password-reset, ``./dev.py user reset``, or ``./dev.py user activate`` then root's PATCH {is_active: false} —: its setup link is retired (decision N60). Inspected → revoked, nothing more; GET /users lists it inactive, pending_setup false, exactly its nine fields; PATCH {is_active: true} → 200, the account active in the answer (pending_setup false) and in the database — not point 14's 409 —, and the password the other way set signs it in. Deactivated again by root, the old link with a password that meets the rules → 400 TOKEN_INVALID, every row of users and account_tokens as it was, and the list still says pending_setup false: whoever holds the link — it was in the log too — no longer takes the account over."""
+        print_section(f"UADM-068: the pending administrator set up another way ({way})")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+        password = await _set_up_another_way(private, cookie, pending, way)
+
+        inspected = await _inspect_setup_link(private, pending.token)
+        listed = (await _private_listed(private, cookie)).get(user_id)
+        on = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json={"is_active": True})
+        active = (await _private_user(private, user_id))[0]
+        signed_in = None if password is None else await _call(private, "POST", "/auth/login", json={"username": F02_USERNAME, "password": password})
+        off = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json={"is_active": False})
+        assert off.status_code == 200, f"Setup: root deactivates the account again: {off.status_code} {off.text}"
+        before = await _private_snapshot(private)
+        setup = await _setup_with(private, pending.token)
+        changes = _snapshot_changes(before, await _private_snapshot(private))
+        relisted = (await _private_listed(private, cookie)).get(user_id)
+
+        violations: list[str] = []
+        _expect(violations, _refusal(setup) == (400, "TOKEN_INVALID"), f"POST /auth/setup with the old link, the account inactive again: expected 400 TOKEN_INVALID, got {setup.status_code} {setup.text} — its holder takes the account over")
+        _expect(violations, changes == {}, f"the refused setup must change nothing — rows that changed: {changes}")
+        _expect(violations, _inspected(inspected) == RETIRED, f"the old link must be retired: inspected, {RETIRED}; got {_inspected(inspected)}")
+        violations += [f"listed once set up another way: {violation}" for violation in _user_item_violations(listed, pending.account, active=False, superuser=True)]
+        _expect(violations, (on.status_code, active) == (200, True), f"PATCH {{is_active: true}} must reactivate it, not refuse it: {on.status_code} {on.text}; active in the database: {active}")
+        if on.status_code == 200:
+            violations += [f"the PATCH's answer: {violation}" for violation in _user_item_violations(on.json(), pending.account, active=True, superuser=True)]
+        if signed_in is not None:
+            _expect(violations, signed_in.status_code == 200, f"reactivated, the account must sign in with the password set another way ({way}): {signed_in.status_code} {signed_in.text}")
+        violations += [f"listed after root deactivated it again: {violation}" for violation in _user_item_violations(relisted, pending.account, active=False, superuser=True)]
+        assert not violations, f"An account set up another way must wait no more, and its old link must set nothing:{_verdict(violations)}"
+        print_success("retired: pending no more, reactivated by the PATCH, the old link refused")
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("action", "superuser_after"), LEAVE_IT_WAITING)
+    async def test_what_leaves_the_pending_administrator_waiting_keeps_the_refusal_and_the_link(self, private: _Private, action: str, superuser_after: bool) -> None:
+        """UADM-069, guard of UADM-068 (green today): what leaves the pending administrator waiting — nothing done, root's reset link issued and not spent, root's demotion, root's {is_active: false} on the account already inactive — retires nothing: GET /users lists it inactive, pending_setup true; PATCH {is_active: true} → 409 PENDING_SETUP (UADM-065); its link inspects valid, for its username, and POST /auth/setup with it → 200, the account active, an administrator or not as the action left it. Complements UADM-062 and UADM-067: the retirement is an activation's and a new password's only."""
+        print_section(f"UADM-069: {action}, and the pending administrator still waits")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+        await _leave_it_waiting(private, cookie, user_id, action)
+
+        listed = (await _private_listed(private, cookie)).get(user_id)
+        refused = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json={"is_active": True})
+        status, shown = _inspected(await _inspect_setup_link(private, pending.token))
+        setup = await _setup_with(private, pending.token)
+        state = (await _private_user(private, user_id))[:2]
+
+        violations = _user_item_violations(listed, pending.account, active=False, superuser=superuser_after, pending_setup=True)
+        _expect(violations, _refusal(refused) == (409, "PENDING_SETUP"), f"PATCH {{is_active: true}} on the account still waiting: expected 409 PENDING_SETUP, got {refused.status_code} {refused.text}")
+        _expect(violations, (status, shown.get("status"), shown.get("username")) == (200, "valid", F02_USERNAME), f"its link must still be valid, for {F02_USERNAME}: {status} {shown}")
+        _expect(violations, setup.status_code == 200, f"its link must still set the account up: POST /auth/setup answered {setup.status_code} {setup.text}")
+        _expect(violations, state == (True, superuser_after), f"set up, the account is active, an administrator or not as {action} left it: (is_active, is_superuser) {state}")
+        assert not violations, f"What leaves the pending administrator waiting must keep both the refusal and its link:{_verdict(violations)}"
+        print_success("still waiting: pending_setup true, 409 PENDING_SETUP, the link valid and working")
+
+    # red until A7b-2
+    @pytest.mark.asyncio
+    async def test_an_activation_by_the_patch_retires_the_setup_links_too(self, private: _Private) -> None:
+        """UADM-070 (A-32, defense in depth): an inactive administrator whose setup link was spent holds another one, live (rows of the token service): it does not wait for its setup (UADM-061), so PATCH {is_active: true} activates it (200, UADM-066). That activation retires the live link: inspected, revoked and nothing more; deactivated again by root, POST /auth/setup with it → 400 TOKEN_INVALID, every row of users and account_tokens as it was, the account listed inactive, pending_setup false. ``update_user_status`` retires at every activation, whatever the route checked before it."""
+        print_section("UADM-070: the PATCH's activation retires the account's setup links")
+        _, cookie = await _admin(private)
+        veteran = await _add_user(private, "veteran", admin=True, active=False)
+        await _private_link(private, veteran.user_id, ADMIN_SETUP, "consumed")
+        live = await _private_issue(private, ADMIN_SETUP, user_id=veteran.user_id)
+        assert veteran.user_id not in await _pending_admin_ids(private), "premise: an account whose setup link was spent does not wait for its setup, a live link besides (UADM-061)"
+        on = await _call(private, "PATCH", f"/users/{veteran.user_id}", cookie=cookie, json={"is_active": True})
+        assert on.status_code == 200, f"Setup: PATCH {{is_active: true}} on an inactive account that does not wait for its setup (UADM-066): {on.status_code} {on.text}"
+
+        inspected = await _inspect_setup_link(private, live.token)
+        off = await _call(private, "PATCH", f"/users/{veteran.user_id}", cookie=cookie, json={"is_active": False})
+        assert off.status_code == 200, f"Setup: root deactivates it again: {off.status_code} {off.text}"
+        before = await _private_snapshot(private)
+        setup = await _setup_with(private, live.token)
+        changes = _snapshot_changes(before, await _private_snapshot(private))
+        listed = (await _private_listed(private, cookie)).get(veteran.user_id)
+
+        violations: list[str] = []
+        _expect(violations, _refusal(setup) == (400, "TOKEN_INVALID"), f"POST /auth/setup with the link the activation left live, the account inactive again: expected 400 TOKEN_INVALID, got {setup.status_code} {setup.text} — its holder takes the account over")
+        _expect(violations, changes == {}, f"the refused setup must change nothing — rows that changed: {changes}")
+        _expect(violations, _inspected(inspected) == RETIRED, f"the PATCH's activation must retire the account's live setup link: inspected, {RETIRED}; got {_inspected(inspected)}")
+        violations += _user_item_violations(listed, veteran, active=False, superuser=True)
+        assert not violations, f"An activation by the PATCH must retire the account's setup links:{_verdict(violations)}"
+        print_success("the live link retired by the activation, refused afterwards")
+
+    # red until A7b-2
+    @pytest.mark.asyncio
+    async def test_the_refused_link_of_an_active_account_retires_its_setup_links(self, private: _Private) -> None:
+        """UADM-071 (A-32; night decision 6, completed by the coordinator): an active administrator (a row) holds two live setup links (the token service). POST /auth/setup with one of them → 400 TOKEN_INVALID, as today (SETUP-009, kept as it is) — and the refusal retires every setup link of the account, revoked and consumed, not only the one presented: both inspect revoked. Root deactivates it (200): GET /users lists it inactive, pending_setup false — it waits for no setup, it had one already —, and PATCH {is_active: true} → 200, active again, not 409 PENDING_SETUP; the refused setup changed no password, its own signs it in."""
+        print_section("UADM-071: the link of an account already active, refused, retires every setup link of it")
+        _, cookie = await _admin(private)
+        veteran = await _add_user(private, "veteran", admin=True)
+        presented = await _private_issue(private, ADMIN_SETUP, user_id=veteran.user_id)
+        other = await _private_issue(private, ADMIN_SETUP, user_id=veteran.user_id)
+
+        setup = await _setup_with(private, presented.token)
+        inspected = {"the link presented": _inspected(await _inspect_setup_link(private, presented.token)), "its other link": _inspected(await _inspect_setup_link(private, other.token))}
+        off = await _call(private, "PATCH", f"/users/{veteran.user_id}", cookie=cookie, json={"is_active": False})
+        assert off.status_code == 200, f"Setup: root deactivates the account: {off.status_code} {off.text}"
+        listed = (await _private_listed(private, cookie)).get(veteran.user_id)
+        on = await _call(private, "PATCH", f"/users/{veteran.user_id}", cookie=cookie, json={"is_active": True})
+        state = (await _private_user(private, veteran.user_id))[:2]
+        signed_in = await _call(private, "POST", "/auth/login", json={"username": veteran.username, "password": veteran.password})
+
+        violations: list[str] = []
+        _expect(violations, _refusal(setup) == (400, "TOKEN_INVALID"), f"POST /auth/setup with the link of an account already active: expected 400 TOKEN_INVALID, as today (SETUP-009), got {setup.status_code} {setup.text}")
+        _expect(violations, inspected == dict.fromkeys(inspected, RETIRED), f"every setup link of the account must be retired, not only the one presented: inspected {inspected}")
+        violations += _user_item_violations(listed, veteran, active=False, superuser=True)
+        _expect(violations, (on.status_code, state) == (200, (True, True)), f"PATCH {{is_active: true}} must reactivate it, not refuse it: {on.status_code} {on.text}; (is_active, is_superuser) {state}")
+        _expect(violations, signed_in.status_code == 200, f"the refused setup changed no password: reactivated, the account signs in with its own: {signed_in.status_code} {signed_in.text}")
+        assert not violations, f"The refused link of an account already active must retire its setup links, so that a deactivation leaves it waiting for nothing:{_verdict(violations)}"
+        print_success("both links retired; deactivated, pending no more; reactivated by the PATCH")

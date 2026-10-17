@@ -105,6 +105,7 @@ pipenv run ./dev.py user activate <username>
 - 👑 `deactivate` refuses the last active administrator: it stops with the error `User '<username>' is the last active administrator: promote or activate another administrator first` and exits with `1`.
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `activate` of a deactivated account warns `… the command line reactivates the account anyway`, then reactivates it.
 - 📬 With email verification on, `activate` lets an account that waits for its email in at once — with no limit warning while its link is live, since its place is already counted — and `deactivate` ends its wait: either way, the verification links it was sent stop working. See *Email Verification* in [Email](email.md).
+- 🏁 On the [initial administrator](configuration.md#initial-admin) still waiting for its setup link, `reset` and `activate` work as on any account: they set it up without its link. Either one ends the wait for good: its setup links stop working, the one of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` included, and neither [`user setup-link`](#setup-link) nor a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives it another one. `activate` alone leaves an active account whose password nobody knows, until `reset` or a [reset link](#reset-link) gives it one; `reset` alone leaves it inactive, until `activate`.
 - 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front. When your instance can email a reset link, the screen shows the email form first and keeps the commands in a panel closed by default ([Forgotten Passwords](email.md#forgot-password)).
 
 ### 🔗 Send a Password-Reset Link {: #reset-link }
@@ -128,6 +129,8 @@ pipenv run ./dev.py user setup-link
 When LibreFolio created the administrator from `LIBREFOLIO_ADMIN_EMAIL` at its first start ([The Initial Administrator](configuration.md#initial-admin)) and nobody has used its setup link yet, this command prints a new one: the administrator opens it, chooses the password and is signed in. Use it when the link has expired or got lost.
 
 - ⏱️ The link works once, for 72 hours. The setup links issued before stop working, the one of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` included.
+- 📮 A new address for the waiting administrator — `LIBREFOLIO_ADMIN_EMAIL` changed before a restart, or [`user set-email`](#set-email) — stops its setup links, which went to the old address. The administrator still waits: this command gives it a link for the new address. The same address with other capitals of the letters A to Z is no change, and the link keeps working.
+- 🔚 Set up another way — activated with `user activate`, or given a password with `user reset` or a [reset link](#reset-link) — the administrator waits no more: its setup links stop working for good, and this command stops with the error below.
 - 🌐 As for [invitations](#invite), the link is complete when `LIBREFOLIO_PUBLIC_URL` is set, and the path only (`/setup#token=…`) when it is not.
 - 📧 The command only prints the link: it sends no email.
 - ❌ When no administrator is waiting for its setup, the command stops with the error `No administrator account is waiting for its setup link` and exits with `1`.
@@ -142,6 +145,7 @@ The same change as a new email in the user's [Profile](../user/settings/profile.
 
 - 🔤 An address belongs to one account only, whatever its capitals: `Anna@example.com` and `anna@example.com` are the same address. Only the letters A to Z are matched this way, accented letters are not: `Émile@example.com` and `émile@example.com` are two different addresses.
 - 🚪 A new address signs the account out of every device, cancels any password-reset link still open, and is recorded as not verified; the account can still sign in. The account's own address with other capitals is the same address: only the way it is written changes, nobody is signed out, and it stays verified.
+- 👑 On the initial administrator still waiting for its setup link, a new address also stops that link, which went to the old address: the account still waits, and [`user setup-link`](#setup-link) gives it a new one. While `LIBREFOLIO_ADMIN_EMAIL` is set, each start of the server gives the waiting account that address again: change the variable as well, or the next start brings the old address back and stops the new link too.
 - ❌ An address another account already has, in any capitals, is refused: the command stops with the error `Email already registered` and exits with `1`, changing nothing. So does an address that is not valid (`Not an email address`) or an unknown username (`User '<username>' not found`).
 
 ### 👑 Grant or Remove Administrator Rights

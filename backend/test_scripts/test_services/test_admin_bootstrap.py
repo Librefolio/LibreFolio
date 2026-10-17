@@ -51,6 +51,16 @@ clock and get scenes dated from it. The log is read with ``structlog.testing.cap
 Red until lot A7a: ``bootstrap_admin_service`` and the F02 names of ``config.accounts`` do not exist (each test says so on
 its own: they are imported lazily), ``issue_token`` takes no ``token``, ``user_usage`` does not count the pending
 administrator, ``user_cli`` has no ``setup-link`` and ``STARTUP_STEPS`` no ``admin-bootstrap``.
+
+Lot A7b-2 (N60; A-32 and A-33 of the security review) adds two sections at the end. A32 — the setup ends, whatever the
+way: the waiting administrator activated another way (``set_user_active``, ``update_user_status``) or given a password
+another way (``reset_password``, ``complete_password_reset``) has its setup links retired in the commit of the change
+(``token_service.retire_tokens``: revoked and consumed), so a later deactivation leaves it waiting for nothing; and the
+refused link of an account already active retires every setup link of that account. Those ``user_service`` functions
+read the clock: the A32 scenes are dated from it, as CLI-003's. A33 — a real change of the waiting administrator's
+address in the variables revokes its live setup links (``EXPIRED``, or ``REARMED`` with a token never seen); the same
+address in other capitals, the username alone and an address another account holds revoke nothing. Red until A7b-2:
+each new red says so on its first contract assertion; the new guards are green today and must stay green.
 """
 
 from __future__ import annotations
@@ -87,7 +97,7 @@ from backend.app.config import SecretFileError, accounts
 from backend.app.db import session as db_session
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import AccountToken, AccountTokenPurpose, GlobalSetting, User
-from backend.app.services.accounts import auth_service, registration_service, token_service
+from backend.app.services.accounts import auth_service, registration_service, token_service, user_service
 from backend.app.services.accounts.auth_service import verify_password
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenInspection, TokenStatus, hash_token
@@ -1243,17 +1253,31 @@ RENAME_SITUATIONS = [
 ]
 
 
+# updated in A7b-2 (A-32/A-33)
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("username", "email"), RENAMES)
 @pytest.mark.parametrize(("token", "elapsed", "expected"), RENAME_SITUATIONS)
 async def test_the_pending_administrator_takes_the_configs_username_and_email(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, username: str, email: str, token: Optional[str], elapsed: timedelta, expected: str) -> None:
-    """BOOT-014 — C2: the config's username or email differ from the pending account's: the account — the same one — takes them, together with whatever the restart does: ``PENDING``, ``REARMED`` or ``EXPIRED``. Still inactive, still a superuser."""
+    """BOOT-014 — C2: the config's username or email differ from the pending account's: the account — the same one — takes them, together with whatever the restart does: ``PENDING``, ``REARMED`` or ``EXPIRED``. Still inactive, still a superuser.
+
+    Updated in A7b-2 (A-33, C3): a new address revokes the live link handed over before, so the restart that would find it
+    live — ``PENDING`` — finds none: ``EXPIRED``, and that link ``revoked``, not consumed (``[pending-both]`` and
+    ``[pending-the-email]``, red until A7b-2). A new username alone revokes nothing: ``[pending-the-username]`` stays
+    ``PENDING``.
+    """
     created = await _created(engine, bootstrap, f02)
+    # updated in A7b-2 (A-32/A-33): a new address revokes the live link handed over before, so this restart finds none
+    revoked_by_the_new_address = expected == "pending" and email != ADMIN_EMAIL
+    if revoked_by_the_new_address:
+        expected = "expired"
 
     result = await _run(engine, bootstrap, _config(f02, username=username, email=email, token=token), now=NOW + elapsed)
 
     assert result.action == expected, f"expected {expected}: {result!r}"
     assert await _accounts(engine) == {username: (created.user_id, email, False, True)}, f"the pending administrator must become {username} <{email}>"
+    if revoked_by_the_new_address:  # updated in A7b-2 (A-32/A-33)
+        old = await _inspect(engine, created.link_token, NOW + elapsed)
+        assert (old.status, old.record is not None and old.record.consumed_at is None) == (TokenStatus.REVOKED, True), f"the link handed over to the old address must be revoked by the new one, not consumed (C3): it is {old.status}"
 
 
 @pytest.mark.asyncio
@@ -1849,3 +1873,479 @@ async def test_startup_with_f02_off_writes_nothing(engine: AsyncEngine, bootstra
 
     assert result.action == bootstrap.BootstrapAction.OFF, f"expected OFF: {result!r}"
     assert await _snapshot(engine) == before
+
+
+# =============================================================================
+# A32 — LOT A7b-2: THE SETUP ENDS, WHATEVER THE WAY (N60)
+# =============================================================================
+# A-32: the waiting administrator activated another way — ``set_user_active(..., True)``, the CLI's ``user activate``;
+# ``update_user_status(..., is_active=True)`` — or given a password another way — ``reset_password``, the CLI's ``user
+# reset-password``; a reset link, ``complete_password_reset`` — keeps its setup link today. Deactivated again within the
+# 72 hours, it waits again by ``pending_admin_filter`` (inactive, a setup link, none consumed), and whoever holds the old
+# link, even read in the log, sets their own password and activates it. The contract (D1, approved as N60): in the
+# transaction of the change, ``user_service`` retires the account's setup links — ``token_service.retire_tokens``:
+# revoked and consumed, without a consumer —, so the account waits for nothing any more; and ``complete_admin_setup``,
+# refusing the link of an account already active, retires every setup link of that account instead of revoking the one
+# shown.
+#
+# The waiting administrator is made by the real bootstrap on the empty private instance with TOKEN_ONE in the config:
+# the test holds the link. root, an active administrator written as a row afterwards, lets it be deactivated once
+# active. The ``user_service`` functions read the clock, so these scenes are dated from it, as CLI-003's: created an hour
+# ago, its link live for 71 hours more — or 72 hours and a minute ago, its link expired a minute before, as UADM-065
+# dates it on the API side —; every call that takes a ``now`` gets one, AFTERWARDS later.
+
+#: What the operator gives the waiting administrator another way: the CLI's ``user reset-password``, a reset link.
+OPERATOR_PASSWORD = "Operator-Pass-2026!"
+#: What whoever holds the old setup link tries to set.
+INTRUDER_PASSWORD = "Intruder-Pass-2026!"
+ROOT_USERNAME = "root"
+#: How long after the scene is read the calls that take a ``now`` are dated.
+AFTERWARDS = timedelta(minutes=5)
+#: How old an expired setup link is when the scene is read: issued 72 hours and a minute before, as UADM-065 does.
+EXPIRED_AGE = SETUP_TTL + timedelta(minutes=1)
+#: A setup link's row once retired: (revoked, consumed, consumed_by_user_id).
+RETIRED = (True, True, None)
+#: The waiting administrator's link when the change comes: live, or already expired.
+LINK_STATES = [pytest.param(False, id="its-link-live"), pytest.param(True, id="its-link-expired")]
+
+#: A change made to an account: (the engine, the account's id, the moment its scene is read at).
+Change = Callable[[AsyncEngine, int, datetime], Awaitable[None]]
+
+
+async def _waiting(engine: AsyncEngine, bootstrap: ModuleType, user_id: int) -> tuple[bool, bool, Optional[int]]:
+    """Whether the account waits for its setup, as each reader of ``pending_admin_filter`` says: ``(is_pending_admin, in pending_admin_ids, the id pending_admin answers)``."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user = await session.get(User, user_id)
+        assert user is not None, f"account {user_id} is not in the database"
+        pending = await registration_service.is_pending_admin(session, user)
+        listed = user_id in await registration_service.pending_admin_ids(session)
+        first = await bootstrap.pending_admin(session)
+    return pending, listed, None if first is None else first.id
+
+
+async def _waiting_administrator(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, moment: datetime, *, expired: bool = False) -> int:
+    """The F02 administrator created by the bootstrap with TOKEN_ONE an hour before ``moment`` — EXPIRED_AGE before with ``expired``: 72 hours and a minute —, and root beside it: the id of the waiting account.
+
+    Barrier: the account waits for its setup, and its link is valid at ``moment`` — or expired.
+    """
+    created = await _created(engine, bootstrap, f02, token=TOKEN_ONE, now=moment - (EXPIRED_AGE if expired else HOUR))
+    await _add_user(engine, ROOT_USERNAME, admin=True)
+    expected = TokenStatus.EXPIRED if expired else TokenStatus.VALID
+    assert await _waiting(engine, bootstrap, created.user_id) == (True, True, created.user_id), "barrier: the F02 administrator waits for its setup"
+    assert await _status(engine, TOKEN_ONE, moment) == expected, f"barrier: its setup link must be {expected}"
+    return created.user_id
+
+
+def _link_states(rows: list[AccountToken]) -> list[tuple[bool, bool, Optional[int]]]:
+    """``(revoked, consumed, consumed_by_user_id)`` of each setup link's row: a retired one is ``RETIRED``."""
+    return [(row.revoked_at is not None, row.consumed_at is not None, row.consumed_by_user_id) for row in rows]
+
+
+def _named(change: Callable[..., Any]) -> str:
+    """A change by its function's name, in words: what a section title and a failure message say."""
+    return change.__name__.strip("_").replace("_", " ")
+
+
+async def _assert_waits_for_nothing(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, user_id: int, moment: datetime, after: str) -> None:
+    """C2, effect 3, ``after`` a change: the account waits for its setup no more — not ``is_pending_admin``, not in ``pending_admin_ids``, ``pending_admin`` ``None`` —; ``issue_setup_link`` is ``None``; a restart with the same config, or with a token never seen that would re-arm it, is ``IGNORED`` — the instance has accounts. None of them writes anything, even when the caller commits."""
+    waiting = await _waiting(engine, bootstrap, user_id)
+    assert waiting == (False, False, None), f"red until A7b-2: after {after} the account must wait for its setup no more: (is_pending_admin, in pending_admin_ids, pending_admin) {waiting}"
+    before = await _snapshot(engine)
+    issued = await _issue_setup_link(engine, bootstrap, now=moment)
+    same = await _run(engine, bootstrap, _config(f02, token=TOKEN_ONE), now=moment, then_commit=True)
+    rotated = await _run(engine, bootstrap, _config(f02, token=TOKEN_TWO), now=moment, then_commit=True)
+    assert issued is None, f"after {after}, ./dev.py user setup-link must find nobody to give a link to: {issued!r}"
+    assert (same.action, rotated.action) == (bootstrap.BootstrapAction.IGNORED, bootstrap.BootstrapAction.IGNORED), f"after {after}, a restart must ignore the variables, with the same token or a new one: {same!r}, {rotated!r}"
+    assert await _snapshot(engine) == before, f"after {after}, issue_setup_link and the restarts must write nothing"
+
+
+async def _activate_by_set_user_active(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """The CLI's ``user activate``: ``set_user_active(session, username, True)``."""
+    username = (await _account(engine, user_id)).username
+    async with AsyncSession(engine) as session:
+        outcome = await user_service.set_user_active(session, username, True)
+    assert outcome == (True, None), f"barrier: user activate must succeed: {outcome}"
+
+
+async def _activate_by_update_user_status(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """The service of the Users tab's PATCH: ``update_user_status(session, user, is_active=True)``."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user = await session.get(User, user_id)
+        refusal = await user_service.update_user_status(session, user, is_active=True)
+    assert refusal is None, f"barrier: the activation must succeed: {refusal}"
+
+
+async def _deactivate_by_set_user_active(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """The CLI's ``user deactivate``: ``set_user_active(session, username, False)``."""
+    username = (await _account(engine, user_id)).username
+    async with AsyncSession(engine) as session:
+        outcome = await user_service.set_user_active(session, username, False)
+    assert outcome == (True, None), f"barrier: user deactivate must succeed: {outcome}"
+
+
+async def _deactivate_by_update_user_status(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """The service of the Users tab's PATCH: ``update_user_status(session, user, is_active=False)``."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user = await session.get(User, user_id)
+        refusal = await user_service.update_user_status(session, user, is_active=False)
+    assert refusal is None, f"barrier: the deactivation must succeed: {refusal}"
+
+
+async def _password_by_user_reset_password(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """The CLI's ``user reset-password``: ``reset_password(session, username, OPERATOR_PASSWORD)``."""
+    username = (await _account(engine, user_id)).username
+    async with AsyncSession(engine) as session:
+        outcome = await user_service.reset_password(session, username, OPERATOR_PASSWORD)
+    assert outcome == (True, None), f"barrier: user reset-password must succeed: {outcome}"
+
+
+async def _password_by_a_reset_link(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """A reset link issued for the account (``create_password_reset``, as an administrator issues one), then spent with OPERATOR_PASSWORD (``complete_password_reset``)."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user = await session.get(User, user_id)
+        issued = await user_service.create_password_reset(session, user, now=moment)
+        await session.commit()
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        spent = await user_service.complete_password_reset(session, issued.token, OPERATOR_PASSWORD, now=moment + timedelta(minutes=1))
+    assert spent is not None and spent.id == user_id, f"barrier: the reset link must set the password: {spent!r}"
+
+
+async def _nothing_done(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """Nothing: the waiting administrator as the bootstrap left it."""
+
+
+async def _demote_by_update_user_status(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """The service of the Users tab's PATCH: ``update_user_status(session, user, is_superuser=False)``."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user = await session.get(User, user_id)
+        refusal = await user_service.update_user_status(session, user, is_superuser=False)
+    assert refusal is None, f"setup: the demotion must succeed: {refusal}"
+
+
+async def _demote_by_set_user_admin(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """The CLI's ``user demote``: ``set_user_admin(session, username, False)``."""
+    username = (await _account(engine, user_id)).username
+    async with AsyncSession(engine) as session:
+        outcome = await user_service.set_user_admin(session, username, False)
+    assert outcome == (True, None), f"setup: user demote must succeed: {outcome}"
+
+
+async def _a_reset_link_never_spent(engine: AsyncEngine, user_id: int, moment: datetime) -> None:
+    """A reset link issued for the account (``create_password_reset``) and never spent: no password is set."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user = await session.get(User, user_id)
+        await user_service.create_password_reset(session, user, now=moment)
+        await session.commit()
+
+
+#: The ways an account becomes active other than its setup link (C2).
+ACTIVATIONS_ANOTHER_WAY = [
+    pytest.param(_activate_by_set_user_active, id="activated-by-user-activate"),
+    pytest.param(_activate_by_update_user_status, id="activated-by-update-user-status"),
+]
+#: The ways an account is deactivated.
+DEACTIVATIONS = [
+    pytest.param(_deactivate_by_set_user_active, id="deactivated-by-user-deactivate"),
+    pytest.param(_deactivate_by_update_user_status, id="deactivated-by-update-user-status"),
+]
+#: The ways an account is given a password other than its setup link (C2).
+PASSWORDS_ANOTHER_WAY = [
+    pytest.param(_password_by_user_reset_password, id="password-by-user-reset-password"),
+    pytest.param(_password_by_a_reset_link, id="password-by-a-reset-link"),
+]
+#: What neither activates the waiting administrator nor gives it a password (C2's guards): nothing; a demotion, by the
+#: service of the Users tab or by the CLI; a deactivation of the account already inactive, by either; a reset link never spent.
+NO_END_OF_THE_SETUP = [
+    pytest.param(_nothing_done, id="nothing-done"),
+    pytest.param(_demote_by_update_user_status, id="demoted-by-update-user-status"),
+    pytest.param(_demote_by_set_user_admin, id="demoted-by-user-demote"),
+    pytest.param(_deactivate_by_update_user_status, id="deactivated-while-inactive-by-update-user-status"),
+    pytest.param(_deactivate_by_set_user_active, id="deactivated-while-inactive-by-user-deactivate"),
+    pytest.param(_a_reset_link_never_spent, id="a-reset-link-never-spent"),
+]
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+@pytest.mark.parametrize("activate", ACTIVATIONS_ANOTHER_WAY)
+async def test_activating_the_waiting_administrator_another_way_retires_its_setup_link(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, activate: Change) -> None:
+    """A32-001 — NEW, red until A7b-2 (the link stays valid): the waiting administrator activated another way — ``set_user_active(..., True)``, the CLI's ``user activate``, or ``update_user_status(..., is_active=True)`` — has its setup link retired in the commit of the activation: revoked and consumed, without a consumer; ``inspect_token`` says ``revoked``. Offered afterwards, the link sets nothing: ``complete_admin_setup`` is ``None`` and nothing changes — the password hash, ``is_active`` and the session version as the activation left them, every token as it was.
+
+    The link is inspected before it is offered: today ``complete_admin_setup`` refuses the link of an active account
+    anyway, and revokes it, which would make «revoked» green for the wrong reason.
+    """
+    print_section(f"A32-001: {_named(activate)}")
+    moment = utcnow()
+    user_id = await _waiting_administrator(engine, bootstrap, f02, moment)
+    hashed = (await _account(engine, user_id)).hashed_password
+
+    await activate(engine, user_id, moment)
+
+    later = moment + AFTERWARDS
+    activated = await _account(engine, user_id)
+    status = await _status(engine, TOKEN_ONE, later)
+    assert (activated.is_active, activated.hashed_password) == (True, hashed), "barrier: the account is active, its password untouched"
+    assert status == TokenStatus.REVOKED, f"red until A7b-2: activating the waiting administrator another way must retire its setup link: it is still {status}"
+    assert _link_states(await _setup_rows(engine, user_id)) == [RETIRED], "its setup link must be retired: revoked and consumed, without a consumer"
+    before = await _snapshot(engine)
+    assert await _complete(engine, bootstrap, TOKEN_ONE, now=later, password=INTRUDER_PASSWORD, then_commit=True) is None, "the old link must set nothing"
+    assert await _snapshot(engine) == before, "the old link must change nothing: the password hash, is_active, the session version, every token"
+    print_success("active; its setup link retired, and opening nothing")
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+@pytest.mark.parametrize("expired", LINK_STATES)
+@pytest.mark.parametrize("deactivate", DEACTIVATIONS)
+@pytest.mark.parametrize("activate", ACTIVATIONS_ANOTHER_WAY)
+async def test_deactivated_after_another_activation_the_administrator_waits_for_nothing(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, activate: Change, deactivate: Change, expired: bool) -> None:
+    """A32-002 — NEW, red until A7b-2 — A-32 itself (today, deactivated again, the account waits again, and its live link sets the password of whoever holds it and activates it): the waiting administrator activated another way, then deactivated within its link's 72 hours — ``set_user_active(..., False)`` or ``update_user_status(..., is_active=False)``. Its old link, even read in the log, opens nothing: ``complete_admin_setup`` with an intruder's password is ``None`` and nothing changes — the account inactive, its password hash and session version as the deactivation left them, every token as it was. And the account waits for nothing (C2, effect 3). Its link live, or already expired when the account was activated: an expired link is retired too, or the deactivated account would wait again, for a new link of ``./dev.py user setup-link`` or a re-arming token."""
+    print_section(f"A32-002: {_named(activate)}, then {_named(deactivate)}, its link {'expired' if expired else 'live'}")
+    moment = utcnow()
+    user_id = await _waiting_administrator(engine, bootstrap, f02, moment, expired=expired)
+    await activate(engine, user_id, moment)
+    await deactivate(engine, user_id, moment)
+    later = moment + AFTERWARDS
+    assert (await _account(engine, user_id)).is_active is False, "barrier: the account is inactive again"
+    before = await _snapshot(engine)
+
+    taken = await _complete(engine, bootstrap, TOKEN_ONE, now=later, password=INTRUDER_PASSWORD, then_commit=True)
+
+    assert taken is None, f"red until A7b-2 (A-32): activated another way then deactivated, the administrator's old setup link must open nothing: it set the intruder's password and activated account {taken.id if taken else None}"
+    assert await _snapshot(engine) == before, "the old link must change nothing: the account inactive, its password hash and session version as the deactivation left them, every token as it was"
+    await _assert_waits_for_nothing(engine, bootstrap, f02, user_id, later, f"{_named(activate)}, then {_named(deactivate)}")
+    print_success("its old link opens nothing, and it waits for nothing")
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+@pytest.mark.parametrize("expired", LINK_STATES)
+@pytest.mark.parametrize("set_password", PASSWORDS_ANOTHER_WAY)
+async def test_a_password_set_another_way_retires_the_setup_link(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, set_password: Change, expired: bool) -> None:
+    """A32-003 — NEW, red until A7b-2 (today the link stays valid: spent, it replaces the operator's password and activates the account; expired, the account still waits for a new one): the waiting administrator, still inactive, given a password another way — the CLI's ``user reset-password`` (``reset_password``), or a reset link issued for it (``create_password_reset``, then ``complete_password_reset``) — has its setup link retired in the commit of the password: ``inspect_token`` says ``revoked``, its row revoked and consumed, without a consumer. The old link opens nothing — ``complete_admin_setup`` is ``None`` and nothing changes: the operator's password stays, the account stays inactive —, and the account waits for nothing (C2, effect 3). Its link live or expired alike."""
+    print_section(f"A32-003: {_named(set_password)}, its link {'expired' if expired else 'live'}")
+    moment = utcnow()
+    user_id = await _waiting_administrator(engine, bootstrap, f02, moment, expired=expired)
+
+    await set_password(engine, user_id, moment)
+
+    later = moment + AFTERWARDS
+    account = await _account(engine, user_id)
+    status = await _status(engine, TOKEN_ONE, later)
+    assert (account.is_active, verify_password(OPERATOR_PASSWORD, account.hashed_password)) == (False, True), "barrier: the operator's password is set, the account still inactive"
+    assert status == TokenStatus.REVOKED, f"red until A7b-2: a password set by {_named(set_password)} must retire the waiting administrator's setup link: it is still {status}"
+    assert _link_states(await _setup_rows(engine, user_id)) == [RETIRED], "its setup link must be retired: revoked and consumed, without a consumer"
+    before = await _snapshot(engine)
+    assert await _complete(engine, bootstrap, TOKEN_ONE, now=later, password=INTRUDER_PASSWORD, then_commit=True) is None, "the old link must set nothing"
+    assert await _snapshot(engine) == before, "the old link must change nothing: the operator's password, the account inactive, every token"
+    await _assert_waits_for_nothing(engine, bootstrap, f02, user_id, later, f"a password set by {_named(set_password)}")
+    print_success("the operator's password kept; the old link retired; it waits for nothing")
+
+
+# guard
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", NO_END_OF_THE_SETUP)
+async def test_what_neither_activates_nor_sets_a_password_leaves_the_administrator_waiting(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, change: Change) -> None:
+    """A32-004 — GUARD, green today and after: what neither activates the waiting administrator nor gives it a password ends nothing — nothing done; a demotion, ``update_user_status(..., is_superuser=False)`` or the CLI's ``set_user_admin(..., False)``; a deactivation of the account already inactive, ``update_user_status(..., is_active=False)`` or ``set_user_active(..., False)``; a reset link issued and never spent —: the account still waits — ``is_pending_admin``, in ``pending_admin_ids``, the one ``pending_admin`` answers —, its setup link valid; and the link still completes the setup: the account active, with the password chosen through the link, its role as the change left it."""
+    print_section(f"A32-004: {_named(change)}")
+    moment = utcnow()
+    user_id = await _waiting_administrator(engine, bootstrap, f02, moment)
+
+    await change(engine, user_id, moment)
+
+    later = moment + AFTERWARDS
+    superuser = (await _account(engine, user_id)).is_superuser
+    assert await _waiting(engine, bootstrap, user_id) == (True, True, user_id), f"after {_named(change)} the account must still wait for its setup"
+    assert await _status(engine, TOKEN_ONE, later) == TokenStatus.VALID, f"after {_named(change)} its setup link must stay valid"
+    user = await _complete(engine, bootstrap, TOKEN_ONE, now=later)
+    after = await _account(engine, user_id)
+    assert user is not None and user.id == user_id, f"after {_named(change)} the link must still complete the setup: {user!r}"
+    assert (after.is_active, after.is_superuser, verify_password(SETUP_PASSWORD, after.hashed_password)) == (True, superuser, True), "the account active, with the password chosen through the link, its role as the change left it"
+    print_success("still waiting; its link completes the setup")
+
+
+# guard
+@pytest.mark.asyncio
+@pytest.mark.parametrize("activate", ACTIVATIONS_ANOTHER_WAY)
+async def test_activating_an_ordinary_inactive_account_still_works(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, activate: Change) -> None:
+    """A32-005 — GUARD, green today and after: beside the waiting administrator, carol — an inactive member without any setup link, holding a live reset link — is activated by the same ways: active, still a member. No account token moves — carol's reset link stays valid, and the retirement finds nothing of hers —, and the F02 administrator still waits, its link valid."""
+    print_section(f"A32-005: an ordinary account, {_named(activate)}")
+    moment = utcnow()
+    admin_id = await _waiting_administrator(engine, bootstrap, f02, moment)
+    carol = await _add_user(engine, "carol", active=False)
+    reset = await _issue(engine, PASSWORD_RESET, user_id=carol, now=moment)
+    tokens_before = (await _snapshot(engine))["tokens"]
+
+    await activate(engine, carol, moment)
+
+    later = moment + AFTERWARDS
+    after = await _account(engine, carol)
+    assert (after.is_active, after.is_superuser) == (True, False), "carol must be active, and still a member"
+    assert (await _snapshot(engine))["tokens"] == tokens_before, "no account token may move: carol has no setup link, and the F02 administrator's is not hers"
+    assert await _status(engine, reset.token, later, PASSWORD_RESET) == TokenStatus.VALID, "carol's reset link must stay valid"
+    assert await _waiting(engine, bootstrap, admin_id) == (True, True, admin_id), "the F02 administrator must still wait"
+    assert await _status(engine, TOKEN_ONE, later) == TokenStatus.VALID, "its setup link must stay valid"
+    print_success("carol active; nothing else moved")
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+@pytest.mark.parametrize("deactivate", DEACTIVATIONS)
+async def test_the_refused_link_of_an_active_account_retires_every_setup_link_of_the_account(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, deactivate: Change) -> None:
+    """A32-006 — NEW, red until A7b-2 (today the refusal revokes the link shown, and only it, without consuming it: deactivated, the account waits again — inactive, setup links, none consumed —, and its other link sets the password of whoever holds it): boss, an operator's active administrator written as a row beside root, holds two live setup links, issued directly. ``complete_admin_setup`` with one of them is ``None`` and changes no account (ND 6, as today); the refusal now retires every setup link of the account — ``retire_tokens``: revoked and consumed, without a consumer —, not only the one shown. Deactivated afterwards — ``set_user_active(..., False)`` or ``update_user_status(..., is_active=False)`` —, boss waits for nothing: not ``is_pending_admin``, not in ``pending_admin_ids``, ``pending_admin`` ``None``, ``issue_setup_link`` ``None``; both its links retired, and neither sets its password. The API side is the sibling's."""
+    print_section(f"A32-006: an active account's refused link, then {_named(deactivate)}")
+    moment = utcnow()
+    await _add_user(engine, ROOT_USERNAME, admin=True)
+    boss = await _add_user(engine, OTHER_USERNAME, email=OTHER_EMAIL, admin=True)
+    shown = await _issue(engine, ADMIN_SETUP, user_id=boss, now=moment - HOUR)
+    other = await _issue(engine, ADMIN_SETUP, user_id=boss, now=moment - timedelta(minutes=50))
+    statuses = (await _status(engine, shown.token, moment), await _status(engine, other.token, moment))
+    assert statuses == (TokenStatus.VALID, TokenStatus.VALID), f"barrier: both setup links are valid: {statuses}"
+    accounts_before = (await _snapshot(engine))["users"]
+
+    refused = await _complete(engine, bootstrap, shown.token, now=moment)
+
+    assert refused is None, f"an account already active is set up already (ND 6): {refused!r}"
+    assert (await _snapshot(engine))["users"] == accounts_before, "the refusal must change no account"
+    await deactivate(engine, boss, moment)
+    assert (await _account(engine, boss)).is_active is False, "barrier: boss is deactivated"
+    waiting = await _waiting(engine, bootstrap, boss)
+    assert waiting == (False, False, None), f"red until A7b-2: refusing the link of an active account must retire its setup links, or a deactivation makes it wait again: (is_pending_admin, in pending_admin_ids, pending_admin) {waiting}"
+    later = moment + AFTERWARDS
+    before = await _snapshot(engine)
+    assert await _issue_setup_link(engine, bootstrap, now=later) is None, "./dev.py user setup-link must find nobody to give a link to"
+    assert _link_states(await _setup_rows(engine, boss)) == [RETIRED, RETIRED], "every setup link of boss must be retired — revoked and consumed, without a consumer —, not only the one shown"
+    for link in (shown, other):
+        assert await _complete(engine, bootstrap, link.token, now=later, password=INTRUDER_PASSWORD, then_commit=True) is None, "no setup link of boss may set its password"
+    assert await _snapshot(engine) == before, "issue_setup_link and the refused links must write nothing"
+    print_success("both links retired; deactivated, boss waits for nothing")
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+async def test_the_cli_retires_an_expired_setup_link_and_the_account_waits_no_more(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> None:
+    """A32-007 — NEW, red until A7b-2 (workstream E's review; today the expired link stays unconsumed, so the deactivated account waits again — for a new link of ``./dev.py user setup-link``, or a re-arming token): the waiting administrator whose only setup link expired a minute ago — issued 72 hours and a minute before, as UADM-065 dates it on the API side —, activated by the CLI's ``user activate`` (``set_user_active(..., True)``), then deactivated by its ``user deactivate`` (``set_user_active(..., False)``). The account waits for nothing — not ``is_pending_admin``, ``issue_setup_link`` ``None``, and the rest of C2's effect 3 —, and the expired link is retired: revoked and consumed, without a consumer, it now inspects ``revoked``, no longer ``expired``. A32-002 walks the same path among its eight, without reading the link."""
+    print_section("A32-007: user activate, then user deactivate, the only setup link expired")
+    moment = utcnow()
+    user_id = await _waiting_administrator(engine, bootstrap, f02, moment, expired=True)
+    assert len(await _setup_rows(engine, user_id)) == 1, "barrier: the expired link is the account's only setup link"
+
+    await _activate_by_set_user_active(engine, user_id, moment)
+    await _deactivate_by_set_user_active(engine, user_id, moment)
+
+    later = moment + AFTERWARDS
+    assert (await _account(engine, user_id)).is_active is False, "barrier: the account is inactive again"
+    await _assert_waits_for_nothing(engine, bootstrap, f02, user_id, later, "user activate, then user deactivate, its only setup link expired")
+    status = await _status(engine, TOKEN_ONE, later)
+    assert status == TokenStatus.REVOKED, f"the expired setup link must have been retired by the activation, so it inspects revoked: it is {status}"
+    assert _link_states(await _setup_rows(engine, user_id)) == [RETIRED], "its only setup link must be retired: revoked and consumed, without a consumer"
+    print_success("waits for nothing; the expired link retired, inspecting revoked")
+
+
+# =============================================================================
+# A33 — LOT A7b-2: THE WAITING ADMINISTRATOR'S NEW ADDRESS (N60)
+# =============================================================================
+# A-33: the waiting administrator's setup link went to its address. When LIBREFOLIO_ADMIN_EMAIL changes while it waits,
+# the restart moves the account to the new address (``_follow_variables``), and the link delivered to the old one keeps
+# working. The contract: a real change of the address — another address under ``same_email`` (P18), not the same one in
+# other capitals — revokes the account's live setup links. Revoked, not retired: the account still waits, and a new link
+# is one ``./dev.py user setup-link`` away. The restart then has no live link, ``EXPIRED``; unless the config carries a
+# token never seen, which re-arms it after the revocation, ``REARMED``. ``update_profile`` on the waiting account (the
+# CLI's ``user set-email``) is pinned in test_user_profile.py, UPROF-003 to UPROF-005. Every call here takes its ``now``:
+# these scenes are dated from NOW, as the rest of this file.
+
+#: Real changes of the address in the variables: (the config's username, the config's email).
+NEW_ADDRESSES = [
+    pytest.param(ADMIN_USERNAME, OTHER_EMAIL, id="the-email"),
+    pytest.param(OTHER_USERNAME, OTHER_EMAIL, id="the-username-and-the-email"),
+]
+#: How the waiting administrator's link was made: from the variable's token, which the restart's config still carries;
+#: or generated, the restart's config carrying none.
+LINK_ORIGINS = [
+    pytest.param(TOKEN_ONE, id="the-variables-token"),
+    pytest.param(None, id="a-generated-link"),
+]
+#: Changes in the variables that give the waiting administrator no new address: (the config's username, the config's
+#: email, whether boss holds OTHER_EMAIL first, the account's username and email expected after the restart).
+NO_NEW_ADDRESS = [
+    pytest.param(ADMIN_USERNAME, "Admin@Example.COM", False, (ADMIN_USERNAME, "Admin@Example.COM"), id="the-address-in-other-capitals"),
+    pytest.param(OTHER_USERNAME, ADMIN_EMAIL, False, (OTHER_USERNAME, ADMIN_EMAIL), id="the-username-alone"),
+    pytest.param(ADMIN_USERNAME, OTHER_EMAIL, True, (ADMIN_USERNAME, ADMIN_EMAIL), id="an-address-another-account-holds"),
+]
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token", LINK_ORIGINS)
+@pytest.mark.parametrize(("username", "email"), NEW_ADDRESSES)
+async def test_a_new_address_in_the_variables_revokes_the_link_delivered_to_the_old_one(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, username: str, email: str, token: Optional[str]) -> None:
+    """A33-001 — NEW, red until A7b-2 (today the link stays valid, and the restart is ``PENDING``): a restart an hour after the creation, the config naming another address — alone or with another username —, and no token never seen: the link delivered to the old address is revoked — ``inspect_token`` says ``revoked`` —, not retired (``consumed_at`` empty); no live link is left, so ``EXPIRED``. The account takes the variables' username and address and still waits for its setup; the old link sets nothing — ``complete_admin_setup`` is ``None``, nothing changes —; ``issue_setup_link`` still gives it a new link, valid."""
+    print_section(f"A33-001: a new address, {'the variable token' if token else 'a generated link'}")
+    created = await _created(engine, bootstrap, f02, token=token)
+    link = token or created.link_token
+    moment = NOW + HOUR
+    assert await _status(engine, link, moment) == TokenStatus.VALID, "barrier: the link delivered to the old address is valid"
+
+    result = await _run(engine, bootstrap, _config(f02, username=username, email=email, token=token), now=moment)
+
+    old = await _inspect(engine, link, moment)
+    assert old.status == TokenStatus.REVOKED, f"red until A7b-2: a new address must revoke the setup link delivered to the old one: it is {old.status}"
+    assert old.record is not None and old.record.consumed_at is None, "revoked, not retired: the account still waits for its setup"
+    assert (result.action, result.link_token) == (bootstrap.BootstrapAction.EXPIRED, None), f"no live link is left: expected EXPIRED, got {result!r}"
+    assert await _accounts(engine) == {username: (created.user_id, email, False, True)}, "the account takes the variables' username and address"
+    assert await _waiting(engine, bootstrap, created.user_id) == (True, True, created.user_id), "the account still waits for its setup"
+    later = moment + HOUR
+    before = await _snapshot(engine)
+    assert await _complete(engine, bootstrap, link, now=later, password=INTRUDER_PASSWORD, then_commit=True) is None, "the link delivered to the old address must set nothing"
+    assert await _snapshot(engine) == before, "the old link must change nothing"
+    issued = await _issue_setup_link(engine, bootstrap, now=later)
+    assert isinstance(issued, IssuedToken), f"./dev.py user setup-link must still give the waiting account a new link: {issued!r}"
+    fresh = await _inspect(engine, issued.token, later)
+    assert fresh.status == TokenStatus.VALID and fresh.record is not None and fresh.record.user_id == created.user_id, f"the new link must be the waiting account's, valid: {fresh.status}"
+    print_success("the old link revoked; EXPIRED; still waiting, a new link one command away")
+
+
+# guard
+@pytest.mark.asyncio
+@pytest.mark.parametrize("token", LINK_ORIGINS)
+async def test_a_new_address_with_a_token_never_seen_rearms_after_the_revocation(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, token: Optional[str]) -> None:
+    """A33-002 — GUARD, green today and after: a new address in the variables, with a token never seen, TOKEN_TWO: ``REARMED`` — the old link revoked before the new token is stored, never after it —: TOKEN_TWO is the account's one live setup link, valid until ``now`` + 72 h; the link delivered to the old address revoked; the account at its new address, still waiting."""
+    print_section(f"A33-002: a new address and a new token, {'the variable token' if token else 'a generated link'} before")
+    created = await _created(engine, bootstrap, f02, token=token)
+    link = token or created.link_token
+    moment = NOW + HOUR
+
+    result = await _run(engine, bootstrap, _config(f02, email=OTHER_EMAIL, token=TOKEN_TWO), now=moment)
+
+    rearmed = await _inspect(engine, TOKEN_TWO, moment)
+    assert (result.action, result.link_token) == (bootstrap.BootstrapAction.REARMED, None), f"expected REARMED: {result!r}"
+    assert rearmed.status == TokenStatus.VALID and rearmed.record is not None, f"the new token must be a valid setup link: {rearmed.status}"
+    assert (rearmed.record.user_id, ensure_utc(rearmed.record.expires_at)) == (created.user_id, moment + SETUP_TTL)
+    assert await _status(engine, link, moment) == TokenStatus.REVOKED, "the link delivered to the old address must be revoked"
+    assert [row.id for row in await _live_setup_rows(engine, moment)] == [rearmed.record.id], "one live setup link: the new token"
+    assert await _accounts(engine) == {ADMIN_USERNAME: (created.user_id, OTHER_EMAIL, False, True)}
+    assert await _waiting(engine, bootstrap, created.user_id) == (True, True, created.user_id), "the account still waits for its setup"
+    print_success("REARMED: the new token the one live link, the old one revoked")
+
+
+# guard
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("username", "email", "held", "expected"), NO_NEW_ADDRESS)
+async def test_a_change_that_gives_no_new_address_revokes_no_setup_link(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, username: str, email: str, held: bool, expected: tuple[str, str]) -> None:
+    """A33-003 — GUARD, green today and after: the variables change, and the waiting administrator's address does not become another one — the same address in other capitals (P18: the account takes the variable's form), the username alone, or an address another account already holds (the account keeps its own; an error is logged) —: ``PENDING``, no token moves, and the link still completes the setup."""
+    print_section(f"A33-003: {username} <{email}>, held by another account: {held}")
+    created = await _created(engine, bootstrap, f02, token=TOKEN_ONE)
+    if held:
+        await _add_user(engine, OTHER_USERNAME, email=OTHER_EMAIL)
+    tokens_before = (await _snapshot(engine))["tokens"]
+    moment = NOW + HOUR
+
+    result = await _run(engine, bootstrap, _config(f02, username=username, email=email, token=TOKEN_ONE), now=moment)
+
+    accounts_after = await _accounts(engine)
+    assert (result.action, result.link_token) == (bootstrap.BootstrapAction.PENDING, None), f"expected PENDING: {result!r}"
+    assert accounts_after.get(expected[0]) == (created.user_id, expected[1], False, True), f"the waiting administrator must be {expected}: {accounts_after}"
+    assert (await _snapshot(engine))["tokens"] == tokens_before, "no setup link may move: the address is the same one"
+    user = await _complete(engine, bootstrap, TOKEN_ONE, now=moment + HOUR)
+    assert user is not None and user.id == created.user_id and user.is_active, f"the link must still complete the setup: {user!r}"
+    print_success("PENDING; nothing revoked; the link completes the setup")

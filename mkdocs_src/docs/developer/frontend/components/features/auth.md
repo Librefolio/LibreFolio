@@ -254,7 +254,7 @@ What a link page shows instead of its form. Props: `status` (`LinkPageStatus`), 
 | `checking` | The inspection is running | `common.loading` | — |
 | `expired` | The link has expired | `auth.link.expired` | ✅ |
 | `consumed` | The link was used | `auth.link.consumed` | ✅ |
-| `revoked` | The link was withdrawn: an invitation revoked by an administrator, or a reset or setup link replaced by a newer one | `auth.link.revoked` | ✅ |
+| `revoked` | The link was withdrawn: an invitation revoked by an administrator, a reset or setup link replaced by a newer one, or a setup link ended by a change of its account, set up another way or given a new address ([Revocation](../../../architecture/security.md#account-token-revocation)) | `auth.link.revoked` | ✅ |
 | `unknown` | An unknown token, a token of another purpose, or a reset or setup refused with `TOKEN_INVALID` | `auth.link.unknown` | ✅ |
 | `missing` | No `token` in the fragment, or a blank one | `auth.link.missing` | ✅ |
 | `closed` | A valid invitation while registration is `disabled` | `auth.registrationDisabled` | — |

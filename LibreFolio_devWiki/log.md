@@ -3700,6 +3700,11 @@ Updated: [[decisions/plugin-folders-and-split-i18n]], [[decisions/ai-export-tech
 [[decisions/signal-backend-plugin-architecture]], [[domains/signals]].
 Graph: not updated; graphify is not available in this worktree.
 
+## [2026-10-17] update | CP-10c: the signal service is cut by theme
+`signals/service.py` keeps only `SignalService`, the façade. The batch plan moves to `signals/planning.py`, its
+execution to `signals/execution.py` and the output checks to `signals/validation.py`; the annotation helpers join
+`signals/annotations.py`. No behaviour change. Source-file rows point at the module that now holds the behaviour.
+Updated: [[domains/signals]], [[decisions/signal-backend-plugin-architecture]], [[decisions/drawdown-full-history-warmup]].
 ## [2026-10-17] update | Domain: EMAIL — E-9 done as night decision N62 (aliases folded, no stranger's text)
 Workstream E's lot E-9 (release 1.3), done the night of 17/10 as the coordinator's night decision N62, to be reviewed
 by the developer. Checked in the code first: the three per-mailbox limits count on `delivery.mailbox_budget_key()`

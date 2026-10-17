@@ -10,7 +10,7 @@ LibreFolio is a **self-hosted** application. The primary security assumption is 
 
 - **🔐 Authentication**: Stateless JWT-based authentication via HTTP-only session cookies with configurable expiration, and [session revocation](#session-revocation) per account.
 - **🛡️ Data Segregation**: Strict isolation between users via Role-Based Access Control (RBAC).
-- **✏️ Input Validation**: Preventing injection attacks via strict Pydantic schemas.
+- **✏️ Input Validation**: Preventing injection attacks via strict Pydantic schemas; a request that fails them gets a `422` that never sends its input back ([Validation Errors Without the Input](#validation-errors)).
 - **🧼 Output Escaping**: User- and provider-supplied text is escaped or sanitized before the browser can render it as HTML.
 - **📁 File Upload Security**: MIME type validation, executable blocking, size limits, and a [scope](#upload-scope) per file: common, or personal to its uploader and the administrators.
 - **🚫 Endpoint Protection**: **All** data and file endpoints require a valid session cookie — including uploaded files and plugin assets.
@@ -129,11 +129,13 @@ stored email sent again, as written or in another A–Z case).
 Since lot A-27, the password change, an email change and `./dev.py user reset` also revoke the account's live
 [reset links](access_control.md#reset-links), whoever issued them, in the commit of the change, with
 `token_service.revoke_tokens(…, purpose=AccountTokenPurpose.PASSWORD_RESET)` as issuing and spending a link already
-did: nothing else (invitations, email-verification and setup links stay), and nothing for a refused change, the same
-address in another A–Z case or a username alone; what it revokes is logged as *Account tokens revoked* (`count`,
-`user_id`, `purpose`), with no address. Otherwise whoever reads the mailbox — the old one, after an email change —
-could ask for a link through «forgot password» before the change and spend it after, within its 30 minutes (security
-review of workstream E, E6.9).
+did: no other purpose (invitations and email-verification links stay; the account's setup links follow their own rule
+since lot A7b-2, retired by the new password and revoked by the new address: see
+[Revocation](#account-token-revocation)), and nothing for a refused change, the same address in another A–Z case or a
+username alone; what it revokes is logged as *Account tokens revoked* (`count`, `user_id`, `purpose`), with no
+address. Otherwise whoever reads the mailbox — the old one, after an email change — could ask for a link through
+«forgot password» before the change and spend it after, within its 30 minutes (security review of workstream E,
+E6.9).
 
 **A restore** sets the version of every account at once, without `end_sessions()`. The first start on a restored backup
 ([Restoring a Backup](#backup-restore)), in its step `restore-commit`, gives every account of the restored database the
@@ -174,7 +176,8 @@ stored value. The value is recorded in the restore's state (`session_version`). 
 
 Tests: `./dev.py test services session-version` (`backend/test_scripts/test_services/test_session_version.py`: the
 token, the check, the command-line callers and the refusals, in-process; its contract 7, the live reset links revoked
-by `reset_password()` and by a real address change in `update_profile()`, every other link left as it was),
+by `reset_password()` and by a real address change in `update_profile()`, the account's setup link retired by the
+first and revoked by the second (lot A7b-2), every other link left as it was),
 `./dev.py test api session-revocation` (`backend/test_scripts/test_api/test_session_revocation_api.py`: the password
 change over HTTP, with two devices and a second account; REVOKE-003 to REVOKE-007, an administrator's reset link
 revoked by a password or an address change, kept by the own address in other A–Z capitals and by a refused change),
@@ -798,7 +801,7 @@ valid session gets these answers:
 | Routes | Not blocked | Blocked |
 |--------|-------------|---------|
 | Protected routes outside the list | `401` | The same `401` |
-| Public routes outside the list: `POST /auth/register`, `POST /auth/setup` (the [initial administrator](access_control.md#initial-admin): a blocked instance stays blocked until the subscription is paid, P16), `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| Public routes outside the list: `POST /auth/register`, `POST /auth/setup` (the [initial administrator](access_control.md#initial-admin): a blocked instance stays blocked until the subscription is paid, P16), `POST /email/verification/confirm` ([spends a verification link](../backend/email.md#api-verification-confirm)), `POST /email/verification/resend` ([sends the verification email again](../backend/email.md#api-verification-resend), with the sign-in's credentials instead of a session), `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
@@ -933,6 +936,32 @@ revoked — expired ones included — and returns how many; consumed and revoked
 Without a `token_id` or a `user_id` it raises `ValueError` rather than revoke every token. An invitation has no
 `user_id`: it is revoked by its id.
 
+`retire_tokens(session, user_id=…, purpose=…)` (lot A7b-2) ends the tokens of one account and one purpose for good,
+when what they were for was done another way. Every one not consumed — live, expired or already revoked — gets
+`consumed_at`, and `revoked_at` unless it already had one, both at the same moment: an earlier revocation keeps its
+moment, and `consumed_by_user_id` stays `NULL`, since nobody spent the link. It returns how many it retired; a second
+call finds none. A retired token reads `revoked`, since `inspect_token()` checks the revocation first, and
+`consume_token()` refuses it.
+
+Only `admin_setup` tokens are retired today, and there the difference matters. The
+[initial administrator](access_control.md#initial-admin) waits for its setup while it is inactive and none of its
+setup links is consumed (`registration_service.pending_admin_filter()`): a revoked link leaves it waiting, for a new
+link; a retired one ends the wait, so an account set up another way never waits for its setup again, not even once
+deactivated. Every account that holds a setup link follows the same rules, waiting or not, in the transaction of the
+change:
+
+| Change | Entry point | Its setup links |
+|--------|-------------|-----------------|
+| An activation | `./dev.py user activate` → `user_service.set_user_active(…, True)`, the waiting administrator included; `PATCH /api/v1/users/{user_id}` with `is_active: true` → `user_service.update_user_status()`, which the waiting administrator never reaches (`409` `PENDING_SETUP` first) | Retired |
+| A new password | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent → `user_service.complete_password_reset()`; `POST /api/v1/auth/change-password` | Retired |
+| A setup link presented for an account already active | `POST /api/v1/auth/setup` → `bootstrap_admin_service.complete_admin_setup()`, which refuses it (`400` `TOKEN_INVALID`) | Every one retired, not only the one presented |
+| A new address, not the same one in another A–Z case (decision P18) | `LIBREFOLIO_ADMIN_EMAIL` at a start (`bootstrap_admin_service._follow_variables()`); `user_service.update_profile()`, behind `./dev.py user set-email` and `PUT /api/v1/auth/profile` | Revoked, not retired: they went to the earlier address, and the account still waits, for a link that reaches the new one |
+| The setup | A live setup link spent by `POST /api/v1/auth/setup` | That one consumed, the others revoked |
+| A new setup link | `./dev.py user setup-link` (`issue_setup_link()`); a `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` never stored, at a start | The earlier ones revoked |
+
+The retirements are logged as *Account tokens retired* (`count`, `user_id`, `purpose`); a refused setup adds the
+WARNING *Setup link refused and retired: the account is already active* (`user_id`).
+
 A restore revokes the live tokens of the whole restored database at once, at its first start
 ([Restoring a Backup](#backup-restore)): in the transaction that sets the session versions
 ([Session Revocation](#session-revocation)), every row of `account_tokens` that is neither consumed nor revoked,
@@ -952,18 +981,20 @@ and can be sent again.
 
 ### 🧾 Transactions and Logs
 
-- The service never commits. `issue_token()` flushes, so the new row has its id; `consume_token()` and
-  `revoke_tokens()` run their `UPDATE` in the session's transaction. The caller commits: spending an invitation
-  and creating the account it opens share one transaction, and fail together. A rollback undoes an issue, a
-  consumption or a revocation.
+- The service never commits. `issue_token()` flushes, so the new row has its id; `consume_token()`,
+  `revoke_tokens()` and `retire_tokens()` run their `UPDATE`s in the session's transaction. The caller commits:
+  spending an invitation and creating the account it opens share one transaction, and fail together. A rollback
+  undoes an issue, a consumption, a revocation or a retirement.
 - The service never logs the plaintext token, nor its hash. The events *Account token issued*, *Account
-  token consumed* and *Account tokens revoked* carry the token id, the purpose and the user ids. One caller logs a
-  link, by design: the setup link of the initial administrator, when the server generated its token, is written
-  once in the log ([Links in Use](#account-token-links)).
+  token consumed* and *Account tokens revoked* carry the token id, the purpose and the user ids; *Account tokens
+  retired* carries the count, the purpose and the user id. One caller logs a link, by design: the setup link of the
+  initial administrator, when the server generated its token, is written once in the log
+  ([Links in Use](#account-token-links)).
 
 `./dev.py test services account-tokens` (`backend/test_scripts/test_services/test_account_tokens.py`) pins this
-contract, including two sessions consuming one token at once and a search of the logs and of every database
-column for the plaintext; a given token (`issue_token(token=)`) is pinned by `./dev.py test services admin-bootstrap`
+contract, including two sessions consuming one token at once, a search of the logs and of every database
+column for the plaintext, and `retire_tokens()` (its contract 9); a given token (`issue_token(token=)`) is pinned by
+`./dev.py test services admin-bootstrap`
 (TOKEN-001 to TOKEN-005). The table — columns, constraints, foreign-key actions — is described in
 [`ACCOUNT_TOKEN`](database/users_access.md#account-token).
 
@@ -987,6 +1018,9 @@ email verification in [Email Verification](../backend/email.md#verification); th
   `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, or issued by `setup-link`, revokes the earlier ones, and the setup revokes
   any other. A password change, an email change and `./dev.py user reset` also revoke the account's live reset
   links (lot A-27, [Session Revocation](#session-revocation)).
+- **A setup link works only while its account waits for it.** An activation or a new password, by any way but the
+  link, retires the account's setup links in the same commit, and a new address revokes them: the table of
+  [Revocation](#account-token-revocation) lists every case.
 - **A verification link is never shown, only emailed, and only to the account's own address.** Registration
   issues a token without an address (the «hold»), whose text never leaves the server; the link itself goes by
   email, built from `LIBREFOLIO_PUBLIC_URL`, and «send the link again» asks for the account's password first.
@@ -997,7 +1031,7 @@ email verification in [Email Verification](../backend/email.md#verification); th
   a reset link in the commit that sets the new password, raises the session version and revokes the other links;
   a setup link in the commit that sets the password, activates the account, raises the session version and revokes
   the other setup links. If the account cannot be created, the invitation stays unspent. A setup link presented
-  for an account already active is refused, and revoked.
+  for an account already active is refused, and every setup link of that account retired.
 - **Inspecting tells a guesser nothing.** `POST /api/v1/auth/tokens/inspect` is public and writes nothing. Only a
   valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset or
   setup link. Any other token gets its status alone, and a token presented for another purpose is `unknown`.
@@ -1473,6 +1507,34 @@ hand into a query string. `mask_query_credentials()` holds the rule. One mode is
 `--log-level trace`, which LibreFolio never passes, logs every ASGI message on `uvicorn.asgi`, headers included. It is
 a debugging mode, not meant for a server with real users.
 
+## 🤐 Validation Errors Without the Input {: #validation-errors }
+
+FastAPI answers a request that fails validation (`RequestValidationError`) with `422` and one error per problem, each
+with the `input` that caused it: the value of a field that breaks its constraint and, for a missing field, the whole
+object it is missing from, a password or a token of the body included. Since lot A7b-2 of release 1.3 (A-35), no
+`422` of the app sends the request's input back.
+
+- **Where.** `install_validation_error_handler(app)` (`backend/app/api/validation_errors.py`) registers a handler for
+  `RequestValidationError`; `backend/app/main.py` calls it once, so it answers for every route.
+- **The answer.** The handler builds a new `RequestValidationError` from the errors without their `input` and hands it
+  to FastAPI's own `request_validation_exception_handler()`: the answer is FastAPI's, `422` with `{"detail": [...]}`,
+  each error keeping `type`, `loc`, `msg` and, when the constraint has one, `ctx`. A client still knows which field is
+  wrong and why; nothing of the request's body is kept.
+- **What it leaves alone.** A `422` a route raises itself, an `HTTPException` with its own `detail` such as a coded
+  refusal, is not a validation error and goes out as before. The OpenAPI schema does not change: FastAPI's
+  `ValidationError` still declares `input`, optional, so the generated client stays as it is.
+- **Why every route.** The login, the registration, the password change and reset, the setup link,
+  `tokens/inspect`, the profile and the resend of an email verification take a password or a token in their body: a
+  malformed request to any of them would get it back in the answer. The plugin-settings routes already kept the input
+  out of their `422`, for their secrets (`_NoInputEchoRoute`, see [Plugin Settings](patterns/plugin_settings.md#secrets));
+  the rule now holds for every route.
+
+Tests: `./dev.py test api validation-errors` (`backend/test_scripts/test_api/test_validation_errors_api.py`): in
+process, a small app with and without the handler — a password too short, a missing field, two errors at once, a query
+parameter, a body that is not JSON, then a valid request and a route's own `422`, answered as before —; on the lane's
+server, every route with a secret in its body, the secret field invalid and another field missing, the secret nowhere
+in the answer; the shape a plain `422` keeps, and the OpenAPI schema.
+
 ## 🏷️ Response Headers {: #response-headers }
 
 `SecurityHeadersMiddleware` (`backend/app/services/platform/security_headers.py`), the `security_headers` entry of
@@ -1576,7 +1638,7 @@ CORS preflight or a 500; the policy read directive by directive, each directive 
 route's own header kept alone and the others added; the switches read when the middleware is built, never per request)
 and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
 the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
-`mime.types` file; a hidden file of the build outside `_app/` is not sampled, since the SPA catch-all never serves it,
+`mime.types` file; no hidden file of either tree is sampled, since no route serves one,
 see [Server Startup](overview.md#server-startup)). The switches' values per profile are tested with the profile defaults,
 `./dev.py test services profile-defaults` (see [Settings System](settings.md)).
 

@@ -221,11 +221,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Creating an asset from the Assets page syncs its prices once, not twice.** The asset form's full-history sync is now the only one, and the page shows its result. A scheduled investment created from the transaction form or the import wizard now gets its price history right away, instead of at the next sync.
 - On a blocked instance, the link pages no longer jump to the sign-in page on a 401 (the link was lost there), and the invitation says the instance is blocked instead of «Not authenticated».
 - **Dashboard Performance table**: each position's start and end value now comes from the same valuation as the portfolio (trade prices, splits, holdings valued at cost, the exchange rate of each boundary day), so the "Other" line no longer absorbs valuation differences; a transfer between your brokers during the period splits the result between them; a value that cannot be computed shows "—".
-- The web app no longer serves the build's hidden bookkeeping files (such as `/.build-debug`).
+- The web app no longer serves the build's hidden bookkeeping files (such as `/.build-debug`), nor files hidden under `/_app` and `/mkdocs`.
 - After the server catches up on prices (for example when an instance wakes up), the asset and currency pages ask for the new prices the next time you open them or change the period, instead of showing the ones kept from earlier in the session.
+- AI Export FIFO summary: open value and unrealized P&L now add up the same lots — those whose value and P&L are both known — so the two totals stay comparable when a lot's cost is unknown.
+- The asset's data editor now speaks your language when it saves: «12 prices saved, 1 event deleted» and its error message were in English in every language.
+- On an instance its hosting provider has blocked, "Send the link again" on the sign-in page now says the instance is blocked, instead of reporting a wrong username or password.
 
 #### 🔒 Security
 
+- The setup link of the initial administrator stops working once the account is set up another way (activated, or given a password, from the command line or with a reset link), and when its address changes.
+- Validation errors (422) no longer repeat the values that were sent: no password or token comes back in an error response.
 - Emails that can be requested without being an administrator (password reset, email verification, and the notice of an email address change) now greet the reader without the account's username, and the notice no longer shows the new address. The per-mailbox email limits count the aliases of an address (`name+tag@…`, dots in Gmail addresses) as one mailbox.
 - **Broker reports uploaded by older versions are no longer open to every user.** A report stored without a broker could be listed, read, parsed and deleted by any signed-in user. Now only the user who uploaded it and an administrator can reach it, and only an administrator when no uploader was recorded.
 - **Parsing a report checks the broker it imports into.** The parse compared the report with the transactions of the broker named in the request without checking that the caller could edit it. It now needs EDITOR or OWNER there too, as the duplicates check already did.

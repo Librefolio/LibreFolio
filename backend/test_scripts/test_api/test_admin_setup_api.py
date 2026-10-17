@@ -26,6 +26,13 @@ in. The public endpoints of that, pinned here:
    admin_setup, expires_at, username}``: no ``email`` and no ``grants_admin`` — they are the invitation's, and the address
    of the pending administrator is not for whoever holds a link. Consumed, expired, revoked or unknown → that status and
    nothing more. A setup link asked as another purpose, and another purpose's link asked as a setup link, are ``unknown``.
+7. Lot A7b-2 (A-32, decision N60): once the account is set up another way than its link — activated (the Users tab's
+   ``PATCH``, ``./dev.py user activate``) or given a password (``./dev.py user reset``, a reset link spent, a change of
+   its own password) —, its setup links are retired, revoked and consumed in the same transaction. The old link then
+   inspects ``revoked``, and ``POST /auth/setup`` with it is 400 ``TOKEN_INVALID`` and changes nothing, the account
+   inactive again too: whoever holds the link — it was in the log as well — no longer takes the account over. A
+   deactivation, a demotion, a reset link issued and not spent, or refused, retire nothing: the account still waits,
+   and its link works.
 
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/password-reset`` gives ``TOKEN_INVALID``; a
 refusal sets no session cookie. Not here: ``/auth/setup`` on a blocked instance — whether it joins the routes allowed
@@ -42,7 +49,10 @@ service; an expired one is issued 72 hours and one second ago, never waited for.
 (``LIBREFOLIO_ADMIN_*``) and the accounts variables are removed from this process for the private instance: the
 configuration is handed to the service, and without ``LIBREFOLIO_PUBLIC_URL`` no email leaves. On the lane's server run
 only refusals that write nothing and the inspection of a token never issued: the unit writes nothing in the lane's
-database.
+database. Lot A7b-2's cases run in-process too: the commands (``./dev.py user …``) as the calls they make
+(``user_service``), and a reset link as ``POST /users/{id}/password-reset-link`` issues it
+(``user_service.create_password_reset``) — the users router is not mounted here; ``test_users_admin_api.py`` issues it
+through the route.
 
 bcrypt runs at its lowest cost in this process (``auth_service.BCRYPT_ROUNDS = 4``); the lane's server keeps its own.
 
@@ -55,6 +65,9 @@ excepted: its active account is made of rows), then on the route — ``POST /aut
 parameters of INSPECT-012 are guards once the bootstrap exists: a setup link asked as ``invite`` or as
 ``password_reset`` is ``unknown`` already. The INSPECT numbers start at 010: INSPECT-001 to INSPECT-006 are in
 ``test_registration_api.py``.
+
+Red until A7b-2: SETUP-014 and SETUP-015, on the takeover itself — nothing retires the setup link today, and ``POST
+/auth/setup`` with it answers 200 —. SETUP-016 is their guard, green today: what must retire nothing.
 """
 
 from __future__ import annotations
@@ -84,7 +97,7 @@ from backend.app.db.base import SQLModel  # imports every model: SQLModel.metada
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AuthLoginResponse, AuthUserResponse
-from backend.app.services.accounts import auth_service
+from backend.app.services.accounts import auth_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, inspect_token, issue_token, revoke_tokens
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
@@ -113,6 +126,8 @@ NEW_PASSWORD = "Setup-Admin-Pass-2026"
 ANOTHER_PASSWORD = "Another-Setup-Pass-2026"
 OLD_PASSWORD = "Already-Active-Pass-2026"
 STRONG_PASSWORD = "Strong-Pass-123!"
+#: The password an account gets another way than its setup link (lot A7b-2): a reset link, ``./dev.py user reset``, a change of its own.
+OTHER_WAY_PASSWORD = "Set-Another-Way-2026"
 #: Long enough, lowercase only: it misses three rules, listed in the policy's order.
 WEAK_PASSWORD = "weakpassword"
 WEAK_RULES = ["uppercase", "digit", "special"]
@@ -150,6 +165,8 @@ SETUP = f"{API_V1_PREFIX}/auth/setup"
 INSPECT = f"{API_V1_PREFIX}/auth/tokens/inspect"
 LOGIN = f"{API_V1_PREFIX}/auth/login"
 ME = f"{API_V1_PREFIX}/auth/me"
+RESET_WITH_LINK = f"{API_V1_PREFIX}/auth/password-reset"
+CHANGE_PASSWORD = f"{API_V1_PREFIX}/auth/change-password"
 
 
 @pytest.fixture(scope="module")
@@ -758,3 +775,184 @@ class TestOnTheLane:
         assert response.status_code == 200, f"the lane's POST /auth/tokens/inspect with purpose admin_setup: {response.status_code} {response.text}"
         body = response.json()
         assert (body.get("status"), body.get("purpose"), _details_shown(body)) == ("unknown", "admin_setup", {}), f"a token never issued is unknown, and shows nothing: {body}"
+
+
+# ============================================================================
+# 5. THE LINK OF AN ACCOUNT SET UP ANOTHER WAY (lot A7b-2, A-32) — IN-PROCESS
+# ============================================================================
+
+
+#: How the pending administrator is set up without its link (A-32), ending inactive as it began (``_set_up_another_way``).
+SET_UP_ANOTHER_WAY = ("a-reset-link-spent", "user-reset", "user-activate-then-user-deactivate")
+#: What is neither an activation nor a password (``_leave_it_waiting``), with whether the account is an administrator afterwards.
+NEITHER_ACTIVATION_NOR_PASSWORD = [
+    pytest.param("user-deactivate", True, id="user-deactivate-the-account-already-inactive"),
+    pytest.param("user-demote", False, id="user-demote"),
+    pytest.param("reset-link-issued", True, id="a-reset-link-issued-not-spent"),
+    pytest.param("expired-reset-link-refused", True, id="an-expired-reset-link-refused"),
+]
+
+
+async def _cli_set_active(engine: AsyncEngine, username: str, active: bool) -> None:
+    """``./dev.py user activate`` or ``deactivate``: the call the command makes, ``user_service.set_user_active``. It ends on its promise: done, the account active or not as asked."""
+    async with AsyncSession(engine) as session:
+        done = await user_service.set_user_active(session, username, active)
+        is_active = (await session.execute(select(User.is_active).where(User.username == username))).scalar_one()
+    assert (done, bool(is_active)) == ((True, None), active), f"setup: user_service.set_user_active({username!r}, {active}) must succeed and leave the account so: answered {done}, is_active {is_active}"
+
+
+async def _cli_reset_password(engine: AsyncEngine, username: str, password: str) -> None:
+    """``./dev.py user reset``: the call the command makes, ``user_service.reset_password``. It ends on its promise: done, ``password`` the account's."""
+    async with AsyncSession(engine) as session:
+        done = await user_service.reset_password(session, username, password)
+        hashed = (await session.execute(select(User.hashed_password).where(User.username == username))).scalar_one()
+    assert done == (True, None) and auth_service.verify_password(password, hashed), f"setup: user_service.reset_password({username!r}) must succeed and set the password: answered {done}"
+
+
+async def _cli_demote(engine: AsyncEngine, username: str) -> None:
+    """``./dev.py user demote``: the call the command makes, ``user_service.set_user_admin(…, False)``. It ends on its promise: done, the account no longer an administrator."""
+    async with AsyncSession(engine) as session:
+        done = await user_service.set_user_admin(session, username, False)
+        superuser = (await session.execute(select(User.is_superuser).where(User.username == username))).scalar_one()
+    assert (done, bool(superuser)) == ((True, None), False), f"setup: user_service.set_user_admin({username!r}, False) must succeed and demote the account: answered {done}, is_superuser {superuser}"
+
+
+async def _reset_link(engine: AsyncEngine, user_id: int, *, expired: bool = False) -> str:
+    """A password-reset link of the account, issued as ``POST /users/{user_id}/password-reset-link`` issues it — ``user_service.create_password_reset`` —, committed: its token. ``expired``: issued its lifetime and a minute ago, never waited for. It ends on its promise: the link reads valid, or expired."""
+    issued_at = utcnow() - DEFAULT_TTL[PASSWORD_RESET] - timedelta(minutes=1) if expired else None
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user = await user_service.get_user_by_id(session, user_id)
+        assert user is not None, f"setup: no account {user_id} to issue a reset link for"
+        issued = await user_service.create_password_reset(session, user, now=issued_at)
+        await session.commit()
+    expected = TokenStatus.EXPIRED if expired else TokenStatus.VALID
+    status = await _status(engine, issued.token, PASSWORD_RESET)
+    assert status == expected, f"setup: the reset link must read {expected.value}, it reads {status.value}"
+    return issued.token
+
+
+async def _change_password(private: _Private, cookie: str, current: str, new: str) -> httpx.Response:
+    """POST /auth/change-password with one session cookie, sent explicitly from a browser of its own."""
+    async with _browser(private) as device:
+        return await device.post(CHANGE_PASSWORD, json={"current_password": current, "new_password": new}, headers={"Cookie": f"{COOKIE}={cookie}"})
+
+
+async def _set_up_another_way(private: _Private, pending: _Pending, way: str) -> Optional[str]:
+    """The pending administrator set up another way than its link, as ``way`` says: the password that way set, None when it sets none. It ends on its promise: the account inactive, as it began.
+
+    ``a-reset-link-spent``: a reset link (``_reset_link``) spent through ``POST /auth/password-reset``. ``user-reset``:
+    ``./dev.py user reset``. ``user-activate-then-user-deactivate``: ``./dev.py user activate`` then ``deactivate``,
+    another active administrator written first — the command never deactivates the last one.
+    """
+    assert way in SET_UP_ANOTHER_WAY, f"no such way: {way!r}"
+    password: Optional[str] = OTHER_WAY_PASSWORD
+    if way == "a-reset-link-spent":
+        spent = await _post(private, RESET_WITH_LINK, {"token": await _reset_link(private.engine, pending.user_id), "new_password": OTHER_WAY_PASSWORD})
+        assert spent.status_code == 200, f"setup: POST /auth/password-reset with a reset link of the pending administrator: {spent.status_code} {spent.text}"
+    elif way == "user-reset":
+        await _cli_reset_password(private.engine, ADMIN_USERNAME, OTHER_WAY_PASSWORD)
+    else:
+        await _add_user(private.engine, "other_admin", password=OLD_PASSWORD, admin=True)
+        await _cli_set_active(private.engine, ADMIN_USERNAME, True)
+        await _cli_set_active(private.engine, ADMIN_USERNAME, False)
+        password = None
+    assert (await _account_state(private.engine, pending.user_id)).active is False, f"setup: set up another way ({way}), the account must end inactive, as it began"
+    return password
+
+
+async def _leave_it_waiting(private: _Private, pending: _Pending, action: str) -> None:
+    """``action`` on the pending administrator, neither an activation nor a password (NEITHER_ACTIVATION_NOR_PASSWORD). It ends on its promise: the account still inactive.
+
+    ``user-deactivate``: ``./dev.py user deactivate`` on the account already inactive. ``user-demote``: ``./dev.py user
+    demote``. ``reset-link-issued``: a reset link issued, not spent. ``expired-reset-link-refused``: an expired reset
+    link refused by ``POST /auth/password-reset`` (400 ``TOKEN_INVALID``): no password set.
+    """
+    if action == "user-deactivate":
+        await _cli_set_active(private.engine, ADMIN_USERNAME, False)
+    elif action == "user-demote":
+        await _cli_demote(private.engine, ADMIN_USERNAME)
+    elif action == "reset-link-issued":
+        await _reset_link(private.engine, pending.user_id)
+    else:
+        assert action == "expired-reset-link-refused", f"no such action: {action!r}"
+        refused = await _post(private, RESET_WITH_LINK, {"token": await _reset_link(private.engine, pending.user_id, expired=True), "new_password": OTHER_WAY_PASSWORD})
+        _assert_token_invalid(refused, "setup: POST /auth/password-reset with an expired reset link")
+    assert (await _account_state(private.engine, pending.user_id)).active is False, f"setup: after {action} the pending administrator must still be inactive"
+
+
+class TestSetUpAnotherWay:
+    """Lot A7b-2 (A-32, decision N60): an account set up another way than its setup link has its setup links retired — revoked and consumed —, so that the old link sets nothing, the account inactive again too. In-process, as every case with a pending administrator."""
+
+    # red until A7b-2
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("way", SET_UP_ANOTHER_WAY)
+    async def test_the_link_of_an_account_set_up_another_way_is_retired_and_takes_nothing_over(self, private: _Private, pending: _Pending, way: str) -> None:
+        """SETUP-014 (A-32): the pending administrator set up another way than its link — a reset link spent, ``./dev.py user reset``, or ``./dev.py user activate`` then ``deactivate`` —, inactive at the end as it began: its setup link is retired (decision N60). Inspected as ``admin_setup`` → ``revoked`` and nothing more; POST /auth/setup with it and a password that meets the rules → 400 ``TOKEN_INVALID``, and nothing changes: still inactive, its password and session version as they were, the link as it was. The setup's password signs nothing in (401); the password the other way set is still the account's — the login answers it as for any inactive account, 403 ``ACCOUNT_DISABLED``."""
+        print_section(f"SETUP-014: the setup link of an account set up another way ({way})")
+        password = await _set_up_another_way(private, pending, way)
+        links = [(pending.token, ADMIN_SETUP)]
+
+        inspected = await _inspect(private, pending.token, "admin_setup")
+        before = await _footprint(private.engine, pending.user_id, links)
+        response = await _setup(private, pending.token, NEW_PASSWORD)
+        after = await _footprint(private.engine, pending.user_id, links)
+        with_setup_password = await _sign_in(private, ADMIN_USERNAME, NEW_PASSWORD)
+        with_its_password = None if password is None else await _sign_in(private, ADMIN_USERNAME, password)
+
+        _assert_token_invalid(response, f"POST /auth/setup with the old link of an account set up another way ({way}), inactive: its holder must not take the account over")
+        body = inspected.json() if inspected.status_code == 200 else {}
+        assert (inspected.status_code, body.get("status"), body.get("purpose"), _details_shown(body)) == (200, "revoked", "admin_setup", {}), f"the setup link of an account set up another way must be retired: inspected, revoked and nothing more: {inspected.status_code} {inspected.text}"
+        assert after == before and after[0].active is False, f"a refused setup must change nothing, the account still inactive: before {before}, after {after}"
+        assert with_setup_password.status_code == 401, f"the refused setup's password must sign nothing in: {with_setup_password.status_code} {with_setup_password.text}"
+        if with_its_password is not None:
+            assert (with_its_password.status_code, _error_code(with_its_password)) == (403, "ACCOUNT_DISABLED"), f"the password set another way ({way}) must still be the account's, answered as for any inactive account: {with_its_password.status_code} {with_its_password.text}"
+        print_success("the link retired: revoked, refused, nothing changed")
+
+    # red until A7b-2
+    @pytest.mark.asyncio
+    async def test_a_change_of_password_retires_the_accounts_setup_links(self, private: _Private) -> None:
+        """SETUP-015 (A-32, defense in depth): an active account with a known password holds a live setup link (written directly: no path of the product leaves one any more), signs in and changes its password through POST /auth/change-password (200): the link is retired — inspected right after, ``revoked`` and nothing more. Deactivated since (``./dev.py user deactivate``), so that night decision 6 — the link of an active account refused and revoked anyway (SETUP-009) — cannot answer for the retirement: POST /auth/setup with that link → 400 ``TOKEN_INVALID``, and nothing changes; the setup's password signs nothing in (401), the changed one is still the account's (403 ``ACCOUNT_DISABLED``, the account inactive)."""
+        print_section("SETUP-015: a change of password retires the account's setup links")
+        user_id = await _add_user(private.engine, "changer", password=OLD_PASSWORD)
+        token = (await _issue(private.engine, ADMIN_SETUP, user_id=user_id)).token
+        login = await _sign_in(private, "changer", OLD_PASSWORD)
+        assert login.status_code == 200 and await _status(private.engine, token, ADMIN_SETUP) == TokenStatus.VALID, f"setup: an active account, signed in, holding a live setup link: login {login.status_code} {login.text}"
+        cookie, _ = _the_session_cookie(login, "POST /auth/login")
+        changed = await _change_password(private, cookie, OLD_PASSWORD, OTHER_WAY_PASSWORD)
+        assert changed.status_code == 200, f"setup: POST /auth/change-password must succeed: {changed.status_code} {changed.text}"
+
+        inspected = await _inspect(private, token, "admin_setup")
+        await _cli_set_active(private.engine, "changer", False)
+        links = [(token, ADMIN_SETUP)]
+        before = await _footprint(private.engine, user_id, links)
+        response = await _setup(private, token, NEW_PASSWORD)
+        after = await _footprint(private.engine, user_id, links)
+        with_setup_password, with_its_password = await _sign_in(private, "changer", NEW_PASSWORD), await _sign_in(private, "changer", OTHER_WAY_PASSWORD)
+
+        _assert_token_invalid(response, "POST /auth/setup with the setup link of an account that changed its password, inactive since: its holder must not take the account over")
+        body = inspected.json() if inspected.status_code == 200 else {}
+        assert (inspected.status_code, body.get("status"), body.get("purpose"), _details_shown(body)) == (200, "revoked", "admin_setup", {}), f"a change of password must retire the account's setup links: inspected right after, revoked and nothing more: {inspected.status_code} {inspected.text}"
+        assert after == before and after[0].active is False, f"a refused setup must change nothing, the account still inactive: before {before}, after {after}"
+        assert with_setup_password.status_code == 401, f"the refused setup's password must sign nothing in: {with_setup_password.status_code} {with_setup_password.text}"
+        assert (with_its_password.status_code, _error_code(with_its_password)) == (403, "ACCOUNT_DISABLED"), f"the changed password must still be the account's, answered as for any inactive account: {with_its_password.status_code} {with_its_password.text}"
+        print_success("retired by the change of password: revoked, refused once inactive")
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("action", "superuser_after"), NEITHER_ACTIVATION_NOR_PASSWORD)
+    async def test_what_is_neither_an_activation_nor_a_password_leaves_the_link_working(self, private: _Private, pending: _Pending, action: str, superuser_after: bool) -> None:
+        """SETUP-016, guard of SETUP-014 (green today): what is neither an activation nor a password leaves the pending administrator waiting, and its link working — ``./dev.py user deactivate`` on the account already inactive, ``./dev.py user demote``, a reset link issued and not spent, an expired reset link refused by POST /auth/password-reset (400 ``TOKEN_INVALID``, no password set): inspected, still ``valid`` for the account; POST /auth/setup with it → 200, the account active, an administrator or not as the action left it. The retirement is an activation's and a new password's only."""
+        print_section(f"SETUP-016: {action}, and the setup link still works")
+        await _leave_it_waiting(private, pending, action)
+
+        inspected = await _inspect(private, pending.token, "admin_setup")
+        response = await _setup(private, pending.token, NEW_PASSWORD)
+        state = await _account_state(private.engine, pending.user_id)
+
+        body = inspected.json() if inspected.status_code == 200 else {}
+        assert (inspected.status_code, body.get("status"), body.get("username")) == (200, "valid", ADMIN_USERNAME), f"after {action} the setup link must still be valid, for {ADMIN_USERNAME}: {inspected.status_code} {inspected.text}"
+        assert response.status_code == 200, f"after {action} the setup link must still set the account up: {response.status_code} {response.text}"
+        user = response.json().get("user") or {}
+        assert (user.get("id"), user.get("is_active"), user.get("is_superuser")) == (pending.user_id, True, superuser_after), f"the setup activates the account, an administrator or not as {action} left it: {user}"
+        assert (state.active, state.superuser) == (True, superuser_after), f"in the database: active {state.active}, superuser {state.superuser}"
+        print_success("the link still valid, and it sets the account up")

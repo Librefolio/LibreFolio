@@ -1,10 +1,10 @@
 """
 The profile defaults of the settings (workstream H, platform, checkpoint CP7b-2; developer decisions D5 and F27), and of
-the variables read outside them (H-17).
+the variables read outside them (H-17), whose type must be their reader's (H-27).
 
 Under test: ``PROFILE_DEFAULTS`` and the validator of ``Settings`` that applies it, both in ``backend/app/config/__init__.py``,
-and the two fields D5 adds there; next to them, ``ENVIRONMENT_PROFILE_DEFAULTS`` and ``profile_default()`` (H-17). The
-contract:
+and the two fields D5 adds there; next to them, ``ENVIRONMENT_PROFILE_DEFAULTS`` and ``profile_default()`` (H-17), and
+``ProfileDefaultError``, which ``profile_default()`` raises for an entry of the wrong type (H-27). The contract:
 
 (a) ``PROFILE_DEFAULTS`` maps each profile ``LIBREFOLIO_PROFILE`` accepts, and no other, to the values that profile gives
     the fields it lists. ``selfhosted`` lists none: an install run by its owner keeps every code default. ``managed``
@@ -30,10 +30,27 @@ contract:
     belong in ``PROFILE_DEFAULTS``) and no name is in both tables. Every key is written as a string constant in the code
     of a section module, any module of ``backend/app/config/`` but ``__init__.py`` (a comment or a docstring does not
     count), and has a variable line in ``.env.example`` (``NAME=`` or ``# NAME=``, as ``test_env_example.py`` reads them).
-    ``profile_default(name, fallback)`` gives the active profile's entry for ``name``, as the table holds it, or else
-    ``fallback`` itself: always when self-hosted (the profile unset or ``selfhosted``), and in managed for a name it does
-    not list. The profile is ``get_settings().LIBREFOLIO_PROFILE``, read at each call: ``MANAGED`` and `` Managed `` are
-    managed, and a profile changed between two calls is followed.
+    ``profile_default(name, fallback)`` gives the active profile's entry for ``name``, as the table holds it, when that
+    entry is of the very type of ``fallback`` (any other entry: see (g)), or else ``fallback`` itself: always when
+    self-hosted (the profile unset or ``selfhosted``), and in managed for a name it does not list. The profile is
+    ``get_settings().LIBREFOLIO_PROFILE``, read at each call: ``MANAGED`` and `` Managed `` are managed, and a profile
+    changed between two calls is followed.
+(g) The type of an entry is checked when a reader asks for it (H-27; E, R13-SEC3). ``profile_default(name, fallback)``
+    gives a listed entry only when it is of the very type of ``fallback``, the reader's own default: ``type(entry) is
+    type(fallback)``, so ``True`` is no ``int``, ``1`` no ``bool``, ``60`` no ``float``, ``"500"`` no ``int``, and
+    ``None`` fits no reader whose default is a number, a flag or a text. Any other entry raises ``ProfileDefaultError``,
+    a ``TypeError`` whose message names the variable, the profile, both types and ``ENVIRONMENT_PROFILE_DEFAULTS``: the
+    reader stops rather than read a value of the wrong type. Unchecked, a ``None`` for the upload limit in the managed
+    table comes back from ``backup_max_upload_mb()`` (``config/backup.py``, workstream B) as the limit, and
+    ``_upload_limit()`` of ``api/v1/backup/restore.py`` reads it as no limit at all: a fail-open. A name the profile does
+    not list, and every name when self-hosted, still give the fallback itself, with no check: whatever the managed table
+    holds, a self-hosted install is unchanged.
+(h) The same rule on the source, before anything runs (H-27). Every call ``profile_default(<name>, <fallback>)`` of a
+    section module, by that name or as an attribute, states its variable as a string literal or as a name the module
+    binds once, at its top level, to a string literal, and its fallback as a literal (``0``, ``-1``, ``60.0``, ``""``,
+    ``False``), so that ``ast`` reads both; every variable a profile lists is read by such a call; and every profile
+    that lists a call's variable gives it a value of the very type of the call's fallback. A self-test writes ``None``
+    for the upload limit into the managed table and checks that the guard reports it.
 
 ``Settings`` is built with ``_env_file=None`` after the profile and every listed field are removed from the environment
 with ``monkeypatch``, so neither the shell nor the instance's ``.env`` reaches a case. The one case about ``.env`` writes
@@ -41,16 +58,24 @@ its own file under ``tmp_path`` and turns test mode off for the call: in test mo
 (``settings_customise_sources``). ``profile_default()`` reads ``get_settings()``, which takes no ``_env_file``: the cases
 that call it set ``LIBREFOLIO_TEST_MODE=1`` (no ``.env``) and ``LIBREFOLIO_TEST_DATA_DIR`` under ``tmp_path`` (never the
 lane's data), remove the profile and every variable of the environment table, set the profile they mean, all with
-``monkeypatch``, and check that ``get_settings()`` reads it so; their fallback is a fresh ``object()``, for which only the
-very object can pass. ``PROFILE_DEFAULTS``, ``ENVIRONMENT_PROFILE_DEFAULTS`` and ``profile_default`` are read with
-``getattr`` when a test runs, so this file collects before they exist and each test fails on its own. The sources of
-``backend/app/config/`` and ``.env.example`` are only read, as text. No DB, no server, no network.
+``monkeypatch``, and check that ``get_settings()`` reads it so. Where no type is checked (self-hosted, or a name the
+profile does not list) their fallback is a fresh ``object()``, for which only the very object can pass; for a name the
+managed profile lists it is a value of the entry's own type that is not the entry (``type(entry)()``: ``0``, ``0.0``,
+``False``, ``""``), since (g) refuses any other. The cases of (g) and (h) write into the managed table, a test-only
+variable or ``None`` for the upload limit, with ``monkeypatch.setitem``, which puts the real table back after each case.
+``PROFILE_DEFAULTS``, ``ENVIRONMENT_PROFILE_DEFAULTS``, ``profile_default`` and ``ProfileDefaultError`` are read with
+``getattr`` when a test runs, so this file collects before ``ProfileDefaultError`` exists and each test fails on its own;
+the cases of (g) that expect it call ``profile_default()`` or its reader first, so that when nothing is raised they
+report the value that came back. ``backend.app.config.backup``, the reader of workstream B, is imported and only called.
+The sources of ``backend/app/config/`` and ``.env.example`` are only read, as text or as an ``ast`` tree. No DB, no
+server, no network.
 """
 
 from __future__ import annotations
 
 import ast
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import get_args
 
@@ -59,6 +84,7 @@ from pydantic import TypeAdapter, ValidationError
 from pydantic.fields import FieldInfo
 
 from backend.app import config
+from backend.app.config import backup as backup_config
 from backend.test_scripts.test_services.test_env_example import ENV_EXAMPLE, _variable_lines
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -75,13 +101,18 @@ MANAGED_DEFAULTS: dict[str, object] = {
 }
 #: The two switches D5 adds to Settings, off in the code.
 NEW_SWITCHES = ("LIBREFOLIO_FRAME_PROTECTION", "LIBREFOLIO_CSP_REPORT_ONLY")
+#: (f), (g): the largest archive a restore accepts, read by backup_max_upload_mb() (workstream B, config/backup.py).
+UPLOAD_LIMIT_VARIABLE = "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"
 #: H-17 (decision 43): the value the managed profile gives each variable a section module of backend/app/config/ reads
 #: from the environment outside Settings, while that variable is unset.
-ENVIRONMENT_MANAGED_DEFAULTS: dict[str, object] = {"LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500}
+ENVIRONMENT_MANAGED_DEFAULTS: dict[str, object] = {UPLOAD_LIMIT_VARIABLE: 500}
 #: (f): a variable no profile lists: profile_default() gives its fallback back, whatever the profile.
 UNLISTED_VARIABLE = "LIBREFOLIO_NO_PROFILE_LISTS_THIS"
 #: (f): one variable of the decided table, for the cases about how the profile is read.
 SAMPLE_VARIABLE = next(iter(ENVIRONMENT_MANAGED_DEFAULTS))
+#: (g) H-27: a variable no section module reads and no profile lists, which the cases of the type check write into the
+#: managed table for themselves alone (list_the_test_variable_in_managed).
+H27_VARIABLE = "LIBREFOLIO_H27_TEST_ONLY_VARIABLE"
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 #: (f): the section modules of the configuration are the modules of this folder but __init__.py, where both tables live.
@@ -203,13 +234,23 @@ def profile_default_function() -> Callable[[str, object], object]:
     return function
 
 
+def profile_default_error() -> type[TypeError]:
+    """``ProfileDefaultError`` (H-27), read when the test asks for it: before it exists, that test fails here, and only
+    that test."""
+    error = getattr(config, "ProfileDefaultError", None)
+    if error is None:
+        pytest.fail("H-27: backend.app.config has no ProfileDefaultError")
+    assert isinstance(error, type) and issubclass(error, TypeError), f"backend.app.config.ProfileDefaultError is {error!r}, not a subclass of TypeError: an entry of the wrong type is a TypeError, and a caller catching TypeError must catch it too"
+    return error
+
+
 def configure_profile(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, written: str | None, profile: str) -> None:
     """Make ``get_settings()`` read ``LIBREFOLIO_PROFILE`` as ``written`` (``None``: unset) from this environment alone, and
-    check that it reads the profile ``profile``. Every variable of the environment table is unset, as it is whenever a
-    section module asks ``profile_default()``."""
+    check that it reads the profile ``profile``. Every variable of the environment table, and the one the cases of (g)
+    write into it, is unset, as it is whenever a section module asks ``profile_default()``."""
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")  # get_settings() reads no .env in test mode: only this environment
     monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))  # get_settings() never looks at the lane's data
-    for name in (PROFILE_VARIABLE, *ENVIRONMENT_VARIABLES, UNLISTED_VARIABLE):
+    for name in (PROFILE_VARIABLE, *ENVIRONMENT_VARIABLES, UNLISTED_VARIABLE, H27_VARIABLE):
         monkeypatch.delenv(name, raising=False)
     if written is not None:
         monkeypatch.setenv(PROFILE_VARIABLE, written)
@@ -227,6 +268,25 @@ def exactly(actual: object, expected: object) -> bool:
 def described(result: object, fallback: object) -> str:
     """``result`` for a message: the fallback named as such, any other value with its type."""
     return "the fallback itself" if result is fallback else f"{result!r} ({type(result).__name__})"
+
+
+def fallback_like(entry: object) -> object:
+    """A reader's own default for a variable a profile lists at ``entry``: of the very type of the entry, as (g) requires,
+    and not the entry, so that a case can tell the two apart (``type(entry)()``: ``0``, ``0.0``, ``False``, ``""``)."""
+    try:
+        fallback = type(entry)()
+    except TypeError:
+        pytest.fail(f"barrier: the entry {entry!r} is a {type(entry).__name__}, a type with no empty value to stand for its reader's own default")
+    assert fallback != entry, f"barrier: the entry {entry!r} is the empty value of its type, so this case could not tell it from the fallback {fallback!r}"
+    return fallback
+
+
+def list_the_test_variable_in_managed(monkeypatch: pytest.MonkeyPatch, value: object) -> None:
+    """Make ``ENVIRONMENT_PROFILE_DEFAULTS['managed']`` list ``H27_VARIABLE`` at ``value``, for this case alone (g): no
+    profile lists that name before, and ``monkeypatch.setitem`` puts the real table back after the case."""
+    listing = sorted(profile for profile, values in environment_defaults().items() if H27_VARIABLE in values)
+    assert not listing, f"barrier: the profiles {listing} of ENVIRONMENT_PROFILE_DEFAULTS list {H27_VARIABLE}, the name the cases of (g) write for themselves"
+    monkeypatch.setitem(environment_values("managed"), H27_VARIABLE, value)
 
 
 def section_modules() -> list[Path]:
@@ -248,6 +308,134 @@ def string_constants(path: Path) -> set[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     docstrings = {id(docstring) for docstring in map(_docstring_node, ast.walk(tree)) if docstring is not None}
     return {node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings}
+
+
+#: (h): the fallback of a call whose second argument the source does not state as a literal.
+NOT_A_LITERAL = object()
+
+
+@dataclass(frozen=True)
+class ProfileDefaultCall:
+    """A call of ``profile_default`` in a section module (h), with its two arguments as the source states them."""
+
+    where: str  # backend/app/config/<module>.py:<line>
+    source: str  # the call, as ast.unparse writes it
+    name: str | None  # the variable; None when the source states no string for it (a literal, or a top-level constant)
+    fallback: object  # the reader's own default; NOT_A_LITERAL when the source does not state it as a literal
+
+    def problems(self) -> list[str]:
+        """Why the type of this call's fallback cannot be compared with the table: nothing when it can."""
+        problems = []
+        if self.name is None:
+            problems.append("its first argument is neither a string literal nor a name the module binds once, at its top level, to a string literal")
+        if self.fallback is NOT_A_LITERAL:
+            problems.append("its second argument, the reader's own default, is not a literal such as 0, -1, 60.0, '' or False")
+        return problems
+
+    @property
+    def readable(self) -> bool:
+        return not self.problems()
+
+
+@dataclass(frozen=True)
+class Mismatch:
+    """A profile that gives the variable of a call a value not of the very type of the call's fallback (h)."""
+
+    call: ProfileDefaultCall
+    profile: str
+    value: object
+
+    def __str__(self) -> str:
+        return f"{self.call.where} {self.call.source} reads a {type(self.call.fallback).__name__}, and ENVIRONMENT_PROFILE_DEFAULTS[{self.profile!r}][{self.call.name!r}] is {self.value!r}, a {type(self.value).__name__}"
+
+
+def _top_level_bindings(statement: ast.stmt) -> list[tuple[str, ast.expr | None]]:
+    """The plain names a top-level statement binds by assignment, each with the value it gives them (``None`` for ``+=``
+    and the like, whose result this guard does not compute)."""
+    if isinstance(statement, ast.Assign):
+        return [(target.id, statement.value) for target in statement.targets if isinstance(target, ast.Name)]
+    if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+        return [(statement.target.id, statement.value)]
+    if isinstance(statement, ast.AugAssign) and isinstance(statement.target, ast.Name):
+        return [(statement.target.id, None)]
+    return []
+
+
+def module_string_constants(tree: ast.Module) -> dict[str, str]:
+    """The names a module binds once, at its top level, to a string literal (``NAME = "..."``, ``NAME: str = "..."``). A
+    name bound twice there is left out: which of its values a call sees would depend on when it runs."""
+    bindings: dict[str, list[ast.expr | None]] = {}
+    for statement in tree.body:
+        for name, value in _top_level_bindings(statement):
+            bindings.setdefault(name, []).append(value)
+    constants: dict[str, str] = {}
+    for name, (value, *rebound) in bindings.items():
+        if not rebound and isinstance(value, ast.Constant) and isinstance(value.value, str):
+            constants[name] = value.value
+    return constants
+
+
+def _names_profile_default(function: ast.expr) -> bool:
+    """``profile_default(...)``, or ``<anything>.profile_default(...)``."""
+    if isinstance(function, ast.Attribute):
+        return function.attr == "profile_default"
+    return isinstance(function, ast.Name) and function.id == "profile_default"
+
+
+def _argument(call: ast.Call, position: int, keyword: str) -> ast.expr | None:
+    """The argument ``call`` passes at ``position``, or else as ``keyword``; ``None`` when it passes neither."""
+    if len(call.args) > position:
+        return call.args[position]
+    return next((item.value for item in call.keywords if item.arg == keyword), None)
+
+
+def _variable_name(node: ast.expr | None, constants: Mapping[str, str]) -> str | None:
+    """The variable the first argument names: a string literal, or a name the module binds once, at its top level, to one."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Name):
+        return constants.get(node.id)
+    return None
+
+
+def _literal_fallback(node: ast.expr | None) -> object:
+    """The reader's own default, when the second argument is a literal (``0``, ``60.0``, ``""``, ``False``) or a negative
+    number (``-1``, which ``ast`` reads as a minus applied to ``1``); otherwise ``NOT_A_LITERAL``."""
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
+        number = node.operand.value
+        if isinstance(number, int | float) and not isinstance(number, bool):
+            return -number
+    return NOT_A_LITERAL
+
+
+def profile_default_calls() -> list[ProfileDefaultCall]:
+    """Every call of ``profile_default`` in the section modules (h), by that name or as an attribute, read from their
+    source with ``ast``: nothing is imported nor run."""
+    calls: list[ProfileDefaultCall] = []
+    for path in section_modules():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        constants = module_string_constants(tree)
+        calls += [
+            ProfileDefaultCall(
+                where=f"{path.relative_to(REPO_ROOT).as_posix()}:{node.lineno}",
+                source=ast.unparse(node),
+                name=_variable_name(_argument(node, 0, "name"), constants),
+                fallback=_literal_fallback(_argument(node, 1, "fallback")),
+            )
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and _names_profile_default(node.func)
+        ]
+    return calls
+
+
+def type_mismatches(calls: Iterable[ProfileDefaultCall]) -> list[Mismatch]:
+    """For every call whose arguments the source states, every profile of ``ENVIRONMENT_PROFILE_DEFAULTS``, as the table
+    is when this runs, that lists the call's variable at a value not of the very type of the call's fallback (h): the rule
+    ``profile_default()`` applies when the reader runs (g). The real case and its self-test both ask this function."""
+    table = environment_defaults()
+    return [Mismatch(call, profile, values[call.name]) for call in calls if call.readable and call.name is not None for profile, values in table.items() if call.name in values and type(values[call.name]) is not type(call.fallback)]
 
 
 # =============================================================================
@@ -580,7 +768,7 @@ def test_managed_gives_the_value_it_lists_as_the_table_holds_it(monkeypatch: pyt
     assert name in values, f"barrier: ENVIRONMENT_PROFILE_DEFAULTS['managed'] does not list {name}: {dict(values)}"
     expected = values[name]
     configure_profile(monkeypatch, tmp_path, "managed", "managed")
-    fallback = object()
+    fallback = fallback_like(expected)  # H-27: a reader's own default is of the entry's type; (g) refuses any other
 
     result = profile_default(name, fallback)
 
@@ -610,7 +798,7 @@ def test_a_profile_written_in_another_case_is_managed_for_profile_default(monkey
     assert SAMPLE_VARIABLE in values, f"barrier: ENVIRONMENT_PROFILE_DEFAULTS['managed'] does not list {SAMPLE_VARIABLE}: {dict(values)}"
     expected = values[SAMPLE_VARIABLE]
     configure_profile(monkeypatch, tmp_path, written, "managed")
-    fallback = object()
+    fallback = fallback_like(expected)  # H-27: a reader's own default is of the entry's type; (g) refuses any other
 
     result = profile_default(SAMPLE_VARIABLE, fallback)
 
@@ -623,7 +811,8 @@ def test_profile_default_reads_the_profile_at_each_call(monkeypatch: pytest.Monk
     profile_default = profile_default_function()
     values = environment_values("managed")
     assert SAMPLE_VARIABLE in values, f"barrier: ENVIRONMENT_PROFILE_DEFAULTS['managed'] does not list {SAMPLE_VARIABLE}: {dict(values)}"
-    expected, fallback = values[SAMPLE_VARIABLE], object()
+    expected = values[SAMPLE_VARIABLE]
+    fallback = fallback_like(expected)  # H-27: a reader's own default is of the entry's type; (g) refuses any other
     configure_profile(monkeypatch, tmp_path, "managed", "managed")
 
     first = profile_default(SAMPLE_VARIABLE, fallback)
@@ -637,3 +826,164 @@ def test_profile_default_reads_the_profile_at_each_call(monkeypatch: pytest.Monk
 
     assert second is fallback, f"{PROFILE_VARIABLE} went from managed to selfhosted between two calls, yet profile_default({SAMPLE_VARIABLE!r}, fallback) still gives {described(second, fallback)}: the profile is read at each call, never kept"
     print_success("✓ managed, then the fallback itself")
+
+
+# =============================================================================
+# (g) THE TYPE OF AN ENTRY, CHECKED WHEN A READER ASKS FOR IT (H-27)
+# =============================================================================
+
+#: (g): a reader's own default, and an entry of another type the managed table might hold for its variable. ``True`` is
+#: no ``int`` and ``1`` no ``bool`` (though ``bool`` subclasses ``int``), ``60`` no ``float``, ``"500"`` no ``int``, and
+#: ``None`` fits none of them.
+WRONG_TYPES: dict[str, tuple[object, object]] = {
+    "int-default-None": (0, None),
+    "int-default-text-500": (0, "500"),
+    "int-default-float-500.0": (0, 500.0),
+    "int-default-flag-True": (0, True),
+    "bool-default-int-1": (False, 1),
+    "bool-default-None": (False, None),
+    "float-default-int-60": (60.0, 60),
+    "str-default-None": ("", None),
+    "str-default-int-0": ("", 0),
+}
+#: (g): a reader's own default, and an entry of its very type, other than the default.
+RIGHT_TYPES: dict[str, tuple[object, object]] = {
+    "int-7": (0, 7),
+    "bool-True": (False, True),
+    "float-1.5": (60.0, 1.5),
+    "str-x": ("", "x"),
+}
+
+
+def test_profile_default_error_is_a_type_error() -> None:
+    print_section("ProfileDefaultError (H-27)")
+
+    error = profile_default_error()
+
+    print_success(f"✓ {error.__module__}.{error.__qualname__}, a TypeError")
+
+
+@pytest.mark.parametrize(("fallback", "entry"), WRONG_TYPES.values(), ids=list(WRONG_TYPES))
+def test_managed_refuses_an_entry_not_of_the_type_of_its_reader_s_default(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fallback: object, entry: object) -> None:
+    print_section(f"LIBREFOLIO_PROFILE=managed, the table gives {entry!r}: profile_default({H27_VARIABLE!r}, {fallback!r})")
+    profile_default = profile_default_function()
+    assert type(entry) is not type(fallback), f"barrier: {entry!r} and {fallback!r} are both {type(entry).__name__}: this row proves nothing"
+    list_the_test_variable_in_managed(monkeypatch, entry)
+    configure_profile(monkeypatch, tmp_path, "managed", "managed")
+
+    with pytest.raises(TypeError) as refused:
+        result = profile_default(H27_VARIABLE, fallback)
+        # reached only when nothing was raised: say what came back
+        pytest.fail(f"managed, the table giving {H27_VARIABLE} {entry!r}: profile_default({H27_VARIABLE!r}, {fallback!r}) gives {described(result, fallback)} to a reader whose own default is a {type(fallback).__name__}, instead of raising ProfileDefaultError (H-27)")
+
+    error = profile_default_error()
+    assert isinstance(refused.value, error), f"profile_default({H27_VARIABLE!r}, {fallback!r}) with {entry!r} in the managed table raises {refused.value!r}, a TypeError but not ProfileDefaultError"
+    message = str(refused.value)
+    missing = [part for part in (H27_VARIABLE, "managed", type(entry).__name__, type(fallback).__name__, "ENVIRONMENT_PROFILE_DEFAULTS") if part not in message]
+    assert not missing, f"the message of ProfileDefaultError names the variable, the profile, the entry's type, the reader's type and the table, so that whoever reads the log knows what to fix: {missing} missing from {message!r}"
+    print_success(f"✓ ProfileDefaultError: {message}")
+
+
+@pytest.mark.parametrize("profile", [pytest.param(None, id="profile-unset"), pytest.param("selfhosted", id="selfhosted")])
+@pytest.mark.parametrize(("fallback", "entry"), WRONG_TYPES.values(), ids=list(WRONG_TYPES))
+def test_selfhosted_gives_back_the_fallback_itself_whatever_the_managed_table_holds(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fallback: object, entry: object, profile: str | None) -> None:
+    print_section(f"LIBREFOLIO_PROFILE={profile or '(unset)'}, the managed table gives {entry!r}: profile_default({H27_VARIABLE!r}, {fallback!r})")
+    profile_default = profile_default_function()
+    list_the_test_variable_in_managed(monkeypatch, entry)  # only the managed profile lists it
+    configure_profile(monkeypatch, tmp_path, profile, "selfhosted")
+
+    try:
+        result = profile_default(H27_VARIABLE, fallback)
+    except TypeError as exc:
+        pytest.fail(f"self-hosted ({PROFILE_VARIABLE}={profile!r}): profile_default({H27_VARIABLE!r}, {fallback!r}) raises {exc!r}, because the managed table gives {entry!r}: the selfhosted profile lists no variable, so the reader gets its own default, with nothing to check")
+
+    assert result is fallback, f"self-hosted ({PROFILE_VARIABLE}={profile!r}): profile_default({H27_VARIABLE!r}, {fallback!r}) gives {described(result, fallback)}, not the fallback itself, though only the managed table lists {H27_VARIABLE}"
+    print_success("✓ the fallback itself, no error")
+
+
+@pytest.mark.parametrize(("fallback", "entry"), RIGHT_TYPES.values(), ids=list(RIGHT_TYPES))
+def test_managed_gives_an_entry_of_its_reader_s_type_as_the_table_holds_it(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fallback: object, entry: object) -> None:
+    print_section(f"LIBREFOLIO_PROFILE=managed, the table gives {entry!r}: profile_default({H27_VARIABLE!r}, {fallback!r})")
+    profile_default = profile_default_function()
+    assert type(entry) is type(fallback) and entry != fallback, f"barrier: {entry!r} must be of the type of {fallback!r} and differ from it, or this row cannot tell the entry from the fallback"
+    list_the_test_variable_in_managed(monkeypatch, entry)
+    configure_profile(monkeypatch, tmp_path, "managed", "managed")
+
+    try:
+        result = profile_default(H27_VARIABLE, fallback)
+    except TypeError as exc:
+        pytest.fail(f"{PROFILE_VARIABLE}=managed: profile_default({H27_VARIABLE!r}, {fallback!r}) raises {exc!r} for the entry {entry!r}, a {type(entry).__name__} like the reader's own default: only another type is refused")
+
+    assert exactly(result, entry), f"{PROFILE_VARIABLE}=managed: profile_default({H27_VARIABLE!r}, {fallback!r}) gives {described(result, fallback)}, not the managed {entry!r} ({type(entry).__name__}) as the table holds it"
+    print_success(f"✓ {result!r}")
+
+
+def test_none_for_the_upload_limit_in_the_managed_table_stops_its_reader(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    print_section(f"LIBREFOLIO_PROFILE=managed, {UPLOAD_LIMIT_VARIABLE} unset, None in the managed table: backup_max_upload_mb()")
+    assert backup_config.MAX_UPLOAD_VARIABLE == UPLOAD_LIMIT_VARIABLE, f"barrier: backup_max_upload_mb() reads {backup_config.MAX_UPLOAD_VARIABLE}, not {UPLOAD_LIMIT_VARIABLE}"
+    managed = environment_values("managed")
+    assert UPLOAD_LIMIT_VARIABLE in managed, f"barrier: ENVIRONMENT_PROFILE_DEFAULTS['managed'] does not list {UPLOAD_LIMIT_VARIABLE}: {dict(managed)}"
+    monkeypatch.delenv(UPLOAD_LIMIT_VARIABLE, raising=False)  # unset: the reader asks the profile
+    configure_profile(monkeypatch, tmp_path, "managed", "managed")
+    monkeypatch.setitem(managed, UPLOAD_LIMIT_VARIABLE, None)  # E, R13-SEC3: the entry a wrong edit of the table leaves
+
+    with pytest.raises(TypeError) as refused:
+        limit = backup_config.backup_max_upload_mb()
+        # reached only when nothing was raised: say what came back
+        pytest.fail(f"backup_max_upload_mb() returns {limit!r} ({type(limit).__name__}) with None in the managed table; _upload_limit() of api/v1/backup/restore.py reads None or 0 as no limit at all (fail-open): profile_default() must raise ProfileDefaultError instead (H-27)")
+
+    error = profile_default_error()
+    assert isinstance(refused.value, error), f"backup_max_upload_mb() with None in the managed table raises {refused.value!r}, a TypeError but not ProfileDefaultError"
+    assert UPLOAD_LIMIT_VARIABLE in str(refused.value), f"the ProfileDefaultError of the upload limit does not name {UPLOAD_LIMIT_VARIABLE}: {refused.value}"
+    print_success(f"✓ ProfileDefaultError: {refused.value}")
+
+
+def test_the_upload_limit_is_the_managed_entry_as_the_table_holds_it(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    print_section(f"LIBREFOLIO_PROFILE=managed, {UPLOAD_LIMIT_VARIABLE} unset, the real table: backup_max_upload_mb()")
+    assert backup_config.MAX_UPLOAD_VARIABLE == UPLOAD_LIMIT_VARIABLE, f"barrier: backup_max_upload_mb() reads {backup_config.MAX_UPLOAD_VARIABLE}, not {UPLOAD_LIMIT_VARIABLE}"
+    expected = ENVIRONMENT_MANAGED_DEFAULTS[UPLOAD_LIMIT_VARIABLE]
+    entry = environment_values("managed").get(UPLOAD_LIMIT_VARIABLE)
+    assert exactly(entry, expected), f"barrier: ENVIRONMENT_PROFILE_DEFAULTS['managed'] gives {UPLOAD_LIMIT_VARIABLE} {entry!r} ({type(entry).__name__}), not the decided {expected!r}"
+    monkeypatch.delenv(UPLOAD_LIMIT_VARIABLE, raising=False)  # unset: the reader asks the profile
+    configure_profile(monkeypatch, tmp_path, "managed", "managed")
+
+    limit = backup_config.backup_max_upload_mb()
+
+    assert exactly(limit, expected), f"{PROFILE_VARIABLE}=managed, {UPLOAD_LIMIT_VARIABLE} unset: backup_max_upload_mb() gives {limit!r} ({type(limit).__name__}), not the managed {expected!r} ({type(expected).__name__}): an entry of the reader's type comes back as the table holds it"
+    print_success(f"✓ {limit!r} MB")
+
+
+# =============================================================================
+# (h) THE SAME RULE, ON THE SOURCE (H-27)
+# =============================================================================
+
+
+def test_every_reader_s_default_is_of_the_type_every_profile_gives_its_variable() -> None:
+    print_section("profile_default(<name>, <literal>) in the section modules: every profile's entry of the literal's type")
+    calls = profile_default_calls()
+    assert calls, f"barrier: no section module of backend/app/config/ ({', '.join(path.name for path in section_modules())}) calls profile_default, not even backup.py for {UPLOAD_LIMIT_VARIABLE}: this guard would compare nothing"
+    unreadable = {f"{call.where} {call.source}": call.problems() for call in calls if not call.readable}
+    assert not unreadable, f"profile_default calls whose arguments the source does not state ({{call: problems}}): {unreadable}. Write the name as a string literal or a top-level constant, and the reader's default as a literal, so that (h) can read its type"
+    unread = sorted(listed_in_the_environment_table() - {call.name for call in calls})
+    assert not unread, f"barrier: ENVIRONMENT_PROFILE_DEFAULTS lists {unread}, and no call of profile_default in a section module reads it: the type of its entries would be compared with no reader's default"
+
+    mismatches = type_mismatches(calls)
+
+    assert not mismatches, "entries not of the type of their reader's own default, so profile_default() raises ProfileDefaultError when the reader runs (g): " + "; ".join(map(str, mismatches)) + ". Write each entry in its reader's type"
+    print_success("✓ " + "; ".join(f"{call.source} reads a {type(call.fallback).__name__}" for call in calls))
+
+
+def test_the_type_guard_reports_an_entry_of_another_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    print_section(f"(h) self-test: None for {UPLOAD_LIMIT_VARIABLE} in the managed table")
+    readers = [call for call in profile_default_calls() if call.readable and call.name == UPLOAD_LIMIT_VARIABLE]
+    assert readers, f"barrier: no call of profile_default in a section module reads {UPLOAD_LIMIT_VARIABLE} with arguments its source states: this self-test has no reader to trip"
+    assert all(call.fallback is not None for call in readers), f"barrier: a reader of {UPLOAD_LIMIT_VARIABLE} has None for its own default, so None would be the right type: {[call.source for call in readers]}"
+    before = [mismatch for mismatch in type_mismatches(readers) if mismatch.profile == "managed"]
+    assert not before, f"barrier: with the real table the guard already reports {UPLOAD_LIMIT_VARIABLE} in managed ({'; '.join(map(str, before))}): this self-test could not tell its own entry from that one"
+    monkeypatch.setitem(environment_values("managed"), UPLOAD_LIMIT_VARIABLE, None)
+
+    after = [mismatch for mismatch in type_mismatches(readers) if mismatch.profile == "managed"]
+
+    unreported = [call.where for call in readers if not any(mismatch.call == call and mismatch.value is None for mismatch in after)]
+    assert not unreported, f"with None for {UPLOAD_LIMIT_VARIABLE} in ENVIRONMENT_PROFILE_DEFAULTS['managed'], type_mismatches() does not report the reader at {unreported}: the guard of (h) would let that entry through"
+    print_success("✓ " + "; ".join(map(str, after)))
