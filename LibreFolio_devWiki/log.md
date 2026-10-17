@@ -3726,3 +3726,12 @@ test. P-10 (decision 27): the event store refuses to change a SPLIT's type while
 cost, asking `splits.py`.
 Updated: [[decisions/financial-math-one-home]], [[decisions/scheduled-investment-redesign]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | CP-14b: ACT/ACT ISDA, the maturity settlement after the final coupon, the measure tool's floor
+ACT/ACT counted one day short per year end crossed; the Scheduled Investment's maturity settlement counted the final
+coupon twice (J-39, the part without late interest); the chart measure tool annualised from one day and showed 0 % on a
+zero start. All three fixed red first, with the changed values declared before the code; two reds had failed on a
+mistyped literal, not on the behaviour, which the page on the settlement keeps as a lesson.
+Filed: [[problems/act-act-lost-a-day-per-year-end]], [[problems/maturity-settlement-counted-the-final-coupon-twice]].
+Updated: [[features/F-045]].
+Graph: not updated; graphify is not available in this worktree.
