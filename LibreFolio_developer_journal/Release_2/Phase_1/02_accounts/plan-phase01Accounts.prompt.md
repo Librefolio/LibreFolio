@@ -5794,3 +5794,36 @@ del cambio password e del profilo). Dettagli fissati ora (scelte mie nel perimet
 - `dev.py mkdocs build` strict **verde**, `check-links` **verde** (97). `git diff --check` pulito; porta libera.
 - **CHECKPOINT READY** al coordinatore, due elenchi (N70 finora, con diario; A8b finora, sul ramo laterale
   `e-alfy-a-a8b`). Stato: **FROZEN** 🧊.
+
+### A8a-N70 — La parte `auth`, verdi (17/10, 06:32–06:36)
+
+- **Checkpoint del coordinatore**: `b0d3d2d4f` (fix LRU), `806a06823` (i 12 rossi del proxy), `0af0c0f79` (diario);
+  A8b sul ramo laterale **`e-alfy-a-a8b` = `4fcf24e10`** (47 file, verificati byte per byte), i suoi file riportati
+  qui allo stato di N70; merge di dev `47405701f` (H-36 dentro) → HEAD **`034333294`**, pulito.
+- H-36 nel ramo: `client_address.rate_limit_address(request)` (`client_address()` letto prima, così l'avviso di
+  un'intestazione malformata non si perde; poi `None` se `forwarded_by_untrusted_proxy()`), `_untrusted_forwarding` =
+  `{"local": set(), "public": set()}` (anche le intestazioni da un pari pubblico sono annotate, per il controllo
+  `platform.client_address`).
+- **Codice** (`apply_n70_part.py auth`): `auth.py` passa `rate_limit_address(http_request)` nei tre punti (import
+  accanto a `client_address`); docstring di `login_throttle.py` aggiornata. **Test**: `_start_client_address_over()`
+  della sezione 8 svuota sul posto `client_address._untrusted_forwarding` prima e dopo (nota di H: nessuna funzione di
+  reset, N58; senza, una nota lasciata da un mio caso farebbe comparire il controllo `platform.client_address` in un
+  test successivo dello stesso processo). `ruff`/`black` puliti.
+- **Verdi**: `test_login_throttle_api.py` in processo **55/55** (i 12 rossi verdi); `services login-throttle` 33,
+  `accounts-checks` 76, `config-audit` 102 (con H-36), `config-package` 861, `client-address` 360 (di H),
+  `session-version` 56, `admin-bootstrap` 190, `email-verification` 127; `utils rate-window` 39. Porta libera.
+- **Doc in scrittura** (`docs-writer`): le note di H («Callers.», `#login-limit`, «15 messages» → 18, i primi paragrafi
+  di `connection_checks` e di `configuration`), l'avvertenza del proxy in «Failed Sign-ins», la LRU in
+  `security.md` e in `backend/email.md#rate-window`.
+- **Doc di N70** (`docs-writer`, 06:50): `security.md` («Callers.», `#login-limit`: l'indirizzo che ogni chiamante passa,
+  il salto dietro un proxy locale non fidato, la LRU che risparmia le chiavi piene e il prezzo del tetto di 32, i test
+  LT-API-20…25 e RWL-024; `#configuration-checks`: 18 messaggi), `backend/email.md#rate-window` (`eviction_scan`, la
+  regola, i perché), `admin/configuration` («Failed Sign-ins»: la riga della tabella e tre punti sul proxy, il
+  riassunto di H citato com'è), `admin/connection_checks` (la frase finale del primo paragrafo). Corretto anche un
+  errore di A8a: «`None` come per un client di test» era falso (`testclient` è una chiave). Fuori dal mio perimetro: il
+  testo di H dice che «i limiti per indirizzo» saltano queste richieste, vero per tutti solo con E-13 (i tre limiti di
+  E usano ancora `client_address()`: `auth.py:299`, `email.py:159`, `email.py:206`). ⚠️ Il `docs-writer` ha creato
+  per sbaglio, con un `pipenv run` senza `PIPENV_CUSTOM_VENV_NAME`, un venv vuoto per questo worktree e l'ha tolto
+  subito; nessun file del repo toccato (verificato: nessun venv di questo worktree in `~/.local/share/virtualenvs`).
+- `dev.py mkdocs build` strict **verde**, `check-links` **verde**; `git diff --check` pulito; porta libera.
+- **CHECKPOINT READY** (N70 completo) al coordinatore. Stato: **FROZEN** 🧊.

@@ -207,7 +207,12 @@ LibreFolio limits some requests per visitor's address: the failed sign-ins
 and the forgotten passwords ([Email](email.md)). Behind a reverse proxy, the connections come from
 the proxy: unless LibreFolio learns each visitor's address, all of them share the proxy's, and a
 single count. For the sign-ins it matters most: 50 failed sign-ins through the proxy, from anyone,
-would then refuse every sign-in through it, the right passwords included, for up to 15 minutes.
+would refuse every sign-in through it, the right passwords included, for up to 15 minutes. That
+remains true behind a proxy on a public address. Behind one on a local address, such as a proxy
+container in front of the Docker image, LibreFolio leaves the sign-ins through it out of the count
+per address instead, and only the limit per username or email address counts them: see
+**When LibreFolio does not trust your proxy**, below. Either way, the cure is to let LibreFolio
+learn each visitor's address, in one of the two ways that follow.
 
 Out of the box, the address that counts is the connection's, as uvicorn, LibreFolio's web server,
 gives it. uvicorn takes the visitor's address from `X-Forwarded-For` only when the connection comes

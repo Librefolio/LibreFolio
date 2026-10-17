@@ -354,7 +354,9 @@ Since lot A8a (release 1.3, F15, decision D-A5), the sign-in counts its failures
 there are too many, so a password can no longer be guessed at the pace bcrypt allows. The module is
 `backend/app/services/accounts/login_throttle.py`. It counts with workstream E's
 [sliding-window limiter](../backend/email.md#rate-window) (`backend/app/utils/runtime/rate_window.py`), and keys the
-address with workstream H's `client_rate_key(client_address(request))` ([The Client's Address](#client-address)).
+address its callers pass with workstream H's `client_rate_key()` ([The Client's Address](#client-address)): at the
+routes of `auth.py`, `rate_limit_address(request)`, `None` behind a local [proxy nobody trusts](#untrusted-proxy)
+(decision N70), where only the identifier's limit applies.
 
 | Limiter | Key | Limit |
 |---------|-----|-------|
@@ -363,15 +365,16 @@ address with workstream H's `client_rate_key(client_address(request))` ([The Cli
 
 | Function | Contract |
 |----------|----------|
-| `refusal(identifier, address) -> RateDecision \| None` | `None` while both limits allow one more failure; otherwise the refusing decision (`allowed` false, `remaining` 0), the longer `retry_after` when both refuse. It only looks (`peek()`): no call counts. Without an address (`client_rate_key()` gives `None`, as for a test client) only the identifier's limit applies |
+| `refusal(identifier, address) -> RateDecision \| None` | `None` while both limits allow one more failure; otherwise the refusing decision (`allowed` false, `remaining` 0), the longer `retry_after` when both refuse. It only looks (`peek()`): no call counts. Without an address (`None`: `rate_limit_address()` gives it behind a [proxy nobody trusts](#untrusted-proxy), `client_address()` for a connection without one) only the identifier's limit applies |
 | `record_failure(identifier, address)` | One failure in each limit (`hit()`), the address's only with an address |
 | `record_success(identifier)` | Forgets the identifier's failures (`reset()`); the address keeps its own |
 | `identifier_key(identifier)` | The identifier's key, as above |
 
 The functions read the two limiters from the module when they run, so a test puts limiters of its own in their place
-(`monkeypatch.setattr`). Four checks of a password call them, the address being the request's `client_address()`:
-three routes of `backend/app/api/v1/auth.py`, and workstream E's «send the link again» (`resend_verification()` in
-`backend/app/services/email/verification.py`, for `POST /email/verification/resend`).
+(`monkeypatch.setattr`). Four checks of a password call them: three routes of `backend/app/api/v1/auth.py`, with the
+address `rate_limit_address(http_request)` gives, and workstream E's «send the link again» (`resend_verification()` in
+`backend/app/services/email/verification.py`, for `POST /email/verification/resend`), with the `client_address(request)`
+its route in `backend/app/api/v1/email.py` reads.
 
 | Route | Before the password is checked | A wrong password | The right password |
 |-------|--------------------------------|------------------|--------------------|
@@ -391,9 +394,9 @@ three routes of `backend/app/api/v1/auth.py`, and workstream E's «send the link
 - **One account, two keys.** The identifier counts as typed: an account's username and its email are two keys, so
   alternating them gives about 20 guesses per account every 15 minutes, still under the address's 50.
 - **The other checks of the current password** count under the account's **username**, the key of a sign-in typed
-  with it, and the request's address: 10 wrong current passwords also lock the sign-in by username, and failed
-  sign-ins by username lock the password change and the email change. Deleting one's own account
-  (`DELETE /auth/users/me`) asks for no password: nothing to limit.
+  with it, and under the address `rate_limit_address()` gives, as at the sign-in: 10 wrong current passwords also lock
+  the sign-in by username, and failed sign-ins by username lock the password change and the email change. Deleting
+  one's own account (`DELETE /auth/users/me`) asks for no password: nothing to limit.
 - **Not limited, on purpose** (the coordinator's decision, backlog A-41): a wrong token of an invitation, reset or setup
   link (`tokens/inspect`, `password-reset`, `setup`, an `invite_token` at the registration). The tokens LibreFolio
   draws are 256 random bits ([Single-use Account Tokens](#account-tokens)), out of reach of guessing, and a limit per
@@ -406,7 +409,10 @@ three routes of `backend/app/api/v1/auth.py`, and workstream E's «send the link
   its password is checked. Unlike the sign-in, whose `403`s neither count nor reset, the right password resets the
   identifier at once, as the password change and the email change do. E's own limits stay
   ([Sending the Link Again](../backend/email.md#verification-resend)); `RESEND_BY_ADDRESS` counts a request first,
-  whatever happens next.
+  whatever happens next. Its address is the `client_address()` its route reads, not `rate_limit_address()`: behind a
+  local [proxy nobody trusts](#untrusted-proxy), the resend's failures count, and its refusal looks, under the proxy's
+  address, which no sign-in through that proxy reads; there the resend and the sign-in share the identifier's count
+  alone.
 - **The switch.** `login_limit_enabled()` (`backend/app/config/accounts.py`) reads `LIBREFOLIO_LOGIN_LIMIT` at each
   call, through `login_limit_value()`: the value as set, stripped, or `None` when it is unset or blank. Unset, blank
   or `on` in any case, on; `off` in any case, off, and then `refusal()` answers `None` and `record_failure()` records
@@ -423,9 +429,27 @@ three routes of `backend/app/api/v1/auth.py`, and workstream E's «send the link
   its two limiters. The limit's own tests turn it on with `monkeypatch`, on limiters of their own.
 - **Per process, in memory.** A restart forgets every count, and with N worker processes (`dev.py server --workers N`)
   each keeps its own, so the limits are N times these; the Docker image runs one worker. Each limiter holds at most
-  10,000 keys (the limiter's `max_keys`): beyond them, the least recently used one is forgotten.
-- **Behind a reverse proxy** the address must be the visitor's ([The Client's Address](#client-address)): otherwise
-  every visitor shares the proxy's, and its 50 failures lock every sign-in through it.
+  10,000 keys (the limiter's `max_keys`): a new key beyond them evicts, among the 32 least recently used
+  (`eviction_scan`), the first that is not full, and the least recently used only when those 32 are all full
+  ([The Sliding-Window Limiter](../backend/email.md#rate-window), decision N70). A locked identifier is full, so a
+  spray of fresh identifiers, one failure each, does not push it out; plain least-recently-used eviction let at most
+  10,000 of them hand it 10 new attempts, and behind a [proxy nobody trusts](#untrusted-proxy) no limit per address
+  slows such a spray. The bound on the search has a price: 31 identifiers locked just after the victim's, about 310
+  failures more, fill the search with full keys, and the fallback evicts the victim all the same.
+- **Behind a reverse proxy** the address must be the visitor's ([The Client's Address](#client-address)). Behind one
+  that LibreFolio does not trust, every visitor has the proxy's address: counted together, 50 failures from anyone, at
+  about one a second, would refuse every sign-in through it, the right password included (security review R13-SEC6).
+  So the three routes of `auth.py` pass `rate_limit_address()` (decision N70): `None`, decided per request, for a
+  request from a local peer that carries a forwarding header neither uvicorn nor `LIBREFOLIO_CLIENT_IP_HEADER` applied
+  ([Behind a Proxy Nobody Trusts](#untrusted-proxy)), which is then counted and refused by its identifier alone.
+  `None` is no key here: the limiter would count it like any other, so `refusal()` and `record_failure()` leave the
+  address out rather than count every «no address» together. The warning logged once per process,
+  `UNTRUSTED_PROXY_SUMMARY`, and the notes behind the check `platform.client_address` are workstream H's: both come
+  from `forwarded_by_untrusted_proxy()`, which `rate_limit_address()` calls.
+- **A public peer's forwarding headers change nothing**: a client on the internet cannot switch its own limit per
+  address off by adding one. Behind a proxy on a public address that LibreFolio does not trust (a CDN left
+  unconfigured), every visitor still shares its address and its 50 failures, until `FORWARDED_ALLOW_IPS` or
+  `LIBREFOLIO_CLIENT_IP_HEADER` gives LibreFolio the visitor's.
 
 The login page already turns any `429` of the sign-in into `auth.tooManyAttempts` (`loginErrorKey()` in
 `frontend/src/lib/stores/app/auth.ts`, see [LoginCard](../frontend/components/features/auth.md)), and the
@@ -435,8 +459,8 @@ the Profile tab have no text of their own for `TOO_MANY_ATTEMPTS` yet. The admin
 [Configuration](../../admin/configuration.md), section «Failed Sign-ins».
 
 Tests: `./dev.py test services login-throttle` (`backend/test_scripts/test_services/test_login_throttle.py`: the two
-limits on an injected clock, the A–Z key, the IPv6 /64, a refusal not counted, a success that forgets the identifier
-only, the longer wait, the switch off), `./dev.py test services accounts-checks`
+limits on an injected clock, the A–Z key, the IPv6 /64, no address and no shared count of «no address», a refusal not
+counted, a success that forgets the identifier only, the longer wait, the switch off), `./dev.py test services accounts-checks`
 (`test_services/test_accounts_checks.py`: `login_limit_enabled()` on, off and invalid, the check
 `accounts.login_limit` in `CONFIG_CHECKS`, the startup audit stopping on an invalid value before it logs any check,
 the import orders in fresh interpreters), `./dev.py test api login-throttle` (`test_api/test_login_throttle_api.py`:
@@ -444,7 +468,14 @@ pure, in-process apps on private SQLite files, the limit turned on with limiters
 with an exact `Retry-After` before any bcrypt, the same for an unknown identifier, per address, the password change
 and the email change under the account's username, the switch; «send the link again»: wrong resends lock the sign-in,
 failed sign-ins refuse the resend before its password, the right password at the resend resets the identifier, a
-wrong resend counts on the address; and [`GET /security/checks`](#security-checks-endpoint)), and
+wrong resend counts on the address; [`GET /security/checks`](#security-checks-endpoint); and, behind a local proxy
+nobody trusts (N70, section 8, `TestUntrustedLocalProxy`, LT-API-20…25): from `lan`, `loopback` and CGNAT (`vpn`)
+peers forwarding `X-Forwarded-For`, `Forwarded` or `X-Real-IP`, fifty failures lock nobody else out while the
+identifier's lock holds; a public peer with the same headers, and a local peer without them, keep the lock per
+address; at each of the three routes, a wrong password through the proxy counts on the identifier alone, and an
+address its own failures locked refuses its direct requests but not those the proxy forwards),
+`./dev.py test utils rate-window` (RWL-024: a locked identifier stays locked through 1,000 fresh ones, see
+[The Sliding-Window Limiter](../backend/email.md#testing)), and
 `./dev.py test api security-checks` (`test_api/test_security_checks_api.py`, on the lane's server, where
 `accounts.login_limit` is a `warning` since the lane runs with the limit off).
 
@@ -909,7 +940,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 15 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). No page shows the `instance` and `auth` messages yet: the checks reach the log, and [`GET /security/checks`](#security-checks-endpoint) returns them for the «Security» tab of the admin settings, which does not exist yet |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 18 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). No page shows the `instance` and `auth` messages yet: the checks reach the log, and [`GET /security/checks`](#security-checks-endpoint) returns them for the «Security» tab of the admin settings, which does not exist yet |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -2268,9 +2299,10 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
   never the address); uvicorn's access log, like any web server's, writes the connection's address on each request
   line (see [Request Logs](#request-logs)). The three per-address email limits read
   their address with `client_address()`: «forgot password» and «send the link again» in `backend/app/api/v1/email.py`,
-  the registration email in `backend/app/api/v1/auth.py`. So does the [failed sign-in limit](#login-limit): in
-  `backend/app/api/v1/auth.py` for the sign-in, the password change and the email change, and at «send the link
-  again» with the address `email.py` already reads. Their key follows the rule of `client_rate_key()`.
+  the registration email in `backend/app/api/v1/auth.py`. The [failed sign-in limit](#login-limit) takes
+  `rate_limit_address()` in `backend/app/api/v1/auth.py`, for the sign-in, the password change and the email change;
+  at «send the link again» it counts with the `client_address()` that `email.py` reads. Their key follows the rule of
+  `client_rate_key()`.
 - **Not the indicator.** `GET /system/connection` (`backend/app/api/v1/system/connection.py`) keeps
   `client_address(forwarded_for, peer)` of `backend/app/utils/runtime/network.py`, a different function that classifies
   the last `X-Forwarded-For` value: advisory only, it gates nothing.

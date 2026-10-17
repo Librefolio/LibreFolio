@@ -512,7 +512,7 @@ password after password until one works. The limit is on unless you turn it off.
 | Limit | Past it |
 | --- | --- |
 | 10 failed sign-ins every 15 minutes with the same username or email address, whether an account has it or not | Every sign-in with it is refused, the right password included, until the oldest failure is 15 minutes old. |
-| 50 failed sign-ins every 15 minutes from the same address, whatever username or email address they use; an IPv6 address counts by its /64, the block one subscriber usually holds | Every sign-in from that address is refused, for any account, until the oldest failure is 15 minutes old. |
+| 50 failed sign-ins every 15 minutes from the same address, whatever username or email address they use; an IPv6 address counts by its /64, the block one subscriber usually holds. Not counted for the sign-ins that come through a proxy LibreFolio does not trust, on a local address: see *Behind a reverse proxy* below | Every sign-in from that address is refused, for any account, until the oldest failure is 15 minutes old. |
 
 - **What the user sees**: the login page says *Too many login attempts: wait a few minutes and try
   again.* The wait is 15 minutes at most. The answer is the same whether an account exists or not,
@@ -547,10 +547,21 @@ password after password until one works. The limit is on unless you turn it off.
 - **Kept in memory**, by each server process: a restart forgets every count, which also lets a user
   who cannot wait back in at once. With several server processes (`./dev.py server --workers N`),
   each keeps its own counts, so the limits are N times these; the Docker image runs one.
-- **Behind a reverse proxy**, the address that counts is the visitor's, as LibreFolio reads it: see
-  [The Visitor's Address](connection_checks.md#client-address). Behind a proxy LibreFolio does not
-  trust, every visitor shares the proxy's address and its count: 50 failed sign-ins from anyone then
-  refuse every sign-in through the proxy, for up to 15 minutes.
+- **Behind a reverse proxy**, the address that counts is the visitor's, as LibreFolio reads it.
+  Tell LibreFolio about your proxy, by listing it in `FORWARDED_ALLOW_IPS` or by naming the header it
+  sets in `LIBREFOLIO_CLIENT_IP_HEADER`, as
+  [The Visitor's Address](connection_checks.md#client-address) explains. Until then, LibreFolio sees
+  every visitor with the proxy's address, and what happens depends on where the proxy is.
+- **A proxy LibreFolio does not trust, on a local address** (a Docker network, your own network or
+  your VPN), such as a proxy container in front of the Docker image, the usual setup: LibreFolio
+  leaves the sign-ins through it out of the limit per address, so that 50 failed sign-ins from
+  anyone cannot refuse everyone. The limit per username or email address still counts them. The log
+  has one warning per server process, the first time a request through such a proxy meets a limit
+  per address:
+  `Requests come through a reverse proxy that LibreFolio does not trust: the limits per client address skip them. List the proxy in FORWARDED_ALLOW_IPS, or name the header it sets in LIBREFOLIO_CLIENT_IP_HEADER`.
+- **A proxy LibreFolio does not trust, on a public address**, such as a CDN: every visitor shares
+  the proxy's address and its count, so 50 failed sign-ins from anyone refuse every sign-in through
+  the proxy, the right passwords included, for up to 15 minutes.
 
 **Turning it off.** `LIBREFOLIO_LOGIN_LIMIT=off`, in any case, is meant for a test instance, whose
 automated tests sign in wrongly on purpose: nothing is counted and nothing is refused. Every start
