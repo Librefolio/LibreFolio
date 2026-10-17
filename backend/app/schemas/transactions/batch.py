@@ -6,14 +6,16 @@ issue, and the split and promote items the pipeline parses.
 
 from __future__ import annotations
 
+from datetime import date as date_type
 from enum import StrEnum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from backend.app.schemas.common import (
     BaseBulkResponse,
     BaseDeleteResult,
+    Currency,
     StrictModel,
 )
 from backend.app.schemas.wac import WACPreviewResultItem
@@ -124,6 +126,8 @@ class TXValidationCode(StrEnum):
     DECIMAL_PLACES_EXCEEDED = "decimalPlacesExceeded"
     SIGNIFICANT_DIGITS_EXCEEDED = "significantDigitsExceeded"
     INTEGER_DIGITS_EXCEEDED = "integerDigitsExceeded"
+    # N74 (R13-SEC7-3): a date outside 1900-01-01 … today + 1 year, params {min, max} (ISO dates).
+    DATE_OUT_OF_RANGE = "dateOutOfRange"
 
 
 class TXValidationCodeInfo(StrictModel):
@@ -173,6 +177,39 @@ class TXSplitBatchItem(StrictModel):
         return self
 
 
+class TXPromoteResolvedFields(StrictModel):
+    """The merged values a promotion writes (PromoteMergeModal), typed like a create's fields (H-41).
+
+    A key left out leaves both rows as they are; an explicit null clears the description, the tags or the cost basis.
+    The description, the tags and the date go on both rows, the cost basis on the receiving leg only (decision 47).
+    Applied by ``batch_creates._apply_promote_resolved_fields``. A value refused here is an issue of the promote at the
+    batch's parse, named by the field itself (``transaction_batch_stages._loc_to_field``). Before, the dict was applied
+    as it came: a description of any type or length reached the Text column, an unknown key was ignored, and a malformed
+    date, tags or cost basis raised out of the batch.
+    """
+
+    description: Optional[str] = Field(default=None, max_length=500, description="Merged notes, on both rows; null clears them")
+    tags: Optional[List[str]] = Field(default=None, description="Merged tags, on both rows; null clears them")
+    date: Optional[date_type] = Field(default=None, description="Merged settlement date, on both rows; never null")
+    cost_basis_override: Optional[Currency] = Field(default=None, description="Merged per-unit cost basis, on the receiving leg; null clears it")
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _validate_tags(cls, v: Any) -> Optional[List[str]]:
+        # transactions.py imports type_metadata, which imports this module: imported here, when a promote is parsed.
+        from backend.app.schemas.transactions.transactions import validate_tags_list  # noqa: PLC0415 — avoid circular import
+
+        return validate_tags_list(v)
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def _date_not_null(cls, v: Any) -> Any:
+        """An explicit null date is refused: no row is without one. Leave the key out to keep the rows' dates."""
+        if v is None:
+            raise ValueError("date cannot be null: leave it out to keep the rows' dates")
+        return v
+
+
 class TXPromoteBatchItem(StrictModel):
     """Single promote within a batch. Supports saved+saved, new+new, saved+new."""
 
@@ -180,7 +217,7 @@ class TXPromoteBatchItem(StrictModel):
     id_b: Optional[int] = Field(None, gt=0, description="Real ID for saved TX B")
     link_uuid_a: Optional[str] = Field(None, max_length=36, description="link_uuid to resolve TX A from creates in same batch")
     link_uuid_b: Optional[str] = Field(None, max_length=36, description="link_uuid to resolve TX B from creates in same batch")
-    resolved_fields: Optional[Dict[str, Any]] = Field(None, description="Merged field values from PromoteMergeModal: description, tags, date, cost_basis_override")
+    resolved_fields: Optional[TXPromoteResolvedFields] = Field(None, description="Merged field values from PromoteMergeModal: description, tags, date, cost_basis_override")
 
     @model_validator(mode="after")
     def _validate_refs(self) -> TXPromoteBatchItem:
