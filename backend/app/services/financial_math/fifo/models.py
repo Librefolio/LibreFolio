@@ -33,6 +33,13 @@ _QUANTITATIVE_FAILURE_CODES: frozenset[str] = frozenset(
         "TRANSFER_PAIR_MISSING",
     }
 )
+
+
+def fails_the_replay(code: str) -> bool:
+    """Whether an issue of this code makes the whole replay unreliable: the analysis is FAILED (J-12 withholds its lots)."""
+    return code in _QUANTITATIVE_FAILURE_CODES
+
+
 EventKind = Literal[
     "BUY",
     "SELL",
