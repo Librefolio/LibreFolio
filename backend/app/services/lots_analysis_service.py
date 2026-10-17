@@ -161,6 +161,9 @@ class LotsAnalysisService:
         # series above is not touched: a TRANSFER or an ADJUSTMENT is never an observation.
         boundary = await self._read_at_scope_boundary(transactions, scope_broker_ids=scope_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
         transactions = boundary.transactions
+        # J-47: a transfer still in transit on actual_to has its arriving leg dated later. That leg goes to the engine
+        # only, which replays up to actual_to (``replay_until``): the units stay in transit, as the Dashboard keeps them.
+        late_legs = await self._load_late_transfer_legs(transactions, asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
         income_transactions = await self._load_income_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
         cost_transactions = await self._load_cost_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
 
@@ -216,12 +219,13 @@ class LotsAnalysisService:
                 unconvertible_trade_ids = unconvertible_ids([tx for tx in transactions if tx.type in (TransactionType.BUY, TransactionType.SELL)], fx_resolver, asset.currency)
 
         engine_result = run_fifo_lot_engine(
-            transactions=engine_transactions,
+            transactions=[*engine_transactions, *late_legs],
             broker_shorting=broker_shorting,
             split_ratios_by_tx_id=split_ratios_by_tx_id,
             reference_price_lookup=reference_price_lookup,
             economic_events=[*income_events_input, *cost_events_input],
             target_currency=target_currency,
+            replay_until=actual_to,
         )
 
         lots_by_id = {lot.lot_id: lot for lot in engine_result.lots}
@@ -256,16 +260,18 @@ class LotsAnalysisService:
             if accessible_broker_ids != scope_broker_ids:
                 accessible_transactions = await self._load_transactions(asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
                 performance_split_ratios = await self._load_split_ratios(accessible_transactions)
-                # The brokers the user can see have an edge as well: a partner at a broker shared with someone else.
+                # The brokers the user can see have an edge too, for a partner at a broker the user cannot see.
                 performance_boundary = await self._read_at_scope_boundary(accessible_transactions, scope_broker_ids=accessible_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
                 performance_transactions = performance_boundary.transactions
+                performance_late_legs = await self._load_late_transfer_legs(performance_transactions, asset_id=asset_id, scope_broker_ids=accessible_broker_ids, date_to=actual_to)
                 performance_broker_shorting = await self._load_broker_shorting(accessible_broker_ids)
                 performance_engine_result = run_fifo_lot_engine(
-                    transactions=performance_transactions,
+                    transactions=[*performance_transactions, *performance_late_legs],
                     broker_shorting=performance_broker_shorting,
                     split_ratios_by_tx_id=performance_split_ratios,
                     reference_price_lookup=reference_price_lookup,
                     target_currency=target_currency,
+                    replay_until=actual_to,
                 )
                 performance_lots_by_id = {lot.lot_id: lot for lot in performance_engine_result.lots}
                 performance_context = PerformanceSourceContext(
@@ -571,6 +577,29 @@ class LotsAnalysisService:
             for row in (await self.db.execute(stmt)).all():
                 partners[row.id] = TransferPartner(id=row.id, broker_id=row.broker_id, asset_id=row.asset_id, type=str(getattr(row.type, "value", row.type)), quantity=row.quantity, related_transaction_id=row.related_transaction_id)
         return read_transfers_at_scope_boundary(transactions, partners=partners, scope_broker_ids=scope_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
+
+    async def _load_late_transfer_legs(self, transactions: Sequence[Transaction | FifoInputTransaction], *, asset_id: int, scope_broker_ids: Sequence[int], date_to: date_type) -> list[FifoInputTransaction]:
+        """The partners of the scope's TRANSFER legs that sit in the scope but are dated after ``date_to`` (J-47).
+
+        A transfer still in transit on ``date_to`` has its arriving leg dated later, so ``_load_transactions`` cut it
+        and the engine could not pair the departure. The engine alone gets these legs, as detached copies, and replays
+        up to ``date_to``: the arrival is not applied. No other reader of the analysis sees them, so no history, WAC
+        line or rate reaches past ``date_to``. A partner outside the scope is read at its edge instead (J-10).
+        """
+        partner_ids = partner_ids_to_load(transactions)
+        if not partner_ids:
+            return []
+        stmt = (
+            select(Transaction)
+            .where(Transaction.id.in_(partner_ids))
+            .where(Transaction.asset_id == asset_id)
+            .where(Transaction.broker_id.in_(scope_broker_ids))
+            .where(Transaction.type == TransactionType.TRANSFER)
+            .where(Transaction.date > date_to)
+            .where(Transaction.quantity.is_not(None))
+            .where(Transaction.quantity != 0)
+        )
+        return [FifoInputTransaction.from_transaction(row) for row in (await self.db.execute(stmt)).scalars().all()]
 
     async def _load_income_transactions(self, asset_id: int, scope_broker_ids: Sequence[int], date_to: date_type) -> list[Transaction]:
         """Load asset-linked DIVIDEND/INTEREST cash transactions for pro-rata lot allocation.
@@ -1001,10 +1030,13 @@ class LotsAnalysisService:
                         ratio=None,
                     )
                 )
+                # Still in transit at the end of the replay (J-47): no arrival yet.
+                if fragment.end_date is None:
+                    continue
                 rows.append(
                     LotTimelineEventSchema(
                         lot_id=fragment.lot_id,
-                        date=fragment.end_date if fragment.end_date is not None else fragment.start_date,
+                        date=fragment.end_date,
                         kind=LotTimelineEventKind.TRANSFER_ARRIVE,
                         transaction_id=transfer_pair_id,
                         related_transaction_id=transfer_pair_id,
