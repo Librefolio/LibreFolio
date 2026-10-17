@@ -26,7 +26,7 @@ progress log).
 ## Solution
 
 The factor is observed from the series itself — `observed_annualization` returns `n_observations · 365 /
-calendar_days` (`series_preparation.py`) — and the same `f` scales the volatility and converts the risk-free rate
+calendar_days` (`market_series.py`) — and the same `f` scales the volatility and converts the risk-free rate
 (`daily_risk_free_rate` in `metrics.py`), so numerator and denominator speak of the same period. The documentation
 followed later: the Sharpe and Sortino pages stopped converting with 1/365 (`1fdcaef38`,
 [[problems/docs-claimed-what-the-code-did-not-do]]).
@@ -40,6 +40,6 @@ measuring another with a different denominator.
 
 | Role | Path |
 |------|------|
-| Observed factor | `backend/app/services/series_preparation.py` |
+| Observed factor | `backend/app/services/market_series.py` |
 | Risk-free rate per period | `backend/app/services/risk/metrics.py` |
 | Journal (stream A) | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation/progress/A-esecuzione.md` |

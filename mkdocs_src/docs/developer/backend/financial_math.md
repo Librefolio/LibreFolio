@@ -111,7 +111,7 @@ series' last point is the card. `calculate_mwrr()` and `calculate_mwrr_series()`
 rule, and every point of the series is the single solve ending on its snapshot (one starting guess).
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
-signal statistics read. `series_preparation.py`, which prepares those series, takes both from here and keeps no return
+signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return
 or annualization formula of its own.
 
 - `float_price_return(start, end)` is `price_return()` as a float. It raises `ValueError` on a missing price or a zero
