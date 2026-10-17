@@ -261,11 +261,11 @@ levels, L1–L4. The two hosts pass the same props with a different scope. What 
 
 | Host | Scope | What differs |
 |---|---|---|
-| `frontend/src/routes/(app)/dashboard/+page.svelte:1071-1085` | `broker_ids: ownedBrokerIds` (l.223): the brokers the user owns with a share above 0 (`getOwnedBrokers()`, `frontend/src/lib/stores/reference/brokerStore.ts:262`) | The broker filter is not applied: `subtitle` becomes `risk.dashboardFullPortfolio` while it is on (l.1079), and `scopeValue` is `null` then (l.1077), because the summary follows the filter. `assetIds` are the summary's holdings (l.1076). |
-| `frontend/src/routes/(app)/brokers/[id]/+page.svelte:712-726` | `broker_ids: [broker.id]` | `scopeValue` is that broker's net worth (l.718); `internalSubset` prints `risk.internalSubset` (l.720). |
+| `frontend/src/routes/(app)/dashboard/+page.svelte:1109-1123` | `broker_ids: ownedBrokerIds` (l.230): the brokers the user owns with a share above 0 (`getOwnedBrokers()`, `frontend/src/lib/stores/reference/brokerStore.ts:262`) | The broker filter is not applied: `subtitle` becomes `risk.dashboardFullPortfolio` while it is on (l.1117), and `scopeValue` is `null` then (l.1115), because the summary follows the filter. `assetIds` are the summary's holdings (l.1114). |
+| `frontend/src/routes/(app)/brokers/[id]/+page.svelte:753-767` | `broker_ids: [broker.id]` | `scopeValue` is that broker's net worth (l.759); `internalSubset` prints `risk.internalSubset` (l.761). |
 
-- **No owned broker, no request.** The Dashboard host mounts the panel only when `canAsk` (l.227);
-  otherwise it shows `common.noData` (l.1087), or a spinner while the brokers load (l.1090).
+- **No owned broker, no request.** The Dashboard host mounts the panel only when `canAsk` (l.234);
+  otherwise it shows `common.noData` (l.1125), or a spinner while the brokers load (l.1128).
 - **Waves.** The controller opts into `includeDrawdownSummary`, `includeMonthlyVar` and
   `includeCurrentCompositionRiskReturn` (`levels/RiskLevelsPanel.svelte:85-103`; the options are in
   [The Panel Controller](../../../backend/risk/architecture.md#panel-controller)). The historical wave
@@ -307,7 +307,7 @@ levels, L1–L4. The two hosts pass the same props with a different scope. What 
   A bar's `title` gives its range (l.68).
 - **Money.** `lossMoney()` is `scopeValue` × loss (`L1HowMuchItHurts.svelte:72`), shown only for a
   positive `scopeValue` (l.65): on the Dashboard, never while a broker filter is on; on Broker Detail,
-  over that broker's own net worth (`frontend/src/routes/(app)/brokers/[id]/+page.svelte:718`).
+  over that broker's own net worth (`frontend/src/routes/(app)/brokers/[id]/+page.svelte:759`).
 - **Labels and links.** Each card prints a `technicalName` line
   (`frontend/src/lib/components/ui/display/RiskMetricCard.svelte:108`, keys `risk.levels.l1.technical.*`)
   and links its own metric page (`DOC_PATHS` and `TAIL_DOCS`, `L1HowMuchItHurts.svelte:103`, l.113).
