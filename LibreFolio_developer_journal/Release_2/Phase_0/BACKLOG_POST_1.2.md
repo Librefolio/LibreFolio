@@ -4051,7 +4051,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), sezione «A1.8».
 - **A-2 · `GET /settings/global` si legge senza login** — basso; A (14/10). Espone tutte le impostazioni globali:
   scheduler, durata della sessione, registrazione. Dettagli: idem, §2 «Da sapere».
-- **A-3 · `reset_password` calcola bcrypt sul loop degli eventi** — basso; A (14/10).
+- ✅ **A-3 · `reset_password` calcola bcrypt sul loop degli eventi** — basso; A (14/10); chiusa il 15/10 con A4
+  (`3ac4114d5`: `await asyncio.to_thread(hash_password, new_password)`), registrata il 17/10 (X-R66).
   `services/accounts/user_service.py:205` chiama `hash_password` senza `asyncio.to_thread` (regola Async I/O). Si
   chiude con A4, che tocca il reset per la versione della sessione. Dettagli: idem, §1 «Reset della password».
 - **A-4 · devWiki: prosa con i vecchi percorsi dei servizi account, e due pagine di dominio non allineate** — minimo;
@@ -4327,8 +4328,10 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Cura possibile: dopo un salvataggio riuscito l'input prende la forma che il server ha conservato; sul 400
     `CURRENT_PASSWORD_REQUIRED` la scheda rilegge l'indirizzo salvato. Da decidere con A7b/A8, che toccano la stessa
     scheda.
-- **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
+- ✅ **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
+  Fatta il 17/10 con A8 (`66873b0c9`: i due endpoint rispondono 429 oltre il limite, prima di controllare la password, e
+  contano errori e successi in `login_throttle` sotto lo username dell'account), registrata il 17/10 (X-R66).
 - **A-29 · Sotto `vite dev` le pagine dei link portano al login** — minimo; da H, revisione di A7b (16/10).
   `frontend/src/hooks.server.ts` ha `PUBLIC_ROUTES` = `/` e `/api`: con il server di sviluppo (5173) chi apre un link
   senza sessione viene mandato a `/?redirect=…` e il token nel frammento si perde. In produzione e nelle corsie di test

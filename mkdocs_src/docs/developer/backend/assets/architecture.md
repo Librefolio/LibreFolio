@@ -642,6 +642,9 @@ moment the asset, the range's start or the display currency changes until the ne
 Any user may start one, so each user gets at most 30 probes a minute (a `SlidingWindowLimiter` in
 `api/v1/assets/providers.py`, counted in each process; MF-SI2): past it the route answers 429
 `{"error_code": "PROBE_RATE_LIMITED", "retry_after", "message"}` with `Retry-After`, before the provider is called.
+The web app says it in the user's language, with the local time the wait ends, rounded up to the minute
+(`probeRateLimitMessage()` in `components/assets/resolveProviderError.ts`, X-R66): **Test Configuration** shows it as the
+result row's detail and one-line summary, **Ask Provider** as its error toast; any other failure is shown as before.
 `LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read at each probe by
 `probe_limiter()`, as the sign-in limit reads its variable: a change applies at the next probe, without a restart.
 `PROBES_BY_LIMIT` holds one limiter per limit the setting has had, so a value it comes back to finds its counts. `0`
