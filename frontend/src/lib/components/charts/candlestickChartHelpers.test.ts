@@ -5,11 +5,12 @@
  * ECharts. The numeric formatters write their figures in the interface language
  * (M-18): the English cases run under an English UI on an en-US browser, where the
  * text is today's except for the thousands separator, and are asserted directly;
- * the last describe switches the UI to French. The tooltip-value decoder is the one
+ * the M-18 describe switches the UI to French. The tooltip-value decoder is the one
  * with a real trap — ECharts prepends the category ordinal — so it gets an
- * explicit 5-element regression case.
+ * explicit 5-element regression case. C-97c-3 (the last block): a price under
+ * 0.001 keeps its significant digits in the candle tooltip.
  */
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 // The interface locale is the UI language regionalised by `navigator.language` (M-18). Node's tag
 // follows the host's ICU locale, so it is pinned to en-US — jsdom's own — before any import.
@@ -19,6 +20,7 @@ vi.hoisted(() => {
 
 import {waitLocale} from 'svelte-i18n';
 import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import type {LineDataPoint} from './LineChart.svelte';
@@ -318,5 +320,48 @@ describe('parseCandleTooltipValue', () => {
 
     it('marks an equal open/close bar bullish', () => {
         expect(parseCandleTooltipValue([100, 100, 90, 120]).bullish).toBe(true);
+    });
+});
+
+/**
+ * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits.
+ *
+ * Below 1, the candle tooltip shows up to six decimals with the trailing zeros trimmed and at least one kept
+ * (`toFixed(6)` decides how many): a price under 0.001 loses its digits there — 0.0000034573 reads `0.000003`,
+ * 0.0000004 reads `0.0`. The contract: `formatPrice(v, {minDecimals: 1, floorDecimals: 6})` — still at least one
+ * decimal and still six where the price has them, but as many as its first four significant digits need
+ * (`priceFractionDigits`, formatFixed.ts). From 0.001 up the text is today's, and so are the two upper bands
+ * (`formatPrice(v)` from 100, `{minDecimals: 4}` from 1) and percentage mode: the guards.
+ *
+ * Reds: 0.0000034573 (today `0.000003`), its negative, 0.0000004 (today `0.0`). Guards, green today and after: a
+ * value of each band and on both sides of 0.001, and percentage mode. English UI on an en-US browser, checked before
+ * each case: the expected digits are typed.
+ */
+describe('formatCandlePrice — a price under 0.001 keeps its significant digits (C-97c-3, D-C97c-1)', () => {
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the tooltip writes en-US, checked.
+        expect(uiLocale(), 'control: an English UI on the en-US browser this file pins is written en-US').toBe('en-US');
+    });
+
+    it('0.0000034573 reads 0.000003457: four significant digits, not 0.000003', () => {
+        expect(formatCandlePrice(0.0000034573, false), 'below 1 (today cut at the sixth decimal: 0.000003)').toBe('0.000003457');
+    });
+
+    it('a negative price under 0.001, -0.0000034573, reads -0.000003457, not -0.000003', () => {
+        expect(formatCandlePrice(-0.0000034573, false), 'below 1, negative (today -0.000003)').toBe('-0.000003457');
+    });
+
+    it('0.0000004 reads 0.0000004, not 0.0: a price under a millionth is not zero', () => {
+        expect(formatCandlePrice(0.0000004, false), 'below 1 (today 0.0: toFixed(6) leaves no digit, the one kept decimal is a zero)').toBe('0.0000004');
+    });
+
+    it('guard: from 0.001 up the text is today’s — 0.00123456, 0.123456789, 0.5, 0, and the 4- and 2-decimal bands', () => {
+        const written = Object.fromEntries([0.00123456, 0.123456789, 0.5, 0, 12.345678, 1234.5].map((value) => [String(value), formatCandlePrice(value, false)]));
+
+        expect(written).toEqual({'0.00123456': '0.001235', '0.123456789': '0.123457', '0.5': '0.5', '0': '0.0', '12.345678': '12.3457', '1234.5': '1,234.50'});
+    });
+
+    it('guard: percentage mode is formatPercent’s, a tiny value included', () => {
+        expect(formatCandlePrice(0.0000034573, true)).toBe(formatPercent(0.0000034573));
     });
 });

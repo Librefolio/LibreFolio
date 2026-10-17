@@ -33,6 +33,9 @@
  * Red today: each of those days is written as ISO (`2024-03-04`), in English too, where the house notation is
  * `Mar 4, 2024`.
  *
+ * C-97c-3 (the describe after T-ISO's): a price in the tooltips keeps its significant digits — an event point's bucket
+ * value, an event's value and original value, the axis rows. Its docblock says how.
+ *
  * The open week and month (after R-5, lot 51). A weekly or monthly point is dated by its bucket's last data point;
  * in the period still open — a series that stops inside a week and a month, OPEN_DAYS — its tooltip must span up
  * to that day, not to the bucket's theoretical end (`bucketSpanUpTo`). The last describe pins it on the axis
@@ -497,6 +500,8 @@ function sansDay(line: string, iso: string): string {
 
 /** The two conversion lines of `marker`'s tooltip, as the catalogue and Intl write them in `locale` — the rate's day set aside (`DAY`). */
 function conversionLines(marker: EventMarker, locale: string): string[] {
+    // Four decimals: since C-97c-3 an amount shows as many as its first four significant digits need, four at least;
+    // the amounts T-EN1 reads (1234.56789, 10.25) show exactly four before and after that cure.
     const original = `${catalogue('chart.tooltip.originalValue', {value: fixed(marker.originalValue!, 4, locale)})} (${marker.originalCurrencyFlag} ${marker.originalCurrency})`;
     const rateDate = catalogue('chart.tooltip.fxRateDate', {date: DAY});
     const lag = marker.fxDaysBack! > 0 ? ` ${catalogue('chart.tooltip.fxDaysBack', {days: fixed(marker.fxDaysBack!, 0, locale)})}` : '';
@@ -773,6 +778,124 @@ describe('PriceChartFull — every day its tooltips write, in the house notation
         expect(lines, 'barrier: the tooltip lists the events of its period').toContain(catalogue('chart.tooltip.eventsInPeriod', {}));
 
         expect(eventDaysIn(lines, 'DIVIDEND'), `the period’s events are not dated in the ${lang} interface’s notation: each entry writes its ISO day`).toEqual(WEEK_DIVIDENDS.map((marker) => houseDay(marker.date, locale)));
+    });
+});
+
+// =========================================================================
+// C-97c-3 — a price in a tooltip keeps its significant digits
+// =========================================================================
+
+/**
+ * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits. Four of the
+ * chart's tooltip figures are written with four fixed decimals, `formatFixed(…, 4)`: the bucket value an event point
+ * sits on (the 💰 line under its heading), the event's value (💰 and its currency badge), its original value inside
+ * `chart.tooltip.originalValue`, and the value of each row of the axis tooltip. On an asset priced in millionths each
+ * reads `0.0000`. The contract: `formatPrice(…, {minDecimals: 4})` — four decimals at least, as many as the first four
+ * significant digits need (`priceFractionDigits`, formatFixed.ts): 0.0000034573 reads 0.000003457, while 1.0834 stays
+ * 1.0834 and 65000.1234 stays 65,000.1234. The FX lag beside the rate's day is a count of days, not a price: T-EN1 reads
+ * it, and it does not move.
+ *
+ * Reds: a dividend of 0.0000034573 EUR converted from 0.0000037512 USD, paid on a day priced 0.0000034573 — its bucket
+ * value, its value, its original value — and the axis row of that price. Guards, green today and after: the same lines
+ * for a dividend of 65000.1234 EUR converted from 1.0834 USD on a day priced 1.0834, and the axis rows of both figures.
+ *
+ * Reading, as the T-EN1 and T-ISO cases read: an event's lines from the formatter its scatter series hands ECharts,
+ * called with its point; the axis rows from the axis formatter, called with the series under the pointer. A line is told
+ * apart by what the code writes around its figure — the 💰 of a value, the currency badge of the event's value and of
+ * the original value, the series name of a row — and the figure is matched as a whole number token; the original
+ * value's line is compared whole, its words from the catalogue. The axis is drawn with `showMainDelta: false`: the Δ
+ * suffix is `buildDeltaHtml`'s, read in priceChartHelpers.test.ts. English UI on jsdom's en-US browser, checked before
+ * each case: the digits are typed.
+ */
+describe('PriceChartFull — a price in its tooltips keeps its significant digits (C-97c-3, D-C97c-1)', () => {
+    /** The day the dividends are paid: DATA's Monday 4 March. */
+    const PAY_DAY = '2024-03-04';
+    /** A price in millionths, a dividend of the same size and its original amount in dollars. */
+    const TINY = {price: 0.0000034573, value: 0.0000034573, original: 0.0000037512};
+    /** A rate-sized price and original amount, and a dividend with a thousands separator. */
+    const PLAIN = {price: 1.0834, value: 65000.1234, original: 1.0834};
+
+    /** DATA's days, priced at `price` on PAY_DAY and a little below on the others. */
+    function pricedAt(price: number): LineDataPoint[] {
+        return DATA.map(({date}) => ({date, value: date === PAY_DAY ? price : price * 0.97}));
+    }
+
+    /** A dividend paid on PAY_DAY in dollars, shown in euros at that day's rate (no lag). */
+    function dividendOf(value: number, original: number): EventMarker {
+        return {date: PAY_DAY, type: 'DIVIDEND', value, currency: 'EUR', currencyFlag: '🇪🇺', originalValue: original, originalCurrency: 'USD', originalCurrencyFlag: '🇺🇸', fxRateDate: PAY_DAY, fxDaysBack: 0};
+    }
+
+    /** `digits` as a whole number in a text: no digit, decimal mark, group separator or sign glued to either side. */
+    function numberToken(digits: string): RegExp {
+        return new RegExp(`(?<![\\d.,+\\-\\u2212])${digits.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![.,]?\\d)`);
+    }
+
+    /** The price lines of `marker`'s tooltip: the bucket value (💰 alone), the event's value (💰 and the 🇪🇺 EUR badge), the original value (closed by the 🇺🇸 USD badge). */
+    async function eventPriceLines(marker: EventMarker): Promise<{bucket: string; value: string; original: string}> {
+        const lines = await tooltipOf(marker);
+        const values = lines.filter((line) => line.startsWith('💰'));
+        const found = {
+            bucket: values.filter((line) => !line.includes('(')),
+            value: values.filter((line) => line.includes('(🇪🇺 EUR)')),
+            original: lines.filter((line) => line.endsWith('(🇺🇸 USD)')),
+        };
+        expect(Object.fromEntries(Object.entries(found).map(([name, matches]) => [name, matches.length])), 'barrier: the tooltip holds one bucket value, one event value with its badge, one original value with its own').toEqual({bucket: 1, value: 1, original: 1});
+        return {bucket: found.bucket[0], value: found.value[0], original: found.original[0]};
+    }
+
+    /** The axis tooltip's row of the main series — named after the currency — with the pointer on PAY_DAY at `value`. */
+    function axisRowAt(value: number): string {
+        const rows = tooltipLines(axisTooltipHtml(PAY_DAY, [{seriesName: 'EUR', value}])).filter((line) => line.includes('EUR:'));
+        expect(rows, 'barrier: one row for the main series').toHaveLength(1);
+        return rows[0];
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the tooltips are written en-US, checked.
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    });
+
+    it('an event on an asset priced in millionths: its bucket value, its value and its original value read their four significant digits, not 0.0000', async () => {
+        const marker = dividendOf(TINY.value, TINY.original);
+        mountPriceChart({data: pricedAt(TINY.price), eventMarkers: [marker]});
+
+        const {bucket, value, original} = await eventPriceLines(marker);
+
+        expect.soft(bucket, 'the bucket value, the price the event sits on (today 💰 0.0000)').toMatch(numberToken('0.000003457'));
+        expect.soft(value, 'the event’s value (today 💰 0.0000 and its badge)').toMatch(numberToken('0.000003457'));
+        expect.soft(original, 'the original value, inside chart.tooltip.originalValue (today 0.0000)').toBe(`${catalogue('chart.tooltip.originalValue', {value: '0.000003751'})} (🇺🇸 USD)`);
+    });
+
+    it('guard: an event at 1.0834 and 65000.1234 keeps its four decimals — the bucket value 1.0834, the value 65,000.1234, the original 1.0834', async () => {
+        const marker = dividendOf(PLAIN.value, PLAIN.original);
+        mountPriceChart({data: pricedAt(PLAIN.price), eventMarkers: [marker]});
+
+        const {bucket, value, original} = await eventPriceLines(marker);
+
+        expect.soft(bucket, 'the bucket value').toMatch(numberToken('1.0834'));
+        expect.soft(value, 'the event’s value').toMatch(numberToken('65,000.1234'));
+        expect.soft(original, 'the original value').toBe(`${catalogue('chart.tooltip.originalValue', {value: '1.0834'})} (🇺🇸 USD)`);
+    });
+
+    it('the axis row of a price in millionths reads 0.000003457, not 0.0000', async () => {
+        mountPriceChart({data: pricedAt(TINY.price), showMainDelta: false});
+        await drawnOver(
+            DATA.map((point) => point.date),
+            'daily',
+        );
+
+        expect(axisRowAt(TINY.price), 'the main series’ row (today EUR: 0.0000)').toMatch(numberToken('0.000003457'));
+    });
+
+    it('guard: the axis rows of 1.0834 and of 65000.1234 keep their four decimals', async () => {
+        mountPriceChart({data: pricedAt(PLAIN.price), showMainDelta: false});
+        await drawnOver(
+            DATA.map((point) => point.date),
+            'daily',
+        );
+
+        expect.soft(axisRowAt(1.0834), 'the row of 1.0834').toMatch(numberToken('1.0834'));
+        expect.soft(axisRowAt(65000.1234), 'the row of 65000.1234').toMatch(numberToken('65,000.1234'));
     });
 });
 
