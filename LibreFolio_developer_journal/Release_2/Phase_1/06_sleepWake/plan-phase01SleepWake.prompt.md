@@ -3870,3 +3870,14 @@ mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 sono ✅ nel backlog.
    (`.scheduler.lock` in `validate_test_data_dir`, file di H, facoltativa). Checkpoint FROZEN al coordinatore.
    In attesa del via da scrittore: la `desc` di `scheduler-catchup` (dice ancora «not_leader … SCU-001..032») e
    quella di `system-wake` in `_backend_api.py` (non nomina WAKE-029).
+7. ✅ 17/10 06:33–06:38 — Z-11 entrato (dev `c5e3c199d`, `CHANGELOG` 🔄 `47405701f`; base `47405701f`). Via da
+   scrittore del coordinatore sulle due descrizioni del runner:
+   - `scheduler-catchup` (`_backend_services.py`): la `desc` dice il lock fra processi (entrato dopo l'impostazione,
+     il leader mai chiesto, stato e ora letti dentro, un lock che non si prende solleva prima dello stato) e il
+     ripiego senza `fcntl` (`not_leader`); la riga «Tests:» del `print_info` passa a «SCU-001..034», col lock;
+   - `system-wake` (`_backend_api.py`): la `desc` dice WAKE-029 (un worker non leader risponde `ok` coi suoi job
+     attraverso il lock; `not_leader` solo senza `fcntl`) e che WAKE-024 intrappola anche il lock.
+   Black ha diviso su tre righe la chiamata del `print_info`, perché ora supera le 300 colonne. Ruff e black puliti,
+   `git diff --check` pulito. Prove (sotto 50): `services scheduler-catchup` 93/93, con la riga nuova stampata;
+   `api system-wake` 76/76 (3,5 min: l'avvio del backend della corsia ha rifatto il build del frontend). Porta 6186
+   libera.

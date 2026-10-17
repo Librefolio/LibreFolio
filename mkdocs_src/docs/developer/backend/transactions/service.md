@@ -181,10 +181,9 @@ import hands its rows to the bulk workspace, which shows the refusal with the ba
 other issues. A figure a plugin computes instead of reading it, such as a per-unit cost
 from a total, is rounded by the plugin (decision D6, see
 [Decimal places](../../architecture/patterns/brim_plugin_guide.md#decimal-places)): on a
-`RealDecimal` column, a quantity or a per-unit cost, it then meets neither of the first
-two refusals (the amount is `Numeric`, whose significant digits the rounding does not
-cap); no rounding takes away digits before the decimal point, which are checked as for
-any other value. The column types are in
+`RealDecimal` column, a quantity, a cash amount (since W-B60) or a per-unit cost, it then
+meets neither of the first two refusals; no rounding takes away digits before the decimal
+point, which are checked as for any other value. The column types are in
 [Decimal Columns](../../architecture/database/index.md#decimal-columns).
 
 ---

@@ -410,6 +410,14 @@ def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Synthetic yield tests", verbose=verbose)
 
 
+def services_scheduled_investment_cost_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC7-2: the Scheduled Investment provider's cost."""
+    print_section("Services: Scheduled Investment Cost Bounds (R13-SEC7-2)")
+    print_info("Testing: scheduled_investment/plugin.py (COMPOUND late interest closed form, late history, cache cap, late horizon)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_cost_bounds.py", test_names)
+    return run_command(cmd, "Scheduled investment cost bounds tests", verbose=verbose)
+
+
 def services_synthetic_yield_integration(verbose: bool = False, test_names: list = None) -> bool:
     """Test E2E synthetic yield integration scenarios."""
     print_section("Services: Synthetic Yield Integration E2E")
@@ -1080,7 +1088,9 @@ def services_scheduler_catchup(verbose: bool = False, test_names: list = None) -
     """Test the scheduler's catch-up on return and its shared lock: run_due_jobs and scheduler_loop (lot Z3)."""
     print_section("Services: Scheduler Catch-up and Lock")
     print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs, scheduler_loop), with sleep_wake/activity.py")
-    print_info("Tests: SCU-001..032 — constants, types, busy span, settle before clock and lock, a lock per event loop, short circuits in order, off-loop I/O, jobs and outcomes, failures by class name, cancellation, status, blocked then caught up, the loop: listener, nudges, shutdown")
+    print_info(
+        "Tests: SCU-001..034 — constants, types, busy span, settle before clock and lock, a lock per event loop, short circuits in order, the lock across processes or the leader without fcntl (Z-11), off-loop I/O, jobs and outcomes, failures by class name, cancellation, status, blocked then caught up, the loop: listener, nudges, shutdown"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_catchup.py", test_names)
     return run_command(cmd, "Scheduler catch-up tests", verbose=verbose)
 
@@ -1732,6 +1742,7 @@ Note: No backend server required.
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
+    add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in one pass, linear day counts, cache cap, horizon")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(
         cat,
@@ -2217,7 +2228,7 @@ Note: No backend server required.
         "scheduler-catchup",
         services_scheduler_catchup,
         name="Scheduler Catch-up and Lock",
-        desc="run_due_jobs: an unknown reason refused before anything; busy 'scheduler' from start to end (settle and lock wait included, also on an exception or a cancellation); return/wake settle the clock before the due checks and before the lock; one asyncio.Lock per event loop (no overlap, the second run loads what the first saved, two loops in a row); under the lock disabled, blocked, not_leader, setting off, in order, without loading the state; am_i_leader/load_state/save_state off the loop; one now for both due checks; jobs in order, each saved, outcomes copied from JobState; a job or a save raising is an error outcome by class name only, logged, the next job runs; report status ok/partial/error; blocked runs nothing, then the missed slot is caught up (D-Z3-4, D-Z3-1). scheduler_loop: disabled registers nothing; listener scheduler-catch-up at 60 s; startup after the first delay or a nudge; tick or return; a nudge from any thread; two nudges, one run; a failing run logged; shutdown ends it and removes the listener",
+        desc="run_due_jobs: an unknown reason refused before anything; busy 'scheduler' from start to end (settle and lock wait included, also on an exception or a cancellation); return/wake settle the clock before the due checks and before the lock; one asyncio.Lock per event loop (no overlap, the second run loads what the first saved, two loops in a row); under the lock disabled, blocked, setting off, in order, without loading the state; with fcntl the lock across processes (Z-11, N71) entered after the setting, the leader never asked, the state and the clock read inside it, a lock that cannot be taken raising before the state loads; without fcntl the leader instead (not_leader); the lock or am_i_leader, load_state and save_state off the loop; one now for both due checks; jobs in order, each saved, outcomes copied from JobState; a job or a save raising is an error outcome by class name only, logged, the next job runs; report status ok/partial/error; blocked runs nothing, then the missed slot is caught up (D-Z3-4, D-Z3-1). scheduler_loop: disabled registers nothing; listener scheduler-catch-up at 60 s; startup after the first delay or a nudge; tick or return; a nudge from any thread; two nudges, one run; a failing run logged; shutdown ends it and removes the listener",
         # PURE: no DB, no server, no lane port, no network. Every collaborator of run_due_jobs (switches, leader, settings, state
         # store, jobs, due functions, utc_now, settle_clock) is a fake set with monkeypatch; the process's ACTIVITY is replaced
         # only through monkeypatch by an Activity on a fake clock. The loop runs as a task of the test's own event loop, against
@@ -2284,7 +2295,7 @@ Note: No backend server required.
         "profile-defaults",
         services_profile_defaults,
         name="Profile Defaults",
-        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call",
+        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call; H-27: an entry not of the very type of the reader's literal fallback raises ProfileDefaultError (a TypeError naming the variable, the profile, both types and the table), None for the upload limit stops backup_max_upload_mb(), and the sources' profile_default(NAME, literal) calls are checked against every profile's entries; H-37 (E, R13-SEC7): under any profile but selfhosted a variable the profile does not list raises ProfileDefaultError instead of the self-hosted fallback (fail closed), the upload limit's managed entry removed stops its reader while selfhosted keeps 0, every call's variable is listed by every profile but selfhosted (guard and self-test), and an entry equal to its reader's own default is fine",
         # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
         # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
         isolation="pure",

@@ -2,8 +2,9 @@
 Database numeric precision for LibreFolio.
 
 Provides functions to work with database numeric precision, decimal truncation and the input limits.
-All numeric columns in the database are declared NUMERIC(precision, scale); quantities and prices use
-``RealDecimal`` (``db/real_decimal.py``), which reads back the decimal written, at most 15 significant digits.
+All numeric columns in the database are declared NUMERIC(precision, scale); quantities, amounts, event values and
+prices use ``RealDecimal`` (``db/real_decimal.py``; amounts and event values since W-B60), which reads back the decimal
+written, at most 15 significant digits.
 
 Usage:
     from backend.app.db.precision import get_model_column_precision, truncate_to_db_precision
@@ -34,7 +35,7 @@ SIGNIFICANT_DIGITS_EXCEEDED = "significantDigitsExceeded"
 INTEGER_DIGITS_EXCEEDED = "integerDigitsExceeded"
 
 #: The digits before the decimal point of a quantity and of a transaction amount (night decision N63, 17/10/2026): 15,
-#: as many as a REAL gives back, not the 12 their declarations leave (``RealDecimal(22, 10)``, ``Numeric(18, 6)``). A
+#: as many as a REAL gives back, not the 12 their declarations leave (``RealDecimal(22, 10)``, ``RealDecimal(18, 6)``). A
 #: thousand billion VND or IDR is a real amount, and release 1.2, which never enforced the declarations on SQLite, may
 #: hold such data already. Every other column keeps the digits it declares (``max_integer_digits``).
 _INTEGER_DIGITS_BY_COLUMN = {("transactions", "quantity"): REAL_SIGNIFICANT_DIGITS, ("transactions", "amount"): REAL_SIGNIFICANT_DIGITS}
@@ -145,8 +146,8 @@ def round_computed_value(value: Decimal, model: Type[SQLModel], column_name: str
 
     ``ROUND_HALF_EVEN`` to the column scale and, on a ``RealDecimal`` column, to ``REAL_SIGNIFICANT_DIGITS``
     significant digits: the result passes the decimal places of ``decimal_limit_issue`` and, on a ``RealDecimal``
-    column, its significant digits too (on a ``Numeric`` column, such as an amount, ``1234567890.1234567`` becomes
-    ``1234567890.123457``, still 16 significant digits); never its digits before the decimal point (W-B58), which no
+    column, its significant digits too (on a plain ``Numeric`` column, an FX rate, ``123456789.12345678912`` becomes
+    ``123456789.1234567891``, still 19 significant digits); never its digits before the decimal point (W-B58), which no
     rounding can bring back. For the values a plugin derives, such as a
     per-unit cost from a total and a quantity (1000 / 3 → 333.333333333333). Never for a value the user typed or a
     file holds: over the limit those are refused, never rounded (decision D2).
