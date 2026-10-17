@@ -169,6 +169,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The asset page now names the data provider (for example "Yahoo Finance") instead of its internal code when the provider list arrives after the asset.
 - **The bulk editor names a broker you can only view, and flags the row it refuses.** Copying a transfer whose receiving broker is shared with you as a viewer showed that side as "—" and reported the refusal on the sending row as "Broker #N". The grid and the message now name the broker, and the refusal sits on the row that caused it; refused edits, deletions and splits are flagged on their own rows too.
 - **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
+- **Signing in, and opening or saving your settings, no longer fail when your account's saved theme is one this version doesn't know** (a hand-edited database, or a downgrade): the app shows the instance's default theme, or Auto.
+- **When the last active administrator tries to delete their own account, the dialog now says in your language what to do first** — make another account an administrator — instead of an English server message.
 - Sign-in errors (the server does not answer, a server error, too many attempts) now appear in your language, no longer as technical English text.
 - The show/hide button of password fields can be reached with the keyboard and has a translated name.
 - The import wizard counts assets in the singular too ("1 unique asset, 1 needs resolution").
