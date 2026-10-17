@@ -317,7 +317,7 @@ With Docker Compose on your server:
 
     `backup restore` checks the archive on a copy first: if this LibreFolio cannot take it, the command says why, and nothing changes. For a secure backup, it asks its password first. Read the report, then type `restore`.
 
-    With the instance key of the hosted instance, in a file such as `old-instance.key` next to `docker-compose.yml`, the restore line becomes three, before the restart:
+    With the instance key of the hosted instance, in a file such as `old-instance.key` next to `docker-compose.yml`, kept private (`chmod 600 old-instance.key`), the restore line becomes three, before the restart:
 
     ```bash
     docker compose cp old-instance.key librefolio:/root/old-instance.key
