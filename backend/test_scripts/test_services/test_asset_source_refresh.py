@@ -9,19 +9,21 @@ setup_test_database()
 import asyncio
 import time
 import uuid
+from dataclasses import dataclass, field
 from decimal import Decimal
 from unittest.mock import patch
 
-from sqlalchemy import select
+import pytest_asyncio
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetType, PriceHistory, ProviderInputType
+from backend.app.db.models import Asset, AssetEvent, AssetProviderAssignment, AssetType, PriceHistory, ProviderInputType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.assets.events import FAAssetEventPoint
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderAssignmentItem
-from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
+from backend.app.schemas.refresh import FARefreshItem, FARefreshResult, SyncDateRangeModel, SyncStatus
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
 from backend.app.services.assets import core, refresh
 from backend.app.services.assets.base import AssetHistoryStartDate
@@ -712,6 +714,217 @@ async def test_fetch_history_point_after_today_is_dropped(xr12_today):
     entry = _xr12_history_entry(prep)
     assert {d.isoformat() for d in after_today}.isdisjoint(entry["dates"]), sorted(entry["dates"])
     assert sorted(entry["dates"]) == [d.isoformat() for d in _xr12_days(start, yesterday)]
+
+
+# ============================================================================
+# Z-32 (c) — the quote currency the provider reported, kept on the assignment
+# ============================================================================
+#
+# Z-32 (c) §4: after a history fetch whose ``FAHistoricalData.currency`` is set, the asset's assignment holds that code in
+# ``reported_currency`` — as reported (``GBp``, not the ``GBP`` its points carry), stripped; a code longer than the
+# column's 8 characters is not stored. A fetch that reports no code leaves the column as it was. A history served whole
+# from the core history cache carries the code it was fetched with (the cache entry keeps it): a cache hit neither
+# erases the code nor misses it.
+#
+# Lane-database tests, as the refresh tests above: a past range, so no current value is asked; the provider's history a
+# double patched on MockProvider, as the resume tests do — no network, every call recorded. Each test writes its own GBP
+# assets, assigned to mockprov under identifiers of its own (no history cache entry is shared with another test); the
+# ``z32_assets`` fixture deletes them with their prices and assignments, and drops the cache entries of those identifiers.
+# A column left as it was is read beside ``last_fetch_at``: set, it proves the refresh reached the assignment.
+#
+# Red on HEAD 80cef0e43: AssetProviderAssignment has no ``reported_currency`` (§2); each test fails on that first.
+
+_Z32_START, _Z32_END = date(2024, 2, 5), date(2024, 2, 7)  # a past range: the history alone, no current value
+_Z32_DAYS = 3
+_Z32_CLOSE = Decimal("7250")  # pence, as Yahoo quotes a London line; the points carry GBP
+
+
+def _z32_column():
+    """``AssetProviderAssignment.reported_currency``, the column §2 adds; until it exists the test fails here."""
+    column = getattr(AssetProviderAssignment, "reported_currency", None)
+    if column is None:
+        pytest.fail("red until Z-32 (c): AssetProviderAssignment has no reported_currency (§2): nothing keeps the code the provider reported", pytrace=False)
+    return column
+
+
+class _Z32History:
+    """Stand-in for ``MockProvider.get_history_value``: a GBP close for each day asked, and ``reported`` as the history's
+    ``currency`` — the code as the provider reported it. Every call is recorded: (identifier, start, end)."""
+
+    def __init__(self, reported: str | None):
+        self.reported = reported
+        self.calls: list[tuple[str, AssetHistoryStartDate, date]] = []
+
+    async def __call__(self, identifier, identifier_type, provider_params, start_date, end_date) -> FAHistoricalData:
+        self.calls.append((identifier, start_date, end_date))
+        days = [start_date + timedelta(days=offset) for offset in range((end_date - start_date).days + 1)]
+        return FAHistoricalData(prices=[FAPricePoint(date=day, close=_Z32_CLOSE, currency="GBP") for day in days], events=[], currency=self.reported, source="mockprov")
+
+
+@dataclass
+class _Z32Assets:
+    """The assets one test writes, for ``z32_assets`` to delete."""
+
+    asset_ids: list[int] = field(default_factory=list)
+    identifiers: set[str] = field(default_factory=set)
+
+    async def new(self, *, identifier: str | None = None, reported_currency: str | None = None) -> tuple[int, str]:
+        """A GBP asset assigned to mockprov under ``identifier`` (one of its own when None), TICKER, no params, as the
+        asset form saves it; ``reported_currency`` then set to the value given (none: NULL, as a new assignment has it)."""
+        identifier = identifier or f"Z32-{uuid.uuid4().hex[:12]}.L"
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            asset = Asset(display_name=f"Z-32 London line {uuid.uuid4().hex[:12]}", currency="GBP", asset_type=AssetType.STOCK, active=True)
+            session.add(asset)
+            await session.commit()
+            await session.refresh(asset)
+            self.asset_ids.append(asset.id)
+            self.identifiers.add(identifier)
+            item = FAProviderAssignmentItem(asset_id=asset.id, provider_code="mockprov", identifier=identifier, identifier_type=ProviderInputType.TICKER, provider_params=None)
+            results = await AssetSourceManager.bulk_assign_providers([item], session)
+            assert [result.success for result in results] == [True], f"setup: the assignment of asset {asset.id}: {results}"
+            if reported_currency is not None:
+                await session.execute(update(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset.id).values({_z32_column(): reported_currency}))
+                await session.commit()
+        return asset.id, identifier
+
+
+@pytest_asyncio.fixture
+async def z32_assets():
+    """The assets of one test; at teardown they go, with their prices, events and assignments, and the history cache
+    entries of their identifiers."""
+    assert initialize_test_database(), "Failed to initialize test database"
+    AssetProviderRegistry.auto_discover()
+    assets = _Z32Assets()
+    yield assets
+    if assets.asset_ids:
+        async with AsyncSession(get_async_engine()) as session:
+            await session.execute(delete(PriceHistory).where(PriceHistory.asset_id.in_(assets.asset_ids)))
+            await session.execute(delete(AssetEvent).where(AssetEvent.asset_id.in_(assets.asset_ids)))
+            await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(assets.asset_ids)))
+            deleted = await session.execute(delete(Asset).where(Asset.id.in_(assets.asset_ids)))
+            await session.commit()
+        assert deleted.rowcount == len(assets.asset_ids), f"cleanup: {deleted.rowcount} of the assets {assets.asset_ids} deleted"
+    for identifier in assets.identifiers:
+        await core.drop_asset_cache_entries("mockprov", identifier, ProviderInputType.TICKER, None)
+
+
+async def _z32_refresh(asset_id: int, history: _Z32History) -> FARefreshResult:
+    """The refresh of one asset over the past range, ``history`` answering for the provider: its result."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        with patch.object(MockProvider, "get_history_value", history):
+            response = await AssetSourceManager.bulk_refresh_prices([FARefreshItem(asset_id=asset_id, date_range=SyncDateRangeModel(start=_Z32_START, end=_Z32_END))], session)
+    (result,) = response.results
+    return result
+
+
+async def _z32_assignment(asset_id: int) -> tuple[str | None, object]:
+    """``(reported_currency, last_fetch_at)`` of the asset's assignment, read in a new session."""
+    column = _z32_column()
+    async with AsyncSession(get_async_engine()) as session:
+        code, fetched_at = (await session.execute(select(column, AssetProviderAssignment.last_fetch_at).where(AssetProviderAssignment.asset_id == asset_id))).one()
+    return code, fetched_at
+
+
+def _z32_refreshed(result: FARefreshResult, history: _Z32History, calls: int) -> None:
+    """Barrier: the refresh went through — OK, the three days fetched, no error — with ``calls`` history call(s) in all."""
+    observed = (result.status, result.points_fetched, result.errors, len(history.calls))
+    assert observed == (SyncStatus.OK, _Z32_DAYS, [], calls), f"barrier: the refresh did not go as set up (status, points, errors, history calls): {observed}"
+
+
+@pytest.mark.parametrize(
+    ("reported", "stored"),
+    [
+        pytest.param("GBp", "GBp", id="pence-as-reported"),
+        pytest.param("USD", "USD", id="dollars"),
+        pytest.param("  GBp\n", "GBp", id="stripped"),
+        pytest.param("GBPPENCE", "GBPPENCE", id="eight-characters"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_z32_a_history_fetch_keeps_the_code_the_provider_reported(z32_assets, reported, stored):
+    """Z-32 (c) §4: a fetched history whose ``currency`` is set leaves it on the assignment, as reported — ``GBp`` is not
+    folded to the ``GBP`` its points carry —, stripped, eight characters kept whole.
+
+    Red on HEAD: AssetProviderAssignment has no ``reported_currency``.
+    """
+    _z32_column()
+    asset_id, _ = await z32_assets.new()
+    history = _Z32History(reported)
+
+    result = await _z32_refresh(asset_id, history)
+
+    _z32_refreshed(result, history, 1)
+    code, _fetched_at = await _z32_assignment(asset_id)
+    assert code == stored, f"the history reported {reported!r}: the assignment must hold {stored!r}, holds {code!r}"
+
+
+@pytest.mark.parametrize("before", [pytest.param("GBp", id="pence-kept"), pytest.param(None, id="null-kept")])
+@pytest.mark.asyncio
+async def test_z32_a_history_without_a_code_leaves_the_column_as_it_was(z32_assets, before):
+    """Z-32 (c) §4: a fetched history whose ``currency`` is None leaves the assignment's code as it was — ``GBp``
+    learned before stays, NULL stays NULL —, once the refresh has reached the assignment (``last_fetch_at`` set).
+
+    Red on HEAD: AssetProviderAssignment has no ``reported_currency``.
+    """
+    _z32_column()
+    asset_id, _ = await z32_assets.new(reported_currency=before)
+    history = _Z32History(None)
+
+    result = await _z32_refresh(asset_id, history)
+
+    _z32_refreshed(result, history, 1)
+    code, fetched_at = await _z32_assignment(asset_id)
+    assert fetched_at is not None, "barrier: the refresh never reached the assignment (last_fetch_at unset), so «left as it was» would prove nothing"
+    assert code == before, f"a history without a code must leave {before!r}, left {code!r}"
+
+
+@pytest.mark.asyncio
+async def test_z32_a_code_longer_than_the_column_is_not_stored(z32_assets):
+    """Z-32 (c) §4: a code of nine characters (``GBP.PENCE``) is not stored, whole or cut to the column's eight: the
+    assignment, NULL before, is NULL after a refresh that otherwise went through and reached it.
+
+    From NULL on purpose: whether a code stored before stays or goes when a longer one comes is not decided (§4 says
+    «not stored»), and this test pins neither.
+
+    Red on HEAD: AssetProviderAssignment has no ``reported_currency``.
+    """
+    _z32_column()
+    asset_id, _ = await z32_assets.new()
+    history = _Z32History("GBP.PENCE")
+
+    result = await _z32_refresh(asset_id, history)
+
+    _z32_refreshed(result, history, 1)
+    code, fetched_at = await _z32_assignment(asset_id)
+    assert fetched_at is not None, "barrier: the refresh never reached the assignment (last_fetch_at unset), so «not stored» would prove nothing"
+    assert code is None, f"a code longer than 8 characters must not be stored, whole or cut: {code!r}"
+
+
+@pytest.mark.asyncio
+async def test_z32_a_history_served_from_the_cache_carries_the_code_it_was_fetched_with(z32_assets):
+    """Z-32 (c) §4: the first of two assets assigned alike (mockprov, one identifier, TICKER, no params: one cache key)
+    fetches a history reported in ``GBp``; the second, refreshed over the same range, is served whole from the core
+    history cache — the provider is not asked again — and its assignment, NULL until then, holds ``GBp``: the cache entry
+    carries the code. The first refreshed again, from the cache too, keeps ``GBp``: a cache hit does not erase it.
+
+    Red on HEAD: AssetProviderAssignment has no ``reported_currency``.
+    """
+    _z32_column()
+    first, identifier = await z32_assets.new()
+    second, _ = await z32_assets.new(identifier=identifier)
+    history = _Z32History("GBp")
+
+    fetched = await _z32_refresh(first, history)
+    _z32_refreshed(fetched, history, 1)
+    assert (await _z32_assignment(first))[0] == "GBp", "precondition: the fetch left GBp on the first assignment"
+
+    served = await _z32_refresh(second, history)
+    _z32_refreshed(served, history, 1)  # still one call: the second history came whole from the cache
+    again = await _z32_refresh(first, history)
+    _z32_refreshed(again, history, 1)
+
+    codes = {"second, served from the cache": (await _z32_assignment(second))[0], "first, refreshed again from the cache": (await _z32_assignment(first))[0]}
+    assert codes == dict.fromkeys(codes, "GBp"), f"a history served from the cache must carry the code it was fetched with: {codes}"
 
 
 if __name__ == "__main__":

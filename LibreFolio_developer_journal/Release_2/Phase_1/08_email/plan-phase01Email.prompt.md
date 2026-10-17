@@ -6688,6 +6688,154 @@ non sposti il registro.
 >   Frontend: banner e selettore, i18n nelle 4 lingue. Test: services, api, Vitest.
 > - **La correzione** (A o C) e quella degli asset: un lotto medio.
 
+#### E-19a.3 — Fix-forward: il passo d'avvio dopo le due riparazioni ✅ (2026-10-17, 17:1x–17:2x; HEAD `e98934eed`)
+> **Il rosso** (coordinatore, 17:1x, gate I, `all-backend` in dev):
+> `test_lone_transfer_legs.py::test_the_startup_step_runs_right_after_the_post_migration_fixes`, perché
+> `lone-transfer-legs` deve venire subito dopo `post-migration-fixes`, e il mio `stored-currencies` si era messo in
+> mezzo.
+>
+> **⚠️ Fuori pista, perché mi era sfuggito.** In E-19a avevo cercato i test che leggono l'ordine dei passi con
+> `grep -rln … | head -n 5`. La lista era tagliata esattamente a cinque file, e i file erano **dodici**.
+> - **La lezione**: un passo d'avvio nuovo vuol dire far girare **ogni** suite che legge l'ordine
+>   (`grep -rln -E "post-migration-fixes|lone-transfer-legs|STARTUP_STEPS" backend/test_scripts`), **senza troncare**.
+> - È la regola del `tee` + `head`: una lista per decidere non si tronca.
+>
+> **La cura**:
+> - `stored-currencies` va subito dopo `lone-transfer-legs`: è un controllo che solo scrive nel log, quindi sta dopo
+>   le due riparazioni;
+> - in `overview.md` i passi 13 e 14 sono scambiati, e il 14 dice «after both repairs».
+>
+> **Prove** (`files/tools/e9_suites.sh e19fix …`, 17:18–17:27, corsia 6188, carico sotto 50): **11 suite, 986 verdi**.
+>
+> | Suite | Verdi |
+> |---|---|
+> | services `lone-transfer-legs` | 20 |
+> | services `stored-currencies` | 24 |
+> | services `admin-bootstrap` | 218 |
+> | services `app-lifecycle` | 53 |
+> | services `plugin-secrets-check` | 11 |
+> | services `shutdown-process` | 7 |
+> | services `sleep-wake-suspend` | 141 |
+> | services `backup-leftovers` | 44 |
+> | services `backup-apply` | 255 |
+> | services `backup-staging` | 168 |
+> | db `post-migration` | 45 |
+>
+> - ruff e black puliti su `app_lifespan.py`.
+> - `api backup-roundtrip` non l'ho rifatto: taglia i passi per nome (da `pending-restore` a `restore-commit`), quindi
+>   lo spostamento non lo tocca, ed era verde nel gate I.
+
+#### E-19b.0 — Analisi del lato utente (2026-10-17, 16:4x–17:0x; sola lettura, HEAD `e98934eed`)
+> **Il quadro del coordinatore**:
+> - Z-32 (c), non ancora in dev, porta:
+>   - `IssueCode.QUOTE_IN_MINOR_UNIT` (`WARNING`, `navigate_asset`, sul modello di `INVALID_SPLIT_RATIO` di MF-D4);
+>   - la colonna `asset_provider_assignments.reported_currency` (migrazione 010);
+>   - un lettore unico in `portfolio_service.py` degli asset tenuti e delle loro assegnazioni.
+> - `NON_ISO_CURRENCY` usa quel lettore, non un secondo.
+>
+> **Lo stato vero** (un agente `explore` sul frontend, letture mie sul backend):
+> - **Il rapporto di qualità** (`data_quality.py`):
+>   - le voci `MISSING_FX_*` nascono dalle stringhe grezze `from/target` di `missing_fx_pairs_dto`
+>     (`daily_state.py:941` scrive `f"{from_ccy}/{target}"` col codice salvato). Un `978` arriva quindi come
+>     `978/EUR`;
+>   - il rapporto si costruisce in due punti di `portfolio_service.py` (`:993` riepilogo, `:2068` l'altro percorso);
+>   - `DataQualityIssue` ha `message_i18n_key`, `message_params`, gli asset e le coppie toccate, e una CTA facoltativa.
+> - **Il banner** (`DataQualityBanner.svelte`):
+>   - traduce `message_i18n_key` con i soli `message_params`;
+>   - senza `cta_action` non disegna il bottone;
+>   - `data-testid="data-quality-issue-{code}"`;
+>   - le chiavi stanno in `i18n/dataQuality/*.json`.
+> - **Il selettore**:
+>   - le valute vengono da `GET /utilities/currencies?language=` (`currencyStore.ts`): codice, nome **tradotto**,
+>     simbolo, nessun codice numerico. Quindi il client non può sapere che `978` è EUR;
+>   - nessuno spazio per un suggerimento o un avviso;
+>   - lo usano 15 moduli, fra cui il modale dell'asset, dove scegliere EUR apre il wipe della Policy D.
+>   - `/utilities/currencies/normalize` esiste già, ma confronta simboli e nomi tradotti, che è un'altra regola, e
+>     nessun frontend lo chiama.
+> - **Il rapporto del ripristino**:
+>   - gli avvisi sono chiavi senza parametri (`restoreText.ts` `WARNING_KEYS`, con un ripiego `unknown`);
+>   - gli elenchi di dettaglio seguono il modello di `control_totals_differences`, con una riga `more`;
+>   - `restoreI18n.test.ts` ha una lista di codici scritta a mano.
+> - **L'i18n**:
+>   - `./dev.py i18n add` scrive le sorgenti `i18n/<sottosistema>/` e rigenera il catalogo;
+>   - le porte HTML (`htmlInterpolation.gate`, `htmlSink.gate`, in `front-utility core-unit`) vietano `<` e `&` nei
+>     valori.
+>
+> **La proposta: E-19b in due tempi.**
+> - **b1, ora, indipendente da Z**:
+>   - **Suggerimento**: `GET /utilities/currencies/suggest?value=` → `{value, suggestion, candidates}`, sulla regola
+>     unica di E-19a (`suggested_iso_currency`).
+>   - **Selettore** (`CurrencySearchSelect`): un valore assente dalle opzioni diventa un'opzione sintetica, e il campo
+>     mostra «978» con un avviso e il suggerimento («it stands for EUR»), invece del vuoto.
+>     - Niente scelta in un clic finché D1 e D2 non decidono: nel modale dell'asset scegliere EUR è ancora il wipe.
+>   - **L'avviso del ripristino**, col via di B:
+>     - `staging.py` legge i reperti sulla copia aggiornata (lo stesso `stored_currencies`);
+>     - `schemas/backup.py` riceve il codice `non_iso_currencies` e l'elenco (posto, valore, righe, suggerimento);
+>     - `backup_cli.py` riceve il testo e le prime righe;
+>     - `restoreText.ts`, le righe in `RestoreReportModal` e `restoreI18n.test.ts`.
+>   - i18n in 4 lingue (`currency`, `backup`), `api sync`, Vitest e le porte.
+> - **b2, dopo Z-32 (c)**:
+>   - `IssueCode.NON_ISO_CURRENCY`: una voce per codice salvato, con `message_params {value, suggestion}`, gli asset
+>     tenuti in quel codice (dal lettore di Z), le coppie spostate, nessuna CTA, `group_key="non_iso_currency"`;
+>   - le voci `MISSING_FX_*` saltano le coppie con un lato non ISO, classificato sulla stringa grezza `from/target`
+>     (un nome può avere un trattino);
+>   - più la valuta base non ISO, con una sua chiave;
+>   - i18n in `dataQuality` e `api sync`.
+>
+> **Da decidere col coordinatore**:
+> - lo spezzamento b1/b2;
+> - l'endpoint nuovo o l'estensione di `normalize`;
+> - i proprietari di `utilities.py`, di `CurrencySearchSelect`/`SearchSelect` (UI condivisa) e dei file del
+>   ripristino (B).
+>
+> **Le risposte** (coordinatore, 16:3x):
+> - **Il ripristino (B)**: un codice d'avviso nuovo tocca **sette posti**, e ho il via su tutti; B rivede.
+>   - `schemas/backup.py:196` (il `Literal`) e il commento a :167, poi `api sync`;
+>   - `staging.py`, il codice e la docstring a :158-162;
+>   - `backup_cli.py` `_STAGE_WARNINGS`;
+>   - `restoreText.ts` `WARNING_KEYS`;
+>   - `backup.restore.report.warning.<code>` in `i18n/backup/*`;
+>   - `restoreI18n.test.ts` §5;
+>   - `admin/cli_tools.en.md` (l.462 in dev, l.491 qui).
+>   - La mia scelta, comunicata: **solo il codice, senza elenco di dettaglio**, quindi `RestoreReportModal.svelte` non si
+>     tocca. Il testo rimanda a `db currencies`, e dopo il ripristino il banner di b2 nomina i codici.
+> - **Spezzamento ok, via su b1**, prima i rossi; **un endpoint `suggest` nuovo**; il via su tutti i file di b1. Con due
+>   attenzioni:
+>   - **`staging.py` per ultimo**, dopo l'ingresso di B-43 (B tradurrà lì in `database_damaged` gli errori di schema
+>     illeggibile, in `_stage` e `_refuse_foreign_objects`): me lo dirà il coordinatore;
+>   - **`CurrencySearchSelect.svelte`** è nell'area del programma colori: la riga d'avviso usa solo ruoli esistenti, e
+>     `theme-roles --check` deve restare pulito. Per un tono nuovo, chiedere prima.
+> - b2 aspetta Z-32 (c).
+
+#### E-19b1.0 — Il contratto e i rossi al `test-author` (2026-10-17, 16:3x–16:5x; HEAD `e98934eed`)
+> Skill `design-system` caricata. Per la riga d'avviso valgono:
+> - solo ruoli (`text-lf-warning` regge 4,5:1 su card e campo);
+> - niente stato nelle righe evidenziate delle opzioni: sulla tinta `selected` gli stati non reggono, quindi l'avviso
+>   sta sotto il campo e nella resa del valore scelto;
+> - lo stato per i test come `data-*`, mai come colore.
+>
+> **Il contratto** (al `test-author` `116f6270`, sei file nuovi):
+> - **CCA**: `iso_currency_candidates(value)` pubblica in `schemas/common.py`, la base di `suggested_iso_currency`
+>   (uguali per proprietà).
+> - **CSA-API**: `GET /api/v1/utilities/currencies/suggest?value=` (pubblica come `GET /utilities/currencies`), che
+>   risponde `{canonical, suggestion, candidates}`; `value` da 1 a 200 caratteri, altrimenti 422.
+> - **RNW**:
+>   - il `Literal` di `schemas/backup.py` accetta `non_iso_currencies`;
+>   - `staging._report(..., non_iso_currencies=True)` lo mette dopo gli altri codici; resta rosso fino a B-43;
+>   - `backup_cli._STAGE_WARNINGS` lo ha, con `db currencies` nel testo;
+>   - la parità `Literal` ↔ `_STAGE_WARNINGS`.
+> - **CNI** (Vitest), `CurrencySearchSelect`, con `978` assente dalle opzioni:
+>   - il campo mostra `978`;
+>   - `data-testid="currency-non-iso-hint"` con `data-suggestion`;
+>   - le chiavi `common.nonIsoCurrency.{suggestion,candidates,unknown}`;
+>   - una sola chiamata a `suggestCurrency`; i casi ambiguo, sconosciuto ed errore;
+>   - scegliere USD toglie l'avviso; `978` non è un'opzione scegliente;
+>   - le guardie per un codice noto e per il vuoto.
+> - **CSS** (Vitest): `currencyStore.suggestCurrency()` chiama
+>   `suggest_currency_api_v1_utilities_currencies_suggest_get`, una volta per valore; un errore non si mette in cache e
+>   risponde il vuoto.
+> - **RTN** (Vitest): `restoreWarningKey('non_iso_currencies')`.
+
 #### E-19a.0 — Il disegno, e i rossi al `test-author` (2026-10-17, 15:1x–15:3x; HEAD `e743fc6a3`)
 > **Il via del coordinatore** (15:1x):
 > - D1 e D2 vanno allo sviluppatore, con la mia raccomandazione (C più D2). **D3 è deciso: `warning`.**
@@ -6907,7 +7055,7 @@ non sposti il registro.
 >   - La mia sezione aggiunge i suoi elementi (`db currencies`, i blocchi, il titolo): debito vero per la traduzione
 >     futura, quindi nessun timbro.
 
-### MF-SEC9a resto + SEC9c — La revisione dopo l'ingresso (2026-10-17, 15:1x; sola lettura, codice `f0e54254f`, dev `29e30b6cc`) — ⏸ sospesa per E-19a
+### MF-SEC9a resto + SEC9c — La revisione dopo l'ingresso (2026-10-17, 15:1x, ripresa 16:1x; sola lettura, codice `f0e54254f`, dev `29e30b6cc`) ✅
 > **Sospesa** per ordine del coordinatore (15:1x): riprende dopo il checkpoint di E-19a.
 >
 > **Verificato finora, nessun reperto**:
@@ -6937,6 +7085,72 @@ non sposti il registro.
 >   `test_current_prices_bulk.py`) e la loro registrazione;
 > - info: il costo di un report con migliaia di strumenti distinti (`ceil(termini/500)` scansioni con `ilike`). È lento
 >   ma non blocca, e lo limita il tetto di upload.
+>
+> **Ripresa e chiusa** (2026-10-17, 16:1x–16:4x, dopo il checkpoint di E-19a; sola lettura): **OK sulle cure, nessun
+> reperto. Un LOW preesistente, che il chunking rende raggiungibile in scala.**
+> - **Il riordino di BRIM in Python regge.**
+>   - `display_name` è `NOT NULL UNIQUE` senza COLLATE (`001_initial.py:101`, `:120`), cioè collation BINARY: l'ordine
+>     dei byte UTF-8 è l'ordine dei code point di Python;
+>   - unico, quindi senza pari: stesso ordine della `ORDER BY` di prima.
+> - **SEC9c regge**: `price_history` ha `UniqueConstraint("asset_id", "date")` (`models.py:999`), quindi un riga per
+>   asset nel join sul `MAX(date)`.
+> - **I test**:
+>   - `bulk-reads-chunked`, nuovo e puro: due barriere dimostrano il meccanismo (SQLite rifiuta un OR di 1 500 termini,
+>     e un `or_` annidato conta ogni termine);
+>   - la parità del bulk col percorso per asset a 100 (il primo oltre i miei 91), 300 e 150 solo nome; le guardie a
+>     50/90; 1 500 chiavi WAC;
+>   - SEC9c: un `_WatchedSession` (`most_in_flight == 1` con 20 ripieghi), i ripieghi in una lettura raggruppata, la
+>     guardia di W-B62.
+>
+> **LOW, disponibilità, preesistente, per il proprietario del BRIM.**
+> - La catena di priorità in memoria di `search_asset_candidates_bulk` (`brim_provider.py` ~2073):
+>   - per ogni estrazione più passate `for asset in universe`, e 8 `_contains` per un nome;
+>   - cioè **O(estrazioni × universo) in Python, sul ciclo degli eventi**.
+> - Misurato col codice di MF (`f0e54254f`, caricato da `git show`), 5 000 asset salvati, SQLite in memoria
+>   (`files/mfsec9a_rest/probe/`), con un monitor del ritardo del ciclo:
+>
+> | Caso | Strumenti distinti | Blocco peggiore | Tempo totale |
+> |---|---|---|---|
+> | realistico: ogni ISIN o nome trova un asset | 90 | 0,01 s | 0,5 s |
+> | | 1 000 | 0,5 s | 5,8 s |
+> | | 3 000 | **4,5 s** | 20 s |
+> | nomi generici che trovano molti asset | 90 | **7,9 s** | 8,4 s |
+> | | 1 000 | **104 s** | 108 s |
+> | | 3 000 | **246 s** | 265 s |
+>
+> - Il caso a 90 era raggiungibile anche prima, quindi il blocco è preesistente. Prima, oltre i 91 strumenti, il
+>   parse falliva subito con un 500; ora gira, e la portata del blocco cresce.
+> - **Le cure possibili**:
+>   - la classificazione in memoria in `asyncio.to_thread`: toglie il blocco, gli oggetti ORM sono già caricati;
+>   - dei dizionari per le priorità esatte (ISIN, ticker);
+>   - un tetto di strumenti distinti per parse.
+>   - Le prove di parità (`test_brim_bulk_candidates.py`, `test_bulk_reads_chunked.py`) proteggono una riscrittura.
+> - Senza la SQL, il costo della sola query è 17 s di orologio a 3 000 per 5 000. Ma gira nel thread di `aiosqlite`, e
+>   non blocca.
+
+### MF-SEC9e — La revisione dopo l'ingresso (2026-10-17, 16:3x; sola lettura, codice `53bec4d59`, dev `4507f7507`)
+> **Esito: OK, nessun reperto.**
+> - **La fusione per asset** in intervalli disgiunti e inclusivi è corretta:
+>   - i giorni adiacenti si uniscono;
+>   - un intervallo rovesciato non estende niente: il `max` tiene la fine vera;
+>   - un asset nominato da più voci è unito su tutte.
+> - **Il `COUNT` raggruppato per blocco è esatto**: una riga soddisfa al più una condizione, quindi una sola volta in un
+>   solo blocco. Poi un `DELETE` per blocco e un commit.
+> - **La richiesta vuota** costruiva la risposta con campi sbagliati (`deleted_count`), cioè un 500: ora è valida, e la
+>   rotta risponde 200.
+> - **§8 dei test**:
+>   - una sovrapposizione contata una volta;
+>   - un asset in due voci;
+>   - richieste casuali contro un'enumerazione bruta;
+>   - al più ⌈intervalli/500⌉ + 2 SELECT;
+>   - la guardia dei limiti inclusivi;
+>   - la richiesta vuota.
+>
+> **Info**:
+> 1. Un asset nominato da due voci riporta il suo totale in tutte e due, per disegno (docstring e test). La somma dei
+>    `deleted_count` per voce non vale `total_deleted` in quel caso, che è il numero da mostrare.
+> 2. Preesistente: conta e cancella in una transazione differita. Un inserimento concorrente fra il `COUNT` e il
+>    `DELETE` farebbe restare indietro i conteggi per asset rispetto a `total_deleted`. Cosmetico.
 
 ### MF-SEC9b — `Currency.validate_code` accetta nomi e numeri: analisi (2026-10-17, 13:2x–13:5x; sola lettura)
 > **Il compito del coordinatore** (13:22), dal backlog di MF, che è occupato con SEC9-1/D1: dove si usa, a che cosa

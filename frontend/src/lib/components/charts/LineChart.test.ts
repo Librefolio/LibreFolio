@@ -23,6 +23,9 @@
  * Red today: in Italian and French the header and the representative day are ISO. Green today, and after: the
  * categories that are not days.
  *
+ * C-97c-3 (the describe after T-ISO's): a price in the tooltip keeps its significant digits, while the y-axis labels
+ * stay compact. Its docblock says how.
+ *
  * Also stubbed: layout — jsdom measures every box as 0×0 and the chart draws only into a non-empty one, so
  * `getBoundingClientRect` reports a panel-sized box.
  *
@@ -400,6 +403,128 @@ describe('LineChart — the days its tooltip writes, in the house notation of th
         const headers = NOT_DAYS.map((category) => axisTooltipAt(category, [{seriesName: 'EUR', value: 10}])[0]);
 
         expect(headers, 'a category that is not a day was rewritten as a day').toEqual(NOT_DAYS);
+    });
+});
+
+// =========================================================================
+// C-97c-3 — a price in the tooltip keeps its significant digits; the y-axis labels stay compact
+// =========================================================================
+
+/**
+ * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits. The axis
+ * tooltip writes each row's value with four fixed decimals, `formatFixed(Number(value), 4)`, and so does the line under
+ * a band signal's row — `chart.tooltip.upper` and `chart.tooltip.lower` around the band's two bounds: on a price in
+ * millionths every one of them reads `0.0000`. The contract: `formatPrice(…, {minDecimals: 4})` — four decimals at least,
+ * as many as the first four significant digits need (`priceFractionDigits`, formatFixed.ts). The y-axis labels are a
+ * scale, not a price on show: they stay compact — `k` from 1,000, two decimals from 1, at most four (trimmed) below — and
+ * do not move.
+ *
+ * Reds: the rows of a price and of a band's middle in millionths, and the band's two bounds (today `0.0000` each).
+ * Guards, green today and after: the same lines at 65000.1234 and around 1.08, and the y-axis labels of 1234.5, 1.234,
+ * 0.1234 and 0.0000034573 (`1.2k`, `1.23`, `0.1234`, `0`) — the second and the last would move if the axis took
+ * `formatPrice`.
+ *
+ * Reading, as the T-ISO cases read: the tooltip from the formatter the chart handed ECharts, called with the series under
+ * the pointer; the y-axis label from the formatter of the last draw's first y-axis. A row is told apart by the series
+ * name it opens with, the bounds' line by the catalogue's `chart.tooltip.upper`; a row's figure is matched as a whole
+ * number token, the bounds' line compared whole, its words from the catalogue. English UI on jsdom's en-US browser,
+ * checked before each case: the digits are typed.
+ */
+describe('LineChart — a price in its tooltip keeps its significant digits, its y-axis labels stay compact (C-97c-3, D-C97c-1)', () => {
+    /** The day under the pointer: DATA's Monday 4 March. */
+    const DAY = '2024-03-04';
+
+    interface Figures {
+        /** The main series' value under the pointer. */
+        price: number;
+        /** The band's middle, its row's value, and its two bounds. */
+        middle: number;
+        upper: number;
+        lower: number;
+    }
+
+    /** A price and a band in millionths. */
+    const TINY: Figures = {price: 0.0000034573, middle: 0.0000034573, upper: 0.0000037512, lower: 0.0000031634};
+    /** A price with a thousands separator, and a band around 1.08. */
+    const PLAIN: Figures = {price: 65000.1234, middle: 1.0834, upper: 1.0912, lower: 1.0756};
+
+    /** A band signal — a Bollinger-like confidence band — with one point, on DAY. */
+    function bandOf({middle, upper, lower}: Figures): RenderedSignal {
+        return {
+            id: 'band',
+            label: 'Band',
+            data: [{date: DAY, value: middle}],
+            seriesType: 'band',
+            bandData: {upper: [upper], middle: [middle], lower: [lower]},
+            color: '#9467bd',
+            lineWidth: 1,
+            lineType: 'solid',
+            markerStart: null,
+            markerEnd: null,
+            yAxisIndex: 0,
+            aggregationProfile: 'last_with_range',
+        };
+    }
+
+    /** `digits` as a whole number in a text: no digit, decimal mark, group separator or sign glued to either side. */
+    function numberToken(digits: string): RegExp {
+        return new RegExp(`(?<![\\d.,+\\-\\u2212])${digits.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![.,]?\\d)`);
+    }
+
+    /** The one line of `lines` that opens with `prefix`. */
+    function lineOpening(lines: string[], prefix: string): string {
+        const found = lines.filter((line) => line.startsWith(prefix));
+        expect(found, `barrier: one line opens with ${prefix}`).toHaveLength(1);
+        return found[0];
+    }
+
+    /** The chart over DATA with the band of `figures`; its tooltip on DAY, the main series (EUR) at `figures.price` and the band at its middle: the main row, the band's row and the bounds' line. */
+    async function tooltipOf(figures: Figures): Promise<{main: string; band: string; bounds: string}> {
+        const band = bandOf(figures);
+        render(LineChart, {props: {data: DATA, currency: 'EUR', overlaySignals: [band]}});
+        await drawnOver(DATA.map((point) => point.date));
+
+        const lines = axisTooltipAt(DAY, [
+            {seriesName: 'EUR', value: figures.price},
+            {seriesName: band.label, value: figures.middle},
+        ]);
+        return {main: lineOpening(lines, 'EUR:'), band: lineOpening(lines, `${band.label}:`), bounds: lineOpening(lines, `${catalogue('chart.tooltip.upper', {})}:`)};
+    }
+
+    /** The bounds' line as the catalogue words it, around `upper` and `lower` as written. */
+    function boundsLine(upper: string, lower: string): string {
+        return `${catalogue('chart.tooltip.upper', {})}: ${upper} · ${catalogue('chart.tooltip.lower', {})}: ${lower}`;
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the tooltip is written en-US, checked.
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    });
+
+    it('a price in millionths: the main row and the band’s row read 0.000003457, and the band’s bounds 0.000003751 and 0.000003163, not 0.0000', async () => {
+        const {main, band, bounds} = await tooltipOf(TINY);
+
+        expect.soft(main, 'the main series’ row (today EUR: 0.0000)').toMatch(numberToken('0.000003457'));
+        expect.soft(band, 'the band’s row (today Band: 0.0000)').toMatch(numberToken('0.000003457'));
+        expect.soft(bounds, 'the band’s bounds (today 0.0000 both)').toBe(boundsLine('0.000003751', '0.000003163'));
+    });
+
+    it('guard: 65000.1234 and a band around 1.08 keep their four decimals', async () => {
+        const {main, band, bounds} = await tooltipOf(PLAIN);
+
+        expect.soft(main, 'the main series’ row').toMatch(numberToken('65,000.1234'));
+        expect.soft(band, 'the band’s row').toMatch(numberToken('1.0834'));
+        expect.soft(bounds, 'the band’s bounds').toBe(boundsLine('1.0912', '1.0756'));
+    });
+
+    it('guard: the y-axis labels stay compact — 1.2k, 1.23, 0.1234, and 0 for a tick in millionths', async () => {
+        render(LineChart, {props: {data: DATA, currency: 'EUR'}});
+        await drawnOver(DATA.map((point) => point.date));
+        const yAxis = lastDraw().yAxis as Array<{axisLabel?: {formatter?: (value: number) => string}}>;
+        const label = yAxis[0]?.axisLabel?.formatter;
+        expect(typeof label, 'barrier: the first y-axis has a label formatter').toBe('function');
+
+        expect(Object.fromEntries([1234.5, 1.234, 0.1234, 0.0000034573].map((value) => [String(value), label!(value)]))).toEqual({'1234.5': '1.2k', '1.234': '1.23', '0.1234': '0.1234', '0.0000034573': '0'});
     });
 });
 

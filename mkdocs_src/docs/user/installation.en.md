@@ -224,6 +224,7 @@ Database migrations run automatically when the container starts and are designed
 
 - With the `latest` tag you always get the newest release, along with any change it brings.
 - To update only when you decide, pin a version instead of `latest`: `ghcr.io/librefolio/librefolio:1.1.0` (full variant) or `ghcr.io/librefolio/librefolio:1.1.0-light` (light variant). See [Image Variants](#image-variants-full-and-light).
+- After the update, each user sees once what changed since the version they last used: see [What's new after an update](settings/about.md#whats-new).
 
 ### 🛠️ 1. Manual Update {: #manual-update }
 

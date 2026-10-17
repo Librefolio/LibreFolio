@@ -317,7 +317,9 @@ def _resolve_bucket(
 @register_plugin(RiskAnalyticRegistry)
 class StressAnalytic(RiskAnalytic):
     analytic_code = "stress"
-    algorithm_version = "3.0.0"
+    # 3.0.1 — a historical replay outside the bounds replays the bounded window (R13-SEC8-1b) and its output states
+    # that window, while metadata.params keeps the request as asked (J-52).
+    algorithm_version = "3.0.1"
     name_i18n_key = "risk.analytics.stress.name"
     description_i18n_key = "risk.analytics.stress.description"
     output_kind = RiskOutputKind.STRESS
@@ -634,7 +636,8 @@ class StressAnalytic(RiskAnalytic):
                 method=RiskStressMethod.HISTORICAL_REPLAY,
                 portfolio_return=portfolio_return,
                 impact_amount=_amount(context.scope_value, portfolio_return) if portfolio_return is not None else None,
-                replay_range=params.replay_range,
+                # The window replayed: the request bounded by R13-SEC8-1b; metadata.params keeps the request as asked (J-52).
+                replay_range=prepared.requested_range,
                 impacts=impacts,
             ),
             method="historical_replay_current_buy_and_hold",

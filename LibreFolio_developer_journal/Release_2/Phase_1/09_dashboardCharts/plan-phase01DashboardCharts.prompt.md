@@ -6119,3 +6119,103 @@ finale) nel mio HEAD.
 >   un'assunzione di tempo sotto carico, non X-R59. Backlog **Y-33**.
 > - Dopo l'ultima frase di `docs-writer` (il terzo caso del limite): MkDocs strict rc 0, 0 WARNING; `check-links` 97.
 > - Porta 6189 libera alla fine.
+>
+> **Ingresso di X-R59 (17/10, 16:08–16:22)**. All'ingresso dei lotti A e B si è messo in mezzo X-R58 di X: i toast per una
+> richiesta troppo grande sulle liste, con E2E nuove (`asset-list` +1, `fx-list` +3). Il coordinatore ha aperto la merge
+> di dev `15ae6f61e` nel mio worktree.
+> - **⚠️ Fuori pista**: nelle due spec le due sezioni nuove (la mia X-R59 e la X-R58 di X), entrambe aggiunte in fondo,
+>   git le aveva intrecciate sulle righe comuni (`configure`, `beforeEach`, le chiusure). Ricostruite con
+>   `files/scripts/xr58_rebuild.py`: la parte unita (uguale a quella di dev: la mia più gli import di X), poi la sezione
+>   X-R59 intera da HEAD, poi la X-R58 intera da dev. Nessun nome di primo livello doppio, nessun marcatore rimasto;
+>   `asset-list` 38 test, `fx-list` 25. Le due pagine, unite da sole, sono l'unione pulita (rispetto a HEAD solo X-R58,
+>   rispetto a dev solo il lotto A).
+> - Prove: `api sync` (serviva: svelte-check dava 1 errore in `UsersTab.svelte:174`, il campo `cancel_setup` di A-51 col
+>   client vecchio), svelte-check 0/0, Prettier e `tsc` delle E2E puliti, Vitest 581/581 in 9 file (con `bulkRefusal`);
+>   E2E `asset-list` 38/38 e `fx-list` 25/25 (16:13–16:21). Entrato: dev `f317e3a9f` (merge `0e995b428`), CHANGELOG 🔄
+>   `763d94b87`.
+
+## J-53 · Il banner dei lotti: ogni fondo orfano con il suo importo e la sua data (17/10)
+
+Voce di J (analisi di J-36), titolare Y per decisione del coordinatore; cura decisa: una riga per issue per i codici senza
+lotto, nessun totale dal backend (valute diverse, date perse). Base `763d94b87`.
+
+**Stato reale.** `buildIssueGroups` (`lotDataQualityHelpers.ts:83`) raggruppa per codice e tiene i parametri della prima
+issue; i chip vengono dai `lot_id` visibili. Il backend mette `lot_id: null` su ogni issue senza lotto
+(`lots_analysis_service.py:1150-1162`). Nel banner (fuori da `FAILED`) arrivano senza lotto: i due codici orfani, uno
+per fondo (`engine.py:899-913`, `:1015-1029`); `CURRENT_PRICE_ASSUMED_AT_COST`, uno; le issue FX di `_report_gaps`, fino a
+due `MISSING_FX_RATES` (`missingFxRates`, le coppie con provider e il loro intervallo, e `missingFxRatesManual`) col
+numero di coppie, senza la chiave `lot_id` (stesso difetto: la seconda si nascondeva dietro la prima); `MISSING_COST_BASIS`,
+una. I quattro codici del rigioco vanno nella notice di J-12.
+
+**Forma (decisione mia, nel perimetro; mandata al coordinatore).** Un blocco per codice, come oggi (chiave
+`group.code`, test id `lot-data-quality-issue-{code}`, conteggi dell'intestazione per categoria), con dentro **una riga
+per issue senza lotto**, coi suoi parametri, nell'ordine dell'input; due issue identiche fanno una riga sola. Le issue con
+lotto restano una riga (i parametri della prima) più i chip. Perché non righe di primo livello: il localizzatore stretto di
+`data-quality-real.spec.ts:479` e la chiave dell'`{#each}` (`each_key_duplicate`) vogliono un elemento per codice.
+
+**Passi.**
+1. Rossi (`test-author`): `lotDataQualityHelpers.test.ts` (in `core-unit`; adattati i test che leggevano
+   `messageParams`), più il test di componente nuovo `LotDataQualityBanner.test.ts` (riga aggiunta in
+   `_frontend_broker.py`, `front_broker_unit`, OK chiesto).
+2. Cura: `IssueGroup.messages` in `lotDataQualityHelpers.ts`; il banner disegna le righe (`lot-data-quality-message`),
+   nessuna classe nuova.
+3. Documentazione (`docs-writer`): `backend/transactions/lots_analysis_service.md:600`,
+   `frontend/components/features/lots-analysis.md`.
+4. Prove leggere; slot E2E corto: `front-portfolio data-quality-real`, `data-quality-legacy`, `front-broker detail`.
+5. CHANGELOG 🐛 nel messaggio; la riga J-53 del backlog (sezione di J) la chiude il coordinatore.
+
+**Avanzamento.**
+1. ✅ 17/10 — **Rossi** (`test-author` `5749c9f8`). `lotDataQualityHelpers.test.ts`: 3 test adattati a `messages` e il blocco
+   «J-53» (20 test: due fondi di entrata, i fondi di costo accanto, le due `MISSING_FX_RATES`, `lot_id` null/assente/non
+   numerico, il doppione, sei parametri che differiscono uno alla volta, un'altra chiave, i lotti visibili e nascosti, il
+   codice misto in due ordini, le chiavi uniche, un gruppo per codice, l'ordine per gravità). `LotDataQualityBanner.test.ts`
+   nuovo (jsdom, i18n vera): 4 test, due rossi sul difetto stesso («… 12.50 EUR on 2024-03-15 …» senza «30.75»). Riga
+   aggiunta in `_frontend_broker.py` (`front_broker_unit`, OK del coordinatore). Rossi: 22 e 2; verdi gli altri 73 e 2.
+   > **Note implementazione**: `check-orphans` pulito (548 file registrati). Log in `files/logs/j53-red-*.log`.
+   > **⚠️ Fuori pista**: il `test-author` ha corretto la mia lettura delle issue FX (non una per coppia: fino a due
+   > `MISSING_FX_RATES` con il numero di coppie, senza `lot_id`); corretta sopra, nello stato reale.
+2. ✅ 17/10 — **Cura**. `lotDataQualityHelpers.ts`: `IssueMessage {key, messageKey, params}`, `IssueGroup.messages` al
+   posto di `messageKey`/`messageParams`; in `buildIssueGroups` le issue su un lotto (`lot_id` finito, visibile o no)
+   aprono una sola riga, la prima, e danno i chip come prima; ogni issue senza lotto aggiunge la sua riga, una sola per
+   stessa chiave e stessi parametri (`messageIdentity`, chiavi ordinate); chiavi `code:lots` e `code:<indice>`.
+   `LotDataQualityBanner.svelte`: un `{#each group.messages}` con `data-testid="lot-data-quality-message"`, le stesse
+   classi di prima.
+   > **Note implementazione**: Vitest dei due file 99/99; svelte-check 0/0; Prettier; `theme-roles --check` pulito;
+   > `git diff --check` pulito. Nessun altro lettore di `messageKey`/`messageParams` del gruppo.
+3. ✅ 17/10 — **Documentazione** (`docs-writer` `f90771f4`): `backend/transactions/lots_analysis_service.md` (`:600`, più
+   `:400` che diceva «un messaggio per codice»), `frontend/components/features/lots-analysis.md` (voce dell'ordine di
+   disegno, riga della composizione, sezione «LotDataQualityBanner», riga dei test id), `user/dashboard/positions.en.md:207`
+   (entrate e costi che nessun lotto ha preso, ognuno col suo importo e la sua data). MkDocs strict rc 0, 0 WARNING;
+   `check-links` 97.
+   > **⚠️ Fuori pista**: `positions.en.md` non timbrata: IT/FR/ES erano già indietro (righe 50, 57, 58 dell'inglese) e la
+   > frase è nuova. Debito di traduzione, sezione «🧾 5. Lot Detail» → «⚠️ When the panel warns you»; si timbra quando le
+   > quattro lingue tornano allineate.
+4. ✅ 17/10 — **E2E** (`files/scripts/j53_e2e.sh`, corsia 6189, 16:53–17:08, prima spec dopo il carico a 5 minuti sotto
+   50): `front-portfolio data-quality-real` 3/3, `data-quality-legacy` 1/1, `front-broker detail` 40/40. Porta libera.
+5. ⏳ CHECKPOINT READY al coordinatore, con la riga 🐛 del CHANGELOG; la riga J-53 del backlog la chiude lui.
+> **J-53 entrato** (17/10, 17:11): dev `fb6d58d17` (`c37c2bb1e`); CHANGELOG 🐛 e la riga J-53 chiusa in `38be2102b`. J
+> rilegge `lots_analysis_service.md` dopo, su richiesta del coordinatore.
+
+## Y-33 · `asset-detail.spec.ts`: la navigazione a freddo sotto carico (17/10)
+
+Voce mia (slot E2E di X-R59); review di X. Base `38be2102b`.
+- **Il difetto**: `goToSeededAssetDetail()` (`frontend/e2e/assets/asset-detail.spec.ts:107-114`, 28 chiamate) clicca la card
+  di Apple e dà 10 s alla radice `asset-detail-page`. Al picco di carico dopo la build un contesto nuovo importa a freddo il
+  bundle della pagina: «edit button opens asset modal» (`:240`) è caduto ancora sulla lista; da solo, verde in 4,1 s.
+- **La cura (forma decisa)**: dopo il clic, prima l'URL (`toHaveURL(/\/assets\/\d+(?:\?|$)/)`, tetto 30 s, messaggio che
+  dice «il clic sulla card porta alla pagina dell'asset»), poi la radice a 10 s come oggi. Nessun nuovo clic: un clic
+  perso deve fallire, e sul messaggio dell'URL.
+- **Passi**: 1. `test-author` scrive la riparazione (nessuna run); 2. prove leggere (`tsc` delle E2E, Prettier); 3. slot:
+   `front-asset asset-detail`; 4. CHECKPOINT READY, review di X.
+
+**Avanzamento.**
+1. ✅ 17/10 — **Riparazione** (`test-author` `b9253145`, due giri): `goToSeededAssetDetail()` divide l'attesa (URL 30 s, poi
+   la radice 10 s, ognuna col suo messaggio; paragrafo Y-33 nel docblock: in SvelteKit l'URL cambia dopo l'import del chunk
+   della rotta, `client.js:1568`, `:1685-1686`, `:1739`); lo stesso passaggio in riga del test della cache degli eventi
+   (`:8570-8577`, l'URL del suo asset); il commento di `:332` («~40 s») riscritto senza totali. +14/−3.
+   > **Note implementazione**: `tsc -p tsconfig.e2e.json` e Prettier puliti; `git diff --check` pulito.
+   > **⚠️ Fuori pista**: il timeout di default dei test (30 s, `playwright.config.ts:113`) fa da tetto anche all'attesa
+   > dell'URL nei test che non lo alzano; lasciato così (il guasto visto era l'attesa di 10 s), detto a X per la review.
+2. ✅ 17/10 — **E2E** (`files/scripts/y33_e2e.sh`, slot del coordinatore dalle 17:32, dopo B; partita alle 17:33 col carico
+   a 5 minuti sotto 50): `front-asset asset-detail` **39/39** in 3,5 min, fine alle 17:42. Porta 6189 libera.
+3. ⏳ CHECKPOINT READY al coordinatore (la spec e il giornale); review di X. Y-33 ✅ nel backlog.
