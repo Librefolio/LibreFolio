@@ -7477,6 +7477,9 @@ da Y il 15/10.
     caricamento non la rilegge, la Δ non segue il prezzo mostrato. Succedeva già prima, con la Δ calcolata nel browser.
   - Rimedio possibile: quando l'intervallo finisce oggi, il poll della lista chiede `/prices/current?range_start=` e la card
     usa quel `range_change`, come la pagina dell'asset (lotto B di X-R59).
+  - Attenzione, se si fa: le glob esatte `'**/api/v1/assets/prices/current'` delle spec che restano sulla lista (per esempio
+    `asset-list.spec.ts`) non vedono più la richiesta con la query, perché in Playwright la glob è ancorata alla fine. Vanno
+    allargate con un `*` finale, come il lotto B ha fatto per le spec che aprono la pagina dell'asset.
   - Dettagli: piano di Y, «X-R59».
 
 ## MF · Matematica finanziaria (fase 01)
