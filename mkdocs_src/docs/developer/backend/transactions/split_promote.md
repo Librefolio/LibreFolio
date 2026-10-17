@@ -85,7 +85,9 @@ broker**, at which the lots hand its units over (decision 47 of release 1.3; see
   `cost_basis_currency` together.
 - An update of the same batch that gives the leg a `cost_basis_override` wins: the
   stage leaves that leg alone. Such an update sends the cost without a
-  `cost_basis_mode`: rule 12 refuses a mode on an `ADJUSTMENT` taking units out (see
+  `cost_basis_mode`: rule 12 refuses a mode on an `ADJUSTMENT` taking units out, and
+  rule 12b, which refuses a cost basis set without a mode where the side takes none,
+  lets this one in (W-B72, night decision N78; see
   [Per-type rules](service.md#per-type-rules)).
 - When the cost needs a missing conversion, the split is refused: one
   `wacFxUnavailable` issue on operation `split`, at the split's index, `ref_id` the
@@ -147,7 +149,12 @@ both. After resolving the references, the stage:
    runs `validate_transaction_business_rules()` on each row with the target type,
    the per-type rules that creates and updates go through too. Each error becomes
    an issue on operation `promote`, at the promote's index, with `ref_id` set only
-   for a saved row; the promote is then skipped and neither row changes;
+   for a saved row. `_resolved_cost_issues()` checks the merged cost basis beside
+   them: a non-null `resolved_fields.cost_basis_override` where neither row takes a
+   cost basis under the target type — a cash pair, `CASH_TRANSFER` or
+   `FX_CONVERSION` — gets one `costBasisNotAllowed`, `field` `cost_basis_override`,
+   params `{type, qty}`, no `ref_id` (W-B72, night decision N78). On any issue the
+   promote is then skipped and neither row changes;
 4. assigns the inferred type to both existing ORM rows;
 5. writes reciprocal `related_transaction_id` values;
 6. clears `cost_basis_override` and `cost_basis_currency` on a side whose new type
@@ -214,7 +221,7 @@ refused.
 | `description` | `Optional[str]`, at most 500 characters | Both rows |
 | `tags` | `Optional[List[str]]`, through the create's tag validator (`validate_tags_list()`: a list, or a comma-separated string) | Both rows |
 | `date` | `Optional[date]`; an explicit `null` is refused | Both rows |
-| `cost_basis_override` | `Optional[Currency]` | For an asset transfer, the positive-quantity receiver only; the sender's is cleared (decision 47) |
+| `cost_basis_override` | `Optional[Currency]` | For an asset transfer, the positive-quantity receiver only; the sender's is cleared (decision 47). A cash pair takes none: a value is refused (`costBasisNotAllowed`, step 3), where before W-B72 it was written on both rows; a `null` clears both |
 
 `_apply_promote_resolved_fields()` (`batch_creates.py`) applies the keys the request
 names (`model_fields_set`): a key left out leaves both rows alone, and an explicit
@@ -304,7 +311,11 @@ different contract:
   `asset_id`, `quantity`, and `cost_basis_override` fields needed for
   `TRANSFER`; a `quantity`, or a `cost_basis_override` amount, whose exponent is
   outside ±100 is refused with a 422 before any work (R13-SEC7-3, see
-  [Decimal Columns](../../architecture/database/index.md#decimal-columns));
+  [Decimal Columns](../../architecture/database/index.md#decimal-columns)). An
+  `FX_CONVERSION` promotion that sets `cost_basis_override` is refused before the
+  deletes, as one that sets `asset_id` is: `rolled_back` true, with the error
+  `FX_CONVERSION promotion must not set cost_basis_override` (W-B72, night decision
+  N78). Its cash legs take no cost basis; before, the value was dropped in silence;
 - implementation: snapshot the two `DEPOSIT`/`WITHDRAWAL` rows, delete them,
   build two replacement create payloads with a shared `link_uuid`, and call
   `execute_batch()` with those deletes and creates. The payloads are raw dicts:
@@ -338,6 +349,7 @@ their stage loops continue. Common stable codes are:
 | `alreadyPaired` | A promote candidate already has a persistent partner |
 | `noPromoteRule` | No metadata rule and constraint set matches the two rows |
 | `eventTypeIncompatible` | A promoted row is linked to an asset event, which the target type refuses (step 3) |
+| `costBasisNotAllowed` | On operation `promote`: a cash pair's resolved `cost_basis_override`, which neither leg takes (step 3, W-B72) |
 
 The service does not roll the session back itself. `/transactions/validate`
 always rolls back; `/transactions/commit` commits only when
