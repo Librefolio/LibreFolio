@@ -521,6 +521,16 @@ def front_admin_users(verbose: bool = False, ui: bool = False, headed: bool = Fa
     return _run_playwright("settings/admin-users.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_security_tab(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Settings › Security tab (accounts lot A8b) and its «Administration» group: the badge, the findings, a re-read; a member's view."""
+    print_section("Frontend Security Tab Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/security-tab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run settings E2E tests."""
     print_section("Frontend Settings Tests")
@@ -881,6 +891,15 @@ def populate_registry(registry: dict) -> None:
         desc="Settings → Users (accounts lot A6b), e2e_test_admin acting on disposable accounts only: the tab for administrators alone (a member has none, ?tab=users opens Profile); the own row with users-self-hint and no action; deactivate/reactivate and promote/demote through users-confirm, with their accounts.user.* events and a server read-back, delete disabled demote-first while admin; a password-reset link and an invitation through LinkShare, each token inspected live, the invitation listed then revoked; the address check on the lane's other loopback origin (match through the real CORS path), a closed port (unverifiable), ftp (invalid, copy off), a stubbed stranger (mismatch), back to the prefill (idle); deletion with preview (one broker with one deposit, typed username, brokers_deleted 1, broker gone); sign-out everywhere (the account's session gets 401) and restart guides (every skipped flow pending again); every invitation it wrote revoked and every account self-deleted after each test",
         prereq="Test users created (e2e_test_admin an administrator, e2e_test_user an ordinary member); registration_mode open on the lane; no user limit on the lane",
         tests="settings/admin-users.spec.ts",
+    )
+    add_test(
+        cat,
+        "security-tab",
+        front_security_tab,
+        name="Security Tab E2E",
+        desc="Settings › Security (accounts lot A8b) inside the «Administration» group (decision P13 b), read-only on the lane: e2e_test_admin sees a badge of at least 1 on settings-tab-administration before anything of the group is opened (the checks read by the page's prefetch, accounts.login_limit a warning with LIBREFOLIO_LOGIN_LIMIT=off, read first from GET /security/checks as a precondition); Security opened through the group settles data-status ready, lists accounts.login_limit as a warning and folds the passed checks (security-passed), its badge counting exactly the errors and warnings it lists and the group's including it; ?tab=security opens it inside the group, and «check again» re-reads (the request held: loading, busy, the refresh disabled, the last findings still listed; then ready with the warning); e2e_test_user, a member: «Administration» opens Global Settings directly, no settings-subtabs, no settings-tab-security, no badge, no read of the checks, and ?tab=security opens Profile without mounting the tab",
+        prereq="Test users created (e2e_test_admin an administrator, e2e_test_user an ordinary member); the lane's server started with LIBREFOLIO_LOGIN_LIMIT=off (dev.py server --test's default)",
+        tests="settings/security-tab.spec.ts",
     )
     add_test(
         cat,
