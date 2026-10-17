@@ -4,6 +4,7 @@ Portfolio Service for LibreFolio.
 Contains:
 - compute_wac_iterative(): WAC (PMC) of one (broker, asset) for the transaction preview, the
   WAC endpoint and the planner — a facade over financial_math.average_cost
+- wac_pool_holding(): what that WAC's pool holds — the units, and whether their cost is known (N88)
 - PortfolioService: Orchestrator for portfolio-level aggregation and reporting
 
 PortfolioService uses:
@@ -162,19 +163,8 @@ async def compute_wac_iterative(
     """
     excluded = set(excluded_tx_ids or [])
 
-    # 1. Query ALL transactions for this (broker, asset) with date <= as_of_date and qty != 0
-    stmt = select(Transaction).where(
-        Transaction.broker_id == broker_id,
-        Transaction.asset_id == asset_id,
-        Transaction.date <= as_of_date,
-        Transaction.quantity.is_not(None),
-        Transaction.quantity != 0,
-    )
-    db_rows = list((await session.execute(stmt)).scalars().all())
-
-    # 1b. Identify which rows are ADJUSTMENT linked to a SPLIT AssetEvent — a split
-    # rescales the pool (same cost, new quantity) instead of adding or reducing.
-    split_linked_row_ids = await split_linked_ids(session, db_rows)
+    # 1. The pool's rows, and the ones linked to a split
+    db_rows, split_linked_row_ids = await _wac_pool_rows(session, broker_id, asset_id, as_of_date)
 
     # WAC cache check: fingerprint from transaction IDs + updated_at
     import hashlib  # noqa: PLC0415
@@ -240,6 +230,63 @@ async def compute_wac_iterative(
         _wac_cache.set(wac_cache_key, result)
 
     return result
+
+
+async def _wac_pool_rows(session: AsyncSession, broker_id: int, asset_id: int, as_of_date: date_type) -> tuple[list[Transaction], set[int]]:
+    """The rows of the pool a WAC averages — every transaction of ``(broker, asset)`` up to ``as_of_date`` with a quantity
+    neither NULL nor zero — and those linked to a SPLIT AssetEvent, which rescale the pool (same cost, new quantity)
+    instead of adding or reducing."""
+    stmt = select(Transaction).where(
+        Transaction.broker_id == broker_id,
+        Transaction.asset_id == asset_id,
+        Transaction.date <= as_of_date,
+        Transaction.quantity.is_not(None),
+        Transaction.quantity != 0,
+    )
+    db_rows = list((await session.execute(stmt)).scalars().all())
+    return db_rows, await split_linked_ids(session, db_rows)
+
+
+@dataclass(frozen=True, slots=True)
+class WacPoolHolding:
+    """What the pool of a WAC holds on its date (N88, J-57): the units, and whether their cost is wholly known."""
+
+    quantity: Decimal
+    cost_complete: bool
+
+
+async def wac_pool_holding(
+    session: AsyncSession,
+    broker_id: int,
+    asset_id: int,
+    as_of_date: date_type,
+    asset_currency: str,
+    excluded_tx_ids: list[int] | None = None,
+    target_currency_override: str | None = None,
+) -> WacPoolHolding:
+    """The average-cost engine's own quantity and cost completeness for the pool :func:`compute_wac_iterative` averages
+    with the same arguments, uncached.
+
+    An average of 0 is no cost when the pool holds no units (never held, or sold out: the engine resets a pool that
+    empties) or holds only units of unknown cost (``ADD_UNKNOWN_COST`` counts at zero and leaves the cost incomplete);
+    a pool of free units holds units at a known cost of 0. The batch's Auto step reads it only when the average is 0.
+    """
+    excluded = set(excluded_tx_ids or [])
+    db_rows, split_linked_row_ids = await _wac_pool_rows(session, broker_id, asset_id, as_of_date)
+    rows = sorted((row for row in db_rows if row.id not in excluded), key=lambda row: (row.date, row.id))
+    movements = tuple(movement for row in rows if (movement := cost_movement_from_transaction(row, asset_currency=asset_currency, split_linked=row.id in split_linked_row_ids)) is not None)
+    if not movements:
+        return WacPoolHolding(quantity=Decimal("0"), cost_complete=True)
+    position_key = (broker_id, asset_id)
+    average_cost = (
+        await compute_average_costs(
+            session,
+            [CostPosition(key=position_key, asset_currency=asset_currency, movements=movements)],
+            report_currency=target_currency_override or determine_target_currency(movements, asset_currency),
+            asset_leg=False,
+        )
+    )[position_key]
+    return WacPoolHolding(quantity=average_cost.quantity, cost_complete=average_cost.report_complete)
 
 
 # Effects of the average-cost steps in the vocabulary of WACQualifyingTX.effect, which the
