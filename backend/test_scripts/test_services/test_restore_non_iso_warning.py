@@ -46,7 +46,19 @@ Under test, the four places a warning code lives:
    left, so a red is about the check alone. The connections the check opens on its copy are traced by
    ``test_backup_staging.py`` (``trusted_schema`` off first), not here.
 
-"RED" tests (marked ``# red until E-19b1``) fail before E-19b1; "GUARD (green today)" ones pass before and after. The
+   Lot E-19b1.3 (B's review of E-19b1): what that read cannot read as text. A currency the copy stores as a BLOB (a
+   TEXT column keeps one bound as bytes; a crafted archive carries it) is no ISO code: the check warns of it as of any
+   other, after the twin's warnings, and goes on (RNW-108; red until then: the audit gives the bytes to
+   ``json.dumps``, whose ``TypeError`` escapes the read and ends the check). A read that fails never ends the check,
+   whatever it raises: RNW-107 also has the audit raise a ``TypeError`` and a ``ValueError`` (red until then: only an
+   ``sqlite3.Error`` is caught). And a REAL error is logged by its class alone: a currency stored as TEXT that is not
+   UTF-8, in a place no other step of the check reads, makes ``sqlite3`` raise an ``OperationalError`` whose message
+   quotes the archive's bytes; the check ends as its twin's, unwarned, with one warning naming the class and the stage
+   id, and no line of the log holds those bytes or the words of the message (RNW-109, GUARD, green today). What these
+   archives and copies store is read by SQL: the E-19a audit is what fails on it.
+
+"RED" tests (marked ``# red until E-19b1``) fail before E-19b1, those marked ``# red until E-19b1.3`` before that lot;
+"GUARD (green today)" ones pass before and after. The
 new keyword is looked up inside each test (``inspect.signature``), never at import: the file collects, and each red
 fails on its own with what is missing.
 
@@ -65,6 +77,7 @@ from __future__ import annotations
 import inspect
 import sqlite3
 import zipfile
+from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -423,14 +436,15 @@ def _expected_findings(stored: tuple[str, ...]) -> list[tuple[str, str]]:
     return sorted({(PLACE, value) for value in stored if value != CANONICAL})
 
 
-def _archive(root: Path, database: Path, stored: tuple[str, ...], *, accounts=cases.ACCOUNTS, statements: tuple[str, ...] = ()) -> BuiltArchive:
+def _archive(root: Path, database: Path, stored: tuple[str | bytes, ...], *, accounts=cases.ACCOUNTS, statements: tuple[str, ...] = (), verify: Callable[[Path], None] | None = None) -> BuiltArchive:
     """The archive of a data directory made in ``root`` from ``database``, a module database of
     ``test_backup_staging.py``: ``accounts``, ``FILES``, the ledger of that module (``add_ledger``: assets and
     transactions, every currency an ISO code) and one asset more per value of ``stored``, its currency stored as given —
-    by SQL, no validator, as a version before E-18 left it —; then ``statements``.
+    by SQL, no validator, as a version before E-18 left it; ``bytes`` as a BLOB —; then ``statements``.
 
     Verified, not assumed: the database the archive carries holds, as the E-19a audit reads it, the findings of
-    ``stored`` and no other.
+    ``stored`` and no other. Or, given ``verify``, what it checks of that database by SQL instead: what the audit
+    cannot read (E-19b1.3: a BLOB before that lot, a text that is not UTF-8).
     """
     data = cases.make_data_dir(root / "data", database, accounts=accounts)
     cases.add_ledger(data / DATABASE_ENTRY)
@@ -443,9 +457,17 @@ def _archive(root: Path, database: Path, stored: tuple[str, ...], *, accounts=ca
     carried = root / "carried.db"
     with zipfile.ZipFile(built.path) as archive:
         carried.write_bytes(archive.read(DATABASE_ENTRY))
+    if verify is not None:
+        verify(carried)
+        return built
     found = _findings(carried)
     assert found == _expected_findings(stored), f"precondition: the archive carries {_expected_findings(stored) or 'only ISO codes'}, as the E-19a audit reads it: {found}"
     return built
+
+
+def _copy_of(data_dir: Path, stage_id: str) -> Path:
+    """The database of the copy a check left: what a confirmed restore puts in place."""
+    return stage_dir(data_dir, stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY
 
 
 def _check(archive: BuiltArchive, data_dir: Path, holds: list[tuple[str, str]]) -> StagingReport:
@@ -458,13 +480,13 @@ def _check(archive: BuiltArchive, data_dir: Path, holds: list[tuple[str, str]]) 
     return report
 
 
-def _warned_once_after_the_others(report: StagingReport, twin: StagingReport) -> None:
+def _warned_once_after_the_others(report: StagingReport, twin: StagingReport, red: str = STAGE_RED) -> None:
     """``report`` carries ``non_iso_currencies`` once, after every other warning: its warnings are those of ``twin``, the
     same archive whose stored currencies are ISO codes, then the code; ``blockers`` and ``restorable`` are the twin's.
-    The twin is not warned (precondition). Red until E-19b1."""
+    The twin is not warned (precondition). Without the code, the test fails with ``red``: why it is red until its lot."""
     assert CODE not in twin.warnings, f"precondition: the twin, every stored currency an ISO code, is not warned {CODE}: {twin.warnings}"
     if CODE not in report.warnings:
-        pytest.fail(f"{STAGE_RED}: the copy holds stored currencies that are not ISO codes, yet the check warns {report.warnings}", pytrace=False)
+        pytest.fail(f"{red}: the copy holds stored currencies that are not ISO codes, yet the check warns {report.warnings}", pytrace=False)
     assert report.warnings.count(CODE) == 1, f"{CODE} once, whatever the number of findings: {report.warnings}"
     assert report.warnings[-1] == CODE, f"{CODE} after every other warning: {report.warnings}"
     assert report.warnings == [*twin.warnings, CODE], f"the twin's warnings, then {CODE}: {report.warnings} != {[*twin.warnings, CODE]}"
@@ -565,45 +587,59 @@ def test_a_value_the_upgrade_corrects_on_the_copy_is_not_warned(instance, databa
 #: RNW-107: the text of the ``sqlite3.OperationalError`` the read of the copy's stored currencies fails with. The
 #: error's text is never logged: no line of the log may hold it.
 UNREADABLE = "disk I/O error"
+#: RNW-107: what the read of the copy's stored currencies fails with, its class and its text: the ``OperationalError`` of
+#: a disk; and errors that are no ``sqlite3.Error`` (E-19b1.3): a ``TypeError``, what ``json.dumps`` raised on a BLOB
+#: before that lot, and a ``ValueError``. Each text is the test's own, so that no line of the log holds it by chance.
+FAILED_READS = [
+    pytest.param(sqlite3.OperationalError, UNREADABLE, id="OperationalError"),
+    pytest.param(TypeError, "rnw107 TypeError text: Object of type bytes is not JSON serializable", id="TypeError"),
+    pytest.param(ValueError, "rnw107 ValueError text", id="ValueError"),
+]
 #: Why RNW-107 fails until E-19b1, at its setup: staging has nothing of that name to replace yet.
 SEAM_RED = "red until E-19b1: staging does not import find_stored_currency_findings yet, so a read of the copy's stored currencies that fails cannot be simulated where _stage makes it (staging.py is changed last, after lot B-43)"
+#: Why RNW-107 fails until E-19b1.3 with an error that is no ``sqlite3.Error``.
+CATCH_RED = "red until E-19b1.3: staging._holds_non_iso_currencies catches only sqlite3.Error, so any other error of the read ends the check"
 #: The levels at which a line of the log is loud.
 LOUD = ("warning", "error", "critical")
 #: What the text of the warning on the stored currency codes holds, in any case: «currency» or «currencies».
 CURRENCY_WORD = "currenc"
 
 
-def _the_failed_read_is_logged(events: list[dict[str, Any]], stage_id: str, paths: tuple[str, ...]) -> None:
+def _the_failed_read_is_logged(events: list[dict[str, Any]], stage_id: str, paths: tuple[str, ...], *, error: str = "OperationalError", untold: tuple[str, ...] = (UNREADABLE,)) -> None:
     """``events``, what ``cases.staging_logs`` captured of a check (its canary aside), hold one loud line on the stored
-    currencies: a warning — never an error, the check goes on — with the stage id and the error's class name, no
-    traceback and none of ``paths``. No line of them holds the error's text."""
+    currencies: a warning — never an error, the check goes on — with the stage id and the error's class name, ``error``,
+    no traceback and none of ``paths``. No line of them holds any of ``untold``: the error's text."""
     lines = [event for event in events if event.get("event") != cases.LOG_CANARY]
     about = [event for event in lines if event.get("log_level") in LOUD and CURRENCY_WORD in str(event.get("event", "")).lower()]
     assert [event.get("log_level") for event in about] == ["warning"], f"one warning on the stored currency codes, and no error: {[(event.get('log_level'), event.get('event')) for event in lines]}"
     warning = about[0]
     fields = {key: value for key, value in warning.items() if key not in ("event", "log_level")}
     assert stage_id in fields.values(), f"the warning carries the stage id, {stage_id}: {fields}"
-    assert any(isinstance(value, str) and "OperationalError" in value for value in fields.values()), f"the warning carries the error's class name, OperationalError: {fields}"
+    assert any(isinstance(value, str) and error in value for value in fields.values()), f"the warning carries the error's class name, {error}: {fields}"
     assert not warning.get("exc_info"), f"no traceback, which holds the error's text: {fields}"
     leaked = [path for path in paths if path in repr(warning)]
     assert leaked == [], f"the warning holds no path ({leaked}): {warning}"
-    told = [event for event in lines if UNREADABLE in repr(event)]
-    assert told == [], f"no line of the log holds the error's text, {UNREADABLE!r}: {told}"
+    told = [event for event in lines if any(fragment in repr(event) for fragment in untold)]
+    assert told == [], f"no line of the log holds the error's text, {untold!r}: {told}"
 
 
-def test_a_read_of_the_copy_s_currencies_that_fails_is_logged_and_the_check_goes_on_unwarned(instance, databases, tmp_path, monkeypatch):  # red until E-19b1
-    """RNW-107 — RED: the copy holds ``978``, but reading its stored currencies fails: the E-19a audit, where ``_stage``
-    calls it (``staging.find_stored_currency_findings``), raises ``sqlite3.OperationalError`` («disk I/O error»). B-29's
-    precedent, a read that fails never ends the check: ``stage_archive`` returns its report, without
-    ``non_iso_currencies``; its warnings, blockers and verdict are those of the twin, read without a failure (both keep a
-    broken reference of the backup's own, so the twin has a warning the failed read must leave as it is); ``report.json``,
-    which the API reads back, is that report. The log has one warning on the stored currency codes, with the stage id
-    and the error's class name; neither a path of the test nor the error's text.
+@pytest.mark.parametrize(("error", "text"), FAILED_READS)
+def test_a_read_of_the_copy_s_currencies_that_fails_is_logged_and_the_check_goes_on_unwarned(instance, databases, tmp_path, monkeypatch, error, text):  # red until E-19b1; TypeError, ValueError: red until E-19b1.3
+    """RNW-107 — the copy holds ``978``, but reading its stored currencies fails: the E-19a audit, where ``_stage`` calls
+    it (``staging.find_stored_currency_findings``), raises ``error`` — ``sqlite3.OperationalError`` («disk I/O error»),
+    or an error that is no ``sqlite3.Error``, a ``TypeError`` or a ``ValueError``. B-29's precedent, a read that fails
+    never ends the check, whatever it raises: ``stage_archive`` returns its report, without ``non_iso_currencies``; its
+    warnings, blockers and verdict are those of the twin, read without a failure (both keep a broken reference of the
+    backup's own, so the twin has a warning the failed read must leave as it is); ``report.json``, which the API reads
+    back, is that report. The log has one warning on the stored currency codes, with the stage id and the error's class
+    name; neither a path of the test nor the error's text.
 
     Barriers: the replacement ran, and the copy holds ``978`` as the E-19a audit reads it (the warning was due, had the
-    read not failed). Red at its setup until E-19b1: staging has no ``find_stored_currency_findings`` to replace.
+    read not failed). RED until E-19b1 at its setup: staging had no ``find_stored_currency_findings`` to replace. The
+    ``TypeError`` and ``ValueError`` cases RED until E-19b1.3: ``_holds_non_iso_currencies`` catches ``sqlite3.Error``
+    alone, so they end the check today.
     """
-    print_section("RNW-107: a read of the copy's stored currencies that fails")
+    print_section(f"RNW-107: a read of the copy's stored currencies that fails with {error.__name__}")
     twin = _check(_archive(tmp_path / "twin", databases.head, (CANONICAL,), statements=(BROKEN_REFERENCE,)), instance.root, [])
     assert twin.restorable and "foreign_key_violations" in twin.warnings and CODE not in twin.warnings, f"precondition: the twin can be restored, is warned of its broken reference, not {CODE}: {twin.blockers}, {twin.warnings}"
     stored = _archive(tmp_path / "stored", databases.head, ("978",), statements=(BROKEN_REFERENCE,))
@@ -611,7 +647,7 @@ def test_a_read_of_the_copy_s_currencies_that_fails_is_logged_and_the_check_goes
 
     def unreadable(*args: Any, **kwargs: Any) -> list[Any]:
         reads.append(args)
-        raise sqlite3.OperationalError(UNREADABLE)
+        raise error(text)
 
     try:
         monkeypatch.setattr(staging, "find_stored_currency_findings", unreadable)
@@ -621,13 +657,157 @@ def test_a_read_of_the_copy_s_currencies_that_fails_is_logged_and_the_check_goes
         try:
             report = staging.stage_archive(stored.path, instance.root)
         except Exception as exc:
-            pytest.fail(f"a read of the copy's stored currencies that fails ends the check, which it never does (B-29): it raised {type(exc).__name__}: {exc}", pytrace=False)
+            red = "" if issubclass(error, sqlite3.Error) else f"{CATCH_RED}: "
+            pytest.fail(f"{red}a read of the copy's stored currencies that fails ends the check, which it never does (B-29): it raised {type(exc).__name__}: {exc}", pytrace=False)
     assert reads, "barrier: the check read the copy's stored currencies through staging.find_stored_currency_findings, which failed"
-    held = _findings(stage_dir(instance.root, report.stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY)
+    held = _findings(_copy_of(instance.root, report.stage_id))
     assert held == [(PLACE, "978")], f"precondition: the copy the check left holds 978, as the E-19a audit reads it: {held}"
     assert CODE not in report.warnings, f"a read that failed finds nothing: no {CODE}: {report.warnings}"
     assert (report.warnings, report.blockers, report.restorable) == (twin.warnings, twin.blockers, twin.restorable), f"the twin's warnings, blockers and verdict: {report.warnings}, {report.blockers}, {report.restorable} != {twin.warnings}, {twin.blockers}, {twin.restorable}"
     written = staging.read_report(instance.root, report.stage_id)
     assert written == report, "report.json, which the API reads back, is the report the check returned"
-    _the_failed_read_is_logged(events, report.stage_id, (str(tmp_path), str(instance.root)))
+    _the_failed_read_is_logged(events, report.stage_id, (str(tmp_path), str(instance.root)), error=error.__name__, untold=(text,))
     print_success(f"{report.warnings}, restorable, one warning logged")
+
+
+#: RNW-108: the currency an asset stores as a BLOB, the bytes of ``EUR`` bound as such (a TEXT column keeps a BLOB; a
+#: crafted archive can carry one), and those bytes as SQLite's ``hex()`` writes them.
+BLOB = b"EUR"
+BLOB_HEX = "455552"
+#: Why RNW-108 fails until E-19b1.3.
+BLOB_RED = "red until E-19b1.3: _as_text does not handle a BLOB yet: its TypeError escapes the read of the copy's stored currencies and ends the check"
+
+
+def _blobs(database: Path) -> list[tuple[int, str]]:
+    """The assets of ``database`` whose currency is stored as a BLOB: (id, its bytes in hex), read by SQL, never as text."""
+    return cases.rows_of(database, "SELECT id, hex(currency) FROM assets WHERE typeof(currency) = 'blob' ORDER BY id")
+
+
+def _carries_the_blob(database: Path) -> None:
+    """Verified by SQL, the E-19a audit being what fails on a BLOB before E-19b1.3: ``database`` stores one currency as a
+    BLOB, the bytes of ``EUR``, in this section's asset."""
+    held = _blobs(database)
+    assert held == [(FIRST_ASSET_ID, BLOB_HEX)], f"precondition: one currency stored as a BLOB, the bytes of EUR, in asset {FIRST_ASSET_ID}: {held}"
+
+
+def test_a_copy_holding_a_blob_currency_is_warned_and_the_check_goes_on(instance, databases, tmp_path):  # red until E-19b1.3: _as_text does not handle a BLOB yet
+    """RNW-108 — RED until E-19b1.3: an archive at the head whose asset stores its currency as a BLOB (the bytes of
+    ``EUR``) is checked to its end: ``stage_archive`` returns, ``blockers`` and ``restorable`` the twin's (the same
+    archive, the currency stored as the text ``EUR``), its warnings the twin's followed by ``non_iso_currencies``, once:
+    a BLOB is no ISO code. ``report.json``, which the API reads back, is that report.
+
+    Preconditions, read by SQL: the archive carries the BLOB, and so does the copy the check left. Today ``_as_text``
+    gives the bytes to ``json.dumps``, whose ``TypeError`` escapes ``_holds_non_iso_currencies`` (it catches only
+    ``sqlite3.Error``) and ends the check: a restore of such an archive cannot even be checked.
+    """
+    print_section("RNW-108: a copy holding a currency stored as a BLOB")
+    twin = _check(_archive(tmp_path / "twin", databases.head, (CANONICAL,)), instance.root, [])
+    stored = _archive(tmp_path / "blob", databases.head, (BLOB,), verify=_carries_the_blob)
+    try:
+        report = staging.stage_archive(stored.path, instance.root)
+    except Exception as exc:
+        pytest.fail(f"{BLOB_RED}: it raised {type(exc).__name__}: {exc}", pytrace=False)
+    _carries_the_blob(_copy_of(instance.root, report.stage_id))
+    _warned_once_after_the_others(report, twin, red=BLOB_RED)
+    assert staging.read_report(instance.root, report.stage_id) == report, "report.json, which the API reads back, is the report the check returned"
+    print_success(f"{report.warnings}, restorable")
+
+
+#: RNW-109: a currency stored as TEXT whose bytes are not UTF-8, the archive's own text (a ``CAST`` of its bytes: SQLite
+#: checks no encoding). ``sqlite3`` cannot read it back as text: its ``OperationalError`` quotes it, the byte replaced by
+#: U+FFFD («Could not decode to UTF-8 column … with text …»).
+NOT_UTF8_MARKER = "rnw109-archive-text"
+NOT_UTF8 = b"E\xffR " + NOT_UTF8_MARKER.encode()
+#: What no line of the log may hold: the stored text (its ASCII part; as the error quotes it) and the words of the error.
+NOT_UTF8_FRAGMENTS = (NOT_UTF8_MARKER, "E\ufffdR", "\ufffd", "Could not decode", "with text")
+
+
+@dataclass(frozen=True)
+class OnlyAuditedPlace:
+    """RNW-109: a place of a stored currency that no step of a check but the E-19a audit reads — not the post-migration
+    fixes, the control totals (``transactions``), the plugin secrets or the administrators (``users``). ``store`` gives
+    the statement storing an SQL expression there; ``read``, its storage class and value."""
+
+    place: str
+    store: Callable[[str], str]
+    read: str
+
+
+ONLY_AUDITED_PLACES = [
+    pytest.param(
+        OnlyAuditedPlace(
+            "user_settings.base_currency",
+            store=lambda value: f"INSERT INTO user_settings (user_id, base_currency, created_at, updated_at) SELECT id, {value}, '{cases.CREATED}', '{cases.CREATED}' FROM users WHERE username = 'zoe_admin'",
+            read="SELECT typeof(base_currency), base_currency FROM user_settings WHERE user_id IN (SELECT id FROM users WHERE username = 'zoe_admin')",
+        ),
+        id="user_settings.base_currency",
+    ),
+    pytest.param(
+        OnlyAuditedPlace(
+            "global_settings.default_currency",
+            store=lambda value: f"INSERT OR REPLACE INTO global_settings (key, value, value_type, updated_at) VALUES ('default_currency', {value}, 'string', '{cases.CREATED}')",
+            read="SELECT typeof(value), value FROM global_settings WHERE key = 'default_currency'",
+        ),
+        id="global_settings.default_currency",
+    ),
+    pytest.param(
+        OnlyAuditedPlace(
+            "asset_events.currency",
+            store=lambda value: f"INSERT INTO asset_events (asset_id, date, type, value, currency, created_at, updated_at) VALUES (1, '2026-03-02', 'DIVIDEND', 1.5, {value}, '{cases.CREATED}', '{cases.CREATED}')",
+            read="SELECT typeof(currency), currency FROM asset_events WHERE asset_id = 1 AND date = '2026-03-02'",
+        ),
+        id="asset_events.currency",
+    ),
+    pytest.param(
+        OnlyAuditedPlace(
+            "fx_rates.base",
+            store=lambda value: f"INSERT INTO fx_rates (date, base, quote, rate, source, fetched_at) VALUES ('2026-03-02', {value}, 'USD', 1.1, 'ECB', '{cases.CREATED}')",
+            read="SELECT typeof(base), base FROM fx_rates WHERE date = '2026-03-02' AND quote = 'USD'",
+        ),
+        id="fx_rates.base",
+    ),
+]
+
+
+def _read_as_bytes(database: Path, sql: str) -> list[tuple[Any, ...]]:
+    """What ``sql`` reads of ``database``, read only, every text as its bytes: a text that is not UTF-8 included."""
+    with closing(cases.read_only(database)) as conn:
+        conn.text_factory = bytes
+        return conn.execute(sql).fetchall()
+
+
+@pytest.mark.parametrize("where", ONLY_AUDITED_PLACES)
+def test_a_real_error_of_the_read_is_logged_by_its_class_never_with_the_archive_s_text(instance, databases, tmp_path, where):
+    """RNW-109 — GUARD (green today) of the rule of the log (B-28, B's review of E-19b1), with a REAL error: an archive at
+    the head whose copy stores a currency as TEXT that is not UTF-8, in a place only the E-19a audit reads. Reading it,
+    ``sqlite3`` raises an ``OperationalError`` whose message quotes the archive's bytes. The check ends as its twin's
+    (the same archive, ``EUR`` stored there): the same warnings, blockers and verdict, no ``non_iso_currencies``. The log
+    has one warning on the stored currency codes, with the stage id and the class name ``OperationalError``; no line of
+    it holds the stored text or the words of the error's message, nor a path of the test.
+
+    Preconditions, read back as bytes: the archive and the copy store the text, as TEXT; the twin's copy stores ``EUR``.
+    Barrier: the E-19a audit does fail on the copy with that ``OperationalError``, its message quoting the text.
+    """
+    print_section(f"RNW-109: a text that is not UTF-8 in {where.place}")
+
+    def carries_the_text(database: Path) -> None:
+        held = _read_as_bytes(database, where.read)
+        assert held == [(b"text", NOT_UTF8)], f"precondition: {where.place} stores a text that is not UTF-8, as TEXT: {held}"
+
+    twin = _check(_archive(tmp_path / "twin", databases.head, (), statements=(where.store(f"'{CANONICAL}'"),)), instance.root, [])
+    assert _read_as_bytes(_copy_of(instance.root, twin.stage_id), where.read) == [(b"text", CANONICAL.encode())], f"precondition: the twin's copy stores {CANONICAL} in {where.place}"
+    stored = _archive(tmp_path / "stored", databases.head, (), statements=(where.store(f"CAST(x'{NOT_UTF8.hex()}' AS TEXT)"),), verify=carries_the_text)
+    with cases.staging_logs() as events:
+        try:
+            report = staging.stage_archive(stored.path, instance.root)
+        except Exception as exc:
+            pytest.fail(f"a read of the copy's stored currencies that fails ends the check, which it never does (B-29): it raised {type(exc).__name__} {getattr(exc, 'code', '')}: {exc}", pytrace=False)
+    copy = _copy_of(instance.root, report.stage_id)
+    carries_the_text(copy)
+    with closing(cases.read_only(copy)) as conn, pytest.raises(sqlite3.OperationalError) as raised:
+        find_stored_currency_findings(conn)
+    assert NOT_UTF8_MARKER in str(raised.value), f"barrier: the error the read fails with quotes the archive's text, so the log had something to keep out: {raised.value}"
+    assert CODE not in report.warnings, f"a read that failed finds nothing: no {CODE}: {report.warnings}"
+    assert (report.warnings, report.blockers, report.restorable) == (twin.warnings, twin.blockers, twin.restorable), f"the twin's warnings, blockers and verdict: {report.warnings}, {report.blockers}, {report.restorable} != {twin.warnings}, {twin.blockers}, {twin.restorable}"
+    _the_failed_read_is_logged(events, report.stage_id, (str(tmp_path), str(instance.root)), error="OperationalError", untold=NOT_UTF8_FRAGMENTS)
+    print_success(f"{where.place}: {report.warnings}, restorable as the twin, one warning logged")

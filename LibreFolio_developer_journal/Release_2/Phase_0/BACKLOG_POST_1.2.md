@@ -7665,12 +7665,33 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Commit al checkpoint di E-19a.
   - Resta **E-19b**: `IssueCode.NON_ISO_CURRENCY` al posto di `MISSING_FX_*`, il banner senza bottone, il selettore
     col valore salvato, l'avviso del ripristino (via di B), i18n nelle 4 lingue, `api sync`.
+  - 17/10, E: **E-19b1** (il selettore, l'endpoint `suggest`, l'avviso `non_iso_currencies` del ripristino): parte 1 nel
+    commit `6e539da02`; `staging.py` sopra B-43, con le tre condizioni di B, va col checkpoint E-19b1. Resta **E-19b2**:
+    `NON_ISO_CURRENCY` nel rapporto di qualità, sul lettore di Z-32 (c).
   - Per D1, se si sceglie C: la rietichettatura automatica deve escludere anche `GBp`, non solo GBX/ZAC/ILA.
   - ✅ Il pezzo di J: la guardia di `Intl` in `riskAnalysisHelpers.ts:168`, entrata in dev `b13ed7944` (CHANGELOG
     `826f99f17`).
   - Smistati altrove dal coordinatore: il modale delle rotte FX che cancella prima di ripubblicare (X) e il `GBp` di
     Yahoo contro il confronto esatto del refresh (Z).
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19».
+- **E-20 · L'audit delle valute e i testi che non sono UTF-8** — piccolo; `test-author` di E-19b1.3 (dubbi 1 e 2),
+  17/10.
+  - Un solo valore TEXT che non è UTF-8 valido, in una delle 14 colonne, fa alzare a sqlite3 un `OperationalError` al
+    `fetchall`, e l'audit intero cade:
+    - l'avviso d'avvio dice «could not be checked» e non elenca nulla;
+    - il controllo di un ripristino perde `non_iso_currencies`, quindi un archivio costruito apposta nasconde tutti gli
+      altri codici non ISO. Non blocca e non perde testo (E-19b1.3), ma acceca.
+  - Il messaggio di quell'errore cita il testo salvato. Il ramo «no such table / no such column» lo confronta con
+    `str(error)`, quindi un testo che contiene quelle parole fa saltare il suo posto in silenzio.
+  - La cura proposta, in `stored_currencies.py`:
+    - leggere ogni posto come `typeof()` più `hex()` in un CTE intorno alle 14 query, e decodificare in Python;
+    - un testo non UTF-8 diventa un reperto `X'…'` come un BLOB;
+    - confrontare il messaggio solo per gli errori della `execute` (la preparazione), mai su quelli dei dati.
+  - Cambia ciò che fissano SCA-036 e RNW-109: servirà un altro errore vero per il ramo del guasto.
+  - Il caso più ampio è di B: un testo non UTF-8 nei dati di un backup passa il controllo del ripristino (RNW-109, in
+    quattro posti) e poi, con ogni probabilità, fa fallire le letture del server di quelle righe (pysqlite alza al
+    `fetch`, come prova la barriera di SCA-036; non misurato sul server). Segnalato al coordinatore.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19b1.3».
 
 ## Y · Cruscotto e grafici (fase 01)
 
