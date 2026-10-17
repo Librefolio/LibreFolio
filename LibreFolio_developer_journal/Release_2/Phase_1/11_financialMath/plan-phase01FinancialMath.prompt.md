@@ -2823,3 +2823,63 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
   `Bulk deletion failed: (sqlite3.OperationalError) Expression tree is too large…` con l'SQL nel dettaglio —; rimesso
   (sha uguali). Verdi: `api fx` **26**, `api assets-price` **21**, `api current-price-persistence` **5**, `api fx-sync`
   **10**. Porta 6190 libera. **CHECKPOINT READY** inviato, FROZEN.
+
+#### MF-SEC9a committato; il resto di SEC9a (BRIM, WAC) e MF-SEC9c (17/10, 14:2x)
+- Coordinatore: SEC9a committato `34cc1a58b` + `d63558abb` (entra dopo E; Z-X-R65 entra dopo e si fonde). Scelta (c),
+  nell'ordine **BRIM → PAC `wac.py` → MF-SEC9c**; scrittura OK solo su `search_asset_candidates_bulk` (H lavora su
+  `BRIMProvider._create_transaction`, W-B75, nello stesso file) e su `_load_wac_fx_rows`. Revisori W e H.
+- **BRIM** `brim/brim_provider.py` `search_asset_candidates_bulk`: fino a 5 condizioni per titolo distinto (ISIN ×2,
+  ticker, nome ×2): un rendiconto con ~250 titoli passava i mille termini. ✅ Una SELECT per blocco di condizioni,
+  unione per id (`universe_by_id`), poi ordinata per `display_name` (unico e non nullo: l'ordine è quello di SQL, il
+  punto di codice di SQLite è quello di Python). Docstring («una sola andata e ritorno»: una per blocco).
+- **WAC** `pac_allocator/source/wac.py` `_load_wac_fx_rows`: un termine per (coppia, data) delle conversioni del costo;
+  ✅ letto a blocchi, unito. Il test esistente (2 chiavi → una sola istruzione) resta valido.
+- **MF-SEC9c** `services/assets/price_query.py`: ✅ la `gather` fa solo le quotazioni (`_live_one`, che non tocca la
+  sessione); dopo, `_last_readable_prices()` legge l'ultima riga d'ogni asset senza quotazione in una query raggruppata
+  (`MAX(date) … GROUP BY`), e solo un asset con l'ultima chiusura illeggibile passa, da solo, per il vecchio
+  `_last_readable_price` a pagine. Doc: `assets/architecture.md` (il ripiego). Suite esistenti verdi col codice:
+  `current-prices-bulk` 24, `current-price-storable` 27, `current-price-bootstrap` 8, `provider-cooldown` 66.
+- In corso: test-author `sec9a-rest-tests` (NUOVO `test_bulk_reads_chunked.py`), `sec9c-tests`
+  (`test_current_prices_bulk.py`).
+- ✅ **Test BRIM/WAC** (test-author `sec9a-rest-tests`): NUOVO `test_bulk_reads_chunked.py` (8: due barriere — un OR di
+  1 500 rifiutato, **un `or_()` annidato conta ogni termine** —; 300 terne ISIN+ticker+nome e 150 solo nome uguali,
+  terna per terna, alla ricerca per asset — id, confidenze, ordine, auto-selezione —, con nomi ASCII misti, accenti,
+  greco, CJK; la guardia di 50 terne; WAC a 500, 501 e 1 510 chiavi). Riga del runner `services bulk-reads-chunked`.
+  ⚠️ **Fuori pista** (dal test-author): la prima cura BRIM restava rossa — SQLAlchemy scrive `or_(a, or_(b, c))` piatto,
+  quindi i 7 ILIKE del nome contano per SQLite uno per uno e un blocco di 500 condizioni ne aveva 1 100 → le 7 colonne
+  ora sono condizioni separate (`conditions.extend`), stesso significato. La soglia reale su HEAD era quindi ~90 titoli
+  con ISIN, ticker e nome (11 termini), non ~250.
+- ✅ **Corsia** (14:37, `files/sec9ar.sh`; prodotto tolto = `brim_provider.py` + `wac.py`, sha `9224f507…` uguale
+  dopo): rosso **3** (2 BRIM `OperationalError`, 1 WAC) / 5 guardie; verdi `bulk-reads-chunked` 8, `db brim-bulk` 7
+  (la parità esistente), `portfolio-allocation-source` 98, `brim-provider-base` 39.
+- ✅ **Test SEC9c** (test-author `sec9c-tests`, in `test_current_prices_bulk.py`): `_WatchedSession` conta le
+  istruzioni in volo; 20 asset senza quotazione (senza fornitore, fornitore che fallisce, in pausa) → mai più d'una
+  istruzione in volo (HEAD: 20); i ripieghi leggibili in **una** istruzione raggruppata, solo gli illeggibili da soli
+  (HEAD: 6 istruzioni per 6 asset); 3 guardie (la chiusura leggibile sotto ±inf anche oltre una pagina, la pausa col suo
+  rifiuto, l'ordine della richiesta). **Corsia** (14:39; prodotto tolto `price_query.py`, sha `2a7b7007…` uguale dopo):
+  rosso **2** / 27; verdi `current-prices-bulk` 29, `current-price-storable` 27, `current-price-bootstrap` 8,
+  `provider-cooldown` 66. Descrizione del runner aggiornata.
+- **Revisione di E su MF-SEC9a** (entrato: dev `dd416f5bb`, CHANGELOG `942934dd6`), dentro questo lotto:
+  (1) LOW-1 ✅ `delete_rates_bulk`: le date di ogni coppia ordinate una volta con i loro id, ogni cancellazione per
+  bisezione (`bisect_left`/`bisect_right`, conteggio `max(0, hi − lo)`): era una scansione per cancellazione, ~4 s di
+  ciclo al tetto. (2) BRIM: la soglia reale su HEAD è 91 titoli con tutti i campi — già curata con le condizioni piatte;
+  chiesto al test-author il caso a 100 (rosso) e a 90 (guardia). (3) Nit ✅: docstring di `sql_chunks.py` (i siti, e
+  che un `or_()` annidato conta ogni termine), di `delete_rates_bulk` e di `bulk_delete_prices`; il conteggio per
+  intervallo di quest'ultimo resta → backlog MF-SEC9e. (4) Backlog ✅ MF-SEC9f (`scheduler/jobs.py:100`, ~1 000 coppie;
+  `engine.py:133` sicuro). (5) Il coordinatore porta dev al prossimo checkpoint (Z-30 tocca `get_prices_bulk` in
+  `price_query.py`, altra funzione). Doc FX: la bisezione in `#rate-write-limits`.
+- In corso: test-author `sec9a-tests` (rosso LOW-1 sul conto dei passi), `sec9a-rest-tests` (BRIM a 100/90).
+- ✅ **Rossi della revisione di E** (test-author): `test_delete_rates_bulk_matching_is_bisection_not_a_scan` (date
+  contate: ≤ 4⌈log₂(D+1)⌉ confronti per cancellazione, 2 000 × 2 000; HEAD supera il tetto alla 22ª — la scansione intera
+  sarebbe ~6 milioni) e la guardia contro una scansione a forza bruta su richieste casuali (5 semi; sovrapposizioni,
+  fine < inizio, coppia assente, giorni singoli); BRIM `[100-triples]` (rosso, appena oltre i 91 di E) e la guardia a
+  50/90. **Corsia** (14:48): BRIM/WAC rosso **4** / 6 (`9224f507…`), LOW-1 rosso **2** / 47 (`56565953…`, solo
+  `storage.py` tolto); verdi `bulk-writes-chunked` 49, `fx-core` 42, `bulk-reads-chunked` 10, `db brim-bulk` 7,
+  `portfolio-allocation-source` 98, `brim-provider-base` 39. ruff/black/diff-check, `mkdocs build` stretto, `check-links`.
+  Porta libera. Slot chiesto (`files/sec9ar.sh slot`: `api current-price-persistence`, `assets-price`, `brim`,
+  `brim-scalable`, `fx`).
+- ✅ **Slot** (14:53–14:57, GO del coordinatore, carico 23): `api current-price-persistence` 5, `api assets-price` 21,
+  `api brim` **118**, `api brim-scalable` 2, `api fx` 26. Porta libera. Nota del coordinatore per l'aggiornamento di
+  base: X-R65 (dev `c726b9d89`) rifiuta date di cambi e prezzi dopo domani; nella revisione combinata `DAY0` di
+  `test_bulk_writes_chunked.py` è passato al 1990 (`f6324af9e`) — da tenere alla fusione; i miei casi nuovi restano lontani
+  da oggi (API dal 2003 per ~3 000 giorni, gli altri a pochi anni dal 2001–2004). **CHECKPOINT READY** inviato, FROZEN.
