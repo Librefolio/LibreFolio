@@ -120,12 +120,10 @@ async def query_prices_bulk(
     for all assets, then applies backward-fill per asset.
     Analogous to POST /fx/currencies/convert for FX rates.
 
-    Limits (Z-25): at most ``MAX_BULK_ITEMS`` items (422 ``bulk_too_many_items``, before any read) and at most
-    ``MAX_BULK_ITEM_DAYS`` per-day points over all the fills (422 ``bulk_too_many_days``, counted once the prices are
-    read, before the fills). The web app's asset list sends one item per asset in a single request: an instance with
-    more than 1,000 assets gets ``bulk_too_many_items``, and today the page then shows its cards without prices, the error
-    reaching only the console (the ``catch`` of ``fetchAllPriceData``). An explicit message, and splitting the request,
-    are a follow-up of the web app.
+    Limits (Z-25; the day budget lowered by R13-SEC9-2): at most ``MAX_BULK_ITEMS`` items (422
+    ``bulk_too_many_items``, before any read) and at most ``MAX_BULK_ITEM_DAYS`` per-day points over all the fills (422
+    ``bulk_too_many_days``, counted once the prices are read, before the fills). The web app's asset list splits its
+    request into batches under both, and splits again a batch refused for its days (Z-27).
     """
     if len(requests) > MAX_BULK_ITEMS:
         raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(requests), MAX_BULK_ITEMS))
