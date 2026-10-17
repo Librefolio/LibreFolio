@@ -258,4 +258,47 @@ Sono tutti locali: la push la fa il developer.
 | 166 | 17/10 00:25 | J: CP-9a (servizio del rischio diviso per tema, T-R1 metà rischio); `devWiki/log.md` per unione; TODO_FUTURI allineato | `c4eeaef14`, `67e795edb` |
 | 167 | 17/10 00:35 | Y: Y-22 (scadenza dell'aiuto L3), Y-23 (mock `onNavigate`, rosso di dev da `ec018afdf`), riferimenti di riga | `d7f3a49c3` |
 | 168 | 17/10 00:38 | X: X-R22 (l'avviso del segreto illeggibile dice l'ordine: prima la chiave vecchia) | `618563949` |
+| 169 | 17/10 01:06 | MF: MF-P (variazione del giorno e gruppi) e MF-A (tabella Performance dal motore); journal MF | `536501541`, `151488582`, `5c9ad06d7` |
+| 170 | 17/10 01:12 | X: X-R37 (link al report in managed, N61) | `908fe6c90` |
+| 171 | 17/10 01:23 | X: X-R35 (le impostazioni URL rifiutano user info) | `67668f5ce` |
+| 172 | 17/10 01:33 | J: CP-10b (runtime dei segnali in `services/signals`) | `b36e3873f` |
+| 173 | 17/10 01:45 | H: H-26, residuo di H-24, H-28 (file nascosti della build) | `40a76bf1a`, `5beecac3d` |
+| 174 | 17/10 01:50 | E: E-9 (alias delle caselle, nessun testo di estranei) | `49c07a95a`, `3a5ff5194` |
+| 175 | 17/10 01:57 | Z: Z-14 (cache dei prezzi dopo il recupero); W: W-B58 (limite dei decimali), W-B59 (precarico BRIM) | `2765773f5`, `6e02e56ec`, `4e9d1815f` |
+| 176 | 17/10 02:02 | Z: Z-21 (aiuti solo-test rimossi) | `ffd58ffbd` |
+| 177 | 17/10 02:04 | MF: MF-E1 (riepilogo dei lotti in casa, riepilogo FIFO v3); X: O-8 (messaggi del data editor) | `e43dfae68`, `f32a04f46`, `b1b4960c4` |
+| 178 | 17/10 02:40 | H: H-27 (tipi dei default di profilo) | `bfdc1f72c` |
+| 179 | 17/10 02:50 | E: E-11 (reinvio con istanza bloccata) | `bca4bd6d3`, `2818924b7` |
+| 180 | 17/10 03:07 | E: journal R13-SEC4 ed E-12 | `110125350`, `dfb1fcafd` |
+| 181 | 17/10 03:09 | H: H-29, H-30 (file nascosti) | `1b11869f7`, `8ef48dedb` |
+| 182 | 17/10 03:11 | A: A7b-2 (ritiro del link di setup, 422 senza input); ⚠️ marcatori in `overview.md` corretti | `90219770c`, `81b8db4e1`, `28059249a` |
+| 183 | 17/10 03:17 | J: CP-10c (taglio del servizio dei segnali) | `69e1c58e9` |
+| 184 | 17/10 03:28 | B: B4 (backup sicuri `.lfbk`) | `339a59142`, `0a45e45de` |
+| 185 | 17/10 03:38 | Z: Z-20 (client senza moduli runes) | `3f654c4da` |
+| 186 | 17/10 03:40 | MF: MF-P4b (frazioni dei periodi), MF-J1 (un solo replay) | `d93de2899` |
+| 187 | 17/10 03:58 | E: journal R13-SEC5 | `7d3012e3b` |
+| 188 | 17/10 04:05 | Z: Z-22 (listener HMR di instanceBlock) | `22d46da6e` |
+| 189 | 17/10 04:17 | H: H-32 (float delle richieste finiti) | `ec6aa2007` |
+| 190 | 17/10 04:45 | H: H-33 (log della validazione delle risposte) | `5bba93280` |
+| 191 | 17/10 04:48 | Y: Y11 lotto assets (pageBusy sulle pagine asset) | `d32d0f3d9` |
+| 192 | 17/10 04:50 | B: B4b (residui dopo un crash, correzioni ai backup) | `c7dd3934a`, `8b15a6c6c` |
+| 193 | 17/10 04:51 | H: wiki-file della notte; ⚠️ marcatori in `devWiki/index.md` corretti | `1937e6cf4`, `333cead4d` |
+| 194 | 17/10 04:54 | X: X-R24/25, X-R38, X-R40/W-B62, X-R50 | `fd6886bb0` |
+| 195 | 17/10 04:56 | Z: Z-10 (spegnimento del server di sviluppo) | `a38d6bdfe`, `75a1107a7` |
+| 196 | 17/10 05:01 | J: CP-14a (casa degli interessi, P-10, V-4) | `03101ddad`, `39dd2ef5c` |
+| 197 | 17/10 05:08 | X: X-R51 (quotazione live rifiutata, nominata) | `b3cae6e0e` |
+| 198 | 17/10 05:11 | MF: MF-W56 (arrotondamento WAC), MF-J2 (il trasferimento tiene i rendimenti); conflitto del runner risolto a mano | `04a5088ff`, `611b07074` |
+| 199 | 17/10 05:13 | E: journal R13-SEC6; W: C-97b (input decimale) | `3f664ae37`, `b2462042d`, `b214c8200` |
+| 200 | 17/10 05:16 | MF: MF-D1 (rendimenti in casa), MF-D2 (drawdown con perdita totale, v2) | `aca75c7ca`, `1c37ad0f0` |
+| 201 | 17/10 05:25 | X: X-R52 (un giorno BCE non numerico salta solo quel giorno) | `56d13a448` |
+| 202 | 17/10 05:27 | Y: R17/W8/P4 (cifre della Dashboard dal backend) | `1565b6bbb`, `a3662b3ef` |
+| 203 | 17/10 05:32 | Z: journal, piano Z-14b/Z-15 | `1a937b93e` |
+| 204 | 17/10 05:38 | Z: Z-16 (albero di `admin/filesystem` in it/fr/es) | `737972ef5` |
+| 205 | 17/10 05:41 | J: CP-14b (ACT/ACT ISDA, liquidazione, soglia del righello); backlog T-D9, T-U8, J-44 | `4111239a7`, `252835dce` |
+| 206 | 17/10 05:48 | B: B-28 (il ripristino rifiuta oggetti estranei nello schema) | `01f36e79d`, `1c2bac918` |
+| 207 | 17/10 05:56 | E: journal, rossi di E-13, R13-SEC7 | `d5126c19a` |
+| 208 | 17/10 05:57 | MF: MF-P2 (endpoint delle variazioni a periodo fisso) | `aa4370905` |
+| 209 | 17/10 06:08 | Y: Y-2 (linea settimanale), Y-16 (test delle candele); B: B-29 (totali illeggibili della copia) | `14072c03d`, `006773c99`, `abf8391fb` |
+| 210 | 17/10 06:16 | H: H-36 (proxy locale non fidato, N70) | `d107b6f26` |
+| 211 | 17/10 06:31 | Z: Z-11 (lock dei job fra i worker, N71); B: B-16 (il riavvio che non avviene lo dice) | `c5e3c199d`, `3896cb6b3`, `47405701f` |
 | — | 17/10 00:05–00:45 | Colori: AF file, media e menu `9d3607eb6`; T `CompactCashCell` `b58108665` | — |

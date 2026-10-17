@@ -56,6 +56,13 @@ The contract (the developer's decisions, 16/10; D5 and D6 the coordinator's, 16/
    (SQLite reads the literal ``1e999`` as +inf), an infinite close — no longer breaks anyone: ``list_assets``, which reads
    every user's quantities, raises nothing; the infinite quantity loads as None and its row can be deleted through the
    batch; the quantity of 1e60 loads as 1E+60; the infinite close loads as None.
+8. W-B60 (17/10, the follow-up of W-B58): a cash amount reads back exactly. ``Transaction.amount`` was a plain
+   ``Numeric(18, 6)``, read through ``'%.6f'`` of the stored double, so from about 11 integer digits the double's noise
+   landed in the 6 decimals; it becomes ``RealDecimal(18, 6)`` — same declaration, same DDL, no migration. A BUY committed
+   through the batch with a cash amount of -123456789012.345 EUR (15 significant digits, 12 before the point: within
+   N63's 15) reads back -123456789012.345000, column by column and through the service (``get_by_ids``), and the control
+   totals (``compute_control_totals``: what a backup records and a restore checks) give its broker's EUR line as
+   -123456789012.345. What reads well today keeps its form: -100 EUR reads -100.000000.
 
 Reds — fail today, pass once the contract holds:
 
@@ -96,6 +103,8 @@ Reds — fail today, pass once the contract holds:
   unchecked);
 - ``TestCorruptRowsAreReadWithoutRaising`` (rule 7): today ``InvalidOperation`` (the REAL 1e60) and ``TypeError``
   (the REAL inf) on every read, the asset list's and the delete's included;
+- ``TestACashAmountReadsBackExactly`` (rule 8, W-B60): today the BUY's cash amount reads back -123456789012.345001, and
+  the control totals give -123456789012.345001: the double's noise;
 - ``TestTheCodesAreListed``: ``TXValidationCode.INTEGER_DIGITS_EXCEEDED``, and ``validation_codes`` lists it.
 
 Guards — green today, and the cure must keep them green:
@@ -116,7 +125,9 @@ Guards — green today, and the cure must keep them green:
   units for -999999999999999 EUR (15 digits each), one of 13-digit units for -1E+13 EUR (accepted under N63), a cost
   basis of 999999999999.999 (12 integer digits) commit;
 - ``TestAPromotedCostBasisIsChecked`` (rule 6): a promote whose resolved cost basis keeps 12 decimals commits, and the
-  receiving leg holds it exactly.
+  receiving leg holds it exactly;
+- ``TestACashAmountReadsBackExactly`` (rule 8): cash amounts of -100 and -1234.5 EUR read back -100.000000 and
+  -1234.500000, column by column and through the service, as ``Numeric(18, 6)`` reads them today.
 
 Derived — read from the contract's general rule, not in the brief's list; drop them if the rule was meant narrower: a
 quantity over both limits gets ``decimalPlacesExceeded`` alone (the "otherwise"); a cash amount past 15 significant
@@ -161,6 +172,7 @@ from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidation
 from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.brim.brim_provider import BRIMProvider
+from backend.app.services.financial_math.ledger_totals import compute_control_totals
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
@@ -1365,6 +1377,87 @@ class TestCorruptRowsAreReadWithoutRaising:
             pytest.fail(f"R13-SEC2: loading the price id={price_id}, whose close the file holds as the REAL {INFINITE_REAL}, raised {exc!r}")
 
         assert row.close is None, f"R13-SEC2: the price id={price_id} loads a close of {row.close!r}: expected None"
+
+
+# ============================================================================
+# RED AND GUARD — RULE 8 (W-B60): A CASH AMOUNT READS BACK EXACTLY
+# ============================================================================
+
+# A cash amount of 15 significant digits, 12 of them before the point (within N63's 15): a double holds it exactly
+# enough, and ``'%.6f'`` of that double reads -123456789012.345001.
+TWELVE_INTEGER_DIGIT_AMOUNT = "-123456789012.345"
+
+
+async def _loaded_amount(world: World, tx_id: int) -> object:
+    """The amount of row ``tx_id`` as the service loads it (``get_by_ids``), from the database. The object the batch left
+    in the session holds the value the batch assigned, not the one read back: it is expired first, so the load fills it
+    from the file, through the column's type."""
+    cached = await world.session.get(Transaction, tx_id)
+    if cached is not None:
+        world.session.expire(cached)
+    loaded = await TransactionService(world.session).get_by_ids([tx_id])
+    assert [row.id for row in loaded] == [tx_id], f"scaffold: get_by_ids([{tx_id}]) loaded {[row.id for row in loaded]}"
+    return loaded[0].amount
+
+
+async def _committed_buy(world: World, cash: str) -> int:
+    """A BUY of one unit of the test's asset on ``main`` for ``cash`` EUR, committed through ``/commit``; its id."""
+    response = await _run_as_the_endpoint(world, creates=[_row(world, "BUY", "1", cash=cash)])
+    assert response.committed is True and response.issues == [], f"scaffold: a BUY of 1 unit for {cash} EUR, within every limit, was refused: {_render(response.issues)}"
+    return _created_ids(response)[0]
+
+
+class TestACashAmountReadsBackExactly:
+    """Rule 8 (W-B60): ``Transaction.amount`` reads back the decimal written, with 6 decimals as today.
+
+    Today it is a plain ``Numeric(18, 6)``: SQLAlchemy reads the stored double through ``'%.6f'``, and from about 11
+    integer digits the double's noise lands in the 6 decimals. Compared as text, so the 6 decimals are pinned.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_cash_amount_of_15_significant_digits_reads_back_exactly(self, world):
+        """Red today: the BUY commits, and its cash amount of -123456789012.345 EUR reads back -123456789012.345001, column
+        by column and through the service alike.
+
+        Contract (W-B60): -123456789012.345000 both ways: the value sent, with 6 decimals.
+        """
+        tx_id = await _committed_buy(world, TWELVE_INTEGER_DIGIT_AMOUNT)
+
+        stored = (await _stored(world, [tx_id]))[tx_id]["amount"]
+        loaded = await _loaded_amount(world, tx_id)
+
+        reads = {"column by column": str(stored), "through get_by_ids": str(loaded)}
+        expected = dict.fromkeys(reads, "-123456789012.345000")
+        assert reads == expected, f"W-B60: the BUY id={tx_id} was committed with a cash amount of {TWELVE_INTEGER_DIGIT_AMOUNT} EUR, and reads back {reads}: expected -123456789012.345000, the value sent with 6 decimals"
+
+    @pytest.mark.asyncio
+    async def test_the_control_totals_give_the_cash_amount_exactly(self, world):
+        """Red today: the control totals read the amount through the column's type, so the broker's EUR line is the
+        double's noise, -123456789012.345001 — what a backup would record, and a restore compare.
+
+        Contract (W-B60): the line of the test's broker ``main`` — the only cash it holds is the BUY's — is
+        -123456789012.345, in the canonical text of ``ControlTotals.to_json``. Only this broker's lines are read: the
+        ledger is the whole lane's.
+        """
+        await _committed_buy(world, TWELVE_INTEGER_DIGIT_AMOUNT)
+
+        totals = (await compute_control_totals(world.session)).to_json()
+
+        lines = [line for line in totals["cash"] if line["broker_id"] == world.main_id]
+        expected = [{"broker_id": world.main_id, "currency": EUR, "balance": "-123456789012.345"}]
+        assert lines == expected, f"W-B60: the control totals of broker {world.main_id}, whose only cash is a BUY for {TWELVE_INTEGER_DIGIT_AMOUNT} EUR, give the cash lines {lines}: expected {expected}"
+
+    @pytest.mark.asyncio
+    async def test_guard_a_cash_amount_that_reads_well_today_keeps_its_form(self, world):
+        """Guard: green today and after. Cash amounts of -100 and -1234.5 EUR read back -100.000000 and -1234.500000,
+        column by column and through the service, as ``Numeric(18, 6)`` reads them today."""
+        ids = {cash: await _committed_buy(world, cash) for cash in ("-100", "-1234.5")}
+
+        stored = await _stored(world, ids.values())
+        reads = {cash: (str(stored[tx_id]["amount"]), str(await _loaded_amount(world, tx_id))) for cash, tx_id in ids.items()}
+
+        expected = {"-100": ("-100.000000",) * 2, "-1234.5": ("-1234.500000",) * 2}
+        assert reads == expected, f"W-B60: cash amounts sent → (column by column, through get_by_ids): {reads}; expected {expected}, today's form"
 
 
 # ============================================================================

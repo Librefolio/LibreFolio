@@ -1739,3 +1739,198 @@ Quattro commit, uno per lotto che cambia numeri:
   legge il fattore preparato (non è una copia); `risk/quant/resampling.py:235` converte una lunghezza di blocco (altro).
 - ✅ **Slot 1** (05:05–05:11, su `b05b80201`, patch D messa da parte e rimessa, sha `1895560c…`): `api portfolio-wac`
   **12**, `api portfolio` **51**; porta 6190 libera. W56 + J2 pronti all'ingresso.
+
+#### MF-D entrato; MF-P2 — analisi (17/10, 05:13)
+- Coordinatore: D1 `b8215253c`, D2 `4aa2d8cc3`, giornale `76510d787`; base aggiornata (dev `611b07074`), validazione
+  combinata verde su `e3e6632fd` (`financial-math` 851, `series-preparation` 22, `ai-export-pure` 323,
+  `front-ai-export unit` 585, `risk-all` parte del confronto 198); **MF-D entrato** in dev `aca75c7ca` + 🐛; HEAD
+  ff a **`1c37ad0f0`**. La sonda la fa J.
+- **MF-P2 — stato reale** (lettura, nessun codice):
+  - Asset: `frontend/src/lib/utils/assetPriceDerived.ts:105-201` — `DELTA_PERIODS` (1W 7, 1M 30, 3M 91, 6M 182,
+    1Y 365, 2Y 730, 3Y 1095, 5Y 1825) più `1D`; `computePeriodDelta` = ultimo punto vs il punto ≤ (data dell'ultimo
+    − N giorni di calendario), ×100, float; gira anche nel Web Worker (`priceProcessing.worker.ts:80`). Sorgente: la
+    serie densa e riempita all'indietro di `POST /assets/prices/query` (`services/assets/price_query.py:398`,
+    `_build_backward_filled_series`), sull'intervallo scelto; `target_currency` opzionale. Le colonne visibili
+    (`assets/+page.svelte:325`) sono i periodi ≤ l'intervallo caricato.
+  - FX: **seconda copia** di `DELTA_PERIODS` e di `computePeriodDelta` in `routes/(app)/fx/+page.svelte:174-210`, con
+    l'inversione della coppia (`displayFxDelta`, `fxStoreRegistry.ts:65`: con la coppia girata il rendimento è
+    `ref/last − 1`); i dati vengono da `POST /fx/currencies/convert` (conversioni per giorno), non da una serie.
+  - Consumatori: `components/assets/AssetTable.svelte:238-264`, `components/fx/FxTable.svelte`.
+  - Il Δ primo→ultimo sull'intervallo scelto (`deltaPercent`) resta misura interattiva (D-MF6 b), dichiarata.
+- **Proposta a X** (05:2x): funzione della casa sui punti datati (ancora = `as_of`; riferimento = ultimo prezzo ≤
+  `as_of − N`; None senza riferimento o con un valore ≤ 0; per l'FX anche il verso inverso) + un elenco dei periodi
+  nel backend restituito nella risposta; forma del campo da concordare (risposta esistente vs endpoint dedicato).
+- **X** (05:2x): Q1 (a) due endpoint dedicati, l'FX in `POST /fx/currencies/period-changes`; Q2 (a) `as_of` =
+  `dateEnd` (fissare con un test l'1D a 0 nel fine settimana); Q3 tiene la regola delle colonne (periodi ≤ intervallo
+  scelto: nessun cambio visibile in questo lotto; mostrare tutto è una proposta UX a parte) → `days` in ogni periodo e
+  `1D` nella lista; Q4 (a). Prestazioni: una query raggruppata per giorno, non una serie per asset. File: scrivo io il
+  backend, X rivede in sola lettura; moduli nuovi `services/assets/period_changes.py` e `services/fx/period_changes.py`,
+  rotte e schemi in coda ai file esistenti, `price_query.py` intatto. Il frontend è di X dopo il mio ingresso.
+- **Coordinatore** (05:2x): **MF-D4** dopo MF-P2 — uno SPLIT già salvato con rapporto ≤ 0 fa sollevare il motore
+  (`financial_math/portfolio/engine.py:226`) e il report risponde 500; deciso: rapporto non valido = split mancante (non
+  applicato) + avviso di qualità dei dati (codice da concordare con J, p. es. `INVALID_SPLIT_RATIO`), mai un'eccezione;
+  X-R47 chiude la scrittura. Rossi prima.
+- ✅ **Codice MF-P2** (2026-10-17):
+  - ⚠️ **Fuori pista — il cambio del giorno**: la conversione della serie di oggi (`price_query.py:483`) converte ogni
+    punto riempito **alla sua data di valutazione** `p.date`, non a quella del prezzo; l'FX della pagina è
+    `convert_bulk` per giorno (rotte CHAIN comprese). Quindi la regola comune è «un valore per ogni giorno valutato»:
+    la prima versione della casa (punti memorizzati + ricerca all'indietro, con `reference_date`) è stata riscritta prima
+    di ogni prova.
+  - Casa (`returns.py`): `FIXED_PERIODS` (1D…5Y con i giorni), `fixed_period_dates(as_of)`, `FixedPeriodChange(key, days,
+    change_ratio, inverse_change_ratio)`, `fixed_period_changes(values, as_of)` (ancora = valore su `as_of`, riferimento =
+    valore su `as_of − giorni`; None su mancante o ≤ 0). `_MIN_ANNUALIZATION_DAYS` intatto (J).
+  - `services/assets/period_changes.py`: una query raggruppata per giorno valutato (`MAX(date) ≤ giorno GROUP BY
+    asset_id` unito ai close), `_Valuation` per asset (nativo = valuta dell'ancora, un giorno in un'altra valuta → None +
+    errore; con `target_currency` → `convert_bulk` al giorno valutato, un lotto per tutta la richiesta; errori unici, al
+    massimo 10). `services/fx/period_changes.py`: un solo `convert_bulk` (1 base → quote a ogni giorno) per tutte le
+    coppie, i due versi dalla casa.
+  - Schemi in coda: `schemas/prices.py` (`FAPeriodChangesQueryItem`, `FAPeriodChange`, `FAPeriodChangesResult`,
+    `FAPeriodChangesResponse`), `schemas/fx.py` (`FXPeriodChangesRequest` con base ≠ quote, `FXPeriodChange`,
+    `FXPeriodChangesResult`, `FXPeriodChangesResponse`). Rotte in coda: `POST /assets/prices/period-changes`,
+    `POST /fx/currencies/period-changes` (login richiesto). `api sync` exit 0 (client non tracciato). Mappe della casa
+    aggiornate. ruff/black puliti.
+- In corso: test-author `mf-p2-tests` (casa, parità col `computePeriodDelta` del frontend su serie densa), test-author
+  `mf-p2-api-tests` (servizi e API, parità col price query e col convert), docs-writer `mf-p2-docs`.
+- ✅ **Test** (test-author):
+  - casa: `test_financial_math/test_fixed_period_changes.py`, 20 test — parità esatta (Decimal) col
+    `computePeriodDelta` della pagina Asset, con quello della pagina FX e col suo verso invertito, su serie dense
+    ricostruite (port di `_build_backward_filled_series`, col seme); l'1D a 0 nel fine settimana e nei festivi (X);
+    l'inverso `(1+c)(1+i)=1`; ≤ 0 → None; mutazioni (riferimento un giorno prima 16 rossi, inverso come −c 11, float 12…).
+  - servizi: `test_services/test_period_changes.py`, 20 test (DB condiviso, asset con nomi unici, coppie FX che nessun
+    altro usa — AMD/BDT, AMD/SZL, AMD/LSL, BBD/BZD, MVR/SCR — datate 1980–1987, pulite prima e dopo): parità col price
+    query reale (nativo e in valuta, cambio che si muove nel fine settimana) e col `convert_bulk` per giorno; ordine
+    della richiesta; asset sconosciuto; valuta estera; cambio mancante (un errore per giorno valutato: fissato così).
+  - API: `test_api/test_period_changes_api.py`, 4 test (401, 422 su base = quote, forma, numeri delle pagine via
+    `/assets/prices/query` e `/fx/currencies/convert`); aiutanti condivisi `fixtures/period_changes/`.
+  - **Righe del runner** (dichiarate): `_backend_services.py` — `services_period_changes` dopo `services_asset_signals`,
+    `add_test(cat, "period-changes", …)` dopo `asset-signals`; `_backend_api.py` — `api_period_changes` dopo
+    `api_assets_price`, `add_test(api, "period-changes", …)` dopo `assets-price`.
+- **Differenze dalla pagina di oggi** (lette nel codice dai due test-author, tutte miglioramenti, da dire a X):
+  1. **fuso orario**: le due pagine calcolano il giorno di riferimento nell'ora locale del browser (`setDate`,
+     `toISOString`): con l'ancora in ora solare e il riferimento in ora legale cade un giorno prima (Europa/Roma:
+     2025-11-15 − 30 → 2025-10-15 invece di 10-16); il backend usa giorni di calendario esatti;
+  2. valuta mista in nativo → null + errore (la pagina confrontava close in valute diverse);
+  3. conversione mancante con `target_currency` → null + errore (il price query tiene il close nativo);
+  4. prezzo ≤ 0 → null (la pagina Asset rifiutava solo lo 0);
+  5. intervallo caricato corto: l'1D c'è comunque (il backend legge lo storico).
+- **Per X** (docs-writer): `isPortfolioAffectingMutation()` (`frontend/src/lib/stores/portfolio/portfolioMutation.ts:102-107`)
+  conta ogni POST sotto `/api/v1/assets/prices` come scrittura tranne `/query` e `/sync`: `/period-changes` va aggiunto,
+  o ogni chiamata segnerebbe vecchie le viste del portafoglio (e la riga di `developer/frontend/state/domain-state.md`).
+- ✅ **Rossi** (`files/p2.sh red`, 05:47, patch `1f0a6268…`, moduli nuovi messi da parte e rimessi con lo stesso sha):
+  `financial-math test_fixed_period_changes` → `ImportError` di `FIXED_PERIODS`; `services period-changes` →
+  `ImportError` di `FXPeriodChangesRequest`. **Verdi**: `financial-math` **871**, `services period-changes` **20**,
+  `services fx-core` **42**. ruff/black (16 file) puliti; `git diff --check` pulito.
+- ✅ **Doc** (docs-writer): `assets/architecture.md` L21, L248–269 (`#fixed-period-changes`), L527; `fx/architecture.md`
+  L87–88, L143–162; `financial_math.md` L69, L124–134, L552. `mkdocs build` stretto exit 0, `check-links` exit 0. Due
+  docstring corretti dopo il suo appunto («routes»: `convert_bulk` non triangola).
+- **Da fare in slot**: `api period-changes`, `api assets-price` (le rotte nuove stanno nello stesso router).
+
+#### MF-P2 entrato; R13-SEC7-2 — DoS della Scheduled Investment (17/10, 06:0x)
+- Coordinatore: MF-P2 committato `ed954008e`, base `ba2cd3cf6` (slot 2: `api period-changes` 6, `api assets-price` 18,
+  `financial-math` 871, `period-changes` 20, `fx-core` 42), **entrato** in dev `aa4370905`, HEAD ff **`aa4370905`**.
+  **MF-D4 fermo** (J unico scrittore di `engine.py`, `data_quality.py`, `schemas/portfolio.py`, `portfolio_service.py`,
+  i18n `dataQuality.*` per J-43b e SEC7-1): riparte sulla base con l'ingresso di J, accordo con J tenuto — (a) le righe
+  restano il riscalamento, cade solo il rapporto; `IssueCode.INVALID_SPLIT_RATIO`, `group_key="invalid_split_ratio"`,
+  `dataQuality.invalidSplitRatio` `{count}`, `affected_asset_ids/names`, CTA `navigate_asset`; `InvalidSplitEvent(event_id,
+  asset_id, date)` in `models.py`, `PortfolioCalculationResult.invalid_split_events`; la chiave i18n la scrivo io con
+  `dev.py i18n`; punti dei pezzi suggeriti da J (dopo `MISSING_COST_BASIS`, campo prima di `missing_fx`, ecc.).
+- **R13-SEC7-2** (E, MEDIUM 8/10): le date dei periodi sono controllate solo in ordine
+  (`schemas/assets/scheduled_investment.py:220-241`); `_accrual_days` (`scheduled_investment/plugin.py:168-211`) cammina
+  un giorno alla volta; `POST /assets/provider/probe` (prova a secco, ogni utente) con un piano dall'anno 1 al 9999
+  DAILY → ~3,65 M giorni due volte (storia + `_compute_value_at`), in thread che il timeout di 15 s non ferma, e ~0,7 GB
+  in cache per piano; salvato su un asset condiviso blocca anche la sincronizzazione.
+- **Riverifica** (`aa4370905`):
+  - schema: `FAInterestRatePeriod` solo `end ≥ start`; `FAScheduledInvestmentSchedule.validate_schedule_continuity`
+    solo sovrapposizioni/buchi; `grace_period_days` solo ≥ 0; nessun limite al numero di periodi.
+  - `_compute_maturation_dates` DAILY costruisce un insieme di tutti i giorni; `_generate_schedule_values` mette in
+    cache (`maxsize=256`, 48 h) un dict con un valore per data di maturazione: DAILY = un valore al giorno.
+  - **Quadratico**: in `get_history_value` ogni data di maturazione del periodo di mora chiama
+    `_compute_late_interest_value`, che col COMPOUND rifà il ciclo giornaliero dalla scadenza a quella data.
+  - La sonda: storia dagli ultimi 7 giorni a oggi; `validate_params` gira **dentro** il thread (errore
+    `INVALID_PARAMS` per operazione, HTTP 200); l'assegnazione (`bulk_assign_providers`) non valida i parametri; la
+    sincronizzazione sì (`refresh.py:148`): con lo schema limitato un piano salvato fuori misura fallisce subito, non
+    blocca.
+- **Decisione notturna N73** (da rivedere; mia, su delega del coordinatore):
+  - periodi con le date in **[1900-01-01, 2200-12-31]**; durata dal primo inizio all'ultima fine **≤ 100 anni**
+    (36 525 giorni); **≤ 1 200 periodi** (100 anni mensili); `grace_period_days` **≤ 36 525**;
+  - la mora si valuta al massimo fino al **2200-12-31** (le date oltre non si emettono);
+  - in cache solo i risultati **≤ 3 660 punti** (10 anni giornalieri); oltre, ricalcolati a ogni chiamata, mai salvati.
+  - Perché: 100 anni coprono ogni titolo a scadenza reale e il modello di un perpetuo; 1900–2200 esclude solo date
+    impossibili per un titolo vivo; il tetto della cache tiene il caso peggiore a ~256 × 1 MB.
+- **Piano di cura**: limiti nello schema (`ValueError` → `INVALID_PARAMS` come oggi; dove lo schema è un modello
+  dell'API, 422); in `financial_math/interest.py` una forma chiusa del composto giornaliero
+  `compound_growth(start, end, annual_rate, convention)` = Π (1 + r · frazione del giorno) — ACT/365 e ACT/360 una
+  potenza, ACT/ACT una potenza per anno, 30/360 per mese (passi da 0, 1, 2, 3 trecentosessantesimi); la mora COMPOUND
+  con la forma chiusa (valore corrente) e incrementale fra date consecutive (storia): lineare; nessuna cache sopra il
+  tetto. Rossi prima (test-author); rivedono J (CP-14) ed E.
+- ✅ **Codice SEC7-2** (2026-10-17, solo scrittura, poi i rossi):
+  - `schemas/assets/scheduled_investment.py`: costanti `SCHEDULE_MIN_DATE`, `SCHEDULE_MAX_DATE`, `SCHEDULE_MAX_SPAN_DAYS`,
+    `SCHEDULE_MAX_PERIODS`, `LATE_INTEREST_MAX_GRACE_DAYS` (N73); validatori sulle date del periodo, sul numero dei
+    periodi e sulla durata (in `validate_schedule_continuity`), sulla mora.
+  - `financial_math/interest.py`: `compound_growth(start, end, annual_rate, convention)` = Π (1 + r · f(d−1, d)) in forma
+    chiusa (ACT/365 e ACT/360 una potenza; ACT/ACT una per anno, l'anno di d−1; 30/360 per mese, passi da 0/1/2/3
+    trecentosessantesimi, `_thirty_360_daily_steps`). **Verifica** (script mio, 1 200 intervalli casuali, 4 convenzioni,
+    contro il prodotto giorno per giorno a precisione 60): scarto relativo massimo **4,1·10⁻²⁵**.
+  - plugin: `_late_compound_growth` (grazia al tasso dell'ultimo periodo, poi quello di mora), `_compute_late_interest_value`
+    COMPOUND = V · crescita in forma chiusa; `_late_interest_values` (COMPOUND incrementale fra date emesse
+    consecutive: una passata; SIMPLE in forma chiusa per data); la storia della mora fino a `SCHEDULE_MAX_DATE` al
+    massimo; `_CACHE_MAX_POINTS = 3 660` (sopra, calcolato e mai salvato).
+  - Effetto sul golden dell'accrual (di J, CP-14a/b): `services synthetic-yield` 1 rosso, `accrual_golden`, **solo** le
+    chiavi `late_interest_value_at` dei casi COMPOUND, alle ultime 2–3 cifre su 28 (~10⁻²³ relativo; es. 14072,65031608087426483844185
+    → …844314): la forma chiusa è più esatta dell'arrotondamento a ogni passo; da rigenerare dichiarato. Verdi
+    `synthetic-yield-integration` 15, `scheduled-investment-param-change` 3.
+  - **Il «422»**: lo schema rifiuta con `ValueError`; dalla sonda arriva come `INVALID_PARAMS` per operazione (HTTP 200,
+    come ogni altro parametro non valido), dalla sincronizzazione come errore dell'asset, subito: nessun lavoro lungo. Un
+    422 sulla sonda chiederebbe di validare prima dei thread (cambio di contratto della sonda per tutti i fornitori):
+    da decidere con E/J, non fatto.
+- ✅ **Rossi e reperti di test-author** (primo giro): 3 file nuovi —
+  `test_schemas/test_scheduled_investment_bounds.py` (limiti, `INVALID_PARAMS`), `test_financial_math/test_compound_growth.py`
+  (forma chiusa vs prodotto giorno per giorno, 169 casi), `test_services/test_scheduled_investment_cost_bounds.py`
+  (mora COMPOUND = vecchio ciclo, storia = valore per data, guardia di costo deterministica sulle chiamate di
+  `calculate_day_count_fraction`, tetto della cache, orizzonte); 221 verdi sull'albero, 22 rossi su HEAD per il motivo
+  giusto. Righe del runner aggiunte (dichiarate): `_backend_schemas.py` → `scheduled-investment-bounds`,
+  `_backend_services.py` → `scheduled-investment-cost-bounds` (dopo `synthetic-yield-integration`).
+- ⚠️ **Fuori pista — tre buchi della mia prima cura** (trovati da test-author): (1) scadenza esattamente sul 2200-12-31 →
+  il ramo «senza mora» emetteva un punto dopo l'orizzonte → ora `elif … and not schedule.late_interest`; (2) la mora
+  SIMPLE in ACT/ACT restava super-lineare (la frazione cicla gli anni dalla scadenza: 41 s fino al 2200) → (3) l'importo
+  del `MATURITY_SETTLEMENT` di mora differiva dall'ultimo prezzo nelle ultime cifre → ora il valore stesso della griglia.
+  Per (2) avevo scritto un ACT/ACT O(1) (una divisione esatta, arrotondata una volta): **rompeva** il contratto di J
+  (`test_day_count_conventions.py::TestACTACTYearEnds::test_span_across_a_leap_year_end`, somma per anno cifra per cifra) e
+  l'additività al 1° gennaio (22 270 intervalli su 148 840 a 1 ulp) → **tornato indietro**: la stessa somma anno per
+  anno, nello stesso ordine, con il prefisso degli anni interi in `lru_cache(4096)` (`_act_act_years_before`): cifre
+  identiche (20 000 intervalli casuali, `str` uguali a HEAD), costo ammortizzato. In più la storia COMPOUND della mora
+  cresce dalla scadenza su tutta la griglia (il valore d'una data non dipende più dalla finestra letta); la SIMPLE
+  valuta solo le date emesse e l'ultima.
+- **Misure** (un processo, `nice 10`, carico ~35): piano tipico 5 anni MONTHLY 13 ms la prima volta, poi in cache; il
+  caso peggiore ammesso (100 anni DAILY, fuori cache) ~130 ms il valore corrente, ~250 ms la storia intera; scadenza 1950
+  con mora DAILY COMPOUND fino a oggi ~70 ms (7 giorni) / ~150 ms (intera); **l'attacco anno 1–9999 DAILY rifiutato in
+  0,6 ms** (`INVALID_PARAMS`).
+- `start_date="min"` di `get_history_value` solleva su HEAD e sull'albero (`start_date < min(cached)` col letterale):
+  difetto preesistente, fuori perimetro → riga **MF-SI1** nel backlog.
+- ⚠️ **Fuori pista — il memo e il contesto Decimal** (test-author): `_act_act_years_before` in cache restituiva la
+  somma arrotondata nel contesto di chi l'aveva riempita per primo (60 cifre in un `localcontext`, poi 60 cifre anche nel
+  contesto normale). Nessun effetto oggi nel prodotto (l'unico `localcontext` di `backend/app`, `ledger_totals`, non
+  chiama le frazioni), ma un accoppiamento nascosto → `precision` e `rounding` del chiamante nella chiave del memo.
+  Riprova: 60 cifre nel `localcontext`, 28 fuori.
+- ✅ **Test finali** (test-author, terzo giro): `test_act_act_fraction.py` riscritto (uguaglianza `str` col ciclo di HEAD
+  su 18 intervalli e 8 490 coppie, lunghe serie da un inizio, additività al 1° gennaio su ~13 000 tagli, costo
+  ammortizzato), sezione H (indipendenza dalla finestra, 4 convenzioni × DAILY/MONTHLY), guardia di costo SIMPLE ACT/ACT
+  col memo. Mutazioni: (a) tolta → gli 8 casi H rossi; memo spento → i 5 test di costo rossi, le cifre verdi.
+- ✅ **Rossi** (`files/sec7.sh red`, 06:38, patch prodotto `78587084…`, rimessa con lo stesso sha):
+  `schemas scheduled-investment-bounds` **13 failed / 5 passed**; `financial-math "test_compound_growth or act_act"` →
+  errore di raccolta (`ImportError` di `compound_growth`); `services scheduled-investment-cost-bounds` **13 failed / 50
+  passed** (costo, cache, orizzonte).
+- ✅ **Verdi** (06:39–06:41): `scheduled-investment-bounds` 18, `schemas assets` 70, `financial-math` **1076**,
+  `scheduled-investment-cost-bounds` 63, `synthetic-yield-integration` 15, `scheduled-investment-param-change` 3,
+  `utils day-count` **43** (il contratto ACT/ACT di J verde), `utils provider-core-cache` 46; `synthetic-yield` 23 + il
+  golden rosso atteso.
+- ✅ **Golden rigenerato e rivisto** (`files/sec7.sh regen`): **44 percorsi**, tutti `late_interest_value_at` dei casi con
+  mora COMPOUND (s2 ×8, s3 compound ×4), scarto relativo massimo **1,05·10⁻²⁵**; nient'altro (values, value_at,
+  auto_events, mora SIMPLE). Cambio dichiarato nel commento del golden in `test_synthetic_yield.py` (come CP-14b).
+  `synthetic-yield` **24** verde.
+- ✅ **Doc** (docs-writer, due giri): `provider_scheduled_investment.md` (L36–56 «Bounds», L122, L136–154 mora, L156–175
+  cache con il tetto e i tempi misurati, L214 ACT/ACT col memo), `financial_math.md` (L71, L555 — anche
+  `test_act_act_fraction.py`, ritocco mio —, L583), utente `scheduled-investment.en.md` L40–47 (nota «Limits of a
+  schedule»). `mkdocs build` stretto exit 0 (anche dopo il mio ritocco), `check-links` exit 0. **Debito di traduzione**
+  it/fr/es della pagina utente: una nota in più (`admonition-count`, `admonition-type`, link `#late-interest`).
+- ruff/black (11 file) puliti, `git diff --check` pulito, porta libera.

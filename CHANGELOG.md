@@ -130,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PAC result:** the real exposure bars take their category colour, the ideal ones a neutral grey. **Growth chart:** each broker line takes the colour of an asset type.
 - **Sign-in pages, new look:** icons in the fields, a highlighted border under the pointer and in focus, the password requirements in a box of their own, no subtitle under the logo, and the recovery commands in a dark terminal box.
 - **Charts: every asset type and sector keeps one colour everywhere:** the same in the allocation pie and in its history, in every portfolio, broker and period. Liquidity has a colour of its own, subtypes are shades of their family, and the maps, the sharing semi-donut and the correlation matrix follow the light and dark theme.
+- **Several server processes (`--workers`): any of them runs the scheduled jobs**, one at a time through a lock file in the data directory: a scheduled wake-up and a user's return no longer depend on the leader process (Windows keeps the leader).
 
 ### 🧹 Repository cleanup
 
@@ -242,6 +243,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scheduled investments with the ACT/ACT day count: late interest across a year end no longer loses one day per year end.
 - Scheduled investments: the maturity settlement no longer includes the last coupon, already paid the same day as interest; after maturity the asset is worth its principal.
 - Measure tool: the yearly rate (Δ%/yr) appears from 30 days, as in the rest of the app (`—` below); a measure that starts from 0 shows `—` instead of 0 % for Δ% and Δ%/yr, and a line that ends on the other side of zero has no yearly rate.
+- Growth chart: in the weekly and monthly views, a broker line that stops in the middle of a week or month keeps its last value for that period instead of leaving a gap.
+- **A restore whose restart never happens says so** — if LibreFolio does not stop after **Restore and restart**, the page no longer waits forever: after a minute it says to restart LibreFolio yourself, and offers **Back to Backup**, where the waiting restore can be restarted or cancelled.
+- Very large cash amounts and event values (eleven digits or more before the decimal point) read back exactly, without a stray digit in the sixth decimal place.
+- Scheduled Investment: a schedule must lie between 1900 and 2200, span at most 100 years with at most 1,200 periods; larger ones are refused as invalid instead of tying up the server, and long late-interest histories are computed in one pass.
 
 #### 🔒 Security
 
@@ -266,6 +271,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A restore ends every session and expires every invitation and link sent before it.** Users sign in again with the accounts and passwords of the backup.
 - **A restore is never applied while the hosting provider blocks the instance**: one confirmed before the block waits for the unblock. On a blocked instance every restore route answers 423, except reading the outcome of a restart with its ticket, which changes nothing.
 - **The outcome ticket stays out of logs and URLs**: the server keeps only its hash, it travels in a header and expires after an hour; `ticket` joins the query parameters the access log masks.
+- **A tampered backup cannot run code during a restore check** — a check now refuses an archive whose database holds triggers, views or virtual tables, which LibreFolio never creates, before anything of it can run (`database_foreign_objects`): a crafted backup can no longer keep the check busy forever or bring its own code into the server. The schema is read without running any of it, and the connections to the copy use SQLite's `trusted_schema=OFF`.
 
 #### 📚 Documentation
 
