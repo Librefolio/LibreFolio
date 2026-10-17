@@ -3901,6 +3901,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     montati, quindi i lettori dell'avvio (`env_secret`, la chiave generata) restano come sono.
   - Costo stimato: piccolo, una ventina di righe e i test (link, FIFO senza blocco, cartella, file regolare, opzione
     spenta come oggi). Si fa dopo B-38, così la CLI può passare all'opzione e togliere la sua copia.
+  - B-38 è entrato (`1ed071c2f`). La guardia della CLI apre il file e lo controlla, poi `read_secret_file` lo riapre
+    per percorso: sono due aperture, e fra le due il percorso può cambiare (`scripts/backup_cli.py`, «two opens»).
+    L'opzione legge dallo stesso descrittore che controlla: con lei basta una sola apertura, e la corsa sparisce
+    (coordinatore, 17/10).
 
   Dettagli: questa riga; la guardia di B in B-38.
 - **H-48 · `env_url` toglie la barra finale anche ai link di una pagina** — basso; H (review di A9), via coordinatore,
@@ -3957,6 +3961,28 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     OK, o lo fa X.
 
   Dettagli: questa riga.
+- **H-51 · Il motore del server vivo tiene `trusted_schema` acceso, con il `regexp` e il `floor` Python di SQLAlchemy**
+  — basso, sicurezza; H (review di B-36/B-37), deciso dal coordinatore il 17/10. Da fare dopo W-B75, nella 1.3.
+  - SQLAlchemy 2.0.52 (dialetto pysqlite, ereditato da aiosqlite) registra `regexp` e `floor` in Python su ogni
+    connessione. `trusted_schema` vale 1 di default.
+  - Il listener globale `set_sqlite_pragma()` (`db/session.py`) imposta solo `foreign_keys`, WAL e `busy_timeout`.
+  - B-28 controlla i tipi degli oggetti, non le espressioni.
+  - Sonda (`files/b36review/` della sessione H): un archivio con una colonna `DEFAULT (regexp(…))` passa il controllo
+    del ripristino, perché l'`integrity_check` della connessione semplice risponde `ok` (un CHECK invece lì fallisce,
+    «unknown function»). Poi, nel server, ogni insert che omette quella colonna fa girare il `regexp` Python con il
+    pattern e il valore dell'archivio; lo fa anche il motore async.
+  - Cura: `PRAGMA trusted_schema=OFF` per primo nel listener globale. Lo schema di LibreFolio (head 009) chiama solo
+    il built-in `lower()`, quindi per l'app non cambia niente.
+  - Nello stesso lotto: la frase di `security.md` sulla chiave d'istanza durante il ripristino, superata da B-18
+    (r. ~706). Va riscritta col percorso vero:
+    - `dev.py backup restore --instance-key-file`, solo da CLI;
+    - il file è letto da root prima del cambio di utente (B-38);
+    - `instance_key_invalid` scatta prima di creare qualsiasi cosa;
+    - la chiave dell'archivio vince (D1).
+  - Sempre nello stesso lotto, la frase sul motore di Alembic: il listener di `env.py` è una cura vera.
+  - Verifica nello slot: i miei test, le suite delle migrazioni e `api backup-restore`.
+
+  Dettagli: piano H, §14, «Review di B-36/B-37» e il lotto H-51.
 
 ## A · Account e accessi (fase 01)
 
@@ -4372,11 +4398,13 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   `docs-writer` di A8a (17/10). La riga del router dice «Authentication (login, token refresh)»: non c'è nessun
   refresh, il cookie dura `session_ttl_hours` (`security.md` «Token Expiration»). Lasciata fuori da A8a perché
   estranea. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A8a.6».
-- **A-46 · `./dev.py user create` non controlla la lunghezza del nome (3–50)** — minimo; dal `docs-writer` di A-21a
-  (17/10). La riga di comando rifiuta la `@` (A-21a) ma non un nome di 2 caratteri o di 60, che la registrazione e il
+- ✅ **A-46 · `./dev.py user create` non controlla la lunghezza del nome (3–50)** — minimo; chiusa il 17/10 (commit del
+  coordinatore): `user_service._new_username_refusal()` (la `@`, poi 3–50) in `create_user` e `update_profile`
+  (UNAME-020…023); dal `docs-writer` di A-21a (17/10). La riga di comando rifiuta la `@` (A-21a) ma non un nome di 2 caratteri o di 60, che la registrazione e il
   profilo rifiutano. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-21a.5».
-- **A-47 · `USERNAME_INVALID` riconosciuto dal testo del messaggio** — minimo; dalla revisione di E di A-21a (17/10,
-  LOW). `auth.py` (registrazione via `registration_service`, profilo) sceglie il codice confrontando
+- ✅ **A-47 · `USERNAME_INVALID` riconosciuto dal testo del messaggio** — minimo; chiusa il 17/10 (commit del
+  coordinatore): `AccountError` (un `str` con `.code`), i chiamanti guardano il codice (UNAME-030/031, UNAME-API-12);
+  dalla revisione di E di A-21a (17/10, LOW). `auth.py` (registrazione via `registration_service`, profilo) sceglie il codice confrontando
   `error == USERNAME_RESERVED_MESSAGE`: un cambio di parole lo romperebbe in silenzio. Meglio un codice restituito da
   `user_service.create_user`/`update_profile`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
   «A-21a — Revisione di E».
@@ -5014,6 +5042,12 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     che la modale mostra come errore generico.
   - Da decidere: scollegare prima, come il wipe di X-R48 (con la regola degli SPLIT senza costo), o rifiutare con un
     codice e i collegamenti. Prima un rosso che lo riproduca.
+- **X-R66 · Il limite delle sonde dei provider detto nella lingua dell'utente** — basso, **dopo X-R58** (il
+  coordinatore, 17/10); X, 17/10 (dalla revisione di MF-SI2).
+  - `POST /assets/provider/probe` risponde 429 `{error_code: PROBE_RATE_LIMITED, retry_after, message}` oltre 30
+    sonde al minuto per utente. «Test Configuration» mostra il `message` inglese del backend (`extractErrorMessage`),
+    «Ask Provider» un generico «si è verificato un errore».
+  - Cura: una frase tradotta con l'ora locale di fine attesa, come per il `RATE_LIMITED` dei provider.
 - **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** — decisione notturna N83; X, 17/10
   (il coordinatore; numerata X-R65 per lo scontro con X-R64).
   - Le letture si fermano al 1900-01-01 (`EARLIEST_RANGE_START`), le scritture manuali di prezzi e di tassi di cambio
@@ -5024,7 +5058,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Il filtro di X-R44 sta nella base dei registri (`_withheld()`), ma segnali e rischio (`list_definitions`), BRIM
     (rilevamento ed elenco) e tools (la sua istantanea) leggono il proprio archivio senza chiederlo: un `test_only` lì
     sarebbe servito in produzione. Un test di guardia lo vieta fuori da asset e cambi.
-- **X-R64 · La richiesta di period-changes divisa in lotti da 1.000** — piccolo, **dopo l'ingresso di Z-27**, con il suo
+- ✅ **X-R64 · La richiesta di period-changes divisa in lotti da 1.000** (chiusa il 17/10, in attesa del commit del coordinatore; con il sondaggio dal vivo di `/prices/current`, tetto di R13-SEC9-1: sì del coordinatore, 17/10) — piccolo, **dopo l'ingresso di Z-27**, con il suo
   aiuto e la sua costante; X, 17/10 (dalla revisione di X-R59: il limite scende da 10.000 a 1.000).
   - Dentro `fetchAssetPeriodChanges`/`fetchFxPeriodChanges` (il registro di X-R60 vede una sola risposta unita); poi
     aggiornare i due passi della documentazione di MF (`assets/architecture.md` ~374, `fx/architecture.md` ~238), che
@@ -6067,7 +6101,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `user/dashboard/kpi-cards`. `translate-validate` (16/10): 63 errori strutturali nuovi da J-24. `adjustment`, `fifo-engine/index` e
   `fifo-lot-analysis` avevano già debito (J-25). Tradurle nello stesso giro, con `index` (l'ancora del §8). Dettagli: piano
   J, §10 «J-24».
-- **J-33 · Lo storico della performance dei lotti salta i giorni senza prezzo, la Dashboard li valuta al costo** —
+- ✅ **J-33 · Lo storico della performance dei lotti salta i giorni senza prezzo, la Dashboard li valuta al costo** —
   medio-basso, numeri; J, 16/10, trovata in CP-7b.
   - Dove: `lots/histories.py::build_performance_history` (ROI e TWRR dei lotti, `PERFORMANCE_HISTORY`). Fa la NAV solo
     nei giorni con un prezzo; i flussi di prima li porta al primo giorno con la NAV.
@@ -6083,6 +6117,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     aperti (costo noto, cambio all'apertura; un giorno con un lotto SHORT aperto o un costo ignoto resta senza punto), con
     le stesse `at_cost_until`; rosso prima. Dichiarare prima i valori che cambiano.
   - Dettagli: piano J, §10 «CP-7b — codice».
+  - ✅ 17/10: fatta da J (checkpoint J-33). Nei giorni senza osservazione la NAV è al costo dei lotti LONG aperti (cambio
+    d'apertura) e un trasferimento sposta il costo delle sue unità; il TWRR comprende il salto dal costo al primo
+    prezzo, come il ROI. Una rettifica senza costo conta 0 come nella storia del valore (J-35 resta al developer).
+    Dettagli: piano 05, sezione «J-33».
 - **J-34 · Debito di traduzione di CP-7b (il riferimento dei lotti e i giorni al costo)** — basso, documentazione; J,
   16/10. Pagine EN cambiate di senso, senza stamp:
   - `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`:
@@ -6295,6 +6333,12 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   La cura naturale è la lettura al confine di J-10 (`financial_math/lots/scope_boundary.py`), applicata ai broker
   visibili al posto della gamba aggiunta. Prima un rosso. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+- **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
+  alla revisione di SEC8-1b (17/10), facoltativa. Per una richiesta fuori dai limiti la finestra preparata
+  (`requested_range`, che fa da ripiego di `metadata.analyzed_range`) è quella limitata, mentre `output.replay_range` e
+  `metadata.params` ripetono la richiesta. Visibile solo fuori dai limiti. Da scegliere una convenzione sola, o da dire
+  nella pagina. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione
+  «SEC8-1b».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -7616,23 +7660,31 @@ punto di partenza, l'audit dello stesso giorno:
   a quote diverse sta dentro il ramo `tx.date != paired.date`: una coppia dello stesso giorno non lo produce. Il divario
   è un risultato nel P&L (J2), l'avviso spiega perché. Da vedere con chi possiede la qualità dei dati (J). Dettagli:
   piano MF, sezione «MF-J2 — codice e misura».
-- **MF-D3 · Il fattore d'annualizzazione riscritto nei validatori degli schemi del rischio** — minimo, nessun numero;
+- ✅ **MF-D3 · Il fattore d'annualizzazione riscritto nei validatori degli schemi del rischio** — minimo, nessun numero;
+  **chiusa il 17/10**: `returns.observations_per_year`, letto dai due validatori (decisione D3 del coordinatore: uno
+  schema può importare una funzione pura della casa; regola 8), commit `ad399d383`, entrato in dev `482343eb3`.
   MF, 17/10 (MF-D resto). `schemas/risk.py:514` e `:595` ricalcolano `n_observations * 365 / calendar_days` per
   controllare l'invariante del contratto, accanto alla funzione della casa `returns.observed_annualization`. Gli
   schemi non importano servizi per scelta: oggi è un controllo dichiarato, non una seconda implementazione. Da
   decidere se resta così (riga nella pagina dev) o se la formula scende in un modulo che entrambi possono leggere.
   Dettagli: piano MF, sezione «MF-D resto».
-- **MF-SI1 · La storia della Scheduled Investment da «min» solleva** — basso, preesistente; test-author di MF, 17/10
+- ✅ **MF-SI1 · La storia della Scheduled Investment da «min» solleva** — basso, preesistente; test-author di MF, 17/10
+  **chiusa il 17/10**: commit `f37b1d0ea`, entrato in dev `16f8c74ed`.
   (R13-SEC7-2). `get_history_value(start_date="min")` confronta il letterale `"min"` con le date
   (`start_date < min(cached.keys())`) e filtra gli eventi con `start_date` invece di `effective_start`: solleva
   `CALCULATION_ERROR`, su HEAD come dopo SEC7-2. La via del refresh può passare `"min"`. Cura: `effective_start` in quei
   due punti, rossi prima. Dettagli: piano MF, sezione «R13-SEC7-2».
-- **MF-SI2 · Scheduled Investment: un tetto agli `asset_events` e un limite per utente alla sonda** — basso,
+- ✅ **MF-SI2 · Scheduled Investment: un tetto agli `asset_events` e un limite per utente alla sonda** — basso,
+  **chiusa il 17/10**: `SCHEDULE_MAX_EVENTS` 10 000, la sonda a 30 al minuto per utente (`LIBREFOLIO_PROBE_RATE_LIMIT`,
+  0 = spento, le corsie spente), commit `ad399d383`, entrato in dev `482343eb3`; la lettura a ogni sonda col lotto
+  MF-SEC9a.
   sicurezza sotto soglia; E, 17/10 (revisione di R13-SEC7-2). Gli eventi manuali di un piano non hanno un numero
   massimo (costo lineare, solo il corpo della richiesta li limita), e `POST /assets/provider/probe` non ha un limite
   per utente. Proposta: un tetto agli eventi (p. es. 10 000) nello schema, e il limite della sonda dove vivono gli altri
   limiti delle richieste. Dettagli: piano MF, sezione «SEC7-2 entrato; MF-SI1».
-- **MF-J45a · L'esecutore del motore non è chiuso allo spegnimento** — minimo; docs-writer di MF, 17/10 (J-45).
+- ✅ **MF-J45a · L'esecutore del motore non è chiuso allo spegnimento** — minimo; docs-writer di MF, 17/10 (J-45).
+  **Chiusa il 17/10**: `shutdown_engine_executor()` nel passo `portfolio-engine` dello spegnimento, commit
+  `ad399d383`, entrato in dev `482343eb3`.
   `_ENGINE_EXECUTOR` (`financial_math/portfolio/engine.py`) non è nella sequenza di spegnimento dell'app: una
   ricostruzione in corso tiene il processo fino alla fine, come l'esecutore predefinito di `asyncio.to_thread`.
   Proposta, se serve: `shutdown(wait=False, cancel_futures=True)` nel lifespan. Dettagli: piano MF, sezione «J-45».
@@ -7640,11 +7692,14 @@ punto di partenza, l'audit dello stesso giorno:
   lettura della cache `portfolio_blob` (`portfolio/engine.py` ~:316) e la sua scrittura (~:457) nessun lucchetto: due
   richieste identiche concorrenti ricostruiscono entrambe (con J-45 occupano i due worker). Nessuna azione ora; cura
   possibile: un `asyncio.Future` per chiave in volo. Dettagli: piano MF, sezione «J-45».
-- **MF-SEC8-2a · Un avviso di qualità dati per le righe datate prima del 1900** — basso; coordinatore, 17/10 (decisione 2
+- ✅ **MF-SEC8-2a · Un avviso di qualità dati per le righe datate prima del 1900** — basso; coordinatore, 17/10 (decisione 2
+  **chiusa il 17/10**: avviso `TRANSACTIONS_BEFORE_FLOOR` (warning, senza CTA), commit `871f75a38`, entrato in dev
+  `482343eb3`; il caso API con `ad399d383`.
   di MF-SEC8-2). N74 impedisce le nuove; quelle già salvate si rigiocano ma la storia parte dal 1900-01-01 senza dirlo.
   Proposta: un codice `TRANSACTION_BEFORE_FLOOR` (INFO) con `navigate_asset`/il broker. Dettagli: piano MF, sezione
   «MF-SEC8-2».
-- **MF-SEC8-2b · `date.min − 1 giorno` fuori dalla ricostruzione** — minimo, preesistente; MF, 17/10 (decisione 3 di
+- ✅ **MF-SEC8-2b · `date.min − 1 giorno` fuori dalla ricostruzione** — minimo, preesistente; MF, 17/10 (decisione 3 di
+  **chiusa il 17/10**: `day_before()` accanto a `shift_date()`, commit `e864827d3`, entrato in dev `482343eb3`.
   MF-SEC8-2). Una coppia con l'arrivo datato `0001-01-01` (`portfolio/classifier.py:217`, `arrival.date − 1`) e un
   provento datato `0001-01-01` (`financial_math/yield_on_cost.py:631`) sollevano `OverflowError`. Cura: confrontare prima
   di sottrarre, o partire da `EARLIEST_RANGE_START`. Rossi prima. Dettagli: piano MF, sezione «MF-SEC8-2».
@@ -7655,6 +7710,15 @@ punto di partenza, l'audit dello stesso giorno:
   ripete l'SQL. Altre query con un termine OR per elemento, da verificare se raggiungibili con tanti elementi:
   `fx/storage.py:262`, `brim_provider.py:2030`, `fx/sync.py:234`, `pac_allocator/source/wac.py:44`. Cura: messaggio
   generico + log, `MAX_BULK_ITEMS`, blocchi come `FX_PAIRS_PER_QUERY`. Dettagli: piano MF, sezione «R13-SEC9».
+  **In corso (17/10)**, allargata da E (revisione di R13-SEC9): anche `fx/storage.py:139`/`:262`, `price_store.py:461`,
+  `fx/sync.py:234` in blocchi (`utils/sql_chunks.OR_TERMS_PER_QUERY`), un tetto di scrittura `MAX_BULK_WRITE_ITEMS`
+  (10 000) su `POST`/`DELETE /fx/currencies/rate` e `DELETE /prices`, la sonda letta a ogni chiamata. Restano da
+  verificare `brim_provider.py:2030` e `pac_allocator/source/wac.py:44`. Dettagli: piano MF, sezione «MF-SEC9a».
+- **MF-SEC9d · Nessun tetto globale alle chiamate concorrenti per fornitore** — basso, carico; E, 17/10 (revisione di
+  R13-SEC9). Il semaforo di `get_current_prices_bulk` limita una richiesta, non il processo: 1 000 id distinti con un
+  fornitore lento sono ~33 minuti di chiamate in uscita per richiesta, e più richieste si sommano. Proposta: un
+  semaforo per fornitore, condiviso fra richieste e scheduler, accanto alle pause dopo un 429. Solo informazione per ora.
+  Dettagli: piano MF, sezione «MF-SEC9a».
 - **MF-SEC9b · `Currency.validate_code` accetta nomi e codici numerici** — basso, preesistente, tutta l'app;
   test-author di MF, 17/10 (Y D1). La ricerca generale di pycountry accetta `EURO`, `978`, `US Dollar` e restituisce
   l'input in maiuscolo (`EURO`, `978`, `US DOLLAR`), non il codice a tre lettere: ogni campo valuta li lascia passare
