@@ -6167,3 +6167,235 @@ nome esatto. Nessuna ricerca indifferente alle maiuscole prima dell'indice di A-
   `email-verification-hooks` 26, `system` 122, `instance-block` 62 → **935 passati, 0 rossi**. Albero invariato
   (`post-run dirty: 0`), porta 6182 libera. Log: `work/slot1/logs/`.
 - **A8b (E2E e seguiti della barra) e A-21a: definizione di fatto ✅** sulla revisione combinata `36ab58445`.
+
+## A9 — Profilo gestito (F05) e note legali (F09) (17/10, 09:12–; base `e58be67fe`)
+
+Ingresso di A8b + A-21a: dev `6e2b2c8b7`, CHANGELOG `e58be67fe`; il mio ramo portato in avanti. Via del coordinatore
+(09:11): nei file di H (`config/platform.py`, `instance_links.py`, `schemas/system.py`, `api/v1/system/instance.py`,
+Sidebar, Header, HelpMenu, ChangelogModal) scrivo io e H rivede (H non li tocca fino all'ingresso); `WelcomePage` con la
+skill `onboarding-guide`; `promptRenderer.ts` di J con le regole dell'AI Export, J rivede; nessuna classe di colore
+nuova.
+
+### A9.1 — Rossi ✅ (riosservati 09:15)
+- Backend sulla base nuova, in-process: **84 rossi**, 20 controlli verdi (il caso dal vivo deselezionato).
+- Frontend: i 14 file scritti prima (gestito 51 casi, legale 54) restano rossi fino al codice.
+
+### A9.2 — Codice del backend ✅ (09:16)
+`work/a9/apply_a9_backend.py`: `tos_url()`/`privacy_url()` in `config/platform.py` (regola di `env_url`), accanto a
+`support_url()`; `terms_link()`/`privacy_link()` in `instance_links.py` (mai un'eccezione, un indirizzo sbagliato nel
+log una volta, con la sua conseguenza); `LegalInstanceConfig` e `InstanceConfigResponse.legal` in `schemas/system.py`;
+una riga nella rotta `GET /system/instance`; `is_donation_popup_disabled()` vero anche col profilo `managed` (i
+contatori crescono comunque); `.env.example` (le due variabili accanto a SUPPORT); runner `services donation-managed`,
+`services legal-links`, `api instance-legal`.
+- Verdi: in-process **104/104**; servizi **1.273** (`donation-managed` 30, `legal-links` 56, `donation-popup` 19,
+  `config-package` 863, `config-env-example` 38, `profile-defaults` 112, `config-audit` 155); ruff/black puliti;
+  `api sync` fatto (il client conosce `legal`).
+
+### A9.3 — Codice del frontend ✅ (09:25)
+`work/a9/apply_a9_frontend.py`, `work/a9/i18n_add.py`:
+- nuovi: `features/support/donations.svelte.ts` (`donationsVisible()` = configurazione caricata **e** self-hosted),
+  `features/legal/LegalNotice.svelte` (disclaimer e link), `features/legal/LegalLinks.svelte` (riga compatta, `tone`
+  `page|bar` per la barra verde);
+- il caffè solo con `donationsVisible()` in `AuthPageFrame` (test id `auth-donate-link`), `SupportActions` (col divisore
+  «Or share»), Header, HelpMenu (`help-donate-link`, col suo divisore);
+- `ChangelogModal`: «controlla aggiornamenti» nascosto solo col profilo gestito;
+- `checkForNewerRelease()`: aspetta la configurazione e sonda solo un'istanza che il server dice self-hosted (anche una
+  richiesta fallita non sonda, come le donazioni);
+- `ForgotPasswordCard`: prima della risposta né comandi né avviso col terminale; gestito → «chiedi all'amministratore»
+  (`forgot-ask-admin`); il modulo email di E invariato;
+- i posti della nota legale: card `about-legal-card` in About (fuori dalla diagnostica), `auth-legal-links` sotto la
+  card di ogni pagina d'accesso (il telaio chiama `instanceConfig.load()`: anche `/verify-email` la riceve),
+  `LegalNotice` sotto la card della Welcome, `sidebar-legal-links` dopo la versione (tono della barra);
+- i18n: `legal.title|disclaimer|disclaimerShort|terms|privacy` nella sorgente `app` (D-A14: una riga `legal` in
+  `app/prefixes.txt`, perché il catalogo dà un prefisso nuovo a `base`), `auth.askAdminToResetPassword`; testo del
+  disclaimer = la mia proposta, sulla lista del developer;
+- runner: le 15 righe Vitest (le unità `core`, `component`, `onboarding-component`, i due elenchi di quest'ultima).
+- Verdi: i 14 file rossi **105/105**; Vitest dei file intorno **1.327** verdi e 6 rossi attesi (`SupportActions.test.ts`
+  ×3, `DonationPopupModal.test.ts` ×3: vogliono il caffè senza risposta del server) → riparazione a un `test-author`
+  con `test_system_api.py:843` (H) e `test_registration_api.py:895` (il blocco `legal` nei campi fissati); Prettier e
+  `theme-roles --check` puliti.
+> **Note implementazione (onboarding)**: la nota legale della Welcome è contorno della pagina, non contenuto del flusso
+> (né ancore né passi): nessun cambio di versione, che riaprirebbe la Welcome a ogni utente. Da confermare dal
+> proprietario dell'onboarding.
+
+### A9.4 — AI Export (J) — in attesa di J (09:40)
+Proposta mandata al coordinatore per J: sezione `legal_notice` (`legal.title` + `legal.disclaimer` via `translate`,
+niente URL: statica e identica fra UI e sonda), ultima nei dati; nelle analisi (a) ultima o (b) prima di «Response
+Language» (proposta b). Rossi dopo la risposta.
+- **Risposta di J** (09:48): **(b)** — D-A11 per l'AI Export si legge «ultima, **prima di Response Language**» (l'ultima
+  parola resta l'istruzione fidata dell'app, dopo le note dell'utente, non fidate); nei dati (`data_only`) ultima. Nello
+  stesso lotto: le due liste d'ordine di `developer/architecture/patterns/ai_export_composition.md` (analisi: un passo
+  nuovo prima di Response Language; `data_only`: «Legal Notice» come passo 3); un test accanto ai test d'ordine (`:20`,
+  `:121`): l'ultima sezione è `response_language` in ogni analisi e `legal_notice` nei dati; il testo sotto un titolo
+  suo, mai dentro un blocco recintato; **sonda di prova**: un'analisi e un dataset (skill `ai-export-probe-tuning`),
+  nel mio slot. Rossi chiesti a un `test-author` (09:50).
+> **⚠️ Fuori pista (sonda)**: `ai_export_real_prompt_probe.py` copia `backend/data/prod/sqlite/app.db` e accede con gli
+> account del developer (`alfy`, `marco`, password da `LIBREFOLIO_AI_EXPORT_PROBE_PASSWORD*`): fuori dalla mia corsia.
+> Coordinatore (09:58): niente sonda da me; nello slot bastano `promptRenderer.test.ts` (rende con il
+> `probeTranslation` del ponte della sonda), il gate `apiClientRuneFree` (`front-utility core-unit`) e
+> `utils ai-export-probe-helpers`; **J fa i due casi di prova dopo l'ingresso di A9**.
+- E2E di A9 chiesti a un `test-author` (09:57, nulla eseguito): uno stub che corregge la risposta vera di
+  `/system/instance` (profilo, `legal`), i cinque casi (pagina d'accesso, link legali, barra laterale e About, gestito
+  in app, gestito alla «password dimenticata»), una riga nel runner.
+
+### A9.4 — AI Export ✅ (09:46–09:51; J rivede)
+- **Rossi** (`test-author`, solo `__tests__/promptRenderer.test.ts` di J): le due liste d'ordine (`:24` analisi,
+  `:126` dati), un test nuovo «l'ultima sezione è `response_language` in ogni analisi, la penultima `legal_notice`; nei
+  dati l'ultima è `legal_notice`» (4 analisi con e senza note, 1 dataset), un test di struttura (una sola sezione,
+  esattamente `## ⟦legal.title⟧`, riga vuota, `⟦legal.disclaimer⟧`; con i cataloghi veri in EN/IT/FR/ES niente ``` e
+  niente `http`): **4 rossi**, 9 casi intatti verdi.
+- **Codice** (`work/a9/apply_a9_ai_export.py`): `legal_notice` in `AiExportPromptSectionId`; `renderLegalNotice()`
+  (titolo e disclaimer via il `translate` già in ingresso, nessuna URL, nessun dato dell'istantanea, mai in un blocco
+  recintato); prima di `response_language` nelle analisi, ultima nei dati.
+- **Verdi**: Vitest di `features/ai-export` **194/194** (12 file); il gate `apiClientRuneFree` **16/16** (il ponte della
+  sonda non importa nulla di nuovo); `utils ai-export-probe-helpers` **73/73**; Prettier pulito.
+> **Note implementazione**: la sonda Python conta ogni sezione non dell'istantanea come «instructions/contracts»
+> (`ai_export_real_prompt_probe.py:1555-1559`): nei `data_only` quella quota non sarà più zero, atteso. La
+> ricostruzione dalle sezioni copre solo `data_only`; l'identità UI/sonda è provata in entrambi i modi (`:313`, `:396`).
+- **Riparazioni dei test esistenti** (`test-author`): `SupportActions.test.ts`, `DonationPopupModal.test.ts` (una
+  risposta self-hosted col vero store in un `beforeEach`; nessuna asserzione cambiata) → `features/support` **104/104**;
+  `test_system_api.py` (H: `INSTANCE_KEYS` con `legal`, commenti e docstring) e `test_registration_api.py` (il set con
+  `legal`): il secondo verde in-process, il primo solo sulla corsia (slot: `api system`).
+
+### A9.5 — Doc ✅, E2E scritti, e il cancello del pulsante del changelog (09:57–)
+- **Doc** (`docs-writer`, 19 pagine inglesi): `admin/configuration`, `admin/hosting_providers` (nuova «Your Legal Pages»,
+  la tabella del profilo gestito da 7 a 10 voci, corretta la frase «la stessa interfaccia nei due profili»),
+  `admin/index`, `admin/cli_tools`, `admin/users`, `admin/email`; `user/settings/about` (nuova «Legal Notice»),
+  `user/getting-started`, `community/contribute`; developer `architecture/settings.md` (la tabella diceva «tre campi»:
+  ora cinque), `frontend/state/app-state.md`, `features/settings.md` (nuova «The legal notice»), `features/auth.md`
+  (`ForgotPasswordCard` come tabella profilo × `email.links`; `/verify-email` mancava fra le pagine del telaio),
+  `frontend/onboarding.md` (la nota legale della Welcome non è del flusso: nessuna versione nuova; tolti due rimandi di
+  riga vecchi), `security.md` («Container Image Check», ancora nuova), `backend/email.md`, `frontend/i18n.md`,
+  `frontend/index.md`, `components/index.md`. Strict build e `check-links` (97) verdi; nessun timbro (debito su
+  `user/settings/about`, `community/contribute`, e già indietro `admin/configuration`, `admin/cli_tools`,
+  `admin/index`, `user/getting-started`).
+> **⚠️ Fuori pista**: il `docs-writer` ha aggiornato per sbaglio la tabella `todos` della sessione (tutte a «done») e le
+> ha ripristinate a mano; ricontrollate: `a6-users-tab` → done (resta solo `a6b-gallery-captures`).
+- **E2E** (`test-author`, nulla eseguito): `e2e/layout/legal-and-managed.spec.ts` (LGM-E-01..05), `serveInstanceConfig`
+  aggiunto alla fixture di A `e2e/fixtures/instance-config.ts` (corregge la risposta vera: `profile`, `legal`), runner
+  `front-utility legal-managed`; Prettier, `tsc -p tsconfig.e2e.json` (nessun errore nei file nuovi; 4 errori vecchi
+  altrove), ruff/black puliti.
+> **⚠️ Fuori pista (trovato da E2E e doc)**: «Check for updates» del changelog era nascosto solo con la risposta
+> `managed`: prima della risposta, o per sempre dopo una richiesta fallita, un'istanza gestita lo mostrava e il clic
+> sondava GitHub. Decisione: la stessa regola delle donazioni (risposta arrivata **e** self-hosted). Rossi CLM-05/06 e
+> riparazione di `ChangelogModal.test.ts` (H) chiesti al `test-author` delle riparazioni; la prova positiva di LGM-E-04
+> diventa il link dei termini nella barra laterale (il profilo gestito con `legal` nello stub), senza ganci nuovi nel
+> prodotto. Codice pronto: `work/a9/apply_a9_changelog_gate.py`.
+- **A-48** nel backlog: la pagina offline statica mostra il caffè anche su un'istanza gestita (della squadra dei
+  colori; basso).
+- **Cancello del changelog ✅** (10:12): rossi CLM-05 (prima di ogni risposta) e CLM-06 (richiesta fallita) in
+  `ChangelogModal.managed.test.ts`, `ChangelogModal.test.ts` (H) con una risposta self-hosted in un `beforeEach`
+  (nessuna asserzione cambiata); codice `work/a9/apply_a9_changelog_gate.py` (`loaded && profile === 'selfhosted'`);
+  layout e About **176/176**. LGM-E-04 prova il profilo gestito con i link legali dello stub nella barra laterale (e in
+  About), senza ganci nuovi.
+- **Doc, seguito** (`docs-writer`): `ai_export_composition.md` (le due liste: «Legal Notice» passo 3 nei dati, passo 9
+  prima di «Response Language» nelle analisi; il paragrafo nuovo con i test), `user/ai-export/index.en.md` (ogni
+  esportazione finisce con la nota, senza link), i posti della nota in About/hosting/settings con l'AI Export, la regola
+  del pulsante del changelog (`app-state.md`, `security.md`, `settings.md`), il caffè elencato posto per posto (la
+  pagina offline nominata solo nella pagina developer). Strict build e `check-links` verdi.
+> **⚠️ Fuori pista**: `front check` ha trovato 4 errori nei due componenti legali: il generatore del client allarga
+> `str | None` a `(string | null) | Array<string | null>` (come `support_url` di H). Ristretto come fa H
+> (`typeof … === 'string'`), nessun comportamento nuovo. Poi `front check` **0/0**.
+- **Regressione Vitest larga** (support, legal, auth, update-check, layout, settings, onboarding, ai-export, instance,
+  routes, i gate rune-free e dei colori): **3.013/3.013** (107 file). `theme-roles --check`, ruff/black, `git diff
+  --check` puliti; porta libera.
+- **FYI dalla squadra dei colori** (10:30): la corsa di G sul punto 33 di A8b è verde (18/18, entrata `e21d5cb11`); alle
+  larghezze della galleria nessuna delle due barre scorre (FR/ES desktop compresi), quindi la sfumatura si giudica dal
+  vivo in una finestra stretta. Il «1» su «Administration» e «Security» nelle foto admin è il conteggio dei controlli
+  della corsia: **G-22** (approvata) li servirà da una fixture con lo schema vero; **i valori li rivedo io** quando è in
+  calendario. Slot di A9 chiesto (10:25), in attesa.
+- **Revisione di H-19** (10:40, sola lettura, dev `9b23bdbfe`: `48aa7a3ed` + `139ca6129`): **OK**. Ogni chiave
+  inutilizzabile (anche un `_FILE` o un file di chiave irraggiungibile, convertiti in `InstanceKeyError`) dà 503
+  `INSTANCE_KEY_UNAVAILABLE` con un avviso e `admin_id`; il controllo pubblico resta `{"match": false}`. L'Invite dialog
+  resta «unverifiable»: `checkAddress()` intercetta ogni rifiuto di `issueNonce()` e l'intercettore di axios non tocca i
+  503 (solo 401 e 423); coperto da APR-19 e LSH-C-06. Nota LOW per E e per me, dopo l'ingresso: il controllo dei link
+  della scheda Email mappa `unverifiable` in `unreachable`; col codice nuovo le due UI potrebbero dire «questa istanza
+  non può verificare indirizzi: vedi i controlli». Chiude A-23 (era la stessa voce).
+- Slot di A9 in coda (10:35): dopo `all-backend` di G, l'API di W-B71 e l'E2E di H-42.
+- Backlog (coordinatore 10:32): **A-23 ✅** (fatta come H-19), nuova **A-49** condivisa con E (un messaggio suo per il 503
+  `INSTANCE_KEY_UNAVAILABLE` nel dialogo d'invito e nel controllo dei link della scheda Email; dopo la 1.3 salvo che
+  venga facile). Vanno nel checkpoint di A9.
+
+## A-42 + A-43 — Il ciclo di vita del link di setup: analisi (17/10, 10:35; solo lettura, A9 congelato)
+
+Fonti: le note 1, 2 e 6 della revisione di E «R13-SEC4» (`08_email/plan-phase01Email.prompt.md` ~:4196–4209), le voci
+A-42/A-43 del backlog (A-44 unita in A-43 dal coordinatore, 17/10 03:09: «disattivarlo è l'annullamento: i link si
+**revocano**, non si ritirano»).
+
+**Stato reale (HEAD `e58be67fe` + A9 non committato, che non tocca questi file)**
+- `token_service`: `revoke_tokens` (vivi → `revoked_at`), `retire_tokens` (mai consumati → revocati **e** consumati:
+  contano come usati), `consume_token` (un UPDATE condizionato: il primo che scrive vince).
+- `registration_service.pending_admin_filter()`: inattivo, con un link `admin_setup`, nessuno consumato.
+- `bootstrap_admin_service`:
+  - `issue_setup_link()` (CLI `user setup-link`) e il riarmo all'avvio (`_keep_pending_admin`) decidono «in attesa»
+    con una **lettura** (`pending_admin()`), prima della prima scrittura che prende il lock di SQLite (il BEGIN
+    differito parte con l'UPDATE di `revoke_tokens`);
+  - `complete_admin_setup()`: `consume_token` prima (il lock), rifiuta un account già attivo e ritira i suoi link
+    (A-32), altrimenti password, attivo, sessioni chiuse, gli altri link revocati.
+- **La gara (A-42)**: un `POST /auth/setup` che si chiude fra quella lettura e la scrittura lascia un link **nuovo e vivo**
+  su un account appena attivato. Finché l'account è attivo il link è rifiutato (A-32), ma se poi viene disattivato,
+  `complete_admin_setup` con quel link (account inattivo) **imposta la password e lo riattiva**: chi tiene il link (il
+  terminale dell'operatore, il pannello che ha dato il token) si riprende l'account.
+- **La disattivazione (A-43)**: `update_user_status` (PATCH `/users/{id}`) e `set_user_active` (CLI `user deactivate`)
+  non toccano i link di setup: sull'admin in attesa (già inattivo) il PATCH `{is_active: false}` non cambia nulla e il
+  link resta buono (UADM-062/067/069 e SETUP-016 lo fissano oggi come guardie di A-32); su un account non in attesa un
+  link vivo rimasto (gara, o un database delle build 1.3 precedenti) resta lì.
+- **La retrocessione (nota 6 di E, seconda metà, non nel backlog)**: un admin in attesa retrocesso si attiva lo stesso
+  col link di setup, come utente normale («un vuoto d'intenzione»).
+- UI: la riga dell'admin in attesa (`UserRow.svelte`) non ha «disattiva» (è già inattivo) né «riattiva» (409
+  `PENDING_SETUP`); ha «retrocedi», il link di reset, la cancellazione; il suggerimento rimanda a `dev.py user setup-link`.
+
+**Proposta di contratto**
+1. *A-42, rilascio*: `issue_setup_link()` e il riarmo fanno prima la scrittura (la revoca dei link vivi), poi
+   ricontrollano «in attesa» sotto il lock (`is_pending_admin`); se non lo è più: rollback, nessun link (la CLI dice che
+   nessuno aspetta; l'avvio non riarma).
+2. *A-42, consumo*: `complete_admin_setup()`, dopo `consume_token`, rifiuta se **un altro** link di setup dell'account è
+   già consumato (setup già fatto, o link ritirati): rollback, ritira i link mai consumati dell'account, un avviso nel
+   log, 400 `TOKEN_INVALID`. Copre il link rimasto per qualunque via.
+3. *A-43, disattivazione*: sull'admin **in attesa** il PATCH `{is_active: false}` e `user deactivate` **revocano** i suoi
+   link vivi (l'annullamento: resta in attesa, `user setup-link` gliene dà uno nuovo; un avviso nel log); su un account
+   **non** in attesa **ritirano** i link di setup mai consumati.
+4. *Retrocessione dell'admin in attesa* (decisione del coordinatore): (a) **proposta**: rifiutata con 409
+   `PENDING_SETUP`, come la riattivazione (il suo ruolo resta fino al setup; per annullare: disattivare o cancellare),
+   e `user demote` lo stesso; (b) in alternativa la retrocessione annulla come la disattivazione.
+5. *UI* (mia, A6): sulla riga dell'admin in attesa un'azione «Annulla il link di setup» (`users-action-cancel-setup`, con
+   conferma: il link consegnato smette di funzionare; uno nuovo con `dev.py user setup-link` o dal fornitore) che manda
+   `{is_active: false}`; «retrocedi» disabilitato con un motivo (con 4a); chiavi i18n nella sorgente `settings`.
+   Nessun «nuovo link di setup» dalla UI (resta della CLI e del pannello: fuori da questo lotto).
+6. *Test*: cambiano per costruzione UADM-062, UADM-067, UADM-069 (le varianti disattiva/retrocedi) e SETUP-016 (CLI
+   `deactivate`/`demote`); nuovi: la gara del rilascio (una lettura vecchia simulata: `pending_admin` restituisce
+   l'account già attivo → nessun link), il link rimasto (righe scritte: un link consumato e uno vivo, account
+   disattivato → `/auth/setup` 400, nulla cambiato, il vivo ritirato), l'annullamento (PATCH e CLI: link `revoked`,
+   ancora in attesa, `setup-link` ne rilascia uno nuovo), il ritiro alla disattivazione di un account non in attesa,
+   la retrocessione rifiutata; UI: Vitest della riga e un E2E sulla corsia se l'account in attesa si può creare lì
+   (altrimenti solo Vitest).
+7. *Doc*: `security.md` (ciclo di vita del link di setup), `access_control.md` (PATCH: retrocessione rifiutata,
+   disattivazione che revoca o ritira), `admin/users.en.md` (annullare un admin in attesa), `admin/cli_tools.en.md`
+   (`deactivate`/`demote` sull'admin in attesa), developer `features/settings.md` (la riga).
+
+**Superfici e conflitti**: tutte di A (`bootstrap_admin_service.py`, `user_service.py`, `api/v1/users.py`,
+`scripts/user_cli.py`, `UserRow.svelte` e l'handler della scheda Utenti, i18n `settings`, i test di A6/A7). E: la
+riga delle verifiche email in `update_user_status` resta com'è (accanto). Le pagine `security.md`, `admin/users`,
+`admin/cli_tools` sono toccate anche da A9 (altre sezioni): dopo il checkpoint di A9, nessun conflitto.
+**Peso**: medio-basso. **Ordine**: rossi (servizi, API, CLI, UI) → codice → verdi → doc → E2E/slot.
+**Decisioni**: del coordinatore — il punto 4 (a/b) e il punto 5 (parole e posto dell'azione); nessuna del developer.
+- **Coordinatore (10:36): contratto approvato**, punti 1–5. Punto 4 → **(a)**: la retrocessione dell'admin in attesa è
+  rifiutata con 409 `PENDING_SETUP`, nell'API e in `user demote`, come la riattivazione. Punto 5: «Annulla il link di
+  setup» con conferma, «Retrocedi» disabilitato con un motivo, nessun rilascio dalla UI. **Dopo il commit del
+  checkpoint di A9; rossi prima.** La riga è nell'area del cricchetto dei colori: nessuna classe di palette nuova (ruoli).
+
+### A9.6 — Slot (10:37–; `e58be67fe` + A9 non committato, impronta dell'albero `37bb0f493c0fe652`)
+- API: `instance-legal` 19 (col caso dal vivo), `system` 122, `registration` 102, `auth` 95 → **338, 0 rossi**.
+- E2E: `legal-managed` 5, `auth` 34, `forgot-password-email` 3, `theme-roles` 22 verdi e **2 rossi** (caso (c),
+  desktop e mobile).
+> **⚠️ Fuori pista (triage: assunzione, non di A9)**: `layout/theme-roles.spec.ts:613` (c) vuole la card
+> `dashboard-cash-balances` ancora «legacy per decisione (D-T3)» (sfondo `--theme-bg-card`), ma `daea7b31c` della squadra
+> dei colori (16/10, «dashboard on colour roles») l'ha portata a `bg-lf-card`: lo sfondo è il ruolo (rgb(21,27,25)).
+> Il commit è nella base di questo slot e in quella dello slot 1; A9 non tocca né la dashboard né la spec. I 22 casi
+> che leggono gli elementi di A9 (caffè dell'header, comandi della «password dimenticata») sono verdi. Da segnalare
+> alla squadra dei colori (proprietaria della spec).
+- Resto dello slot (fino alle 11:09): E2E `header-scroll` 11, `support-copy-and-go` 16, `changelog-locale` 2; Vitest
+  `core-unit` 8.124 (205 file), `component-unit` 4.697 (179), `onboarding-component-unit` 465 (16).
+- **Totale**: API **338/338**; E2E **93 verdi** e 2 rossi non di A9 (sopra); Vitest **13.286/13.286**. Impronta
+  dell'albero invariata (`37bb0f493c0fe652`), porta 6182 libera.
+- **A9: definizione di fatto ✅** (salvo la sonda di prova di J dopo l'ingresso e la galleria di G).
