@@ -35,11 +35,15 @@ def bulk_too_many_items_detail(items: int, max_items: int) -> dict:
     return {"code": "bulk_too_many_items", "message": f"A bulk request may hold at most {max_items} items, not {items}", "max_items": max_items, "items": items}
 
 
-def bulk_too_many_days_detail(item_days: int, max_item_days: int) -> dict:
-    """The ``detail`` of the 422 for a bulk request that would build more than ``max_item_days`` per-day points."""
+def bulk_too_many_days_detail(item_days: int, max_item_days: int, *, at_least: bool = False) -> dict:
+    """The ``detail`` of the 422 for a bulk request that would build more than ``max_item_days`` per-day points.
+
+    ``at_least``: ``item_days`` is a count that stopped once past the budget, not the request's total (the conversions
+    are counted one by one), and the message says so.
+    """
     return {
         "code": "bulk_too_many_days",
-        "message": f"A bulk request may build at most {max_item_days} per-day points, and this one would build {item_days}",
+        "message": f"A bulk request may build at most {max_item_days} per-day points, and this one would build {'at least ' if at_least else ''}{item_days}",
         "max_item_days": max_item_days,
         "item_days": item_days,
     }
