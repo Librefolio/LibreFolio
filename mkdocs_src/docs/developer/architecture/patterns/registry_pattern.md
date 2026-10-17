@@ -157,6 +157,8 @@ The base class of every registry. Each subclass gets its own storage, discovery 
 | `auto_discover(cls)` | Scan plugin folder and import all modules, once |
 | `get_discovery_errors(cls)` | Import failures recorded by the discovery |
 
+Outside test mode (`is_test_mode()` false, read at each call), a class whose `test_only` is `True` is withheld (`_withheld()`): `get_plugin()` returns `None`, so `get_plugin_instance()` and `get_provider_instance()` return `None` too, and `list_plugin_codes()` and `AbstractProviderRegistry.list_providers()` leave it out — see [Test-Only Plugins](plugin_settings.md#test-only).
+
 A subclass specializes it through class-method hooks: `_get_plugin_folder()` (a folder under `backend/app/services/`), `_get_plugin_code_attr()` (default `plugin_code`), `_normalize_lookup_code()`, `_validate_plugin_class()`, `_ignored_module_stems()`, `_reject_duplicate_codes()`, `_fail_on_discovery_errors()`, and `settings_family()` (`asset` or `fx` for the registries whose plugins may declare settings, `None` otherwise).
 
 ### 📋 `AbstractProviderRegistry`
