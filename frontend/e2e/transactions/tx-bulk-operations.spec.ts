@@ -10,6 +10,7 @@
  * - Picker: no context menu, no action buttons
  * - Create pair with different descriptions → validation error
  * - C-97b guard: an untouched one-satoshi SELL opens as original, shows 0.00000001, and closing writes nothing
+ * - W-B65: an untouched Apply on a SELL, a BUY or a DEPOSIT keeps the row original, as the editor holds it, and closing asks nothing
  *
  * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates multiple TX types on
@@ -23,7 +24,7 @@
  * afterwards. It used to rewrite "the first editable row", which is the `[delete-safe]`
  * FEE that tx-delete A1-confirm looks up by its description. The C-97b guard writes
  * the same way: its own rows through the API, on the seeded Bitcoin it only reads,
- * deleted afterwards.
+ * deleted afterwards. So do the W-B65 tests, one ledger each.
  */
 import {expect, test, type Page, type Locator} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
@@ -145,6 +146,7 @@ interface CommitBody {
 interface StoredRow {
     id: number;
     quantity: string;
+    cash: {code: string; amount: string} | null;
     updated_at: string;
 }
 
@@ -211,6 +213,60 @@ function decimalValue(value: unknown): string {
     return sign === '-' && magnitude !== '0' ? `-${magnitude}` : magnitude;
 }
 
+/** What the editor must leave as it found it on a stored row: its values digit for digit (`decimalValue`), signs
+ *  included, and the stamp of its last write. */
+function storedState(row: StoredRow): {quantity: string; cash: {code: string; amount: string} | null; updated_at: string} {
+    return {quantity: decimalValue(row.quantity), cash: row.cash ? {code: row.cash.code, amount: decimalValue(row.cash.amount)} : null, updated_at: row.updated_at};
+}
+
+/**
+ * The satoshi ledger, in date order, amounts as sent — signs included: two cents in, two satoshis bought with them, one
+ * sold for a cent. Each step needs the ones before it to keep the cash and the units at or above zero.
+ */
+const SATOSHI_LEDGER = {
+    funding: {type: 'DEPOSIT', daysAgo: 302, quantity: '0', cash: '0.02'},
+    buy: {type: 'BUY', daysAgo: 301, quantity: '0.00000002', cash: '-0.02'},
+    sell: {type: 'SELL', daysAgo: 300, quantity: '-0.00000001', cash: '0.01'},
+} as const;
+type LedgerStep = keyof typeof SATOSHI_LEDGER;
+const LEDGER_STEPS: readonly LedgerStep[] = ['funding', 'buy', 'sell'];
+
+/** A seeded ledger: its ids in date order, and its last row — the one under test — by id and by description. */
+interface SeededLedger {
+    ids: number[];
+    rowId: number;
+    rowDesc: string;
+}
+
+/**
+ * Our own satoshi ledger (`SATOSHI_LEDGER`) on the owned broker, up to `last`, a day apart from 302 days back: far below
+ * the top of the date-desc table, which is where the specs that pick rows by position look. Kept tiny for the neighbours
+ * in the lane: while it stands, the user holds at most two satoshis and two cents more, not a coin that would move every
+ * portfolio value. Bitcoin is the seeded asset it only reads; the cash is in its own currency, so no exchange rate is
+ * needed. Every row carries the owner's marker (`${marker} ${step}`), and every id the commit reports is on `owned`
+ * before anything is asserted.
+ */
+async function seedSatoshiLedger(page: Page, owned: OwnedRows, last: LedgerStep): Promise<SeededLedger> {
+    const brokerId = await ownedMockBrokerId(page);
+    const bitcoin = await seededAsset(page, 'BTC-USD');
+    const steps = LEDGER_STEPS.slice(0, LEDGER_STEPS.indexOf(last) + 1);
+    const creates = steps.map((step) => {
+        const row = SATOSHI_LEDGER[step];
+        const date = daysAgoIso(row.daysAgo);
+        const description = `${owned.marker} ${step}`;
+        if (row.type === 'DEPOSIT') return depositPayload(brokerId, date, row.cash, description, bitcoin.currency);
+        return {broker_id: brokerId, asset_id: bitcoin.id, type: row.type, date, quantity: row.quantity, cash: {code: bitcoin.currency, amount: row.cash}, tags: [], description};
+    });
+    const setup = await commitViaApi(page, {creates}, 'setup commit');
+    owned.ids.push(...setup.results.flatMap((r) => r.ids ?? []));
+    const ids = steps.map((_, index) => {
+        const id = setup.results.find((r) => r.operation === 'create' && r.index === index)?.ids?.[0];
+        if (id == null) throw new Error(`setup commit reported no id for create #${index}: ${JSON.stringify(setup.results)}`);
+        return id;
+    });
+    return {ids, rowId: ids[ids.length - 1], rowDesc: `${owned.marker} ${last}`};
+}
+
 /**
  * Delete what the test owns: the ids it recorded, plus every row carrying its marker —
  * which is how the row the UI commit creates still goes when the test died before
@@ -250,6 +306,32 @@ async function ensureOptionalOpen(page: Page) {
     await expect(details).toBeVisible({timeout: 3_000});
     if (!(await details.evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByTestId('tx-form-optional-toggle').click();
     await expect(details).toHaveAttribute('open', '');
+}
+
+/**
+ * W-B65: the ledger's last row alone in the editor, its Form applied untouched. Narrowed to the ledger, only that row
+ * selected → Edit: one row auto-opens the Form over the grid, and «Apply» pushes the form's payload back into the row.
+ * Ends on the Form gone: the push lands in the same update that closes it, so the grid already shows the row as the
+ * Apply left it. Returns that row.
+ */
+async function applyFormUntouched(page: Page, ledger: SeededLedger): Promise<Locator> {
+    await goToTransactionsByIds(page, ledger.ids);
+    await ensureChecked(page.getByTestId(`dt-row-checkbox-tx-${ledger.rowId}`));
+    const editBtn = page.getByTestId('toolbar-action-edit');
+    await expect(editBtn).toBeEnabled({timeout: 5_000});
+    await editBtn.click();
+
+    await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+    const formModal = page.getByTestId('tx-form-modal');
+    await expect(formModal, 'one selected row auto-opens its Form').toBeVisible({timeout: 5_000});
+    const applyBtn = page.getByTestId('tx-form-save');
+    await expect(applyBtn, 'the untouched Form is complete: Apply is enabled').toBeEnabled({timeout: 5_000});
+    await applyBtn.click();
+    await expect(formModal, 'Apply pushes the draft back into the grid and closes the Form').toBeHidden({timeout: 5_000});
+
+    const row = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]').filter({hasText: ledger.rowDesc});
+    await expect(row).toHaveCount(1);
+    return row;
 }
 
 // ---------------------------------------------------------------------------
@@ -851,51 +933,25 @@ test.describe('Transaction Bulk Operations — commit on owned rows', () => {
      * which the backend refuses. The magnitude is now the stored digits without their sign, and the grid cell shows
      * the same text.
      *
-     * The FormModal that one selected row opens is closed with Cancel, not Apply: Apply rewrites the row from the
-     * form's payload, which carries the sign — the cell would then read `-0.00000001`, and closing would ask to
-     * discard. The guard is on the row as the editor loads it.
+     * The FormModal that one selected row opens is closed with Cancel, not Apply: the guard is on the row as the editor
+     * loads it. The Apply path — the form's payload pushed back into the row, signed — is pinned by the W-B65 tests
+     * below, one per type; the guard keeps closing with Cancel.
      */
     test('C-97b: an untouched one-satoshi SELL opens as original, shows 0.00000001, and closing writes nothing', async ({page}) => {
-        const SOLD = '-0.00000001'; // the stored quantity of the SELL, sign included
+        const SOLD = SATOSHI_LEDGER.sell.quantity; // -0.00000001, the stored quantity of the SELL, sign included
         const SHOWN = '0.00000001'; // its magnitude, as the editor shows it
         const mine: OwnedRows = {marker: `E2E-satoshi-sell-${uniqueSuffix()}`, ids: []};
         owned = mine;
-        const sellDesc = `${mine.marker} sell`;
 
-        // Our own ledger on the owned broker, dated 300 days back like the test above: two cents in, two satoshis
-        // bought with them, one sold for a cent, a day apart, so neither the cash nor the units go below zero. Kept
-        // tiny for the neighbours in the lane: while it stands, the user holds one satoshi and one cent more, not a
-        // coin that would move every portfolio value. Bitcoin is the seeded asset this test only reads; the cash is
-        // in its own currency, so no exchange rate is needed.
-        const brokerId = await ownedMockBrokerId(page);
-        const bitcoin = await seededAsset(page, 'BTC-USD');
-        const setup = await commitViaApi(
-            page,
-            {
-                creates: [
-                    depositPayload(brokerId, daysAgoIso(302), '0.02', `${mine.marker} funding`, bitcoin.currency),
-                    {broker_id: brokerId, asset_id: bitcoin.id, type: 'BUY', date: daysAgoIso(301), quantity: '0.00000002', cash: {code: bitcoin.currency, amount: '-0.02'}, tags: [], description: `${mine.marker} buy`},
-                    {broker_id: brokerId, asset_id: bitcoin.id, type: 'SELL', date: daysAgoIso(300), quantity: SOLD, cash: {code: bitcoin.currency, amount: '0.01'}, tags: [], description: sellDesc},
-                ],
-            },
-            'setup commit',
-        );
-        mine.ids.push(...setup.results.flatMap((r) => r.ids ?? []));
-        const createdId = (index: number): number => {
-            const id = setup.results.find((r) => r.operation === 'create' && r.index === index)?.ids?.[0];
-            if (id == null) throw new Error(`setup commit reported no id for create #${index}: ${JSON.stringify(setup.results)}`);
-            return id;
-        };
-        const fundingId = createdId(0);
-        const buyId = createdId(1);
-        const sellId = createdId(2);
+        // Our own ledger (seedSatoshiLedger): two cents in, two satoshis bought with them, and the SELL of one.
+        const {ids, rowId: sellId, rowDesc: sellDesc} = await seedSatoshiLedger(page, mine, 'sell');
 
         // The premise, read back rather than inferred: the server keeps the satoshi exactly.
         const seeded = await readStoredRow(page, sellId);
         expect(decimalValue(seeded.quantity), 'premise: the SELL is stored as one satoshi, sign included').toBe(SOLD);
 
         // Narrowed to our rows, the SELL alone selected → Edit: one row auto-opens the FormModal over the grid.
-        await goToTransactionsByIds(page, [fundingId, buyId, sellId]);
+        await goToTransactionsByIds(page, ids);
         await ensureChecked(page.getByTestId(`dt-row-checkbox-tx-${sellId}`));
         const editBtn = page.getByTestId('toolbar-action-edit');
         await expect(editBtn).toBeEnabled({timeout: 5_000});
@@ -922,5 +978,86 @@ test.describe('Transaction Bulk Operations — commit on owned rows', () => {
         await expect(modal, 'an untouched editor closes without asking to discard').toBeHidden({timeout: 5_000});
         const after = await readStoredRow(page, sellId);
         expect({quantity: decimalValue(after.quantity), updated_at: after.updated_at}, 'the stored SELL is still as seeded').toEqual({quantity: SOLD, updated_at: seeded.updated_at});
+    });
+
+    /**
+     * W-B65 — an untouched «Apply» changes nothing. Red before the cure: the SELL on (b) and (c), the BUY and the
+     * DEPOSIT on (c).
+     *
+     * The editor holds a saved row in its own convention: for a type whose sign rule is `negative`, the value as its
+     * magnitude (`fieldsFromTx`: a SELL's quantity, a BUY's cash). The Form that one selected row opens pushes back, on
+     * «Apply», `buildCreatePayload`: signed. `applyFormPayload` copied it as it came, so an untouched Apply turned the
+     * SELL's `0.00000001` into `-0.00000001` in the cell, and the BUY's cash `0.02` into `-0.02` in the draft (its cell
+     * signs the cash anyway, so nothing shows). The status stays original — the diff against the stored row signs both
+     * sides — but the close guard compares the drafts raw with the key taken at seeding (`hasUnsavedChanges`), so closing
+     * asked to discard a change nobody made. Every Apply also wrote `wacCurrencyHint = null` on a row that had no such
+     * key (`patchRowFromForm`), and `JSON.stringify` keeps a null where it drops an absent key: the DEPOSIT, whose values
+     * keep their signs, is that second cause alone.
+     *
+     * One test per type, so each red names its cause: (a) the row is original, (b) its quantity reads as the editor holds
+     * it — soft, so that (c) reports too — and (c) the editor closes at once and the stored row is as seeded. Each test
+     * owns its ledger (seedSatoshiLedger), only as far as its row needs.
+     */
+    test('W-B65: an untouched Apply on a SELL keeps it original, shows its quantity as a magnitude, and closing asks nothing', async ({page}) => {
+        const mine: OwnedRows = {marker: `E2E-wb65-sell-${uniqueSuffix()}`, ids: []};
+        owned = mine;
+        const ledger = await seedSatoshiLedger(page, mine, 'sell');
+        const seeded = await readStoredRow(page, ledger.rowId);
+        expect(storedState(seeded), 'premise: the SELL is stored as sent, signs included').toMatchObject({quantity: SATOSHI_LEDGER.sell.quantity, cash: {amount: SATOSHI_LEDGER.sell.cash}});
+
+        const row = await applyFormUntouched(page, ledger);
+
+        // (a) Untouched, it is original.
+        await expect(row.getByTestId('tx-bulk-row-status'), 'an untouched Apply is not an edit').toHaveAttribute('data-status', 'original');
+        // (b) Held as its magnitude, as the editor seeded it — the signed payload made the cell read -0.00000001.
+        await expect.soft(row.locator('td[data-column-id="quantity"]'), 'the SELL quantity is still held as its magnitude').toHaveText('0.00000001');
+
+        // (c) Nothing to discard: the editor closes at once, and the stored SELL was never rewritten.
+        await page.getByTestId('tx-bulk-cancel').click();
+        await expect(page.getByTestId('tx-bulk-modal'), 'an untouched Apply leaves nothing to discard: the editor closes at once').toBeHidden({timeout: 5_000});
+        const after = await readStoredRow(page, ledger.rowId);
+        expect(storedState(after), 'the stored SELL is still as seeded').toEqual(storedState(seeded));
+    });
+
+    test('W-B65: an untouched Apply on a BUY keeps it original, and closing asks nothing', async ({page}) => {
+        const mine: OwnedRows = {marker: `E2E-wb65-buy-${uniqueSuffix()}`, ids: []};
+        owned = mine;
+        const ledger = await seedSatoshiLedger(page, mine, 'buy');
+        const seeded = await readStoredRow(page, ledger.rowId);
+        expect(storedState(seeded), 'premise: the BUY is stored as sent, signs included').toMatchObject({quantity: SATOSHI_LEDGER.buy.quantity, cash: {amount: SATOSHI_LEDGER.buy.cash}});
+
+        const row = await applyFormUntouched(page, ledger);
+
+        // (a) Untouched, it is original.
+        await expect(row.getByTestId('tx-bulk-row-status'), 'an untouched Apply is not an edit').toHaveAttribute('data-status', 'original');
+        // (b) A positive quantity is held as stored: its rule carries no sign to take off.
+        await expect.soft(row.locator('td[data-column-id="quantity"]'), 'the BUY quantity is held as stored').toHaveText('0.00000002');
+
+        // (c) Nothing to discard: the cash the Form pushed back signed is held as its magnitude again, and the stored
+        // BUY was never rewritten.
+        await page.getByTestId('tx-bulk-cancel').click();
+        await expect(page.getByTestId('tx-bulk-modal'), 'an untouched Apply leaves nothing to discard: the editor closes at once').toBeHidden({timeout: 5_000});
+        const after = await readStoredRow(page, ledger.rowId);
+        expect(storedState(after), 'the stored BUY is still as seeded').toEqual(storedState(seeded));
+    });
+
+    test('W-B65: an untouched Apply on a DEPOSIT keeps it original, and closing asks nothing', async ({page}) => {
+        const mine: OwnedRows = {marker: `E2E-wb65-deposit-${uniqueSuffix()}`, ids: []};
+        owned = mine;
+        // The DEPOSIT alone: two cents in, nothing before it to keep above zero.
+        const ledger = await seedSatoshiLedger(page, mine, 'funding');
+        const seeded = await readStoredRow(page, ledger.rowId);
+        expect(storedState(seeded), 'premise: the DEPOSIT is stored as sent').toMatchObject({quantity: SATOSHI_LEDGER.funding.quantity, cash: {amount: SATOSHI_LEDGER.funding.cash}});
+
+        const row = await applyFormUntouched(page, ledger);
+
+        // (a) Untouched, it is original.
+        await expect(row.getByTestId('tx-bulk-row-status'), 'an untouched Apply is not an edit').toHaveAttribute('data-status', 'original');
+
+        // (c) Its values keep their signs, so only what else the Apply writes can make the close ask: nothing must.
+        await page.getByTestId('tx-bulk-cancel').click();
+        await expect(page.getByTestId('tx-bulk-modal'), 'an untouched Apply leaves nothing to discard: the editor closes at once').toBeHidden({timeout: 5_000});
+        const after = await readStoredRow(page, ledger.rowId);
+        expect(storedState(after), 'the stored DEPOSIT is still as seeded').toEqual(storedState(seeded));
     });
 });

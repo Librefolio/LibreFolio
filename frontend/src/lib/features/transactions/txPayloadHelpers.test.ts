@@ -18,6 +18,9 @@ vi.mock('$lib/features/transactions/transactionTypeStore', () => ({
 
 import {applySign, applySignRules, buildSignedCash, exactDecimalEqual, exactDecimalSign, fieldEq, buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, buildBatchPayload, PATCHABLE_FIELDS, signedCashAmount, upgradeAutoToDetail} from './txPayloadHelpers';
 import type {TxFields, TxOriginal, CashValue, ResolvedOp, TxDualSide} from './txPayloadHelpers';
+// W-B65: the module itself too, so that `magnitudeForRule` is read as a property: a named import of an export that does
+// not exist yet would fail every case of this file, not only its own.
+import * as payloadHelpers from './txPayloadHelpers';
 
 // =============================================================================
 //  Mock TypeRule factory
@@ -139,6 +142,103 @@ describe('applySign(…, positive) — the magnitude of a negative-rule row in t
 
         expect(magnitude, `the magnitude of ${value}`).toBe(expected);
         expect(magnitude, 'no exponent notation, which Number writes below 1e-6').not.toMatch(/e/i);
+    });
+});
+
+/** `magnitudeForRule(value, rule)`, read off the module namespace: until txPayloadHelpers.ts exports it, the case that
+ *  asks fails naming the export, and every other case of this file still runs. Typed here, so the file checks before the
+ *  export lands and after. */
+function magnitudeForRule(value: string, signRule: string): string {
+    const helper = (payloadHelpers as unknown as {magnitudeForRule?: unknown}).magnitudeForRule;
+    expect(typeof helper, 'txPayloadHelpers.ts exports magnitudeForRule(value, rule), the value the bulk editor holds (W-B65)').toBe('function');
+    return (helper as (value: string, rule: string) => string)(value, signRule);
+}
+
+/**
+ * W-B65 — the value the bulk editor holds for a saved row, and what an untouched «Apply» gives back.
+ *
+ * TransactionBulkModal holds a saved row in its own convention: for a type whose sign rule is `negative`, the value as
+ * its magnitude (`fieldsFromTx`: a SELL's quantity; the cash of a BUY, a WITHDRAWAL, a FEE or a TAX). The Form it opens
+ * pushes back, on «Apply», `buildCreatePayload`: signed. `applyFormPayload` copied that as it came, so an untouched Apply
+ * turned a SELL's `0.00000001` into `-0.00000001` — in the cell, and in the key the close guard compares with the one
+ * taken at seeding, which then asked to discard a change nobody made.
+ *
+ * `magnitudeForRule(value, rule)` is the one conversion both ends go through, the seeding and the Apply: a negative-rule
+ * value as its magnitude, anything else exactly as given — so an untouched Apply gives back the value held. It is not
+ * `applySign(…, 'positive')` (C-97b, above): that one acts whatever the rule and keeps the digits as written; this one
+ * acts only under a negative rule, and drops the trailing zeros, as the grid shows them.
+ *
+ * Red until the export lands; every other case of this file runs either way. The editor side is pinned end to end by the
+ * W-B65 tests of e2e/transactions/tx-bulk-operations.spec.ts.
+ */
+describe('magnitudeForRule — the bulk editor holds a negative-rule value as its magnitude (W-B65)', () => {
+    it.each([
+        ['-0.00000001', '0.00000001'],
+        ['-1.500000', '1.5'],
+        ['-0.020000', '0.02'],
+        ['-100', '100'],
+        ['-0.1234567891', '0.1234567891'],
+        ['-123456789012.345001', '123456789012.345001'],
+    ])('under a negative rule, %j is held as %j: the digits exact, the trailing zeros dropped, never exponent notation', (value, expected) => {
+        const held = magnitudeForRule(value, 'negative');
+
+        expect(held, `the magnitude of ${value}`).toBe(expected);
+        expect(held, 'no exponent notation, which Number writes below 1e-6').not.toMatch(/e/i);
+    });
+
+    it.each([
+        ['0.020000', 'a magnitude, already held: not reformatted'],
+        ['0', 'a zero'],
+        ['-0.000000', 'a zero with a sign, which is no negative value'],
+        ['', 'an empty text'],
+        ['1e-8', 'exponent notation, which is no plain decimal'],
+        ['-1e-8', 'a negative in exponent notation, still no plain decimal'],
+        ['abc', 'no number at all'],
+    ])('under a negative rule, %j stays exactly as given (%s)', (value) => {
+        expect(magnitudeForRule(value, 'negative')).toBe(value);
+    });
+
+    const otherRules = ['positive', 'free', 'any', 'nonzero', 'zero'];
+    const signedValues = ['-5', '-0.00000001', '-1.500000', '0.020000'];
+    it.each(otherRules.flatMap((signRule) => signedValues.map((value): [string, string] => [signRule, value])))('under a %s rule, %j stays exactly as given: only a negative rule holds a magnitude', (signRule, value) => {
+        expect(magnitudeForRule(value, signRule)).toBe(value);
+    });
+
+    it.each([
+        ['-0.00000001', 'negative'],
+        ['-1.500000', 'negative'],
+        ['-123456789012.345001', 'negative'],
+        ['0.020000', 'negative'],
+        ['-0.000000', 'negative'],
+        ['-1e-8', 'negative'],
+        ['-5', 'nonzero'],
+        ['-0.020000', 'positive'],
+    ])('is idempotent: what it holds for %j under a %s rule, it holds again', (value, signRule) => {
+        const once = magnitudeForRule(value, signRule);
+
+        expect(magnitudeForRule(once, signRule), `held once: ${JSON.stringify(once)}`).toBe(once);
+    });
+
+    // Each row as the API reads it back (RealDecimal pads to six decimals), with its type's rules as the backend gives
+    // them (type_metadata.py): a SELL takes a negative quantity and a positive cash, a BUY the reverse, a FEE no quantity
+    // and a negative cash. `signed` names the field whose rule is negative: the one the Form pushes back with a sign.
+    it.each([
+        {type: 'SELL', typeRule: rule({quantityRule: 'negative', cashSign: 'positive'}), stored: {quantity: '-0.00000001', cash: '0.010000'}, signed: 'quantity' as const, held: {quantity: '0.00000001', cash: '0.010000'}},
+        {type: 'BUY', typeRule: rule({quantityRule: 'positive', cashSign: 'negative'}), stored: {quantity: '0.00000002', cash: '-0.020000'}, signed: 'cash' as const, held: {quantity: '0.00000002', cash: '0.02'}},
+        {type: 'FEE', typeRule: rule({quantityRule: 'zero', cashSign: 'negative'}), stored: {quantity: '0.000000', cash: '-1.500000'}, signed: 'cash' as const, held: {quantity: '0.000000', cash: '1.5'}},
+    ])('an untouched Form Apply on a $type gives back the value held: magnitude in, signed payload out, magnitude again', ({type, typeRule, stored, signed, held}) => {
+        // Seeding: the row as the editor holds it.
+        const holding = {quantity: magnitudeForRule(stored.quantity, typeRule.quantityRule), cash: magnitudeForRule(stored.cash, typeRule.cashSign)};
+        expect(holding, `the ${type} as the editor holds it`).toEqual(held);
+
+        // «Apply», untouched: the Form pushes its create payload, built from the row it was given.
+        const pushed = buildCreatePayload(baseFields({type, quantity: holding.quantity, cash: cash('USD', holding.cash)}), typeRule as any);
+        const pushedValues = {quantity: String(pushed.quantity), cash: (pushed.cash as CashValue).amount};
+        expect(exactDecimalSign(pushedValues[signed]), `premise: the Form pushes the ${type} ${signed} signed, which the editor used to keep as it came`).toBe(-1);
+
+        // Back in the editor: held again exactly as before, so the close guard has nothing to discard.
+        const heldAgain = {quantity: magnitudeForRule(pushedValues.quantity, typeRule.quantityRule), cash: magnitudeForRule(pushedValues.cash, typeRule.cashSign)};
+        expect(heldAgain, `an untouched Apply gives the ${type} back as it was held`).toEqual(holding);
     });
 });
 

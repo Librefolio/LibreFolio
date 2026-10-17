@@ -172,7 +172,7 @@
                     onchange={setQuantity}
                     onvaliditychange={onQuantityValidityChange}
                     step="1"
-                    maxIntegerDigits={12}
+                    maxIntegerDigits={15}
                     maxFractionDigits={10}
                     allowNegative
                     signRule={quantityInputSignRule}
@@ -220,7 +220,7 @@
                     onchange={setQuantity}
                     onvaliditychange={onQuantityValidityChange}
                     step="1"
-                    maxIntegerDigits={12}
+                    maxIntegerDigits={15}
                     maxFractionDigits={10}
                     allowNegative
                     signRule={quantityInputSignRule}

@@ -76,6 +76,31 @@ type PendingOp = (
 
 A linked pair is two ops: the visible row and a hidden partner whose `pairedWith` points to it.
 
+`quantity` and `cash.amount` are decimal strings held in the workspace's sign convention: a value
+whose type rule demands a negative — a `SELL`'s quantity; the cash of a `BUY`, a `WITHDRAWAL`, a
+`FEE` or a `TAX` — is held as its magnitude, and `applySignRules()` puts the sign back in every
+payload built for validate and commit (`buildCreatePayload()` and `buildUpdateDiff()`, in
+`lib/features/transactions/txPayloadHelpers.ts`). Every other value is held as given; under a
+`nonzero` rule, such as a `TRANSFER` leg's or an `ADJUSTMENT`'s quantity, its sign is information.
+The conversion is `magnitudeForRule(value, rule)` (same file, W-B65): under the `negative` rule a
+negative value becomes its magnitude, its digits exact, trailing zeros dropped, never in exponent
+notation (`-0.00000001` → `0.00000001`, `-0.020000` → `0.02`); anything else comes back as given —
+a magnitude, a zero, a text that is no plain decimal, any value of another rule. It is idempotent,
+and the inverse of `applySign()` on the `negative` rule. A saved row, or a clone of one, is read
+in through it (`fieldsFromTx`), its cash exactly, no longer through `Number`; an imported row
+takes the same convention in `txCreateItemToPendingOp`, which still reads its cash, whatever the
+rule, through `Number`.
+
+On **Apply** the Form pushes back a create-shaped payload, signed as a create is sent
+(`buildCreatePayload()`, or `buildDualCreatePayloads()` for a pair). `applyFormPayload()` copies it
+into the row's `DraftFields`, reads the signed quantity to derive `cost_basis_mode`, and as its
+last step brings the quantity and the cash back to the workspace's convention with
+`magnitudeForRule()`. Every Apply goes through it — a new row, an edited one, both halves of a
+pair — so an untouched Apply gives the quantity and the cash back as the row held them (W-B65).
+Before, the row kept the signed values: an untouched Apply on a one-satoshi `SELL` showed
+`-0.00000001` in its cell, and closing the workspace asked to discard, though the row stayed
+`original` (see *Derived Row Status* below).
+
 ---
 
 ## ⚡ Core Design Principles
@@ -92,6 +117,27 @@ Row status is calculated dynamically at runtime. It is never stored as an editab
 | `op.op === 'edit'` | `markedDelete === true` | `delete` | Row marked to be removed |
 | `op.op === 'edit'` | `fields` match `txStoreGet(txId)` | `original` | Unchanged row |
 | `op.op === 'edit'` | `fields` differ from `txStoreGet(txId)` | `edited` | Row has local modifications |
+
+The comparison goes through `collectUpdate()` → `buildUpdateDiff()`, which signs the draft and the
+saved row alike (`applySignRules()`) and compares their decimals exactly (`fieldEq()`): a
+magnitude held for a `negative` rule matches the signed value saved, so the sign convention never
+shows in the status.
+
+The close guard is stricter. Closing the workspace — ✕, **Cancel**, Escape or a click on the
+backdrop — goes through `requestClose()`, which first asks *Discard Changes?* when
+`hasUnsavedChanges()` finds that `serializeOps(ops)` differs from `initialOpsKey`, the key
+`serializeOps()` (`lib/features/transactions/bulk/bulkDisplay.ts`) took when the rows were seeded.
+The key is the JSON of every op, hidden partners included: its `DraftFields` as held (not through
+`applySignRules()`) and its other keys. It leaves out `tempId` and `createdSeq`, names `pairedWith`
+and `link_uuid` by the rows they point at, and sorts object keys, so a reset (`resetRow`,
+`resetAll`), which rebuilds the saved rows under new identities, reads no change. Unlike the
+status, it compares values as held: a signed value where the row held a magnitude is a change. And
+`JSON.stringify` keeps a key set to `null` but drops an absent one, so an Apply whose payload
+carries no WAC currency (`_wac_currency_hint: null`) deletes the op's `wacCurrencyHint`
+(`patchRowFromForm`, and the partner in `patchDualRowFromForm`) instead of writing `null`: both
+mean that the backend decides (`opToTxFields()` uses the hint only when it holds a currency), and
+a row starts without the key. Before W-B65 it wrote `null`, and every such Apply, even on a
+`DEPOSIT`, asked to discard.
 
 ---
 
