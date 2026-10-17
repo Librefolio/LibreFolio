@@ -403,7 +403,8 @@ class PriceStoreOperations:
         Returns:
             FABulkDeleteResponse with results and deleted count
 
-        Optimized: 1 SELECT COUNT + 1 DELETE query with complex WHERE
+        One COUNT per range (the per-asset counts), then one DELETE per chunk of ranges (``utils/sql_chunks``; MF-SEC9a),
+        in one transaction. The counts are up to ``MAX_BULK_WRITE_ITEMS`` awaited queries: slow, not a stall (MF-SEC9e).
         Note: Cannot parallelize with gather - DB operations are sequential and interdependent
         """
         if not data:
