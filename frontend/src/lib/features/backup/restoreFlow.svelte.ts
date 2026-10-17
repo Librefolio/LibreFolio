@@ -110,7 +110,8 @@ export interface RestoreFlowOptions {
     pollMs?: number;
     /** A server never seen down for this long after the restart was asked: its outcome is read anyway. */
     fastRestartMs?: number;
-    /** A server down for this long: `slow`, and the page says to start it again. */
+    /** A server down for this long: `slow`, and the page says to start it again. Up all along, never down, this long
+     * after the restart was asked with the restore still waiting: `notStopping`, and the page says to restart it (B-16). */
     slowAfterMs?: number;
     onEvent?: (name: RestoreEventName, detail: Record<string, unknown>) => void;
 }
@@ -161,6 +162,8 @@ export class RestoreFlowController {
     dropRequested = $state(false);
     outcome = $state<RestartOutcome | null>(null);
     slow = $state(false);
+    /** The server never went down after the restart was asked, and the restore still waits, past `slowAfterMs` (B-16). */
+    notStopping = $state(false);
     /** The status read once the server came back, for `rolled_back` and `still_pending`. */
     outcomeStatus = $state<RestoreStatus | null>(null);
     /** A secure backup's password is out to the server: the form waits for its answer. */
@@ -209,6 +212,7 @@ export class RestoreFlowController {
         this.outcome = null;
         this.outcomeStatus = null;
         this.slow = false;
+        this.notStopping = false;
         this.#ticket = null;
         let status: RestoreStatus;
         try {
@@ -468,6 +472,7 @@ export class RestoreFlowController {
         this.outcome = 'waiting';
         this.outcomeStatus = null;
         this.slow = false;
+        this.notStopping = false;
         this.#ticket = null;
         this.#setError(null, null);
         let accepted: RestoreRestartAccepted;
@@ -610,6 +615,8 @@ export class RestoreFlowController {
         const now = Date.now();
         if (health === 'down') {
             this.#seenDown = true;
+            // Stopping after all: the late stop proceeds as any other.
+            this.notStopping = false;
             this.#downSince ??= now;
             if (now - this.#downSince >= this.#slowAfterMs) this.slow = true;
             this.#scheduleProbe(generation);
@@ -622,6 +629,8 @@ export class RestoreFlowController {
             if (this.#stale(generation)) return;
             if (this.#settle(read, fast)) return;
         }
+        // Up all along, read and still waiting: the server has not stopped. The page says so, and goes on probing (B-16).
+        if (fast && now - this.#restartAskedAt >= this.#slowAfterMs) this.notStopping = true;
         this.#scheduleProbe(generation);
     }
 
@@ -631,12 +640,14 @@ export class RestoreFlowController {
         if (read.kind === 'blocked') {
             // Never applied on a blocked instance (P7), which refuses the status route too: the page says why itself.
             this.slow = false;
+            this.notStopping = false;
             this.outcome = 'still_pending';
             this.outcomeStatus = {state: 'pending', waiting: 'instance_blocked'};
             return true;
         }
         if (read.kind === 'signed_out' || read.status.state === 'committed') {
             this.slow = false;
+            this.notStopping = false;
             this.outcome = 'restored';
             this.#emit('backup.restore.restored', {});
             restoreNavigation.toSignIn();
@@ -645,6 +656,7 @@ export class RestoreFlowController {
         const status = read.status;
         if (status.state === 'rolled_back') {
             this.slow = false;
+            this.notStopping = false;
             this.outcome = 'rolled_back';
             this.outcomeStatus = status;
             this.#emit('backup.restore.rolled_back', {reason: status.reason ?? null});
@@ -653,6 +665,7 @@ export class RestoreFlowController {
         // Still pending after a stop seen: not applied (a start left it waiting). Never seen down: not restarted yet.
         if (status.state === 'in_progress' || (fast && status.state === 'pending')) return false;
         this.slow = false;
+        this.notStopping = false;
         this.outcome = 'still_pending';
         this.outcomeStatus = status;
         return true;
