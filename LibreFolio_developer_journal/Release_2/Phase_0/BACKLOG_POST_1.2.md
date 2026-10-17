@@ -5439,6 +5439,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   controllo del costo), il secondo lo riceve due volte; e un Auto seguito da un Manuale con la stessa chiave sovrascrive il costo
   Manuale con la media. Cura: la riga di ogni elemento dalla mappa che la creazione già conosce (indice → riga), senza la ricerca per
   campi; rossi prima. Dopo W-B60. Dettagli: piano 04, sezione «W-B67» (quando parte).
+  Analisi (17/10, W): c'è un secondo difetto. Le righe Auto dello stesso batch non ancora costate entrano a zero nelle medie delle
+  altre, e il risultato segue l'ordine degli indici (BUY 10 a 100, due Auto +5 lo stesso giorno: con la sola mappa 66,67 e 88,89).
+  **Decisione N84** (D-W67-1 → P1, coordinatore 17/10): ogni create sulla propria riga; le righe Auto in ordine di data del loro
+  gruppo, poi per indice; quelle non ancora costate (salvo le legate a uno split) fuori dai gruppi delle altre. Lo stesso costo che
+  avrebbero salvate una alla volta in ordine di data. Dettagli: piano 04, «W-B67 — … analisi» e «W-B67 — cura».
+  ✅ 17/10: `context.created_by_index` (la riga di ogni create, da `apply_creates`) al posto della ricerca per campi
+  (`_find_created_tx_for_wac` tolta); le righe Auto in ordine di data del gruppo, poi le create per indice e gli update per indice;
+  quelle non ancora costate (salvo le legate a uno split) fuori dai gruppi delle altre. 4 rossi verdi (`transaction-cost-basis-rule`
+  171); `transaction` 125, `transaction-decimal-places` 201, `auto-cost-unreadable-pool` 17, `lone-transfer-legs` 20,
+  `orphan-transfer-numbers` 21, `roi-fifo-utils` 1 312, `broker` 81. Slot prima dell'ingresso: `api transactions-wac` 20,
+  `portfolio-wac` 12, `batch-split-promote` 38; E2E `tx-wac-bulk` 11, `tx-wac-formmodal` 10, `tx-transfer-auto-cost` 2. Dettagli:
+  piano 04, sezione «W-B67 — cura».
 - **W-B68 · I valori degli eventi dei provider non sono troncati alla colonna** — basso, numeri; W, 17/10 (W-B60, docs-writer). I
   prezzi dei provider si salvano troncati a ciò che la colonna tiene (`storable_value`, `truncate_priceHistory`), i valori degli eventi
   dei provider no: `_storable_events` (`backend/app/services/assets/event_store.py`) ne controlla solo la grandezza. Con la lettura di
