@@ -3830,3 +3830,11 @@ a column missing at the first render as gone: it rewrote the saved order without
 and width, so every load reset them. Y-27 keeps the preferences of absent columns and filters them only when drawing.
 Filed: [[problems/datatable-pruned-preferences-of-absent-columns]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] update | A FAILED lots analysis withholds its figures (J-12)
+Decision N81, option A: a lots analysis whose replay FAILED no longer shows the lots of a replay that does not match the
+account. The service keeps only the WAC lines, the issues that fail the replay (with `transaction_date`,
+`fails_analysis` and the giving leg of a transfer) and the WAC-line gaps; the AI Export declares the asset in
+`failed_lot_reconstructions` (FIFO lots v3, lot detail v4) with the scope totals null. Updated:
+[[entities/lots-analysis-service]] (backend half; the decision record and the panel half are Y's).
+Graph: not updated; graphify is not available in this worktree.

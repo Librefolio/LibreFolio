@@ -5686,6 +5686,13 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - oppure il pannello le nasconde.
 
   Prima un rosso sul caso speculare di W. Dettagli: piano J, §10 «Domande di W N1».
+  - ✅ 17/10, metà backend e AI Export: fatta da J (checkpoint J-12; N81, opzione A). La metà del pannello è di Y.
+    - Con `FAILED` il servizio non dà nessuna cifra dei lotti: tiene le righe WAC, le issue che fanno fallire il
+      rigioco (con `transaction_date`, `fails_analysis` e, per un trasferimento, la gamba che dà) e le lacune delle
+      righe WAC.
+    - AI Export: l'asset è dichiarato in `failed_lot_reconstructions` (solo identità e codici), i totali del perimetro
+      sono nulli; `*.fifo_lots` v3, `asset.lot_detail` v4 con lo stato. Dettagli: piano 05, sezione «J-12 — backend e
+      AI Export».
 - ✅ **J-13 · Volatilità, Sharpe e Beta mobili mostrano «giorni» ma contano osservazioni** — basso, chiarezza (utenti
   non esperti); J, 15/10, nella nota sul punto 29 per il coordinatore.
   - `rolling_volatility`, `rolling_sharpe` e `rolling_beta` dichiarano `"x-suffix": "days"` sulla finestra (come oggi
