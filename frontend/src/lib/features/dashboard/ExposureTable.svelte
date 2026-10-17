@@ -21,6 +21,7 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {makePositionKey} from '$lib/utils/core/positionKey';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {priceFractionDigits} from '$lib/utils/core/formatFixed';
     import {maskableQuantity} from '$lib/utils/privacy/maskable';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -149,9 +150,15 @@
         };
     }
 
-    /** A position quantity; masked under privacy (D5′), an em dash when absent. */
+    /** A position quantity, up to the 10 decimals a quantity keeps (C-97c); masked under privacy (D5′), an em dash when absent. */
     function formatQuantity(value: number | null): string {
-        return value == null ? '—' : maskableQuantity(value.toLocaleString(uiLocale(), {minimumFractionDigits: 0, maximumFractionDigits: 6}));
+        return value == null ? '—' : maskableQuantity(value.toLocaleString(uiLocale(), {minimumFractionDigits: 0, maximumFractionDigits: 10}));
+    }
+
+    /** A price per unit, public: the decimals its first 4 significant digits need, at least 2, so a price under a cent is not 0.00 (C-97c). */
+    function formatUnitPrice(value: number): string {
+        const {min, max} = priceFractionDigits(value);
+        return formatCurrencyAmountPlain(value, displayCurrency, {minFraction: min, maxFraction: max, sensitivity: 'public'});
     }
 
     function label(key: string, fallback: string): string {
@@ -393,7 +400,7 @@
                 // on purpose: the row also carried `quantity`, visible by D5, and
                 // quantity × price reconstructs `value`. D5′ masks the quantity beside it,
                 // so the reason is gone, and a market price is not patrimony.
-                cell: (row) => (row.price == null ? '—' : formatCurrencyAmountPlain(row.price, displayCurrency, {sensitivity: 'public'})),
+                cell: (row) => (row.price == null ? '—' : formatUnitPrice(row.price)),
             },
             {
                 id: 'pmc',
@@ -409,7 +416,7 @@
                 hiddenByDefault: true,
                 getValue: (row) => row.wacPerUnit ?? 0,
                 // The WAC per unit is admissible (product owner, 2026-09-22); masked only while the quantity was visible.
-                cell: (row) => (row.wacPerUnit == null ? '—' : formatCurrencyAmountPlain(row.wacPerUnit, displayCurrency, {sensitivity: 'public'})),
+                cell: (row) => (row.wacPerUnit == null ? '—' : formatUnitPrice(row.wacPerUnit)),
             },
             {
                 id: 'oldest-open-lot',
