@@ -519,10 +519,11 @@ the call where the user's request arrives:
 
 | Trigger | Examples |
 |:--------|:---------|
-| The first load, in `onMount` | `dashboard-first-load` (`routes/(app)/dashboard/+page.svelte:832`), `broker-first-load` (`routes/(app)/brokers/[id]/+page.svelte:279`) |
-| The Refresh handler | `handleSync()` → `dashboard-refresh` (`dashboard/+page.svelte:711`), `handleRefresh()` → `broker-refresh` (`brokers/[id]/+page.svelte:434`) |
-| A change of period, currency, scope, filter or tab | `createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()))` (`dashboard/+page.svelte:175`), `dashboard-scope` after the broker filter's debounce (`dashboard/+page.svelte:706`), `broker-period` in `handleDateChange()` (`brokers/[id]/+page.svelte:431`) |
-| A panel that opens, changes its inputs, or follows the page's Refresh | `lib/features/brokers/lots/LotsAnalysisPanel.svelte:343-371` (`lots-panel-load`, `lots-selection-load`, and `lots-*-refresh` on `refreshVersion`); `lib/features/risk/riskPanelController.svelte.ts` (`risk-load` in `applyBaseSignature()`, l.594; `risk-refresh` on `refreshVersion`, l.658) |
+| The first load, in `onMount` | `dashboard-first-load` (`routes/(app)/dashboard/+page.svelte:832`), `broker-first-load` (`routes/(app)/brokers/[id]/+page.svelte:279`), `asset-first-load` (`routes/(app)/assets/[id]/+page.svelte:1112`) |
+| The Refresh handler | `handleSync()` → `dashboard-refresh` (`dashboard/+page.svelte:711`), `handleRefresh()` → `broker-refresh` (`brokers/[id]/+page.svelte:434`). On an asset's page the token sits on the button's `onrefresh`, `asset-refresh` (`assets/[id]/+page.svelte:2279`), because `handleRefresh()` also runs after a sync |
+| A change of period, currency, scope, filter or tab | `createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()))` (`dashboard/+page.svelte:175`), `dashboard-scope` after the broker filter's debounce (`dashboard/+page.svelte:706`), `broker-period` in `handleDateChange()` (`brokers/[id]/+page.svelte:431`); on an asset's page `asset-period`, `asset-currency`, and the chart's view and calendar window, `asset-mode` and `asset-calendar-window` (`assets/[id]/+page.svelte:1769`, `:1181`, `:391`, `:419`) |
+| A reload after a save in a window | `assets-reload` after a create, an edit or a merge on the Assets list (`routes/(app)/assets/+page.svelte:897`, `:1898`, `:1914`); `asset-reload` after an edit, a new FX pair or the data editor's save on an asset's page (`assets/[id]/+page.svelte:2758`, `:1748`, `:2642`): the page rebuilds what the user just changed |
+| A panel that opens, changes its inputs, or follows the page's Refresh | `lib/features/brokers/lots/LotsAnalysisPanel.svelte:343-371` (`lots-panel-load`, `lots-selection-load`, and `lots-*-refresh` on `refreshVersion`); `lib/features/risk/riskPanelController.svelte.ts` (`risk-load` in `applyBaseSignature()`, l.594; `risk-refresh` on `refreshVersion`, l.658); on the Assets list's Correlation tab, `AssetSetRiskPanel.reload()` (`lib/features/risk/AssetSetRiskPanel.svelte:224`) hands each section a new `refreshVersion`, so «Reload All» waits for their `risk-refresh` |
 | A lazy load a panel asks by itself: `join` | `dashboard-pnl-candles`, `dashboard-contribution` (`dashboard/+page.svelte:1040`, `:1057`); `broker-pnl-candles`, `broker-contribution` (`brokers/[id]/+page.svelte:675`, `:704`) |
 
 Inside an `$effect`, read the inputs tracked and start the load untracked, as the lots panel does:
@@ -546,6 +547,12 @@ $effect(() => {
   (`dashboard/+page.svelte:729`, `brokers/[id]/+page.svelte:449`), and the risk controller's own sync,
   `handleSynced()` (l.612), reloads without a token too. See
   [How a page uses the cache](domain-state.md#how-a-page-uses-the-cache).
+- the reload after a sync on an asset's page: `handlePageSyncComplete()` and
+  `handleFxPairCreationSynced()` call `handleRefresh()` without a token
+  (`assets/[id]/+page.svelte:1715`, `:1743`). A sync can still make the button wait for a panel: the
+  Dashboard's banner syncs bump `refreshVersion` (`dashboard/+page.svelte:389`, `:465`) and the asset
+  page's `handleRefresh()` bumps `riskRefreshVersion`, so an open lots panel or Risk tab reloads under
+  its own token.
 
 **`join` (N55).** A new report drops the P&L candles of the growth chart and the contribution of the
 positions panel, and a panel left on that view asks for them again at once. After the user's period,
@@ -586,10 +593,12 @@ icon. Trimmed from the Dashboard's:
 | Broker detail | `broker-refresh` | `routes/(app)/brokers/[id]/+page.svelte:624` |
 | Brokers list | `brokers-refresh` | `routes/(app)/brokers/+page.svelte:384` |
 | Transactions | `tx-refresh-button` | `routes/(app)/transactions/+page.svelte:768` |
-| Files | `files-refresh-button` | `routes/(app)/files/+page.svelte:784` |
+| Files | `files-refresh-button` | `routes/(app)/files/+page.svelte:783` |
 | FX list | `fx-refresh-all-button` | `routes/(app)/fx/+page.svelte:1113` |
 | FX detail | `fx-detail-refresh-btn` | `routes/(app)/fx/[pair]/+page.svelte:1338` |
-| Assets list | `assets-refresh-button` | `routes/(app)/assets/+page.svelte:1642` |
+| Asset detail | `asset-detail-refresh-btn` | `lib/components/assets/detail/AssetDetailToolbarActions.svelte:92`, with `busy={pageBusy.busy}` from `routes/(app)/assets/[id]/+page.svelte:2278` |
+| Assets list | `assets-refresh-button` | `routes/(app)/assets/+page.svelte:1645` |
+| Assets list, Correlation tab | `risk-reload-button` («Reload All») | `routes/(app)/assets/+page.svelte:1595`, in place of the list's button on that tab |
 | Tools hub | `tools-hub-refresh` | `lib/features/tools/ToolsHub.svelte:162` |
 | Tool page | `tool-host-refresh` | `lib/features/tools/ToolHost.svelte:263` |
 
@@ -614,19 +623,23 @@ no `data-busy` on its root.
 - **The pages**: `frontend/e2e/portfolio/page-busy.spec.ts` (`./dev.py test front-portfolio page-busy`).
   A localhost answer lands before an assertion can look, so each case owns the busy state by holding
   the request that causes it:
-    1. `hold()` (l.165) parks, through `page.route`, the request the trigger sends — picked by method,
-       path and body — and lets every other one through. `heldRequest()` (l.201) fails by name when the
+    1. `hold()` (l.178) parks, through `page.route`, the request the trigger sends — picked by method,
+       path and body — and lets every other one through. `heldRequest()` (l.214) fails by name when the
        trigger never reaches the network. `release()` lets the request go with `route.fallback()`, not
        `continue()`, so it still crosses the page's other routes; `dispose()` runs in `finally`.
-    2. `expectBusy()` and `expectIdle()` (l.207, l.213) read only `data-busy` and `disabled`: never the
+    2. `expectBusy()` and `expectIdle()` (l.220, l.226) read only `data-busy` and `disabled`: never the
        spin class, a colour or a text.
-    3. For a request the button must **not** wait for, `recordBusy()` (l.355) keeps every value the
+    3. For a request the button must **not** wait for, `recordBusy()` (l.368) keeps every value the
        button's `data-busy` takes, through a `MutationObserver` in the page, so «it never waited» means
-       never, not «not when the test looked». `simulateCatchUp()` (l.325) stubs the catch-up status so
+       never, not «not when the test looked». `simulateCatchUp()` (l.338) stubs the catch-up status so
        the tracker sends `{kind: 'prices'}`.
     4. Then the **control**, in the same page under the same recording: a period change (the 6M preset)
-       must make the button wait, and the record must now contain `true` (l.666-678). Without it, the
+       must make the button wait, and the record must now contain `true` (l.679-691). Without it, the
        silence of step 3 proves nothing.
     5. The N55 cases also hold the cascaded P&L candles or contribution: after a background reload the
        button stays idle while they are held; after a period change it waits for them once the
        period's own report is back.
+    6. The asset pages' cases (l.1184): an asset's Refresh and a period change hold the chart's price
+       query; the reload after the page's own Sync — answered in the browser, nothing written — must
+       leave the button idle, with a period change as its control; on the Correlation tab, «Reload
+       All» holds the sections' base wave.
