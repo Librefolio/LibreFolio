@@ -3683,6 +3683,15 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Deve fallire chiuso: rifiutare l'avvio, oppure un default sicuro dichiarato per ogni campo. Oggi il profilo
     `managed` ha una sola voce, `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`: 500.
   - Prima i rossi; E rivede. Si fa dopo H-36.
+  - Cura fatta il 17/10 (lotto «H-37», piano H §14). La scelta è il fallimento chiuso alla chiamata, senza rifiuto
+    all'avvio, come per H-27.
+    - Sotto ogni profilo tranne `selfhosted`, una variabile che il profilo non elenca solleva `ProfileDefaultError`.
+    - Le rotte di B danno 503 e `upload_limit_mb` null.
+    - La guardia (h) controlla anche la direzione nuova, con il suo autotest.
+  - Resta a E da decidere: `PROFILE_DEFAULTS` (i campi di `Settings`) ha la stessa forma. Senza la voce managed di
+    `LIBREFOLIO_FRAME_PROTECTION` si torna in silenzio a spento, e oggi lo ferma solo il test (a).
+
+  Dettagli: piano H, §14, lotto «H-37».
 - **H-38 · Tailscale Serve davanti al container, e Docker Desktop: cosa mettere in `FORWARDED_ALLOW_IPS`** — basso,
   documentazione; H (dal docs-writer di H-36), 17/10.
   - Tailscale Serve sull'host inoltra a `127.0.0.1:6040`. Con Docker su Linux il container vede probabilmente il gateway
