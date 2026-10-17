@@ -86,8 +86,10 @@ and readable without a session (backend side:
 
 - **When**: the `(app)` layout calls `void instanceConfig.load()` at the top of its `onMount`, before
   the auth check, and does not wait for it. Pages outside the layout call it too: `LoginCard` on
-  mount, and the `/invite` page, which waits for it together with the inspection of its link
-  ([Account Link Pages](../components/features/auth.md#link-pages)).
+  mount, the `/invite` page, which waits for it together with the inspection of its link
+  ([Account Link Pages](../components/features/auth.md#link-pages)), and
+  [`AuthPageFrame`](../components/features/auth.md#authpageframe-and-authcard) on mount, so every
+  sign-in page has it, `/verify-email` included.
 - **One request per page load**: concurrent and later calls share the same request;
   `load({force: true})` asks again, and `fetchConfig` replaces the API call (tests).
   `GlobalSettingsTab` forces it after saving `registration_mode`, so the rest of the app follows the
@@ -119,6 +121,42 @@ and readable without a session (backend side:
   configuration itself: the page around it does. The `/reset-password` and `/setup` pages ask for it
   on mount without waiting for it, so the checklist switches to the server's rules when they arrive
   and a slow request never delays the form.
+- **Readers of `profile`** (F05, workstream A): what a hosting provider's customers must not get shows
+  only once `loaded` is true and `profile` is `selfhosted`, since the default says `selfhosted` and a
+  managed instance must never show it while its answer is in flight, nor after a failed request:
+    - `donationsVisible()` (`lib/features/support/donations.svelte.ts`) is the one rule of the
+      coffee links in the Svelte app, reactive in a template or a `$derived`. `Header` (`header-donate-link`),
+      `HelpMenu` (`help-donate-link` and the divider above it),
+      [`AuthPageFrame`](../components/features/auth.md#authpageframe-and-authcard)
+      (`auth-donate-link`) and `SupportActions` (the coffee and the «Or share» divider, in the
+      [About tab](../components/features/settings.md#abouttab) and in the donation popup) draw their
+      coffee only while it is true; the share buttons of `SupportActions` stay. The popup itself never
+      comes on a managed instance: the backend decides it
+      ([Deferred popups](../onboarding.md#deferred-popups)). The static offline page
+      (`frontend/static/offline.html`, which the service worker serves when a navigation fails) reads
+      no configuration: its coffee link shows on every instance, managed included.
+    - `checkForNewerRelease()` (`lib/features/update-check/updateCheck.ts`), the administrators' check
+      at sign-in, awaits `instanceConfig.load()` and probes GitHub and the image registry only when
+      the answer says `selfhosted`: otherwise it returns `null`, with no request and no write to its
+      cache ([Container Image Check](../../architecture/security.md#container-image-check)).
+    - [`ForgotPasswordCard`](../components/features/auth.md#forgotpasswordcard) draws the server
+      commands once the answer says `selfhosted`, `forgot-ask-admin` once it says `managed`, and
+      neither before.
+    - `AssetSearchAutocomplete` (workstream H) offers the GitHub fallback of «Let us know» only once
+      the answer says `selfhosted` ([Asset Search & Link-Finder](../../backend/assets/search_link_finder.md)).
+    - `ChangelogModal` draws **Check for updates** (`changelog-check-update`) by the same rule: not
+      before the answer, not on a managed instance, and not while no answer came on this page load,
+      a failed request included, on a self-hosted instance too.
+    - Tests: `./dev.py test front-utility core-unit` runs `donations.test.ts` and
+      `updateCheck.managed.test.ts`; `./dev.py test front-utility component-unit` runs
+      `Header.managed.test.ts`, `HelpMenu.managed.test.ts`, `SupportActions.managed.test.ts` and
+      `ChangelogModal.managed.test.ts`, with those of `AuthPageFrame` and `ForgotPasswordCard`
+      ([Authentication Components](../components/features/auth.md)): each before the answer, once
+      it says `selfhosted` and once it says `managed`.
+- **Readers of `legal`**: the two components of the legal notice, `LegalNotice` and `LegalLinks`
+  ([Settings Components](../components/features/settings.md#legal-notice)), draw each link only
+  while its address is set. The default has no `legal`: until the answer, the notice shows without
+  links.
 
 ```ts
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
@@ -129,6 +167,7 @@ instanceConfig.config.accounts.registration_mode; // 'open' | 'invite' | 'disabl
 instanceConfig.config.accounts.registration_locked; // true while LIBREFOLIO_REGISTRATION pins it
 instanceConfig.config.accounts.first_account_open; // true while the instance has no account (optional: absent reads as false)
 instanceConfig.config.accounts.password_rules; // [{code, value}]: the password rules (optional: absent or empty, PasswordStrength assumes DEFAULT_PASSWORD_RULES)
+instanceConfig.config.legal?.terms_url; // the terms of service of the instance, or null (optional: absent until the answer)
 ```
 
 ## 📢 Instance notices {: #instance-notices }

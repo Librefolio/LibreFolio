@@ -102,6 +102,9 @@ first: see [If LibreFolio Asks You to Confirm Your Email](#verify-email).
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
+Under the card, as on every sign-in page, one line holds the [legal notice](settings/about.md#legal-notice)
+of your instance.
+
 !!! note "Too many login attempts"
 
     After 10 wrong passwords in 15 minutes for the same username or email address, or 50 from the
@@ -126,6 +129,9 @@ form at the top:
   address, or the requests came too close together: try again later, or ask your administrator.
 - 💻 Under the form, a closed panel holds the command your administrator runs on the server to reset
   a password; when your instance cannot send emails, the page shows it open. Either way: ask them.
+- 🏢 On an instance a hosting provider runs for you, the page shows no command. It says *Ask your
+  administrator for a password-reset link: they can create one for your account.* Once you have the
+  link, follow [If an Administrator Sent You a Password-Reset Link](#password-reset-link).
 
 ### 🔑 If an Administrator Sent You a Password-Reset Link {: #password-reset-link }
 
@@ -152,6 +158,7 @@ The first time you log in, LibreFolio opens a **Welcome** page before the dashbo
 - 🖼️ Add a **profile picture** if you like — otherwise your initials are shown.
 - ✅ Click **Continue** to save, or **Skip setup permanently** to keep the current settings.
 - 🚪 Need to leave? **Log out** is at the top right.
+- ⚖️ Under the card: the [legal notice](settings/about.md#legal-notice) of your instance.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="The first-run Welcome page: the profile picture block with the initials avatar and Choose picture, Language and Default Currency pre-filled, the note that your theme preference is kept unchanged, and Skip setup permanently and Continue" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">

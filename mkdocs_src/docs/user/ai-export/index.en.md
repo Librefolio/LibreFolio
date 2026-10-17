@@ -85,7 +85,10 @@ LibreFolio remembers your last choices on each page for a few minutes; logging o
 
 You copy plain text: a short header (what was exported, the date, period, currency and detail
 level) and your data in compact tables. **Request Analysis** adds the question and the expected
-answer structure around them.
+answer structure around them. Every export ends with LibreFolio's
+[legal notice](../settings/about.md#legal-notice), in your interface language and without its
+links; with **Request Analysis**, only the line that asks the AI to answer in your language comes
+after it.
 
 1. Open a new chat in an AI assistant you trust with financial data.
 2. Paste the text and send it. With **Request Analysis**, the question is already in it.
