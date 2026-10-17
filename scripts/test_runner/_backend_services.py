@@ -45,6 +45,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
 # the shared DB) so the unit can honestly declare PURE isolation and run beside
 # anything.
 AI_EXPORT_PURE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_components_drawdown_total_loss.py",
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_int_validation.py",
