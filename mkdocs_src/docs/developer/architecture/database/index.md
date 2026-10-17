@@ -367,9 +367,14 @@ Both call `convert_lone_giving_legs(session, *, dry_run=False)`:
 - **Conversion.** A leg with a cost becomes an `ADJUSTMENT` (`make_standalone()`: the same
   quantity, asset, date, description and tags, no link, a new `updated_at`), and
   `_write_auto_cost()` writes `cost_basis_override` and `cost_basis_currency`. A leg whose cost
-  needs a missing conversion, or whose cost cannot be computed (an unreadable row of its broker
-  makes the computation raise), stays a `TRANSFER` without its partner, every column as it was: an
-  `ADJUSTMENT` taking units out without a cost would read them as destroyed. The other legs are
+  needs a missing conversion, or whose cost cannot be computed (the computation raises), stays a
+  `TRANSFER` without its partner, every column as it was: an `ADJUSTMENT` taking units out without
+  a cost would read them as destroyed. One such error is `UnreadablePoolError` (W-B69): since
+  W-B58 a stored value that is no number reads `None` instead of raising (see
+  [Decimal Columns](#decimal-columns)), so the average would skip such a row or count its cost at
+  zero; `_auto_cost()` raises instead when a row of the leg's broker pool cannot be read, with
+  the number of such rows and no id (see
+  [Unreadable pool](../../backend/transactions/wac.md#unreadable-pool)). The other legs are
   converted all the same, and the next run tries the ones left again.
 - **Transaction.** The function commits nothing: its caller commits, or rolls back after a dry run,
   which changes nothing. Outside a dry run it first calls `begin_writes(session, Transaction)`,
