@@ -1115,11 +1115,13 @@ LOCAL_PEERS = [
 
 
 def _start_client_address_over() -> None:
-    """Workstream H's module reads its settings once per process — ``LIBREFOLIO_CLIENT_IP_HEADER`` among them —: every cached function of its own cleared, so the next request reads the environment as it is then."""
+    """Workstream H's module reads its settings once per process — ``LIBREFOLIO_CLIENT_IP_HEADER`` among them —: every cached function of its own cleared, so the next request reads the environment as it is then. And the forwarding headers it noted from untrusted peers (``_untrusted_forwarding``, which the configuration check ``platform.client_address`` reports, and which has no reset function, decision N58) emptied in place: a case of this section leaves no note for the next test of the process."""
     module = importlib.import_module(CLIENT_ADDRESS_MODULE)
     for value in list(vars(module).values()):
         if getattr(value, "__module__", None) == module.__name__ and callable(getattr(value, "cache_clear", None)):
             value.cache_clear()
+    for seen in module._untrusted_forwarding.values():
+        seen.clear()
 
 
 @pytest.fixture

@@ -8,7 +8,10 @@ The limit on failed sign-ins (F15, decision D-A5 of 14/10): 10 failures in 15 mi
   username, the same key a sign-in typed with that username uses.
 - The identifier counts as typed, stripped, with A–Z folded and nothing else (decision P18), whether an account matches
   it or not: the answer never tells which identifiers exist.
-- The address is workstream H's ``client_rate_key()`` of ``client_address()``: an IPv6 client counts by its /64.
+- The address is workstream H's ``client_rate_key()`` of the address the routes pass: ``rate_limit_address()``, None
+  behind a reverse proxy LibreFolio does not trust (decision N70), where every visitor would share the proxy's address
+  and 50 failures from anyone would refuse everyone; then only the identifier's limit applies. An IPv6 client counts
+  by its /64.
 - In memory, per process: with N worker processes the limits are N times these. ``LIBREFOLIO_LOGIN_LIMIT=off`` turns it
   off — the test lanes do, for their suites sign in wrongly on purpose from one address — and the configuration checks
   say so (``checks.check_login_limit``: the startup log, ``GET /security/checks``).

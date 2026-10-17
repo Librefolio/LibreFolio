@@ -48,7 +48,7 @@ from backend.app.services.accounts.global_settings_service import get_session_tt
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.email import flows as email_flows
 from backend.app.services.email import verification as email_verification
-from backend.app.services.platform.client_address import client_address
+from backend.app.services.platform.client_address import client_address, rate_limit_address
 
 logger = structlog.get_logger(__name__)
 
@@ -153,7 +153,7 @@ async def login(
     Returns user info and sets session cookie.
     """
     # Too many failures for this identifier or from this address: refused before the account is even looked up (F15)
-    address = client_address(http_request)
+    address = rate_limit_address(http_request)
     _refuse_too_many_failures(request.username, address)
 
     # Try to find user by username or email
@@ -358,7 +358,7 @@ async def change_password(
     receives a new session cookie in the response, and carries on.
     """
     # The current password is guessed no faster here than at the sign-in: the account's username, the same limit (F15)
-    address = client_address(http_request)
+    address = rate_limit_address(http_request)
     _refuse_too_many_failures(current_user.username, address)
     _refuse_weak_password(request.new_password)
 
@@ -421,7 +421,7 @@ async def update_profile(
         if request.current_password is None:
             raise HTTPException(status_code=400, detail={"error_code": "CURRENT_PASSWORD_REQUIRED", "message": "Changing the email needs the current password"})
         # The same limit as the sign-in, under the account's username (F15)
-        address = client_address(http_request)
+        address = rate_limit_address(http_request)
         _refuse_too_many_failures(current_user.username, address)
         if not await asyncio.to_thread(verify_password, request.current_password, current_user.hashed_password):
             login_throttle.record_failure(current_user.username, address)
