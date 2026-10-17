@@ -20,7 +20,7 @@ from typing import Literal
 
 from backend.app.config import SecretFileError, get_data_dir, get_settings, is_test_mode, secrets_set_twice
 from backend.app.config.accounts import admin_bootstrap_config, login_limit_enabled
-from backend.app.config.platform import configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date, owning_test_lane_id
+from backend.app.config.platform import TEST_LANE_ID_MAX_LENGTH, TEST_LANE_ID_MIN_LENGTH, configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date, owning_test_lane_id
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
@@ -214,15 +214,18 @@ TEST_MODE_OUTSIDE_LANE_SUMMARY = "LIBREFOLIO_TEST_MODE is on outside a test lane
 
 
 def _test_mode_outside_a_lane() -> bool:
-    """Test mode is on and no test lane owns this process: ``LIBREFOLIO_TEST_LANE_ID`` is unset or blank (H-46)."""
-    return is_test_mode() and not (owning_test_lane_id() or "").strip()
+    """Test mode is on and no test lane owns this process (H-46): ``LIBREFOLIO_TEST_LANE_ID``, stripped, is not a lane id
+    the readiness probe accepts, ``TEST_LANE_ID_MIN_LENGTH`` to ``TEST_LANE_ID_MAX_LENGTH`` characters (H-49)."""
+    lane_id = (owning_test_lane_id() or "").strip()
+    return is_test_mode() and not TEST_LANE_ID_MIN_LENGTH <= len(lane_id) <= TEST_LANE_ID_MAX_LENGTH
 
 
 def check_test_mode() -> ConfigCheck:
     """``LIBREFOLIO_TEST_MODE`` on outside a test lane (H-46): an error in every profile.
 
-    A test lane owns ``LIBREFOLIO_TEST_LANE_ID``: ``configure_test_runtime`` sets it for the runner, ``dev.py server
-    --test`` and the gallery, and ``dev.py server`` removes it along with test mode. A server started otherwise with the
+    A test lane owns a ``LIBREFOLIO_TEST_LANE_ID`` the readiness probe accepts, 16 to 128 characters (H-49):
+    ``configure_test_runtime`` sets it for the runner, ``dev.py server --test`` and the gallery, and ``dev.py server``
+    removes it along with test mode. A server started otherwise with the
     variable on (``uvicorn`` directly, a service unit) serves the test-only providers (X-R44), keeps what is entered in
     the test data directory and reads no ``.env``. In the managed profile ``log_configuration_audit()`` stops the start
     on it. ``get_data_dir()`` is not guarded: a test data directory that cannot be used stops the start earlier, when
@@ -279,7 +282,9 @@ def log_configuration_audit() -> None:
         origin = configured_jwt_secret_origin() or "JWT_SECRET"
         raise WeakSecretError(f"In the managed profile the session signing key from {origin} must be at least {JWT_SECRET_MIN_LENGTH} characters long; it is {len(secret)}")
     if _test_mode_outside_a_lane() and get_settings().LIBREFOLIO_PROFILE == MANAGED_PROFILE:
-        raise ManagedTestModeError(f"In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): test-only providers would be served and the data kept in the test data directory {get_data_dir()}; unset LIBREFOLIO_TEST_MODE")
+        raise ManagedTestModeError(
+            f"In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID of {TEST_LANE_ID_MIN_LENGTH} to {TEST_LANE_ID_MAX_LENGTH} characters): test-only providers would be served and the data kept in the test data directory {get_data_dir()}; unset LIBREFOLIO_TEST_MODE"
+        )
     if instance_blocked():
         deletion_date = instance_deletion_date()
         logger.warning("Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): only a few API routes answer", deletion_date=deletion_date.isoformat() if deletion_date else None)
