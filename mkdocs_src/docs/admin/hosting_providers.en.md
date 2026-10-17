@@ -68,9 +68,11 @@ Today the profile changes seven things:
   the security checks: see «Startup Checks» in [Configuration](configuration.md).
 - **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
   `Content-Security-Policy: frame-ancestors 'self'` to every response: a browser then shows
-  LibreFolio in a frame only inside LibreFolio's own pages. If your hosting panel, or any page at
-  another address, shows the app in a frame, the browser refuses to display it there: set
-  `LIBREFOLIO_FRAME_PROTECTION=false` for those instances.
+  LibreFolio in a frame only inside LibreFolio's own pages, whose policy also carries
+  `object-src 'none'; base-uri 'self'; form-action 'self'`, three directives that block nothing
+  LibreFolio uses (see «Main Options» in [Environment Variables](configuration.md)). If your hosting
+  panel, or any page at another address, shows the app in a frame, the browser refuses to display it
+  there: set `LIBREFOLIO_FRAME_PROTECTION=false` for those instances.
 - **The report-only Content-Security-Policy** blocks nothing. On the pages of the web app (not the
   documentation, not the API), it tells the browser where a page may load its content from; the
   browser lists what falls outside in its developer console and sends no report anywhere: LibreFolio
