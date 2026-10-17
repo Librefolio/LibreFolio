@@ -5366,7 +5366,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
-### X-R75 (per X) — il modale delle rotte di cambio cancella prima di salvare; e togliere ogni rotta cancella la coppia (2026-10-17, dalle 16:42) — ⏳ in corso
+### X-R75 (per X) — il modale delle rotte di cambio cancella prima di salvare; e togliere ogni rotta cancella la coppia (2026-10-17, 16:42-18:33) — ✅ 🧊 FROZEN (checkpoint delle 18:33)
 
 > **Assegnazione** (coordinatore, 16:42; trovata da E): «the FX route modal deletes before it posts
 > (`FxPairAddModal.svelte` ~325-339)… If the POST fails (a 422, a network error, a server restart), the routes are
@@ -5461,6 +5461,23 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   `git diff --check` pulito; porta libera.
 > - 🧊 **FROZEN for base update** (18:05): il frontend è finito. Il backend (`providers.py`) aspetta il merge di dev con
 >   X-R74, che fa il coordinatore.
+> - **Base aggiornata** (coordinatore, 18:04): il mio checkpoint `5cbc60844` più il diario, fino a `73627df26`; dev
+>   `1eeb297b2` entrato pulito, `087db9be5`. Porta X-R74 (`providers.py`: quattro 500 generici).
+> - ✅ **Patch del backend applicata** (18:05:18): `apply_xr75_be.py`, 3 operazioni in `providers.py`, ricontrollata dopo
+>   X-R74 (che non tocca i punti della patch). ruff e black puliti; `import backend.app.main` riuscito.
+> - ✅ **`api sync`** (18:10, nessun file tracciato cambiato: il client generato è ignorato da git) e **`front check`**
+>   (18:11): 0 errori, 0 avvisi. Il tipo di `{queries: {replace: true}}` ora esiste.
+> - ⏳ I verdi `api fx` ed E2E: slot chiesto alle 18:12.
+> - ✅ **Doc** (18:14-18:17, mentre lo slot era in coda): `mkdocs build` strict, `check-links`, gate 63.
+> - ✅ **Verdi** (slot del coordinatore, via libera alle 18:15 dopo la finestra di X; 18:18-18:31,
+>   `files/scripts/xr75_green_slot.sh`, ogni corsa ad attesa del carico a 5 minuti sotto 50):
+>   - `api fx`, tutto il file: **33 passati** (i 6 di X-R75 e le prove delle rotte 15-17);
+>   - `front-fx fx-detail`, i 2 test di X-R75: **2 passati**;
+>   - `front-fx fx-add-pair`, tutta la spec, per regressione (la chiamata di creazione condivide la riga cambiata):
+>     **11 passati**.
+>   - Porta 6187 libera.
+> - **Backlog**: X-R75 e il fratello dell'editor (che conta come salvate le date scartate) li scrive X nella sua
+>   sezione; il grafo non multiplo è entrato in X-R75 (coordinatore, 17:48). CHANGELOG: la riga 🐛 nell'handoff.
 
 ### B-43 + B-44 — una funzione sconosciuta nello schema dell'archivio diventa `database_damaged`; i testi di `trusted_schema` dopo H-51 (2026-10-17, 16:01-16:45) — ✅ 🧊 FROZEN (checkpoint delle 16:45)
 
