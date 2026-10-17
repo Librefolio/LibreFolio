@@ -6404,6 +6404,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     ai punti senza valore, e i giorni assenti restano uniti. Con la ricaduta (a), il badge «📈N» conta le date
     distinte (`renderedSignalPointCount`), giusto ora anche per RSI, CCI, MFI e StochRSI. Rivedono Y (renderer) e
     X (le due pagine). Dettagli: piano 05, §10 «J-21».
+  - ✅ 17/10, **J-21 bis** (nota di Y): con una finestra piccola su un asset poco scambiato, un'uscita arrivava a centinaia
+    di tratti, cioè di serie. Tetto `MAX_LINE_RUNS = 30`: oltre il tetto, un'uscita senza stile (o un'area) è una linea
+    unita, chiamata «(gaps joined)», più un avviso nel risultato, in 4 lingue. Nessun tratto di un punto con una
+    finestra di 3 o più. La cura vera è J-59. Dettagli: piano 05, §10 «J-21 bis».
 - **J-22 · Debito di traduzione di CP-10a (un solo Rolling Return, J-13)** — basso, documentazione; J, 16/10. Pagine EN
   cambiate di senso, senza stamp: `financial-theory/fundamentals/returns` (tutta la sezione Rolling Return; esce l'ancora
   `#rolling-return-sessions`), `financial-theory/technical-analysis/indicators/index` (introduzione, righe Rolling Return e
@@ -6648,7 +6652,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - ✅ 17/10: fatta da X come **X-R48** (dev `2ea54ff76`): il rifiuto `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST` (409)
     usa `costless_incoming_split_adjustments` di J; J ha rivisto dopo (OK). Il parente minore resta aperto come
     **X-R49** (di X).
-- **J-41 · Il costo Auto può finire sulla riga sbagliata** — medio, numeri; test-author di J, 17/10, letto nel codice,
+- ✅ **J-41 · Il costo Auto può finire sulla riga sbagliata** — medio, numeri; test-author di J, 17/10, letto nel codice,
   **da provare con un rosso**. Area di W.
   - Senza legame, `_find_created_tx_for_wac` (`auto_cost.py:158-183`) prende la riga più recente con stesso broker,
     asset, data e tipo.
@@ -6657,6 +6661,12 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - Varianti: una riga Auto seguita da una Manuale con la stessa chiave sovrascrive il costo Manuale; dal modale bulk
     (`{amount: "0"}`, `TransactionBulkModal.svelte:1099`) la riga mancata resta a 0 in silenzio.
   - **→ W** (coordinatore, 17/10).
+  - ✅ 17/10: già fatta, è **W-B67** (W, `279b3d5bd`, entrata con `ac92e6fae` alle 14:00): ogni create si costa sulla
+    propria riga (`context.created_by_index`, `_find_created_tx_for_wac` tolta) e le righe Auto in ordine di data
+    (N84). I due casi sono test di W-B67 per nome, rossi fino alla cura: `test_two_auto_rows_on_one_key_each_hold_the_
+    average_before_the_other` e `test_auto_then_manual_on_one_key_each_row_keeps_its_own_cost`
+    (`services transaction-cost-basis-rule`). La variante del modale bulk non può più accadere: nessuna riga resta
+    senza costo. Nessun codice da J. Vicina ma diversa: **J-57**. Dettagli: piano 05, §10 «J-41».
 - **J-42 · Il rapporto di uno SPLIT non è mai validato** — basso, numeri; test-author di J, 17/10, letto nel codice.
   Area di X. Un rapporto 0 o negativo si salva (P-10 lascia passare la modifica, il tipo non cambia). Quando una
   transazione lo lega, il motore solleva `ValueError` (`engine.py:226-227`) e il rapporto della Dashboard risponde
@@ -6828,6 +6838,62 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     c'è il gradino. A risoluzione giornaliera nulla cambia.
   - Cura possibile: aggregare l'uscita intera una volta sola, e dividerla in fette e tratti dopo l'aggregazione.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-21».
+- **J-59 · Una serie sola per uscita, con i vuoti dichiarati e i giorni assenti uniti** — basso, prestazioni e
+  chiarezza; J, 17/10 (nota di Y su J-21). **Dopo la 1.3**, file dei grafici, Y (FE2).
+  - Da J-21 una linea si divide in tratti ai punti senza valore, e ogni tratto è una serie ECharts lunga quanto
+    l'asse. Misurato sulle metriche mobili vere: con la finestra di default (90) c'è un tratto solo; con una finestra
+    piccola su un asset giornaliero poco scambiato (30–60 % di chiusure invariate) i tratti sono da 46 a 371.
+    Nessun tratto di un punto solo con una finestra di 3 o più. Per ora un tetto nel renderer (J-21 bis): oltre il
+    tetto l'uscita torna una linea unita, con un avviso.
+  - La cura vera: una serie per uscita, con dati a coppie (`[date, value]`, `[gapDate, null]`, `connectNulls:
+    false`). I giorni assenti non hanno elemento e restano uniti; un array allineato all'asse non lo permette, e
+    anche `'-'` vale null. I tratti del renderer restano, e i due costruttori dei grafici li fondono.
+  - File: `charts/signals/backendRenderer.ts` (una chiave di gruppo e la data del vuoto), `ChartSignal.ts` (il
+    tipo), `components/charts/chartCoreHelpers.ts` (`buildOverlaySignalSeries`), `LineChart.svelte` (la sua copia
+    del costruttore, `:505`) e i tooltip di `PriceChartFull.svelte:983-984` e `LineChart.svelte:810-811`, che
+    leggono `p.value` come numero o `{value}` e con le coppie stamperebbero l'array.
+  - Rossi: molti vuoti danno una serie sola; fine settimana uniti; vuoti spezzati; indicatori agli estremi;
+    valori del tooltip giusti. Stima ~3 h. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md),
+    sezione «J-21».
+- ✅ **J-57 · Una rettifica in Auto senza nulla da mediare si salva a costo 0** — medio, numeri (utenti non esperti);
+  J, 17/10 (analisi di J-41), letta nel codice. Area di W; da decidere insieme a J-11/J-35 (costo zero o ignoto).
+  - Un pool vuoto dà un costo medio di **0** nella valuta dell'asset, non None (`compute_wac_iterative`,
+    `portfolio_service.py:199-204`; documentato in `wac.md`, «with no rows left it returns a zero WAC»). Il risultato
+    è un `Currency` e quindi vero: `_write_auto_cost` (`transactions/auto_cost.py`) lo scrive. Il controllo del costo
+    salta le righe Auto (`batch_costs.py`).
+  - Il modulo parte in Auto (`TransactionFormModal.svelte:307`) e non avvisa di un suggerimento a 0. Una rettifica
+    in entrata su un broker che non ha mai avuto l'asset, salvata senza toccare il costo, è quindi un acquisto
+    gratuito (`ADD_ZERO_COST`): Dashboard e lotti mostrano tutto il valore come guadagno. Salvata senza costo, la
+    stessa riga avrebbe costo ignoto (`ADD_UNKNOWN_COST`).
+  - Un TRANSFER ricevuto da un pool vuoto dà 0 anch'esso (`test_wacp27_empty_pool_wac_zero` lo fissa nella
+    validazione), ma il controllo dei saldi lo rifiuta al salvataggio: il mittente andrebbe sotto zero.
+  - Cure possibili: (a) rifiutare con un messaggio tradotto («niente da mediare: inserisci il costo»); (b) costo
+    ignoto, come una rettifica senza costo, e il risultato lo dice; (c) tenere lo 0 e avvisare nell'anteprima. Prima
+    un rosso. Dettagli: piano 05, §10 «J-41».
+  - Decisione del coordinatore, notturna **N88** (17/10, da rivedere dal developer): (a), rifiutare. Due codici,
+    `autoCostEmptyPool` (nessuna unità nel pool alla data: mai avute o vendute tutte) e `autoCostUnknownPool` (unità
+    tenute, nessuna a costo noto). Un pool di unità gratuite tiene il suo 0; uno 0 scritto a mano resta accettato.
+    Solo le righe Auto del lotto: passaggi di decisione 47, `delete_by_broker`, `POST /portfolio/wac` e PAC invariati.
+    Il costo in parte ignoto è **J-58**.
+  - ✅ 17/10: fatta da J (W rivede).
+    - Il motore ne dà lo stato tramite una facciata sorella, `wac_pool_holding()` in `portfolio_service.py`, senza
+      cache e chiamata solo quando la media è 0.
+    - La cache di `compute_wac_iterative` resta com'era.
+    - 11 rossi più P27 (`test_wacp27_empty_pool_is_refused`).
+    - Verdi: `transaction-cost-basis-rule` 189, `api transactions-wac` 20, `roi-fifo-utils` 1 439, e i 6 E2E del costo
+      Auto.
+    - Dettagli: piano 05, §10 «J-57».
+- **J-58 · Il costo Auto di un pool in parte a costo ignoto è sottostimato, in silenzio** — medio, numeri; J, 17/10
+  (analisi di J-57). **Da decidere (developer)**; proposta: rifiutare, come N88.
+  - Un'acquisizione senza costo entra nel motore come `ADD_UNKNOWN_COST`: la quantità sale, il costo no, e il pool
+    resta «incompleto» (`report_complete=False`) finché non si svuota. `compute_wac_iterative` non guarda la
+    completezza: la media è il costo noto diviso per tutte le unità. BUY 10 per 1 000 € più 10 ricevute senza costo:
+    una rettifica Auto si salva a 50 € invece di «ignoto».
+  - N88 rifiuta solo lo 0 (nessuna unità, o nessuna a costo noto). Il caso in parte noto cambia un flusso che oggi
+    funziona per chi importa (righe senza costo da broker esterni), quindi la scelta è del developer.
+  - Cura proposta: lo stesso rifiuto quando il pool è incompleto, con un codice proprio. In alternativa, un avviso
+    nell'anteprima. Un controllo che fissa il valore di oggi c'è già (J-57, C4).
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-57».
 
 ## Z · Sospensione e risveglio (fase 01)
 
