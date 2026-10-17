@@ -48,7 +48,7 @@ How much money did your investments make in the selected period? The **Period P&
     $$
 
     - **Sign and colour follow the change**, even while the Total P&L is a loss: from `-558.10 €` to `-466.79 €`, the line reads `+91.31 € (+16.36%)` — your loss shrank by 16.36%.
-    - **It needs two days of history**; the percentage is left out when yesterday's Total P&L is exactly zero, and a day without change shows `0.00%`.
+    - **It is missing only when the period ends on your portfolio's first day**, as there is no day before to compare with; the percentage is left out when yesterday's Total P&L is exactly zero, and a day without change shows `0.00%`. On a Monday the line covers the whole weekend, since a day without a market keeps the last trading day's prices.
 
 ### 💱 Unrealized change by currency {: #unrealized-change-by-currency }
 
@@ -105,7 +105,7 @@ How well did your money work, whatever the size of your portfolio? The **Returns
     \text{percentage} = \frac{\text{Total P}\&\text{L}_{\text{today}} - \text{Total P}\&\text{L}_{\text{yesterday}}}{\left|\text{Net Worth}_{\text{yesterday}}\right|} \times 100
     $$
 
-    Its sign and colour follow the change, as on Card 1. It needs two days of history and is hidden when yesterday's net worth was exactly zero.
+    Its sign and colour follow the change, as on Card 1. It is missing when the period ends on your portfolio's first day and is hidden when yesterday's net worth was exactly zero.
 
 ---
 
