@@ -3524,6 +3524,14 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     / H-28.
 
   Dettagli: piano H, §14, «Residuo di H-24».
+  - Cura fatta il 17/10 (lotto «H-27», piano H §14).
+    - `profile_default()` accetta solo un valore del tipo esatto del ripiego; un altro tipo alza
+      `ProfileDefaultError` (un `TypeError`) e il lettore si ferma: un `None` non diventa più «nessun limite».
+    - Una guardia statica in `services profile-defaults` confronta il ripiego letterale di ogni chiamata con le voci
+      dei profili.
+    - Nessun controllo all'avvio: il tipo atteso lo conosce solo il lettore.
+    - Resta a B, se lo vuole: con una tabella sbagliata le due rotte di `restore.py` rispondono 500, perché catturano
+      solo `BackupConfigError`; per il suo 503 basta catturare anche `ProfileDefaultError`.
 - **H-28 · Il catch-all della SPA serve i file nascosti di `frontend/build/`** — basso, sicurezza (informazione); H
   (analisi del residuo di H-24), 17/10.
   - `frontend_catchall()` (`backend/app/services/platform/static_site.py` ~130) serve qualunque file che
@@ -3547,6 +3555,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura proposta: la stessa regola di `_hidden_in_build()` nei due percorsi, con un test ciascuno.
 
   Dettagli: piano H, §14, «Residuo di H-24 e H-28».
+  - Cura fatta il 17/10 (lotto «H-29 e H-30», piano H §14).
+    - `ImmutableStaticFiles.get_response()` dà a un nome nascosto il 404 di un file mancante;
+    - `mkdocs_static()` gli dà il 404 della documentazione, attraverso `_hidden_below()`, che usa anche il catch-all.
 - **H-30 · `python -m scripts.test_runner --log-file` non fotografa il DB se il corpo alza un'eccezione** — basso,
   runner; H (test-author di H-26), 17/10.
   - Nel ramo `--log-file` di `main()` (`scripts/test_runner/_cli.py`), `_snapshot_log_dir_db()` segue
@@ -3555,6 +3566,32 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura proposta: lo stesso `try/finally`, con un test.
 
   Dettagli: piano H, §14, «Residuo di H-24 e H-28».
+  - Cura fatta il 17/10 (lotto «H-29 e H-30»): il `try/finally` dentro il `with` di `tee_output`, come in
+    `_dispatch_test_command`.
+- **H-31 · `blocked` nel pubblico `/system/instance`** — basso, facoltativo; E (E-11) e coordinatore, 17/10.
+  - Le pagine anonime dei link (A7b) deducono il blocco dal 401 di una rotta pubblica fuori lista. Un booleano
+    `blocked` in `GET /system/instance`, che è permesso a istanza bloccata, lo direbbe senza deduzioni e senza
+    dettagli: la data di cancellazione resta dietro login in `/system/block`.
+  - Non serve per E-11: E lo risolve nei suoi file, con il 401 `INVALID_CREDENTIALS` della sola `resend`.
+  - Scelto (a) invece di (b), un codice nel 401 anonimo del blocco: con (b) una rotta protetta non risponderebbe più
+    allo stesso modo con o senza blocco.
+
+  Dettagli: piano H, §14, lotto «H-29 e H-30».
+- **H-32 · Un `float` nel corpo di una richiesta accetta `1E+400`** — basso, API; A (A-35), via coordinatore, 17/10.
+  - Pydantic accetta `inf` e `nan` di default (`allow_inf_nan=True`): la richiesta riceve 200. Se una rotta
+    restituisce il valore così com'è, il renderer di Starlette (`allow_nan=False`) fallisce con un 500.
+  - Direzione: un inventario dei campi `float` degli schemi dei corpi; poi forse `allow_inf_nan=False` nel modello
+    base, o `Decimal` dove sono soldi.
+
+  Dettagli: piano H, §14, lotto «H-29 e H-30».
+- **H-33 · Senza un gestore di `ResponseValidationError`, il log del server contiene la risposta** — basso,
+  sicurezza (log); E (R13-SEC4), via coordinatore, 17/10.
+  - Quando una risposta non passa il suo `response_model`, FastAPI alza `ResponseValidationError`. Nessuno la gestisce,
+    quindi il traceback che uvicorn scrive nel log porta l'`input`: la risposta stessa, con i dati che conteneva.
+  - Cura proposta: un gestore, accanto a quello globale dei 422 di A (A-35, lotto A7b-2), che registra la rotta e gli
+    errori senza il valore e risponde 500.
+
+  Dettagli: piano H, §14, lotto «H-29 e H-30».
 
 ## A · Account e accessi (fase 01)
 
@@ -4103,7 +4140,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `afterEach` aspetta `vi.dynamicImportSettled()`, alla sua prima volta nel repo.
   - Il file da solo dà 5/5, e il primo caso passa da 437 a 57 ms; `core-unit` è verde.
   - Commit del coordinatore, lotto X-R21. Dettagli: piano 03, sezione «X-R21».
-- **X-R22 · L'invito a reinserire un segreto illeggibile non dice di ripristinare prima la vecchia chiave** — basso,
+- ✅ **X-R22 · L'invito a reinserire un segreto illeggibile non dice di ripristinare prima la vecchia chiave** (chiusa il
+  17/10: `375d09db3`, entrata in dev `618563949`) — basso,
   testi; da H (H-3, opzione B), girata a X dal coordinatore il 16/10.
   - **Il problema**: salvare un segreto riscrive la sua riga con la chiave attuale. Se l'amministratore ripristina poi
     la vecchia chiave d'istanza, il segreto appena reinserito diventa illeggibile a sua volta.
@@ -4236,7 +4274,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-R34 · Doc: `asset_plugin_guide.md` «How It Works» dice che il frontend chiama `GET …/search`** — basso; X, 17/10
   (trovato dal docs-writer).
   - In realtà il frontend usa prima lo streaming (`…/search/stream`), e il REST solo come ripiego.
-- **X-R35 · `env_url` accetta `user:pass@` e lo pubblica** — piccolo, **prima del rilascio**; da E (piano 08,
+- ✅ **X-R35 · `env_url` accetta `user:pass@` e lo pubblica** (chiusa il 17/10: `4e06d78ff`, entrata in dev
+  `67668f5ce`) — piccolo, **prima del rilascio**; da E (piano 08,
   revisione di sicurezza «R13-SEC2»), assegnata a X dal coordinatore il 17/10.
   - Un indirizzo con utente e password passa il validatore e finisce sull'anonimo `GET /system/instance`.
   - Cura: il validatore della configurazione rifiuta utente e password. Copre anche `LIBREFOLIO_PUBLIC_URL` e
@@ -4245,7 +4284,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `services/assets/core.py:81`. Oggi è innocuo: i prezzi sono condivisi e una collisione mescola solo due asset con
     parametri diversi.
   - Diventa **MEDIO** il giorno in cui gli asset avranno un proprietario: allora serve un'impronta piena.
-- **X-R37 · P20 nell'interfaccia: le 4 note di E** — piccolo, **prima di O-8**; da E («R13-SEC2/SEC3»), 17/10.
+- ✅ **X-R37 · P20 nell'interfaccia: le 4 note di E** (chiusa il 17/10: `c7434f00c`, entrata in dev `908fe6c90`) —
+  piccolo, **prima di O-8**; da E («R13-SEC2/SEC3»), 17/10.
   1. `assetSearchReport.ts:70-74`: il controllo legge il valore senza base, così `https:host` passa e, come `href`, si
      risolve sull'istanza. Usare `url.href`.
   2. **N61** (decisione notturna del coordinatore): su `managed`, senza un `support_url` valido, o con
@@ -4262,6 +4302,24 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Direzione** (la stessa di W-B58): un limite alle cifre intere in ogni scrittura dei cambi (manuale, provider,
     inverso), una lettura che non solleva mai, un 4xx e mai un 500.
   - Riusare l'helper di W `max_integer_digits(model, column)` in `db/precision.py`, che entra con W-B58.
+- **X-R39 · Editor dei dati dell'asset: le stranezze trovate con O-8** — basso; X, 17/10 (dal test-author di O-8; già
+  presenti prima di O-8).
+  - I conteggi non sono simmetrici: gli eventi eliminati vengono dal server, quelli salvati dal client. Le righe di
+    evento non valide si scartano in silenzio, mentre per i prezzi c'è il conteggio delle righe scartate.
+  - Un salvataggio sono tre richieste separate (prezzi aggiornati, prezzi cancellati, eventi): un errore può arrivare
+    dopo una scrittura parziale, e il messaggio non lo dice.
+  - Le righe di prezzo vuote, scartate, allargano lo stesso l'intervallo del grafico dopo un salvataggio riuscito
+    (`expandedRange` legge tutte le righe `appended`).
+  - `onsave` non è atteso: un errore nel ricaricamento della pagina dopo il salvataggio non viene mai mostrato.
+  - Il banner d'errore dell'editor dei cambi non ha un `data-testid` (quello degli asset l'ha avuto con O-8).
+- **X-R40 · Prezzo corrente: la quotazione rifiutata torna lo stesso come prezzo dal vivo** — basso, **dopo X-R38**; X,
+  17/10 (le mie due note alla revisione di W-B58, accettate dal coordinatore).
+  - `services/assets/price_query.py` ~862–866: una quotazione che `storable_price` non può tenere non si salva, ma la
+    risposta la restituisce (`FACurrentPriceItem.value`, sorgente `provider:…`): un 1E+60 compare nella UI come prezzo
+    dal vivo, anche se il DB l'ha rifiutato. Cura: rispondere con un errore per la voce, come «No price data available».
+  - ~865: l'avviso si ripete a ogni interrogazione della stessa quotazione (lo scheduler ogni 10 minuti, più ogni pagina
+    aperta). Cura: una volta per (asset, valore) per processo (`functools.cache`, come `_report_invalid`), oppure
+    `info`.
 
 ## W · Import e transazioni (fase 01)
 
@@ -5578,8 +5636,9 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - L'invariante: nessuna email che un estraneo può indirizzare porta testo scelto da lui.
     - Il DoS sul budget d'istanza, fatto con tante caselle diverse, è una domanda del cloud per il developer
       (coordinatore). Resta E-12.
-    - Dettagli: piano 08, «E-9.0» ed «E-9.1».
-- **E-11 · Su un'istanza bloccata, «Send the link again» legge il 401 del blocco come credenziali sbagliate** —
+    - Dettagli: piano 08, «E-9.0»…«E-9.2».
+    - Commit `3dd23eaa4` (codice), `bb392de35` (docs), `7fc549fea` (journal); in `dev_release2` col merge `49c07a95a`.
+- ✅ **E-11 · Su un'istanza bloccata, «Send the link again» legge il 401 del blocco come credenziali sbagliate** —
   minimo; E, 16/10 (E-10, nota del `test-author`).
   - `POST /email/verification/resend` è fuori da `ALLOWED_WHEN_BLOCKED`, quindi un chiamante anonimo riceve il 401 di
     `get_current_user`, e `readResendFailure()` legge ogni 401 come `INVALID_CREDENTIALS`: l'avviso dice che username
@@ -5594,6 +5653,17 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - leggere il testo di `detail`, che è fragile.
 
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-10».
+  - 17/10, E: chiusa.
+    - A7b non la risolve: A-13 tiene fuori dal redirect al login solo le pagine dei link, mentre «Send the link again»
+      sta su `/`.
+    - La strada scelta sta tutta nei file di E:
+      - il 401 della rotta è ora codificato (`{"error_code": "INVALID_CREDENTIALS", …}`);
+      - `readResendFailure()` legge ogni altro 401, o il 423 `instance_blocked`, come il blocco;
+      - l'avviso mostra `auth.instanceBlocked`, la chiave di A7b.
+    - Resta giusta anche se H darà un codice al rifiuto anonimo del blocco.
+    - EVA-017 fissa `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`.
+    - Dettagli: piano 08, «E-11.0» e seguenti.
+    - Commit `18d945d2e` (codice), `f2b459ebe` (docs), `fdd4acc6d` (journal); in `dev_release2` col merge `bca4bd6d3`.
 - **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
   `mailbox_budget_key()` unisce gli alias `+tag` e i punti di Gmail. Restano due casi:
   - un dominio catch-all, dove ogni parte locale arriva alla stessa casella;
