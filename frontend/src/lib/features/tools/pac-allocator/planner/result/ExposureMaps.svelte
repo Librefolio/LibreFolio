@@ -45,9 +45,9 @@
     import {exposureTooltipHtml, exposureTooltipText} from './exposureTooltip';
     import {chartPercent, type MapWeightRow} from './model';
     import {themed} from '$lib/theme/themePair';
-    import {GEO_MAP_COLORS} from '$lib/theme/chartTheme';
+    import {chartNeutrals, GEO_MAP_COLORS} from '$lib/theme/chartTheme';
     import {GEO_CHOROPLETH_SCALE} from '$lib/theme/chartPalettes';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
     const KEY = 'tools.pacAllocator.planner.result';
 
     interface Props {
@@ -66,6 +66,8 @@
     let geoNames = $state<Record<string, string> | null>(null);
     let failed = $state(false);
     let dark = $state(false);
+    /** Bumped by the Designer Lab's colour edits (C4): the options are rebuilt and their roles read again. */
+    let colorsVersion = $state(0);
     let frame = $state<HTMLDivElement | null>(null);
     const containers = $state<Record<Side, HTMLDivElement | null>>({target: null, final: null});
     const charts: Record<Side, echarts.ECharts | null> = {target: null, final: null};
@@ -100,6 +102,9 @@
         };
         readTheme();
         const observer = onThemeClassChange(readTheme);
+        const chartColors = onChartColorsChange(() => {
+            colorsVersion += 1;
+        });
         loadWorldMap()
             .then((names) => {
                 geoNames = names;
@@ -111,6 +116,7 @@
         return () => {
             renderGeneration += 1;
             observer.disconnect();
+            chartColors.disconnect();
             resizeWatcher.disconnect();
             for (const side of SIDES) release(side);
         };
@@ -130,7 +136,10 @@
     });
 
     function option(side: Side): echarts.EChartsOption {
-        const theme = buildTooltipTheme(dark);
+        void colorsVersion;
+        // The roles of the maps' own frame: both maps sit in it.
+        const neutrals = chartNeutrals(dark, frame);
+        const theme = buildTooltipTheme(dark, frame);
         const tooltipText = text;
         const rowsByName = byGeoName;
         return {
@@ -157,7 +166,7 @@
                     // A country outside the plan has no box: only the plan's countries switch it back on.
                     tooltip: {show: false},
                     emphasis: {label: {show: false}, itemStyle: {areaColor: themed(GEO_MAP_COLORS.highlight, dark)}},
-                    itemStyle: {areaColor: themed(GEO_MAP_COLORS.land, dark), borderColor: themed(GEO_MAP_COLORS.border, dark), borderWidth: 0.5},
+                    itemStyle: {areaColor: themed(GEO_MAP_COLORS.land, dark), borderColor: neutrals.geoMap.border, borderWidth: 0.5},
                     label: {show: false},
                     data: placed.map((row) => ({name: geoName(row) as string, value: chartPercent(side === 'target' ? row.target : row.final) ?? '-', tooltip: {show: true}})),
                 },

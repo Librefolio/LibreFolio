@@ -1,6 +1,6 @@
 # 🏭 Registries & Caches
 
-*Status: Implemented (Mar 2026) · asset price registry and image preview cache: Jun 2026*
+*Status: Implemented (Mar 2026) · asset price registry and image preview cache: Jun 2026 · stale after a price catch-up: Oct 2026*
 
 The **Registries & Caches** category holds the client-side caches for data that the frontend loads in pieces and reuses across pages: the daily price series of each asset, the daily rate series of each FX pair, and the object URLs of image previews.
 
@@ -25,6 +25,7 @@ config:
 ---
 graph TD
     Page["📄 Page: assets list, asset detail, FX list, FX detail"]
+    Bus["📣 portfolioMutation.ts: end of a price catch-up (notifyPricesCaughtUp)"]
 
     subgraph Registries ["🏭 Registries: module-level Maps"]
         AP["assetPriceStoreRegistry: 42:EUR, 42:USD, …"]
@@ -41,6 +42,7 @@ graph TD
     Page -->|"getFxStore(slug)"| FX
     AP -->|"created on the first request, same instance afterwards"| Store
     FX -->|"created on the first request, same instance afterwards"| Store
+    Bus -->|"kind: prices only, markStale() on every store"| Store
     Store --> Gaps
     Gaps -->|"no gap: read from memory"| Read
     Read --> State
@@ -54,9 +56,10 @@ The portfolio figures do not come from these stores: the backend computes the po
 ### 🧠 How it Works
 
 1. **Getting a store**: a page asks the registry for the store of its key: `getAssetPriceStore(assetId, currency)`, which upper-cases the currency into the key, or `getFxStore(slug)` (`getFxStoreByPair(base, quote)` builds the slug first). The first request creates an empty `TimeSeriesStore` (`stores/core/TimeSeriesStore.ts`); every later request returns the same instance.
-2. **Finding the gaps**: `store.getMissingIntervals(start, end)` lists the date intervals of the range that hold no point and were never marked fetched. With no gap, the page reads `store.getRange(start, end).data` instead of asking the backend for prices or rates (the asset detail page still asks for its events, and backend-computed signals are still requested), so narrowing or widening the range is instant once it is loaded.
+2. **Finding the gaps**: `store.getMissingIntervals(start, end)` lists the date intervals of the range that hold no point and were never marked fetched; in a store a price catch-up made stale, the intervals not fetched since, points or not (step 5). With no gap, the page reads `store.getRange(start, end).data` instead of asking the backend for prices or rates (the asset detail page still asks for its events, and backend-computed signals are still requested), so narrowing or widening the range is instant once it is loaded.
 3. **Fetching and merging**: otherwise the data is requested, `store.merge(points)` upserts the answer by date, and `store.markFetched(start, end)` records the range as fetched (the asset pages do so only when the answer holds points). Asset prices are requested for the whole range, not gap by gap: each item of `POST /api/v1/assets/prices/query` carries one `date_range`. FX rates come from `POST /api/v1/fx/currencies/convert`, one item per gap, or one for the whole range when the request also asks for signals.
 4. **Invalidating**: after a sync or a refresh, `invalidateAssetPriceStore(assetId)` empties every currency store of the asset. The FX pages empty every FX store with `invalidateAllFxStores()` or one range of a pair with `store.invalidateRange(start, end)`, and `removeFxStore(slug)` drops the store of a deleted pair.
-5. **Lifetime**: nothing counts subscribers and nothing is evicted. `TimeSeriesStore` is a plain class, not a Svelte store: each page copies what it reads into its own `$state`. The stores stay in memory as long as the loaded app: a logout does not clear them, a page reload does. `removeAssetPriceStore(assetId)` exists for asset deletion, but nothing calls it.
+5. **Going stale after a price catch-up**: when a price catch-up on the server has updated something, `notifyPricesCaughtUp()` sends `{kind: 'prices'}` on the portfolio bus (`stores/portfolio/portfolioMutation.ts`, see [Updating prices…](../components/features/live-ticker.md#price-refresh)). Each registry registers a listener when it is imported, under its own name (`registerPortfolioMutationListener('assetPriceStoreRegistry', …)`, `'fxStoreRegistry'`), and on that kind alone calls `markStale()` on every store it holds: `kind: 'mutation'` (among others the live-price poll writing today's candle, every 30 s on an asset's page) and `kind: 'refresh'` (the portfolio's **Refresh**) leave the stores alone. A stale store keeps its points — `get`, `has`, `size`, `getRange` and `getAllSorted` answer as before — and drops its fetched marks: `getMissingIntervals(start, end)` then returns the parts of the range that no `markFetched` made after the mark covers, even where the store holds points, so the next read of a range asks the server again, once; the fetches made after the mark add up. `lookupFxRate` takes a stale cached day for a miss: it asks the server for that day and marks it fetched, while `lookupFxRateSync` stays a pure cache read. `invalidateAll()` ends the stale state; `invalidateRange()` does not. The mark ignores the points because the price and rate answers fill the days without a value backward (`backward_fill_info`): a loaded store holds a point for every day, so the days a catch-up filled are not gaps. And it is a mark rather than `invalidateAll()` because many reads are synchronous (`getRange`, `getAllSorted`, `lookupFxRateSync`): an emptied store would leave them blank, with nobody to reload them. So the next visit of a price or FX page, or its next change of range, shows the page's loading state once, as on a first visit; a page already open during the catch-up keeps its chart until its next load (backlog Z-14b).
+6. **Lifetime**: nothing counts subscribers and nothing is evicted. `TimeSeriesStore` is a plain class, not a Svelte store: each page copies what it reads into its own `$state`. The stores stay in memory as long as the loaded app: a logout does not clear them, a page reload does. `removeAssetPriceStore(assetId)` exists for asset deletion, but nothing calls it.
 
 `ensureAssetPriceRangeLoaded(assetId, currency, start, end, {targetCurrency})` and `ensureFxRangeLoaded(slug, start, end)` wrap steps 2 and 3 in one call and return the cached points of the range; `ensureFxRangeLoadedBulk` does the same for several pairs in one request. They mark a range fetched even when the answer is empty or a 404, so it is not requested again; any other error (network, 5xx) leaves it unmarked, and the next call retries. `ensureFxRangeLoaded` loads the FX overlays of the FX detail page and the FX data of the asset pages; the other two are called only by their unit tests. The asset pages run steps 2 and 3 inline: the assets list sends one `POST /api/v1/assets/prices/query` for every asset that misses prices or needs backend signals, and the asset detail page asks for events and signals in the same request. On the FX side, `loadFxRatesAndSignalsBulk` loads the rates and signals of the FX list cards in one request, and `lookupFxRate(base, quote, date)` answers one day's rate for the transaction modals, reading the cache first (`lookupFxRateSync`).

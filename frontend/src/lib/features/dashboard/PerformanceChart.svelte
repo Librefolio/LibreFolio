@@ -29,8 +29,8 @@
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
-    import {CHART_GAIN_LOSS, PERFORMANCE_COLORS} from '$lib/theme/chartTheme';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {CHART_GAIN_LOSS, chartNeutrals, PERFORMANCE_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface AssetPeriodContribution {
         asset_id: number;
@@ -300,7 +300,7 @@
         const colors = palette(themeDark);
         if (amount > 0) return colors.positive;
         if (amount < 0) return colors.negative;
-        return themed(PERFORMANCE_COLORS.zeroValue, themeDark);
+        return chartNeutrals(themeDark, chartContainer).performance.zeroValue;
     }
 
     let labels = $derived.by(() => ({
@@ -433,18 +433,19 @@
     }
 
     function buildAxisRich(themeDark: boolean, desktop = false) {
+        const neutrals = chartNeutrals(themeDark, chartContainer);
         return {
             name: {
-                color: themed(PERFORMANCE_COLORS.axisName, themeDark),
+                color: neutrals.performance.axisName,
                 fontSize: desktop ? 14 : 11,
                 fontWeight: 500,
             },
             secondary: {
-                color: themed(PERFORMANCE_COLORS.axisSecondary, themeDark),
+                color: neutrals.performance.axisSecondary,
                 fontSize: 10,
             },
             section: {
-                color: themed(PERFORMANCE_COLORS.axisSection, themeDark),
+                color: neutrals.performance.axisSection,
                 fontSize: 10,
                 fontWeight: 700,
                 padding: [4, 0, 0, 0],
@@ -513,7 +514,7 @@
     }
 
     function buildTooltip(row: ChartRow, themeDark: boolean): string {
-        const theme = buildTooltipTheme(themeDark);
+        const theme = buildTooltipTheme(themeDark, chartContainer);
 
         if (row.kind === 'other') {
             const pnlHtml = `<span style="color:${signValueColor(row.net, themeDark)}">${escapeHtml(formatCurrencyAmountPlain(row.net, displayCurrency, {showSign: true}))}</span>`;
@@ -612,6 +613,7 @@
 
     function buildSeries(themeDark: boolean): echarts.SeriesOption[] {
         const colors = palette(themeDark);
+        const neutrals = chartNeutrals(themeDark, chartContainer);
 
         // Mobile only: label slot and bar slot are 2 separate y-axis categories, so
         // ECharts' built-in axisPointer shadow (which highlights one category band at
@@ -653,7 +655,7 @@
                         height: yBottom - yTop + bandSize,
                     },
                     style: {
-                        fill: themed(PERFORMANCE_COLORS.rowHighlight, themeDark),
+                        fill: neutrals.performance.rowHighlight,
                     },
                 };
             },
@@ -716,7 +718,7 @@
                     symbol: 'none',
                     label: {show: false},
                     lineStyle: {
-                        color: themed(PERFORMANCE_COLORS.zeroLine, themeDark),
+                        color: neutrals.performance.zeroLine,
                         width: 1,
                         opacity: 0.75,
                     },
@@ -807,7 +809,7 @@
                         y2: y,
                     },
                     style: {
-                        stroke: themed(PERFORMANCE_COLORS.sectionSeparator, themeDark),
+                        stroke: neutrals.performance.sectionSeparator,
                         lineWidth: 1,
                     },
                 };
@@ -929,8 +931,9 @@
     }
 
     function buildOption(themeDark: boolean): echarts.EChartsOption {
-        const theme = buildTooltipTheme(themeDark);
-        const gridColors = buildGridColors(themeDark);
+        const neutrals = chartNeutrals(themeDark, chartContainer);
+        const theme = buildTooltipTheme(themeDark, chartContainer);
+        const gridColors = buildGridColors(themeDark, chartContainer);
 
         return {
             animationDuration: 250,
@@ -958,7 +961,7 @@
                     // so the native shadow already covers the whole row correctly.
                     type: isMobile ? 'none' : 'shadow',
                     shadowStyle: {
-                        color: themed(PERFORMANCE_COLORS.axisPointerShadow, themeDark),
+                        color: neutrals.performance.axisPointerShadow,
                     },
                 },
                 position: performanceTooltipPosition,
@@ -1121,10 +1124,12 @@
             syncTheme();
             renderChart();
         });
+        const chartColors = onChartColorsChange(() => renderChart());
 
         return () => {
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
+            chartColors.disconnect();
             resizeWatcher.disconnect();
             if (chartInstance) delete (chartInstance.getDom() as unknown as Record<string, unknown>).__lfChart;
             chartInstance?.dispose();

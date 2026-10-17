@@ -52,8 +52,8 @@
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
-    import {LOT_CHART_COLORS, LOT_GANTT_COLORS} from '$lib/theme/chartTheme';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {chartNeutrals, LOT_GANTT_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -237,6 +237,13 @@
     let axisDataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let axisDataZoomSyncHandle: DataZoomSyncHandle | null = null;
     let isDark = $state(false);
+    /** Bumped by the Designer Lab's colour edits (C4): the chart's roles are read again at the next draw. */
+    let chartColorsRevision = $state(0);
+    /** The neutrals of the chart (B4), read on its own element: again when the theme or a Lab colour changes. */
+    let neutrals = $derived.by(() => {
+        void chartColorsRevision;
+        return chartNeutrals(isDark, chartContainer);
+    });
     let overlayRects = $state<OverlayRect[]>([]);
     let axisScrollLeft = $state(0);
     let axisContentWidthPx = $state(CHART_MIN_WIDTH);
@@ -855,7 +862,7 @@
                 const baseColor = segmentBaseColor(meta, themeDark);
                 const selected = selectedLotIdSet.has(meta.lotId);
                 const pulsing = pulseState?.lotId === meta.lotId;
-                const borderColor = pulsing ? themed(LOT_GANTT_COLORS.pulseBand.stroke, themeDark) : selected ? themed(LOT_GANTT_COLORS.selectedSegmentBorder, themeDark) : withAlpha(baseColor, themeDark ? 0.92 : 0.85);
+                const borderColor = pulsing ? themed(LOT_GANTT_COLORS.pulseBand.stroke, themeDark) : selected ? neutrals.lots.gantt.selectedSegmentBorder : withAlpha(baseColor, themeDark ? 0.92 : 0.85);
                 const label = buildSegmentLabel(meta, Math.max(0, rectShape.width - 24));
                 const labelFits = rectShape.width >= 28;
                 const edgeMarkerX = Math.max(coordSys.x + 4, Math.min(rectShape.x + 8, coordSys.x + coordSys.width - 6));
@@ -898,7 +905,7 @@
                             ],
                         },
                         style: {
-                            stroke: themed(LOT_GANTT_COLORS.lineageConnector, themeDark),
+                            stroke: neutrals.lots.gantt.lineageConnector,
                             lineWidth: 1.5,
                             fill: 'none',
                         },
@@ -946,7 +953,7 @@
                         y: startCoord[1],
                         style: {
                             text: label,
-                            fill: themed(LOT_GANTT_COLORS.segmentLabel, themeDark),
+                            fill: neutrals.lots.gantt.segmentLabel,
                             fontSize: 11,
                             fontWeight: pulsing ? 700 : 600,
                             textAlign: 'left',
@@ -992,7 +999,7 @@
                     style: {
                         text: eventMarkerSymbol(meta.kind),
                         fill: color,
-                        stroke: themed(LOT_CHART_COLORS.markerRing, themeDark),
+                        stroke: neutrals.lots.markerRing,
                         lineWidth: 3,
                         fontSize: meta.kind === 'SPLIT' ? 18 : 15,
                         fontWeight: 800,
@@ -1351,10 +1358,15 @@
             syncTheme();
             renderChart();
         });
+        const chartColors = onChartColorsChange(() => {
+            chartColorsRevision += 1;
+            renderChart();
+        });
 
         return () => {
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
+            chartColors.disconnect();
             resizeWatcher.disconnect();
             axisResizeWatcher.disconnect();
             dataZoomTouchPanHandle?.dispose();
@@ -1444,7 +1456,7 @@
         <div class="flex w-fit overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium" data-testid="lot-gantt-state-filter">
             <button
                 class="px-3 py-1 transition-colors {openSelected ? '' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                style={openSelected ? `background-color:${lotStateColor('OPEN', isDark)};color:${themed(LOT_GANTT_COLORS.stateChipText, isDark)}` : ''}
+                style={openSelected ? `background-color:${lotStateColor('OPEN', isDark)};color:${neutrals.lots.gantt.stateChipText}` : ''}
                 onclick={() => onToggleOpen?.()}
                 data-testid="lot-gantt-filter-open"
                 aria-pressed={openSelected}
@@ -1454,7 +1466,7 @@
             </button>
             <button
                 class="border-l border-lf-subtle px-3 py-1 transition-colors {closedSelected ? '' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                style={closedSelected ? `background-color:${lotStateColor('CLOSED', isDark)};color:${themed(LOT_GANTT_COLORS.stateChipText, isDark)}` : ''}
+                style={closedSelected ? `background-color:${lotStateColor('CLOSED', isDark)};color:${neutrals.lots.gantt.stateChipText}` : ''}
                 onclick={() => onToggleClosed?.()}
                 data-testid="lot-gantt-filter-closed"
                 aria-pressed={closedSelected}
