@@ -16,6 +16,11 @@
  * tested in a plain node environment. The component keeps the ECharts wiring,
  * the tooltip HTML (translated, therefore not asserted) and the reactive glue.
  *
+ * @financial-math-exception The WAC chart's percentage view (D-MF6(b)): `toPercentSeries` rebases the value
+ * series the backend sends on its first known non-zero value, a display scale the user toggles on the chart.
+ * Every value it rebases is the backend's; a BUY's opening value is read as the backend sends it
+ * (`eventOpeningValue`, V11), never recomputed as quantity × price.
+ *
  * @module brokers/lots/lotWacPriceChartHelpers
  */
 
@@ -119,6 +124,16 @@ export function scaleUnitPrice(value: number | null, qbqScale: number): number |
 export function nullifyZeroWac(wac: number | null, poolQty: number | null): number | null {
     if (wac == null) return null;
     return wac === 0 || poolQty === 0 ? null : wac;
+}
+
+/**
+ * The value of the event that opens a lot (BUY, ADJUSTMENT_IN), as the backend sends it: the lot's original cost,
+ * converted at the opening date, in the currency of `unit_price` (MF-E1). `null` when the backend has none — any other
+ * kind of event, or a missing conversion. Never recomputed as quantity × price: the backend is the one home of that
+ * figure (V11, rule 10).
+ */
+export function eventOpeningValue(event: {opening_value?: unknown}): number | null {
+    return safeDecimal(event.opening_value);
 }
 
 /**
