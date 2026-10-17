@@ -6978,6 +6978,10 @@ sulla base `23f6578f3`.
     copia di un ripristino forse ancora in attesa; l'avvio dopo direbbe `stage_missing`.
   - Un test per la FIFO al posto dello stato ora si può scrivere, con un timeout: la lettura `lstat`-prima la ignora,
     prima restava appesa.
+  - **La pagina** (17/10, trovato in B-41): con uno stato illeggibile dopo un riavvio, il ripiego su `GET /status`
+    riceve 500, che `readStatusWithSession` (`backupApi.ts`) prende per «server giù». L'overlay interroga ogni secondo
+    per sempre: due righe d'errore a ogni giro col biglietto, una dopo la sua ora. E non dice perché. Va con la stessa
+    decisione.
   Dettagli: piano 07, «B-32».
 - ✅ **B-34 · `--instance-key-file`: la causa giusta quando questa istanza non ha ancora una chiave, e due frasi della doc**
   — basso; B, 17/10 (revisione di H su B-18: LOW-1 e due appunti; piano di H §14 «Review di B-18»).
@@ -7062,7 +7066,7 @@ sulla base `23f6578f3`.
   i risultati seguono l'ordine della tabella. Le due righe vanno nel prossimo lotto, nel loro posto dell'ordine.
   ✅ **Fatto il 17/10** in B-35 (checkpoint delle 12:36): le tre righe di B (`backup.panel_token`,
   `backup.upload_limit`, `backup.restore_limit`) fra il «Log level» della piattaforma e il primo controllo di A.
-- **B-41 · `/restore/outcome` registra un errore a ogni chiamata quando lo stato è illeggibile** — basso; E, R13-SEC9,
+- ✅ **B-41 · `/restore/outcome` registra un errore a ogni chiamata quando lo stato è illeggibile** — basso; E, R13-SEC9,
   17/10.
   - Con uno stato del ripristino illeggibile, la rotta anonima `GET /backup/restore/outcome` legge lo stato prima del
     biglietto, e la lettura indulgente registra un errore a ogni chiamata. Un client anonimo può ripeterlo.
@@ -7070,6 +7074,23 @@ sulla base `23f6578f3`.
   - Cura economica: la rotta controlla prima il biglietto (forma, registro, impronta, scadenza) e legge lo stato
     soltanto per un biglietto valido; oppure un solo log per stato, o a livello debug.
   Dopo la 1.3, se non costa poco.
+
+  ✅ **Fatto il 17/10** (checkpoint delle 14:56), nella 1.3 (coordinatore).
+  - La rotta passa a `read_outcome` il modo di leggere lo stato, chiamato una volta e solo per il biglietto di un
+    riavvio non scaduto. Chi non ha quel biglietto non fa più leggere lo stato, né registrare l'errore.
+  - Il titolare del biglietto resta com'era (guardia b5).
+  Dettagli: piano 07, «B-41 + B-42».
+- ✅ **B-42 · Un file del biglietto dell'esito rotto registra un errore a ogni chiamata anonima** — basso; B, 17/10
+  (trovato in B-41).
+  - Ogni biglietto ben formato (43 caratteri URL-safe, senza sessione) arriva a `outcome._read_record`. Un file del
+    biglietto illeggibile, un link, troppo grande o non valido registra un errore a ogni chiamata.
+  - Cura: un errore la prima volta per cartella dati, poi `debug` finché dura lo stesso errore; di nuovo dopo che il file
+    è stato scritto, tolto o letto, o se fallisce in altro modo.
+  Dentro B-41 (coordinatore, 17/10). Dettagli: piano 07, «B-41 + B-42».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 14:56).
+  - `outcome._report`: un errore la prima volta per cartella dati e processo, poi `debug` finché dura lo stesso errore.
+  - `_forget` lo dimentica quando il file viene scritto, tolto, trovato mancante o letto.
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo

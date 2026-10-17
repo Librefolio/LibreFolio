@@ -97,7 +97,9 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     leaves the ticket as it was (a guard): readable again, the same ticket opens the outcome. OpenAPI: the status
     documents a 500 naming ``restore_state_unreadable``; the 500s of the cancel, the restart and the confirmation name
     it too. Not the content: a state no restore can hold, the (c) case named «unreadable» included, stays ``none``
-    (§10).
+    (§10). B-41: only the right ticket of a restart that has not expired makes ``GET /outcome`` read the state (b5);
+    every case of (i) the ticket alone decides, the state file then made unreadable, is the one 404 without the state
+    file ever opened, nor «The state of the restore cannot be read» logged — else anyone could repeat that error.
 
 Pure, as ``test_backup_restore.py`` (lot B2b), whose fixtures and helpers are imported: an app of each test holds
 ``backup_router``, ``get_current_user`` overridden; the data directory of the routes under ``tmp_path`` (``apply``'s
@@ -2221,6 +2223,56 @@ async def test_the_outcome_of_a_restore_whose_state_cannot_be_read_is_the_one_40
     again = await get_outcome(ticket)
     assert answer_of(again) == (200, {"state": "pending", "reason": None, "waiting": None}), f"{unreadable.way}: readable again, the same ticket opens the outcome: {api.shown(again)}"
     print_success(f"{unreadable.way}: the one 404, the ticket kept; readable again, pending")
+
+
+#: B-41: the cases of (i) that present the RIGHT ticket of a restart that has not expired, with no restore or another
+#: stage's: its holder reads the state, and one that cannot be read is the one 404 with its cause logged (b5). Every other
+#: case of (i) is decided by the ticket alone.
+READ_BY_ITS_HOLDER = {"no-restore", "a-restore-of-another-stage"}
+#: B-41: built from ``NOT_OPENING`` by id, so that a case added to (i) is never left out without saying so.
+DECIDED_BY_THE_TICKET = [case for case in NOT_OPENING if case.id not in READ_BY_ITS_HOLDER]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("present", DECIDED_BY_THE_TICKET)
+async def test_a_ticket_that_does_not_open_the_outcome_never_reads_the_state_nor_logs_it(instance, tmp_path, unreadable, present):
+    """(j) B-41: ``GET /outcome`` answers anyone, without a session: a caller without the ticket of a restart that has not
+    expired must never make LibreFolio open the restore's state, nor log that it cannot — else that error is anybody's
+    to repeat, as often as asked. Every case of (i) the ticket alone decides (``NOT_OPENING`` but ``no-restore`` and
+    ``a-restore-of-another-stage``, whose right ticket reads the state: b5), presented as (i) presents it, then the state
+    file made unreadable in each way of (j): the ``unreadable`` fixture, every case three times, cheap in-process
+    requests. ``dropped-by-a-cancel`` gets a pending state written back after its cancel, its ticket still gone. The one
+    404 ``restore_outcome_not_found``; the state file never opened; «The state of the restore cannot be read» never
+    logged, at any level. A ticket's file that cannot be used logs its own error (``its-file-…``): B-42, not asserted
+    here. Barrier, once the route has answered: read directly, the state file is refused and its reader logs it — it was
+    unreadable, and the log heard, all along.
+
+    RED until B-41's code: the route reads the state before it looks at the ticket."""
+    root = instance.root
+    assert READ_BY_ITS_HOLDER <= {case.id for case in NOT_OPENING}, f"barrier: the cases left out are cases of (i): {sorted(READ_BY_ITS_HOLDER - {case.id for case in NOT_OPENING})}"
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    ticket = await restart_requested(root)
+    presented = await present(Presenting(root, api.UNKNOWN_ID, ticket, elsewhere))
+    if present is _dropped_by_a_cancel:
+        # The cancel removed the state with the ticket: a state written back, its ticket still gone, to make unreadable.
+        assert not os.path.lexists(ticket_path(root)), "precondition: the cancel dropped the ticket"
+        write_state(root, "pending", api.UNKNOWN_ID)
+    unreadable.now()
+    case = f"{present.__name__}, {unreadable.way}"
+
+    with capture_logs() as events:
+        response = await get_outcome(presented.ticket, params=presented.params)
+    tried = list(unreadable.refused)
+    logged = [(event.get("log_level"), event.get("error")) for event in events if event.get("event") == STATE_READ_ERROR]
+    with capture_logs() as heard, pytest.raises(apply_module().RestoreStateUnreadableError):
+        apply_module().read_restore(root)
+
+    assert len(unreadable.refused) == len(tried) + 1 and cause_in_the_log(heard, unreadable), f"barrier: {case}: read directly, the state file is refused and its reader logs it: {unreadable.refused} {api.loud(heard)}"
+    assert answer_of(response) == (404, NOT_FOUND), f"{case}: the one 404 restore_outcome_not_found, not {api.shown(response)}"
+    assert tried == [], f"{case}: the state file never opened for a ticket that does not open the outcome: {tried}"
+    assert logged == [], f"{case}: «{STATE_READ_ERROR}» never logged, at any level: {logged}"
+    print_success(f"{case}: the one 404, the state never opened, nothing logged of it")
 
 
 def test_openapi_documents_the_state_that_cannot_be_read():
