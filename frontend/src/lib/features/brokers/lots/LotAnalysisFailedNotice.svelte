@@ -36,7 +36,7 @@
     /** A lot quantity: the lots' pattern (LotCustodyModal), masked under privacy. */
     function formatQuantity(raw: unknown): string {
         if (typeof raw !== 'string' && typeof raw !== 'number') return String(raw);
-        return maskableQuantity(formatExactDecimal(raw, {minFrac: 0, maxFrac: 8}));
+        return maskableQuantity(formatExactDecimal(raw, {minFrac: 0, maxFrac: 10}));
     }
 
     let rows = $derived(buildFailureRows(issues, brokers, formatQuantity));
