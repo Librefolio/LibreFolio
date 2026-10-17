@@ -4849,3 +4849,56 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >   `2cd430a5e`. Con questo **Y11 è completo nel codice**: tutte le pagine e la scheda Correlation. Restano per la
 >   chiusura le righe del CHANGELOG e la documentazione utente del kit (`files/y11_closing/`), che aspettano la parola di
 >   Y-15 dal developer.
+
+## R17 · W8 · P4 — implementazione (17/10, dalle 04:48; HEAD `d32d0f3d9`, il lotto `assets` entrato, MF-P4b dentro)
+
+> **Note implementazione**.
+> - **Base**: `d32d0f3d9` = dev, con dentro il lotto `assets` (`aa95cc86d` journal, `1e93d8046` wiki) e MF-P4b.
+>   - `api sync` a rc 0: il client ha i 4 campi `period_*_percent`;
+>   - i 4 file di prodotto non sono cambiati da `2cd430a5e`;
+>   - la prova a secco dà ancora 27 sostituzioni; `y11_docrefs.py` 69/69;
+>   - svelte-check prima del codice 0/0, con i 3 test trattenuti.
+> - **Via dei colori** sui 4 file DV (coordinatore, 04:5x).
+>   - Le regole: non toccare le 4 classi di palette delle barre di `KpiSection`, che sono nella baseline e aspettano
+>     il designer; i colori di segno solo dagli aiuti esistenti; un aiuto nuovo nei file del tema solo con il loro via;
+>     `theme-roles --check` fra le prove leggere.
+>   - Rispettate tutte: nessun attributo `class` cambiato (controllato sul diff), nessun colore e nessun aiuto nuovo.
+> - **Applicato** `r17w8_apply.py --apply`: 27 sostituzioni in 4 file (+71/−74). Prettier pulito.
+> - **⚠️ Fuori pista, due correzioni a mano in `ExposureTreemap.svelte`**, trovate dalle prove:
+>   1. **Il rosso del gruppo assente.** Il caso chiede «—», come diceva il mio brief, ma il tooltip saltava le righe
+>      con `gl` null.
+>      - Ora le tessere di tipo e di broker scrivono «Unrealized P&L: —» quando il backend non dà una cifra (gruppo
+>        assente o null); le tessere degli asset restano come prima.
+>      - È la regola «null → «—»» concordata con MF.
+>   2. **svelte-check, 3 errori.** Un `gl: 0` rimasto nell'inizializzazione della tessera di tipo, e il mio tipo locale
+>      `HoldingGroupFigures` che non combaciava con il tipo generato, dove ogni campo ammette anche array.
+>      - Ora il tipo è `NonNullable<PortfolioSummary['holding_groups']>[number]`, dallo store, come usano già
+>        `PositionsPanel` e il test.
+>      - Le letture passano per `safeString`, `safeCurrency` e `safeDecimal` di `$lib/types`. A runtime è equivalente.
+> - **Prove** (carico 31–56):
+>   - Vitest: `KpiSection` 51/51, `ExposureTreemap` 7/7 (dopo la correzione 1), `PerformanceChart` 24/24,
+>     `AllocationPanel` 3/3;
+>   - **`front-utility core-unit` 7941/7941** (200 file, con i gate di HTML e denaro) e **`component-unit`
+>     4468/4468** (166 file). Sono girati prima della correzione 2, che cambia solo tipi e letture equivalenti; dopo
+>     ho rilanciato il file della treemap;
+>   - svelte-check 0/0 dopo la correzione 2; `theme-roles --check` pulito; `git diff --check` pulito.
+>   - Log in `files/logs/r17w8_green*_*.log`, `r17w8_core-unit.log`, `r17w8_component-unit.log` e
+>     `r17w8_front-check_post2.log`.
+> - **Documentazione per sviluppatori**: `pages/index.md:120-123` descriveva ancora il calcolo nel browser (gli ultimi
+>   due punti della history, `mwrr − twrr`). Affidata a `docs-writer`. Nessuna pagina utente cambia:
+>   `kpi-cards.en.md` dice già «from yesterday to today».
+> - **Slot breve** pronto: `files/scripts/r17w8_e2e.sh` (`front-portfolio dashboard`, `privacy-masking`,
+>   `front-broker detail`).
+> - **E2E breve** (slot 1, 05:11–05:25; `files/scripts/r17w8_e2e.sh`): `front-portfolio dashboard` 27/27,
+>   `privacy-masking` 18/18, `front-broker detail` 38/38: **83/83**. Porta 6189 libera, nessun processo rimasto.
+> - **Documentazione** (`docs-writer`):
+>   - `developer/frontend/pages/index.md` (+23/−5): i punti del Δ del giorno e del timing dicono ora che si leggono i
+>     campi del backend; due punti nuovi per i gruppi della treemap e per i ritorni di `PerformanceChart`;
+>   - `user/dashboard/kpi-cards.en.md`, due frasi: «It needs two days of history» era fuorviante. Ora la riga manca
+>     solo quando il periodo finisce nel primo giorno del portafoglio, e di lunedì copre il fine settimana.
+>     **Debito di traduzione**: it/fr/es hanno ancora la frase vecchia, senza stamp.
+>   - Durante la corsa E2E `docs-writer` non ha lanciato build: due build scriverebbero sullo stesso `mkdocs_src/site`.
+>     Le ho lanciate io dopo, con `files/scripts/r17w8_docs_check.sh`: build stretta rc 0 e 0 WARNING (53,7 s);
+>     `check-links` con 97 collegamenti validi.
+> - **Backlog**: T-U8 («il frontend solo di presentazione») sta nella sezione T, che non è mia. Lo segnalo al
+>   coordinatore: con Y12a e questo lotto restano solo V11 e P5, che aspettano MF-E e il CP-7b di J.
