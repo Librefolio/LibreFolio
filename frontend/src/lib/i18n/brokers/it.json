@@ -128,7 +128,7 @@
       "shortLotLabel": "Short {date}",
       "detailTitle": "Dettaglio Lotti FIFO",
       "loadFailed": "Impossibile caricare i dati dei lotti",
-      "analysisFailed": "L'analisi dei lotti non è stata ricostruita in modo affidabile (quantità o trasferimenti incoerenti) — i valori potrebbero essere incompleti.",
+      "analysisFailed": "I lotti di questo asset non si possono ricostruire: alcune sue transazioni non tornano. Lotti, cronologia e confronto sono nascosti; le linee del costo medio qui sotto non ne risentono.",
       "combined": "Combinato",
       "chartMarkers": {
         "legend": {
@@ -284,7 +284,8 @@
       "yAxisAuto": "Auto",
       "yAxisFromZero": "Da 0",
       "annualizedReturn": "Annualizzato",
-      "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) del singolo lotto sulla sua durata di detenzione, al netto di proventi e spese, per confrontare lotti tenuti per periodi diversi."
+      "annualizedReturnTooltip": "Rendimento netto annualizzato (CAGR) del singolo lotto sulla sua durata di detenzione, al netto di proventi e spese, per confrontare lotti tenuti per periodi diversi.",
+      "analysisFailedFix": "Correggi queste transazioni e i lotti tornano:"
     },
     "createdInSystem": "Creato nel Sistema",
     "deleteBlockedTitle": "Impossibile eliminare il broker",

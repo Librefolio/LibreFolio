@@ -121,7 +121,11 @@ locale prefix):
 - `EventDataImportModal` — header `date;currency;type;amount;notes`, with `currency` and `notes`
   optional. `amount` also reads a `value` column (an alias), the name the events export
   (`GET /api/v1/backup/asset/{id}/events?format=csv`) gives it, so an exported events file imports
-  back with its other columns ignored. Its `source` column is not read (every row becomes a manual
+  back with its other columns ignored. Its `notes` column has a `parse`, `unescapeFormulaText`
+  (exported from the modal's `<script module>`), which drops the one leading apostrophe the export
+  puts in front of a note that starts, after any apostrophes, with `=`, `+`, `-`, `@`, a tab or a
+  carriage return, so that such a note imports back exactly as it was (lot B-39,
+  [Output Escaping](../../../architecture/security.md#output-escaping)). Its `source` column is not read (every row becomes a manual
   event). Its `type` column is a `matchKey`: two rows are duplicates only when they share the date
   and the type, so a dividend and a split of one day import together.
 

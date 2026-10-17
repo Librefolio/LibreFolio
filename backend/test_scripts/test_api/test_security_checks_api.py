@@ -2,26 +2,26 @@
 ``GET /api/v1/security/checks`` on the lane's server — release 1.3, workstream A, lot A8a (plan phase01Accounts, A8a C3
 and C4): the administrator's list of the «Security» checks, read from the server the runner starts.
 
-The runner starts the lane's backend with ``dev.py server --test``, which sets ``LIBREFOLIO_LOGIN_LIMIT=off`` unless the
-variable is already set: the lanes sign in over and over against shared accounts, and the cases of the limit turn it on
-in-process (``test_login_throttle_api.py``). Pinned here, through the whole app of ``main.py``:
+The runner starts the lane's backend with ``dev.py server --test``, which sets ``LIBREFOLIO_LOGIN_LIMIT=off`` on every
+lane (``configure_test_runtime()`` has dropped any ``LIBREFOLIO_*`` of ``.env`` and of the shell): the lanes sign in over
+and over against shared accounts, and the cases of the limit turn it on in-process (``test_login_throttle_api.py``).
+Pinned here, through the whole app of ``main.py``:
 
 1. ``e2e_test_admin`` → 200 with ``{"items": [...]}``, each check once; ``accounts.login_limit`` listed, well formed,
    with the severity the lane's server must have — ``warning``, the limit off, under the runner: this pins the
    runner's line —; ``platform.jwt_secret`` and ``platform.plugin_secrets`` listed too.
 2. ``e2e_test_user``, a member → 403; no session → 401.
 
-Which severity: ``_expected_login_limit()`` follows the rule of the runner's line. An explicit ``LIBREFOLIO_LOGIN_LIMIT``
-in this process's environment — the runner's, which its backend inherits — wins: ``off`` a warning, ``on`` ok. Unset,
-under the runner (a shared backend) the server is ``dev.py server --test``'s: off, a warning. Unset, without a shared
-backend, ``_TestingServerManager`` runs the server in this very process, whose environment leaves it unset: on by
-default, ok — what the case pins when the module is run alone.
+Which severity: ``_expected_login_limit()`` reads ``LIBREFOLIO_LOGIN_LIMIT`` in this process when the case runs, and
+``backend/test_scripts/conftest.py`` always provides it: ``off`` in every pytest process that started without a value,
+put back before each test (lot E-15). So the case pins ``warning`` under the runner, where the lane's server is
+``dev.py server --test``'s, and when the module runs alone too: ``_TestingServerManager`` then runs the server in this
+very process, which reads the same ``off``. A value set by hand before a run alone wins in both places: ``on`` pins
+``ok``. The function's branches for an unset variable remain for a process without that conftest.
 
 Read-only and parallel-safe: GET requests, and the sign-ins of the two fixture users of ``populate_mock_data.py`` (the
 api setup runs ``db populate``), whose roles are checked, never changed; the only write is a login's own counters
 (``record_login_and_maybe_show_popup``), which no unit asserts on. Nothing to clean up.
-
-Red until A8a, every case: the route does not exist yet (404).
 """
 
 import os

@@ -305,7 +305,7 @@ With Docker Compose on your server:
     cp /path/to/librefolio-backup-20261015-121500.zip LibreFolio-data/backups/
     ```
 
-    A secure backup goes the same way, `.lfbk` instead of `.zip`, and so does the instance key, if you have it, in a file such as `LibreFolio-data/backups/old-instance.key`. From the app, skip this step: you choose the archive on your computer.
+    A secure backup goes the same way, `.lfbk` instead of `.zip`. The instance key, if you have it, never goes into `LibreFolio-data/`: step 4 hands it to the container. From the app, skip this step: you choose the archive on your computer.
 
 4. **Start LibreFolio, restore the archive, restart**:
 
@@ -317,7 +317,15 @@ With Docker Compose on your server:
 
     `backup restore` checks the archive on a copy first: if this LibreFolio cannot take it, the command says why, and nothing changes. For a secure backup, it asks its password first. Read the report, then type `restore`.
 
-    With the instance key of the hosted instance, add `--instance-key-file /app/backend/data/prod-docker/backups/old-instance.key` to `backup restore`: the report counts the saved keys it re-encrypted with the key of your server («The Instance Key of Another Installation» in [CLI Admin Tools](cli_tools.md)). Then remove the file from `LibreFolio-data/`, and keep your own copy apart.
+    With the instance key of the hosted instance, in a file such as `old-instance.key` next to `docker-compose.yml`, the restore line becomes three, before the restart:
+
+    ```bash
+    docker compose cp old-instance.key librefolio:/root/old-instance.key
+    docker compose exec librefolio python dev.py backup restore /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip --instance-key-file /root/old-instance.key
+    docker compose exec librefolio rm /root/old-instance.key
+    ```
+
+    `/root` is root's own folder in the container, which LibreFolio's user can neither read nor change, while it could swap a file in `LibreFolio-data/`: the command reads the key as root, before it runs as that user. The report counts the saved keys it re-encrypted with the key of your server («The Instance Key of Another Installation» in [CLI Admin Tools](cli_tools.md)). Keep your own copy of the key apart.
 
     Or, from the app, which takes no instance key: start LibreFolio with `docker compose up -d`, open it, and create the administrator account it asks for, with **Register here**. Then restore the archive from **Settings › Administration › Backup** ([Restore from Settings › Administration › Backup](#restore-settings)): it is checked on a copy in the same way, and **Restore and restart** stops LibreFolio, which Docker starts again to apply the restore. The restore replaces the account you created with the accounts of the backup.
 

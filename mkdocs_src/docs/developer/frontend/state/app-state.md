@@ -121,11 +121,19 @@ and readable without a session (backend side:
   configuration itself: the page around it does. The `/reset-password` and `/setup` pages ask for it
   on mount without waiting for it, so the checklist switches to the server's rules when they arrive
   and a slow request never delays the form.
-- **Readers of `profile`** (F05, workstream A): what a hosting provider's customers must not get shows
-  only once `loaded` is true and `profile` is `selfhosted`, since the default says `selfhosted` and a
-  managed instance must never show it while its answer is in flight, nor after a failed request:
-    - `donationsVisible()` (`lib/features/support/donations.svelte.ts`) is the one rule of the
-      coffee links in the Svelte app, reactive in a template or a `$derived`. `Header` (`header-donate-link`),
+- **Readers of `profile`** (F05, workstream A): one test, the helpers of
+  `lib/features/instance/profile.ts`. `selfHostedConfirmed()` is true once the server has answered on
+  this page load (`loaded`) and said `selfhosted`; `managedConfirmed()` is the same for `managed`.
+  Until the answer both are false, although `DEFAULT_INSTANCE_CONFIG` says `selfhosted`, and a
+  reload that fails after an answer leaves that answer confirmed. So what a hosting provider's
+  customers must not get waits for `selfHostedConfirmed()`: a managed instance never shows it while
+  its answer is in flight, nor after a request that failed before any answer. What only a managed
+  instance shows waits for `managedConfirmed()`. The helpers are reactive, read in a template or a
+  `$derived`, and live in a module of their own rather than on the store: they read only `loaded`
+  and `config`, so the test files that replace the store with `vi.mock` keep working. The readers:
+    - `donationsVisible()` (`lib/features/support/donations.svelte.ts`), which returns
+      `selfHostedConfirmed()`, is the one rule of the coffee links in the Svelte app, reactive in a
+      template or a `$derived`. `Header` (`header-donate-link`),
       `HelpMenu` (`help-donate-link` and the divider above it),
       [`AuthPageFrame`](../components/features/auth.md#authpageframe-and-authcard)
       (`auth-donate-link`) and `SupportActions` (the coffee and the «Or share» divider, in the
@@ -136,20 +144,34 @@ and readable without a session (backend side:
       (`frontend/static/offline.html`, which the service worker serves when a navigation fails) reads
       no configuration: its coffee link shows on every instance, managed included.
     - `checkForNewerRelease()` (`lib/features/update-check/updateCheck.ts`), the administrators' check
-      at sign-in, awaits `instanceConfig.load()` and probes GitHub and the image registry only when
-      the answer says `selfhosted`: otherwise it returns `null`, with no request and no write to its
-      cache ([Container Image Check](../../architecture/security.md#container-image-check)).
-    - [`ForgotPasswordCard`](../components/features/auth.md#forgotpasswordcard) draws the server
-      commands once the answer says `selfhosted`, `forgot-ask-admin` once it says `managed`, and
-      neither while the request is pending. When the request failed before any answer (`failed`
-      true, `loaded` false), it draws `forgot-ask-admin`, the advice that holds in both profiles,
-      and still no command (FPM-08).
-    - `AssetSearchAutocomplete` (workstream H) offers the GitHub fallback of «Let us know» only once
-      the answer says `selfhosted` ([Asset Search & Link-Finder](../../backend/assets/search_link_finder.md)).
-    - `ChangelogModal` draws **Check for updates** (`changelog-check-update`) by the same rule: not
-      before the answer, not on a managed instance, and not while no answer came on this page load,
-      a failed request included, on a self-hosted instance too.
-    - Tests: `./dev.py test front-utility core-unit` runs `donations.test.ts` and
+      at sign-in, awaits `instanceConfig.load()`, then returns `null` unless `selfHostedConfirmed()`,
+      with no request and no write to its cache: GitHub and the image registry are probed only once
+      the answer says `selfhosted`
+      ([Container Image Check](../../architecture/security.md#container-image-check)).
+    - [`ForgotPasswordCard`](../components/features/auth.md#forgotpasswordcard) draws
+      `forgot-ask-admin` while `managedConfirmed()`, the server commands once the answer is in and
+      does not say `managed`, and neither while the request is pending. When the request failed
+      before any answer (`failed` true, `loaded` false), it draws `forgot-ask-admin`, the advice that
+      holds in both profiles, and still no command (FPM-08): that branch reads `loaded` and `failed`
+      itself, beside `managedConfirmed()`.
+    - `AssetSearchAutocomplete` (workstream H) offers the GitHub fallback of «Let us know» only while
+      `selfHostedConfirmed()` ([Asset Search & Link-Finder](../../backend/assets/search_link_finder.md)).
+    - `ChangelogModal` draws **Check for updates** (`changelog-check-update`) only while
+      `selfHostedConfirmed()`: not before the answer, not on a managed instance, and not while no
+      answer came on this page load, a failed request included, on a self-hosted instance too.
+    - **The gate**: `frontend/src/instanceProfile.gate.test.ts` keeps `profile.ts` the only source
+      that compares a profile with `'selfhosted'` or `'managed'`. It parses every product `.ts` and
+      `.svelte` file under `src` — TypeScript's syntax tree for a module, Svelte's for a component, its
+      scripts and every expression of its markup —, skipping the tests, the mocks and the generated
+      API clients, and fails on any `===`, `!==`, `==` or `!=` between a `profile` (a member or a
+      variable of that name) and one of the two values, in either order, or on a `case` of a `switch`
+      on it. A comparison anywhere else is a copy of the rule: call a helper, or add one to
+      `profile.ts` when neither says what the site needs. Its forms are a floor: it does not follow an
+      alias, a constant holding the value, or a lookup keyed by the profile.
+    - Tests: `./dev.py test front-utility core-unit` runs `profile.test.ts` (PRF-01…08: both helpers
+      false before any request, while it is in flight and after a first request that failed; true for
+      the profile answered, kept after a reload that fails, following a reload that answers the other
+      one; reactive inside an effect), the gate, `donations.test.ts` and
       `updateCheck.managed.test.ts`; `./dev.py test front-utility component-unit` runs
       `Header.managed.test.ts`, `HelpMenu.managed.test.ts`, `SupportActions.managed.test.ts` and
       `ChangelogModal.managed.test.ts`, with those of `AuthPageFrame` and `ForgotPasswordCard`
@@ -162,9 +184,12 @@ and readable without a session (backend side:
 
 ```ts
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+import {managedConfirmed, selfHostedConfirmed} from '$lib/features/instance/profile';
 
 await instanceConfig.load();
-instanceConfig.config.profile; // 'selfhosted' | 'managed'
+instanceConfig.config.profile; // 'selfhosted' | 'managed': never compared by hand (the gate), see the helpers
+selfHostedConfirmed(); // true once the server answered on this page load, and said 'selfhosted'
+managedConfirmed(); // the same for 'managed'; both false until the answer
 instanceConfig.config.accounts.registration_mode; // 'open' | 'invite' | 'disabled'
 instanceConfig.config.accounts.registration_locked; // true while LIBREFOLIO_REGISTRATION pins it
 instanceConfig.config.accounts.first_account_open; // true while the instance has no account (optional: absent reads as false)

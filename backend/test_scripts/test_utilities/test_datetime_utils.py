@@ -195,5 +195,39 @@ def test_fixture_guard_saturating_shifts_overflow_plain_arithmetic():
         assert expected == (date.max if days > 0 else date.min), param.id
 
 
+# ============================================================================
+# TESTS: day_before (MF-SEC8-2b)
+# ============================================================================
+#
+# A row stored on date.min (0001-01-01: an older version, or a hand edit; N74 refuses new rows before 1900) has no day
+# before it, and ``date.min - timedelta(days=1)`` raises OverflowError. ``day_before`` answers None there: no day
+# before, so nothing was held then. It is read from the module when the test runs: on a module without it (HEAD
+# c0b4b6f05) only these tests fail, with AttributeError, never the module's collection.
+
+
+@pytest.mark.parametrize(
+    ("day", "expected"),
+    [
+        pytest.param(date(2025, 1, 2), date(2025, 1, 1), id="within_a_month"),
+        pytest.param(date(2025, 1, 1), date(2024, 12, 31), id="across_a_year"),
+        pytest.param(date(2024, 3, 1), date(2024, 2, 29), id="across_a_leap_day"),
+        pytest.param(date(1, 1, 2), date.min, id="onto_date_min"),
+    ],
+)
+def test_day_before_is_the_previous_calendar_day(day, expected):
+    """Red on HEAD c0b4b6f05 (no ``day_before``: AttributeError). Any day after date.min: the calendar day before it,
+    a ``date`` — date.min itself included, as the day before 0001-01-02."""
+    result = datetime_utils.day_before(day)
+
+    assert result == expected
+    assert type(result) is date
+
+
+def test_day_before_date_min_is_none():
+    """Red on HEAD c0b4b6f05 (no ``day_before``: AttributeError). date.min has no day before it: None, never an
+    OverflowError."""
+    assert datetime_utils.day_before(date.min) is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

@@ -28,7 +28,6 @@ from backend.app.schemas.risk import (
     AssetSetRiskScope,
     PortfolioRiskScope,
     PreparedAssetSeriesSet,
-    RiskErrorCode,
     RiskExcludedAsset,
     RiskQueryRequest,
     RiskWarning,
@@ -36,10 +35,10 @@ from backend.app.schemas.risk import (
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.financial_math.weights import share_of
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.risk.base import RiskAssetClassification, RiskUnavailableError
+from backend.app.services.risk.base import RiskAssetClassification, resource_limit_error
 from backend.app.services.risk.scenario_catalog import get_loaded_risk_scenario_catalog
 from backend.app.services.series_preparation import prepare_asset_series_set
-from backend.app.utils.date_range_limits import BulkTooManyDaysError
+from backend.app.utils.date_range_limits import BulkTooManyDaysError, range_span_floor
 from backend.app.utils.datetime_utils import latest_range_end
 
 logger = get_logger(__name__)
@@ -67,6 +66,23 @@ class ScopeInputs:
     broker_ids: tuple[int, ...] = ()
     composition_as_of: Optional[date] = None
     slice_asset_ids: tuple[int, ...] = ()
+
+
+def bounded_range(date_range: DateRangeModel) -> DateRangeModel:
+    """``date_range`` as a risk analysis may walk it, day by day over prices (R13-SEC8-1b).
+
+    It ends by ``latest_range_end()`` (tomorrow) and starts no earlier than ``range_span_floor()`` of that end
+    (``RANGE_SPAN_LIMIT_DAYS``, 100 years before it: X-R55's span limit); a start after that end moves to it. The price
+    query bounds only the end and backward-fills a range from its start, so without the floor a price stored long ago
+    would let a range starting just after it walk every day since. A range already within those bounds comes back as
+    it is.
+    """
+    requested_end = date_range.end or date_range.start
+    end = min(requested_end, latest_range_end())
+    start = min(max(date_range.start, range_span_floor(end)), end)
+    if (start, end) == (date_range.start, requested_end):
+        return date_range
+    return DateRangeModel(start=start, end=end)
 
 
 def scope_reference(
@@ -356,10 +372,11 @@ async def prepare_asset_series(
     except BulkTooManyDaysError as exc:
         # J-50: the prices of these assets over this period are more per-day points than one request may build (Z-25):
         # a size limit, refused as every other one is (D379), with the settings that bring it back within reach.
-        raise RiskUnavailableError(
+        raise resource_limit_error(
             f"The prices of {len(asset_ids)} asset(s) over this period would build {exc.item_days} per-day points, more than {exc.max_item_days}",
-            code=RiskErrorCode.RESOURCE_LIMIT,
-            details={"metric": "price_item_days", "actual": exc.item_days, "limit": exc.max_item_days, "remedy": "period_or_assets"},
+            metric="price_item_days",
+            actual=exc.item_days,
+            limit=exc.max_item_days,
         ) from exc
     return prepare_asset_series_set(
         price_results,

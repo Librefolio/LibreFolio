@@ -81,7 +81,11 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       The first entry is the upload limit of a restore:
       `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43), read by
       `backup_max_upload_mb()` in `config/backup.py` with `profile_default(MAX_UPLOAD_VARIABLE, 0)`: no limit on a
-      self-hosted install.
+      self-hosted install. Since B-35 the same entry also bounds a restore's check: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`,
+      the most an archive may unpack to, read by `backup_max_restore_mb()` in the same module, is, when unset,
+      `RESTORE_TO_UPLOAD_RATIO` (8) times the upload limit in any profile but `selfhosted` (4000 megabytes in
+      `managed`; `0`, no limit, when the upload limit is none), and `0` under `selfhosted`; an explicit value always
+      wins, `0` meaning no limit.
       `./dev.py test services profile-defaults` guards this table too: one entry per profile;
       `selfhosted` empty; `managed` equal, value and type, to `ENVIRONMENT_MANAGED_DEFAULTS`, the
       decided table of the test file; no key that is a `Settings` field or sits in both tables; every

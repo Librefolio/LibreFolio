@@ -5366,6 +5366,173 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-38 — i file dei segreti letti da root: regolari, mai attraverso un link nella cartella dei dati (2026-10-17, 13:36-13:58) — ✅ 🧊 FROZEN (checkpoint delle 13:58)
+
+> **B-36/B-37 entrati** (coordinatore, 13:39): `2eff9e623` più il merge `05d1dc76a` → dev `d1976bca8`. Un conflitto
+> nella desc del runner `post-migration` (Z-28), risolto dal coordinatore tenendo entrambe le frasi. HEAD portata in
+> avanti.
+>
+> - **⚠️ Fuori pista — Kubernetes (13:36)**: rifiutare ogni link con `O_NOFOLLOW`, come concordato, romperebbe
+>   Kubernetes, che monta ogni segreto attraverso un symlink (`/etc/secret/pw` → `..data/pw`). Proposta di rifinitura,
+>   **approvata dal coordinatore (13:40, opzione a)**:
+>   - ovunque, un file regolare aperto con `O_NONBLOCK`: una FIFO non blocca più il comando, e una cartella o un
+>     dispositivo non vengono letti;
+>   - i link sono rifiutati solo da root e solo dentro la cartella dei dati;
+>   - la guida sposta la chiave fuori dalla cartella dei dati;
+>   - la corsa residua va nella riga H-47 di H.
+> - **Altri due punti miei** (13:42):
+>   - il controllo percorre **ogni componente**, dalla cartella dei dati in giù: un `backups` sostituito da un link verso
+>     `/root` sarebbe sfuggito controllando solo l'ultimo componente;
+>   - la guida usa **`/root`** del container, non `/tmp`: in `/tmp` l'utente del server può creare il nome per primo
+>     come link, e `docker compose cp` ci scriverebbe attraverso.
+> - **Contratto**: `b38-contract.md`. Il codice: `_secret_path(args, path, label)` prima di ogni `read_secret_file`
+>   della CLI, con `_data_dir_setting` (come `_decrypt_as_owner`) e `_link_inside`. Le eccezioni sono
+>   `SecretFileError`, quindi i ❌ restano quelli di oggi (`password_unreadable`, `instance_key_unreadable`).
+> - **Codice pronto** in `b38-wip/apply_b38.py`: 4 operazioni, ruff e black puliti. Prova a mano sulla copia emessa:
+>   - una FIFO e una cartella sono rifiutate subito;
+>   - un file normale passa, e uno mancante è lasciato a `read_secret_file`;
+>   - il link di una cartella madre dentro i dati viene preso, fuori no.
+> - **Rossi in scrittura** (TA-E, sezione (n) di `test_backup_cli_secure.py`); doc (docs-writer): la guida, `cli_tools`
+>   e `security.md`.
+> - ✅ **Rossi scritti** (TA-E, 13:42-13:50): sezione (n), 3 funzioni e 40 casi sui 4 comandi che leggono un segreto
+>   (`decrypt` compreso).
+>   - Una FIFO o una cartella, da root finto e non: 16 casi rossi. Un watchdog di 10 s apre la FIFO, così il run non
+>     resta appeso.
+>   - Un link dentro i dati, su `backups/key` o su `backups/` stesso: 8 rossi. Il bersaglio non viene mai aperto.
+>   - 16 guardie.
+>   - Due vincoli fissati: il controllo dei link viene **prima** di ogni apertura, e lavora sul percorso **come è
+>     dato**, non risolto.
+>   - Trovato da TA-E: oggi `create` e `inspect` rifiutano un `backups/` che è un link solo **dopo** che root ha già
+>     letto il segreto attraverso quel link.
+> - ✅ **Doc scritta** (docs-writer, 13:44):
+>   - `backup_restore.en.md` l.308 e l.320-328: la chiave passa da `/root` del container;
+>   - `cli_tools.en.md` l.363-364, 378, 564, 569: la regola detta una volta sola (debito di traduzione);
+>   - `security.md` l.856-870: il punto «Secret files read as root», con il residuo H-47.
+>   - Da passare ad H: «The Instance Key» in `security.md` l.706-708 dice ancora che B-18 è nel backlog.
+> - ✅ **Rosso** (corsia 6187, 13:50-13:52): `utils backup-cli-secure` **24 falliti** e 82 passati, come previsto.
+> - ✅ **Patch applicata** (13:52:44): 4 operazioni in `scripts/backup_cli.py`; ruff e black puliti.
+> - ✅ **Verdi** (13:52-13:54): `backup-cli-secure` **106** (37 s: nessuna attesa su una FIFO), `backup-cli-restore`
+>   107, `backup-cli` 102.
+> - ✅ **Doc** (13:55-13:57): `mkdocs build` strict (54 s), `check-links`, gate 63. Controlli statici puliti, porta
+>   6187 libera.
+> - **Backlog**: B-38 ✅. Il residuo (due aperture) è nella riga H-47 di H.
+
+### B-36 + B-37 — nomi quotati e `trusted_schema` spento anche nelle correzioni e nell'upgrade (2026-10-17, 13:09-13:33) — ✅ 🧊 FROZEN (checkpoint delle 13:33)
+
+> **B-39 entrato** (coordinatore, 13:09): `c8fc32bfa` → dev `25d00f192`, CHANGELOG 🔒 `bbfb76e38`; HEAD portata in
+> avanti. Via a B-36 + B-37; rivede H.
+> - Permesso di scrittura (11:59) su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette e
+>   per `trusted_schema=OFF`.
+>
+> **Stato reale** (13:00-13:10):
+> - Solo `_row_counts` costruisce SQL con nomi che vengono dall'archivio. `autoincrement.py` usa la tupla costante
+>   `AUTOINCREMENT_TABLES`; la connessione di `_backup` scrive un file `.bak` nuovo.
+> - Il test di B-28 «every connection … trusted_schema off first» lascia fuori apposta le correzioni e l'upgrade (§2):
+>   «not recorded».
+> - `security.md` l.1821-1827 lo dice.
+>
+> **Contratto** (`b36-37-contract.md`):
+> 1. **B-36**: un `_quoted()` locale, che raddoppia `"`, in `_row_counts`.
+> 2. **B-37**: `PRAGMA trusted_schema=OFF` subito dopo la connessione di `run_post_migration_fixes`, dentro il `try`,
+>    anche sul database vivo: lo schema di LibreFolio contiene solo tabelle e indici, e le funzioni predefinite di
+>    SQLite sono innocue.
+> 3. **B-37**: un listener `connect` (`_schema_untrusted`) in `env.py`, registrato prima di `connectable.connect()`, per
+>    ogni URL.
+>
+> - **Codice pronto** in `b36-wip/apply_b36.py`: 5 operazioni in 2 file; ruff e black puliti sulla copia emessa.
+> - **Rossi in scrittura** (TA-S):
+>   - `test_post_migration.py` (`db post-migration`);
+>   - il registratore di (l) esteso a `post_migration` (`services backup-staging`);
+>   - un controllo statico di `env.py` (`utils dev-cli-db-path`).
+>   Doc: `security.md` l.1821-1827 (docs-writer).
+> - ✅ **Rossi scritti** (TA-S, 13:10-13:15):
+>   - `test_post_migration.py` §17: un 1.1 portato all'ultima migrazione (correzione autoincrement pendente), più le
+>     tabelle `x"y` e `a" WHERE 1 --`, che oggi diventa `FROM "a" WHERE 1 --"` («no such table: a»). Una spia su
+>     `_row_counts`;
+>   - il registratore (l) di `test_backup_staging.py` registra anche `post_migration`; la copia `.bak` resta fuori per il
+>     filtro del percorso;
+>   - DBP-j in `test_dev_cli_db_path.py`: un controllo AST di `env.py`. Un'esecuzione vera di Alembic non può mostrare
+>     il pragma: è uno stato della connessione, dentro un processo che finisce.
+> - ✅ **Rossi** (corsia 6187, 13:15-13:19): `db post-migration` **1 fallito** (44 passati), `services backup-staging`
+>   **1 fallito** (167), `utils dev-cli-db-path` **2 falliti** (15). Sono esattamente i 4 attesi.
+> - ✅ **Patch applicata** (13:19:19): 5 operazioni in 2 file; ruff e black puliti.
+> - ✅ **Verdi** (13:19-13:23):
+>   - `db`: `post-migration` 45, `post-migration-event-types` 36, `post-migration-orphan-pairs` 47,
+>     `autoincrement-schema` 4, `migration-008` 23, `migration-009` 11;
+>   - `services backup-staging` 168, che comprende l'upgrade vero in un processo a parte;
+>   - utils: `dev-cli-db-path` 17, `backup-cli-restore` 107.
+>   Porta libera.
+> - ✅ **Doc** (13:30-13:32): `security.md` l.1821-1832 e il paragrafo dei test l.1838-1841 (docs-writer); `mkdocs
+>   build` strict (61 s), `check-links`, gate 63.
+> - ✅ **Controlli statici**: ruff e black sui 7 file Python, tranne `_backend_db.py`, che era già sporco prima di B (tre
+>   `PLC0415`, e black che lo riformatterebbe), con una sola riga di desc aggiunta. `git diff --check` pulito.
+> - **Per H**:
+>   - le due modifiche nei suoi file (`post_migration/__init__.py`, `env.py`);
+>   - `database/index.md` l.203-204, che potrebbe dire «with `trusted_schema` off first» (nota del docs-writer).
+> - **Backlog**: B-36 ✅, B-37 ✅.
+
+### B-39 — formule nei CSV esportati, con un ritorno esatto (2026-10-17, 12:43-13:09) — ✅ 🧊 FROZEN (checkpoint delle 13:09)
+
+> **B-35 entrato** (coordinatore, 12:43): merge `d7efb5805` → dev `9fafc79b5`, CHANGELOG 🔒; HEAD portata in avanti
+> a `e3ef5c9a6`. Via a B-39.
+>
+> **Stato reale** (12:44-12:52):
+> - `series_export.stream_rows_as_csv` scrive le celle così come sono: un testo che comincia con `=` diventa una
+>   formula in un foglio di calcolo. Le uniche colonne di testo libero sono le `notes` degli eventi; le altre sono
+>   codici, date e numeri.
+> - **L'export degli eventi è fatto per tornare indietro**: `EventDataImportModal` legge `value` come alias di `amount`
+>   e legge `notes`. Un `'` aggiunto solo all'export resterebbe nella nota dopo una reimportazione.
+> - `CsvColumnDef` ha già un `parse` per colonna, che `CsvEditor` chiama sulle celle non vuote e senza spazi ai bordi.
+> - L'altro scrittore di CSV (`brim_provider.write_combined_csv`) non è di B: contiene i dati del broker dell'utente
+>   stesso, quindi al più un danno a sé. Solo una nota.
+>
+> **Contratto** (approvato dal coordinatore, 12:55, con il permesso di scrivere sul modale per l'hook di `notes`;
+> rivede X):
+> 1. All'export, un testo che corrisponde a `'*[=+\-@\t\r]` all'inizio riceve un `'` in più, salvo un numero puro
+>    (`[+-]?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`), di qualunque tipo. Il JSON non cambia.
+> 2. All'import, `notes` toglie esattamente un `'` iniziale davanti a quel motivo (`unescapeFormulaText`, nello script
+>    di modulo del modale). Il ritorno è esatto, anche per una nota che comincia già con apostrofi (`'=x` →
+>    `''=x` → `'=x`).
+>
+> - **Codice pronto** in `b39-wip/apply_b39.py`: 5 operazioni in 2 file; ruff, black e prettier puliti.
+>   Prova a mano sulla copia emessa: `=1+1` → `'=1+1`, `'=x` → `''=x`, `-1.5` resta, `a = b` resta.
+> - **Rossi in scrittura**:
+>   - TA-S: un file nuovo, `test_series_export_csv.py`, con la sua voce `services series-export-csv`;
+>   - TA-F: i casi di Vitest (finiti in `DataEditor.test.ts`, vedi sotto);
+>   - docs-writer: le pagine della doc.
+> - ✅ **Rossi scritti** (12:44-12:54):
+>   - **TA-S**: `test_series_export_csv.py`, nuovo, registrato come `services series-export-csv` (isolamento pure):
+>     6 funzioni e 30 casi (11 rossi, 19 guardie). Asserisce sulle celle rilette da `csv.reader`; un valore non di
+>     testo il cui testo sembra una formula viene scappato anche lui.
+>   - **TA-F**: 22 casi in `DataEditor.test.ts`, non in un file nuovo. Quel file è già registrato, e ha già il blocco
+>     del modale degli eventi; un file nuovo avrebbe chiesto una riga in `_frontend_utility.py`. I casi: la funzione,
+>     la tabella del ritorno (con anche `'\r=1`), e il modale che reimporta tre note.
+>   - **Docs-writer**:
+>     - `data-editor.md` (dev) l.123-128;
+>     - `user/assets/detail/data-editor.en.md` l.80, perché `events.en.md` non descrive il formato (debito di
+>       traduzione);
+>     - `security.md` «🧼 Output Escaping», l.2256-2267.
+> - **⚠️ Fuori pista — gli apostrofi già presenti (12:58)**: una nota che comincia già con `'=x` sarebbe tornata
+>   `=x`. L'export scappa ora anche una serie di apostrofi davanti a un carattere di formula (`'*[=+\-@\t\r]`, `'=x`
+>   → `''=x`), e l'import ne toglie esattamente uno: il ritorno è esatto per ogni testo.
+> - ✅ **Rossi** (corsia 6187, 12:54-12:55): `services series-export-csv` **11 falliti** e 19 passati; Vitest
+>   `DataEditor.test.ts` **22 falliti** e 88 passati.
+> - ✅ **Codice applicato** (12:55:44): 5 operazioni in 2 file.
+>   - `series_export.py`: `_FORMULA_LIKE`, `_PLAIN_NUMBER`, `_csv_cell`;
+>   - `EventDataImportModal.svelte`: `<script module>` con `unescapeFormulaText`, e `parse:` su `notes`.
+>   Ruff, black e prettier puliti.
+> - ✅ **Verdi**: `services series-export-csv` 30; Vitest su `ui/data-editor/` e `components/assets/`, **1560 su
+>   1560** in 38 file.
+> - ✅ **Doc** (12:57-12:59): `mkdocs build` strict (70 s), `check-links`, gate 63. Controlli statici puliti, porta
+>   6187 libera.
+> - ✅ **Slot 2** (coordinatore, 13:04), regressione API:
+>   - `api backup-export-extras` **8 passati** (13:04-13:07; il frontend ricostruito, svelte-check 0 errori con lo
+>     script di modulo del modale);
+>   - `api asset-prices-export` **5 passati**.
+>   Porta 6187 libera.
+> - Proposta di CHANGELOG 🔒 (docs-writer): «CSV exports are safe to open in a spreadsheet…».
+> - **Backlog**: B-39 ✅.
+
 ### B-35 — un tetto a quello che un archivio scompatta (2026-10-17, 11:59-12:36) — ✅ 🧊 FROZEN (checkpoint delle 12:36)
 
 > **Coordinatore** (11:59): BZ parte 1 va bene. Ordine:
@@ -5450,6 +5617,15 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - la voce nella mappa di `test_config_audit.py`;
 >   - `developer/architecture/settings.md` l.79-84: inoltrato al coordinatore.
 > - **Backlog**: B-35 ✅, B-40 ✅ (le righe di B in «What It Lists»).
+> - **Merge di dev in B-35** (coordinatore, 12:36): dev `9e8f6e8dc` dentro `32739feaa`, con 3 conflitti di doc
+>   risolti tenendo entrambe le parti:
+>   - `configuration.en.md`, la riga `LIBREFOLIO_PROFILE`: quella di dev più la mia frase, verificata contro la base
+>     (stage 1);
+>   - `settings.en.md`, «What It Lists»: «Test mode» di H, poi le tre righe di B, nell'ordine del `CONFIG_CHECKS`
+>     fuso;
+>   - `security.md`, la riga `i18n_key`: il 4 → 7 di dev più il mio nine → thirteen.
+>   Cancelli sulla revisione combinata (12:37-12:42): `services config-audit` 204, `backup-checks` 93, `mkdocs build`
+>   strict (123 s), `check-links`, gate 63. Merge `d7efb5805` → dev `9fafc79b5`; CHANGELOG 🔒 dentro.
 
 ### B-18, riparazione — il cancello G rosso: `instance_key_invalid` non dichiarato (2026-10-17, 11:40-11:52) — ✅ 🧊 FROZEN
 
