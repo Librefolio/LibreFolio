@@ -6328,3 +6328,17 @@ punto di partenza, l'audit dello stesso giorno:
   annualizza sul costo venduto e sul suo tempo di volo; `portfolio-engine/index` §5 definisce il non realizzato come
   NAV − Book (transito incluso) mentre il periodo usa valore di mercato − costo aperto (§7 ora lo dice). Dettagli:
   piano MF, sezione «MF-A — codice».
+- **MF-J3 · Un trasferimento di cassa che attraversa il confine del perimetro non tocca i pool K/R** — basso-medio,
+  numeri (proposta, da decidere); test-author e docs-writer di MF, 17/10 (J2), provato con una sonda su HEAD e su J2.
+  Una gamba `linked_external_inflow`/`_outflow` (l'altra gamba è in un broker fuori dal perimetro scelto) entra nel
+  capitale di riferimento come un versamento o un prelievo (`deposited-capital`, riga 33), ma `_apply_pool_rule` non la
+  tratta: la cassa si muove, i pool no. Con il perimetro {B} e 650 in arrivo da A, la scomposizione dice versato 0 /
+  generato 650 (capitale di riferimento 650); con B che aveva già K 100 e R 100, 425 / 425 invece di 750 / 100.
+  Proposta: la gamba esterna in entrata come un DEPOSIT in K (senza il recupero di W, che è globale), in uscita come un
+  WITHDRAWAL (K prima, poi R → W); da verificare anche le gambe orfane. Rossi prima; serve l'ok del developer (cambia
+  la scomposizione della cassa nelle viste filtrate per broker). Dettagli: piano MF, sezione «MF-J2 — codice e misura».
+- **MF-J4 · L'avviso di quote diverse non scatta per una coppia dello stesso giorno** — minimo, qualità dei dati;
+  test-author di MF, 17/10 (J2). In `classifier.py` l'avviso «share mismatch» d'una coppia interna fra broker posseduti
+  a quote diverse sta dentro il ramo `tx.date != paired.date`: una coppia dello stesso giorno non lo produce. Il divario
+  è un risultato nel P&L (J2), l'avviso spiega perché. Da vedere con chi possiede la qualità dei dati (J). Dettagli:
+  piano MF, sezione «MF-J2 — codice e misura».
