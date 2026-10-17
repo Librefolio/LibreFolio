@@ -3796,3 +3796,11 @@ after a theme or Designer Lab rebuild, which a light → dark → zoom unit test
 restores the saved zoom before it re-aims, as `CandlestickChart` did: the restore's event only schedules the settle (Y-8b).
 Updated: [[concepts/echarts-chart-gotchas]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Y-25: arrow markers cost nothing on charts without them, and only a turn is written back
+After Y-8, `updateArrowRotations()` still deep-copied the option on every `ResizeObserver` callback and on charts that
+draw no arrow at all, and wrote every series back even when no angle had changed. A resize now re-aims at the settle; the
+write-back happens only when an arrow turns by more than 0.01°; and `noteArrowMarkers()`, called right after each full
+render, lets charts without arrows skip `getOption()` altogether.
+Updated: [[concepts/echarts-chart-gotchas]].
+Graph: not updated; graphify is not available in this worktree.
