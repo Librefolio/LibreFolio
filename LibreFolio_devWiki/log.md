@@ -3860,3 +3860,11 @@ unbounded output's bounds), so J-54 adds one exported list of such columns, `NUL
 by table and component), whose all-null drop stays silent. `partial_reason_code` stays out: its null means unknown.
 Filed: revision of [[decisions/ai-export-versioned-snapshot-boundary]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | A day without a point is not a point without a value (J-21)
+Backend signal lines joined the points sent with `value: null` like absent days; the first fix proposed,
+`connectNulls: false`, would have broken every quote-day indicator on every weekend. The renderer now cuts a line or
+area output into runs at the points without a value, one series each with the same label, and absent days stay bridged;
+the signals panel badge counts distinct dates (`renderedSignalPointCount`).
+Filed: section added to [[concepts/absence-sentinel-vs-nullable-type]].
+Graph: not updated; graphify is not available in this worktree.
