@@ -4135,7 +4135,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > verifica già `encrypted` sul report del server. Un commento spiega il perché. La spec E2E non conta per la build: il
 > controllo delle sorgenti guarda solo `frontend/src` e i file di configurazione, quindi nessuna ricostruzione.
 
-### B4b — le note di E (R13-SEC4) e di J (2026-10-17, 03:10-03:25) — registrate, lotto dopo l'ingresso di B4
+### B4b — le note di E (R13-SEC4) e di J (2026-10-17, 03:10-04:55) ✅ — 🧊 FROZEN, checkpoint pronto
 
 > **Il coordinatore (03:08 e 03:10)**:
 >
@@ -4187,6 +4187,266 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >
 > **Lotto B4b proposto** (dopo l'ingresso di B4 e il riallineamento alla punta, prima di B-21): B-23 (il più
 > importante), B-24, B-25, B-26 e B-22. Prima l'analisi, poi i rossi.
+>
+> **B4 entrato (coordinatore, 03:28)**: dev `339a59142`, con `8b56f4a62` (FBKP-108/109) e `4d16d583e` (journal); il
+> blocco del CHANGELOG (3 ✨ + 3 🔒) in `0a45e45de`. La mia HEAD è portata in avanti a **`0a45e45de`**, pulita. Dentro
+> ci sono anche H-27 (`bfdc1f72c`) e J-27 (`7336722ad`).
+>
+> **Analisi B4b (03:30-03:45), in sola lettura**:
+>
+> - **B-23 (N66), la pulizia all'avvio.**
+>   - (a) I controlli del server. `read_check` chiude come `restore_interrupted` un controllo rimasto `running` senza il
+>     lucchetto, e toglie copia e upload. `prune` lo fa quando nessun controllo gira, ma oggi la chiama solo
+>     `start_check` → all'avvio basta chiamare `prune(data_dir)`. I controlli della CLI (`restore`, `--dry-run`) lasciano
+>     invece cartelle di stage non registrate, che `_prune_unrecorded` toglie solo dopo `STAGE_LIFETIME` (24 h).
+>     L'`archive.zip` decifrato vive solo durante lo staging: lo si toglie dopo lo spacchettamento, e su ogni eccezione
+>     `rmtree` toglie tutta la cartella. Lo staging tiene sempre il lucchetto dello stage. Quindi, se nessuno lo tiene,
+>     ogni `stage/*/archive.zip` è il resto di un kill: all'avvio si toglie (un file vero, `lstat`, mai un link). Il
+>     resto della copia segue le 24 h di oggi.
+>   - (b) `_remove_stale_decrypt_folders` passa dalla CLI al backend, perché la regola deve avere una sola casa. La CLI
+>     la importa, e l'avvio la chiama su `backups/` (se è una cartella vera). La regola dell'ora resta: un `inspect` può
+>     girare mentre il server parte.
+>   - (c) Nel ramo «interrotto» di `get_job` si aggiunge `_remove_work_files(folder, keep=None)`. È la stessa regola
+>     anche senza riavvio, per esempio con un `backup create` della CLI ucciso mentre il server gira. All'avvio: `get_job`
+>     su ogni job, che segna e pulisce se il lucchetto è libero, poi `remove_expired_jobs`. La conservazione resta di
+>     un'ora; si applica anche all'avvio e non più solo al backup seguente.
+>   - Il passo: `Step("backup-leftovers", lambda: asyncio.to_thread(sweep_backup_leftovers))`, subito dopo
+>     `restore-commit`. Le tre parti stanno ciascuna in un `try` col suo log e **non sollevano mai**: dopo
+>     `restore-commit` un'eccezione fermerebbe ogni avvio (N57). Il passo è idempotente fra più worker, rispetta i
+>     lucchetti (della corsa e dello stage) e non segue i link. Modulo nuovo: `instance_backup/leftovers.py`.
+>   - La fissazione dell'ordine va in `test_backup_apply.py` (j): `("restore-commit", "backup-leftovers")`.
+>     `test_app_lifecycle.py` fissa solo l'ordine dei passi di base, quindi lì nulla cambia. Doc: `overview.md` passa da
+>     22 a 23 passi (il nuovo è il 17) e `security.md` (`.decrypt-*` e l'avvio).
+> - **B-24.** Dopo la scrittura, `cmd_decrypt` legge il manifesto dello zip appena scritto (`archive.read_manifest`). Se
+>   `instance_key.included`, aggiunge una riga: lo zip contiene anche la chiave d'istanza, che apre ogni chiave salvata.
+>   Doc: `cli_tools.en.md` (riga 591) e `backup_restore.en.md` (riga 351).
+> - **B-25.** In `_password`, `--password-stdin` con `sys.stdin.isatty()` prende la strada del terminale: `getpass`, e
+>   due volte quando si sceglie la password (`create`). In una pipe resta com'è. Nella scheda, i due campi della
+>   creazione passano a `autocomplete="new-password"`, così un gestore non riempie la password dell'account. Il campo
+>   del ripristino resta `off`: è una password esistente ma non quella dell'account, e `current-password` proporrebbe
+>   quella dell'account. Doc: `cli_tools.en.md` (riga 353).
+> - **B-26.** `exportable_instance_key()` (`secure.py:35`) dà `None` anche quando
+>   `len(key.encode("utf-8")) > INSTANCE_KEY_MAX_BYTES`. Anche `generated_key_unusable()` deve dire sì in quel caso,
+>   altrimenti la chiave sparisce senza avviso: oggi segue solo lo stato di H, che controlla solo il minimo
+>   (`_length_problem`). Importare `INSTANCE_KEY_MAX_BYTES` da `archive.py` non crea un ciclo: `archive.py` non importa
+>   né `secure` né `jobs` (verificato).
+> - **B-22.** Via `_plain`, `_PLAIN_AMOUNT` e `import re` se resta inutile. `compare_totals` passa il documento a
+>   `ControlTotals.from_json`, il cui `ValueError` è già `absent`. Nel test
+>   `test_what_is_not_plain_text_in_lines_of_objects_is_absent_before_j_reads_it` l'asserzione si capovolge: non più «J
+>   non l'ha mai visto», ma «J l'ha avuto e l'ha rifiutato». Il wrapper `j_reads` continua a rifiutare il testo non
+>   semplice, così nel processo di test niente si espande anche se J regredisse. Aggiornare la docstring (b) del modulo
+>   e `security.md:1278`, che dice chi controlla.
+> - **B-21, in opzione.** H-27 è nella HEAD: due `except` in `restore.py` più due casi API. Propongo di metterlo nello
+>   stesso lotto; chiede uno slot per `api backup-restore`.
+>
+> **Superfici**:
+>
+> - di B: `instance_backup/{leftovers (nuovo), restore_jobs, jobs, secure, totals}.py`, `scripts/backup_cli.py`,
+>   `BackupDownloadCard.svelte`, i test, `backup_restore.en.md`, `cli_tools.en.md`;
+> - condivise:
+>   - `app_lifespan.py`: `STARTUP_STEPS`, scrittore B per N66;
+>   - `overview.md`, l'elenco numerato;
+>   - `security.md`;
+>   - il runner, un selettore nuovo `services backup-leftovers`;
+>   - `CHANGELOG.md`, del coordinatore.
+>
+> **Conflitti previsti**: `app_lifespan.py` e `overview.md` se un altro flusso aggiunge un passo d'avvio insieme a noi
+> (medio-basso); il resto basso.
+>
+> **Rischi**: la pulizia gira a ogni avvio di ogni installazione, quindi:
+>
+> - deve essere rapida e silenziosa su una cartella pulita;
+> - non deve mai sollevare né seguire un link;
+> - deve rispettare una CLI che gira insieme.
+>
+> Togliere all'avvio gli archivi scaduti da più di un'ora cambia poco il comportamento: la regola è la stessa, si
+> applica prima. Va detto nel CHANGELOG.
+>
+> **Passi**:
+>
+> 1. I rossi, con tre test-author:
+>    - servizi: la pulizia, `get_job`, la chiave, i totali, la fissazione dell'ordine;
+>    - utilità: `--password-stdin` su un TTY, la riga di `decrypt`, la pulizia spostata;
+>    - Vitest: `new-password`;
+> 2. il codice;
+> 3. la doc (docs-writer);
+> 4. i verdi, i controlli statici, mkdocs rigoroso;
+> 5. il blocco del CHANGELOG (🔒);
+> 6. il checkpoint.
+>
+> Senza B-21 non serve uno slot: solo `services`, `utils` e Vitest.
+>
+> **Selettori**:
+>
+> - `services`: `backup-leftovers` (nuovo), `backup-jobs`, `backup-secure`, `backup-totals`, `backup-apply`,
+>   `app-lifecycle`;
+> - `utils`: `backup-cli-secure`, `backup-cli`;
+> - Vitest: `BackupDownloadCard`;
+> - mkdocs rigoroso e check-links;
+> - con B-21 anche `api backup-restore`, in uno slot.
+>
+> **Fatto quando**:
+>
+> - un avvio dopo un kill non trova un archivio decifrato in `.restore/stage/`, né `.decrypt-*` più vecchie di un'ora,
+>   né i file di lavoro di un job interrotto;
+> - nulla si tocca sotto un lucchetto preso o attraverso un link, e il passo non solleva mai;
+> - `decrypt` dice che lo zip apre le chiavi salvate, quando porta la chiave;
+> - `--password-stdin` su un terminale non mostra mai la password, e i campi della creazione sono `new-password`;
+> - una chiave oltre 4096 byte non si esporta, e il job avvisa con `instance_key_unusable`;
+> - `totals.py` non ha più una copia della regola di J, e lo stato non cambia;
+> - doc e CHANGELOG sono a posto.
+>
+> **Domande al coordinatore**: B-21 nello stesso lotto (propongo sì)? Il nome del passo, `backup-leftovers`? Nessuna
+> domanda per il developer. 🧊 FROZEN in attesa del via.
+>
+> **Via (coordinatore, 03:34)**: B4b approvato com'è scritto, **B-21 dentro**, il nome `backup-leftovers` va bene.
+> Prima i rossi. Lo slot breve per `api backup-restore` (B-21: il rosso, poi il verde) viene dopo il blocco della
+> galleria, verso le 04:35. Il codice di B-21 resta fuori dal worktree fino al suo rosso.
+>
+> **Rossi in scrittura (03:40)**: il contratto congelato è in `files/b4b-test-brief.md` (§1-§7). I quattro test-author,
+> ciascuno sui suoi file:
+>
+> - servizi: §1, cioè `test_backup_leftovers.py` (nuovo) e la fissazione in `test_backup_apply.py` (j); §4 in
+>   `test_backup_secure.py`;
+> - API e totali: §6 in `test_backup_restore.py`, §5 in `test_backup_totals.py`;
+> - CLI: §2 e §3 in `test_backup_cli_secure.py`;
+> - frontend: §3 in `BackupDownloadCard.test.ts` e `RestoreCard.test.ts`. **Fatto alle 03:47**: un caso rosso (i due
+>   campi a `new-password`) e una guardia verde (`restore-password` resta `off`).
+>
+> Intanto:
+>
+> - il codice è pronto fuori dal worktree, in `files/b4b-wip/`. Lo verifica `--check`, tutti verdi sull'albero:
+>   - `apply_b4b_core.py`: `leftovers.py` nuovo, `restore_jobs`, `jobs`, il passo in `app_lifespan.py`;
+>   - `apply_b4b_cli.py`;
+>   - `apply_b4b_misc.py`: `secure`, `totals`, la card;
+>   - `apply_b4b_b21.py`, tenuto fuori fino al rosso nello slot;
+> - registrato il selettore `services backup-leftovers` (`_backend_services.py`, un'aggiunta; ruff e black puliti).
+>
+> **Rossi eseguiti (03:47-03:50)**, uno alla volta, a carico < 50, tutti rossi per il motivo giusto:
+>
+> - `services backup-totals` (B-22): 19 falliti e 65 passati. Fallisce solo il test capovolto, ora
+>   `…_is_refused_by_j_and_absent`: «0 documents given to J», perché `_plain` decide ancora prima di J;
+> - Vitest sulle card (B-25 UI): 1 fallito e 114 passati. I due campi sono ancora a `off`; la guardia del campo del
+>   ripristino è verde;
+> - `utils backup-cli-secure` (B-24, B-25 CLI): 11 falliti e 47 passati:
+>   - B-24: la riga 🔑 (1), e i tre casi senza riga (3): la loro precondizione vuole che un archivio con la chiave abbia
+>     la riga;
+>   - B-25: `--password-stdin` a un terminale (4), le sue tre risposte di rifiuto (3).
+>
+>   Le guardie della pipe e il caso (j) restano verdi.
+>
+> Due cose dai test-author:
+>
+> - TA-E: il difetto di oggi è peggio dell'eco. A un terminale, `create --password-stdin` legge una sola riga senza
+>   conferma, e un errore di battitura sigillerebbe il backup con una password che nessuno conosce. La strada del
+>   terminale chiede la password due volte;
+> - TA-B: la descrizione del selettore `backup-totals` nel runner dice ancora «decided before J's from_json». La
+>   correggo col codice.
+>
+> I rossi di B-21 (8 casi, `api backup-restore`) aspettano lo slot.
+>
+> **⚠️ Fuori pista: tre buchi del contratto trovati da TA-S (03:55), corretti nel lotto (revisione delle 03:58)**:
+>
+> 1. **`archive.zip.part`.** `decrypt_file` scrive attraverso `<nome>.part`. Una `restore` della CLI uccisa mentre
+>    decifra lascia quindi un archivio in chiaro parziale, che può già contenere la chiave, e `prune` lo toglierebbe
+>    solo dopo 24 h. Ora `remove_stray_decrypted_archives` toglie sia `archive.zip` sia `archive.zip.part`, solo file
+>    veri;
+> 2. **`remove_expired_jobs` seguiva un link.** Usava `folder.is_dir()`. Al backup seguente era innocuo, perché
+>    `_prepare` passa prima da `ensure_private_dir`, che rifiuta i link. Ma ora la funzione gira da sola a ogni avvio,
+>    quindi controlla `is_plain_dir` su `backups/` e su `.jobs/`. È codice di B1, ma legato al mio cambiamento;
+> 3. **Un controllo chiuso all'avvio non si contava**, perché `prune` restituiva `None`: proprio il caso più importante
+>    della nota di E non avrebbe lasciato traccia nel log. Ora `prune` restituisce quanti controlli ha chiuso come
+>    `restore_interrupted`, e il riassunto INFO comincia con `checks_interrupted`. Tutti i chiamanti ignoravano il
+>    valore restituito, e `_prune_checks` è privata.
+>
+> Codice aggiornato in `files/b4b-wip/` (`apply_b4b_core.py`: 15 operazioni, `--check` verde). TA-S estende i suoi test.
+>
+> TA-S ha trovato un altro caso: con `backups/` come link, `.jobs` nel suo bersaglio sembra una cartella vera. Il mio
+> `end_interrupted_jobs` controllava già entrambi i livelli, ma il contratto lo diceva male: corretto, e aggiunto il
+> caso (`test_while_backups_or_its_jobs_folder_is_a_link_no_job_is_ended`, 4 casi).
+>
+> **Gli ultimi rossi (04:26-04:28)**, per il motivo giusto:
+>
+> - `services backup-secure` (B-26): 6 falliti, 62 passati. Falliscono i casi oltre il limite: due chiavi da 4097 byte
+>   (ASCII, e caratteri da due byte) in `exportable_instance_key`, in `generated_key_unusable` e nel backup sicuro. I
+>   casi da 4096 byte sono verdi già oggi, di proposito: fanno da guardia all'errore di uno;
+> - `services backup-apply` (N66): 1 fallito, 227 passati. La fissazione dell'ordine dà «missing from STARTUP_STEPS»;
+> - `services backup-leftovers` (B-23): 44 falliti su 44:
+>   - il modulo `leftovers` mancante: 26 casi;
+>   - le funzioni nuove: `end_interrupted_jobs` 5, `remove_stray_decrypted_archives` 4;
+>   - `prune` che restituisce `None`: 5 casi;
+>   - i link: `remove_expired_jobs` toglie ancora attraverso un link, 2 casi;
+>   - `get_job`, che lascia i file di lavoro: 1 caso;
+>   - l'import nel lifespan: 1 caso.
+>
+> **Codice applicato (04:29)**: `apply_b4b_core.py` (15 operazioni più `leftovers.py`), `apply_b4b_cli.py` (6) e
+> `apply_b4b_misc.py` (10). `apply_b4b_b21.py` resta fuori. Ruff e black puliti sui 7 file. Gli import non hanno cicli:
+> il passo `backup-leftovers` sta subito dopo `restore-commit`, e i passi sono 23. Nel runner, la descrizione di
+> `backup-totals` ora dice «refused by J's from_json» (nota di TA-B).
+>
+> **In corso (dalle 04:30)**:
+>
+> - i verdi leggeri, `files/scripts/b4b_greens.sh`: 8 selettori `services`, 3 `utils`, il Vitest delle card;
+> - la doc: il docs-writer col brief `files/b4b-docs-brief.md` e la revisione delle 03:58.
+>
+> **Verdi leggeri (04:28-04:31), tutti verdi**:
+>
+> - `services`: `backup-leftovers` 44, `backup-secure` 68, `backup-apply` 228, `backup-totals` 84, `backup-jobs` 69,
+>   `backup-staging` 145, `app-lifecycle` 51, `backup-secure-rules` 24;
+> - `utils`: `backup-cli-secure` 58, `backup-cli` 102, `backup-cli-restore` 77;
+> - Vitest delle tre card: 161;
+> - `front check` (04:33): 0 errori e 0 avvisi.
+>
+> BACKUP-007 (`api backup`) legge un job interrotto che ha solo `state.json`: la pulizia dei file di lavoro in `get_job`
+> non lo tocca. Nello slot basta quindi `api backup-restore`, più `api backup` come prova.
+>
+> **Slot (coordinatore, 04:35)**: è lo slot 1 dopo X (~25 minuti), poi J e MF. Circa 10 minuti:
+>
+> 1. `api backup-restore`, il rosso di B-21. Ricostruisce il frontend per `autocomplete`;
+> 2. `apply_b4b_b21.py`;
+> 3. `api backup-restore`, il verde;
+> 4. `api backup`.
+>
+> Intanto la bozza del blocco del CHANGELOG è in `files/next-checkpoint/changelog-b4b.md`: 3 🔒 e 1 🐛. B-22 e B-21 sono
+> interni, quindi senza voce.
+>
+> **Doc (docs-writer, 04:40)**, solo pagine inglesi, nessun timbro:
+>
+> - `overview.md`: 23 passi, uguali a `STARTUP_STEPS`;
+> - `security.md`: dentro `#secure-backups` le righe di B-23..B-26, e la sottosezione nuova `#backup-leftovers`; il
+>   paragrafo dei totali (B-22) e quello del limite di upload (B-21);
+> - `backup_restore.en.md`: `#command-line`, `#secure`, `#check`, `#by-hand`, `#secure-problems`;
+> - `cli_tools.en.md`: il debito di traduzione di B4 cresce nelle stesse sezioni.
+>
+> Le sue cinque note, decise:
+>
+> 1. B-21 è documentato prima del codice: il codice entra nello slot. Se lo slot salta, tolgo quelle righe;
+> 2. il messaggio della CLI «the next backup after that removes it» resta vero, solo non è più l'unica via. Lasciato:
+>    un test fissa quel testo;
+> 3. lo stato di un job interrotto resta un'ora in più: è voluto, ed è documentato;
+> 4. togliere `archive.zip` aggiorna il tempo di modifica della cartella di stage, quindi le 24 h della copia ripartono
+>    una volta, a quell'avvio; gli avvii seguenti non toccano nulla. Accettato: la copia è dati in chiaro come il DB
+>    vivo, nella stessa cartella privata;
+> 5. `get_job()` aiuta solo i job che qualcuno segue. Il resto lo fa l'avvio, e la doc promette solo questo.
+>
+> **Verdi della doc (04:42-04:44)**: build rigorosa exit 0 (68 s), check-links valido, `gate-docs-links` 63.
+>
+> **Slot 1 (coordinatore, 04:45)**: partito con `files/scripts/b4b_slot.sh`.
+>
+> **Slot (04:44-04:49) ✅**:
+>
+> - `api backup-restore` rosso: 8 falliti, proprio i casi di B-21 (un 500 dove si aspettano 503 o un limite nullo), e
+>   122 verdi. Anche il nuovo valore restituito da `prune` non rompe nulla;
+> - `apply_b4b_b21.py`, 3 operazioni; ruff e black puliti;
+> - `api backup-restore` verde: 130;
+> - `api backup`: 23.
+>
+> La porta 6187 è libera alle 04:48:52, ed è stato detto al coordinatore.
+>
+> **Backlog**: B-21..B-26 chiusi con ✅ («Fatto il 17/10 in B4b»). B-27 resta per il lotto seguente.
+>
+> **Checkpoint (04:55)**: 21 file modificati e 2 nuovi, `git diff --check` pulito, porta libera. Inviato col blocco del
+> CHANGELOG (`files/next-checkpoint/changelog-b4b.md`, 3 🔒 e 1 🐛). 🧊 FROZEN. Il prossimo lotto è B-27.
 >
 > **Approvato (coordinatore, 03:12)**: prima l'analisi, dopo l'ingresso di B4. Il passo di avvio nuovo dopo
 > `restore-commit` è la sua decisione **N66**, un'estensione di N57: aggiornare `STARTUP_STEPS` e `overview.md`.
