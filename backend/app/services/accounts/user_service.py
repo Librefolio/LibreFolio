@@ -402,6 +402,21 @@ async def complete_password_reset(session: AsyncSession, token: str, new_passwor
     return user
 
 
+async def refreshed_under_lock(session: AsyncSession, user: User) -> bool:
+    """SQLite's write lock taken, then ``user`` read again: what every decision on an account reads (A-51).
+
+    ``False``, the session rolled back, when the account was deleted since it was loaded (A-54): ``session.refresh``
+    would raise ``InvalidRequestError`` there — a 500 —, and the caller answers as for an account that does not exist.
+    """
+    user_id = user.id
+    await begin_writes(session, User)
+    if (await session.execute(select(User.id).where(User.id == user_id))).first() is None:
+        await session.rollback()
+        return False
+    await session.refresh(user)
+    return True
+
+
 async def update_user_status(
     session: AsyncSession,
     user: User,
@@ -415,7 +430,8 @@ async def update_user_status(
     Every decision reads the account under SQLite's write lock, refreshed (A-51): a setup completed, or another change
     committed, since the caller read it is seen here. Returns ``"LAST_ADMIN"``, changing nothing, when the change would
     deactivate or demote the last active administrator; ``"SETUP_COMPLETED"``, changing nothing, when ``cancel_setup``
-    asks to cancel the setup link of an account that no longer waits; None otherwise. Deactivating or demoting ends every session of the account. A value equal to the
+    asks to cancel the setup link of an account that no longer waits; ``"NOT_FOUND"``, changing nothing, when the
+    account was deleted since the caller read it (A-54); None otherwise. Deactivating or demoting ends every session of the account. A value equal to the
     current one changes nothing, except one thing: deactivating an account that waits for its email verification ends
     the wait, as ``user deactivate`` does. Activating or deactivating revokes the account's email-verification links:
     an administrator has decided, so the account no longer waits for one, and an old link cannot wake it (workstream E).
@@ -424,8 +440,8 @@ async def update_user_status(
     cancellation: it keeps waiting, and ``./dev.py user setup-link`` gives it a new one —; deactivating any other
     account retires the setup links it never used (A-43). Demoting the waiting administrator is refused by the caller.
     """
-    await begin_writes(session, User)
-    await session.refresh(user)
+    if not await refreshed_under_lock(session, user):
+        return "NOT_FOUND"
     deactivate = is_active is False and user.is_active
     demote = is_superuser is False and user.is_superuser
     if (deactivate or demote) and await _is_last_active_admin(session, user):
@@ -438,20 +454,7 @@ async def update_user_status(
         await session.rollback()
         logger.info("Setup cancellation refused: the account does not wait for its setup", user_id=user_id)
         return "SETUP_COMPLETED"
-    changed = False
-    if is_active is not None and is_active != user.is_active:
-        user.is_active = is_active
-        changed = True
-        await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION)
-        # Activated another way, the initial administrator is set up (A-32); deactivated, a link left behind must not
-        # set up the account again (A-43): either way its setup links are retired
-        await token_service.retire_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
-    elif is_active is False:
-        if await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION):
-            # An account already inactive that waited for its email verification: its links stop working, its place is free.
-            changed = True
-        if await _end_setup_links(session, user, waiting):
-            changed = True
+    changed = await _apply_active_flag(session, user, is_active, waiting)
     if is_superuser is not None and is_superuser != user.is_superuser:
         user.is_superuser = is_superuser
         changed = True
@@ -464,6 +467,28 @@ async def update_user_status(
         await session.refresh(user)
         logger.info("User status changed", user_id=user.id, username=user.username, is_active=user.is_active, is_superuser=user.is_superuser)
     return None
+
+
+async def _apply_active_flag(session: AsyncSession, user: User, is_active: Optional[bool], waiting: bool) -> bool:
+    """The ``is_active`` part of ``update_user_status``, under its lock: whether anything changed. Not committed.
+
+    A new value of the flag revokes the account's email-verification links and retires its setup links. Deactivating an
+    account already inactive ends what it waited for: its verification links, and its setup links (``_end_setup_links``:
+    revoked for the waiting initial administrator, ``waiting``; retired for any other).
+    """
+    if is_active is not None and is_active != user.is_active:
+        user.is_active = is_active
+        await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION)
+        # Activated another way, the initial administrator is set up (A-32); deactivated, a link left behind must not
+        # set up the account again (A-43): either way its setup links are retired
+        await token_service.retire_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
+        return True
+    if is_active is not False:
+        return False
+    # An account already inactive that waited for its email verification: its links stop working, its place is free.
+    revoked = await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION)
+    ended = await _end_setup_links(session, user, waiting)
+    return bool(revoked) or bool(ended)
 
 
 async def _is_pending_admin(session: AsyncSession, user: User) -> bool:
@@ -517,9 +542,9 @@ async def set_user_active(
         return False, f"User '{username}' not found"
 
     # The decisions read the account under SQLite's write lock, refreshed (A-51): a setup completed since the read above
-    # has made the waiting administrator an active one
-    await begin_writes(session, User)
-    await session.refresh(user)
+    # has made the waiting administrator an active one; an account deleted meanwhile is not found (A-54)
+    if not await refreshed_under_lock(session, user):
+        return False, f"User '{username}' not found"
     if not active and await _is_last_active_admin(session, user):
         await session.rollback()
         return False, f"User '{username}' is the last active administrator: promote or activate another administrator first"
@@ -577,9 +602,9 @@ async def set_user_admin(
         return False, f"User '{username}' is {status}"
 
     # The decisions read the account under SQLite's write lock, refreshed (A-51): a setup completed since the read above
-    # has made the waiting administrator an active one
-    await begin_writes(session, User)
-    await session.refresh(user)
+    # has made the waiting administrator an active one; an account deleted meanwhile is not found (A-54)
+    if not await refreshed_under_lock(session, user):
+        return False, f"User '{username}' not found"
     if not is_admin and await _is_last_active_admin(session, user):
         await session.rollback()
         return False, f"User '{username}' is the last active administrator: promote another user first"
