@@ -9,6 +9,7 @@ Tests for price-related endpoints:
 """
 
 import time
+import uuid
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -1112,3 +1113,80 @@ async def test_query_more_than_1000_items_is_refused(test_server):
         assert isinstance(detail.get("message"), str) and detail["message"].strip(), detail
         assert {key: value for key, value in detail.items() if key not in ("code", "message")} == {"max_items": BULK_MAX_ITEMS, "items": BULK_MAX_ITEMS + 1}
         print_success(f"  ✓ 422 {detail['code']}: {detail['items']} items, at most {detail['max_items']}")
+
+
+# ============================================================
+# X-R65 (N83): a stored price is dated within [1900-01-01, the server's tomorrow]
+# ============================================================
+#
+# J's SEC8-1b: one price dated 0001-01-01 makes a backward fill or a risk replay walk about 740 000 days per asset.
+# POST /assets/prices checks every date against date_range_limits.stored_date_bounds() -- 1900-01-01 and
+# latest_range_end(), both included -- before any statement: one date outside refuses the whole request with a 422 and
+# writes nothing, for any asset of it. The frozen ceiling, the bounds themselves, the cap of ten and a provider's points
+# are pinned at service level (services asset-source-guards; services range-ceiling, RC-W); here the route on the lane's
+# server, at its real ceiling, read before the request and after the answer as RC-API-01 reads it. 1899-12-31, not
+# 0001-01-01: on code without the check the price is stored, and a walk from year one is what this lot prevents, not
+# something to start on the shared backend.
+
+STORED_FLOOR = "1900-01-01"  # the contract's floor (EARLIEST_RANGE_START), written here and not read from the code
+
+
+async def _create_bounds_asset(client: httpx.AsyncClient) -> int:
+    """An asset of this test alone, in USD, its name unique across workers; the caller deletes it."""
+    item = FAAssetCreateItem(display_name=f"Stored Bounds {unique_id('XR65')} {uuid.uuid4().hex[:8]}", currency="USD")
+    resp = await client.post(f"{API_BASE}/assets", json=[item.model_dump(mode="json")], timeout=TIMEOUT)
+    assert resp.status_code == 201, resp.text
+    return FABulkAssetCreateResponse(**resp.json()).results[0].asset_id
+
+
+async def _stored_price_days(client: httpx.AsyncClient, asset_id: int) -> list[str]:
+    """Every day the asset has a price on, whatever its date: the backup export reads the table, no range and no fill."""
+    resp = await client.get(f"{API_BASE}/backup/asset/{asset_id}/prices", params={"format": "json"}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return [row["date"] for row in resp.json()["rows"]]
+
+
+@pytest.mark.asyncio
+async def test_upsert_outside_the_stored_bounds_is_refused_whole(test_server):
+    """RC-API-05 (X-R65, N83): POST /assets/prices with 1899-12-31 on one asset and a day past the ceiling on another,
+    each beside valid days, answers 422 ``{"code": "date_out_of_range", "message", "params": {"min": "1900-01-01",
+    "max": the ceiling}, "items": [{"asset_id": first, "dates": ["1899-12-31"]}, {"asset_id": second, "dates": [that
+    day]}], "count": 2}`` -- and neither asset has a price, not even on its valid days.
+
+    The ceiling is ``latest_range_end()``, read before the request and after the answer: ``max`` lies between them. The
+    day past it is 30 days on, past whatever the ceiling becomes meanwhile.
+    Red before X-R65: 200, the five prices stored -- 1899-12-31 and the day past the ceiling with them.
+    """
+    print_section("RC-API-05: price upsert outside the stored bounds refused")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        owned: list[int] = []
+        try:
+            owned.append(await _create_bounds_asset(client))
+            owned.append(await _create_bounds_asset(client))
+            first, second = owned
+            assert (await _stored_price_days(client, first), await _stored_price_days(client, second)) == ([], []), "barrier: a new asset holds prices"
+            ceiling_before = latest_range_end()
+            past_ceiling = ceiling_before + timedelta(days=30)
+            body = [
+                FAUpsert(asset_id=first, prices=[FAPricePoint(date=day, close=Decimal(close), currency="USD") for day, close in ((date(2020, 3, 2), "100"), (date(1899, 12, 31), "101"), (date(2020, 3, 3), "102"))]),
+                FAUpsert(asset_id=second, prices=[FAPricePoint(date=day, close=Decimal(close), currency="USD") for day, close in ((date(2020, 3, 2), "200"), (past_ceiling, "201"))]),
+            ]
+            resp = await client.post(f"{API_BASE}/assets/prices", json=[item.model_dump(mode="json") for item in body], timeout=TIMEOUT)
+            ceiling_after = latest_range_end()
+            assert resp.status_code == 422, f"{resp.status_code}: {resp.text[:400]}"
+            detail = resp.json()["detail"]
+            assert isinstance(detail, dict) and set(detail) == {"code", "message", "params", "items", "count"}, detail
+            assert detail["code"] == "date_out_of_range", detail
+            assert isinstance(detail["message"], str) and detail["message"].strip(), detail
+            assert set(detail["params"]) == {"min", "max"} and detail["params"]["min"] == STORED_FLOOR, detail
+            assert ceiling_before <= date.fromisoformat(detail["params"]["max"]) <= ceiling_after, f"max {detail['params']['max']} outside {ceiling_before} … {ceiling_after}"
+            assert detail["items"] == [{"asset_id": first, "dates": ["1899-12-31"]}, {"asset_id": second, "dates": [past_ceiling.isoformat()]}], detail
+            assert detail["count"] == 2, detail
+            assert await _stored_price_days(client, first) == []
+            assert await _stored_price_days(client, second) == []
+            print_success(f"  ✓ 422 {detail['code']}: {detail['count']} date(s), nothing stored")
+        finally:
+            if owned:
+                await client.delete(f"{API_BASE}/assets", params={"asset_ids": owned}, timeout=TIMEOUT)

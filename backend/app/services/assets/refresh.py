@@ -39,7 +39,7 @@ from backend.app.services.assets.base import (
 )
 from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.price_store import PriceStoreOperations, _unstorable_provider_point, storable_current_value, unstorable_quote_reason
-from backend.app.utils.date_range_limits import range_span_floor
+from backend.app.utils.date_range_limits import range_span_floor, stored_date_bounds
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -565,8 +565,10 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
             # Count actual changes BEFORE upserting (compare with DB)
             if price_items:
                 # Only the dates the upsert keeps are counted and announced: a value no column keeps loses its date in
-                # the upsert (W-B58), so that date is neither a change nor in ``changed_points`` (W-B62)
-                kept_items = [p for p in price_items if _unstorable_provider_point(p) is None]
+                # the upsert (W-B58), so that date is neither a change nor in ``changed_points`` (W-B62); nor is a date
+                # outside stored_date_bounds(), which the upsert skips as well (X-R65, N83)
+                earliest, latest = stored_date_bounds()
+                kept_items = [p for p in price_items if _unstorable_provider_point(p) is None and earliest <= p.date <= latest]
                 try:
                     new_count, changed_count, changed_items_delta = await _count_actual_price_changes(persist_session, asset_id, kept_items)
                 except Exception:
