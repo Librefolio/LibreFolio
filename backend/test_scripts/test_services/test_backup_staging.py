@@ -82,6 +82,22 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     the copy; the same one warning, no line naming the function. The guard: this LibreFolio's own index on
     ``lower(email)`` reads with the stand-ins, and its backup checks as usual. A CHECK or a DEFAULT calling them is
     resolved only when used: lot B-45's, not pinned here.
+(o) Lot B-49, text that is not UTF-8: SQLite keeps as TEXT whatever bytes it is handed and checks no encoding, and its
+    integrity check passes them; once restored, every ``select`` of such a table fails in the server, its error quoting
+    the bytes. A check reads every text value of its copy — every table but SQLite's own, those LibreFolio does not have
+    too, by storage class (the text of a DATE column counts, a BLOB is no text) — on a connection of ``staging`` of its
+    own, ``mode=ro``, ``trusted_schema`` off first, once the copy is found to be the database its manifest describes and
+    before anything writes in it. An archive holding text that is not UTF-8 — in ``transactions.description``, in
+    ``fx_rates.date``, in a table LibreFolio does not have (its names quoted, its column untyped), the three at once,
+    one character whose two bytes are split over two rows, the first or the last row of a table whose rowids are as far
+    apart as SQLite allows, a column generated VIRTUAL or STORED from a ``CAST`` of bytes (``PRAGMA table_info`` does
+    not list it, ``table_xinfo`` does) — is refused ``database_damaged`` in the contract's words: the copy described
+    once, never fixed nor upgraded (an older backup too, its progress never reaching ``upgrading``), nothing of it left,
+    the lock free, the archive only read. One warning, whose payload is numbers only: how many tables hold such text; no
+    line of the log holds the text, its bytes, the words of a decode error, a name of the archive or a path. A manifest
+    that does not describe the database is still refused for that, first. The guards: valid UTF-8 beyond ASCII
+    (characters of two to four bytes) in the same places, and the same bytes stored as a BLOB, are checked as usual,
+    and the copy keeps them as they are.
 
 Real databases: two, made once for the module by ``alembic upgrade`` in a process of their own (at the head, and at
 ``OLDER``), then copied for every data directory and given accounts by SQL. Two more ``alembic`` processes
@@ -107,7 +123,12 @@ the manifest listing its new bytes and its tables: the snapshot's ``VACUUM INTO`
 lacks, so only a hand puts such a database in an archive (``floor``'s index takes the same road). Every reader the
 product opens today lacks ``lf_b43_probe`` and ``regexp``; the server's connections are played by a read-only reader
 that registers ``regexp`` and ``floor`` as stand-ins, deterministic and never run, ``trusted_schema`` off
-(``server_schema_error``).
+(``server_schema_error``). (o) replaces ``run_post_migration_fixes`` as ``staging`` imports it, the first step that
+writes in the copy, with a function that fails the test, and wraps ``describe_database`` as (n) does. Its archives are
+real backups whose database got its text by SQL (a ``CAST`` of bytes, stored, or the expression of a generated column)
+before the backup: the snapshot copies the bytes as they are, and nothing of the build reads them. Its check of a table
+whose rowids are far apart runs in a thread, joined with a deadline: a scan that never ends fails the test instead of
+holding it.
 
 Pure: every data directory, database and archive lives in ``tmp_path``. This process and every process it starts are
 configured with a production data directory of the test (``LIBREFOLIO_TEST_*`` removed, ``LIBREFOLIO_DATA_DIR`` set and
@@ -3137,3 +3158,469 @@ def test_this_librefolio_s_own_index_on_lower_reads_with_the_server_s_functions_
     report = stage_archive(head_archive.path, instance.root)
     assert (report.action, report.warnings, report.blockers, report.restorable) == ("same", [], [], True), f"the head archive checks as a backup at the head, restorable: {report.action}, {report.warnings}, {report.blockers}"
     print_success(f"{OWN_LOWER_INDEX} on lower(email): read with the stand-ins, the head archive restorable")
+
+
+# =============================================================================
+# (o) Lot B-49: text that is not UTF-8
+# =============================================================================
+#
+# SQLite keeps as TEXT whatever bytes a statement hands it (a ``CAST`` of a blob; a crafted archive) and checks no
+# encoding: ``PRAGMA integrity_check`` passes such a database, and nothing of the check reads most of its columns. Once
+# restored, every ``select`` of that table fails in the server: ``sqlite3`` cannot decode the value, and its
+# ``OperationalError`` quotes the archive's bytes («Could not decode to UTF-8 column … with text …»). A check reads
+# every text value of its copy — every table but SQLite's own, those LibreFolio does not have too; by storage class, so
+# the text of a DATE column counts and a BLOB does not — on a connection of its own (``mode=ro``, ``trusted_schema``
+# off first), once the copy is found to be the database its manifest describes and before anything writes in it, and
+# refuses an archive holding any text that is not UTF-8: ``database_damaged``, with a message of its own. One warning
+# gives how many tables hold such text, and nothing else. Every text this section stores that is not UTF-8 holds
+# ``B49_MARKER``, every name it gives a table or a column ``B49_UNTRUSTED``: a line of the log or a message that holds
+# one of them quotes the archive's text or names its tables.
+
+#: The refusal of a copy holding text that is not UTF-8 (B-49): B-43's code, the contract's message.
+UNDECODABLE_CODE = "database_damaged"
+UNDECODABLE_MESSAGE = "The backup's database holds text that is not UTF-8: it cannot be restored"
+#: The one warning the refusal logs (B-49): its only payload, the number of tables holding such text.
+UNDECODABLE_EVENT = "A backup's database holds text that is not UTF-8"
+#: What every text that is not UTF-8 this section stores holds: the archive's own text.
+B49_MARKER = "b49-archive-text"
+#: What every name this section gives a table or a column holds: the archive's own names.
+B49_UNTRUSTED = "b49_untrusted"
+#: A text that is not UTF-8: 0xff, a byte UTF-8 never uses, between two letters, then the marker. SQLite keeps it as
+#: TEXT (a ``CAST`` of its bytes); ``sqlite3`` cannot read it back as text, and its error quotes it, 0xff as U+FFFD.
+NOT_UTF8 = b"E\xffR " + B49_MARKER.encode()
+#: Valid UTF-8 beyond ASCII: characters of two bytes (é), three (日本) and four (💶, an emoji; 𝄞, a musical symbol).
+VALID_TEXT = "Caf\u00e9 \u65e5\u672c \U0001f4b6 \U0001d11e"
+VALID_UTF8 = VALID_TEXT.encode("utf-8")
+#: What no line of the log may hold: the text (its marker; its 0xff as sqlite3 quotes it, as Python escapes it or names
+#: it, as Latin-1 decodes it; in hex), the words of sqlite3's error and of Python's decoder, and the archive's names.
+UNDECODABLE_FRAGMENTS = (B49_MARKER, "E\ufffdR", "\ufffd", "\\xff", "0xff", "\xff", "45ff52", "45FF52", "Could not decode", "with text", "can't decode", "invalid start byte", B49_UNTRUSTED)
+#: A statement that reads values by their storage class, as B-49's read does: ``typeof(`` and ``'text'``, whatever the
+#: case, the spacing or the form of the comparison. No exact SQL is pinned.
+TEXT_BY_STORAGE_CLASS = (re.compile(r"\btypeof\s*\(", re.IGNORECASE), re.compile(r"'text'", re.IGNORECASE))
+
+
+def sql_name(name: str) -> str:
+    """``name`` as an SQL identifier: in double quotes, a quote it holds doubled."""
+    return '"' + name.replace('"', '""') + '"'
+
+
+def text_sql(raw: bytes) -> str:
+    """The SQL of a TEXT value made of the bytes ``raw`` as they are: SQLite checks no encoding."""
+    return f"CAST(x'{raw.hex()}' AS TEXT)"
+
+
+def blob_sql(raw: bytes) -> str:
+    """The SQL of a BLOB made of the bytes ``raw``."""
+    return f"x'{raw.hex()}'"
+
+
+def stored_bytes(database: Path, sql: str) -> list[tuple]:
+    """What ``sql`` reads of ``database``, read only, every text as its bytes: a text that is not UTF-8 included."""
+    with closing(read_only(database)) as conn:
+        conn.text_factory = bytes
+        return conn.execute(sql).fetchall()
+
+
+@dataclass(frozen=True)
+class TextPlace:
+    """Where this section stores a value: ``column`` of ``table``. ``store(value)``, the statements storing the SQL
+    expression ``value`` there, in ``rows`` rows; ``read``, the query reading back the storage class and the value of
+    each, in order."""
+
+    name: str
+    table: str
+    column: str
+    rows: int
+    store: Callable[[str], tuple[str, ...]]
+    read: str
+
+
+#: A TEXT column of the app, which every ``select`` of its model reads: ``transactions.description``, in the two rows of
+#: a broker of their own. Nothing of today's check reads it: the control totals read eight other columns.
+IN_A_TEXT_COLUMN = TextPlace(
+    name="transactions.description",
+    table="transactions",
+    column="description",
+    rows=2,
+    store=lambda value: (
+        f"INSERT INTO brokers (id, name, created_at, updated_at) VALUES (49, 'Broker B-49', '{CREATED}', '{CREATED}')",
+        f"INSERT INTO transactions (broker_id, type, date, quantity, amount, currency, description, created_at, updated_at) VALUES (49, 'DEPOSIT', '2026-01-02', 0, 100, 'EUR', {value}, '{CREATED}', '{CREATED}')",
+        f"INSERT INTO transactions (broker_id, type, date, quantity, amount, currency, description, created_at, updated_at) VALUES (49, 'WITHDRAWAL', '2026-01-03', 0, -40, 'EUR', {value}, '{CREATED}', '{CREATED}')",
+    ),
+    read="SELECT typeof(description), description FROM transactions WHERE broker_id = 49 ORDER BY id",
+)
+#: A DATE column of the app: ``fx_rates.date``, whose NUMERIC affinity keeps a text that is no number as TEXT; read by
+#: storage class, it counts. Nothing of today's check reads it: the currency audit reads ``base`` and ``quote``.
+IN_A_DATE_COLUMN = TextPlace(
+    name="fx_rates.date",
+    table="fx_rates",
+    column="date",
+    rows=1,
+    store=lambda value: (f"INSERT INTO fx_rates (date, base, quote, rate, source, fetched_at) VALUES ({value}, 'EUR', 'USD', 1.0849, 'ECB', '{CREATED}')",),
+    read="SELECT typeof(date), date FROM fx_rates WHERE base = 'EUR' AND quote = 'USD'",
+)
+#: A table LibreFolio does not have, as a crafted archive carries one (B-28 lets a table through by its kind): its name
+#: and its column's need quotes, and the column declares no type, so that only its storage class says a value is text.
+B49_TABLE = f'{B49_UNTRUSTED} "notes"'
+B49_COLUMN = f"{B49_UNTRUSTED} body"
+IN_A_TABLE_LIBREFOLIO_DOES_NOT_HAVE = TextPlace(
+    name="a-table-librefolio-does-not-have",
+    table=B49_TABLE,
+    column=B49_COLUMN,
+    rows=1,
+    store=lambda value: (f"CREATE TABLE {sql_name(B49_TABLE)} (id INTEGER PRIMARY KEY, {sql_name(B49_COLUMN)})", f"INSERT INTO {sql_name(B49_TABLE)} ({sql_name(B49_COLUMN)}) VALUES ({value})"),
+    read=f"SELECT typeof({sql_name(B49_COLUMN)}), {sql_name(B49_COLUMN)} FROM {sql_name(B49_TABLE)} ORDER BY id",
+)
+ALL_TEXT_PLACES = (IN_A_TEXT_COLUMN, IN_A_DATE_COLUMN, IN_A_TABLE_LIBREFOLIO_DOES_NOT_HAVE)
+TEXT_PLACES = [
+    pytest.param((IN_A_TEXT_COLUMN,), id="text-column-transactions.description"),
+    pytest.param((IN_A_DATE_COLUMN,), id="date-column-fx_rates.date"),
+    pytest.param((IN_A_TABLE_LIBREFOLIO_DOES_NOT_HAVE,), id="a-table-librefolio-does-not-have"),
+    pytest.param(ALL_TEXT_PLACES, id="the-three-at-once"),
+]
+#: é (C3 A9) split over two rows of a table LibreFolio does not have: neither row is UTF-8, though their bytes joined
+#: with nothing between them are. The server reads each row on its own.
+SPLIT_TABLE = f"{B49_UNTRUSTED}_halves"
+SPLIT_COLUMN = f"{B49_UNTRUSTED}_half"
+SPLIT_HALVES = (b"\xc3", b"\xa9")
+#: A table whose rowids are as far apart as SQLite allows: the smallest, 1 and the largest. Windows of 200 000 rows are
+#: rows: a read stepping through rowid values instead would walk 2**64 / 200 000 windows, and hold the lock of the
+#: checks for ever; one starting at rowid 0 would never meet the first row. The text that is not UTF-8 lies at either
+#: end.
+SPARSE_TABLE = f"{B49_UNTRUSTED}_sparse"
+SPARSE_COLUMN = f"{B49_UNTRUSTED}_body"
+SMALLEST_ROWID = -(2**63)
+LARGEST_ROWID = 2**63 - 1
+SPARSE_ENDS = [pytest.param(SMALLEST_ROWID, id="at-the-smallest-rowid"), pytest.param(LARGEST_ROWID, id="at-the-largest-rowid")]
+#: A table LibreFolio does not have, its one row holding valid UTF-8 in a plain column, and a column generated from an
+#: expression of the schema alone, declared ``TEXT``: VIRTUAL (computed whenever it is read, never stored) or STORED
+#: (computed when the row is written). ``PRAGMA table_info`` does not list a generated column; ``table_xinfo`` does,
+#: its ``hidden`` 2 (VIRTUAL) or 3 (STORED): a read whose columns come from ``table_info`` passes it by. The expression
+#: calls no function, so neither B-43's integrity check (it computes a VIRTUAL column that declares a type, and finds
+#: TEXT in a TEXT column) nor the server's stand-ins (B-43, part 1) meet one, and B-28 lets a table through.
+GENERATED_TABLE = f"{B49_UNTRUSTED}_computed"
+GENERATED_PLAIN = f"{B49_UNTRUSTED}_plain"
+GENERATED_COLUMN = f"{B49_UNTRUSTED}_generated"
+GENERATED_KINDS = [pytest.param("VIRTUAL", 2, id="virtual"), pytest.param("STORED", 3, id="stored")]
+
+
+def archive_with(tmp: Path, database: Path, statements: tuple[str, ...], stored: dict[str, list[tuple]]) -> BuiltArchive:
+    """A real backup of a data directory made from ``database`` (``ACCOUNTS``, ``FILES``), whose database got
+    ``statements`` before it was archived: the snapshot copies the bytes as they are, and nothing of the build reads
+    them (the control totals read eight columns of ``transactions``, never ``description``). Checked: the build warned
+    of nothing, and each query of ``stored``, read as bytes on the database the archive carries, gives back its rows."""
+    data = make_data_dir(tmp / "data", database)
+    execute(data / DATABASE_ENTRY, *statements)
+    built = build_into(data, tmp / "work")
+    assert built.warnings == (), f"precondition: a backup its build warns nothing of: {built.warnings}"
+    carried = database_of(built.path, tmp / "carried.db")
+    held = {sql: stored_bytes(carried, sql) for sql in stored}
+    assert held == stored, f"precondition: the database of the archive stores what the test wrote, as it wrote it: {held}"
+    return built
+
+
+def archive_storing(tmp: Path, database: Path, places: tuple[TextPlace, ...], raw: bytes, *, as_blob: bool = False) -> BuiltArchive:
+    """``archive_with`` the bytes ``raw`` in every row of each of ``places``: as TEXT (a ``CAST`` of them), or as a
+    BLOB."""
+    value, kind = (blob_sql(raw), b"blob") if as_blob else (text_sql(raw), b"text")
+    statements = tuple(statement for place in places for statement in place.store(value))
+    return archive_with(tmp, database, statements, {place.read: [(kind, raw)] * place.rows for place in places})
+
+
+def in_a_generated_column(storage: str) -> TextPlace:
+    """``GENERATED_COLUMN`` of ``GENERATED_TABLE``, generated ``storage`` (``VIRTUAL`` or ``STORED``) and declared
+    ``TEXT``: ``store(value)`` creates the table, the SQL expression ``value`` the column's own, and inserts its one
+    row, ``GENERATED_PLAIN`` holding ``VALID_UTF8``; ``read``, the storage class and the value the column gives."""
+    return TextPlace(
+        name=f"{storage.lower()}-generated-column",
+        table=GENERATED_TABLE,
+        column=GENERATED_COLUMN,
+        rows=1,
+        store=lambda value: (
+            f"CREATE TABLE {GENERATED_TABLE} (id INTEGER PRIMARY KEY, {GENERATED_PLAIN} TEXT, {GENERATED_COLUMN} TEXT GENERATED ALWAYS AS ({value}) {storage})",
+            f"INSERT INTO {GENERATED_TABLE} (id, {GENERATED_PLAIN}) VALUES (1, {text_sql(VALID_UTF8)})",
+        ),
+        read=f"SELECT typeof({GENERATED_COLUMN}), {GENERATED_COLUMN} FROM {GENERATED_TABLE} ORDER BY id",
+    )
+
+
+def never_fixed(patch: pytest.MonkeyPatch, *, why: str = "the check went on with a database holding text that is not UTF-8 (B-49)") -> list[Path]:
+    """``run_post_migration_fixes`` as ``staging`` imports it, failing the test when a check reaches it: the first step
+    that writes in the copy, which a copy holding text that is not UTF-8 never reaches (B-49). ``why``: what the failure
+    says the check let through. The calls, kept."""
+    calls: list[Path] = []
+
+    def fixes(database: Path, data_dir: Path | None = None, **_options: Any) -> PostMigrationReport:
+        calls.append(Path(database))
+        pytest.fail(f"run_post_migration_fixes (as staging imports it) ran on the copy: {why}")
+
+    patch.setattr(staging, "run_post_migration_fixes", fixes)
+    return calls
+
+
+def given_away(line: dict[str, Any], places: tuple[TextPlace, ...], paths: tuple[str, ...]) -> list[str]:
+    """What a line of the log gives away: a fragment of the archive's text or of a decode error, a name of a table or a
+    column of ``places`` (as a whole word: ``date`` is not ``updated``), a path of the test."""
+    text = repr(line)
+    names = {name for place in places for name in (place.table, place.column)}
+    told = [fragment for fragment in UNDECODABLE_FRAGMENTS if fragment in text]
+    named = sorted(name for name in names if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text))
+    return [*told, *named, *(path for path in paths if path in text)]
+
+
+def reads_text_by_storage_class(statement: str) -> bool:
+    """Whether ``statement`` reads values by their storage class, as B-49's read does (``TEXT_BY_STORAGE_CLASS``)."""
+    return all(pattern.search(statement) for pattern in TEXT_BY_STORAGE_CLASS)
+
+
+@pytest.mark.parametrize("places", TEXT_PLACES)
+def test_a_database_holding_text_that_is_not_utf8_is_refused_before_anything_writes_in_its_copy(instance, databases, tmp_path, monkeypatch, places):
+    """(o) B-49 A backup at the head holding text that is not UTF-8 — in ``transactions.description`` (two rows), in
+    ``fx_rates.date`` (a DATE column), in a table LibreFolio does not have (its names quoted, its column untyped), or
+    the three at once — is refused ``database_damaged`` in the contract's words, once unpacked: after the copy's first
+    description (``describe_database``, the real one, answered ``ok`` once: the copy is the one its manifest describes)
+    and before anything writes in it (``run_post_migration_fixes`` and ``_upgrade`` fail the test if reached). Nothing
+    of the copy left, the lock free, no path said, the archive only read, the live data directory untouched
+    (``instance``). Red before B-49: nothing reads these values, and the check goes on to the post-migration fixes."""
+    print_section("B-49: text that is not UTF-8")
+    archive = archive_storing(tmp_path / "b49", databases.head, places, NOT_UTF8).path
+    original = sha256(archive.read_bytes())
+    answers = recorded_descriptions(monkeypatch)
+    fixed = never_fixed(monkeypatch)
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    error, progress = refused(archive, instance)
+    assert (error.code, str(error)) == (UNDECODABLE_CODE, UNDECODABLE_MESSAGE), f"refused in the contract's words: {error.code}: {error}"
+    assert progress.phases == UNPACKED, f"refused once unpacked, never upgraded nor verified: {progress.phases}"
+    assert (answers, fixed) == (["ok"], []), f"described once, as its manifest says, then refused before anything wrote in the copy: descriptions {answers}, fixes run on {fixed}"
+    assert sha256(archive.read_bytes()) == original, "the archive is only read"
+    print_success(f"{[place.name for place in places]}: {error.code}, nothing of the copy left")
+
+
+def test_an_older_backup_holding_text_that_is_not_utf8_is_refused_before_its_upgrade(instance, databases, tmp_path, monkeypatch):
+    """(o) B-49 An older backup — at ``OLDER``, built as the module's ``older_archive`` is — holding text that is not
+    UTF-8 in ``transactions.description``: refused ``database_damaged`` in the contract's words before its copy is
+    upgraded (``_upgrade`` fails the test if reached), the progress never reaching ``upgrading``; the copy described
+    once, nothing of it left, the lock free, the archive only read. Red before B-49: nothing refuses it, and the check
+    goes on to upgrade the copy."""
+    built = archive_storing(tmp_path / "b49-older", databases.older, (IN_A_TEXT_COLUMN,), NOT_UTF8)
+    assert (built.manifest.alembic_revision, _revision_plan(OLDER)[0]) == (OLDER, "upgrade"), f"precondition: a backup at {OLDER}, which a restore upgrades: {built.manifest.alembic_revision}"
+    original = sha256(built.path.read_bytes())
+    answers = recorded_descriptions(monkeypatch)
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    error, progress = refused(built.path, instance)
+    assert (error.code, str(error)) == (UNDECODABLE_CODE, UNDECODABLE_MESSAGE), f"refused in the contract's words: {error.code}: {error}"
+    assert progress.phases == UNPACKED, f"refused before upgrading: {progress.events}"
+    assert answers == ["ok"], f"described once, as its manifest says, then refused: {answers}"
+    assert sha256(built.path.read_bytes()) == original, "the archive is only read"
+    print_success(f"{OLDER}: {error.code} before upgrading")
+
+
+@pytest.mark.parametrize("places", TEXT_PLACES)
+def test_the_refusal_warns_once_with_the_number_of_tables_never_the_text_its_bytes_a_name_nor_a_path(instance, databases, tmp_path, monkeypatch, places):
+    """(o) B-49 One warning, «A backup's database holds text that is not UTF-8», whose payload is numbers only, the
+    number of tables holding such text among them (the three at once: 3, for four values). No line of the log holds the
+    text, its bytes (as ``sqlite3`` quotes them, as Python escapes or names them, in hex), the words of a decode error,
+    a name of a table or a column of the archive, or a path of the test. The barrier: ``sqlite3``, reading the archive's
+    value as the server reads text, fails with an error quoting it: a log of an error's message would leak it."""
+    archive = archive_storing(tmp_path / "b49", databases.head, places, NOT_UTF8).path
+    probed = database_of(archive, tmp_path / "b49-probed.db")
+    for place in places:
+        with pytest.raises(sqlite3.OperationalError) as raised:
+            rows_of(probed, place.read)
+        assert B49_MARKER in str(raised.value), f"barrier: {place.name}: sqlite3's error quotes the archive's text, so the log had something to keep out: {raised.value}"
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    with staging_logs() as events:
+        error, _progress = refused(archive, instance)
+    assert error.code == UNDECODABLE_CODE, f"precondition: refused for its text: {error.code}: {error}"
+    lines = [event for event in events if event.get("event") != LOG_CANARY]
+    warned = [event for event in lines if event.get("log_level") in ("warning", "error", "critical")]
+    assert [(event.get("log_level"), event.get("event")) for event in warned] == [("warning", UNDECODABLE_EVENT)], f"one warning, and only that one: {[(event.get('log_level'), event.get('event')) for event in lines]}"
+    fields = {key: value for key, value in warned[0].items() if key not in ("event", "log_level")}
+    tables = len({place.table for place in places})
+    assert fields and all(type(value) is int for value in fields.values()), f"the warning's payload is numbers only, never a text: {fields}"
+    assert tables in fields.values(), f"the warning gives the number of tables holding such text, {tables}, for {sum(place.rows for place in places)} values: {fields}"
+    paths = (str(tmp_path), str(tmp_path.resolve()), f"{os.sep}pytest-of-")
+    leaked = {str(line.get("event")): found for line in lines if (found := given_away(line, places, paths))}
+    assert not leaked, f"no line of the log holds the archive's text, its bytes, a decode error's words, its names or a path: {leaked}"
+    print_success(f"warned once: {fields}")
+
+
+def test_a_character_whose_two_bytes_are_split_over_two_rows_is_text_that_is_not_utf8_in_each(instance, databases, tmp_path, monkeypatch):
+    """(o) B-49 é (C3 A9) split over two rows of a table LibreFolio does not have: each row holds one byte of it, so
+    neither is UTF-8 and the server fails on each, though the two, joined with nothing between them, are. Every value is
+    to be UTF-8 on its own, whatever a read joins: refused ``database_damaged`` in the contract's words, once unpacked,
+    before anything writes in the copy. Red before B-49: nothing reads them."""
+    first, second = SPLIT_HALVES
+    assert (first + second).decode("utf-8") == "\u00e9", "precondition: joined with nothing between them, the two halves are é"
+    for half in SPLIT_HALVES:
+        with pytest.raises(UnicodeDecodeError):
+            half.decode("utf-8")
+    statements = (f"CREATE TABLE {SPLIT_TABLE} (id INTEGER PRIMARY KEY, {SPLIT_COLUMN} TEXT)", *(f"INSERT INTO {SPLIT_TABLE} (id, {SPLIT_COLUMN}) VALUES ({row}, {text_sql(half)})" for row, half in enumerate(SPLIT_HALVES, start=1)))
+    read = f"SELECT typeof({SPLIT_COLUMN}), {SPLIT_COLUMN} FROM {SPLIT_TABLE} ORDER BY id"
+    archive = archive_with(tmp_path / "b49-split", databases.head, statements, {read: [(b"text", half) for half in SPLIT_HALVES]}).path
+    fixed = never_fixed(monkeypatch)
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    error, progress = refused(archive, instance)
+    assert (error.code, str(error), progress.phases, fixed) == (UNDECODABLE_CODE, UNDECODABLE_MESSAGE, UNPACKED, []), f"refused once unpacked, before anything wrote in the copy: {error.code}: {error}, {progress.phases}"
+    print_success("é split over two rows: database_damaged")
+
+
+@pytest.mark.parametrize("end", SPARSE_ENDS)
+def test_text_that_is_not_utf8_at_either_end_of_rowids_as_far_apart_as_sqlite_allows_is_found_and_the_check_ends(instance, databases, tmp_path, monkeypatch, end):
+    """(o) B-49 A table LibreFolio does not have, its rows at the smallest rowid SQLite allows (-2**63), at 1 and at the
+    largest (2**63 - 1), the text that is not UTF-8 in the first or in the last of them, valid UTF-8 in the others.
+    Windows of 200 000 rows are rows, so the read meets every row in a window or two: the check refuses the archive
+    ``database_damaged`` in the contract's words, once unpacked, and ends — within ``DEADLINE_S``, run in a thread: a
+    read stepping through rowid values would walk 2**64 / 200 000 windows and never end, holding the lock of the checks;
+    one starting at rowid 0 would pass the first row by. Nothing of the copy left, the lock free. Red before B-49:
+    nothing reads the row, and the check goes on to the post-migration fixes."""
+    rows = tuple((rowid, NOT_UTF8 if rowid == end else VALID_UTF8) for rowid in (SMALLEST_ROWID, 1, LARGEST_ROWID))
+    statements = (f"CREATE TABLE {SPARSE_TABLE} (id INTEGER PRIMARY KEY, {SPARSE_COLUMN} TEXT)", *(f"INSERT INTO {SPARSE_TABLE} (id, {SPARSE_COLUMN}) VALUES ({rowid}, {text_sql(raw)})" for rowid, raw in rows))
+    read = f"SELECT id, typeof({SPARSE_COLUMN}), {SPARSE_COLUMN} FROM {SPARSE_TABLE} ORDER BY id"
+    archive = archive_with(tmp_path / "b49-sparse", databases.head, statements, {read: [(rowid, b"text", raw) for rowid, raw in rows]}).path
+    never_fixed(monkeypatch)
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    progress = Progress()
+    outcome: dict[str, object] = {}
+
+    def check() -> None:
+        try:
+            outcome["report"] = stage_archive(archive, instance.root, progress=progress)
+        except BaseException as exc:  # reported by the test, below
+            outcome["error"] = exc
+
+    thread = threading.Thread(target=check, name="staging-b49-sparse-rowids", daemon=True)
+    thread.start()
+    thread.join(DEADLINE_S)
+    assert not thread.is_alive(), f"the check did not end within {DEADLINE_S}s: a read stepping through rowid values, not rows, walks 2**64 / 200 000 windows (phases so far: {progress.phases})"
+    error = outcome.get("error")
+    assert isinstance(error, StagingError), f"refused for the text of the row at rowid {end}: {outcome}"
+    assert (error.code, str(error), progress.phases) == (UNDECODABLE_CODE, UNDECODABLE_MESSAGE, UNPACKED), f"refused in the contract's words, once unpacked: {error.code}: {error}, {progress.phases}"
+    assert leftover_stages(instance.root) == [] and lock_is_free(instance.root), f"nothing of the copy left, the lock free: {leftover_stages(instance.root)}"
+    print_success(f"text that is not UTF-8 at rowid {end}: database_damaged, ended")
+
+
+@pytest.mark.parametrize(("storage", "hidden"), GENERATED_KINDS)
+def test_text_that_is_not_utf8_in_a_generated_column_which_table_info_does_not_list_is_refused(instance, databases, tmp_path, monkeypatch, storage, hidden):
+    """(o) B-49 A table LibreFolio does not have, its one row holding valid UTF-8 in a plain column and, in a column
+    generated from ``CAST(x'45ff…' AS TEXT)`` and declared ``TEXT`` — VIRTUAL (computed whenever it is read) or STORED
+    (computed when the row was written) — text that is not UTF-8. ``PRAGMA table_info`` does not list a generated
+    column, ``table_xinfo`` does: a read whose columns come from ``table_info`` passes it by, while a reader naming the
+    column, as the server names those of its models, fails on it. Refused ``database_damaged`` in the contract's words,
+    once unpacked: after the copy's first description, which finds it intact, and before anything writes in it (the
+    fixes and the upgrade fail the test if reached). One warning, its payload numbers only, the one table among them;
+    no line of the log holds the text, its bytes, the hex of the schema's expression, a decode error's words, a name of
+    the archive or a path. Nothing of the copy left, the lock free, the archive only read.
+
+    Preconditions, on the database the archive carries: ``table_info`` lists the plain columns alone, ``table_xinfo``
+    the generated one too, its ``hidden`` 2 or 3; the plain column reads as the server reads text. Barrier: the
+    generated one fails with an error quoting the text, so a log of an error's message would leak it. And nothing
+    refuses it first: B-28 reads a table; B-43's description, read only, answers ``ok``, and its integrity checks of a
+    plain reader (read only, read write) and its read of the schema with the server's stand-ins raise nothing. Red
+    before B-49 (nothing reads the column), and with a read whose columns come from ``table_info``: the check goes on
+    to the post-migration fixes."""
+    place = in_a_generated_column(storage)
+    plain = f"SELECT typeof({GENERATED_PLAIN}), {GENERATED_PLAIN} FROM {GENERATED_TABLE} ORDER BY id"
+    built = archive_with(tmp_path / "b49-generated", databases.head, place.store(text_sql(NOT_UTF8)), {place.read: [(b"text", NOT_UTF8)], plain: [(b"text", VALID_UTF8)]})
+    probed = database_of(built.path, tmp_path / "b49-generated-probed.db")
+    by_info = [row[1] for row in rows_of(probed, f"PRAGMA table_info({GENERATED_TABLE})")]
+    by_xinfo = {row[1]: row[6] for row in rows_of(probed, f"PRAGMA table_xinfo({GENERATED_TABLE})")}
+    assert (by_info, by_xinfo) == (["id", GENERATED_PLAIN], {"id": 0, GENERATED_PLAIN: 0, GENERATED_COLUMN: hidden}), f"precondition: table_info lists the plain columns alone, table_xinfo the generated one too (hidden {hidden}): {by_info}, {by_xinfo}"
+    assert rows_of(probed, f"SELECT {GENERATED_PLAIN} FROM {GENERATED_TABLE}") == [(VALID_TEXT,)], "precondition: the plain column holds valid UTF-8, read as the server reads text"
+    with pytest.raises(sqlite3.OperationalError) as raised:
+        rows_of(probed, place.read)
+    assert B49_MARKER in str(raised.value), f"barrier: sqlite3's error on the generated column quotes the archive's text, so the log had something to keep out: {raised.value}"
+    described = snapshot.describe_database(probed)
+    foreign = [(name, schema_kind(sql)) for _type, name, sql in rows_of(probed, "SELECT type, name, sql FROM sqlite_master") if schema_kind(sql) not in ALLOWED_KINDS]
+    met = {"integrity, read only": plain_integrity_error(probed, read_only=True), "integrity, read write": plain_integrity_error(probed, read_only=False), "schema, server's stand-ins": server_schema_error(probed)}
+    assert (described.integrity_check, foreign, {step: repr(error) for step, error in met.items() if error is not None}) == ("ok", [], {}), f"precondition: neither B-28 nor B-43 refuses it before B-49's read: integrity {described.integrity_check!r}, foreign {foreign}, errors {met}"
+    original = sha256(built.path.read_bytes())
+    answers = recorded_descriptions(monkeypatch)
+    fixed = never_fixed(monkeypatch, why=f"the check went on with a {storage} generated column computing text that is not UTF-8 (B-49): PRAGMA table_info does not list it, table_xinfo does")
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    with staging_logs() as events:
+        error, progress = refused(built.path, instance)
+    assert (error.code, str(error), progress.phases) == (UNDECODABLE_CODE, UNDECODABLE_MESSAGE, UNPACKED), f"refused in the contract's words, once unpacked: {error.code}: {error}, {progress.phases}"
+    assert (answers, fixed) == (["ok"], []), f"described once, intact, then refused before anything wrote in the copy: descriptions {answers}, fixes run on {fixed}"
+    lines = [event for event in events if event.get("event") != LOG_CANARY]
+    warned = [event for event in lines if event.get("log_level") in ("warning", "error", "critical")]
+    assert [(event.get("log_level"), event.get("event")) for event in warned] == [("warning", UNDECODABLE_EVENT)], f"one warning, and only that one: {[(event.get('log_level'), event.get('event')) for event in lines]}"
+    fields = {key: value for key, value in warned[0].items() if key not in ("event", "log_level")}
+    assert fields and all(type(value) is int for value in fields.values()) and 1 in fields.values(), f"the warning's payload is numbers only, the one table holding such text among them: {fields}"
+    paths = (str(tmp_path), str(tmp_path.resolve()), f"{os.sep}pytest-of-")
+    leaked = {str(line.get("event")): found for line in lines if (found := given_away(line, (place,), paths))}
+    assert not leaked, f"no line of the log holds the archive's text, its bytes, a decode error's words, its names or a path: {leaked}"
+    assert sha256(built.path.read_bytes()) == original, "the archive is only read"
+    print_success(f"{storage} generated column, hidden {hidden} in table_xinfo: {error.code}, warned once")
+
+
+def test_a_check_reads_the_text_of_its_copy_by_storage_class_read_only_trusted_schema_off_first(instance, head_archive, monkeypatch):
+    """(o) B-49 A check of the module's head archive, nothing to refuse, reads the text of its copy: a connection of
+    ``staging``, opened after the copy's first description (``snapshot``'s) and before the post-migration fixes', runs
+    statements reading values by their storage class (``typeof(…)`` compared with ``'text'``; no exact SQL pinned), one
+    of them on ``users``, which every backup of the module fills. It is read only (a ``file:`` URI with ``mode=ro``) and
+    runs ``PRAGMA trusted_schema=OFF`` before anything else; (l)'s B-37 test sees it among every connection to the copy.
+    Red before B-49: no statement of a check reads ``typeof``."""
+    opened = recorded_connections(monkeypatch)
+    stage_id = new_stage_id()
+    report = stage_archive(head_archive.path, instance.root, stage_id=stage_id)
+    on_copy = on_the_copy(opened, instance.root, stage_id)
+    kinds = [record.by for record in on_copy]
+    assert report.restorable and {"snapshot", "post_migration"} <= set(kinds), f"precondition: a genuine archive checked, its copy described and fixed: {report.blockers}, {first_statements(on_copy)}"
+    between = on_copy[kinds.index("snapshot") + 1 : kinds.index("post_migration")]
+    reads = [record for record in between if record.by == "staging" and any(reads_text_by_storage_class(statement) for statement in record.statements)]
+    if not reads:
+        pytest.fail(f"[new] no connection of staging between the copy's first description and the post-migration fixes reads its values by storage class (typeof(…) compared with 'text'): lot B-49 is not written yet: {first_statements(on_copy)}")
+    loose = [(record.target, record.uri, record.statements[:2]) for record in reads if not (record.opened_read_only and turns_trust_off_first(record))]
+    assert not loose, f"the read of the text is read only (mode=ro) and turns trusted_schema off first: {loose}"
+    statements = "\n".join(statement for record in reads for statement in record.statements if reads_text_by_storage_class(statement))
+    assert re.search(r"(?<!\w)users(?!\w)", statements), f"every table is read, users among them: {statements[:2000]}"
+    print_success(f"{len(reads)} connection(s) reading the copy's text by storage class, read only, trusted_schema=OFF first")
+
+
+@pytest.mark.parametrize("places", TEXT_PLACES)
+def test_valid_utf8_beyond_ascii_in_the_same_places_is_checked_as_usual_and_kept_intact(instance, databases, tmp_path, places):
+    """(o) B-49, the guard (green before and after): valid UTF-8 beyond ASCII — characters of two, three and four bytes
+    (é, 日本, an emoji, 𝄞) — in the same places is no finding. The archive is checked as any backup at the head (``same``,
+    nothing to fix, nothing to warn, restorable), no warning of B-49 logged, and the copy keeps every value as TEXT,
+    read back intact as the server reads text."""
+    assert {len(character.encode("utf-8")) for character in VALID_TEXT} >= {2, 3, 4}, f"precondition: characters of two, three and four bytes: {VALID_TEXT!r}"
+    archive = archive_storing(tmp_path / "b49-valid", databases.head, places, VALID_UTF8).path
+    with staging_logs() as events:
+        report = stage_archive(archive, instance.root)
+    found = (report.action, report.post_migration_fixes, report.warnings, report.blockers, report.restorable)
+    assert found == ("same", [], [], [], True), f"checked as any backup at the head: {found}"
+    assert not [event for event in events if event.get("event") == UNDECODABLE_EVENT], "no warning of text that is not UTF-8"
+    copy = stage_dir(instance.root, report.stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY
+    kept = {place.name: rows_of(copy, place.read) for place in places}
+    assert kept == {place.name: [("text", VALID_TEXT)] * place.rows for place in places}, f"the copy keeps every value as TEXT, read back intact: {kept}"
+    print_success(f"{[place.name for place in places]}: valid UTF-8 kept, restorable")
+
+
+def test_the_same_bytes_stored_as_a_blob_are_no_text_and_are_checked_as_usual(instance, databases, tmp_path):
+    """(o) B-49, the guard (green before and after): the very bytes of ``NOT_UTF8`` stored as a BLOB in the same three
+    places are no text — B-49 reads by storage class, and a BLOB in a column of text is out of its scope. The archive is
+    checked as any backup at the head, restorable, no warning of B-49 logged, and the copy keeps every BLOB as it is."""
+    archive = archive_storing(tmp_path / "b49-blob", databases.head, ALL_TEXT_PLACES, NOT_UTF8, as_blob=True).path
+    with staging_logs() as events:
+        report = stage_archive(archive, instance.root)
+    found = (report.action, report.warnings, report.blockers, report.restorable)
+    assert found == ("same", [], [], True), f"checked as any backup at the head: {found}"
+    assert not [event for event in events if event.get("event") == UNDECODABLE_EVENT], "no warning of text that is not UTF-8"
+    copy = stage_dir(instance.root, report.stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY
+    kept = {place.name: stored_bytes(copy, place.read) for place in ALL_TEXT_PLACES}
+    assert kept == {place.name: [(b"blob", NOT_UTF8)] * place.rows for place in ALL_TEXT_PLACES}, f"the copy keeps every BLOB as it is: {kept}"
+    print_success("the same bytes as BLOBs: restorable")
+
+
+def test_a_manifest_that_does_not_describe_the_database_is_refused_for_that_first_whatever_text_it_holds(instance, databases, tmp_path, monkeypatch):
+    """(o) B-49, the guard (green before and after): the text is read once the copy is found to be the database its
+    manifest describes, never before. An archive holding text that is not UTF-8 whose manifest counts one account more
+    than its database holds is refused ``manifest_mismatch``, as without that text ((e), ``rows_differ``)."""
+    built = archive_storing(tmp_path / "b49-mismatch", databases.head, (IN_A_TEXT_COLUMN,), NOT_UTF8)
+    tables = built.manifest.database.tables
+    archive = pack(tmp_path / "b49-mismatch.zip", entries_of(built), with_tables(built, {**tables, "users": tables["users"] + 1}))
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    error, progress = refused(archive, instance)
+    assert (error.code, progress.phases) == ("manifest_mismatch", UNPACKED), f"the manifest's mismatch first, the text never read: {error.code}: {error}, {progress.phases}"
+    print_success("manifest_mismatch, before the text is read")
