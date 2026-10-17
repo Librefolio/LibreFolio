@@ -3769,3 +3769,11 @@ mistyped literal, not on the behaviour, which the page on the settlement keeps a
 Filed: [[problems/act-act-lost-a-day-per-year-end]], [[problems/maturity-settlement-counted-the-final-coupon-twice]].
 Updated: [[features/F-045]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | J-43 (transfer share mismatch) and R13-SEC7-1 (unbounded date ranges)
+The share-mismatch warning of the portfolio classifier skipped same-day pairs and never reached the user, so a transfer
+between brokers owned at different shares made P&L with no explanation: now an INFO data-quality issue. And an
+unbounded date range (`end: 9999-12-30`) froze the instance through the portfolio, lots, risk and AI Export routes:
+every range now ends by tomorrow and starts at the first transaction, with a test seam for the far-future suites.
+Filed: [[problems/share-mismatch-warning-never-left-the-classifier]], [[problems/unbounded-date-range-froze-the-instance]].
+Graph: not updated; graphify is not available in this worktree.
