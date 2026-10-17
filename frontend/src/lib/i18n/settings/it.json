@@ -256,13 +256,15 @@
         "resetLink": "Link per reimpostare la password",
         "signOut": "Disconnetti ovunque",
         "restartGuides": "Riavvia le guide",
-        "delete": "Elimina"
+        "delete": "Elimina",
+        "cancelSetup": "Annulla il link di setup"
       },
       "reasons": {
         "protected": "Questo account è protetto: nessuno può disattivarlo, declassarlo o eliminarlo.",
         "lastAdmin": "È l'unico amministratore attivo: non si può disattivare né declassare.",
         "limit": "L'istanza è piena: libera un posto per riattivarlo.",
-        "demoteFirst": "Un amministratore va declassato prima di poterlo eliminare."
+        "demoteFirst": "Un amministratore va declassato prima di poterlo eliminare.",
+        "pendingSetup": "Aspetta il suo setup: fino ad allora mantiene il suo ruolo."
       },
       "confirm": {
         "deactivate": {
@@ -294,6 +296,11 @@
           "title": "Revocare l'invito per {email}?",
           "message": "Il link smette subito di funzionare.",
           "confirm": "Revoca"
+        },
+        "cancelSetup": {
+          "title": "Annullare il link di setup di {username}?",
+          "message": "Il link già consegnato smette di funzionare. L'account resta in attesa del suo setup: un link nuovo arriva da «dev.py user setup-link» sul server, o dal tuo fornitore.",
+          "confirm": "Annulla il link"
         }
       },
       "errors": {
@@ -308,7 +315,7 @@
         "INVALID_INPUT": "Controlla i dati inseriti: l'indirizzo email potrebbe non essere valido.",
         "generic": "L'azione non è riuscita. Riprova.",
         "load": "Non è stato possibile caricare gli account.",
-        "PENDING_SETUP": "Questo amministratore attiva l'account con il suo link di setup: non si può riattivare da qui."
+        "PENDING_SETUP": "Questo amministratore aspetta il suo setup: da qui non si può né riattivare né retrocedere."
       },
       "invite": {
         "button": "Invita",
@@ -338,7 +345,8 @@
       "toasts": {
         "signedOut": "{username} è stato disconnesso ovunque.",
         "guidesRestarted": "Le guide di {username} ripartono da capo.",
-        "resetLinkCreated": "Link di reimpostazione creato per {username}."
+        "resetLinkCreated": "Link di reimpostazione creato per {username}.",
+        "setupCancelled": "Il link di setup di {username} non funziona più."
       },
       "pendingSetupHint": "Questo account amministratore si attiva con il suo link di setup. Se il link è perso, esegui «dev.py user setup-link» sul server, o chiedi al tuo fornitore."
     },
