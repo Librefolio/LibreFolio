@@ -5401,3 +5401,167 @@ saltano, 422 invece di 500.
 `git diff --check` pulito; porta 6183 libera. Non girati: `api fx-unit`, `fx`, `fx-sync`, `fx-signals`,
 `fx-compress-errors` (dopo il blocco della galleria). Commit proposti: `fix(fx): refuse or skip unstorable rates`
 (codice, test, documentazione, CHANGELOG, hash delle traduzioni) e `docs(journal): X-R38, backlog X-R43–X-R46`.
+
+**X-R38 committato** (coordinatore, 03:42): `80f5c65ff` e `a90f40d75`. **Ventunesimo aggiornamento di base**: dev
+`d93de2899` unito; il CHANGELOG è andato in conflitto in coda a «Fixed» (la riga di E-11), e il coordinatore le ha tenute
+entrambe. HEAD **`812194d37`**, pulito, verificato. Dopo il blocco della galleria: slot 1 per `api fx-unit fx fx-sync
+fx-signals fx-compress-errors` ed `e2e search-to-prices`, poi l'ingresso di X-R24/25 e X-R38 insieme. X-R45 è dal
+developer, insieme a W-B63; X-R46 dopo X-R40.
+
+### X-R40 + W-B62 (+ X-R50) — prezzo corrente: la quotazione che nessuna colonna può tenere non torna come prezzo dal vivo ✅ (2026-10-17, 03:45–04:55; consegnato, entra insieme a X-R24/25 e X-R38)
+
+**Stato verificato** (su `812194d37`), in `services/assets/price_query.py`, `get_current_prices_bulk`:
+- `_fetch_one` restituisce il valore del provider così com'è, sia dalla cache (`core._asset_current_cache`, 2 minuti, che
+  anche `refresh.py` riempie col valore grezzo) sia dalla chiamata, con sorgente `provider:<codice>`.
+- Il controllo di W-B58 (`storable_price`) sta solo nel passo di salvataggio (~862): una quotazione da 1E+60, o 1E-13,
+  non si salva, ma la risposta la restituisce lo stesso, e la UI la mostra come prezzo dal vivo. Il controllo vale solo
+  per le quotazioni datate oggi: una con un'altra data passa senza controllo.
+- L'avviso (~865) si ripete a ogni interrogazione: lo scheduler ogni 10 minuti, più ogni pagina aperta.
+- Un valore non finito non arriva mai: `FACurrentValue` lo rifiuta alla costruzione, e il provider fallisce. Restano i
+  valori finiti con più di 12 cifre intere, e quelli sopra 0 che troncati a 12 decimali danno 0.
+- Il test di W-B58 `test_an_unstorable_current_quote_is_not_persisted` (`test_asset_digit_limits.py` ~874) usa come
+  barriera `item.source == "provider:…"`, cioè proprio il comportamento che X-R40 cambia: va riscritto.
+
+**Disegno**:
+- Una quotazione che `storable_price` rifiuta vale come un provider che ha fallito: non torna come prezzo dal vivo, e
+  l'asset ricade sull'ultimo prezzo salvato (`db:last_known`), oppure su «No price data available». Il controllo vale
+  sia per il valore in cache sia per quello appena chiesto, qualunque sia la data.
+- La cache resta com'è, col valore grezzo, così il provider non viene chiamato più spesso di oggi (una volta ogni due
+  minuti per asset).
+- L'avviso si scrive una volta per processo per ogni (asset, provider, valore): `functools.lru_cache` limitato, sul
+  modello di `_report_invalid`.
+- Un valore valido torna come oggi, grezzo; il passo di salvataggio tiene il suo controllo, ora senza avviso.
+- Nessun codice d'errore nuovo in `FACurrentPriceItem`: il frontend non cambia.
+
+> **⚠️ Fuori pista (03:50) — X-R40 si fonde con W-B62, e il disegno cambia.** Il coordinatore ha visto che X-R40 e W-B62
+> (l'analisi di W, piano 04) sono lo stesso buco, e me li ha dati insieme (sono file miei: `price_query.py`,
+> `refresh.py`). La proposta concordata con W sostituisce il mio disegno sopra:
+> - `storable_price` subito dopo la chiamata: una quotazione non memorizzabile **non entra in cache** e ricade sul
+>   database (prima tenevo la cache col valore grezzo, per non chiamare il provider più spesso);
+> - una quotazione valida si serve **troncata** come la tiene il database;
+> - il delta `changed_points` della sync si filtra col predicato di `price_store` (`_unstorable_provider_point`);
+> - il ripiego sul database salta una chiusura che si rilegge `None` (un +inf salvato), invece di sollevare
+>   `Decimal(str(None))` e far cadere tutta la richiesta.
+> W ha passato i suoi rossi (17 più 2 guardie, girati alle 03:46, tutti per la ragione giusta) in una cartella della sua
+> sessione, autorizzata dal coordinatore: vanno in un **file nuovo**, mentre nel file di W (`test_asset_digit_limits.py`)
+> cambia solo la barriera.
+
+**Disegno finale** (03:55):
+- `price_store.storable_current_value(cv, asset_id, provider_code)` è l'unico controllo di una quotazione dal vivo, usato
+  sia da `price_query` sia da `refresh` prima della cache:
+  - restituisce `None` se `storable_price` rifiuta il valore; il rifiuto si scrive una volta per processo per ogni
+    (asset, provider, valore), con `functools.lru_cache(maxsize=1024)` e il testo del valore accorciato (`1E+50000000`
+    scritto per intero è 50 MB);
+  - altrimenti restituisce la quotazione nella sua forma, se il troncamento non la cambia (`101.5` resta `101.5`: nessuna
+    differenza nel JSON delle risposte di oggi), o troncata, se la cambia.
+- `price_query`:
+  - `_live_quote_item` (estratto da `_fetch_one`, per la complessità) mette in cache solo dopo aver costruito l'item;
+  - `_last_readable_price` legge prima la riga più recente da sola, poi le più vecchie a pagine di 32, finché una
+    chiusura si rilegge;
+  - il passo di salvataggio tiene il controllo, ora senza avviso;
+  - `FACurrentPriceItem` si importa in cima al modulo: l'import locale «contro il ciclo» era superato (`schemas.prices`
+    era già importato in cima).
+- `refresh`:
+  - il valore corrente passa da `storable_current_value` prima della cache e prima di diventare il punto di oggi;
+  - `_persist_refresh_item` conta e annuncia solo i punti che l'upsert tiene (`kept_items`). Così anche `new_count` e
+    `changed_count` escludono le date saltate, e un 1E+60 non fa più cadere `_count_actual_price_changes` nel ripiego
+    «tutto è nuovo».
+- Script a sostituzioni contate: `files/checks/xr40_code.py`, 13 sostituzioni più una fetta fra due marcatori. Provato a
+  secco su una copia in `/tmp`: ruff (C901 ≤ 10, isort) e black puliti.
+
+**X-R50** (03:58, tre note della revisione R13-SEC5 di E su X-R38, nello stesso lotto):
+1. `storable_fx_rate` chiede anche `float(stored) < 1E+14`. Misurato: `99999999999999.995` diventa il double `1E+14`,
+   mentre `.992` no.
+2. `normalize_storable_rate` restituisce `None` se l'inverso va a 0. Misurato: `1/1E+1000027` dà `0E-1000026`.
+3. BOE, SNB e FED: `ArithmeticError` negli `except` per riga, così un valore ostile salta la sua riga e non fa fallire
+   tutto il fetch. FED ha lo stesso buco, anche se E non l'ha nominato.
+- Script `files/checks/xr50_code.py`: 6 sostituzioni in 5 file, provato a secco, pulito.
+- Il caso X-R38 `99999999999999.99999999999` («tenuto») diventa «rifiutato»: va riscritto coi rossi di X-R50.
+
+**Rossi di X-R40/W-B62** (test-author, 03:55–04:10): file nuovo `test_current_price_storable.py`, runner `services
+current-price-storable`.
+- Contenuto: gli aiuti di W copiati alla lettera (con asset e codici di provider propri); il blocco W-B62 identico (17
+  rossi più 2 guardie, verificato con `diff`); i miei 3 rossi X-R40 (avviso una volta per valore; il refresh non mette
+  in cache, non salva e non annuncia un valore corrente non memorizzabile; il refresh mette in cache quello valido già
+  troncato) e una guardia (una quotazione che entra si serve nella sua forma).
+- Nel file di W solo la barriera (`current_calls >= 1`), il contatore e il suo incremento.
+- Rossi alle 04:13: `services current-price-storable` **20 rossi, 5 verdi** (le guardie), tutti per la ragione giusta:
+  quotazioni servite o messe in cache grezze, il delta con la data saltata, `Decimal(str(None))` che solleva
+  `ConversionSyntax` (500), 3 avvisi invece di 2. `services asset-digit-limits` 76/76, con la nuova barriera.
+- Nota del test-author: `_count_actual_price_changes` solleva su una chiusura da `1E+48` in su quando la data ha già una
+  riga, e il ripiego annuncia tutto. Con la cura i punti non memorizzabili non arrivano più lì (`kept_items`).
+
+**Codice** (04:14): `xr40_code.py` applicato (13 sostituzioni più la fetta); ruff e black puliti; `import
+backend.app.main` ok.
+
+**Verdi** (04:14–04:16, carico < 50): `current-price-storable` 25/25, `asset-digit-limits` 76, `current-price-bootstrap`
+8, `asset-source-refresh` 18, `asset-sync-counts` 1, `rate-limit-results` 23, `scheduler-jobs` 73, `utils
+provider-core-cache` 46, `asset-source` 61. Per lo slot: `api current-price-persistence`, `api prices-sync-delta`.
+
+**Documentazione di X-R40/W-B62** (docs-writer, 04:15–04:28; solo EN, pagine sviluppatore senza traduzioni):
+`developer/backend/assets/architecture.md` (il punto Current Price, il paragrafo del refresh, la sezione «💹 Current
+Quotes and Today's OHLC», il punto `_asset_current_cache`), `developer/frontend/components/features/live-ticker.md` (il
+diagramma e i punti della sezione Backend), `developer/api/overview.md` («Resolution strategy»). `mkdocs build` stretto ✅
+(carico 22) e `check-links` ✅ (97). **CHANGELOG**: una riga 🐛 dopo quella di X-R38.
+> **⚠️ Fuori pista — una regressione trovata dal docs-writer, che diventa X-R51.** Prima, una quotazione corrente rifiutata
+> arrivava all'upsert, e il risultato del refresh era PARTIAL col motivo («rejected 1 date(s) … no price column can
+> keep»). Ora la quotazione si scarta prima, e il motivo resta solo nel log: con lo storico il risultato è OK senza
+> messaggio; senza storico (CSS Scraper, o un intervallo che è solo oggi) è FAILED con «No price data available from
+> provider». La cura (una nota in `_FetchedRefreshData`, che finisce negli `errors` del risultato) è pronta in
+> `files/checks/xr51_code.py`, provata a secco. I rossi del test-author (e, f) sono in
+> `files/drafts/xr51_refresh_note_tests.py`. Non entra in questo checkpoint: il coordinatore fa entrare tutto insieme,
+> provato da questo slot, e la cura applicata dopo non sarebbe provata. È il prossimo lotto.
+
+**X-R50, rossi e verdi**:
+- Rossi del test-author: 16 rossi e 6 guardie, in `test_real_decimal.py`, `test_fx_core.py`, `test_fx_sync_service.py`,
+  `test_fx_api_unit.py`, `test_snb_errors.py` e nel file nuovo `test_fx_parse_errors.py` (BOE e FED, PURE, registrato in
+  `PROVIDER_ERROR_TEST_PATHS`). Il caso di X-R38 `14-integer-digits-cut-at-10-decimals` («tenuto») è passato fra i
+  rifiutati, con la nota.
+- Rossi alle 04:30, prima del codice: `real-decimal` 4/235, `fx-core` 3/41, `fx-sync-service` 1/35, `provider-errors`
+  6/191. Nessun altro rosso, tutti per la ragione giusta (il double `1E+14` tenuto; `0E-1000026` restituito;
+  `InvalidOperation` che esce dal `try` per riga). I 2 rossi di `api fx-unit` girano nello slot.
+- Codice (04:31): `xr50_code.py`, 6 sostituzioni in 5 file; ruff, black e import puliti. Nel runner: il commento e la
+  descrizione di `provider-errors`, che ora nominano sei provider.
+- Verdi: `real-decimal` 235, `fx-core` 41, `fx-sync-service` 35, `provider-errors` 191, `fx-conversion` 44.
+- Nota del test-author: per SNB il danno era maggiore. `_parse_json` gira fuori dal `try` di `fetch_rates`, quindi un
+  valore ostile faceva perdere tutto il fetch SNB, ogni valuta; BOE e FED perdevano solo la valuta.
+
+**Slot 1** (dalle 04:33; porta 6183): `db populate`, `e2e search-to-prices`, `api fx-unit fx fx-sync fx-signals
+fx-compress-errors`, poi `api current-price-persistence prices-sync-delta`. L'albero è `812194d37` più X-R40/W-B62 e X-R50
+non committati, l'ho detto al coordinatore: non si può isolare `812194d37` senza uno stash o un altro worktree. Il
+coordinatore ha deciso (04:35) di far entrare insieme X-R24/25, X-R38, X-R40/W-B62 e X-R50, in un solo merge provato da
+questo slot. A fine slot consegno il checkpoint FROZEN.
+
+**Slot 1, risultati** (04:32–04:42, tutto verde):
+- `db populate` ✅;
+- `e2e search-to-prices` 3/3 (X-R25);
+- `api fx-unit` 48/48, di cui 17 casi X-R38 e 2 X-R50;
+- `api fx` 21, `fx-sync` 10, `fx-signals` 8, `fx-compress-errors` 6;
+- `api current-price-persistence` 5, `prices-sync-delta` 5 (X-R40/W-B62).
+- Porta 6183 libera alle 04:42.
+- Log in `files/checks/logs/slot2_*`.
+> **⚠️ Fuori pista**: nella consegna di X-R38 avevo scritto «21 casi X-R38» in `fx-unit`: sono 17, cioè 13 del primo giro,
+> 3 di `"abc"`/`true`/`"0x10"` e la guardia dei numeri JSON.
+
+**Dopo lo slot**:
+- documentazione di X-R50 (docs-writer: il limite del double, l'underflow, i parser);
+- CHANGELOG: una frase sui parser di BOE, SNB e FED in coda alla riga di X-R38;
+- ruff e black puliti sui 17 file Python, `git diff --check` pulito.
+
+**Documentazione di X-R50** (docs-writer, 04:43–04:53):
+- `developer/backend/fx/architecture.md`: il «limite noto» di X-R38 sostituito dalla regola del double;
+- `developer/architecture/database/index.md` (punto «Exchange rates.») e `developer/backend/fx/configuration.md` («What
+  the column keeps», più l'underflow nei punti del manuale, dell'endpoint e del provider);
+- `developer/architecture/patterns/fx_plugin_guide.md`: una frase sui parser, nel Flow.
+- `mkdocs build` stretto ✅ e `check-links` ✅ (97).
+- Note del docs-writer, nel backlog e non in questo checkpoint, perché lo slot non le avrebbe provate:
+  - il testo dei limiti non nomina la regola del double (con X-R51);
+  - la docstring di `_collect_leg_rates` (con X-R51);
+  - ECB perde una valuta su un valore che non è un numero (X-R52).
+
+**Consegna** (04:55, FROZEN): HEAD `812194d37`; 25 file tracciati e 2 nuovi (`test_current_price_storable.py`,
+`test_fx_parse_errors.py`); ruff e black puliti sui 17 file Python; `git diff --check` pulito; porta 6183 libera. Commit
+proposti:
+- `fix(assets): serve only storable live quotes` (X-R40/W-B62: codice, test, runner, docs degli asset, CHANGELOG);
+- `fix(fx): double limit, underflow, parser skips` (X-R50: codice, test, docs dei cambi, frase nel CHANGELOG);
+- `docs(journal): X-R40/W-B62, X-R50, backlog X-R47–X-R52`.
