@@ -3980,6 +3980,241 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
   vecchia dell'admin si ricifra anche un archivio in chiaro, per esempio all'uscita dal cloud se il pannello consegna la
   sua chiave.
 
+### B4 committato; validazione combinata su `33275d9a6` e gli E2E FBKP-108/109 (2026-10-17, 02:07-03:27) ✅ — 🧊 FROZEN, checkpoint pronto
+
+> **Il coordinatore (02:07)**:
+>
+> - B4 è committato in tre commit: `df1f0d52c` (codice, test, runner), `0ff310355` (doc), `97037bb2e` (journal);
+> - base aggiornata: merge pulito di dev `b1b4960c4`, HEAD **`33275d9a6`**;
+> - la riga in più di H (`test_instance_block.py:821`, solo la firma) l'ha controllata lui: OK;
+> - A7b-2 (il gestore globale del 422 senza `input`, `api/validation_errors.py`) entra in dev dopo il suo
+>   `all-backend`. Copre anche le rotte di B; `NoInputEchoRoute` resta, A-37 lo toglie più avanti;
+> - la domanda su scrypt è passata al developer. Il default «in chiaro» c'era già.
+>
+> Validazione combinata in due metà:
+>
+> 1. **leggera**, a carico < 50: `api sync`, `front check`, il Vitest del backup, `services backup-*`,
+>    `password-policy`, mkdocs rigoroso e check-links;
+> 2. **in uno slot** (lo dà lui, fra 30-40 minuti): `api backup-secure backup backup-restore instance-block`,
+>    `e2e backup-roundtrip` e `front-utility backup` con FBKP-108/109.
+>
+> Prima, il freeze FE8b (W, una rinomina): nessuno tocca `components/transactions/**`, `utils/transactions/**`,
+> `stores/transactions/**`, né `_frontend_transaction.py` e `_frontend_utility.py`. Controllato in sola lettura: B4 non
+> tocca quei percorsi, e nessun file di B importa da quelle cartelle.
+>
+> **HEAD verificata (02:12)**: `33275d9a6`, pulita.
+>
+> **⚠️ Fuori pista: FBKP-108/109 non esistono.** La spec si ferma a FBKP-107. L'analisi li nominava per la chiusura
+> (passo 7), e nel mio handoff li avevo dati per «non eseguiti», come se ci fossero. Corretto col coordinatore (02:15).
+> Li scrive ora TA-F, solo in `backup.spec.ts`:
+>
+> - **FBKP-108**: un backup sicuro dalla UI, il download dell'`.lfbk` (comincia con `LFBK`), il controllo con la
+>   password, il report di un archivio cifrato, poi «Drop this archive»; nessuna password resta in `localStorage` o in
+>   `sessionStorage`;
+> - **FBKP-109**: un `.lfbk` fatto via API. Una password sbagliata lo chiede di nuovo con un solo upload (un `PUT`, due
+>   `POST` del controllo), poi quella giusta e «Drop this archive».
+>
+> Nessuna riga nuova nel runner: `front-utility backup` gira tutto il file, e `_frontend_utility.py` è congelato. Sono
+> gli E2E di chiusura previsti dall'analisi, scritti dopo il codice: non sono rossi prima. TA-F non lancia nulla nella
+> corsia: solo `tsc -p tsconfig.e2e.json` e Prettier sul suo file.
+>
+> Verificato nel codice, per il brief: `cancelPassword()` non chiama il server. Un upload lasciato dopo una password
+> sbagliata lo toglie l'upload seguente (`_remove_replaced_uploads`) o `prune` dopo `STAGE_LIFETIME`: niente perdite.
+>
+> **Metà leggera (dalle 02:16)**: `files/scripts/b4_combined_light.sh`, un passo alla volta, col carico che aspetta
+> sotto 50 (alle 02:14 era 117):
+>
+> - `api sync`;
+> - `services`: `password-policy` e i nove `backup-*`;
+> - `utils`: i tre `backup-cli*`;
+> - Vitest in quattro lotti;
+> - `front check`, `theme-roles` e i gate (il merge può muovere la baseline dei colori), `i18n check`;
+> - mkdocs rigoroso, check-links e `gate-docs-links`.
+>
+> **Freeze della galleria fino alle ~03:30** (coordinatore, 02:17; il gruppo dei colori, carico a 170): nessun passo
+> pesante nuovo (`api`, E2E, `all-backend`, `--workers`) fino al suo via; solo controlli leggeri sotto 50. Lo slot di B
+> (~30 minuti) viene dopo il freeze, dopo Y e J. La metà leggera aspetta il carico (alle 02:17: 181, nessun passo
+> partito); TA-F intanto scrive FBKP-108/109.
+>
+> **FBKP-108/109 scritti (TA-F, 02:40)**, solo in `backup.spec.ts`, in coda al blocco seriale `restoreTest` (240 s per
+> test, dopo FBKP-107: un rosso lì non salta nessun caso). Nessun file sotto `frontend/src/`, nessuna riga del runner.
+> Prettier `--check` pulito senza `--write`; `tsc -p tsconfig.e2e.json` 0 errori nel file (4 altrove, preesistenti).
+>
+> - **FBKP-108**:
+>   - la password è costruita dalle regole di `GET /backup/instance/options`: un codice sconosciuto fallisce per nome, e
+>     il minimo deve essere ≥ 12;
+>   - una password lunga un carattere meno del minimo tiene spento «crea». Il caso aspetta così anche l'arrivo delle
+>     opzioni, perché le regole degli account chiedono meno caratteri;
+>   - poi il backup sicuro: `backup.created` e il job dicono `encrypted`, il nome è `.lfbk`, il file comincia con `LFBK`;
+>   - nella card del ripristino: la password chiesta prima di inviare qualcosa, la fase `decrypting`, un `PUT` e un
+>     `POST` con `{upload_id, password}`, il report del server `encrypted: true`, le righe della chiave e dei segreti
+>     uguali al report del server;
+>   - «Drop this archive», e nessuna delle due password resta negli storage, nell'anello degli eventi o nei cookie;
+> - **FBKP-109**:
+>   - l'archivio sicuro è fatto via API, col job registrato per la pulizia e poi cancellato;
+>   - una password sbagliata dà `restore-password-error` con `data-error-code="wrong_password"`, e il campo si
+>     svuota;
+>   - con la password giusta: un `PUT` e due `POST` sullo stesso `upload_id`, il primo 400 `wrong_password`;
+>   - dopo «Drop this archive», un nuovo `POST` dello stesso upload risponde 404 `backup_upload_not_found`: l'upload è
+>     andato via col suo controllo.
+>
+> Rivisti da me sul codice: i testid (`backup-mode`/`data-mode`, `backup-encrypted-note`, `PasswordInput` mette il
+> testid sull'`<input>`, `data-passed` del misuratore, `restore-password-error`, `data-phase`), il 201 dell'upload e il
+> codice `backup_upload_not_found`. Anche l'helper condiviso `createBackup`: non fissa il dettaglio intero di
+> `backup.created`, quindi il campo `encrypted` aggiunto da B4 non rompe FBKP-002.
+>
+> **Le due segnalazioni di TA-F, decise**:
+>
+> - il report del ripristino non mostra se l'archivio era cifrato (nessun attributo). Il contratto (§7, «Report modal»)
+>   chiedeva solo le righe dei segreti, quindi la UI è conforme. L'E2E verifica `encrypted` sul report del server dello
+>   stesso controllo, più la password chiesta prima e la fase `decrypting`. Nessun gancio solo per il test;
+> - finché le opzioni non arrivano, il misuratore usa le regole degli account (minimo 8): «crea» si può accendere per
+>   una password che il server rifiuta con `password_too_weak`. È la scelta scritta nel commento della card: il server
+>   controlla comunque, la finestra dura millisecondi, e se le opzioni falliscono l'errore ha il suo messaggio. Lasciato
+>   così.
+>
+> **B-21 nel backlog (coordinatore, 02:50; da H, H-27 in dev `bfdc1f72c`)**. `profile_default()` solleva
+> `ProfileDefaultError` (un `TypeError`) su una tabella sbagliata. Le due rotte di `restore.py` prendono solo
+> `BackupConfigError`, e sono le sole che chiamano `backup_max_upload_mb()`:
+>
+> - l'upload darebbe 500 invece del 503;
+> - `GET /restore/status` darebbe 500 invece di `upload_limit_mb: null`. Questo è peggio di quanto detto: la scheda non
+>   leggerebbe più lo stato.
+>
+> Da fare dopo l'ingresso di H-27 nel ramo. Il test di guardia H-17 usa `123`, un intero: compatibile.
+>
+> **Metà leggera, tutta verde (02:28-03:06)**, su `33275d9a6`, un passo alla volta a carico < 50 (con lunghe attese:
+> carico fino a 181):
+>
+> - `api sync`;
+> - `services`: `password-policy` 74, `backup-envelope` 100, `backup-secure-rules` 24, `backup-secure` 52,
+>   `backup-archive` 155 (+1 salto voluto), `backup-jobs` 69, `backup-staging` 145, `backup-apply` 228,
+>   `backup-outcome` 97, `backup-totals` 84;
+> - `utils`: `backup-cli` 102, `backup-cli-restore` 77, `backup-cli-secure` 43;
+> - Vitest: 799, 184, 159, 41. Il client passa da 17 a 41 test: sono quelli arrivati col merge di dev;
+> - `front check` 0 errori e 0 avvisi, `theme-roles` pulito, gate 215, `i18n check` 4967 chiavi (rigoroso);
+> - mkdocs rigoroso exit 0, check-links valido, `gate-docs-links` 63. Porta 6187 libera.
+>
+> **⚠️ Fuori pista: un annuncio in anticipo.** Alle 02:50 ho scritto al coordinatore «tutti e 10 i `services` verdi»,
+> ma `backup-totals` non era ancora partito (lo era alle 02:47, verde). Lo correggo nel resoconto. Regola per me: un
+> risultato si annuncia dopo averlo letto, mai prima.
+>
+> **Lo slot (coordinatore, 03:06)**: il freeze è finito; un nuovo blocco della galleria va dalle ~03:50 alle ~04:45. Lo
+> slot di B4 (~30 minuti) è il secondo, appena finisce l'`all-backend` di A. Se non può chiudersi prima delle 03:50, si
+> sposta a dopo le 04:45. Lo script dello slot è pronto: `files/scripts/b4_slot.sh`, senza attesa del carico, un
+> selettore alla volta:
+>
+> - `api backup-secure` (rifà la build del frontend), poi `api backup`, `backup-restore` e `instance-block`;
+> - `e2e backup-roundtrip`;
+> - `front-utility backup`, coi worker di default (1, seriale): tutta la spec, FBKP-108/109 compresi.
+>
+> **Slot 2 (03:12-03:27) ✅, tutto verde.** L'ordine è cambiato: prima `front-utility backup`, il pezzo più nuovo e più
+> lungo; ogni pezzo partiva solo se la sua stima stava prima delle 03:50.
+>
+> - `front-utility backup`, primo giro (03:12-03:20, con la build di debug del frontend): 12 passati, **FBKP-108
+>   rosso**, FBKP-109 non eseguito (spec seriale);
+> - `api`: `backup-secure` 24, `backup` 23, `backup-restore` 122, `instance-block` 62;
+> - `e2e backup-roundtrip` 3;
+> - `front-utility backup`, secondo giro dopo la riparazione (03:24-03:27): **14 passati**, FBKP-108 e FBKP-109
+>   compresi (1,8 minuti). Porta 6187 libera alle 03:27.
+>
+> **⚠️ Fuori pista: il rosso di FBKP-108 era del banco di prova, non del prodotto.** FBKP-108 era arrivato quasi in
+> fondo: backup sicuro, download, password, controllo e report. Si è fermato su `schemas.RestoreUpload.parse(upload?.json)`
+> (riga 1559): lo stato era 201, ma `response.json()` di Playwright non riusciva a leggere il corpo della risposta
+> all'upload della pagina, un XHR (axios con `onUploadProgress`) che porta la busta, decine di MB. La pagina invece
+> l'aveva letta:
+>
+> - il controllo era partito con l'id giusto ed era arrivato al report;
+> - `lane.checks` corrispondeva;
+> - il JSON della risposta al `POST` si leggeva.
+>
+> Riparazione (TA-F, 03:23, solo la spec; `tsc` e Prettier puliti): l'id dell'upload si prende dal corpo della prima
+> richiesta del controllo (`sent[1].body`, 32 esadecimali) e i corpi restano verificati esattamente. In FBKP-109 i due
+> `POST` portano lo stesso id, prima la password sbagliata e poi quella giusta, e il nuovo `POST` dopo «Drop this
+> archive» usa quell'id. Tolte `kind` e `size` della risposta all'upload: le fissa `api backup-secure`, e FBKP-108
+> verifica già `encrypted` sul report del server. Un commento spiega il perché. La spec E2E non conta per la build: il
+> controllo delle sorgenti guarda solo `frontend/src` e i file di configurazione, quindi nessuna ricostruzione.
+
+### B4b — le note di E (R13-SEC4) e di J (2026-10-17, 03:10-03:25) — registrate, lotto dopo l'ingresso di B4
+
+> **Il coordinatore (03:08 e 03:10)**:
+>
+> - la revisione di E su B4 (R13-SEC4, piano 08 in dev `110125350`) non trova niente sopra la soglia, e la crittografia
+>   è solida. Quattro note per un lotto B4b subito dopo l'ingresso di B4, prima di B-21;
+> - J (J-27): `ledger_totals._as_amount` (la casa) accetta solo testo decimale semplice. Così `_plain` e `_PLAIN_AMOUNT`
+>   di `totals.py` ripetono lo stesso controllo, e la scelta è di B.
+>
+> Il nome «B4b» è del coordinatore. Il B4b dell'analisi (la chiave dentro l'archivio) è confluito in B4.
+>
+> **Verifica sul codice, in sola lettura (HEAD `33275d9a6`)**. Le note reggono tutte:
+>
+> 1. **Chiaro lasciato da un crash.** La pulizia gira solo quando parte un nuovo controllo (`restore_jobs.prune`,
+>    chiamata solo da `start_check`) o un nuovo backup (`remove_expired_jobs`, chiamata solo da `_prepare`). Fra i passi
+>    di avvio nessuno pulisce: `pending-restore` e `restore-commit` lavorano solo su un ripristino in attesa. Quindi:
+>    - (a) `.restore/stage/<id>/archive.zip` (`STAGE_DECRYPTED_ARCHIVE`) resta finché non parte un altro controllo;
+>    - (b) `backups/.decrypt-*` resta finché non parte un altro `inspect`;
+>    - (c) **in più, non nella nota di E**: un job di backup interrotto lascia lo zip in chiaro e la copia del DB in
+>      `backups/.jobs/<id>/`. `get_job` segna `backup_interrupted` senza toglierli, e `remove_expired_jobs` toglie la
+>      cartella solo dopo un'ora e solo al backup seguente. È la stessa classe di (b): per un backup sicuro è proprio
+>      il chiaro che l'utente non voleva su disco.
+>
+>    → **B-23**: una pulizia all'avvio di (a), (b) e (c), con le regole della pulizia di B4 (cartelle vere, mai link; per
+>    `.decrypt-*` l'ora, perché un `inspect` può girare mentre il server parte). Tocca `STARTUP_STEPS` e `overview.md`,
+>    condivisi.
+> 2. **Il messaggio di `decrypt`** (`cmd_decrypt`): «It holds every user's data in clear: keep it private, and remove it
+>    once used.» Non nomina la chiave d'istanza, che lo zip contiene se il backup la portava, e che apre ogni chiave
+>    salvata → **B-24**, messaggio e guida.
+> 3. **`--password-stdin`** legge con `sys.stdin.readline()` (`backup_cli.py:100`) senza guardare `isatty()`: su un
+>    terminale la password si vede. I due campi della creazione hanno `autocomplete="off"` (`BackupDownloadCard.svelte`)
+>    → **B-25**: `getpass` con `isatty()`, e `new-password`.
+> 4. **La chiave d'istanza**:
+>    - (a) staging accetta la chiave anche da uno `.zip` in chiaro. **Voluto, nessun cambiamento**: è la revisione del
+>      contratto delle 23:25 (16/10). Lo zip che `backup decrypt` scrive porta la chiave, e il suo ripristino deve
+>      poterla usare. Uno zip costruito ad arte con DB e chiave propri non dà nulla in più a chi lo carica, che è già
+>      admin;
+>    - (b) la creazione legge `secrets/instance.key` con `read_secret_file`, fino a `SECRET_FILE_MAX_BYTES` (64 KiB), ma
+>      ogni lettura dall'archivio si ferma a `INSTANCE_KEY_MAX_BYTES` (4096) → **B-26**: rifiutarlo già all'esportazione,
+>      con l'avviso `instance_key_unusable`.
+>
+> **J-27 → B-22, deciso.** J-27 è già nella base di B: `7336722ad` «fix(ledger-totals): read only plain decimal
+> amounts», entrato con `e221a0544`. La regola è identica: `_EXACT.prec` = 60, la stessa di `-?[0-9]{1,60}(\.[0-9]{1,60})?`
+> di B. `from_json` rifiuta con un `ValueError` anche tutto il resto che `_plain` controllava (righe che non sono una
+> lista, una riga che non è un oggetto, un importo che non è una stringa). `compare_totals` lo traduce già in `absent`.
+> L'unico motivo di `_plain` era il pericolo dell'esponente espanso prima della casa, e ora la casa lo evita da sé.
+> Decisione: **si tolgono `_plain` e `_PLAIN_AMOUNT`** («una regola, una casa»; regola fondamentale 10). Lo stato
+> resta `absent` in ogni caso. I test di B-13 che fissano «deciso prima che `from_json` veda il documento» diventano
+> «rifiutato da J», e il fixture `j_reads` resta la difesa contro l'espansione nel processo di test.
+>
+> **Lotto B4b proposto** (dopo l'ingresso di B4 e il riallineamento alla punta, prima di B-21): B-23 (il più
+> importante), B-24, B-25, B-26 e B-22. Prima l'analisi, poi i rossi.
+>
+> **Approvato (coordinatore, 03:12)**: prima l'analisi, dopo l'ingresso di B4. Il passo di avvio nuovo dopo
+> `restore-commit` è la sua decisione **N66**, un'estensione di N57: aggiornare `STARTUP_STEPS` e `overview.md`.
+>
+> **G-20, domanda di G (03:11), solo la risposta**: dopo un ripristino `committed` la scheda Backup mostra un avviso
+> «ultimo ripristino: applicato il …», come `restore-last-result` per `rolled_back`?
+>
+> - **No.** `lastResult` vale solo per `rolled_back` (`RestoreCard.svelte:64`).
+> - Il server ha già tutto. `GET /restore/status` risponde `committed` con `finished_at`, `backup_created_at`,
+>   `backup_app_version` e `confirmed_by`. Lo stato resta in `restore.json` fino al ripristino confermato seguente: lo
+>   toglie solo `cancel_restore`, e solo per uno in attesa.
+> - **Costo**: piccolo, solo frontend, circa un'ora coi rossi:
+>   - il caso nel derivato e l'avviso, in un ruolo info;
+>   - una chiave i18n in 4 lingue;
+>   - 2-3 casi Vitest;
+>   - un E2E su uno stato finto, come FBKP-103 (dà anche la foto a G);
+>   - una riga nella guida.
+>
+> Le domande per il developer, passate al coordinatore:
+>
+> 1. lo vogliamo?
+> 2. per quanto: fino al ripristino seguente, come `rolled_back` (proposta), o N giorni?
+> 3. il testo: data dell'applicazione, data e versione del backup, chi l'ha confermato.
+>
+> **Deciso (coordinatore, 03:20)**: sì, decisione notturna **N67**, che il developer rivede → **B-27**, dopo B4b.
+> L'avviso resta fino al ripristino seguente, come `rolled_back`. Il testo è quello proposto, il ruolo è info, e l'E2E
+> gira su uno stato finto, così dà anche la foto a G.
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto
