@@ -4701,3 +4701,276 @@ riletti da me. Percorsi sotto `frontend/src/`.
    (`files/z27_build.sh`); `services ai-export` 1 070 in 414 s, rc 0 (carico 24 alla partenza; dentro anche i test del
    budget di J-50). Porta 6186 libera.
 9. ✅ 17/10 ~13:10 — Backlog: Z-27 chiusa per la parte di Z (A e C); le colonne Δ restano a X con X-R59/X-R60.
+10. ✅ 17/10 ~13:11 — Il coordinatore ha fatto entrare Z-27 e SEC9-2: `107fff751`, `8d236fa11`, `61a6b758b`,
+    `26691436c` → dev `726d90d72`; CHANGELOG `f1786a883` (la riga 🔒 di Z-25 a 1 milione, la riga 🔄 nuova). Il mio
+    ramo è avanzato lì (verificato, albero pulito). Le mie note per X le gira lui; i segnali persi a un fallimento
+    parziale dei cambi vanno a X con X-R58.
+
+### X-R65 (N83) — date assurde nelle scritture manuali di prezzi e cambi: analisi (17/10 ~13:15, sola lettura)
+
+> **Assegnazione** (coordinatore, 17/10 ~13:12, dalla coda di X): «X-R65 (N83). Manual price and FX writes must refuse
+> dates outside [`EARLIEST_RANGE_START` (1900-01-01), `latest_range_end()`] with a coded 422, the same rule as N74 for
+> transactions. The paths are `POST /assets/prices`, plus the manual FX rate write and any bulk upsert/import of manual
+> prices or rates. Also check that provider writes can't store pre-1900 dates (refuse or note). Origin: J's SEC8-1b,
+> where a price at 0001-01-01 lets a risk replay or a query walk about 740k days per asset. Start with an analysis
+> (exact routes and services, error code naming consistent with W's SEC7-3), then reds first. X reviews.»
+
+**Stato reale.**
+- Gli estremi esistono: `EARLIEST_RANGE_START` (`utils/datetime_utils.py:106`) e `latest_range_end()` (domani, col
+  calendario del server). N74 (W, SEC7-3) per le transazioni: `transaction_date_bounds()`
+  (`transactions/transaction_batch_stages.py:202`), [1900-01-01, oggi più un anno]; ogni riga fuori riceve il codice
+  `dateOutOfRange` (`TXValidationCode.DATE_OUT_OF_RANGE`) su `date`, con `params {"min", "max"}`; il batch non si salva.
+- Prezzi, manuali: `POST /assets/prices` (`api/v1/assets/prices.py:45`) →
+  `PriceStoreOperations.bulk_upsert_prices(…, "MANUAL")` (`services/assets/price_store.py:155`). Prima di scrivere
+  rifiuta già le cifre di troppo (`_reject_prices_over_the_limit`, un `ValueError` che la rotta rende 400 con una
+  stringa); nessun controllo della data. La chiama l'editor dei dati dell'asset (`AssetDataEditorSection.svelte:310`),
+  anche per il suo import CSV.
+- Prezzi, dai fornitori: lo stesso servizio con la chiave del fornitore, da `assets/refresh.py:582`. I punti sono
+  tagliati solo sopra (`last_price_day`): una data prima del 1900 restituita da un fornitore viene salvata. Il caso
+  probabile è lo Scheduled Investment, che genera i prezzi da una data d'inizio scritta dall'utente. I punti che
+  nessuna colonna tiene sono già saltati con un avviso (`_unstorable_provider_point`, W-B58): il posto naturale.
+- `price_query.py:961` (avvio F.2) scrive solo oggi: limitato.
+- Cambi, manuali: `POST /fx/currencies/rate` (`api/v1/fx/currencies.py:99`), voce per voce, errori come stringhe in
+  `errors[]` (200 parziale, 400 se tutto fallisce); nessun controllo della data. Lo chiama l'editor dei cambi
+  (`FxDataEditorSection.svelte:188`), anche per l'import CSV (`FxDataImportModal`).
+- Cambi, dai fornitori: `services/fx/sync.py` (insert a `:366`, `:773`, `:848`), date filtrate da
+  `_is_date_within_sync_range` (`:35`), senza pavimento quando l'inizio è `"min"`. I fornitori partono dal 1971 (FED)
+  o dopo: nessuna data prima del 1900 in pratica.
+- Web app: i due editor mostrano `e?.message` (il generico «Request failed with status code 4xx»), non il `detail`,
+  già oggi per i 400. Mostrare il messaggio codificato è di X (gli editor), con X-R58 o dopo.
+
+**Proposta.**
+1. Una regola in un posto: `stored_date_bounds()` → `(EARLIEST_RANGE_START, latest_range_end())`, con
+   `DateOutOfRangeError` e `date_out_of_range_detail()`, in `utils/date_range_limits.py` (accanto ai rifiuti di Z-25).
+2. Prezzi manuali: in `bulk_upsert_prices` per `MANUAL`, prima di ogni scrittura, accanto a
+   `_reject_prices_over_the_limit`; la rotta risponde 422 `{"code": "dateOutOfRange", "message", "params": {"min",
+   "max"}, "items": [{"asset_id", "dates": [...]}]}` (al più 10 date per asset, col conto). Nulla scritto.
+3. Prezzi dai fornitori: i punti fuori dagli estremi saltati come quelli che nessuna colonna tiene (W-B58): avviso
+   nel log, detto nel messaggio del risultato dell'asset; il resto scritto.
+4. Cambi manuali: la rotta controlla tutte le voci prima del ciclo; una data fuori → 422 con `items: [{"index",
+   "date"}]`, nulla scritto (come N74, il batch non si salva).
+5. Cambi dai fornitori: nota (nessun fornitore ha dati prima del 1900); in più, facoltativo, un pavimento di una riga
+   in `_is_date_within_sync_range`.
+6. Fuori: le righe già salvate prima del 1900 (il riempimento le cammina ancora: ~740 000 giorni, sotto il budget di
+   1 milione); gli eventi (`POST /assets/events`), che non fanno camminare nulla (si leggono dentro l'intervallo); la
+   data d'inizio di uno Scheduled Investment nei suoi parametri (di X).
+
+**Superfici.** Prodotto: `utils/date_range_limits.py` (mio), `services/assets/price_store.py`,
+`api/v1/assets/prices.py`, `api/v1/fx/currencies.py` (scrittore io, X rivede). Test (test-author): `services
+asset-source-guards` (`test_asset_source_upsert_guards.py`: il servizio, manuale e fornitore), `api assets-price`,
+`api fx`. Documentazione (inglese): `developer/backend/assets/architecture.md`, `developer/backend/fx/architecture.md`.
+Una riga 🔒 nel CHANGELOG. Peso: S–M.
+
+**Decisioni chieste.** D-XR65-1: il codice, `dateOutOfRange` con `params {min, max}` come N74 (consigliato: il web
+app può riusare il messaggio delle transazioni), o `date_out_of_range` come i codici HTTP di Z-25. D-XR65-2: i
+fornitori di cambi, solo la nota o anche il pavimento di una riga (consigliato). D-XR65-3: le righe già salvate prima
+del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel riempimento dei prezzi.
+
+> **Decisione** (coordinatore, 17/10 ~13:17): «X-R65 decisions: **D1:** snake_case `date_out_of_range` with `params
+> {min, max}`, consistent with the codes already on those routes (`bulk_too_many_items`,
+> `period_changes_too_many_days`). The editors' coded messages are X's later. **D2:** yes, the one-line FX floor.
+> **D3:** a separate item in your section. Proposal approved otherwise; reds first. X reviews.»
+
+**Contratto (N83).**
+- `utils/date_range_limits.py`: `stored_date_bounds()` → `(EARLIEST_RANGE_START, latest_range_end())`, con
+  `latest_range_end` importato per nome (la cucitura di J lo abbassa lì); `DateOutOfRangeError(items, earliest,
+  latest)` (un'`Exception`, non un `ValueError`: la rotta dei prezzi rende 400 i `ValueError`);
+  `date_out_of_range_detail(items, earliest, latest)` → `{"code": "date_out_of_range", "message", "params": {"min",
+  "max"}, "items", "count"}` (date ISO; `items` al più 10, `count` il totale).
+- Prezzi manuali (`bulk_upsert_prices`, `MANUAL`): prima di ogni scrittura, una voce per asset con date fuori,
+  `{"asset_id", "dates"}` (al più 10, in ordine d'ingresso); `count` le date fuori in tutto. La rotta: 422. Nulla
+  scritto.
+- Prezzi dai fornitori: i punti fuori saltati come W-B58, avviso nel log e nel messaggio del risultato; il resto
+  scritto.
+- Cambi manuali (`POST /fx/currencies/rate`): tutte le voci prima del ciclo; `items` `{"index", "date"}`; 422, nulla
+  scritto.
+- Cambi dai fornitori: `_is_date_within_sync_range` falso prima di `EARLIEST_RANGE_START`.
+
+**Passi.**
+1. ✅ 17/10 ~13:20–13:45 — Rossi di test-author (21 casi: 19 rossi per la ragione giusta, 2 guardie verdi prima e
+   dopo); nessun codice di prodotto toccato.
+   - `test_range_ceiling.py` RC-W01…W07 (gli aiuti, le due rotte chiamate direttamente; la rotta dei cambi non
+     scrive nulla, nemmeno le voci buone); `test_asset_source_upsert_guards.py` (manuale: rifiuto prima di ogni
+     istruzione, due asset, date in ordine d'ingresso al più 10; fornitore: punti fuori tolti, nominati e nel log;
+     la via reale del refresh non salva il 1899-12-31 e lo nomina fra gli errori); `test_fx_sync_service.py` (il
+     pavimento, con inizio `"min"` e no; la sincronizzazione non salva prima del 1900); RC-API-05 e 06.
+   - Conti: `range-ceiling` 50 → 51 + 6 rossi, `fx-sync-service` 35 → 35 + 3, `asset-source-guards` 29 → 30 + 8,
+     `api assets-price` 21 + 1, `api fx` 25 + 1. Database della corsia pulito dopo i rossi.
+   - Toccato un test mio di X-R55: RC-000 diceva che `date_range_limits` non ha `latest_range_end`; ora l'accetta se
+     è la funzione di `datetime_utils`, e rifiuta ancora un secondo tetto. Il coordinatore: «fine; mention it».
+2. ✅ 17/10 ~13:25–13:40 — Bozza fuori dal repo (`files/xr65-draft/apply_xr65.py`, 16 sostituzioni esatte in cinque
+   file), provata su una copia: applicazione, compilazione, black pulito, inverso esatto.
+   - Prima, due verifiche. Gli scenari lontani di J (2032–2091, `lift_range_bound`) salvano righe ORM dirette: le
+     scritture manuali non li toccano. Nessun test esistente scrive con le vie manuali una data prima del 1900 o dopo
+     domani (le date estreme trovate sono interrogazioni, o un parser di un fornitore).
+   - `ensure_rates_multi_source` (`fx/sync.py:111`) salva ogni osservazione senza filtro, ma è «unwired»: solo i test
+     lo chiamano. La via viva, `sync_pairs_bulk` (rotta e scheduler), passa da `_is_date_within_sync_range`: il
+     pavimento la copre.
+   - Prezzi manuali: il controllo dopo quello delle cifre, prima di ogni lettura o scrittura; prezzi dai fornitori: i
+     punti fuori tolti prima di quelli che nessuna colonna tiene, con il loro avviso e la loro parte del messaggio.
+3. ✅ 17/10 ~13:47 — Applicata al repo (16 sostituzioni, +90 −4): `ruff` e `black` puliti su prodotto e test;
+   `import backend.app.main` riuscito (nessun import circolare). Impronta in `files/xr65-draft/applied.md5`.
+   Il refresh mette fra i suoi errori ogni messaggio con «rejected»: il mio lo fa, e nomina le date.
+4. ✅ 17/10 ~13:52 — Testi del runner, col via del coordinatore («runner text only (desc/print_info plus those 5
+   comment lines)»): `asset-source-guards` e `fx-sync-service` (`_backend_services.py`), `assets-price` e `fx`
+   (`_backend_api.py`), e la mia voce `range-ceiling`. `ruff` e `black` puliti.
+
+5. ✅ 17/10 14:00–14:12 — Controlli leggeri, corsia 6186, uno alla volta (carico 21–47): `files/xr65_light.sh
+   green`, log in `files/logs/z_xr65_green_*.log`.
+   - I casi nuovi: `services range-ceiling` 57, `fx-sync-service` 38, `asset-source-guards` 38; `api assets-price`
+     22, `api fx` 26.
+   - Le altre suite che scrivono prezzi o cambi a mano: `services asset-digit-limits` 79, `current-price-storable`
+     27, `asset-source` 61, `asset-source-refresh` 18, `fx-core` 42; `utils real-decimal` 267; `api fx-unit` 48,
+     `prices-currency-coherence` 5, `prices-sync-delta` 5, `period-changes` 24, `events-target-currency` 7,
+     `portfolio` 51, `backup-export-extras` 8; `schemas openapi-client-text` 78. Porta 6186 libera.
+6. ✅ 17/10 ~14:00–14:20 — Documentazione (docs-writer, solo inglese, pagine senza traduzioni):
+   `developer/backend/assets/architecture.md` (`#stored-date-bounds`, le righe del modulo e della rotta, e la frase di
+   W-B62 sul conto del refresh), `developer/backend/fx/architecture.md` (`#stored-rate-dates`),
+   `developer/backend/fx/configuration.md` (le due frasi superate: la sincronizzazione non scrive prima del 1900, la
+   rotta manuale rifiuta tutto con un 422).
+
+   > **⚠️ Fuori pista**: il controllo di docs-writer ha trovato un mio difetto. Il refresh conta e annuncia i punti
+   > prima dell'upsert (`refresh.py:569`, `kept_items` senza i soli punti che nessuna colonna tiene, W-B62): una data
+   > fuori dagli estremi, saltata dall'upsert, sarebbe ancora contata e annunciata. Cura in
+   > `files/xr65-draft/apply_xr65b.py` (provata su una copia); prima il rosso, chiesto a test-author.
+   > E una mia affermazione senza appoggio: «i fornitori di cambi partono dal 1971 (FED)». Nel repo c'è solo
+   > l'inizio della BCE (1999), e per `"min"` i fornitori chiedono dal 1900-01-01 (`fx/base.py:21`). Il pavimento
+   > resta giusto; la frase no.
+   - Notato per X (non mio, di prima): nel caricamento manuale il rifiuto per valuta diversa (`price_store.py:250`)
+     arriva asset per asset, dopo che i precedenti sono già scritti.
+7. ✅ 17/10 ~14:13–14:17 — Il difetto del conto. Rosso di test-author:
+   `test_a_provider_refresh_neither_counts_nor_announces_a_price_before_1900` (una riga del 1899-12-30 lasciata da
+   prima, il fornitore che dà 1899-12-30, 1899-12-31 e due giorni buoni): (2, 2, 4) con le due date annunciate contro
+   (1, 1, 2); il database era già giusto. `points_fetched` non fissato: come per W-B62, un punto scartato resta
+   «recuperato». Applicato `files/xr65-draft/apply_xr65b.py` (il conto con gli stessi estremi dell'upsert); `ruff` e
+   `black` puliti. Verdi: `services asset-source-guards` 39, `asset-source-refresh` 18, `asset-source` 61.
+
+8. ✅ 17/10 14:19–14:20 — `mkdocs build` stretto rc 0, nessun avviso (carico 22); `check-links` 97 validi
+   (`files/xr65_build.sh`). Da docs-writer, per X (di prima, non mio): una data rifiutata dal controllo OHLC
+   (chiusura fuori da [minimo, massimo], `price_store.py:338`) passa `kept_items`, e il refresh la conta e la annuncia
+   senza scriverla.
+9. ✅ 17/10 ~14:21 — Backlog: nessuna riga da chiudere nella mia sezione (X-R65 è nella coda di X); Z-30 aperta.
+10. ✅ 17/10 ~14:20–14:30 — Il coordinatore ha committato X-R65 (`30e19b9d9`, `9e52e571e`) e ha aperto la fusione di
+    dev `5603a23a7` nel mio ramo. Un conflitto, gli import di `prices.py`: tenute le due righe (la mia di
+    `date_range_limits`, quella di dev di `datetime_utils` per `_range_start_in_bounds` di MF); messo in stage solo
+    quel file. Rivisti i pezzi fusi da soli (`upsert_prices_bulk`, i tetti di Z-25, `currencies.py`, le tabelle della
+    pagina degli asset). Sul risultato: `range-ceiling` 57, `asset-source-guards` 39, `api assets-price` 22,
+    `mkdocs build` stretto rc 0, `check-links` 97, porta libera. Fusione committata dal coordinatore: `d12153a1f`. X
+    rivede X-R65; MF-SEC9a entrerà prima, e dev tornerà nel mio ramo con piccoli conflitti in `prices.py`,
+    `fx/currencies.py`, `test_fx_api.py`.
+
+### Z-30 — le righe salvate prima del 1900: proposta (17/10 ~14:32, sola lettura)
+
+- Il cammino lungo nasce in un solo posto: `get_prices_bulk` (`services/assets/price_query.py`), per un segnale su
+  tutta la storia, carica da `date.min`; senza seme, il riempimento parte dal primo prezzo salvato. Con una riga del
+  0001-01-01 sono ~740 000 giorni per asset (sotto il budget di 1 milione).
+- Proposta (a), consigliata: il riscaldamento e la storia intera non vanno mai prima di `EARLIEST_RANGE_START`, salvo
+  che l'intervallo visibile non cominci già prima (limitato a 100 anni da X-R55). Il cammino si ferma a ~46 000
+  giorni; una riga più vecchia fa ancora da seme (la lettura del seme prende l'ultimo prezzo prima dell'inizio del
+  carico). Lo stesso pavimento che J usa già per lotti e cassa nativa. `_fill_span` segue da sé (usa gli stessi
+  intervalli). Nessun dato toccato.
+- (b): una correzione post-migrazione che segnala o toglie le righe: tocca i dati e il modulo di H; non la consiglio.
+- I cambi non camminano dalla prima riga (le conversioni hanno intervalli limitati, il riscaldamento dei segnali è
+  limitato da X-R55): fuori.
+- Superfici di (a): `price_query.py`; test (test-author) in `test_range_ceiling.py` o `test_bulk_limits.py`;
+  `developer/backend/assets/architecture.md`. Nessuno dei tre file di MF-SEC9a.
+
+> **Decisione** (coordinatore, 17/10 ~14:31): «Z-30 **(a): GO**, failing tests first. `price_query.py` is MF's file,
+> and MF will touch `get_current_prices_bulk` there for MF-SEC9c after its BRIM and PAC lots. You have a write OK only
+> for the load start of `get_prices_bulk`. MF reviews at your checkpoint.»
+
+### Z-30 — le righe salvate prima del 1900: lavoro (17/10 ~14:35)
+
+**Contratto (Z-30).** In `get_prices_bulk`, solo l'inizio del carico di ogni voce:
+`max(inizio visibile − riscaldamento, min(EARLIEST_RANGE_START, inizio visibile))`.
+> **Ristretto** il 17/10 ~15:05 (passo 3): solo la storia intera, `max((inizio visibile − EARLIEST_RANGE_START).days,
+> 0)` giorni prima; i riscaldamenti finiti restano. I punti qui sotto valgono per la storia intera.
+- Inizio visibile dal 1900 in poi: il riscaldamento, e la storia intera, si fermano al 1900-01-01.
+- Inizio visibile prima del 1900 (al più 100 anni prima della fine, X-R55): resta, senza riscaldamento prima.
+- Le serie di confronto, gli eventi, il seme e `_fill_span` usano gli stessi intervalli: seguono da sé. Un asset con una
+  riga prima del 1900 la usa come seme e riempie dal 1900; uno senza resta com'è (parte dal primo prezzo).
+
+**Passi.**
+1. ✅ 17/10 ~14:55 — Rossi di test-author in `test_bulk_limits.py` (sezione BL-L, `services range-ceiling`, PURE):
+   BL-L01 ×6 (inizio del carico letto dal conteggio, budget uno sotto), BL-L02 (serie di confronto), BL-L03 (budget
+   vero, fusibile a 60 000 passi: punto visibile 120, drawdown −20 %, `analyzed_range` dal 1900), guardie BL-L04
+   (intervallo 1850–1860 con le sue righe) e BL-L05 (asset senza righe vecchie, invariato).
+   > **Note implementazione**: prima 59 verdi e 8 rossi (739 420, 693 596, 693 595, 679 351, 5, 5; 739 722; fusibile
+   > dopo 0,64 s); 57 → 67 test. Ruff e black puliti. Dopo la prima formula: 67/67 (`logs/z_z30_rc.log`).
+2. ✅ 17/10 ~14:36 — Bozza fuori dal repo (`files/z30-draft/apply_z30.py`: l'import di `EARLIEST_RANGE_START` e
+   l'inizio del carico, nient'altro del file di MF), provata su una copia: applicazione, compilazione, black pulito,
+   inverso esatto.
+3. ✅ 17/10 ~15:05 — Codice applicato, poi ristretto. La prima formula passava `services range-ceiling` 67/67, ma
+   `services asset-signals` dava 2 rossi su 30 (`logs/z_z30_asig.log`).
+   > **⚠️ Fuori pista**: `test_calendar_interior_fx_gap_is_sparse_with_typed_reference_cause` tiene i suoi dati
+   > nel 1800 per isolarsi, e una finestra di 7 giorni perdeva il riscaldamento: la formula toglieva OGNI
+   > riscaldamento prima di un intervallo visibile anteriore al 1900, più di quanto serva. Solo la storia intera è
+   > illimitata. Formula ristretta (`apply_z30.py`; la prima resta in `apply_z30_ruleA_superseded.py`):
+   > `warmup_days = max((inizio visibile − EARLIEST_RANGE_START).days, 0)` solo se `requires_full_history`, al posto
+   > di `(inizio − date.min).days`; il tetto a `date.min` e `load_range` restano. Commento E1 aggiornato (non diceva
+   > più il vero). Il secondo rosso è la guardia T6 (`starts == [date.min]`): ora 1900-01-01, i 500 punti restano.
+   > Coordinatore informato alle ~15:05 («se non sei d'accordo, dillo prima del checkpoint»).
+   > **Note implementazione**: con la formula ristretta i quattro casi di storia intera di BL-L01, BL-L02…L05
+   > restano come scritti; i due casi a riscaldamento corto diventano una guardia (riscaldamento finito invariato,
+   > 5/5). A test-author: quella guardia, la riparazione di T6, la ricerca di altri test fissati a `date.min`.
+   > Rischio e AI Export: lo scope di rischio non manda segnali (inizio = inizio visibile, limitato a 100 anni da
+   > X-R55), AI Export chiede solo riscaldamenti finiti (EMA/SMA 200 al massimo); il suo drawdown d'asset passa
+   > da `RiskService` (limitato a 100 anni). `risk_metadata.analyzed_range` di un segnale a storia intera parte
+   > ora dal 1900-01-01 invece che dallo 0001-01-01: nessuno lo legge nel frontend né in AI Export.
+4. ⏳ 17/10 ~15:08 — Docs (docs-writer): `developer/backend/assets/architecture.md` (`#bulk-request-limits`,
+   `#stored-date-bounds`) e `developer/architecture/patterns/signal_plugin_guide.md` (la storia intera).
+   > **Residuo** (nota di test-author): il percorso dei prezzi non limita l'inizio VISIBILE. Un intervallo chiesto a
+   > mano prima del 1900 su un asset con una riga vecchia emette ancora fino a ~740 000 punti visibili, dentro il
+   > budget di 1 milione. «All» della UI parte dal 2000-01-01 (`dateRangeStore.svelte.ts:145`). Rimedio: limitare
+   > l'inizio come fanno già lo scope di rischio e la conversione FX (`range_span_floor`, X-R55). Voce nuova Z-31.
+5. ✅ 17/10 ~15:35 — Seconda correzione della regola (nota di test-author, prova usa e getta
+   `/tmp/libreFolio_z30_mixed_probe.log`).
+   > **⚠️ Fuori pista**: anche la formula ristretta tagliava i riscaldamenti finiti nei piani misti. Con SMA 200 e
+   > drawdown su dati prima del 1900 (1850-06 e 1900-03), lo SMA usciva `insufficient_history`, mentre da solo era
+   > completo (400). Il ramo della storia intera SOSTITUIVA il riscaldamento finito invece di estenderlo; prima di
+   > Z-30 `date.min` li copriva tutti.
+   > **Decisione** (mia, nel perimetro: sempre solo l'inizio del carico): la strada A di test-author,
+   > `warmup_days = max(riscaldamento finito, (inizio visibile − EARLIEST_RANGE_START).days)` col tetto a
+   > `date.min`. La B (riscaldamento finito dei soli segnali non a storia intera) toccava `planning.py`, fuori dal
+   > mio permesso. Effetto della A: tre casi di BL-L01 al pavimento o prima passano a 5, 5 e 4 022 (i 4 giorni del
+   > drawdown); dopo ~1910 nessuna differenza dalla ristretta. Bozza `apply_z30.py` (da HEAD, provata su una copia:
+   > compilazione, black e ruff puliti, inverso esatto); la ristretta resta in `apply_z30_narrow_superseded.py`.
+   > A test-author: BL-L07 rosso (SMA 200 + drawdown come SMA da solo) e i tre casi di BL-L01. Coordinatore
+   > informato alle ~15:38, con la domanda sul testo del runner (`range-ceiling`) e Z-31.
+
+> **Decisione** (coordinatore, 17/10 ~15:45): «Z-30: the final rule is OK. Runner text edit: OK (that `desc` and the
+> one `print_info`). Z-31: file it, post-1.3.»
+
+6. ✅ 17/10 ~15:47 — Testo del runner di `range-ceiling` (`_backend_services.py`): una frase Z-30 in coda al `desc`
+   e una riga `print_info`, nient'altro; il file compila. Z-31 nel backlog, dopo la 1.3.
+7. ✅ 17/10 ~15:25 — Rossi della regola A (test-author, `test_bulk_limits.py`): sotto la ristretta 69 raccolti, 64
+   verdi, 5 rossi, esattamente quelli attesi: BL-L01 ai bordi (1, 1, 4 018 invece di 5, 5, 4 022) e BL-L07 ×2 (SMA
+   200 accanto al drawdown `insufficient_history`, 30/0 e 89/59 punti; da solo ok, 430/400).
+   > **Note implementazione**: BL-L01 legge il conteggio con un budget di 0 (un conteggio corto lo nomina). BL-L07
+   > confronta lo SMA accanto al drawdown con lo SMA da solo; verde anche prima di Z-30 (allora 882 e 789 punti).
+   > BL-L04, L05, L06 invariati e validi sotto A. Simulazioni di test-author: A 12/12 BL-L verdi; prima di Z-30
+   > BL-L01 rosso con 739 420 / 693 596 / 693 595 / 679 351.
+   Poi `apply_z30_narrow_superseded.py revert` (di nuovo HEAD, diff vuoto) e `apply_z30.py apply` (regola A, da
+   HEAD, tre sostituzioni: l'import; il riscaldamento finito calcolato per ogni piano, poi
+   `max(…, (inizio − EARLIEST_RANGE_START).days)` se storia intera, col commento E1 riscritto; il commento Z-25 a
+   ~397, mio, che diceva ancora «loads from date.min»). Provato su una copia di HEAD (compilazione, black, inverso
+   esatto); ruff e black puliti, righe ≤ 120. Testo del runner corretto alla regola esatta («the earlier of
+   1900-01-01 and the start of its finite warm-up»), sempre solo `desc` e la riga `print_info` autorizzate.
+   Comandi (`files/z30_light.sh`, carico < 50, uno alla volta, corsia 6186):
+   `services range-ceiling` 69 verdi; `services asset-signals` 30 verdi; `api asset-signals` 2 verdi; porta libera.
+8. ✅ 17/10 ~15:40 — Docs (docs-writer) e wiki.
+   > **Note implementazione**: `developer/backend/assets/architecture.md` (`#stored-date-bounds`: le righe vecchie
+   > restano, una storia intera non va oltre il 1900 e non taglia un riscaldamento; `#bulk-request-limits`: «the
+   > earlier of `EARLIEST_RANGE_START` and the start of the item's point-derived warm-up», ~9 800 giorni dal 2000 e
+   > ~46 300 con una riga vecchia, verificati a oggi) e `developer/architecture/patterns/signal_plugin_guide.md`.
+   > docs-writer ha verificato la frase «the earlier of» contro la formula su 200 000 date casuali. Build stretta
+   > (`files/z30_build.sh`): rc 0, 0 avvisi. Wiki: `decisions/drawdown-full-history-warmup.md` e la riga
+   > dell'indice dicevano «loads from `date.min`»: una nota Z-30 ciascuno, nessun percorso nuovo
+   > (`check_source_paths.py`: i 7 percorsi mancanti sono di altre pagine).
+   > **Residui fuori dal mio permesso** (commenti diventati imprecisi, per il proprietario):
+   > `signals/planning.py:68–70` («not from a points-derived day count») e
+   > `signal_plugins/drawdown/plugin.py:119–120` («ignores total_points»): sotto A il riscaldamento finito conta
+   > ancora, vicino al 1900 o prima.
+9. ✅ 17/10 ~15:45 — Checkpoint FROZEN al coordinatore (revisore MF): 10 file tracciati, nessuno nuovo; `git diff
+   --check` pulito, porta 6186 libera. Proposte: riga 🔒 del CHANGELOG, commit `fix(prices): floor full-history
+   load at 1900`, i due commenti fuori permesso (`planning.py`, plugin del drawdown) se il coordinatore lo autorizza.

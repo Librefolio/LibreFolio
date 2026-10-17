@@ -120,6 +120,7 @@
     "createForex": "Crear forex…",
     "unknownError": "error desconocido",
     "decimalPlacesExceeded": "{max, plural, =0 {Solo números enteros} one {Como máximo # decimal} other {Como máximo # decimales}}",
+    "decimalExponentOutOfRange": "Escribe el número completo: la notación científica solo se lee sola, con un exponente de hasta ±{max}",
     "bulkRefusal": {
       "tooManyItems": "No se han podido cargar algunos valores: el servidor acepta como máximo {max, number} elementos por solicitud, y esta tenía {count, number}.",
       "tooManyDays": "No se han podido cargar algunos valores: el servidor genera como máximo {max, number} valores diarios por solicitud, y esta necesitaba más. Elige un periodo más corto."

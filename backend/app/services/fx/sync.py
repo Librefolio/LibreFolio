@@ -23,6 +23,7 @@ from backend.app.services.fx.conversion import compute_chain_rate
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx.runtime import call_fx_provider, configured_fx_provider, settings_cache_part
 from backend.app.services.fx.storage import normalize_storable_rate
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 from backend.app.utils.runtime.cache import clear_cache, get_ttl_cache
 from backend.app.utils.sql_chunks import chunks
 
@@ -34,7 +35,9 @@ _fx_fetch_cache = get_ttl_cache("fx_provider_responses", maxsize=200, ttl=300)
 
 
 def _is_date_within_sync_range(target_date: date, start_date: FXProviderStartDate, end_date: date) -> bool:
-    """Return True when target_date falls inside requested sync range."""
+    """Return True when target_date falls inside requested sync range, never before ``EARLIEST_RANGE_START`` (X-R65)."""
+    if target_date < EARLIEST_RANGE_START:
+        return False
     if start_date == "min":
         return target_date <= end_date
     return start_date <= target_date <= end_date

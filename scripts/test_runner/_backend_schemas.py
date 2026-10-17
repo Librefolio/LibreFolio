@@ -58,6 +58,14 @@ def schemas_period_changes_bounds(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Period changes bounds tests", verbose=verbose)
 
 
+def schemas_currency_write_strict(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-SEC9b (E-18): strict ISO 4217 codes on the write paths, tolerant reads."""
+    print_section("Schemas: Currency Write Strict (MF-SEC9b, E-18)")
+    print_info("Testing: backend/app/schemas/common.py (iso_currency_code, IsoCurrencyCode, IsoCurrencyAmount) and the write schemas")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_currency_write_strict.py", test_names)
+    return run_command(cmd, "Currency write strict tests", verbose=verbose)
+
+
 def schemas_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Test transaction Pydantic schemas."""
     print_section("Schemas: Transactions (TXCreateItem, TXReadItem, etc.)")
@@ -213,6 +221,15 @@ Tests for Pydantic/SQLModel schema validation:
         name="Period Changes Bounds",
         desc="R13-SEC8 (MF-P2b): the as_of of an asset or FX period-changes item is 1900-01-01 or later (no upper bound)",
         # PURE: imports schemas.prices and schemas.fx only and validates items; no row, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "currency-write-strict",
+        schemas_currency_write_strict,
+        name="Currency Write Strict",
+        desc="MF-SEC9b (E-18): write paths take ISO 4217 alpha-3 codes only; read paths stay tolerant",
+        # PURE: schemas and plain functions only; no row, no server, no network, no file.
         isolation="pure",
     )
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")

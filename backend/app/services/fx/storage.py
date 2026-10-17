@@ -3,6 +3,7 @@ FX rate storage: the alphabetical normalization of a pair (``normalize_rate_for_
 delete of stored rates.
 """
 
+from bisect import bisect_left, bisect_right
 from datetime import date
 from decimal import Decimal
 
@@ -187,12 +188,13 @@ async def delete_rates_bulk(  # noqa: C901 — flat batch delete: normalize, cou
     deletions: list[tuple[str, str, date, date | None]],  # [(from_currency, to_currency, start_date, end_date?), ...]
 ) -> list[tuple[bool, int, int, str | None]]:  # [(success, existing_count, deleted_count, message), ...]
     """
-    Delete multiple FX rates in a single batch operation.
+    Delete multiple FX rates in one transaction.
 
-    This function efficiently handles bulk deletions by:
+    This function handles bulk deletions by:
     1. Normalizing all currency pairs (alphabetical ordering)
-    2. Fetching existing counts in a single batch query (optimization)
-    3. Executing deletions in a single batch (optimization)
+    2. Reading the matching rates in chunks of OR terms (``utils/sql_chunks``; MF-SEC9a), and counting each deletion's
+       by bisection over its pair's sorted dates
+    3. Deleting the matched ids in chunks
 
     Args:
         session: Database session
@@ -258,15 +260,22 @@ async def delete_rates_bulk(  # noqa: C901 — flat batch delete: normalize, cou
         for r in result.all():
             rates_by_pair.setdefault((r.base, r.quote), {})[r.date] = r.id
 
+    # Each pair's dates sorted once, with their ids: a deletion takes its slice by bisection. Scanning every date of the
+    # pair for each deletion was quadratic, about 4 s of the event loop at the 10 000-item cap (E's review of MF-SEC9a)
+    index_by_pair: dict[tuple[str, str], tuple[list[date], list[int]]] = {}
+    for pair, ids_by_date in rates_by_pair.items():
+        days = sorted(ids_by_date)
+        index_by_pair[pair] = (days, [ids_by_date[day] for day in days])
+
     # Count existing rates per deletion request, among its own pair's rates only
     existing_counts = {}
     ids_to_delete = set()
 
     for idx, (base, quote, start_date, end_date) in enumerate(normalized_deletions):
-        last = end_date or start_date
-        matched = [r_id for r_date, r_id in rates_by_pair.get((base, quote), {}).items() if start_date <= r_date <= last]
-        ids_to_delete.update(matched)
-        existing_counts[idx] = len(matched)
+        days, ids = index_by_pair.get((base, quote), ([], []))
+        lo, hi = bisect_left(days, start_date), bisect_right(days, end_date or start_date)
+        ids_to_delete.update(ids[lo:hi])
+        existing_counts[idx] = max(0, hi - lo)
 
     # CHUNKED DELETE: Remove all matched IDs in batches to avoid SQLite limits
     # SQLite has SQLITE_MAX_VARIABLE_NUMBER = 999 by default

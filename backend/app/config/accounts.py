@@ -100,9 +100,12 @@ ADMIN_EMAIL_VARIABLE = "LIBREFOLIO_ADMIN_EMAIL"
 ADMIN_USERNAME_VARIABLE = "LIBREFOLIO_ADMIN_USERNAME"
 ADMIN_BOOTSTRAP_TOKEN_VARIABLE = "LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN"
 DEFAULT_ADMIN_USERNAME = "admin"
-#: The username rules of registration (``AuthRegisterRequest``).
-ADMIN_USERNAME_MIN_LENGTH = 3
-ADMIN_USERNAME_MAX_LENGTH = 50
+#: The length of a new username: registration and the profile (their request schemas, a 422 first),
+#: ``./dev.py user create`` (``user_service``, A-46) and ``LIBREFOLIO_ADMIN_USERNAME``.
+USERNAME_MIN_LENGTH = 3
+USERNAME_MAX_LENGTH = 50
+#: Why a new username of another length is refused (A-46), with ``error_code`` ``USERNAME_INVALID`` where a code is given.
+USERNAME_LENGTH_MESSAGE = f"A username must be {USERNAME_MIN_LENGTH} to {USERNAME_MAX_LENGTH} characters long"
 #: The character no new username may hold (A-21a): the sign-in reads an identifier holding it as an email address first
 #: (``user_service.get_user_by_username_or_email``). Registration, a change of username, ``./dev.py user create`` and
 #: ``LIBREFOLIO_ADMIN_USERNAME`` refuse it; a username from before A-21a keeps it, and its account signs in by address.
@@ -192,11 +195,11 @@ def admin_bootstrap_config() -> AdminBootstrapConfig | None:
     except ValidationError:
         raise AdminBootstrapConfigError(ADMIN_EMAIL_VARIABLE, "ADMIN_EMAIL_INVALID", "expected an email address") from None
     name = username or DEFAULT_ADMIN_USERNAME
-    if not ADMIN_USERNAME_MIN_LENGTH <= len(name) <= ADMIN_USERNAME_MAX_LENGTH:
+    if not USERNAME_MIN_LENGTH <= len(name) <= USERNAME_MAX_LENGTH:
         raise AdminBootstrapConfigError(
             ADMIN_USERNAME_VARIABLE,
             "ADMIN_USERNAME_INVALID",
-            f"expected {ADMIN_USERNAME_MIN_LENGTH} to {ADMIN_USERNAME_MAX_LENGTH} characters, as a username chosen at registration",
+            f"expected {USERNAME_MIN_LENGTH} to {USERNAME_MAX_LENGTH} characters, as a username chosen at registration",
         )
     if USERNAME_RESERVED_CHARACTER in name:
         raise AdminBootstrapConfigError(

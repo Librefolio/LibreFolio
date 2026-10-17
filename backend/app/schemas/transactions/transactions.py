@@ -28,6 +28,7 @@ from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
+    IsoCurrencyAmount,
     SafeDecimal,
     StrictModel,
 )
@@ -234,7 +235,7 @@ class TXCreateItem(StrictModel):
     quantity: SafeDecimal = Field(default=Decimal("0"), description="Asset quantity delta (+ in, - out)")
 
     # Cash movement using Currency class from common.py
-    cash: Optional[Currency] = Field(default=None, description="Cash movement (code + amount). Required for cash operations.")
+    cash: Optional[IsoCurrencyAmount] = Field(default=None, description="Cash movement (code + amount). Required for cash operations.")
 
     # Temporary linking for bulk create (not persisted)
     link_uuid: Optional[str] = Field(
@@ -250,7 +251,7 @@ class TXCreateItem(StrictModel):
     # IMPORTANT: amount is PER-UNIT (weighted-average cost per single unit), NOT a total.
     # The engine multiplies it by quantity. Divide any TOTAL countervalue by quantity first.
     # Object {code, amount} — e.g. {"code": "EUR", "amount": "42.50"}
-    cost_basis_override: Optional[Currency] = Field(
+    cost_basis_override: Optional[IsoCurrencyAmount] = Field(
         default=None,
         description="Frozen PER-UNIT cost basis (WAC per single unit) for TRANSFER_IN. Multiplied by quantity to get the total. Object {code, amount}.",
     )
@@ -522,13 +523,13 @@ class TXUpdateItem(StrictModel):
     quantity: Optional[SafeDecimal] = Field(default=None, description="New quantity")
 
     # Cash update using Currency class
-    cash: Optional[Currency] = Field(default=None, description="New cash (code + amount)")
+    cash: Optional[IsoCurrencyAmount] = Field(default=None, description="New cash (code + amount)")
 
     tags: Optional[List[str]] = Field(default=None, description="New tags (replaces existing)")
     description: Optional[str] = Field(default=None, max_length=500, description="New description")
 
     # Frozen cost basis override (for TRANSFER_IN) — object {code, amount}
-    cost_basis_override: Optional[Currency] = Field(
+    cost_basis_override: Optional[IsoCurrencyAmount] = Field(
         default=None,
         description=(
             "Frozen cost basis {code, amount}, where the type and side take one (TRANSFER or ADJUSTMENT received). "

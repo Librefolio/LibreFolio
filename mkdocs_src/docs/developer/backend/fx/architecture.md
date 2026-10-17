@@ -35,6 +35,21 @@ currency.**
 
 This ensures that we only need to store one rate per pair, and we can easily calculate the inverse if needed.
 
+Rate writes keep to the [stored-date bounds](../assets/architecture.md#stored-date-bounds) of the
+prices: from 1900-01-01 to tomorrow by the server's calendar (`stored_date_bounds()`; X-R65, night
+decision N83). `POST /api/v1/fx/currencies/rate` (`upsert_rates_endpoint()`) checks every item's
+`date` before its loop: a single date outside refuses the whole request with the same 422
+`date_out_of_range` (`date_out_of_range_detail()`), its `items` `{"index", "date"}` (the item's
+0-based index; at most ten), its `count` all of them. Nothing is written, not even the valid
+items, unlike the endpoint's [per-item errors](configuration.md#chain-dates-writes-and-counters).
+The provider sync never stores a rate dated before 1900-01-01, whatever its start: in
+`sync_pairs_bulk()`, the live sync path, `_is_date_within_sync_range()`
+(`backend/app/services/fx/sync.py`), which keeps the dates of the requested range, is false before
+`EARLIEST_RANGE_START`, so neither `start: "min"` nor an older start reaches past it; its end stays
+the requested one, today at the latest. `ensure_rates_multi_source()`, which has no production
+caller, is left without that floor.
+{: #stored-rate-dates }
+
 ## 🔢 Priority System
 
 When converting currency, the system needs to decide which rate to use if multiple providers have data for the same pair and date.
@@ -287,7 +302,9 @@ saves a CSV import in one request, and daily rates since 1999 are about 7,000 ro
 one `OR` term per rate or deletion, so they run in chunks of `OR_TERMS_PER_QUERY` (500, `utils/sql_chunks.py`, the
 value of `FX_PAIRS_PER_QUERY`), in the same transaction: the read of the stored rates and the
 `INSERT … ON CONFLICT` of `upsert_rates_bulk()`, the read of the matching rates of `delete_rates_bulk()` (a deletion
-of more than 1,000 separate days, which the FX page sends as as many ranges, answered 500), and the read of the
+of more than 1,000 separate days, which the FX page sends as as many ranges, answered 500; each deletion then takes
+its rates by bisection over its pair's sorted dates, not by a scan of them, which at the cap held the event loop for
+seconds), and the read of the
 stored rates a provider sync compares with (`_stored_rates()`; refused, it was taken for a missing table and every
 rate counted as new). An error answers with a fixed message, never the database's, and is logged.
 {: #rate-write-limits }
