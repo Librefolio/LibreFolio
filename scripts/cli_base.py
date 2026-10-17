@@ -20,6 +20,7 @@ import socket
 import subprocess
 import threading
 import time
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -164,6 +165,14 @@ def _load_project_dotenv() -> None:
 #: (secrets, profile, block, mail, accounts, plugins…) takes its default in a lane: configure_test_runtime drops it.
 TEST_LANE_KEEPS = frozenset({"PORT", "TEST_PORT", "LIBREFOLIO_DATA_DIR", "HOST", "LOG_LEVEL", "LIBREFOLIO_LOG_LEVEL", "LF_APP_VERSION", "LIBREFOLIO_SERVER_WORKERS"})
 TEST_LANE_KEPT_PREFIX = "LIBREFOLIO_TEST_"
+#: What a test lane may set of its instance's configuration, with ``--lane-setting NAME=VALUE`` (H-43): the settings a
+#: hosting provider's instance runs with, so the suite can see the managed profile, its frame protection and its
+#: report-only content security policy for real. Never a secret, a port, a data directory or one of the runner's names.
+TEST_LANE_SETTABLE = frozenset({"LIBREFOLIO_PROFILE", "LIBREFOLIO_FRAME_PROTECTION", "LIBREFOLIO_CSP_REPORT_ONLY"})
+#: The variable that carries a lane's settings down its process tree — the runner, Playwright, ``dev.py server --test``
+#: and uvicorn's workers —, as ``NAME=VALUE`` pairs joined by ``;``. Under the kept prefix, so each nested
+#: ``configure_test_runtime()`` finds it and applies it again after its own drop. Set by the runner, never by .env.
+TEST_LANE_SETTINGS = "LIBREFOLIO_TEST_LANE_SETTINGS"
 # A variable line of .env.example, commented out or not: «NAME=…» or «# NAME=…».
 _ENV_EXAMPLE_VARIABLE = re.compile(r"^(?:#\s*)?([A-Z_][A-Z0-9_]*)=")
 
@@ -171,6 +180,26 @@ _ENV_EXAMPLE_VARIABLE = re.compile(r"^(?:#\s*)?([A-Z_][A-Z0-9_]*)=")
 def kept_in_a_test_lane(name: str) -> bool:
     """Whether a test lane keeps ``name`` from the developer's configuration: ``TEST_LANE_KEEPS`` or ``LIBREFOLIO_TEST_*``."""
     return name in TEST_LANE_KEEPS or name.startswith(TEST_LANE_KEPT_PREFIX)
+
+
+def parse_lane_settings(items: Iterable[str]) -> dict[str, str]:
+    """The lane settings ``items`` give, ``NAME=VALUE`` each, checked (H-43): a name of ``TEST_LANE_SETTABLE``, given
+    once, with a value that is not empty and holds no ``;`` nor a line break. ``ValueError`` otherwise, naming the item."""
+    allowed = ", ".join(sorted(TEST_LANE_SETTABLE))
+    settings: dict[str, str] = {}
+    for item in items:
+        name, separator, value = item.partition("=")
+        name, value = name.strip(), value.strip()
+        if not separator or not name or not value:
+            raise ValueError(f"Lane setting {item!r} is not NAME=VALUE")
+        if name not in TEST_LANE_SETTABLE:
+            raise ValueError(f"Lane setting {item!r}: a test lane may set only {allowed}")
+        if any(character in value for character in (";", "\n", "\r", "\0")):
+            raise ValueError(f"Lane setting {item!r}: its value may hold no ';' and no line break")
+        if name in settings:
+            raise ValueError(f"Lane setting {name} is given twice")
+        settings[name] = value
+    return settings
 
 
 def documented_instance_variables() -> frozenset[str]:
@@ -264,11 +293,17 @@ def get_data_dir(test_mode: bool = False) -> Path:
 def configure_test_runtime(
     port: int | str | None = None,
     data_dir: str | os.PathLike[str] | None = None,
+    lane_settings: Iterable[str] | None = None,
 ) -> tuple[int, Path]:
     """Validate and apply one test lane's port and data directory.
 
     Explicit values are exported for every child process. Omitted values keep
     their effective value while normalizing it for every child process.
+
+    ``lane_settings`` (``--lane-setting``, H-43) are applied after the drop of the
+    developer's settings and handed down in ``TEST_LANE_SETTINGS``; without them,
+    the settings that variable carries from the parent are applied again. That
+    variable is refused when it comes from .env.
     """
     raw_port = port if port is not None else (_configured_env_value("TEST_PORT") or "6041")
     resolved_port = _validated_port(raw_port, "--test-port")
@@ -294,10 +329,22 @@ def configure_test_runtime(
     )
 
     # A test lane runs on the instance's defaults: no setting of the developer's .env or shell reaches it, only what
-    # kept_in_a_test_lane() keeps and what the runner sets below. Other keys of .env (not LibreFolio's) stay.
+    # kept_in_a_test_lane() keeps, the lane's own settings (H-43) and what the runner sets below. Other keys of .env
+    # (not LibreFolio's) stay.
+    # Refused whenever the dotenv file holds it, whatever the environment says: `pipenv run` exports .env before dev.py
+    # starts, so a line there would look inherited. A runner's children never read .env (PIPENV_DONT_LOAD_ENV, set below).
+    if TEST_LANE_SETTINGS in _project_dotenv_values():
+        raise ValueError(f"{TEST_LANE_SETTINGS} comes from .env: a test lane's settings come from --lane-setting only")
+    inherited_settings = os.environ.get(TEST_LANE_SETTINGS)
+    settings = parse_lane_settings(lane_settings if lane_settings is not None else [item for item in (inherited_settings or "").split(";") if item.strip()])
     _load_project_dotenv()
     for name in _test_lane_drops():
         os.environ.pop(name, None)
+    if settings:
+        os.environ[TEST_LANE_SETTINGS] = ";".join(f"{name}={value}" for name, value in sorted(settings.items()))
+    else:
+        os.environ.pop(TEST_LANE_SETTINGS, None)
+    os.environ.update(settings)
     os.environ["TEST_PORT"] = str(resolved_port)
     os.environ["LIBREFOLIO_TEST_DATA_DIR"] = str(resolved_data_dir)
     ensure_test_lane_id()
