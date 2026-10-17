@@ -14,7 +14,11 @@ Two more, read from the settings when the middleware is built, off for a self-ho
 one (``PROFILE_DEFAULTS``), each settable on its own:
 
 - ``LIBREFOLIO_FRAME_PROTECTION``: ``X-Frame-Options: SAMEORIGIN`` and ``Content-Security-Policy: frame-ancestors
-  'self'``, enforced, on every response: only the app's own pages may frame it;
+  'self'``, enforced, on every response: only the app's own pages may frame it. An HTML response (the web app's pages,
+  the documentation, the API's Swagger UI and ReDoc) gets ``PAGE_POLICY`` instead, which adds three directives that
+  touch no script (H-42): ``object-src 'none'``, ``base-uri 'self'`` and ``form-action 'self'``, against plugin content,
+  an injected ``<base>`` and a form sent to another site. Only HTML: Chromium shows an inline PDF with a viewer it
+  treats as a plugin, which ``object-src 'none'`` on the PDF's own answer could stop;
 - ``LIBREFOLIO_CSP_REPORT_ONLY``: ``Content-Security-Policy-Report-Only: CSP_REPORT_ONLY_POLICY`` on the HTML pages of
   the web app, never on ``/mkdocs`` or ``/api/``. Nothing is blocked; the browser reports each violation in its
   console (no report endpoint).
@@ -41,6 +45,15 @@ ALWAYS_HEADERS: tuple[tuple[bytes, bytes], ...] = (
 FRAME_HEADERS: tuple[tuple[bytes, bytes], ...] = (
     (b"x-frame-options", b"SAMEORIGIN"),
     (b"content-security-policy", b"frame-ancestors 'self'"),
+)
+
+#: The enforced policy of an HTML response when frame protection is on (H-42): ``frame-ancestors`` and three directives
+#: that touch no script. ``script-src`` and the rest stay in the report-only policy below.
+PAGE_POLICY = "; ".join(("frame-ancestors 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'"))
+#: ``FRAME_HEADERS`` for an HTML response.
+PAGE_FRAME_HEADERS: tuple[tuple[bytes, bytes], ...] = (
+    (b"x-frame-options", b"SAMEORIGIN"),
+    (b"content-security-policy", PAGE_POLICY.encode()),
 )
 
 #: The report-only policy of the web app's pages. Images may come from any HTTPS address (asset and broker icons set
@@ -90,12 +103,17 @@ def register_served_types() -> None:
         mimetypes.add_type(mime_type, extension)
 
 
+def _is_html(headers: list[tuple[bytes, bytes]]) -> bool:
+    """Whether a response is an HTML document, by its ``content-type``."""
+    content_type = next((value for name, value in headers if name.lower() == b"content-type"), b"")
+    return content_type.lower().startswith(b"text/html")
+
+
 def _is_web_app_page(path: str, headers: list[tuple[bytes, bytes]]) -> bool:
     """An HTML response of the web app: not the documentation (``/mkdocs``), not the API (``/api/``)."""
     if path == "/mkdocs" or path.startswith("/mkdocs/") or path == "/api" or path.startswith("/api/"):
         return False
-    content_type = next((value for name, value in headers if name.lower() == b"content-type"), b"")
-    return content_type.lower().startswith(b"text/html")
+    return _is_html(headers)
 
 
 class SecurityHeadersMiddleware:
@@ -106,6 +124,7 @@ class SecurityHeadersMiddleware:
         # Read once: the switches cannot change while the app runs
         settings = get_settings()
         self.headers = ALWAYS_HEADERS + (FRAME_HEADERS if settings.LIBREFOLIO_FRAME_PROTECTION else ())
+        self.page_headers = ALWAYS_HEADERS + (PAGE_FRAME_HEADERS if settings.LIBREFOLIO_FRAME_PROTECTION else ())
         self.csp_report_only = settings.LIBREFOLIO_CSP_REPORT_ONLY
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -121,7 +140,8 @@ class SecurityHeadersMiddleware:
                 started = True
                 headers = list(message.get("headers") or [])
                 present = {name.lower() for name, _ in headers}
-                headers.extend(header for header in self.headers if header[0] not in present)
+                added = self.page_headers if _is_html(headers) else self.headers
+                headers.extend(header for header in added if header[0] not in present)
                 if self.csp_report_only and _CSP_REPORT_ONLY_HEADER[0] not in present and _is_web_app_page(scope["path"], headers):
                     headers.append(_CSP_REPORT_ONLY_HEADER)
                 message = {**message, "headers": headers}
