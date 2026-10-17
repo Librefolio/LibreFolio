@@ -5462,3 +5462,25 @@ non sposti il registro.
 > - **I docs di H-40** (IPv6 su Docker, la mia nota di SEC8): corretti. Se non è stato verificato su un host Linux,
 >   basta scrivere nel piano di H che viene dalla documentazione di Docker.
 > - **I docs di H-34**: coerenti con il codice. `TXMixedBatch` è dichiarato onestamente fuori dalla visita.
+
+> **La revisione di MF-SEC8-2** (`ee440a5db`, ramo di MF `fddeb819a`, 09:4x, sola lettura; è la cura del mio SEC8-2):
+> **chiusa, nessun reperto.** Il mio SEC8-2 è curato anche prima della N74 di W.
+> - **L'emissione parte dal pavimento del 1900-01-01**: `calculate`, il `computed_from` e il `display_from` dei lots,
+>   `_unit_requests`, l'FX in transito del motore e i calendari del builder (`max(_replay_from, pavimento)`). Non resta
+>   nessuna camminata, né il `date.min − 1` che dava `OverflowError`.
+> - **Le righe vecchie sono rigiocate esatte, al costo delle righe**: prima di `date_from` un giorno quieto salta con
+>   `bisect` al prossimo giorno sporco. I giorni sporchi vengono solo da eventi, e `date_from` è uno di loro.
+>   `rate_change_days` fa una bisezione su una lista costruita dai giorni pavimentati.
+> - **La regola 7** («solo `localcontext()`») è nelle istruzioni di financial-math.
+> - **Residuo LOW**: dopo la N74, un report dal 1900 emette circa 46 000 giorni, cioè 3,5 volte un portafoglio dal 1990.
+>   La cura facoltativa resta «un replay alla volta per utente». È una scelta di prodotto.
+
+> **Lo slot E2E di E-8** (coordinatore, 09:48; parti 1 e 2, sulla punta `20c70013e`; `files/tools/e8_e2e_slot.sh`,
+> corsia 6188, `--workers 2`, una spec alla volta, macchina condivisa con J e H):
+>
+> | Spec | Esito | Durata |
+> |---|---|---|
+> | `front-utility email-send-link` (da ESL-E-01 a ESL-E-05, compreso l'invito in Italiano) | 5 passati | 349 s |
+> | `front-utility email-tab` (con i titoli «Settings › Administration › Email») | 5 passati | 87 s |
+>
+> La porta 6188 è libera alla fine (09:55). E-8 è pronto all'ingresso.
