@@ -4705,7 +4705,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Fatto: il limite è `MAX_SAFE_INTEGER` (2^53 − 1), quello che la pagina delle impostazioni tiene esatto; copre anche
     la variabile d'ambiente, la riga salvata e le dichiarazioni, che fallivano allo stesso modo. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
     sezione «X-R43».
-- **X-R44 · `mockprov` si può nominare e assegnare a un asset anche in produzione** — piccolo, **prima del rilascio,
+- ✅ **X-R44 · `mockprov` si può nominare e assegnare a un asset anche in produzione** (consegnata il 17/10, 10:20; SHA all'ingresso; chiude anche `MOCKFX`) — piccolo, **prima del rilascio,
   dopo X-R38**; X, 17/10 (revisione R13-SEC5 di E su X-R24/25, girata dal coordinatore).
   - `mockprov` è nell'immagine di produzione e sempre registrato. Con X-R24 la ricerca senza `providers` lo salta, ma
     chiunque può nominarlo in una ricerca e **assegnarlo a un asset** con `POST /assets/provider`, che non controlla né
@@ -4751,13 +4751,18 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     J (file di W) rispondono a un utente che vede le transazioni: J e W rivedono. Nello stesso lotto, la nota LOW di W:
     il rapporto nel messaggio d'errore scritto nella lingua dell'interfaccia (`formatExactDecimal`). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
     sezione «X-R47b».
-- ✅ **X-R48 · `market-data/wipe` cancella gli SPLIT collegati a rettifiche senza costo** (consegnata il 17/10, 09:45; SHA all'ingresso) — **prima del rilascio, dopo
+- ✅ **X-R48 · `market-data/wipe` cancella gli SPLIT collegati a rettifiche senza costo** (chiusa il 17/10: entrata in dev `2ea54ff76`; J ed E rivedono a posteriori) — **prima del rilascio, dopo
   l'ingresso di CP-14a di J**; X, 17/10 (J, F1, girato dal coordinatore).
   - `POST /assets/{id}/market-data/wipe` (il flusso del cambio di valuta, ma si può chiamare anche da solo) scollega ogni
     transazione dagli eventi dell'asset e li cancella tutti, SPLIT compresi (`currency_change.py:131-137`). Una
     rettifica +q collegata a uno SPLIT, senza costo, diventa `MISSING_COST_BASIS`.
   - **Deciso**: una guardia come quella di P-10, cioè un rifiuto 409 con i dettagli (evento, data, transazioni), tramite
     `financial_math.splits.costless_incoming_split_adjustments`, che arriva con CP-14a.
+- **X-R48b · La modale del cambio di valuta non avvisa prima della conferma** — basso, UX, non urgente; X, 17/10 (J,
+  revisione di X-R48, girata dal coordinatore).
+  - Il riepilogo (dry run) non rifiuta mai, quindi il pannello di conferma non può avvisare: l'utente incontra il 409
+    solo dopo aver confermato.
+  - Cura facoltativa: il riepilogo porta il numero degli SPLIT che bloccano, e la modale avvisa prima della conferma.
 - **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** — basso; X, 17/10 (J, F2,
   girato dal coordinatore).
   - `provider_management.py:212-221`: vale solo se un utente ha scritto uno SPLIT fra gli eventi del piano.
