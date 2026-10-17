@@ -63,6 +63,9 @@ So the code fix and a one-time repair ship together (decision N86).
    - Latest first. A price that meets a row already on its new date (any source) is dropped and that row stays. An
      event that meets one of the same source and type is merged into it: its transactions are re-pointed there, then
      it is deleted.
+   - Targets go forward only: latest first is safe only then, so `redate_provider_rows` refuses an earlier target
+     with a `ValueError` before anything moves (MF's review). Its per-row `flush()` is required: one flush at the end
+     would emit the UPDATEs sorted by primary key and collide on `(asset_id, date)`.
    - A moved SPLIT carries along the ADJUSTMENTs linked to it and dated on its old day S, since Yield on Cost refuses
      a split link whose transaction date differs from the event's (`yield_on_cost.py:404`). It is the one place
      where the repair moves transactions.
