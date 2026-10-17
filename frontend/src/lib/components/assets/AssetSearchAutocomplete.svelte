@@ -27,6 +27,7 @@
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import PluginSettingsModal from '$lib/features/plugin-settings/PluginSettingsModal.svelte';
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+    import {selfHostedConfirmed} from '$lib/features/instance/profile';
     import {currentLanguage} from '$lib/stores/app/language';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
@@ -156,7 +157,7 @@
     // support address means no report link at all.
     let channel = $derived.by(() => {
         const configured = instanceConfig.config.support_url;
-        const githubFallback = instanceConfig.loaded && instanceConfig.config.profile === 'selfhosted';
+        const githubFallback = selfHostedConfirmed();
         return supportChannel(typeof configured === 'string' ? configured : null, {githubFallback});
     });
     let report = $derived.by(() => {
