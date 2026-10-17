@@ -6556,3 +6556,125 @@ altri) e un **toast** di successo per l'annullamento (l'esito non si vede: la ri
   amministratore» di `hosting_providers` non potrà più annullare dalla scheda (solo la CLI); la pagina rimanda già alla
   sezione sulla protezione.
 - **A-42 + A-43: definizione di fatto ✅** (revisione di E dopo l'ingresso).
+
+## A-42 + A-43 — Entrato; revisione di E-15 (17/10, 13:17–)
+- **Entrato**: `59161e5e2`, `8f8116fce`, `00b1b2e67`, `145adbf27`, `33a617dd0` → dev `7156a24af`; CHANGELOG 🔒 ✨ 🔄
+  `289fe26e8` (il mio ramo portato in avanti). Revisioni di E, J e H dopo l'ingresso.
+- **Revisione di E-15** (dev `da02ed816`, `d7ae430a9`), `security.md` `:477` e `:655`: **OK**. Verificato nel codice:
+  `conftest.py` legge `_SESSION_LOGIN_LIMIT = os.environ.setdefault(…, "off")` all'import e la fixture autouse
+  `restore_login_limit` lo rimette, con un `MonkeyPatch` suo, prima di ogni test che non ce l'ha (e lo toglie in
+  teardown); `setup_test_database()` → `get_test_data_dir()` → `configure_test_runtime()` lo scarta alla raccolta;
+  `login_limit_enabled()` lo legge a ogni chiamata, quindi il ripristino per test vale; le fixture autouse dei moduli e
+  `monkeypatch` dei test del limite girano dopo quella del conftest.
+
+## H-nit + A-50 + SC-LANE-01 (17/10, 13:20–; base `289fe26e8`)
+
+Dal coordinatore (13:17): «H's nit (one helper for the «loaded && selfhosted» rule), then A-50 if cheap»; e, facoltativo,
+la docstring di SC-LANE-01 dopo E-15.
+
+**Stato reale**
+- La regola «il server ha risposto e ha detto X» è scritta a mano in 5 posti: `features/support/donations.svelte.ts:12`
+  (`donationsVisible()`, mio), `components/layout/ChangelogModal.svelte:341` (di H), `components/assets/
+  AssetSearchAutocomplete.svelte:159` (`githubFallback`, area asset), `features/update-check/updateCheck.ts:242` (mio,
+  A9), e la gemella «gestita» in `features/auth/ForgotPasswordCard.svelte:63`, `:80` (mia).
+- 28 file di test sostituiscono lo store con `vi.mock('$lib/features/instance/instanceConfig.svelte', …)`: un getter o
+  un export nuovo dello store mancherebbe a quei finti, e i chiamanti si romperebbero.
+- A-50: `_keep_pending_admin`, senza link vivo, dice «has expired» anche per un link revocato (annullamento, o indirizzo
+  cambiato a un avvio precedente). Nessun test fissa quella frase.
+- SC-LANE-01 (`test_security_checks_api.py:14-18`): «unset, without a shared backend … ok — what the case pins when the
+  module is run alone»; dopo E-15 la variabile c'è (`off`) in ogni test, quindi da solo vuole `warning`. Anche «Red until
+  A8a» (`:24`) è vecchia.
+
+**Disegno**
+1. Modulo nuovo `frontend/src/lib/features/instance/profile.ts`: `selfHostedConfirmed()` e `managedConfirmed()`
+   (`loaded && profile === …`). Un modulo a parte, non un getter dello store: i 28 `vi.mock` restano validi (leggono solo
+   `loaded` e `config`), come già `donations.svelte.ts`. I 5 posti lo usano; `donationsVisible()` resta il nome della
+   regola delle donazioni e delega.
+2. Rossi (`test-author`): `profile.test.ts` (stati: prima della risposta, in volo, risposta selfhosted/managed,
+   fallimento prima e dopo una risposta, ricarica forzata) e un test-cancello: nessun sorgente fuori da `profile.ts`
+   confronta `.profile` con `'selfhosted'`/`'managed'` (rosso oggi: 5 confronti).
+3. A-50: se l'ultimo link di setup dell'account è revocato e mai consumato → «…was withdrawn (cancelled, or its address
+   changed)…»; altrimenti «has expired». L'azione resta `EXPIRED`. Rossi in `test_admin_bootstrap.py`.
+4. SC-LANE-01: la docstring del modulo dice la regola dopo E-15.
+
+**Revisori**: H (`profile.ts` nella sua cartella, `ChangelogModal`), l'area asset (`AssetSearchAutocomplete`), E (A-50).
+- **Coordinatore (13:24): approvato** com'è (il helper in `features/instance/profile.ts`, il cancello, A-50, la docstring
+  di SC-LANE-01). `AssetSearchAutocomplete.svelte` è dell'area di X: permesso di scrittura per la riga, X rivede; H
+  rivede la posizione del helper dopo l'ingresso; la registrazione nel runner è aggiuntiva.
+
+### HN.1 — SC-LANE-01 ✅ (13:26)
+- `test_security_checks_api.py`, docstring del modulo: `dev.py server --test` mette `off` **su ogni corsia** (`dev.py:333`,
+  senza condizioni: anche «unless the variable is already set» era vecchia); «Which severity» dice la regola dopo E-15
+  (il conftest dà sempre la variabile: `off`, quindi `warning` sotto il runner e da solo; `on` messo a mano vince nei due
+  posti; i rami «non impostata» di `_expected_login_limit()` restano per un processo senza quel conftest); tolta «Red
+  until A8a». Solo docstring.
+
+### HN.2 — Rossi (13:24–, due `test-author` in parallelo, file distinti)
+- Frontend: `features/instance/profile.test.ts` (unità sullo store vero) e il cancello `src/instanceProfile.gate.test.ts`
+  (nessun confronto a mano di `.profile` con `'selfhosted'`/`'managed'` fuori da `profile.ts`; rosso oggi sui 6 punti),
+  registrati in `_frontend_utility.py`.
+- Backend: A50-001…004 in `test_admin_bootstrap.py` («withdrawn» dopo un annullamento, per PATCH e per CLI o link
+  generato, e al riavvio dopo un cambio d'indirizzo; guardia: un link scaduto dice ancora «has expired»).
+- Codice pronto, non applicato: `work/hnit/apply_hnit.py` (+ `profile.ts`; 6 file, dry-run pulito) e
+  `work/hnit/apply_a50.py` (`_latest_setup_withdrawn()`, il ramo nuovo del WARNING; dry-run pulito).
+- Doc da allineare dopo il codice (A-50): `access_control.md:511` («the next starts log the expiry»), `security.md:1733`,
+  `admin/hosting_providers.en.md` (il paragrafo dell'annullamento rimanda al WARNING della scadenza).
+
+### HN.3 — A-50 ✅ (rossi 13:33, codice 13:36, verdi 13:39)
+- Rossi (`test-author`, `test_admin_bootstrap.py` +192 righe, header «Lot A-50» `:79-88`): **A50-001** (annullato per PATCH,
+  token nella configurazione), **A50-002** (per `user deactivate`, link generato), **A50-003** (4 varianti: token o link
+  generato × riavvio un'ora dopo o dopo le 72 h, dopo l'avvio che ha cambiato l'indirizzo), guardia **A50-004** (3: token,
+  link generato, riarmato con il primo revocato e l'ultimo scaduto). Osservati: **6 rossi** sull'asserzione «withdrawn»
+  (es. A50-001: «…the warning must say it was withdrawn: "…has expired: run ./dev.py user setup-link, or set a new
+  LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN"»), 3 guardie verdi, i 207 di prima invariati (216 in tutto).
+  > **Scelte del test-author, approvate**: l'avvio che cambia l'indirizzo dice «address changed» e **non** «withdrawn»
+  > (il testo nuovo contiene anch'esso «address changed»); dopo le 72 h un link revocato resta «withdrawn» (la regola non
+  > guarda la scadenza: la causa più informativa); decide solo l'ultimo link (un riarmo revoca il precedente).
+- Codice (`work/hnit/apply_a50.py`): `_latest_setup_withdrawn()` (l'ultimo link `admin_setup` per `created_at`, `id`:
+  revocato e mai consumato) e il ramo `elif` del WARNING: «…setup link was withdrawn (cancelled, or its address
+  changed): {remedy}». L'azione resta `EXPIRED`. `black` ha messo la query su una riga (stile del progetto).
+- Verdi in processo: `test_admin_bootstrap.py` **216/216**; ruff, black puliti.
+
+### HN.4 — Il helper del profilo ✅ (rossi 13:44, codice 13:45, verdi 13:49)
+- Rossi (`test-author`): `features/instance/profile.test.ts` (PRF-01…08, 11 casi, sullo store vero: `vi.resetModules()` e
+  un caricamento pigro di `./profile.ts`, così ogni caso nomina il modulo mancante) e il cancello
+  `src/instanceProfile.gate.test.ts` (analizza i sorgenti con i parser TS e Svelte, come `financialMathExceptions`:
+  commenti, stringhe, tipi e letterali d'oggetto non contano; prende anche `{profile}`, `x['profile']`, backtick,
+  parentesi/`as`/`!`/`satisfies`, `switch … case`; un controllo dal vivo vuole in `profile.ts` un confronto diretto con
+  ciascun profilo; la lista dei profili è tipata sul client generato). Registrati in `_frontend_utility.py`
+  (`core-unit`, `:138` e `:195`, +2 righe). Osservati: `profile.test.ts` **11/11 rossi** (modulo assente); il cancello
+  **2 rossi** (i 6 punti esatti, e il controllo dal vivo) e 6 controlli verdi; `instanceConfig.test.ts` 11/11 e
+  `donations.test.ts` 8/8 verdi.
+  > **Nota del test-author**: ha provato in memoria il codice approvato (verde), un helper senza `loaded` (PRF-02/03/05/08
+  > rossi) e uno che azzera la risposta dopo un fallimento (PRF-06/08 rossi), poi ha tolto ogni prova.
+- Codice (`work/hnit/apply_hnit.py`): `profile.ts` nuovo (`selfHostedConfirmed()`, `managedConfirmed()`); i 6 punti lo
+  usano: `donationsVisible()` delega; `ChangelogModal` (l'import di `instanceConfig` sostituito: era usato solo lì);
+  `AssetSearchAutocomplete` (`githubFallback`, permesso del coordinatore, X rivede); `checkForNewerRelease()`;
+  `ForgotPasswordCard` ×2 (`managedConfirmed()`; il ramo `!loaded && failed` invariato). Prettier ha ritoccato solo i
+  due file di test nuovi.
+- Verdi: Vitest su ogni file di test che tocca lo store o un modulo cambiato, più i due nuovi: **58 file, 1 822/1 822**;
+  `front check` **0/0**; `theme-roles --check` pulito; `diff --check` pulito.
+- Corsia, servizi `admin-bootstrap` col conftest vero (E-15): **216/216**; porta 6182 libera.
+- Doc (`docs-writer`, terzo giro, in corso): `app-state.md` («Readers of `profile`»), `search_link_finder.md:337` (di X,
+  una frase), `frontend/index.md:52`, eventuali elenchi dei cancelli; per A-50 `access_control.md` (~:495, ~:511, ~:648),
+  `security.md` ~:1733, `hosting_providers.en.md` (il paragrafo dell'annullamento).
+> **⚠️ Fuori pista (conteggio)**: i file di test che sostituiscono lo store sono **28**, non 10 (il mio `grep` era
+> tagliato da `head`; corretto qui sopra, lo ha visto il `docs-writer`). Tutti e 28 erano nel giro Vitest dei 58 file
+> (ogni test che nomina `instanceConfig`), verde.
+
+### HN.5 — Doc ✅ (13:52–14:15, `docs-writer`, terzo giro)
+- Helper: `developer/frontend/state/app-state.md` «Readers of `profile`» (i helper come unica prova, il perché del
+  modulo a parte, ogni lettore riscritto, il cancello, i test `core-unit`, l'esempio di codice);
+  `developer/backend/assets/search_link_finder.md` (N61, la sola frase: `githubFallback = selfHostedConfirmed()`, di X);
+  `developer/frontend/index.md` (la riga di `instance/`). Nessuna pagina cataloga i cancelli (`designer-lab.md` ne ha
+  un elenco parziale, solo del Lab): nessuna aggiunta.
+- A-50: `access_control.md` («The Initial Administrator»: la riga `expired`, «A new address», «Cancelling the setup
+  link», i test A50-001…004); `security.md` («The Setup Link's Lifecycle»); `admin/hosting_providers.en.md` («A New
+  Link»: l'annullamento cita il WARNING *withdrawn*, il cambio d'indirizzo non parla più di scadenza);
+  `admin/configuration.en.md` («The Initial Administrator»: le due frasi); `admin/users.en.md` («Cancel Its Setup Link»).
+- Build strict (×2) e `check-links` (97 validi) puliti. Nessuna pagina timbrata; debito nuovo: la frase del WARNING in
+  `admin/configuration` (le traduzioni non hanno ancora la sezione dell'admin iniziale).
+- Lasciate com'erano, ancora esatte: `auth.md` (ForgotPasswordCard) e «Container Image Check» di `security.md`
+  descrivono lo stesso comportamento senza nominare i helper.
+- **H-nit + A-50 + SC-LANE-01: definizione di fatto ✅** (revisioni dopo l'ingresso: H la posizione del helper, X la riga
+  di `AssetSearchAutocomplete` e la frase di `search_link_finder`, E A-50).
