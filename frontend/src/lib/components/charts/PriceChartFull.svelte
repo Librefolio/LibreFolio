@@ -20,7 +20,7 @@
     import CandlestickChart from './CandlestickChart.svelte';
     import ResolutionBadge from './ResolutionBadge.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {buildMainSeries, COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {buildFittedTooltipRow, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
@@ -499,7 +499,8 @@
                                 renderChart();
                             }
                         }
-                        if (chartInstance) updateArrowRotations(chartInstance);
+                        // The arrows are re-aimed by scheduleResolutionRecompute() below, once the resize settles, never on
+                        // each callback: a re-aim deep-copies the whole option (Y-25)
                         // Bugfix: resizing the container (e.g. rotating a device, or
                         // shrinking a browser window to a narrow/mobile width) changes
                         // plotWidthPx, which can push the density past the weekly/monthly
@@ -1097,6 +1098,7 @@
         }
 
         chartInstance.setOption(option, true);
+        noteArrowMarkers(chartInstance, option);
         chartOptionSet = true;
         lastRenderedResolution = activeResolution;
 

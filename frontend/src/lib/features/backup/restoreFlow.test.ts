@@ -127,6 +127,7 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockIns
 import type {z} from 'zod';
 import type {schemas} from '$lib/api';
 import {assertEffectsRun} from '$test/runes.svelte';
+import {restoreErrorKey} from './restoreText';
 
 const zodios = vi.hoisted(() => ({
     get_restore_status_api_v1_backup_restore_status_get: vi.fn(),
@@ -1073,6 +1074,44 @@ describe('upload(): a refused PUT, or a check that cannot start', () => {
 });
 
 // =====================================================================================================================
+// B-30 — a check that cannot start: a full disk (507), its folders or its state unwritable (500) — guards
+// =====================================================================================================================
+
+/*
+ * After B-30, `POST /backup/restore/stage` refuses on a full disk with 507 `no_space` (the check's own code), and on any
+ * other failure to write the check's folders or state with 500 `stage_failed`, both before any check exists (B-30 brief
+ * §1). No frontend change: the code is read off `detail.code` whatever the status, and restoreText.ts words both. These
+ * guards pin what the flow does today with them — exactly what any check that cannot start does (the case above) — and
+ * the sentence the card shows (`restoreErrorKey`, as RestoreCard.svelte resolves it). Green from the start.
+ */
+describe('B-30 — a check that cannot start on a full disk, or with its folders unwritable', () => {
+    it.each<[string, number, string]>([
+        ['507 no_space: not enough free space to check the archive', 507, 'no_space'],
+        ['500 stage_failed: its folders or its state could not be written', 500, 'stage_failed'],
+    ])('%s: failed (check) as any check that cannot start, worded by backup.restore.errors.<code>', async (_case, status, code) => {
+        const {controller, api, storage, events} = await idle();
+        api.upload.mockResolvedValueOnce(uploaded());
+        api.startCheck.mockRejectedValueOnce(refusal(status, code));
+
+        await controller.upload(archive());
+        await flush();
+
+        expect(api.startCheck.mock.calls).toEqual([[UPLOAD_ID]]);
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('check');
+        expect(controller.busy).toBe(false);
+        expect(controller.stage, 'no check exists').toBeNull();
+        expect(storage.setItem, 'no check exists to remember').not.toHaveBeenCalled();
+        expect(events()).toEqual([
+            ['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 4096}],
+            ['backup.restore.failed', {code, what: 'check'}],
+        ]);
+        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe(`backup.restore.errors.${code}`);
+    });
+});
+
+// =====================================================================================================================
 describe('checking: the stage read every pollMs until it ends', () => {
     it('remembered, read every pollMs and not before, through its phases and bytes; done → the report, announced once, never read again', async () => {
         const {controller, api, storage, events} = await idle();
@@ -1647,6 +1686,82 @@ describe('a restore found pending at load: restartNow() and cancelPending()', ()
         expect(controller.busy).toBe(false);
         expect(api.dropCheck, 'the copy of a restore still pending was dropped').not.toHaveBeenCalled();
         expect(events()).toEqual([['backup.restore.failed', {code, what: 'cancel'}]]);
+    });
+});
+
+// =====================================================================================================================
+// B-31 — a confirmation, a cancellation or a restart the server could not carry out (written red first)
+// =====================================================================================================================
+
+/*
+ * After B-31 the server words three failures of its own (B-31 brief §1): the confirmation `restore_confirm_failed`
+ * (500), the cancellation `restore_cancel_failed` (500) and the restart `restore_restart_failed` (500, answered
+ * already today), each with its sentence in restoreText.ts; a confirmation on a full disk is 507 `backup_no_space`,
+ * worded as for the upload. The flow each one ends is today's for a refusal of that request — pinned as the cases
+ * above pin it —, and the sentence is the one the card shows (`restoreErrorKey`, as RestoreCard.svelte resolves it).
+ *
+ * Red today: `restoreErrorKey` knows none of the three codes and gives `backup.restore.errors.unexpected`. The case of
+ * 507 `backup_no_space` is a guard, green today.
+ */
+describe('B-31 — a confirmation, a cancellation or a restart the server could not carry out', () => {
+    it.each<[string, number, string]>([
+        ['500 restore_confirm_failed: the server could not confirm it', 500, 'restore_confirm_failed'],
+        ['507 backup_no_space: not enough free space to confirm it (green today: the guard)', 507, 'backup_no_space'],
+    ])('a confirmation refused — %s: failed (confirm) as any refused confirmation, nothing restarted, worded by backup.restore.errors.<code>', async (_case, status, code) => {
+        const {controller, api, events} = await reportShown();
+        api.confirm.mockRejectedValueOnce(refusal(status, code));
+
+        await controller.confirm();
+        await flush();
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('confirm');
+        expect(controller.busy).toBe(false);
+        expect(controller.outcome).toBeNull();
+        expect(api.restart, 'a restore that was not confirmed is not restarted').not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'confirm'}]]);
+        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe(`backup.restore.errors.${code}`);
+    });
+
+    it('cancelPending() refused — 500 restore_cancel_failed: failed (cancel) as any refused cancel, no copy dropped, worded by backup.restore.errors.restore_cancel_failed', async () => {
+        const {controller, api, events} = await pendingRestore();
+        api.cancelPending.mockRejectedValueOnce(refusal(500, 'restore_cancel_failed'));
+
+        await controller.cancelPending();
+        await flush();
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('restore_cancel_failed');
+        expect(controller.failure).toBe('cancel');
+        expect(controller.busy).toBe(false);
+        expect(api.dropCheck, 'the copy of a restore still pending was dropped').not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code: 'restore_cancel_failed', what: 'cancel'}]]);
+        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe('backup.restore.errors.restore_cancel_failed');
+    });
+
+    it('the restart refused after the confirmation — 500 restore_restart_failed: pending with the error (failure restart), the restore still confirmed, nothing probed, worded by backup.restore.errors.restore_restart_failed', async () => {
+        const {controller, api, storage, events} = await reportShown();
+        api.confirm.mockResolvedValueOnce(pending());
+        api.restart.mockRejectedValueOnce(refusal(500, 'restore_restart_failed'));
+
+        await controller.confirm();
+        await flush();
+        await vi.advanceTimersByTimeAsync(10 * POLL_MS);
+
+        expect(controller.state).toBe('pending');
+        expect(controller.busy).toBe(false);
+        expect(controller.errorCode).toBe('restore_restart_failed');
+        expect(controller.failure).toBe('restart');
+        expect(controller.status, 'the restore stays confirmed').toEqual(pending());
+        expect(controller.outcome, 'no overlay for a restart that was refused').toBeNull();
+        expect(storage.items.has(KEY)).toBe(false);
+        expect(api.probeServer).not.toHaveBeenCalled();
+        expect(events()).toEqual([
+            ['backup.restore.confirmed', {stage_id: STAGE_ID}],
+            ['backup.restore.failed', {code: 'restore_restart_failed', what: 'restart'}],
+        ]);
+        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe('backup.restore.errors.restore_restart_failed');
     });
 });
 

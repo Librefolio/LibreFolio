@@ -78,6 +78,18 @@
  * other case runs on the defaults, the five rules of before. The server's
  * refusal is drawn like the other codes, through `describeRegistrationError`:
  * `auth.validation.passwordTooWeak`, never the server's sentence.
+ *
+ * Accounts lot A-21a: a new username may not hold `@`. The sign-in reads an
+ * identifier holding one as an email address first, so the server refuses it
+ * with a 400 `{detail: {error_code: "USERNAME_INVALID", message}}`, which
+ * `describeRegistrationError` reads as `auth.validation.usernameNoAt` (pinned in
+ * `registrationErrors.test.ts`). The card refuses it first, as it refuses a
+ * username under three characters: `validateUsername` shows that key and
+ * nothing reaches the server — for an address, and for `a@b`, three characters,
+ * which only the `@` can refuse; on blur too. Red until A-21a. A guard keeps the
+ * other characters a username of three or more may hold — a space, accents,
+ * `.`, `_`, `-`, `+` — going out as typed. Not pinned: which key a username both
+ * under three characters and holding `@` shows; the contract does not say.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
@@ -236,6 +248,10 @@ describe('RegisterCard — validation keeps bad credentials off the wire', () =>
         ['an address with no @', {email: 'alice.example.com'}, 'auth.validation.invalidEmail'],
         ['an address with no domain dot', {email: 'alice@example'}, 'auth.validation.invalidEmail'],
         ['an address with a space in it', {email: 'ali ce@example.com'}, 'auth.validation.invalidEmail'],
+        // red until A-21a: the sign-in reads an identifier holding @ as an email address, so a new username may not hold one
+        ['a username that is an address', {username: 'bob.smith@example.com'}, 'auth.validation.usernameNoAt'],
+        // red until A-21a: three characters, enough for the length rule — only the @ can refuse it
+        ['a three-character username holding an @', {username: 'a@b'}, 'auth.validation.usernameNoAt'],
     ])('refuses to send %s', async (_label, overrides, key) => {
         mount();
         await fillValid(overrides);
@@ -291,6 +307,24 @@ describe('RegisterCard — validation keeps bad credentials off the wire', () =>
         await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
         expect(screen.queryByText('auth.validation.usernameMinLength')).not.toBeInTheDocument();
     });
+
+    // guard (A-21a): only the @ is refused — a username of three or more characters without one goes out as typed
+    it.each([
+        ['a space', 'Bob Smith'],
+        ['accents', 'Zoë Müller'],
+        ['a dot', 'bob.smith'],
+        ['an underscore', 'bob_smith'],
+        ['a hyphen', 'bob-smith'],
+        ['a plus', 'bob+lf'],
+    ])('still sends a username holding %s and no @ (%j), as typed', async (_label, name) => {
+        mount();
+        await fillValid({username: name});
+        await submit();
+
+        await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+        expect(register).toHaveBeenCalledWith(expect.objectContaining({username: name}));
+        expect(screen.queryByText('auth.validation.usernameNoAt')).not.toBeInTheDocument();
+    });
 });
 
 describe('RegisterCard — validation on blur', () => {
@@ -300,6 +334,20 @@ describe('RegisterCard — validation on blur', () => {
         await fireEvent.blur(screen.getByTestId('register-username'));
 
         expect(screen.getByText('auth.validation.usernameMinLength')).toBeInTheDocument();
+    });
+
+    // red until A-21a
+    it('flags a username holding an @ as soon as the user leaves it, and clears the flag once the @ is gone', async () => {
+        mount();
+        await fill('register-username', 'bob.smith@example.com');
+        await fireEvent.blur(screen.getByTestId('register-username'));
+
+        expect(screen.getByText('auth.validation.usernameNoAt')).toBeInTheDocument();
+
+        await fill('register-username', 'bob.smith');
+        await fireEvent.blur(screen.getByTestId('register-username'));
+
+        expect(screen.queryByText('auth.validation.usernameNoAt')).not.toBeInTheDocument();
     });
 
     it('clears the flag once the field is corrected', async () => {

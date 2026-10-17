@@ -10,7 +10,9 @@ which never stops the server) and in ``python -m backend.app.db.post_migration``
 with the cost it would take and writes nothing.
 
 Every cost is computed before any row changes. A leg whose cost needs a missing conversion stays as it is, a TRANSFER
-without its partner: an ADJUSTMENT-out without a cost would read the units it moved as destroyed. Of several workers
+without its partner: an ADJUSTMENT-out without a cost would read the units it moved as destroyed. So does a leg whose
+cost raises — its broker's pool holds a row that cannot be read (``UnreadablePoolError``, W-B69), or any other error —,
+answered with the reason, and the run goes on with the others (decision 1). Of several workers
 starting together, the first converts and the next find nothing (``begin_writes`` takes the write lock first). Like the
 fixes, the step never touches a damaged database: at startup, when there is something to convert, it runs ``PRAGMA
 quick_check`` first; the offline script runs it only when the fixes' integrity check passed.
@@ -93,7 +95,7 @@ async def convert_lone_giving_legs(session: AsyncSession, *, dry_run: bool = Fal
     for row in rows:
         try:
             handovers.append((row, await service._handover_cost(row), None))
-        except Exception as exc:  # noqa: BLE001 — an unreadable row of its broker: this leg stays, the others go on
+        except Exception as exc:  # noqa: BLE001 — UnreadablePoolError or another failure: this leg stays, the others go on
             handovers.append((row, None, str(exc) or type(exc).__name__))
     found: list[LoneLeg] = []
     for leg, handover, reason in handovers:

@@ -4793,7 +4793,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Backlog**: B-16 chiuso con ✅. Aggiunti gli SHA ai chiusi di oggi: B-21..B-26 `964ecf434`, B-28 `9403ecda0`, B-29
 > `c96861834`.
 
-### B-9 — il token del pannello fra i controlli della configurazione (2026-10-17, 06:35-07:12) — ✅ 🧊 FROZEN (checkpoint delle 07:12)
+### B-9 — il token del pannello fra i controlli della configurazione (2026-10-17, 06:35-07:36) — ✅ entrato in dev `997dc7ecf`
 
 > **B-16 entrato (coordinatore, 06:33)**: dev `3896cb6b3`, il CHANGELOG 🐛 in `47405701f`. HEAD portata in avanti a
 > **`47405701f`**, pulita. Via all'analisi di B-9.
@@ -4958,6 +4958,413 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   (py_compile, ruff e black puliti). Niente `front check`: nessun file Svelte o TS cambia, solo i cataloghi JSON,
 >   coperti da `i18n check` e dai due gate.
 > - **Backlog**: B-9 ✅; B-30 nuovo.
+>
+> **Commit e merge con A8a+N70+E-13** (07:12-07:36):
+>
+> - 07:12: il coordinatore committa B-9 (`b35581e5b`). Contro il ramo A8a+N70+E-13 confligge in 4 file; A entra prima.
+>   Intanto, fino al merge: albero pulito, B-30 solo in analisi (sezione «B-30» qui sotto).
+> - 07:22: A8a+N70+E-13 è entrato (dev `45f9c5406`), e il coordinatore apre nel mio worktree il merge di dev nel mio ramo.
+> - Risoluzione, tenendo entrambi i lati, nell'ordine vero di `CONFIG_CHECKS`: piattaforma, **B**, **A**, E.
+>   - `config_audit.py`: `*BACKUP_CONFIG_CHECKS` dopo `check_log_level`, poi `*ACCOUNTS_CONFIG_CHECKS` di A, poi quelli
+>     di E. È l'ordine che il test di A sulla tupla intera
+>     (`test_config_checks_holds_every_check_in_its_place_with_its_id`) già si aspettava: il suo `platform` era ogni
+>     voce di `CHECK_IDS` tranne quelle di E, quindi conteneva anche le due di B. Restano veri «A subito prima dei tre di
+>     E» ed «E per ultimo» (EMK-010/011/012). La docstring del modulo ora nomina i prefissi `auth`, `backup` ed `email`.
+>   - `test_config_audit.py`: in `_configure` entrambi i blocchi (B, poi A); la docstring (c); nel test di A sulla tupla
+>     intera, i controlli di B resi espliciti (`backup = (check_panel_token, check_upload_limit)`, fuori da `platform`).
+>     Il verdetto è lo stesso; il messaggio e la docstring prima erano sbagliati. Da far rivedere a H.
+>   - `configuration.en.md`, «Startup Checks»: le due righe di B, poi quella di A, poi quelle dell'email (ordine del
+>     log).
+>   - `security.md`:
+>     - la riga `i18n_key`: la riscrittura di dev più la clausola `backup.checks.*`, e «No page shows the `instance`,
+>       `auth` and `backup` messages yet»;
+>     - due mie righe che il merge aveva reso false, il punto «In `CONFIG_CHECKS`» e la frase dell'ordine («platform,
+>       B, A, E»);
+>     - due righe `backup.*` nella tabella dell'ordine di H, fra `platform.log_level` e `accounts.login_limit`: senza
+>       di esse la tabella, che dice «in this order», mostrava il controllo di A subito dopo `log_level`. Da far rivedere
+>       a H.
+>   - Riletti gli auto-merge: `settings.md` (la mia clausola intatta; i pezzi di dev stanno altrove),
+>     `_backend_services.py` (entrambi i selettori; compila), `BACKLOG_POST_1.2.md` (sezione B intatta).
+>   - Il nuovo `GET /security/checks` di dev restituisce `run_config_checks()`, quindi anche i due controlli di B. I suoi
+>     test (`api security-checks`, `api login-throttle`) confrontano a runtime, senza una lista fissa: non me ne aspetto
+>     la rottura. Il coordinatore lo mette nel prossimo gate; io lo faccio girare nello slot API di B-30.
+> - Gate (07:27-07:36, corsia 6187, carico 36-48, un'attesa sopra 50): `services config-audit` 102 (101 prima, più il
+>   test di A), `backup-checks` 57, `email-checks` 87, `accounts-checks` 76; `mkdocs build` strict OK (124 s),
+>   `check-links` OK, `utils gate-docs-links` 63. Porta libera; `git diff --cached --check` pulito; ho messo in stage
+>   solo le 4 risoluzioni.
+> - **Entrato**: merge `0f3f72961` → dev `997dc7ecf`, CHANGELOG ✨ `94fb9be08`; HEAD portata in avanti a `94fb9be08`.
+> - **Congelamento** (coordinatore): `frontend/e2e/settings/backup.spec.ts` resta fermo fino all'ingresso di A8b.
+>   A cambia il controllo del membro e il clic a `:263/:276` (il nuovo percorso della scheda); lo rivedo al
+>   checkpoint di A.
+
+### B-30 — un disco pieno negli avvii brevi del backup e del ripristino (2026-10-17, 07:12-08:00) — ✅ 🧊 FROZEN (checkpoint delle 08:00)
+
+> **Analisi** (07:12-07:17, in sola lettura sull'albero pulito; testo intero nei file della sessione,
+> `b30-analysis.md`). `jobs._out_of_space` (ENOSPC, EDQUOT, `SQLITE_FULL`, lungo la catena delle cause) distingue un
+> disco pieno da ogni altro guasto nelle fasi lunghe: la costruzione del backup (`backup_no_space`), il controllo in
+> background (`no_space`), il file e le scritture dell'upload (507). Non negli avvii brevi:
+>
+> 1. **upload, la cartella**: `ensure_private_dir(uploads_dir)` sta fuori dal `try` (`restore_jobs.py` l.145): il primo
+>    upload su un disco pieno dà 500 `backup_upload_failed`, non 507 (il B-30 annotato);
+> 2. **upload, la fine**: `fsync`, `close` e `replace` di `finish()` senza mappatura. NFS e le quote segnalano il
+>    guasto a `close` o `fsync` (close(2)), quindi 500. In più, una `close` fallita lasciava `self._fd` impostato, e
+>    `abort` l'avrebbe chiuso una seconda volta (EBADF, o il descrittore riusato da un altro thread);
+> 3. **il controllo, l'avvio** (`POST /restore/stage` → `start_check`): la rotta non prende `OSError`. ENOSPC, EACCES
+>    o EIO escono come il 500 in testo semplice di Starlette, senza codice, con un traceback nel log; la scheda dice
+>    «unexpected». È la stessa classe della scoperta (f) n.1 di B3, corretta allora solo per l'upload;
+> 4. **la conferma**: lo stesso 500 senza codice (raro; `_write_state` è atomico: mai mezza conferma);
+> 5. **il backup, l'avvio** (scheda e pannello, `start_job`): un disco pieno dà 500 `backup_failed`; un secondo dopo,
+>    nella costruzione, lo stesso disco dà `backup_no_space`;
+> 6. **il riavvio**: `restore_restart_failed` ha un codice ma nessun messaggio nella UI (fuori da `ERROR_KEYS`: dice
+>    «unexpected») e nessuna riga nella guida;
+> 7. **l'annullamento**: un `OSError` dà un 500 senza codice. Non riguarda lo spazio.
+>
+> **Decisioni del coordinatore (07:18)**:
+>
+> 1. ambito **1+2+3+5**;
+> 2. **`stage_failed`** per un `OSError` che non è spazio all'avvio del controllo, con una riga nel log;
+> 3. **B-31** (4, 6, 7) come lotto separato, dopo B-30.
+>
+> L'implementazione parte dopo il merge e l'ingresso di B-9 (via arrivato verso le 07:38), con uno slot API breve per
+> rossi e verdi.
+>
+> **Contratto congelato** (file della sessione, `b30-test-brief.md`):
+>
+> - un disco pieno (ENOSPC o EDQUOT) alla cartella o alla fine dell'upload, all'avvio del controllo, all'avvio del
+>   backup (scheda e pannello) → **507 `backup_no_space`**;
+> - all'avvio del controllo, ogni altro `OSError` → **500 `stage_failed`**, con un ERROR nel log (tipo e strerror);
+> - mai le parole del sistema né un percorso nella risposta; nulla lasciato indietro; il lock del controllo libero;
+> - `jobs._out_of_space` diventa pubblica, `out_of_space`: la usano le rotte;
+> - OpenAPI: 507 in `START_RESPONSES` e sulla rotta del controllo, il cui 500 nomina anche `stage_failed`.
+>
+> Nessun cambiamento del frontend: `backupFailureCode` legge `detail.code` qualunque sia lo stato, e le due schede
+> hanno già le frasi di `backup_no_space` e `stage_failed`. Le guardie lo fissano.
+>
+> **Codice pronto** in `b30-wip/apply_b30.py` (18 operazioni in 5 file), provato a secco su `94fb9be08`. Le copie
+> patchate, scritte nei file della sessione, passano ruff (ordine degli import compreso) e black, letti da stdin col
+> percorso vero del repo: il worktree resta intatto finché i rossi non hanno girato.
+>
+> - ✅ **Rossi scritti** (TA-B, dalle 07:39, ultimo file alle 07:47): 39 istanze in 4 file, nessuna verde oggi.
+>   - `test_backup_restore.py` 15: (1) cartella ENOSPC/EDQUOT ×2; (2) fine dell'upload ×3 (fsync-ENOSPC,
+>     close-EDQUOT, close-ENOSPC), con la chiusura del descrittore contata una sola volta; (3) ×4 e (3') ×4 (le cartelle e
+>     il primo stato, × ENOSPC/EDQUOT o EACCES/EIO; il messaggio esatto, una riga di log, l'upload tenuto, nessuno stato
+>     né thread, poi 202); l'OpenAPI: `refusals` (+507) e un test nuovo sui codici `no_space`/`stage_failed`;
+>   - `test_backup_instance_errors.py` 4: ENOSPC, EDQUOT, EIO causato da ENOSPC → 507, più l'OpenAPI;
+>   - `test_backup_panel.py` 2 (PANEL-022): l'avvio del pannello su un disco pieno → 507, più l'OpenAPI;
+>   - `test_backup_jobs.py` 18: `jobs._out_of_space` → `jobs.out_of_space`.
+>   Note di TA-B:
+>   - la doppia `close` è un bug vero: una `close` fallita lasciava il numero a `abort`, che su Linux poteva chiudere
+>     il file aperto nel frattempo da un'altra richiesta;
+>   - il lock di (3) funziona già oggi: manca solo la mappatura nella rotta;
+>   - `_FOLDER_UNUSABLE` è condiviso fra stage e conferma, quindi lo stage ha la sua descrizione (`_STAGE_NOT_STARTED`
+>     nella patch).
+> - ✅ **Rosso leggero** (07:49, corsia 6187, carico 27): `services backup-jobs`, 18 falliti e 51 passati: 16
+>   `AttributeError: … has no attribute 'out_of_space'`, più i 2 cicli, che falliscono dentro il loro thread.
+> - **Slot API chiesto** (07:48): i rossi `api backup-restore`, `backup-instance-errors` e `backup-panel`, poi il
+>   codice, poi i verdi degli stessi più `api backup`, `backup-secure`, `backup-restore-apply` e `security-checks`.
+> - ✅ **Slot 2** (concesso alle 07:49, rilasciato alle 07:57; corsia 6187, carico 20-36):
+>   - rossi (07:50-07:54): `api backup-restore` 15 falliti e 131 passati, `api backup-instance-errors` 4 e 6,
+>     `api backup-panel` 2 e 59. Ognuno per la ragione attesa: 500 `backup_upload_failed`; il 500 in testo semplice di
+>     Starlette («Internal Server Error») all'avvio del controllo; i 507 e i codici assenti dall'OpenAPI. Il primo run ha
+>     ricostruito frontend e doc (svelte-check: 0 errori);
+>   - **codice** (07:54): `apply_b30.py`, 18 operazioni in 5 file; ruff e black puliti sui 6 file Python di B-30;
+>     nessun `_out_of_space` rimasto;
+>   - verdi (07:54-07:57): `api backup-restore` 146, `api backup-instance-errors` 10, `api backup-panel` 61,
+>     `api backup` 23, `api backup-secure` 24, `api backup-restore-apply` 136, `api security-checks` 3 (i due controlli
+>     di B ora fra quelli che l'endpoint restituisce).
+> - ✅ **Verdi leggeri** (07:57-07:58): `services backup-jobs` 69, `backup-staging` 161, `backup-secure` 68,
+>   `backup-leftovers` 44, `backup-checks` 57.
+> - ✅ `api sync` (07:58): l'OpenAPI documenta il 507 sui tre avvii (stage `no_space`; istanza e pannello
+>   `backup_no_space`) e il 500 `stage_failed` dello stage; i file generati sono ignorati da git.
+> - ✅ **Doc** (07:59-08:00): `mkdocs build` strict OK (55 s), `check-links` OK, `utils gate-docs-links` 63. Traduzioni:
+>   `backup_restore.en.md` non ne ha;
+>   `hosting_providers.en.md` non ne ha.
+> - Non eseguiti: `e2e` (nessun file Svelte né componente cambia; `frontend/e2e/settings/backup.spec.ts` resta fermo per
+>   A8b), `front check` a parte quello del build dentro il primo run `api`.
+> - **Backlog**: B-30 ✅; B-31 nuovo (conferma, annullamento, messaggio del riavvio).
+> - ✅ **Guardie Vitest** (TA-F, 07:43): 4 casi in 3 file (`backupJob.test.ts`, `BackupDownloadCard.test.ts`,
+>   `restoreFlow.test.ts`), verdi già oggi per lettura del codice (non ancora eseguiti): ogni codice si legge da
+>   `detail.code` qualunque sia lo stato, e le schede lo traducono. Nessun buco funzionale del frontend.
+> - **Revisione di H su B-9** (OK, via il coordinatore, 07:45): nella docstring di `instance_backup/checks.py`
+>   «right before E's email checks» non è più vero, perché in mezzo ci sono quelli di A. Corretta dentro B-30: «right
+>   after the platform's own checks and before workstream A's and E's (E's close it)»; ruff e black puliti. Le
+>   impalcature «B-9 is not written» in `test_config_audit.py` le toglie H in H-35: io non le tocco.
+> - **⚠️ Fuori pista — il codice all'avvio del controllo** (07:44, decisione mia, dentro i codici di B): TA-F nota che
+>   il 507 `backup_no_space` all'avvio del controllo farebbe dire alla scheda «Not enough free space on the server for
+>   this archive.», la frase scritta per l'upload. Il codice del controllo che resta senza spazio, `no_space`, dice
+>   invece «…to check the archive». Quindi all'avvio del controllo: **507 `no_space`** e 500 `stage_failed`, i due
+>   codici del controllo (`StagingError`). L'upload e l'avvio del backup restano `backup_no_space`. Aggiornati la patch,
+>   il contratto (revisione 07:44), TA-B (mentre scriveva), TA-F e il docs-writer.
+> - ✅ **Guardie eseguite** (07:45, carico 24): `vitest run` su `backupJob.test.ts`, `BackupDownloadCard.test.ts`,
+>   `restoreFlow.test.ts`: 3 file, 412 test verdi. Il frontend legge già le nuove risposte, senza cambiare nulla.
+> - ✅ **Doc** (docs-writer, finito alle 07:44; codice non ancora applicato):
+>   - `backup_restore.en.md`: quattro righe in «What Settings › Backup Says» (upload `backup_no_space`, controllo
+>     `no_space`, `stage_failed`, backup `backup_no_space`), in un solo blocco per il merge con A8b;
+>   - `hosting_providers.en.md`: una riga `507` all'avvio del pannello; il 507 dell'upload vale anche per un disco che
+>     si dice pieno solo alla fine;
+>   - `security.md`: «The start» del backup, la riga delle rotte del controllo, un paragrafo su `jobs.out_of_space` e su
+>     `UploadWriter`.
+>   Il docs-writer ha corretto il mio contratto: la cartella è `.restore/upload/` (`UPLOAD_FOLDER = "upload"`), non
+>   `uploads/`. Nota sua, lasciata com'è: dopo un avvio di controllo fallito, la scheda dimentica l'id dell'upload; nella
+>   UI «riprova» vuol dire scegliere di nuovo l'archivio, che sostituisce quello tenuto.
+
+### B-31 — conferma, annullamento e riavvio: un codice e un messaggio (2026-10-17, 08:01-08:46) — ✅ 🧊 FROZEN (checkpoint delle 08:46)
+
+> **B-30 entrato** (coordinatore, 08:01): commit con la punta `116df6800`, dev `af9b7f482`, CHANGELOG 🐛 `f4dab3db7`;
+> HEAD portata in avanti a **`f4dab3db7`**, pulita. **Via a B-31** come annotato: un 500 con un codice e un messaggio
+> suo per conferma, annullamento e riavvio (3 chiavi × 4, `ERROR_KEYS`, l'elenco §5 di `restoreI18n`), 507 alla
+> conferma. Niente classi di colore; `backup.spec.ts` resta fermo per A8b.
+>
+> **Stato reale** (verificato prima di scrivere il contratto):
+>
+> - conferma (`confirm_check` → `apply.confirm_restore`): la cartella `.restore`, il lock, poi lo stato scritto per
+>   ultimo e in modo atomico; dopo, solo `drop_ticket`, che non solleva mai. Quindi un `OSError` vuol dire sempre «nulla
+>   confermato». La rotta prende solo `BackupPathError`: tutto il resto esce come il 500 in testo semplice;
+> - annullamento (`apply.cancel_restore`): il lock, la lettura, l'`unlink` dello stato, poi `drop_ticket` e `_fsync_dir`,
+>   che non sollevano, poi, con `drop_copy`, `_remove_leftovers`, quasi tutto in silenzio. Restano due punti rari di
+>   `remove_stage` (`lstat`, `unlink` di un non-cartella) che possono sollevare **dopo** che il ripristino è già
+>   annullato: allora un 500 «could not be cancelled» sarebbe falso. **Correzione accoppiata**: in `cancel_restore` un
+>   `OSError` di `_remove_leftovers` diventa un WARNING, e la copia se ne va con `prune`. Così il 500 vuol dire sempre
+>   «nulla annullato». Vale anche per `dev.py backup pending --cancel`;
+> - riavvio: il 500 `restore_restart_failed` c'è già, ma nessun test lo fissa, e la scheda dice «unexpected» (nessuna
+>   chiave, fuori da `ERROR_KEYS`).
+>
+> **Contratto congelato** (file della sessione, `b31-test-brief.md`, alle 08:05):
+>
+> - conferma: un disco pieno → 507 `backup_no_space` (WARNING); ogni altro `OSError` → 500 `restore_confirm_failed`
+>   (ERROR, tipo e strerror). Nulla confermato; la stessa conferma, tolto il guasto, dà 202;
+> - annullamento: un `OSError` prima di togliere il ripristino → 500 `restore_cancel_failed`, il ripristino ancora in
+>   attesa; uno durante la rimozione della copia → 204 e un WARNING;
+> - riavvio: invariato e ora fissato (500 `restore_restart_failed`, nessun riavvio programmato);
+> - i messaggi, in 4 lingue: «… could not be confirmed … Nothing changed.», «… could not be cancelled … It still waits
+>   for the next start.», «LibreFolio could not be restarted … The restore still waits for the next start.».
+>
+> - **Rossi in scrittura** (brief inviati alle 08:05):
+>   - TA-B: `test_backup_restore_apply.py` (conferma, annullamento, riavvio, OpenAPI);
+>   - TA-S: `test_backup_apply.py` (`cancel_restore` con la copia che non si toglie);
+>   - TA-F: `restoreI18n.test.ts` §5 e `restoreFlow.test.ts`.
+> - **Codice pronto** in `b31-wip/apply_b31.py` (alle 08:05): 9 operazioni in 3 file, più 4 cataloghi. Provato a secco
+>   su `f4dab3db7`; le copie passano ruff, black e prettier.
+> - ✅ **Rossi scritti**:
+>   - TA-F, 3 + 4 casi: `restoreI18n` §5 con i 3 codi (rossi); `restoreFlow`, blocco «B-31», con conferma 500, conferma
+>     507 (guardia), annullamento 500 e riavvio 500 (rossi sulla chiave: oggi «unexpected»);
+>   - TA-S, 2 + 1 in `test_backup_apply.py`: la copia che non si toglie (EACCES, EIO; rossi: l'`OSError` esce) e la
+>     guardia con `drop_copy=False`. Su sua nota, entrambi fissano anche l'INFO «Pending restore cancelled» con
+>     `copy_dropped` falso: dopo una rimozione fallita la riga diceva `copy_dropped=True`. Corretto nella patch;
+>   - TA-B, 19 istanze in `test_backup_restore_apply.py`: conferma 507 ×6 (lock o scrittura dello stato × ENOSPC,
+>     EDQUOT, EIO causato da ENOSPC) e 500 ×4; annullamento 500 ×4 (lock o rimozione dello stato); la copia che non si
+>     toglie ×2 (204); riavvio ×2 (guardie: la rotta prende già l'errore); OpenAPI (rosso su conferma 500/507 e
+>     annullamento 500).
+> - **⚠️ Fuori pista — «la lettura» nel contratto**: TA-B nota che `_read_state` prende ogni `OSError`, lo registra e
+>   rende `None`. Quindi uno stato illeggibile fa rispondere a un annullamento 404 `restore_not_pending`, non 500.
+>   Il contratto (§1) diceva «leggere o rimuovere lo stato»: i test coprono il lock e la rimozione. Il 404 su uno stato
+>   illeggibile è un comportamento di prima: va nel residuo.
+> - ✅ **Rossi leggeri**:
+>   - Vitest (08:08, carico 32): 6 falliti e 338 passati, i 6 attesi;
+>   - `services backup-apply` (08:19-08:20): 2 falliti e 229 passati, cioè i due casi della copia («cancel_restore let
+>     the OSError of the copy's removal out, once the restore was dropped»).
+> - ✅ **Metà frontend applicata** (08:09): `--part front` (`ERROR_KEYS` più le 3 chiavi × 4); `i18n build` (4993
+>   chiavi) e `i18n check` strict puliti; Vitest (08:09-08:10) su `restoreI18n`, `restoreFlow` e `RestoreCard`: 398 su
+>   398; `utils gate-i18n-catalog` 176 e `gate-i18n-usage` 195 (08:14-08:15, dopo un'attesa sopra 50).
+> - ✅ **Doc** (docs-writer):
+>   - `backup_restore.en.md`: la riga «…for this archive.» ora copre anche la conferma; tre righe nuove;
+>   - `security.md`: le righe di conferma, annullamento e riavvio, più la frase su `cancel_restore`;
+>   - `cli_tools.en.md` l.580 allineata (la pagina ha traduzioni: debito).
+>   Fra le note del docs-writer: il bottone della conferma è «Restore and restart», non «Confirm the restore».
+> - **Residuo** (pre-esistente, fuori dall'ambito approvato), in backlog come **B-32**:
+>   - in `cancelPending()` la riga `state = 'pending'` è morta (`#fail` mette `failed`): un annullamento rifiutato
+>     finisce sulla schermata di errore, non sul blocco del ripristino in attesa con l'errore accanto, come fa il
+>     riavvio;
+>   - `dev.py backup pending --cancel` finisce in un traceback su un `OSError` prima della rimozione, e la sua riga ✅
+>     dice «with its copy» anche quando la copia è rimasta;
+>   - uno stato illeggibile dà 404 «not pending» all'annullamento (e `read_restore` dà `None`).
+> - **Slot API chiesto** (08:20): il rosso `api backup-restore-apply`, poi la metà backend, poi i verdi
+>   `api backup-restore-apply` e `api backup-restore`.
+> - **Coordinatore** (risposta alla richiesta, fra le 08:21 e le 08:29): in coda per lo slot 2; approvate le due decisioni (copia → WARNING e 204; conferma →
+>   507 `backup_no_space`); i residui nel backlog di B (B-32).
+> - ✅ **Slot 2** (08:30-08:34, corsia 6187):
+>   - rosso: `api backup-restore-apply` 17 falliti e 137 passati. Conferma e annullamento sul 500 in testo semplice di
+>     Starlette; l'OpenAPI sui codici non documentati; le 2 guardie del riavvio verdi. Il primo run ha ricostruito
+>     frontend e doc (svelte-check: 0 errori, con la metà frontend già dentro);
+>   - **metà backend** (08:33): `--part back`, 8 operazioni su `restore.py` e `apply.py`; ruff e black puliti;
+>   - verdi: `api backup-restore-apply` 154, `api backup-restore` 146.
+> - ✅ **Verdi leggeri** (08:34-08:39, con un'attesa per carico sopra 50): `services backup-apply` 231, `services backup-outcome` 97,
+>   `utils backup-cli-restore` 77.
+> - ✅ `api sync` (08:39): la conferma documenta 507 `backup_no_space` e 500 `restore_confirm_failed`, l'annullamento
+>   500 `restore_cancel_failed`; i file generati sono ignorati.
+> - **⚠️ Fuori pista — le doc dicevano «read»**: le righe dell'annullamento (`backup_restore.en.md`, `security.md`)
+>   davano «locked, read or removed». Uno stato illeggibile risponde invece 404 (B-32): tolto «read» dalle due pagine e
+>   dal contratto.
+> - ✅ **Doc** (08:41-08:45): `mkdocs build` strict OK (143 s), `check-links` OK, `utils gate-docs-links` 63.
+>   Traduzioni: `cli_tools.en.md` ne ha (cli_tools.es.md, cli_tools.fr.md, cli_tools.it.md), quindi
+>   la sua riga è debito; `backup_restore.en.md` non ne ha. Niente stamp.
+> - Non eseguiti: `e2e` (nessun componente cambia; `backup.spec.ts` fermo per A8b); `front check` separato (lo
+>   svelte-check del build del primo run `api` era pulito, con `restoreText.ts` già cambiato); `theme-roles` (nessun file
+>   Svelte e nessuna classe).
+> - **Backlog**: B-31 ✅; B-32 nuovo.
+
+### B-19 — `backup decrypt` lanciato da root (2026-10-17, 08:47-09:23) — ✅ 🧊 FROZEN (checkpoint delle 09:23)
+
+> **B-31 entrato** (coordinatore, 08:47): dev `997c358f5`, CHANGELOG 🐛 `547545b8e`; HEAD portata in avanti a
+> **`547545b8e`**, pulita. Prossimi: **B-19** (piccolo, prima il rosso), poi l'**analisi di B7**. B-32, B-18 e B-20
+> restano nel backlog; la galleria di B5b passa alla squadra dei colori.
+>
+> **Stato reale**: ogni comando di `dev.py backup` che usa la cartella dei dati passa al suo proprietario quando parte
+> da root (`_data_dir()` → `_drop_root_privileges`, `scripts/backup_cli.py`). `cmd_decrypt` non lo fa: con
+> `docker compose exec` lo zip appartiene a root. In più, `is_envelope()` risponde `False` per un file che non può
+> leggere: un archivio illeggibile riceve oggi il falso `not_an_envelope`. Dopo il passaggio al proprietario, un file
+> di root diventerebbe illeggibile proprio così.
+>
+> **Contratto congelato** (file della sessione, `b19-test-brief.md`, alle 08:49):
+>
+> - per prima cosa, prima di toccare l'archivio o `-o` e prima di chiedere la password: se una cartella dei dati
+>   esiste (`--test-db` compreso), si passa al suo proprietario con lo stesso `_drop_root_privileges`. Un passaggio
+>   fallito stampa il suo messaggio ed esce con 1;
+> - senza cartella dei dati si resta l'utente che lancia: «It needs no data directory» resta vero;
+> - un archivio illeggibile → `❌ Cannot read <path>: <motivo> (archive_unreadable)` ed esce con 1, prima della password.
+>
+> - **Rossi in scrittura** (TA-E, `test_backup_cli_secure.py`); doc al docs-writer (`cli_tools.en.md`).
+> - **Codice pronto** in `b19-wip/apply_b19.py` (3 operazioni in `scripts/backup_cli.py`: `_decrypt_as_owner`,
+>   `_readable_envelope`, `cmd_decrypt`). Ruff (C901 compreso: i controlli dell'archivio sono andati in un helper per
+>   tenere `cmd_decrypt` a 10) e black puliti sulla copia.
+> - ✅ **Rossi scritti** (TA-E): 6 funzioni nella sezione (m) di `test_backup_cli_secure.py`, nessuna verde oggi. Una
+>   finta identità registra i cambi; dopo un `setuid` registrato non risponde più root. L'archivio e il file della
+>   password restano illeggibili fino a quel `setuid`, per provare l'ordine. Saltati quando i test girano da root.
+> - **⚠️ Fuori pista — revisione del contratto (09:02)**, dalle note di TA-E:
+>   - `create`, `inspect` e `restore` leggono `--password-file` **prima** di cambiare utente. Cambiare per primo in
+>     decrypt rifiuterebbe un segreto leggibile solo da root (un Docker secret) che gli altri tre accettano. Allora
+>     decrypt legge prima `--password-file` (come gli altri), poi cambia utente, ancora prima dell'archivio, di `-o` e
+>     di ogni domanda (`_password_file_first`; `_unlock` accetta la password già letta);
+>   - `get_data_dir()` può sollevare `ValueError`. Senza essere root non lo chiama più: non c'è nulla da cambiare. Da
+>     root, un valore inutilizzabile stampa `❌ <messaggio>` ed esce con 1, senza traceback.
+>   La patch (5 operazioni) passa ruff, con la complessità, e black. TA-E aggiorna l'ordine nel suo test e aggiunge i
+>   due casi del `ValueError`; il docs-writer aggiunge una clausola sul file della password.
+> - ✅ **Test aggiornati** (TA-E): 8 funzioni nella sezione (m). L'ordine ora prova il file della password letto prima
+>   del cambio e l'archivio dopo. Due casi nuovi: un `LIBREFOLIO_DATA_DIR` con `#` (`get_data_dir()` solleva
+>   `ValueError`) da root dà una riga ❌ ed esce con 1, senza traceback né domande; non da root decifra come oggi.
+> - ✅ **Doc** (docs-writer): `cli_tools.en.md` (l.593-595 e 636-640, più la clausola sul file della password letto
+>   prima del cambio; traduzioni: debito, niente stamp) e `backup_restore.en.md` l.344-354 (l'esempio diviso fra host e
+>   Docker, `-o` scrivibile in `backups/`). La frase generale di `docker_advanced.en.md` l.221 (`docker compose exec`
+>   crea file di root) resta per B7d: quella pagina si riscrive comunque per Litestream.
+> - ✅ **Rosso** (09:06, corsia 6187, carico 30): `utils backup-cli-secure` 8 falliti e 58 passati, gli 8 nuovi.
+> - ✅ **Codice** (09:06): `apply_b19.py`, 5 operazioni in `scripts/backup_cli.py`; ruff (C901 compreso) e black puliti.
+> - ✅ **Verdi** (09:06-09:07): `utils backup-cli-secure` 66, `utils backup-cli` 102, `utils backup-cli-restore` 77.
+> - ✅ **Doc** (09:08-09:12): `mkdocs build` strict OK (92 s), `check-links` OK, `utils gate-docs-links` 63.
+> - **Revisione del cambio di A8b a `backup.spec.ts`** (dev `6e2b2c8b7`, letto con `git diff`; chiesta dal
+>   coordinatore): corretto.
+>   - FBKP-001a (membro): la presenza passa a `settings-tab-administration`, e restano le assenze di
+>     `settings-tab-admin`, `settings-tab-backup` e `backup-tab`;
+>   - FBKP-001b (admin): precondizione «Profile selezionata», poi `openSettingsTab(page, 'backup')`, la scheda
+>     selezionata e la card idle.
+>   Selettori `data-testid`, tempi conservati. Nessuna richiesta.
+> - **B7a, tentativo** (09:12-09:23): il demone Docker non gira su questa macchina, e `docker pull` è rimasto ad
+>   aspettarlo; fermato. Non è stato creato nulla; tolta la cartella vuota del binario. Lo script ora controlla prima
+>   `docker info`. Chiesto al coordinatore chi avvia Docker Desktop.
+>   **Coordinatore**: Docker non si avvia (la macchina è del developer, e B7b aspetta comunque le sue risposte). Lo spike
+>   passa **alla mattina, con il developer presente** (è nella sua lista).
+
+### B7 — Litestream: analisi (2026-10-17, 08:50-08:55) — 🧊 inviata al coordinatore, prima del codice
+
+> **Stato reale** (HEAD `547545b8e`), confrontato con §3.13 e §3.16:
+>
+> - **Litestream** non c'è in nessun file. `.env.example:297` ha la sezione «Backup and Litestream» con le sole
+>   variabili del backup.
+> - **Immagine**: stadio finale `python:3.13-slim` con `gosu` e `tzdata`/`tzdata-legacy` (CP7a, P-4);
+>   `ENTRYPOINT ["/entrypoint.sh"]`; `CMD ["uvicorn", …, "--port", "6040"]`; `HEALTHCHECK` su `/api/v1/system/health`,
+>   `start-period` 15 s.
+> - **`entrypoint.sh`** è cambiato dal piano: ora calcola un budget di spegnimento (`LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`,
+>   8 s di default, 3/8 a uvicorn per svuotare le richieste), poi `chown` della cartella dei dati e `exec gosu`.
+> - **I due compose**: `restart: unless-stopped`, healthcheck `/system/health`, **nessuno `stop_grace_period`**, quindi
+>   valgono i 10 s di Docker.
+> - **CP7a di H** ha portato tzdata, le porte, `dev.py docker exec` con gli id numerici e la versione del frontend
+>   nell'immagine. `/system/ready` esiste (DB raggiungibile e schema alla head), ma l'healthcheck usa ancora `/health`.
+>   CP7b è HTTP (cache di `/_app`, default del profilo gestito, CSP in sola segnalazione): nessun legame con B7, salvo
+>   la tabella dei default del profilo, dove Litestream non serve.
+> - **Dati**: un solo DB, `sqlite/app.db` (WAL, attesa 30 s). Lo zip del backup prende solo `sqlite/app.db` da una
+>   copia coerente, quindi `.app.db-litestream` non ci entra mai. Il ripristino scambia tutta `sqlite/`, quindi lo
+>   stato locale di Litestream se ne va con la cartella vecchia (come in §3.13).
+> - **Litestream v0.5.17** è ancora l'ultima versione (31/08/2026, API GitHub). Le funzioni del piano esistono tutte,
+>   lette nella doc ufficiale:
+>   - l'espansione `${VAR}`;
+>   - `restore -if-db-not-exists -if-replica-exists`, e `-integrity-check quick|full`;
+>   - `replicate -exec` («esce quando esce il figlio») e `-restore-if-db-not-exists`;
+>   - `shutdown-sync-timeout` (v0.5.6, default 30 s);
+>   - S3 `sse-customer-key` o `sse-customer-key-path` (v0.5.6; nel file di configurazione solo in YAML, non come
+>     parametri dell'URL);
+>   - SFTP `password`, `key-path` e `host-key` (v0.5.3: se è vuota, **la chiave del server non si verifica**);
+>   - `retention.enabled: false` (v0.5.8: le credenziali non hanno bisogno del permesso di cancellare);
+>   - heartbeat (v0.5.6, mandato solo se ogni DB è sincronizzato), `auto-recover` e `reset` (v0.5.7).
+>   La cifratura age **non esiste più** dalla v0.5: SSE-C (solo S3) è l'unica cifratura a riposo. Una replica `file://`
+>   o SFTP tiene i dati di ogni utente in chiaro.
+>
+> **Il contratto regge, con questi aggiornamenti**:
+>
+> 1. **Avviatore** `scripts/docker/start_server.py` come `CMD`. La catena è entrypoint (root, chown) → `gosu` →
+>    avviatore → `os.execvp`. Con Litestream acceso il PID 1 diventa `litestream`, e uvicorn è suo figlio; spento, il
+>    PID 1 è uvicorn, come oggi. L'avviatore applica per prima cosa `apply_pending_restore()`, poi lo fa il passo
+>    del lifespan, che non trova più nulla.
+> 2. **Ripristino automatico come passo a parte**: `litestream restore -if-db-not-exists -if-replica-exists
+>    -integrity-check quick`, prima di `replicate`. Se fallisce, **l'avvio si ferma**. Partire con un DB vuoto lo
+>    replicherebbe come una linea nuova, e il prossimo ripristino automatico prenderebbe il DB vuoto.
+> 3. **Dopo uno scambio** (ripristino in avanti o indietro) lo stato locale di Litestream va tolto. In avanti se ne va
+>    già con la cartella; all'indietro la cartella vecchia torna con il suo `.app.db-litestream`, che va rimosso.
+>    Così la prima sincronizzazione scrive uno snapshot completo. **Da provare nello spike**: che quello snapshot prenda
+>    un TXID sopra il massimo della replica, e che un ripristino automatico successivo prenda la linea nuova. Se non è
+>    così, servono un sotto-percorso per ogni ripristino o un azzeramento documentato.
+> 4. **Spegnimento**: 8 s del budget, più la sincronizzazione finale, più margine. Propongo `shutdown-sync-timeout: 10s`
+>    nella configurazione generata, `stop_grace_period: 30s` nei due compose (innocuo da spento: Docker aspetta solo
+>    quanto serve) e `kill_timeout = 30` per Fly nella doc. **Da provare**: che `litestream` inoltri SIGTERM/SIGINT
+>    a uvicorn e poi sincronizzi.
+> 5. **Segreti**: l'avviatore li risolve (`env_secret`, `_FILE` compresi) in variabili interne e scrive nel file solo
+>    i riferimenti `${…}`: nessun segreto su disco. SSE-C con `sse-customer-key-path` quando c'è `_FILE`.
+>
+> **Variabili** (§3.16, confermate, più tre proposte): `…_REPLICA_URL` (vuota = spento; `s3://`, `sftp://`, `file:///`),
+> `…_ACCESS_KEY_ID`, `…_SECRET_ACCESS_KEY(_FILE)`, `…_ENDPOINT`, `…_REGION`, `…_SSE_C_KEY(_FILE)`,
+> `…_SFTP_PASSWORD(_FILE)`, `…_SFTP_KEY_FILE`, `…_SFTP_HOST_KEY`, `…_RESTORE_ON_START` (1), `…_CONFIG` (vince su
+> tutto). Le proposte: `…_RETENTION` (D3), `…_HEARTBEAT_URL` (D5) e l'obbligo di `…_SFTP_HOST_KEY` per SFTP (D7). Ogni
+> default lascia il self-hosted com'è (Litestream spento); nessun default nuovo nel profilo gestito.
+>
+> **Immagine**: il tarball di v0.5.17 per `TARGETARCH`, verificato con lo `sha256` di `checksums.txt` fissato nel
+> `Dockerfile` (ci sono anche gli SBOM); circa 13 MB compressi, in tutte e due le varianti; pronto per arm64 (B9).
+>
+> **Backup e ripristino**:
+>
+> - il backup zip legge il DB con l'API di backup di SQLite mentre Litestream tiene la sua transazione di lettura:
+>   compatibili;
+> - la copia del controllo B2/B4 è un altro file, che Litestream non guarda;
+> - lo scambio del ripristino avviene prima di Litestream, attraverso l'avviatore. Il commit al primo avvio riuscito
+>   non cambia; il rollback passa anche lui dall'avviatore (punto 3);
+> - il riavvio chiesto dalla UI: uvicorn esce, Litestream esce con lui, Docker riavvia il container, l'avviatore
+>   applica;
+> - Litestream copre **solo il DB** (decisione 9): `custom-uploads/`, `broker_reports/`, `scenario_catalog/` e
+>   `secrets/` viaggiano negli zip. Nel cloud la chiave d'istanza arriva dall'ambiente.
+>
+> **Test**:
+>
+> - leggeri: l'avviatore, con `execvp` e `subprocess` sostituiti (spento/acceso, la configurazione generata per S3,
+>   SFTP e file, SSE-C, nessun segreto nel file, `_FILE`, il ripristino all'avvio, `…_CONFIG`, il ripristino in attesa
+>   prima di tutto, lo stato tolto dopo un rollback, un ripristino che fallisce ferma l'avvio). Poi le letture in
+>   `config/backup.py`, e controlli statici di `Dockerfile` e compose (stadio Litestream, `sha256` per architettura,
+>   `CMD`, `stop_grace_period`), nel test di H `release-image-contract` o in uno mio;
+> - Docker (ogni run con il via del coordinatore, pulizia alla fine: container, volumi, immagini, reti):
+>   - lo **spike** (punti 3 e 4) con l'immagine ufficiale `litestream/litestream:0.5.17` e una replica `file://` su un
+>     volume temporaneo: la linea dopo uno scambio in avanti e uno all'indietro, e i segnali;
+>   - l'immagine nostra con Litestream spento (avvio come oggi, `docker stop` nel limite) e acceso (scrittura, stop, DB
+>     tolto, riavvio, ripristinato);
+>   - MinIO facoltativo; SSE-C su MinIO chiede TLS: fuori.
+>
+> **Lotti proposti**: B7a lo spike (solo Docker, nessun file del repo); B7b avviatore, configurazione e test leggeri;
+> B7c immagine e compose, con le prove Docker; B7d le doc (`docker_advanced`, `configuration`, Fly e `kill_timeout`,
+> «Porta a casa»).
+>
+> **Decisioni per il developer**: le D1-D10 del messaggio al coordinatore.
+>
+> **Coordinatore** (risposta all'analisi): D1-D10 vanno nella lista del developer per la mattina. **Spike B7a
+> approvato**, come run pesante: aspetta uno slot libero (gate F, A e W in corso), circa 10 minuti. Usa l'immagine
+> ufficiale `litestream/litestream:0.5.17` e una replica `file://` su un volume temporaneo, con **pulizia completa** alla
+> fine (container, volumi, immagini, reti) e la prova nel piano. **B7b e i lotti dopo aspettano le risposte del
+> developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
+> `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 

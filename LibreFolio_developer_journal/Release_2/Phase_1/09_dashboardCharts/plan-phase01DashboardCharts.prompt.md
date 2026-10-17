@@ -5191,3 +5191,187 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 > ### Y-8 — checkpoint 🧊 FROZEN (07:4x)
 >
 > Handoff al coordinatore con le liste da committare. Nessun server, porta 6189 libera, `git diff --check` pulito.
+
+## Dopo Y-8: J-44 (annullata, poi revisione) e Y-25 (dalle 07:40; HEAD `039af67bb`)
+
+### J-44 · revisione a posteriori del commit di J ✅ (07:45–07:55)
+
+> **Note implementazione**. Il coordinatore mi aveva passato J-44 (07:40), poi l'ha annullata: J l'aveva già fatta, nel
+> suo checkpoint F5 (messaggi incrociati). Nessun file toccato da me. Revisione in sola lettura di `824b27437` («fix(charts):
+> no tooltip Δ% from a zero start», in dev `b6b615c3d`), via `git show`:
+> - ✅ `changePct` esportato da `MeasureSignal.ts` (file dichiarato dal gate della matematica finanziaria): la regola ha una
+>   copia sola. `buildDeltaHtml` la usa; `—` (U+2014, lo stesso glyph del righello) solo nella vista assoluta; colore dal
+>   segno di Δabs e vista percentuale invariati, come dichiarato. Nessun ciclo: `MeasureSignal.ts` nomina
+>   `priceChartHelpers` solo in un commento. Test: rossi con ragioni, il vecchio pin ripinnato, `changePct` provato con un
+>   import dinamico. `financial_math.md` regola 6 aggiornata; nessuna pagina utente descrive il Δ del tooltip.
+> - Note, non correzioni: il `—` del tooltip prende il colore di Δabs (nel righello è grigio: cambiarlo è dei colori);
+>   `priceChartHelpers` → `MeasureSignal` è un arco in più dell'inversione D-Y15/Y-7, da sciogliere in FE9.
+> - **Fuori dal perimetro di J-44, lo stesso numero sbagliato** (regola 10): la vista percentuale. `toDisplaySeries`
+>   (`priceChartHelpers.ts:369`) rende la serie intatta quando il primo valore è 0, quindi linea e Δ del tooltip mostrano
+>   valori assoluti come percentuali. Altre copie del ribasamento, tre comportamenti su una base nulla:
+>   `computeGhostSeries` (`:469`, tutto 0 %), `candlestickChartHelpers.toPercent` (`:35`) e `backendRenderer.transformValue`
+>   (`:37`, valore grezzo), `lotWacPriceChartHelpers.toPercentSeries` (`:130`, ribasa sul primo valore non nullo).
+>   Mandato al coordinatore; diventa **Y-26** (aperta, per il developer) al prossimo checkpoint.
+
+### Y-25 · i costi di `updateArrowRotations` fuori dallo zoom — analisi e scelta (07:55)
+
+> **Via del coordinatore** (07:4x): «Y-25 if it's cheap».
+>
+> **Stato reale** (HEAD `039af67bb`; i 9 commit nuovi di dev non toccano questi file):
+> - ogni chiamata copia tutta l'opzione con `getOption()`, anche su un grafico **senza frecce** (quasi tutti: le frecce
+>   vengono solo dai segnali con `markerStart`/`markerEnd: 'arrow'` e dalla freccia finale del righello);
+> - riscrive tutte le serie appena trova una freccia, anche se nessun angolo è cambiato;
+> - i tre `ResizeObserver` (`LineChart.resizeChartOnly`, `CandlestickChart`, `PriceChartFull`) la chiamano a ogni
+>   callback, cioè a ogni frame di un trascinamento della finestra o di una transizione di larghezza;
+> - il primo disegno la chiama tre volte (`renderChart` e i due passi di `scheduleFirstRenderStabilityFix`), e ogni
+>   ridisegno di un grafico zoomato una volta in più, 120 ms dopo (il ripristino non è `silent`).
+> - Ogni componente ha un solo disegno completo (`setOption(option, true)`); gli altri `setOption` toccano solo le
+>   etichette dell'asse. Nessun altro chiamante di `updateArrowRotations`.
+>
+> **Scelta, tre parti piccole**:
+> - **(a)** la riscrittura parte solo se una freccia gira di più di 0,01° (sotto, la freccia è identica a vista);
+> - **(b)** i tre `ResizeObserver` non riallineano più a ogni callback: `LineChart` e `CandlestickChart` riarmano
+>   l'assestamento che già c'è (`scheduleZoomedAxisLabels(lastZoomEvent)`: etichette e frecce 120 ms dopo l'ultima
+>   callback); `PriceChartFull` lascia fare al suo rinvio da 200 ms, che già riallinea nel ramo «risoluzione tenuta» (una
+>   risoluzione nuova ridisegna);
+> - **(d)** un grafico il cui ultimo disegno completo non ha frecce non legge niente: `noteArrowMarkers(chart, option)`,
+>   chiamata subito dopo ogni `setOption(option, true)`, annota in un `WeakSet` i grafici senza frecce, e
+>   `updateArrowRotations` esce prima di `getOption()`. Un grafico mai annotato si comporta come oggi.
+> - Non faccio il ripristino `silent` dello zoom: altri ascoltatori potrebbero contare sull'evento; con (a) e (d) costa
+>   una copia sola, e nessuna sui grafici senza frecce.
+>
+> **Passi**: rossi (`test-author`); correzione; prove leggere; prova del morso su (d) (un disegno che non annota → la
+> guardia «un grafico che ottiene frecce le riallinea» resta verde, quello senza frecce torna a leggere); E2E dei grafici;
+> backlog (Y-25 ✅, Y-26 nuova), devWiki, checkpoint.
+>
+> **Passo 1 ✅, i rossi** (`test-author` `dd7aff62`, 07:57–08:07; solo i quattro file di test permessi, già registrati):
+> - **16 rossi**, ognuno per la ragione voluta; tutti i casi di prima verdi (42, 9, 40, 290):
+>   - unità (`__tests__/lineChartHelpers.test.ts`, 4 rossi e 45 verdi): (a) una seconda chiamata senza niente di mosso
+>     riscrive (`expected 2 to be 1`); una freccia a 0,005° dal suo angolo viene riscritta; (d) `noteArrowMarkers` manca
+>     (barriera dell'import dinamico, due casi). Guardie: una freccia a 0,02° si riallinea; una che gira fra altre ferme
+>     dà una riscrittura con tutte le serie; un grafico mai annotato legge come prima;
+>   - `LineChart.test.ts` (2 rossi e 9 verdi): (d) un grafico senza frecce legge `getOption()` all'assestamento (`1` invece
+>     di `0`); (b) cinque callback del ridimensionamento → `{5 letture, 5 riscritture}` invece di `{0, 0}`, nessun
+>     riallineamento all'assestamento, letture totali 5 invece di ≤ 1;
+>   - `PriceChartFull.test.ts` (4 rossi e 40 verdi): (d) per `PriceChartFull` (2 letture invece di ≤ 1) e per le candele;
+>     (b) per i due grafici;
+>   - `chartCoreHelpers.test.ts` (6 rossi e 293 verdi): i pin di (b) per i tre grafici e di (d) per i tre (`noteArrowMarkers`
+>     subito dopo `setOption(option, true)`, importato da `./lineChartHelpers`); una premessa verde: il disegno completo è
+>     l'unico `setOption` con le serie.
+> - **Il registratore**: `PriceChartFull.test.ts` ha ora lo zoom vero di `LineChart.test.ts` (`gridPixel`, `userZoom`,
+>   `dispatchAction` registrato ed emesso, `takeWindow`); la larghezza del grafico è una manopola (`plot.width`), così un
+>   ridimensionamento cambia gli angoli. I casi di Y-8 e le guardie del colore usano zoom veri: con (a), uno zoom che non
+>   muove niente non porterebbe nessuna riscrittura. I casi di ridimensionamento usano un `ResizeObserver` locale che tiene
+>   la sua callback, tolto in `afterEach`; lo stub globale resta inerte.
+> - **La tolleranza**: il bordo esatto non è provabile in virgola mobile (90,01 − 90 = 0,010000000000005), quindi i test
+>   guardano a metà (0,005°) e al doppio (0,02°). La freccia dentro la tolleranza non viene toccata, nemmeno nella copia.
+>
+> **Passo 2 ✅, la correzione** (08:08, `files/scripts/y25_apply.py --apply`, 12 sostituzioni esatte; 4 file, +46 −8):
+> - `lineChartHelpers.ts`: `ARROW_ROTATE_EPSILON_DEG = 0.01`; `noteArrowMarkers(chart, option)` con un `WeakSet` dei grafici
+>   senza frecce; `updateArrowRotations` esce prima di `getOption()` per quei grafici e salta una freccia che non gira; JSDoc.
+> - I tre componenti: `noteArrowMarkers(chartInstance, option)` subito dopo il disegno completo; nei `ResizeObserver`,
+>   `LineChart` (`resizeChartOnly`) e `CandlestickChart` riarmano l'assestamento (`scheduleZoomedAxisLabels(lastZoomEvent)`),
+>   `PriceChartFull` lascia fare a `scheduleResolutionRecompute()`.
+>
+> **Passo 3 ✅, prove leggere** (`files/scripts/y25_light.sh`, 08:08–08:19; il carico è salito fino a 59 e lo script ha
+> aspettato): `LineChart` 11, `PriceChartFull` 44, `lineChartHelpers` 49, `sessionGaps` 9, `chartCoreHelpers` 299, i due
+> `tooltipEscape` 7 e 17, `echartsZoomPan` 24, `chartFlagFont` 16, `moneyRenderSites` 6, `themeModeReads` 24, `MeasurePanel`
+> 23 (529, tutti verdi); svelte-check 0/0; Prettier pulito sugli 8 file; `theme-roles --check` pulito; `git diff --check`
+> pulito.
+>
+> **Passo 4 ✅, la prova del morso sul verso pericoloso di (d)** (`files/scripts/y25_bite.sh`): un `noteArrowMarkers` che
+> archivia ogni grafico come senza frecce lascerebbe le frecce vere dritte. Con quel mutante vanno rossi tutti i casi che
+> disegnano frecce: `LineChart` 5 (passo e assestamento, ridisegno zoomato, le due guardie del colore, ridimensionamento),
+> `PriceChartFull` 6 (passo e assestamento, guardie del colore e ridimensionamento, per i due grafici), la guardia
+> d'unità «un grafico che ottiene frecce viene riallineato». Ripristino con hash uguale (`6a53971c3280`).
+>
+> **Slot E2E chiesto** (08:2x, `files/scripts/y25_e2e.sh`: `asset-detail`, `asset-mobile-layout`, `asset-list`, `fx-detail`,
+> `risk`); il coordinatore lo mette in coda dopo F, A, MF e B-31. **`docs-writer`** (`adeb1b4e`) riscrive il punto «Arrow
+> markers» di `charts.md`. **Backlog**: Y-25 ✅, Y-26 nuova, e la ✅ di Y-12 che mancava (`6ac6ead12`, 16/10).
+
+### Y-3 e Y-4 · via del coordinatore, mentre Y-25 aspetta lo slot (08:3x)
+
+> **Y-3, la misura** (sola lettura, `files/scripts/y3_measure.py`, log `files/logs/y3_measure.log`): una copia in Python di
+> `scanLine`/`scan` del gate `moneyRenderSites.test.ts`, con le sue espressioni di oggi, girata due volte.
+> - 819 file; **8 colpi oggi** (forma A 4, B 4) e **gli stessi 8** con `\bt\(` in `I18N_CALL`: nessuno sparisce, nessuno
+>   compare, quindi nessuna voce del registro marcisce.
+> - Un solo letterale ha un `t(` accanto a un segno di valuta: `growthChartTooltip.ts:166`
+>   (`${t('dashboard.totalPnl')}`), che resta un colpo grazie a `pnlColor`. Nessun `t(` porta valori con importi.
+> - **Rumore zero**: la modifica è solo di test (la forma, il commento e un controllo sintetico attraverso `scanLine`).
+>
+> **Y-4**: da G-9 (`c635da129`, entrato con `1470bd693`) `selectIndicatorFromTree` della galleria apre il menu con ↓ sul
+> pulsante, aspetta il fuoco della casella di ricerca e un `aria-activedescendant`, apre una famiglia chiusa con → dopo
+> averla raggiunta (`walkIndicatorTreeTo`), arriva all'opzione e conferma con Invio. I commenti di
+> `SignalTreeSelect.test.ts` (`:16-17`, `:306-310`) descrivono ancora i clic. Solo il testo dei commenti; lo spostamento di
+> FE2 resta congelato.
+>
+> Le due modifiche le fa `test-author` (file di test), in due file diversi.
+>
+> **Y-25, documentazione ✅** (`docs-writer` `adeb1b4e`, 08:2x–08:30): il punto «Arrow markers» di `charts.md` riscritto (13
+> righe): le frecce si riallineano quando un gesto o un ridimensionamento si ferma, nell'assestamento delle etichette che
+> un evento `dataZoom` o una callback del `ResizeObserver` riarmano; un disegno completo le riallinea subito, dopo il
+> ripristino dello zoom; la riscrittura solo oltre 0,01°; `noteArrowMarkers` e i grafici senza frecce; i colori; i test.
+> - **Due correzioni al mio brief, giuste**: anche un pan può girare una freccia (lo zoom filtra i punti,
+>   `filterMode: 'filter'`, e l'asse Auto segue i dati visibili), quindi non l'ho più dato come esempio di «niente
+>   riscrittura»; il passo della stabilità del primo disegno riallinea anch'esso subito, quindi niente «solo».
+> - `mkdocs build` (strict) rc 0, 0 righe WARNING, 47,6 s; `check-links` 97 validi (`files/scripts/y25_docs_check.sh`,
+>   carico 39 dopo 90 s di attesa).
+>
+> **Y-3 ✅ e Y-4 ✅** (`test-author` `331dfce4`, 08:3x–08:50):
+> - **Y-3** (`moneyRenderSites.test.ts`): `I18N_CALL = /\$_\(|\bt\(|label\(/`. `\bt\(` prende il posto di `\$t\(` invece di
+>   affiancarlo: copre anche `$t(` (`$` non è un carattere di parola), e un'alternativa morta sarebbe proprio quella contro cui
+>   mette in guardia la nota di `SAFE_CALL`. Commento sulla forma: le chiavi sono parole e non numeri, il `\b` tiene fuori
+>   `format(`, `fmt(`, `parseInt(`, `split(`, e il punto cieco condiviso con `$_(` (un importo nei `values` di una traduzione).
+>   Caso nuovo con tre righe sintetiche attraverso `scanLine`: una chiave `t('…totalPnl')` accanto alla valuta non è un colpo;
+>   la stessa con `formatFixed(amount, 2)` sì; `fmt(`/`format(` accanto alla valuta sì. **Il rosso**, valutato con node sul
+>   `scanLine` di prima (il brief diceva una corsa sola, alla fine): la prima asserzione rossa con la forma di oggi; il mutante
+>   senza `\b` rende rossa la terza. Su `src`: gli stessi 8 colpi con ogni forma. Corsa: **7/7**.
+> - **Y-4** (`SignalTreeSelect.test.ts`, solo commenti): il docblock (`:16-25`) dice come sceglie oggi la galleria (↓ apre
+>   sulla casella di ricerca col fuoco e una riga evidenziata, ↓/↑ camminano, → apre la famiglia chiusa raggiunta, Invio
+>   sceglie e chiude) e nomina i quattro casi da tastiera che lo fissano; il commento del caso a clic (`:318-320`) dice che è
+>   la strada dell'utente e di `asset-detail.spec.ts`. Corsa: **28/28**. **Il titolo** del caso («…the way the gallery helper
+>   drives it…») ora è falso: `test-author` propone di cambiarlo; è una stringa, non un commento, e
+>   `BACKLOG_POST_1.2.md:2370` (sezione G) la cita. Lo porto al coordinatore.
+
+### X-R53 · revisione a posteriori (dev `78708660f`, commit `d38077ed4`), sola lettura (08:40–08:45)
+
+> **Note implementazione**. Le colonne Δ 1D…5Y di Asset e FX dal backend (`/period-changes`), in uno stato loro con un
+> contatore di versione; `fetchAllPriceData` (asset) e `fetchAllPairData` (FX) = `Promise.all` di prezzi e periodi.
+> - ✅ **Flusso e pageBusy**: i gettoni restano sui grilli (primo caricamento, periodo, Aggiorna, aggiornamento in blocco,
+>   impostazioni, riprova dei segnali, ricarica), quindi il pulsante gira finché ci sono anche le colonne Δ;
+>   `periodChangesLoading` è nel `busy`/`data-busy` della pagina e non in `pageBusy`, come vuole il contratto di Y11; il
+>   sondaggio dal vivo tocca solo `livePriceMap`, come prima. Versione: vale solo l'ultima risposta, e il `finally` spegne
+>   solo per l'ultima; un errore svuota i Δ, sempre sotto la guardia.
+> - **Regressione, medio-bassa: le preferenze delle colonne Δ 1W…5Y si azzerano a ogni caricamento** (Asset e FX).
+>   `periodSpecs` parte vuoto e `visiblePeriodColumns([], …)` dà `[]`, quindi il primo disegno della tabella non ha quelle
+>   colonne. `DataTable` all'`onMount` filtra le scelte di visibilità sulle colonne presenti; il suo `$effect` di
+>   sincronizzazione toglie gli id assenti da `columnOrder` e **salva subito**, e toglie le larghezze. All'arrivo della
+>   risposta le colonne tornano al posto predefinito, visibili, larghe come da definizione. Una colonna nascosta ricompare a
+>   ogni caricamento, e la scelta si perde per sempre al primo cambio di visibilità salvato; lo stesso per l'ordine (subito) e
+>   le larghezze (al primo ridimensionamento). Prima di X-R53 le colonne c'erano dal primo disegno (lista statica filtrata
+>   sull'intervallo). In più un salto della tabella quando arrivano. Rimedi: (a) in `DataTable` (mio): non potare le
+>   preferenze delle colonne assenti, filtrare solo al disegno — chiude anche la perdita che c'era già quando un intervallo
+>   più corto nasconde i periodi lunghi; (b) in X: seminare `periodSpecs` con l'ultima risposta conservata.
+> - Minori: la riprova dei segnali e il cambio di impostazioni richiedono anche i periodi (non ne dipendono); un errore
+>   svuota anche Δ ancora validi per lo stesso `dateEnd`; senza una prima risposta non compare nessuna colonna di periodo.
+>   FX, percorso per coppia (`loadPairPeriodChanges`): nessun indicatore, quindi `data-busy` può dire «finale» mentre il Δ
+>   della coppia è ancora in volo; e non incrementa la versione, quindi una risposta completa partita prima e arrivata dopo
+>   riscrive la coppia con dati più vecchi (finestra stretta).
+>
+> **Coordinatore (08:4x)**: il rimedio (a) è mio, in `DataTable` (tenere le preferenze delle colonne assenti, filtrarle solo
+> al disegno), rosso prima, come **lotto a parte dopo Y-25**, con il suo checkpoint; se un test fissa la potatura come voluta,
+> va detto prima di cambiarlo. Analisi in sola lettura: nessun test la fissa. `DataTable.test.ts` dichiara la persistenza
+> non coperta (il suo jsdom non ha `localStorage`) e il filtro degli id assenti in `orderedColumns`; `ExposureTable.test.ts`
+> fissa il verso opposto (una scelta di visibilità esistente sopravvive). Le note minori le passa a X il coordinatore.
+> **Y-4**: titolo rinominato come proposto da `test-author` («selects an item on click, its collapsed family clicked open
+> first: …»), 28/28; `BACKLOG_POST_1.2.md:2370` (sezione G) lo allinea il coordinatore.
+>
+> **Y-25, E2E ✅** (slot 2, `files/scripts/y25_e2e.sh`, 08:35–08:54, HEAD `039af67bb` più i miei file; carico a 5 minuti 42,5
+> alla partenza, poi fino a 95 a un minuto per le altre sessioni): `front-asset asset-detail` **35/35** (2,7 minuti),
+> `asset-mobile-layout` **21/21** (1,9), `asset-list` **30/30** (2,6), `front-fx fx-detail` **17/17** (1,0), `front-portfolio
+> risk` **38/38** (2,7). 141/141. Porta 6189 libera alle 08:54.
+>
+> ### Y-25 + Y-3 + Y-4 — checkpoint 🧊 FROZEN (08:5x)
+>
+> 15 file tracciati, nessuno nuovo; `git diff --check` pulito; nessun server. Dev `547545b8e` (55 commit avanti) tocca solo
+> `log.md` della devWiki (aggiunte in fondo: unione) e il backlog in altre sezioni (H, X, J, Z, B, E, MF).

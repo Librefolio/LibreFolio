@@ -20,7 +20,10 @@ invitation, follow [If You Received an Invitation Link](#invitation-link).
 
 Fill in your details:
 
-- 👤 **Username** — unique: you log in with it.
+- 👤 **Username** — unique, 3 to 50 characters, without `@`: you log in with it. Spaces, accented
+  letters and signs such as `.`, `_`, `-` or `+` are fine. When you log in, LibreFolio reads
+  anything with an `@` as an email address, so the form refuses one: *The username cannot contain @:
+  to sign in, you can always use your email address.*
 - 📧 **Email** — a valid address; it works for logging in too.
 - 🔑 **Password** and **Confirm Password** — the strength indicator tells you when the password is
   strong enough.
@@ -90,7 +93,9 @@ after **Register**:
 ## 🔐 2. Log In
 
 After registering, you are back on the login page. Log in with your username (or email) and your
-password. If LibreFolio asked you to confirm your email address, open the link it emailed you
+password. Type your username exactly as you chose it, capitals included. If your username contains
+an `@`, which accounts created before version 1.3 may have, log in with your email address instead.
+If LibreFolio asked you to confirm your email address, open the link it emailed you
 first: see [If LibreFolio Asks You to Confirm Your Email](#verify-email).
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">

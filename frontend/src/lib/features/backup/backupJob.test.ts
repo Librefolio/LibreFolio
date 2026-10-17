@@ -5,7 +5,8 @@
  * The contract under test:
  *   - `start()`: `starting` while the request is out; the job it answers is followed — `running` is remembered in the
  *     storage and read again every `pollMs`, `done` is announced once (`onDone`) and never read again; a refusal
- *     (`backup_busy`, `backup_folder_unusable`, `backup_failed`, `network`, `unexpected`) is announced once as
+ *     (`backup_busy`, `backup_folder_unusable`, `backup_failed`, `backup_no_space` — B-30's 507 on a full disk —,
+ *     `network`, `unexpected`) is announced once as
  *     `onFailed(code, 'start', null)` and leaves the storage as it was — `failed` with no job, or, when an archive was on
  *     offer (`done`), `done` with that same archive still on offer and the error beside it (decision 1);
  *   - polling: a read that fails while the job runs is retried after `pollMs × (1 + failures in a row)`, capped at five
@@ -240,6 +241,8 @@ describe('start(): a backup followed to its archive', () => {
         ['backup_busy', () => refusal(409, 'backup_busy')],
         ['backup_folder_unusable', () => refusal(500, 'backup_folder_unusable')],
         ['backup_failed', () => refusal(500, 'backup_failed')],
+        // B-30: a start on a full disk is refused before any job exists.
+        ['backup_no_space', () => refusal(507, 'backup_no_space')],
         ['network', noAnswer],
         ['unexpected', codelessAnswer],
     ])('a start refused with %s: failed with that code and no job, announced once, the stored job left alone and offered to recheck', async (code, refused) => {

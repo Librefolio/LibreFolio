@@ -1,9 +1,9 @@
 """Lift R13-SEC7-1's bound on date ranges for the suites whose data lives far in the future.
 
 R13-SEC7-1 ends every range that is walked day by day -- the portfolio engine's replay, the summary and the report, the
-lots histories, risk's portfolio scope, an AI Export period -- at ``latest_range_end()``, tomorrow. The modules that apply
-the bound import the function by name, so a test replaces the name where it is read: replacing it in
-``backend.app.utils.datetime_utils`` would change nothing.
+lots histories, risk's portfolio scope, an AI Export period, and (X-R55) the asset price queries and the FX conversions --
+at ``latest_range_end()``, tomorrow. The modules that apply the bound import the function by name, so a test replaces
+the name where it is read: replacing it in ``backend.app.utils.datetime_utils`` would change nothing.
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ RANGE_BOUND_CONSUMERS = (
     "backend.app.services.lots_analysis_service",
     "backend.app.services.risk.scope",
     "backend.app.services.ai_export.runtime_service",
+    "backend.app.services.assets.price_query",
+    "backend.app.api.v1.fx.currencies",
 )
 
 
