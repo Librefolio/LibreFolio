@@ -7114,3 +7114,164 @@ Revocation).
    > entrate non sono chiuse con ✅, data e commit, come chiede la regola del backlog. Esempi con il commit che le nomina:
    > H-17, H-21…H-25, H-27…H-30, H-32…H-34, H-37, H-39, H-42, H-45, H-46. Altre, come H-19 e H-49, hanno commit che
    > non nominano l'ID. Propongo una riconciliazione, solo giornale.
+
+### Lotto «H-43: una corsia di test con il profilo managed, per gli E2E del cloud» (2026-10-17, 16:10) — analisi
+
+> Dal coordinatore (16:00, dopo l'entrata del mini-lotto, dev `13b6cfde1`): «H-43 analysis (read-only) first, the most
+> useful for Cloud». Deve coprire: come la corsia accende il profilo managed senza rompere l'isolamento del runner
+> condiviso; quale insieme di E2E ci gira; come le violazioni della CSP report-only si raccolgono e fanno fallire; lo
+> `<script>` inline di `app.html` come reperto a parte; il costo in tempo di corsia.
+
+**Stato reale** (sola lettura, HEAD `13b6cfde1`):
+1. **La corsia gira sui default.** `configure_test_runtime()` (`scripts/cli_base.py:264`) toglie:
+   - ogni variabile documentata in `.env.example`;
+   - i segreti dell'istanza (`INSTANCE_TRUST_SECRETS`);
+   - ogni `LIBREFOLIO_*`, salvo `TEST_LANE_KEEPS` e il prefisso `LIBREFOLIO_TEST_*` (`kept_in_a_test_lane()`).
+
+   Poi imposta porta, cartella dei dati, lane id e test mode.
+2. **La pulizia avviene due volte.** Una nel runner (`scripts/test_runner/_cli.py:547`), una in `dev.py server --test`
+   (`dev.py:205`). Quest'ultimo è il backend condiviso, ed è anche il comando del `webServer` di Playwright, che riceve
+   in `WEB_SERVER_ENV` solo le quattro variabili della corsia. Un `LIBREFOLIO_PROFILE` messo dal runner sparirebbe
+   quindi alla pulizia del server.
+3. **Cosa cambia il profilo managed** (`PROFILE_DEFAULTS` ed `ENVIRONMENT_PROFILE_DEFAULTS`, `config/__init__.py`):
+   - la protezione dai frame: `X-Frame-Options: SAMEORIGIN` più `PAGE_POLICY` imposta sui documenti;
+   - la CSP report-only sulle pagine dell'app;
+   - i worker del rischio che si fermano dopo 60 s;
+   - un ripristino fino a 500 MB;
+   - nel frontend, `selfHostedConfirmed()`/`managedConfirmed()` nascondono quello che vale solo per chi ospita da sé.
+4. **Il server managed parte in una corsia.** I blocchi dell'avvio esclusivi del managed sono due:
+   - `WeakSecretError`: il `JWT_SECRET` della corsia è generato lungo;
+   - `ManagedTestModeError`: la corsia ha il suo lane id di 32 caratteri.
+5. **Oggi la UI managed si prova con degli stub** di `/system/instance` (`fixtures/instance-config.ts`), in
+   `legal-and-managed`, `theme-roles`, `asset-modal`, `auth-forgot-password-email` e `files-uploader`: la UI è
+   coperta, gli header veri no.
+   - `page-policy` (H-42) **inietta** la politica con `context.route`.
+   - Nessun E2E vede l'header della CSP report-only: nessuno misura cosa romperebbe una CSP applicata.
+6. **142 file di spec** importano `test` da `e2e/fixtures/playwright.ts`: un raccoglitore si mette in un punto solo.
+   Ci sono circa 1.400 casi, con due progetti (desktop, mobile).
+
+**Disegno: la corsia managed senza rompere l'isolamento**
+- **Opzione**: `--lane-setting NOME=VALORE`, ripetibile, su `dev.py test` e su `dev.py server --test`.
+- **Lista ammessa**: `TEST_LANE_SETTABLE` in `cli_base.py`, accanto a `TEST_LANE_KEEPS`, con `LIBREFOLIO_PROFILE`,
+  `LIBREFOLIO_FRAME_PROTECTION` e `LIBREFOLIO_CSP_REPORT_ONLY`.
+  - Mai segreti, porte, cartelle dei dati o nomi `LIBREFOLIO_TEST_*` del runner.
+  - Un nome fuori dalla lista dà un errore prima che parta qualsiasi cosa. Il valore lo valida il server all'avvio,
+    con un rifiuto netto.
+- **Trasporto**: una sola variabile sotto il prefisso tenuto, `LIBREFOLIO_TEST_LANE_SETTINGS`
+  (`LIBREFOLIO_PROFILE=managed;…`), messa dal runner.
+  - `configure_test_runtime()` riapplica le coppie ammesse dopo la pulizia, in ogni processo dell'albero: runner,
+    Playwright, `dev.py server --test`, worker di uvicorn.
+  - `WEB_SERVER_ENV` la inoltra.
+- **Mai da `.env`**: un `LIBREFOLIO_TEST_*` si tiene dalla configurazione dello sviluppatore, quindi una riga dimenticata
+  renderebbe managed ogni corsia, in silenzio. `configure_test_runtime()` rifiuta la variabile quando viene da `.env`, e
+  il runner stampa le impostazioni della corsia alla partenza.
+- **Isolamento**:
+  - le altre corsie non vedono niente: l'ambiente è per albero di processi;
+  - la cartella dei dati e il DB della corsia non cambiano, perché il managed non scrive niente di suo;
+  - ogni run avvia il suo backend con un lane id nuovo (la sonda di prontezza), quindi un server di un altro profilo
+    non viene mai riusato;
+  - la build del frontend è la stessa: il profilo si legge a runtime.
+- **Test del runner**: la lista ammessa, il trasporto attraverso una pulizia annidata, il rifiuto da `.env`, un nome
+  sconosciuto. Nello stile di `utils runtime-isolation` e `test-runner-cli`.
+
+**Quale insieme di E2E**
+- **Fase 1**, un'azione «cloud smoke» (per esempio `front-utility cloud-smoke`): 10-12 spec esistenti che coprono le
+  pagine principali e le superfici a rischio per le politiche.
+  - Pagine: login e layout, dashboard, asset (lista, dettaglio, modale), transazioni e import, File con l'anteprima
+    PDF (le politiche su frame e oggetti), broker, impostazioni (utenti, sicurezza), rischio, AI Export,
+    `legal-and-managed`, `page-policy` (che, sulla corsia managed, legge l'header vero).
+  - Solo desktop, con `--lane-setting LIBREFOLIO_PROFILE=managed`.
+- **Fase 2**: tutta la suite sulla corsia managed, in uno slot.
+  - Le spec sensibili al profilo usano gli stub, quindi reggono.
+  - `gallery` resta self-hosted, perché fotografa i link di donazione.
+  - Una spec che si basasse sul profilo vero senza stub va trovata al primo run, e avrà un `test.skip` sul profilo
+    letto una volta per worker.
+
+**Le violazioni della CSP report-only: raccolta e fallimento**
+- **Un fixture automatico** in `e2e/fixtures/playwright.ts`:
+  - `context.addInitScript` registra un listener di `securitypolicyviolation`, che scatta anche in report-only
+    (`disposition: 'report'`);
+  - `context.exposeBinding` porta ogni violazione al processo del test, anche dopo una navigazione: direttiva, URI
+    bloccata, file e riga, campione, URL della pagina.
+- **Alla chiusura del test**, le violazioni che non sono in una baseline lo fanno fallire, con un elenco leggibile;
+  quelle note si contano.
+- **La baseline**: `e2e/csp-baseline.json` (direttiva, sorgente, motivo, proprietario), come un cricchetto: si possono
+  solo togliere voci.
+- **Su una corsia self-hosted** il fixture non fa niente (nessun header report-only, nessun evento): resta sempre
+  acceso, a costo zero. Le righe «[Report Only] Refused…» della console si contano come riserva.
+- **Non proposto ora**: un endpoint `report-to`/`report-uri` nel backend. Servirebbe alle operazioni del cloud, perché
+  oggi una violazione in produzione non si vede. Però la consegna è asincrona e non va bene per gli E2E, e un
+  endpoint non autenticato va irrobustito. È una voce futura a parte.
+
+**Reperto a parte: gli script inline**
+- L'`index.html` costruito ha due script inline:
+  - quello di `app.html` (1.459 caratteri): l'anti-FOUC del tema, la cattura del prompt d'installazione PWA, la
+    registrazione del service worker;
+  - quello di avvio di SvelteKit (373 caratteri): `__sveltekit_…` e l'`import()` dell'entry.
+- Entrambi violano `script-src 'self' 'wasm-unsafe-eval'`. Su un'istanza managed ogni caricamento di pagina segnala
+  oggi due violazioni, che non si vedono perché manca un endpoint, e bloccano una CSP applicata.
+- **Cura proposta** (lotto successivo, mio: `static_site.py` e `security_headers.py`): il backend calcola `sha256-…` di
+  ogni script inline dell'`index.html` servito, una volta per build (mtime), e lo aggiunge a `script-src` di tutte e
+  due le politiche.
+  - Non tocca `app.html`, che è del programma colori.
+  - Copre anche lo script di SvelteKit, che dall'HTML non può uscire.
+  - L'alternativa, spostare lo script di `app.html` in `static/`, lascerebbe comunque quello di SvelteKit.
+  - Con la fase 1 di H-43 queste due sono le prime voci della baseline; la cura con gli hash le toglie.
+
+**Costo**
+- **Implementazione**:
+  - opzione, trasporto e test del runner: mezza giornata;
+  - fixture, baseline e doc: mezza giornata;
+  - azione smoke e registrazione: un quarto di giornata.
+- **Superfici condivise**: `scripts/cli_base.py`, `scripts/test_runner/_cli.py`, `dev.py` (l'opzione di
+  `server --test`), `frontend/playwright.config.ts`, `frontend/e2e/fixtures/playwright.ts` (tocca ogni spec),
+  `_frontend_utility.py`, la doc dei test.
+- **Tempo di corsia**:
+  - fase 1: l'avvio del server (1-2 min) più 10-12 spec desktop a 2-4 worker, circa 6-12 min. È una stima, da misurare
+    al primo run;
+  - fase 2: quanto un run E2E completo self-hosted del treno, con un sovraccosto vicino a zero (un header e un
+    listener).
+- **Rischi**:
+  - il fixture condiviso tocca ogni spec, quindi si prova prima su un piccolo insieme, con un interruttore per
+    spegnerlo;
+  - se `webServer.env` di Playwright fonde o sostituisce l'ambiente è da verificare (si mette la variabile
+    esplicitamente).
+
+**Decisioni** (per il coordinatore):
+- D1: la lista ammessa, i tre nomi oppure altri.
+- D2: solo la fase 1 nella 1.3, oppure anche la fase 2.
+- D3: il raccoglitore sempre acceso (la mia proposta) oppure dietro un flag.
+- D4: la cura con gli hash, come lotto H dopo la fase 1.
+
+**Decisioni del coordinatore su H-43** (16:20), testuali in sostanza:
+- D1: i tre nomi.
+- D2: nella 1.3 la fase 1. La fase 2 gira una volta sola, nel cancello della release candidate, nella corsia del
+  coordinatore: non è una corsia ricorrente.
+- D3: il raccoglitore sempre acceso, **con un interruttore** (una variabile d'ambiente), provato prima su poche spec.
+  Il checkpoint deve mostrare un campione E2E self-hosted verde e l'azione cloud smoke verde.
+- D4: la cura con gli hash è un lotto H a parte dopo la fase 1, nella 1.3 se c'è tempo. I due script inline sono le
+  prime voci della baseline.
+- **OK di scrittura**: `scripts/cli_base.py`, `test_runner/_cli.py`, `dev.py` (l'opzione di `server --test`),
+  `playwright.config.ts`, `e2e/fixtures/playwright.ts`, `_frontend_utility.py`, la doc dei test.
+  - `dev.py` (E, E-19a) e `_frontend_utility.py` (W, C-97c) sono aperti altrove: le modifiche lì vanno solo aggiunte,
+    e per ultime.
+- Ordine: prima la riconciliazione del backlog, poi la fase 1 con i rossi. Lo slot va chiesto per il primo cloud smoke.
+
+### Riconciliazione del backlog H (2026-10-17, 16:30) — ✅ solo giornale
+
+- Chiuse con ✅, data e SHA (da `git log`, nella storia di dev, e dalle voci «Ingresso» del piano) le 25 righe già
+  entrate: H-12, H-17, H-19, H-21…H-30, H-32…H-37, H-39, H-41, H-42, H-45, H-46, H-49.
+  - Il diff cambia solo le loro prime righe (`- **H-NN ·` → `- ✅ **H-NN ·`) e aggiunge una riga di chiusura ciascuna.
+  - H-41 (di W, trovata nel lotto H-34) è chiusa da `c0b67f4c8` del lotto R13-SEC7-3, con i rossi in `61acbc16b`.
+- Restano aperte:
+  - H-3, bloccata da P24;
+  - H-5, la traduzione, solo su richiesta;
+  - H-7, H-8 e H-11, Docker e dipendenze;
+  - H-18, i toast, componente condiviso;
+  - H-20;
+  - H-31: `blocked` sta solo in `InstanceBlockResponse` (`/system/block`, dietro login), non nel pubblico
+    `/system/instance`;
+  - H-38 e H-40, Linux e Docker;
+  - H-43, in corso;
+  - H-44;
+  - dopo la 1.3: H-47, H-48 e H-50.
