@@ -5951,3 +5951,71 @@ alle 07:18): `POST /api/v1/assets/prices/period-changes` e `POST /api/v1/fx/curr
   Aperta **X-R58**, lotto piccolo subito dopo.
 - **Consegna** (08:45, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti
   `fix(assets,fx): Δ columns from the server` e `docs(journal): X-R53, X-R56–X-R59`.
+
+### X-R48 — `market-data/wipe` cancella gli SPLIT collegati a rettifiche senza costo ✅ (2026-10-17, 08:42–09:46; consegnato)
+
+**Base**: `90ec69e0f` (X-R53 entrato, riga del CHANGELOG spostata dal coordinatore), albero pulito. Il CP-14a di J è in
+dev (P-10 e `financial_math.splits.costless_incoming_split_adjustments`).
+
+**Stato verificato**: `CurrencyChangeOperations.wipe_market_data_for_currency_change` (`currency_change.py`) scollega
+ogni transazione dagli eventi dell'asset e li cancella tutti, SPLIT compresi; una rettifica +q collegata a uno SPLIT e
+senza costo diventa un acquisto di costo ignoto (`MISSING_COST_BASIS`). La rotta (`api/v1/assets/market_data.py`)
+risponde gli errori come `detail=str(e)`, senza codice. Il frontend (`AssetCurrencyChangeModal.svelte`) chiama la wipe
+alla conferma e mostra `currencyChange.failed: <messaggio del server>` in inglese.
+
+**Disegno**:
+- nella wipe vera (non nel riepilogo, che resta solo conteggi), prima di ogni scrittura:
+  `costless_incoming_split_adjustments(session, <tutti gli eventi dell'asset>)` (filtra gli SPLIT da sé: nessun nome
+  del membro fuori dalle due case, regola d); se ne trova, rifiuto `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`, 409,
+  `detail = {error_code, message, params}`; `params.splits` = ogni SPLIT così, per data e id, con `event_id`, `date`,
+  `transaction_ids` (solo quelle che il chiamante vede, come P-10 dopo R13-SEC7) e `hidden_transactions_count`; senza
+  chiamante nessun id (X-R47b); il messaggio dà solo i totali; niente scritto;
+- gli altri errori della rotta restano come sono;
+- frontend: il `catch` della modale traduce quel codice (data del primo SPLIT, rettifiche senza costo, quanti altri),
+  la modale resta aperta; una chiave in 4 lingue; un caso Vitest;
+- X-R49 (il cambio dei parametri di un Scheduled Investment) riusa lo stesso controllo.
+- **Via del coordinatore** (08:47): la modale va bene senza chiedere ai colori (è già sui ruoli, AF, e fuori dalla
+  baseline); solo il `catch`, la chiave e il test, nessun markup; il disegno del backend va bene.
+  > **⚠️ Fuori pista (08:50)** — dalla revisione di Y su X-R53 arriva **X-R60** (tre note sul flusso delle Δ: il caso
+  > della coppia sola senza indicatore e senza versione, le richieste dei periodi in più, l'errore che cancella Δ valide),
+  > piccolo, dopo X-R48. Nel backlog.
+- **Rossi** affidati a due test-author (08:44 e 08:52): backend, file nuovo `test_market_data_wipe_split_guard.py` (il
+  servizio e la rotta in processo, la vista del chiamante, le guardie); frontend, `currencyChangeErrors.test.ts` (nuovo,
+  modulo puro con un `t` finto, più la chiave nei 4 cataloghi) e un caso in `AssetCurrencyChangeModal.test.ts`.
+- **Codice pronto**, provato a secco: `xr48_code.py` (8 sostituzioni in 2 file; ruff, black, la regola d non trova
+  nulla) e `xr48_frontend.py` (il modulo nuovo, 2 sostituzioni nella modale, poi `i18n add` della chiave in 4 lingue,
+  con il ramo `many` in francese; prettier pulito).
+- **Rossi** (consegnati 09:00):
+  - backend `test_market_data_wipe_split_guard.py` (nuovo, 886 righe, 13 voci; registrato `services
+    market-data-wipe-split-guard`): 6 rossi (il servizio non prende `current_user_id`, la rotta risponde 200 e cancella),
+    7 guardie verdi; due casi in più del test-author: uno SPLIT di un provider conta, e due SPLIT dello stesso giorno
+    seguono l'id; uno SPLIT di un altro asset non blocca;
+  - frontend `currencyChangeErrors.test.ts` (nuovo, 45 casi; registrato in `front-utility core-unit`) e 2 rossi più una
+    guardia in `AssetCurrencyChangeModal.test.ts` (il modulo deriso con `vi.hoisted` + `importOriginal`, così il file si
+    carica anche prima della cura). Tre righe del test-author vanno oltre la mia lista (un elenco vuoto, un conteggio
+    nascosto −1 o 1,5, una data oggetto): tenute; la bozza contava 1,5 come 1, corretta (`Number.isInteger`).
+  - **Rossi confermati** (09:03–09:04): backend 6 falliti su 13 (TypeError su `current_user_id`), Vitest 2 falliti più
+    il file nuovo che non si carica.
+- **Codice** (09:04): `xr48_code.py` (8 sostituzioni) e `xr48_frontend.py` (modulo nuovo, 2 sostituzioni nella modale,
+  `i18n add` della chiave in 4 lingue).
+- **Verdi** (09:05–09:31): `services market-data-wipe-split-guard` 13, `services financial-math` 1111 (la regola d);
+  Vitest 68 (i due file); `i18n check` stretto (4997 chiavi), `gate-i18n-catalog`, `gate-i18n-usage`; colori puliti;
+  `front check` 0/0; `check-orphans`; `front-utility core-unit` verde; slot 8 (cancello a 5 minuti): `api
+  market-data-wipe` 5, `api assets-crud` 35; porta 6183 libera.
+  > **⚠️ Fuori pista (09:20)** — `front-utility component-unit` rosso: 2 file della feature backup (`RestoreCard`,
+  > `RestoreReportModal`), `beforeAll` in timeout a 60 s in una corsa di 167 file e 6,5 minuti a carico circa 48; da soli
+  > 100/100; nessun mio file tocca quella feature. Ambiente, non il lotto (skill test-triage: timeout di un hook, non
+  > un'asserzione; verde da solo).
+- **CHANGELOG**: una riga 🐛 dopo quella delle colonne Δ (la wipe esiste nella 1.2, quindi il comportamento rilasciato
+  cambia).
+- **Documentazione** (docs-writer, dalle 09:33): `events.md`, `architecture.md`, l'eventuale pagina della modale, e la
+  pagina utente del cambio di valuta (solo EN, debito di traduzione).
+- **Documentazione fatta** (09:33–09:44, docs-writer): `events.md` (l'eccezione nel paragrafo della wipe e una
+  sottosezione nuova «🧹 Market-Data Wipe»), `architecture.md` (la riga di `currency_change.py` e le due rotte del
+  market-data, che mancavano dalla tabella), `user/assets/create-edit.en.md` (una frase; debito di traduzione, la pagina
+  era già indietro). Oltre il compito, in `events.md`: P-10 non era documentato e un paragrafo lo contraddiceva; il
+  docs-writer ha aggiunto la riga di `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` e corretto il paragrafo e i nomi dei test (J
+  rivede). Segnala, fuori dal mio perimetro: `data-quality-banner.md:181` e `:330`, `wac.md:592` citano P-10 come
+  aperto e un test che non esiste più (di J). `mkdocs build` stretto ✅, `check-links` ✅.
+- **Consegna** (09:46, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti
+  `fix(assets): wipe refuses splits with costless adjustments` e `docs(journal): X-R48, X-R60`.
