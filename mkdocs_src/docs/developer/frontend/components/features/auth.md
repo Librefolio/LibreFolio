@@ -287,7 +287,7 @@ What a link page shows instead of its form. Props: `status` (`LinkPageStatus`), 
 | `checking` | The inspection is running | `common.loading` | — |
 | `expired` | The link has expired | `auth.link.expired` | ✅ |
 | `consumed` | The link was used | `auth.link.consumed` | ✅ |
-| `revoked` | The link was withdrawn: an invitation revoked by an administrator, a reset or setup link replaced by a newer one, or a setup link ended by a change of its account, set up another way or given a new address ([Revocation](../../../architecture/security.md#account-token-revocation)) | `auth.link.revoked` | ✅ |
+| `revoked` | The link was withdrawn: an invitation revoked by an administrator, a reset or setup link replaced by a newer one, or a setup link ended by a change of its account — set up another way, given a new address, or deactivated while it waits for its setup, the cancellation of its link (lot A-43) — or retired by the setup that refused it, its account set up before ([Revocation](../../../architecture/security.md#account-token-revocation)) | `auth.link.revoked` | ✅ |
 | `unknown` | An unknown token, a token of another purpose, or a reset or setup refused with `TOKEN_INVALID` | `auth.link.unknown` | ✅ |
 | `missing` | No `token` in the fragment, or a blank one | `auth.link.missing` | ✅ |
 | `closed` | A valid invitation while registration is `disabled` | `auth.registrationDisabled` | — |
@@ -340,7 +340,7 @@ the password of the account the link sets up, twice. Built like
 | The answer | The card |
 |---|---|
 | Success | Calls `ondone` |
-| `400` `TOKEN_INVALID`: the link was used, expired or was revoked meanwhile, or its account is already active | Calls `oninvalid`; the page shows `unknown` |
+| `400` `TOKEN_INVALID`: the link was used, expired or was revoked meanwhile; or its account is already active, or another of its setup links was consumed, the setup done or the links retired (lot A-42) | Calls `oninvalid`; the page shows `unknown` |
 | `400` `PASSWORD_TOO_WEAK`, or `422` | `auth.validation.passwordTooWeak` in `setup-error`, never the server's English |
 | `401`, or `423` with `detail.code` `instance_blocked` (`isInstanceBlockedError()`): the [instance is blocked](../../../architecture/security.md#instance-block), the `401` for a browser without a session, the `423` for one that holds another account's session | `auth.setup.blocked` in `setup-blocked`, and `setup-submit` disappears: every setup is refused until the hosting provider lifts the block. Neither callback runs |
 | Anything else, a request that never reached the server and a `423` with another code included | `auth.setup.failed` in `setup-error`; the form stays, for another try |

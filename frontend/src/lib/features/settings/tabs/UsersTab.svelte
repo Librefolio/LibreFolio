@@ -23,7 +23,7 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
     import {accountErrorText, describeAccountError} from '../users/accountErrors';
     import type {AccountsUsage, AdminAccount, OpenInvite, UserAction} from '../users/types';
 
-    type Confirmable = 'deactivate' | 'promote' | 'demote' | 'sign-out' | 'restart-guides';
+    type Confirmable = 'deactivate' | 'cancel-setup' | 'promote' | 'demote' | 'sign-out' | 'restart-guides';
     type Pending = {kind: Confirmable; account: AdminAccount} | {kind: 'revoke-invite'; invite: OpenInvite};
 
     const CONFIRM_KEYS: Record<Pending['kind'], {title: string; message: string; confirm: string; danger: boolean}> = {
@@ -31,6 +31,13 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
             title: 'settings.usersTab.confirm.deactivate.title',
             message: 'settings.usersTab.confirm.deactivate.message',
             confirm: 'settings.usersTab.confirm.deactivate.confirm',
+            danger: true,
+        },
+        // The waiting initial administrator's setup link stops working; the account still waits (A-43)
+        'cancel-setup': {
+            title: 'settings.usersTab.confirm.cancelSetup.title',
+            message: 'settings.usersTab.confirm.cancelSetup.message',
+            confirm: 'settings.usersTab.confirm.cancelSetup.confirm',
             danger: true,
         },
         promote: {
@@ -157,6 +164,10 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
         switch (current.kind) {
             case 'deactivate':
                 await setStatus(account, {is_active: false}, 'deactivate', 'accounts.user.deactivated');
+                break;
+            case 'cancel-setup':
+                // The row still reads «waiting» afterwards: the toast tells what changed
+                await perform('cancel-setup', {user_id: userId}, () => zodiosApi.update_account_api_v1_users__user_id__patch({is_active: false}, {params: {user_id: userId}}), 'accounts.user.setup-cancelled', $_('settings.usersTab.toasts.setupCancelled', {values: {username: account.username}}));
                 break;
             case 'promote':
                 await setStatus(account, {is_superuser: true}, 'promote', 'accounts.user.promoted');

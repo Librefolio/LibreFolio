@@ -256,13 +256,15 @@
         "resetLink": "Password-reset link",
         "signOut": "Sign out everywhere",
         "restartGuides": "Restart the guides",
-        "delete": "Delete"
+        "delete": "Delete",
+        "cancelSetup": "Cancel setup link"
       },
       "reasons": {
         "protected": "This account is protected: nobody can deactivate, demote or delete it.",
         "lastAdmin": "It is the only active administrator: it cannot be deactivated or demoted.",
         "limit": "The instance is full: free a place to reactivate it.",
-        "demoteFirst": "An administrator must be demoted before it can be deleted."
+        "demoteFirst": "An administrator must be demoted before it can be deleted.",
+        "pendingSetup": "It waits for its setup: it keeps its role until then."
       },
       "confirm": {
         "deactivate": {
@@ -294,6 +296,11 @@
           "title": "Revoke the invitation for {email}?",
           "message": "The link stops working at once.",
           "confirm": "Revoke"
+        },
+        "cancelSetup": {
+          "title": "Cancel the setup link of {username}?",
+          "message": "The link already handed over stops working. The account keeps waiting for its setup: a new link comes from «dev.py user setup-link» on the server, or from your hosting provider.",
+          "confirm": "Cancel the link"
         }
       },
       "errors": {
@@ -308,7 +315,7 @@
         "INVALID_INPUT": "Check what you entered: the e-mail address may not be valid.",
         "generic": "The action failed. Try again.",
         "load": "The accounts could not be loaded.",
-        "PENDING_SETUP": "This administrator activates the account through its setup link: it cannot be reactivated here."
+        "PENDING_SETUP": "This administrator waits for its setup: it can be neither reactivated nor demoted here."
       },
       "invite": {
         "button": "Invite",
@@ -338,7 +345,8 @@
       "toasts": {
         "signedOut": "{username} is signed out everywhere.",
         "guidesRestarted": "The guides of {username} start again.",
-        "resetLinkCreated": "Reset link created for {username}."
+        "resetLinkCreated": "Reset link created for {username}.",
+        "setupCancelled": "The setup link of {username} no longer works."
       },
       "pendingSetupHint": "This administrator account activates through its setup link. If the link is lost, run «dev.py user setup-link» on the server, or ask your hosting provider."
     },

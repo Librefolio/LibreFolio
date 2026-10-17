@@ -4345,12 +4345,19 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - In parte già coperto: `test_validation_errors_api.py` vuole il segnale assente da **tutta** la risposta sulle otto
     rotte con credenziali, ma solo per le forme d'errore che esercita. Cura: una regola in `security.md#validation-errors`
     («un validatore non mette il valore nel messaggio») e, se serve, un test che la imponga per ogni campo segreto.
-- **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; dalla revisione di E di A7b-2 («R13-SEC4»).
+- ✅ **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; chiusa il 17/10 in A-42/A-43 (commit del
+  coordinatore); dalla revisione di E di A7b-2 («R13-SEC4»). Cura: `issue_setup_link` e il riarmo revocano prima (un solo
+  UPDATE, che prende il lock) e rileggono «in attesa» sotto il lock; `complete_admin_setup` rifiuta (`TOKEN_INVALID`)
+  quando un altro link di setup dell'account è consumato, e ritira i suoi link.
   `issue_setup_link` e il riarmo all'avvio decidono «in attesa» da una lettura fatta prima del BEGIN differito: un
   `POST /auth/setup` chiuso in quella finestra lascia un link vivo all'account appena attivato. Cura proposta da E: rifiutare
   il consumo (e il rilascio) quando un altro link di setup dell'account è già consumato.
-- **A-43 · La disattivazione non tocca i link di setup (con A-44: annullare l'admin iniziale)** — basso; dalla revisione
-  di E di A7b-2 («R13-SEC4»); A-44 unita qui dal coordinatore (17/10, 03:09). Dopo A8a.
+- ✅ **A-43 · La disattivazione non tocca i link di setup (con A-44: annullare l'admin iniziale)** — basso; chiusa il
+  17/10 in A-42/A-43 (commit del coordinatore); dalla revisione di E di A7b-2 («R13-SEC4»); A-44 unita qui dal
+  coordinatore (17/10, 03:09). Cura: come sotto; in più la retrocessione dell'admin in attesa è rifiutata (409
+  `PENDING_SETUP`, `user demote`), la sua cancellazione diretta è permessa, la scheda Utenti ha «Annulla il link di
+  setup», e un account protetto rifiuta anche l'annullamento (la CLI no). Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-42 + A-43 — Implementazione».
   - Disattivare l'admin **in attesa** è l'annullamento: i suoi link si **revocano** (non si ritirano: resta in attesa,
     così `user setup-link`, la via dell'operatore, gli dà ancora un link nuovo; un ritiro lo toglierebbe dall'attesa e
     `setup-link` non lo troverebbe più).
@@ -4384,6 +4391,11 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   (`emailLinks.ts`, di E) «irraggiungibile»: col codice nuovo i due posti possono dire «questa istanza non può
   verificare gli indirizzi: vedi i controlli di configurazione». Condivisa con E. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Revisione di H-19».
+- **A-50 · Dopo un annullamento, l'avvio dice «scaduto»** — minimo; da A-43 (A, 17/10). Annullato il link dell'admin in
+  attesa, un riavvio con lo **stesso** `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` giustamente non lo riarma (il valore è noto),
+  ma `_keep_pending_admin` avvisa «The initial administrator's setup link has expired»: il rimedio è giusto, la causa
+  no. Cura: leggere l'ultimo link di setup e dire «cancelled» quando è revocato. Dettagli:
+  [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-43.5».
 
 ## X · Plugin, asset e ricerca (fase 01)
 

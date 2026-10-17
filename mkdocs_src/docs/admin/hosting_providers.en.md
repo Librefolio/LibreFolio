@@ -207,8 +207,8 @@ minute.
 
 - ⏱️ The link works once, for 72 hours from that first start. A restart changes nothing: the link
   you sent keeps working until it is used or expires, unless you give the administrator a new
-  address ([A New Link](#initial-admin-new-link)) or the account is set up another way
-  ([Once the Account Is Active](#initial-admin-active)).
+  address or cancel the link ([A New Link](#initial-admin-new-link)), or the account is set up
+  another way ([Once the Account Is Active](#initial-admin-active)).
 - 🔒 The token travels after the `#` of the link, a part that browsers never send to the server, so
   it stays out of the access logs of the server and of every proxy on the way. Keep it as private as
   a password until your customer has used it.
@@ -243,7 +243,7 @@ When the setup cannot go through, the page says why:
 
 | The page shows | When | What to do |
 | --- | --- | --- |
-| *This link has expired.*, *This link has already been used.*, *This link has been withdrawn.*, *This link is not valid.* or *This link is incomplete: open it again from the message you received.*, then *Ask your hosting provider for a new link. On your own server, run `dev.py user setup-link`.* | The link is more than 72 hours old, was used, was replaced by a newer one, was withdrawn when the administrator's address changed or when the account was set up another way, is unknown to the instance, or lost its token when it was copied; also a link that stops working while the form is open | Give your customer a new link: [A New Link](#initial-admin-new-link). An account set up another way gets none: see [Once the Account Is Active](#initial-admin-active) |
+| *This link has expired.*, *This link has already been used.*, *This link has been withdrawn.*, *This link is not valid.* or *This link is incomplete: open it again from the message you received.*, then *Ask your hosting provider for a new link. On your own server, run `dev.py user setup-link`.* | The link is more than 72 hours old, was used, was replaced by a newer one, was cancelled, was withdrawn when the administrator's address changed or when the account was set up another way, is unknown to the instance, or lost its token when it was copied; also a link that stops working while the form is open, and a link left over on an account already set up, which the setup refuses once the form is sent | Give your customer a new link: [A New Link](#initial-admin-new-link). An account already set up, another way or through another of its links, gets none: see [Once the Account Is Active](#initial-admin-active) |
 | *The link could not be checked. Try again in a moment.*, with **Retry** | The instance did not answer the check | **Retry** once the instance answers |
 | *Password does not meet security requirements* | The password misses one of the instance's rules | Choose a password that meets the rules shown under the field |
 | That the setup is refused while the instance is blocked, and no button to send the form any more | The instance is [blocked](#instance-block): the form opens, and the setup is refused once it is sent | Unblock the instance: your customer then opens the link again, within its 72 hours |
@@ -265,6 +265,16 @@ Either way gives a new link, which works for 72 hours, and ends the earlier ones
   [CLI Admin Tools](cli_tools.md).
 
 Both work before the link expires too, to replace a link that went astray.
+
+To stop a link that went astray without sending a new one yet, cancel it from a shell on the
+server, with the administrator's username (`admin` unless `LIBREFOLIO_ADMIN_USERNAME` names
+another): `docker compose exec librefolio python dev.py user deactivate <username>`. Another
+administrator of the instance can do the same with **Cancel setup link** in
+[Users & Invitations](users.md#cancel-setup). The link you sent stops working at once, and every
+other setup link of the account with it, while the account keeps waiting for its setup: when you
+are ready, give a new link in one of the two ways above. Until then, each start logs the warning
+above. Restarting with the same `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives no new link: the instance
+has already seen that token.
 
 To change the address or the username before your customer activates the account, change
 `LIBREFOLIO_ADMIN_EMAIL` or `LIBREFOLIO_ADMIN_USERNAME` and restart: the waiting account takes the

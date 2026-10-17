@@ -151,14 +151,18 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   superuser from its creation by the startup, inactive until its setup link is spent
   ([The Initial Administrator](#initial-admin)).
 - **Promote and demote** go through `user_service.set_user_admin()` from the CLI, which refuses a
-  no-op (*already an admin*, *not an admin*) and the demotion of the last active administrator, and
-  through `user_service.update_user_status()` from the [administrator API](#admin-user-api). A
+  no-op (*already an admin*, *not an admin*), the demotion of the last active administrator and,
+  since lot A-43, the demotion of the [initial administrator](#initial-admin) waiting for its setup,
+  and through `user_service.update_user_status()` from the [administrator API](#admin-user-api),
+  whose route refuses that demotion first (`409` `PENDING_SETUP`). A
   demotion also ends every session of the account (`user_service.end_sessions()` raises
   `users.session_version`, see [Session Revocation](security.md#session-revocation)); a promotion
   does not. Self-deletion has the same guard: `DELETE /api/v1/auth/users/me` answers `400` to an
   administrator when no other active administrator remains (`count_active_superusers()`). The
   administrator API deletes no administrator, active or not: `DELETE /api/v1/users/{user_id}` answers
-  `409` `DEMOTE_FIRST` until the account is demoted ([Deleting an Account](#admin-account-deletion)).
+  `409` `DEMOTE_FIRST` until the account is demoted ([Deleting an Account](#admin-account-deletion)),
+  except for the initial administrator waiting for its setup, which cannot be demoted and is deleted
+  directly.
 - **Applied at the next request**: the user CLI writes the database directly, with the server
   running or not, and `get_current_user()` reloads the user on every request. A deactivated
   account (`user deactivate`, `user_service.set_user_active()`, or the administrator API) gets `401`
@@ -326,9 +330,9 @@ or *links show the bare path until it is fixed*.
 | Route | Body | Does | Answers |
 |-------|------|------|---------|
 | `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, `protected`: see [Protected Accounts](#account-protection), `holds_place`: inactive and waiting for its email verification with a live link, so its place is already counted, from `place_holders()` in one query — see [Email Verification](../backend/email.md#verification) —, and `pending_setup`: the [initial administrator](#initial-admin) waiting for its setup, from `registration_service.pending_admin_ids()` in one query), with `usage: {used, max_users, billing_url}` | `200` |
-| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with one exception: `is_active: false` on an account waiting for its email verification, inactive already, ends the wait as `user deactivate` does — its links revoked, its place free. A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links, and an activation also retires its setup links ([The Initial Administrator](#initial-admin)) | `200` with the account, `holds_place` and `pending_setup` included (`holds_place` `false` once a wait has ended); `404`; `409` `ACCOUNT_PROTECTED` for a deactivation or a demotion of a [protected account](#account-protection), checked first; `409` `PENDING_SETUP` for `is_active: true` on the initial administrator waiting for its setup (`is_pending_admin()`), checked before the user limit, nothing changed; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, unless the account `holds_place` |
+| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with two exceptions for `is_active: false` on an account inactive already: one waiting for its email verification ends the wait as `user deactivate` does — its links revoked, its place free —, and the initial administrator waiting for its setup has its setup links revoked, the [cancellation](#setup-cancel) of its link (any other account has the setup links it never consumed retired). A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links and retires its setup links ([The Initial Administrator](#initial-admin)) | `200` with the account, `holds_place` and `pending_setup` included (`holds_place` `false` once a wait has ended; `pending_setup` still `true` after a cancellation); `404`; `409` `ACCOUNT_PROTECTED` for a deactivation, a demotion or a cancellation of a [protected account](#account-protection), checked first; `409` `PENDING_SETUP` for `is_superuser: false` or `is_active: true` on the initial administrator waiting for its setup (`is_pending_admin()`), checked before the user limit, nothing changed; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, unless the account `holds_place` |
 | `GET /users/{user_id}/deletion-preview` | — | `preview_user_deletion()`: what [deleting the account](#admin-account-deletion) would take with it. Writes nothing | `200` `AccountDeletionPreviewRead`; `404` |
-| `DELETE /users/{user_id}` | — | `delete_account()`: the account, and the brokers it is the only `OWNER` of, all or nothing. Cannot be undone: see [Deleting an Account](#admin-account-deletion) | `204` with an empty body; `404`; `409` `SELF_DELETION`, `ACCOUNT_PROTECTED` or `DEMOTE_FIRST`; `500` when the deletion fails, nothing deleted |
+| `DELETE /users/{user_id}` | — | `delete_account()`: the account, and the brokers it is the only `OWNER` of, all or nothing. Cannot be undone: see [Deleting an Account](#admin-account-deletion) | `204` with an empty body; `404`; `409` `SELF_DELETION`, `ACCOUNT_PROTECTED` or `DEMOTE_FIRST` (never for the initial administrator waiting for its setup, deleted directly); `500` when the deletion fails, nothing deleted |
 | `POST /users/{user_id}/password-reset-link` | — | A [reset link](#reset-links), shown once | `201` `{token, path, url, expires_at}`; `404` |
 | `POST /users/{user_id}/sessions/revoke` | — | `end_sessions()`: every device of the account is signed out at its next request | `204`; `404` |
 | `POST /users/{user_id}/onboarding/reset` | optional `{flow}` | `reset_onboarding_progress()`: that flow, or every flow, back to `pending`, steps included, with `completed_at` and `skipped_at` cleared (backlog item 21-5) | `204`; `404`; `422` for a flow that does not exist |
@@ -368,7 +372,12 @@ After `require_admin`, the deletion refuses, in this order:
 3. `409` `ACCOUNT_PROTECTED`, with the `reason` of the [protection hook](#account-protection). It comes
    before `DEMOTE_FIRST` because demoting a protected account is refused too;
 4. `409` `DEMOTE_FIRST`: an administrator, active or not. It must be demoted first, so the last
-   administrator can never be deleted from here.
+   administrator can never be deleted from here. Not the initial administrator waiting for its setup
+   (`is_pending_admin()`, lot A-43): it cannot be demoted (`409` `PENDING_SETUP`) and never was an
+   active administrator, so it is deleted directly, the hard cancellation of its setup: its setup
+   links go with it (`account_tokens.user_id` cascades), its place is freed, and nobody waits any
+   more: `./dev.py user setup-link` finds nobody, and a next start with the variables still set
+   answers `ignored`, since the instance has accounts ([The Initial Administrator](#initial-admin)).
 
 Each `409` carries `detail` `{error_code, message}`, plus `reason` for `ACCOUNT_PROTECTED`. Otherwise the
 route calls `user_service.delete_account()`, the helper of `DELETE /auth/users/me` too, and answers `204`
@@ -391,10 +400,15 @@ managed instance, who pays for it. The [initial administrator](#initial-admin) o
 yet: the hook still returns `None` for every account.
 
 - `GET /users` reflects it in `protected` (`AdminUserRead`), as do the accounts `PATCH` returns.
-- `DELETE /users/{user_id}`, and a `PATCH /users/{user_id}` that deactivates or demotes the account, answer
-  `409` `ACCOUNT_PROTECTED` with that `reason`. The `PATCH` checks it first, before the user limit and the
-  last-administrator rule.
+- `DELETE /users/{user_id}`, and a `PATCH /users/{user_id}` that deactivates or demotes the account,
+  or cancels the setup link of the initial administrator waiting for its setup (`is_active: false`
+  on that inactive account, lot A-43, [The Initial Administrator](#initial-admin)), answer `409`
+  `ACCOUNT_PROTECTED` with that `reason`. The `PATCH` checks it first, before `PENDING_SETUP`, the
+  user limit and the last-administrator rule.
 - Promoting or reactivating a protected account is not refused.
+- The command line stays above protection: `./dev.py user deactivate`, `user demote` and the other
+  user commands never read the hook, as the operator of the server may do what the administrator
+  API refuses.
 
 ### 🔑 Password-Reset Links {: #reset-links }
 
@@ -474,16 +488,17 @@ what it writes, and returns a `BootstrapResult` whose `action` (`BootstrapAction
 | `action` | When | What it does |
 |----------|------|--------------|
 | `off` | F02 off | Nothing |
-| `ignored` | Accounts exist and none is waiting, the setup done included, through the link or another way (below) | Logs `LIBREFOLIO_ADMIN_* ignored: this instance already has accounts` (INFO) |
+| `ignored` | Accounts exist and none is waiting, the setup done included, through the link or another way (below); or a re-arm that finds the setup completed in the meantime (`rearmed`) | Logs `LIBREFOLIO_ADMIN_* ignored: this instance already has accounts` (INFO); after a re-arm cut short, the INFO line of `rearmed` instead |
 | `created` | No account at all | In one transaction: the `registration_mode` row set to `invite` (inserted when missing, `updated_by_user_id` `NULL`); the administrator, superuser and inactive (`create_user(..., is_superuser=True, is_active=False, commit=False)`), whose password is the bcrypt hash of `secrets.token_urlsafe(32)`, a secret nobody ever sees, so no password signs in and a login attempt costs what it costs for any account; an `admin_setup` token for it, the variable's or a generated one, 72 hours. A variable's token already stored once (an instance emptied after an earlier setup) is not stored again: a token is generated instead, with a warning naming the variable. `link_token` holds the plaintext of a generated token, and only of that |
-| `rearmed` | An administrator waits, and the variable's token was never stored (`_token_known()`: no row has its hash, whatever its account or purpose) | Revokes the administrator's setup links and stores the new token, 72 hours. The token is neither logged nor emailed |
+| `rearmed` | An administrator waits, and the variable's token was never stored (`_token_known()`: no row has its hash, whatever its account or purpose) | Revokes the administrator's setup links, then reads «waiting» again under the write lock that revocation took (lot A-42, [The Setup Link's Lifecycle](security.md#setup-link-lifecycle)): an account set up in the meantime rolls everything back, and the start is `ignored`, with the INFO line `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN not re-armed: the initial administrator was set up meanwhile`. Otherwise stores the new token, 72 hours. The token is neither logged nor emailed |
 | `pending` | An administrator waits, with a live setup link | Nothing new: no link issued, none logged |
-| `expired` | An administrator waits, with no live setup link | Logs the WARNING `The initial administrator's setup link has expired: run ./dev.py user setup-link`, followed by `, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` when the variable is set; at the start that writes a new address, the WARNING of the address change instead, with the same ending (below) |
+| `expired` | An administrator waits, with no live setup link: the link expired, or was revoked — by a [cancellation](#setup-cancel), for one — and no token of the variable re-arms it, as one already stored never does | Logs the WARNING `The initial administrator's setup link has expired: run ./dev.py user setup-link`, followed by `, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` when the variable is set; at the start that writes a new address, the WARNING of the address change instead, with the same ending (below) |
 
 - **The waiting administrator** is `pending_admin(session)`, built on
   `registration_service.pending_admin_filter()`: an inactive account with at least one `admin_setup`
-  token, none of them consumed. An expired or revoked link keeps it waiting; a spent one ends the
-  wait, and so does a retired one, the account set up another way (below). Before `rearmed`,
+  token, none of them consumed. An expired or revoked link keeps it waiting, a
+  [cancelled](#setup-cancel) one included; a spent one ends the wait, and so does a retired one, the
+  account set up another way (below). Before `rearmed`,
   `pending` or `expired`, the account follows the variables (`_follow_variables()`): a different
   `username` or `email` is written, unless another account holds it, which logs an ERROR and keeps
   the account's own.
@@ -536,8 +551,13 @@ most 200 characters) is public:
    changes nothing: `400` `TOKEN_INVALID`. The link of an account that is already active is refused
    the same way: the spending is rolled back, and every setup link of the account is retired
    (`token_service.retire_tokens()`, lot A7b-2), with the WARNING *Setup link refused and retired:
-   the account is already active*. Once the account is set up, by any way, none of its links may set
-   its password, nor make it wait for its setup again once deactivated.
+   the account is already active*. Since lot A-42, so is the link of an account another of whose
+   setup links was already consumed (`_setup_spent_before()`): the setup done through it, or the
+   links retired. That is a link left live by a race with a new link, or by an earlier 1.3 build,
+   and its WARNING reads *Setup link refused and retired: the account was set up before*. Once the
+   account is set up, by any way, none of its links may set its password, nor make it wait for its
+   setup again once deactivated. Both refusals come before bcrypt
+   ([The Setup Link's Lifecycle](security.md#setup-link-lifecycle)).
 3. Otherwise, in one commit: the bcrypt hash of the new password, computed in a worker thread; the
    account active; its sessions ended (`end_sessions()`: `session_version` + 1); the link's
    `consumed_by_user_id` set to the account; its other setup links revoked.
@@ -552,11 +572,13 @@ link keeps running out its 72 hours. The pinned list of `test_instance_block.py`
 `username` and `expires_at`, as a reset link does ([Invitations](#invitations)).
 
 **The command line.** `./dev.py user setup-link`, with no argument (`cmd_setup_link()` in
-`scripts/user_cli.py`): `issue_setup_link()` revokes the waiting administrator's setup links and
-issues a generated one, 72 hours, which the command prints as `reset-link` prints its link: the
-full address with `LIBREFOLIO_PUBLIC_URL`, otherwise the path and a note. It sends no email. Without
-a waiting administrator it prints `❌ No administrator account is waiting for its setup link` and
-exits with `1`.
+`scripts/user_cli.py`): `issue_setup_link()` revokes the waiting administrator's setup links, then,
+under the write lock that revocation took, reads «waiting» again (lot A-42,
+[The Setup Link's Lifecycle](security.md#setup-link-lifecycle)): an account set up in the meantime
+gets no link. Otherwise it issues a generated one, 72 hours, which the command prints as
+`reset-link` prints its link: the full address with `LIBREFOLIO_PUBLIC_URL`, otherwise the path and
+a note. It sends no email. Without a waiting administrator, or once it was set up in the meantime,
+it prints `❌ No administrator account is waiting for its setup link` and exits with `1`.
 
 **Set up another way** (lot A7b-2, A-32). The setup link is not the only way in, and the command
 line stays permissive on purpose: `./dev.py user activate` and `./dev.py user reset` on the waiting
@@ -572,15 +594,18 @@ consumed at once ([Revocation](security.md#account-token-revocation)). The calle
 - a new password: `user_service.reset_password()` (`user reset`),
   `user_service.complete_password_reset()` (a reset link spent, one an administrator issued for the
   waiting account included) and `POST /auth/change-password`;
-- `complete_admin_setup()`, when it refuses the link of an account already active (above).
+- `complete_admin_setup()`, when it refuses the link of an account already active, or, since lot
+  A-42, of an account another of whose setup links was consumed (above).
 
 This applies to every account with a setup link, not only the waiting one. Afterwards the old
 link inspects `revoked` (the setup page's *withdrawn* card) and sets nothing (`400`
 `TOKEN_INVALID`), and the account is out of `pending_admin_filter()`, inactive or not:
 `pending_setup` is `false`, `PATCH /users/{user_id}` reactivates it as any inactive account (no
 `409` `PENDING_SETUP`), `issue_setup_link()` returns `None` (`user setup-link` prints its error),
-and the startup answers `ignored`. A reset link issued and never spent, a demotion or a
-deactivation retires nothing: the account keeps waiting, and its link still works.
+and the startup answers `ignored`. A reset link issued and never spent retires nothing: the account
+keeps waiting, and its link still works. Since lot A-43, a demotion of the waiting administrator is
+refused, and its deactivation revokes its setup links: the account keeps waiting, but the link
+handed over stops working ([below](#setup-cancel)).
 
 **The user limit.** `user_usage()` counts the waiting administrator (`pending_admin_filter()`)
 beside the active accounts and the live invitations, its link live or not: it holds a place from
@@ -594,15 +619,42 @@ holds no place, as any inactive account.
   `admin_setup` token and none of them consumed — live, expired or revoked alike, an administrator or
   not; a retired token is consumed, so an account set up another way is `false`.
   `registration_service.pending_admin_ids()` reads it for the list, `is_pending_admin()` for one
-  account. An expired link keeps the account waiting: `./dev.py user setup-link` gives it a new one.
+  account. An expired link keeps the account waiting, and so does a [cancelled](#setup-cancel) one:
+  `./dev.py user setup-link` gives it a new one.
 - `PATCH /users/{user_id}` with `is_active: true` on that account, alone or with `is_superuser`,
   answers `409` with `detail: {error_code: "PENDING_SETUP", message}` and changes nothing: nobody
   knows its password, and an activation would retire its setup links (above). The check comes before
-  the user limit. Any other change is accepted: a demotion, for one, leaves the account waiting.
-- The Users tab draws the account with the badge *Waiting for setup*, without **Reactivate**, and
-  with a hint that names `dev.py user setup-link` ([UserRow](../frontend/components/features/settings.md#userrow));
-  administrator side: [Waiting for Its Setup Link](../../admin/users.md#pending-setup).
+  the user limit. Since lot A-43 a demotion is refused with the same detail, word for word:
+  `is_superuser: false`, alone or with `is_active: false`, changes nothing either, checked right after
+  the [protection hook](#account-protection). The account keeps its role until its setup: its link
+  is cancelled, or the account deleted, instead (below).
+- The Users tab draws the account with the badge *Waiting for setup*; **Cancel setup link** in place
+  of **Reactivate**, **Remove administrator** turned off with the reason `pending-setup`, **Delete**
+  enabled (on a protected account, all three are off with the reason `protected`); and a hint that
+  names `dev.py user setup-link`
+  ([UserRow](../frontend/components/features/settings.md#userrow)); administrator side:
+  [Waiting for Its Setup Link](../../admin/users.md#pending-setup) and
+  [Cancel Its Setup Link](../../admin/users.md#cancel-setup).
 - No route issues a new setup link: in release 1.3 the command line does (backlog).
+
+**Cancelling the setup link** (lot A-43). Deactivating the waiting administrator cancels the link
+handed over: `PATCH /users/{user_id}` with `is_active: false` (the Users tab's **Cancel setup
+link**, after a confirmation) and `./dev.py user deactivate <username>` revoke its setup links, live
+or expired (`user_service._end_setup_links()`). Whoever holds the link can no longer set the account
+up: inspected, it answers `revoked`, and `POST /auth/setup` with it `400` `TOKEN_INVALID`. The
+account keeps waiting: `pending_setup` stays `true`, in the `200` of the `PATCH` too, it keeps its
+place, and its reactivation stays `409` `PENDING_SETUP`. A new link comes from
+`./dev.py user setup-link`, or from a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` at the next start; the
+same token re-arms nothing, being stored already, and that start is `expired`. The cancellation logs
+the WARNING of [The Setup Link's Lifecycle](security.md#setup-link-lifecycle); a second `PATCH`
+finds no link left to revoke and changes nothing. A [protected account](#account-protection)
+refuses it on the API, `409` `ACCOUNT_PROTECTED`, nothing changed and the link still working:
+`update_account()` asks the hook about the cancellation (`cancel`) as about a deactivation or a
+demotion. The command line stays above protection. The hard cancellation is the deletion, which
+needs no demotion first for this account ([Deleting an Account](#admin-account-deletion)).
+Deactivating any other account retires the setup links it never consumed instead, so that a stray
+one can never make it wait for its setup.
+{: #setup-cancel }
 
 **The web page.** The link opens `/setup`, an anonymous page that reads the token from the fragment,
 inspects it with the purpose `admin_setup`, then spends it with `POST /auth/setup` from
@@ -628,4 +680,11 @@ A32-007 and A33-001 to A33-003 to `admin-bootstrap` (set up another way, the ref
 active account, a new address in the variables), SETUP-014 and SETUP-015 to `admin-setup`,
 UADM-068 to UADM-071 to `users-admin`, UPROF-003 to UPROF-005 of
 `./dev.py test services user-profile` (a new address through `update_profile()`), and contract 9 of
-`./dev.py test services account-tokens` (`retire_tokens()`).
+`./dev.py test services account-tokens` (`retire_tokens()`). Lots A-42 and A-43 add A42-001 to
+A42-006 and A43-001 to A43-005 to `admin-bootstrap` (the issue and the re-arm under the write lock,
+a stray link refused at its spending; the cancellation revoking, another account's deactivation
+retiring, `user demote` refused), SETUP-016 to SETUP-018 to `admin-setup` (what leaves the account
+waiting, `user deactivate` cancelling its link, the stray link of an account set up before) and
+UADM-072 to UADM-079 to `users-admin` (the demotion refused, the cancellation through the `PATCH`,
+another administrator's stray link retired, the direct deletion and the protection hook before it,
+the cancellation of a protected waiting administrator refused, its link still working).
