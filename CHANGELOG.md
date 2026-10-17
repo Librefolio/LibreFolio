@@ -260,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 🔒 Security
 
+- A number that is not finite (`NaN`, `Infinity`) nested in a provider's parameters or in a risk analytic's parameters is refused (422): a provider's was saved and read back as `null`.
 - A password change and an administrator's sign-out-everywhere arriving at the same moment both end the sessions: the cookie the first issued no longer survives the second.
 - Behind a reverse proxy LibreFolio does not trust, the limits per visitor's address no longer count every visitor together: such requests are left out, and LibreFolio warns once in its log and in the security checks until `FORWARDED_ALLOW_IPS` or `LIBREFOLIO_CLIENT_IP_HEADER` is set.
 - **Nothing left in clear after a crash** — at every start, LibreFolio removes what a backup, a restore check or `dev.py backup inspect` left on disk when it was stopped outright (a power cut, `kill -9`): a decrypted archive, even a partial one, an `inspect` folder older than an hour, and the database copy and clear zip of a backup that died. Nothing a running command still holds is touched, and nothing through a link. Finished backups past their hour are removed at start too, not only at the next backup.
