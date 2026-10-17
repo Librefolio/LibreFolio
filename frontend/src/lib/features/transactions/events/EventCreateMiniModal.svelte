@@ -77,15 +77,38 @@
         return diff;
     });
 
-    // Format amount on blur: two decimals at least, and never fewer than typed — an event edited here can carry
-    // a per-share amount with more (decision 20, «Edit this»), which rounding would change.
+    /** The decimals an event value keeps (``AssetEvent.value``, ``Numeric(18, 6)``): past them the backend refuses
+     *  (EVENT_TOO_MANY_DIGITS), never rounds (C-97a). */
+    const EVENT_VALUE_DECIMALS = 6;
+
+    /** ``text`` as a plain unsigned decimal (``normalizeDecimalInput``: the locale's punctuation read), or null. */
+    function plainAmount(text: string): string | null {
+        const raw = normalizeDecimalInput(text.trim());
+        return /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw) ? raw : null;
+    }
+
+    /** Two decimals at least, the typed ones kept as they are: ``1`` → ``1.00``, ``0.2345`` stays. */
+    function withTwoDecimals(plain: string): string {
+        const [integer, fraction = ''] = plain.split('.');
+        return `${integer || '0'}.${fraction.padEnd(2, '0')}`;
+    }
+
+    /** The decimals of a plain amount, trailing zeros not counted: what the backend counts. */
+    function amountDecimals(plain: string): number {
+        return (plain.split('.')[1] ?? '').replace(/0+$/, '').length;
+    }
+
+    // C-97b: past six decimals the field says why, and the event is not sent; the value stays as typed.
+    let amountOverBudget = $derived.by(() => {
+        const plain = plainAmount(eventAmount);
+        return plain !== null && amountDecimals(plain) > EVENT_VALUE_DECIMALS;
+    });
+
+    // Format amount on blur: two decimals at least, the typed ones kept — never rounded nor cut (C-97b), so an event
+    // edited here keeps a per-share amount with more (decision 20, «Edit this»), and one past six is said, not changed.
     function formatAmount() {
-        const raw = normalizeDecimalInput(eventAmount);
-        const n = parseFloat(raw);
-        if (!isNaN(n) && n >= 0) {
-            const typedDecimals = raw.includes('.') ? raw.split('.')[1].length : 0;
-            eventAmount = n.toFixed(Math.min(Math.max(2, typedDecimals), 8));
-        }
+        const plain = plainAmount(eventAmount);
+        if (plain !== null) eventAmount = withTwoDecimals(plain);
     }
 
     // Reset form when modal opens
@@ -93,8 +116,9 @@
         if (open) {
             eventType = resolveDefaultEventType(defaultEventType);
             eventDate = defaultDate;
-            const amt = parseFloat(suggestedAmount || '');
-            const formatted = !isNaN(amt) && amt > 0 ? amt.toFixed(2) : '';
+            // The suggestion whole, two decimals at least (C-97b): 0.2345 stays 0.2345.
+            const suggested = plainAmount(suggestedAmount || '');
+            const formatted = suggested !== null && /[1-9]/.test(suggested) ? withTwoDecimals(suggested) : '';
             eventAmount = formatted;
             initialAmount = formatted;
             eventNotes = '';
@@ -131,11 +155,13 @@
 
     async function handleSubmit() {
         error = '';
-        const amount = parseFloat(normalizeDecimalInput(eventAmount));
-        if (!amount || amount <= 0) {
+        // Sent as its digits, never through a float (C-97b).
+        const amount = plainAmount(eventAmount);
+        if (amount === null || !/[1-9]/.test(amount)) {
             error = $t('transactions.form.eventCreateAmountRequired') || 'Amount required';
             return;
         }
+        if (amountDecimals(amount) > EVENT_VALUE_DECIMALS) return;
         if (!eventDate) {
             error = $t('transactions.form.eventCreateDateRequired') || 'Date required';
             return;
@@ -280,7 +306,8 @@
                             id="event-amount"
                             type="text"
                             inputmode="decimal"
-                            class="flex-1 rounded-lg border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary placeholder:text-lf-placeholder px-3 py-2 text-sm font-mono text-right focus:ring-2 focus:ring-lf-focus/30 focus:border-lf-focus [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                            class="flex-1 rounded-lg border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary placeholder:text-lf-placeholder px-3 py-2 text-sm font-mono text-right focus:ring-2 focus:ring-lf-focus/30 focus:border-lf-focus aria-invalid:border-lf-danger [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                            aria-invalid={amountOverBudget}
                             bind:value={eventAmount}
                             oninput={() => (userTouched = true)}
                             onkeydown={(e) => {
@@ -299,6 +326,11 @@
                             {assetCurrency}
                         </span>
                     </div>
+                    {#if amountOverBudget}
+                        <p class="text-xs text-lf-danger" data-testid="event-create-amount-digits-error" data-max={EVENT_VALUE_DECIMALS}>
+                            {$t('common.decimalPlacesExceeded', {values: {max: EVENT_VALUE_DECIMALS}})}
+                        </p>
+                    {/if}
                 </div>
 
                 <!-- Notes -->
@@ -327,7 +359,7 @@
             <button
                 type="button"
                 class="px-3 py-1.5 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={saving || !eventAmount || existing !== null}
+                disabled={saving || !eventAmount || existing !== null || amountOverBudget}
                 onclick={handleSubmit}
                 data-testid="event-create-submit"
             >

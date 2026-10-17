@@ -4925,6 +4925,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   costo manuale la conferma la rifiuta (oltre 12 decimali, D2). Proposta del coordinatore: `round_computed_value` alla
   fonte, come D6 per i valori calcolati. Da decidere con MF (avvisato dal coordinatore). La parte urgente, il controllo
   dei decimali che rifiutava l'importo di un costo Auto, è nel checkpoint «C-97a, il costo Auto». Dettagli: piano 04.
+- **W-B57 · Il picker del Bulk ha 5 s per aprirsi, pochi sotto carico** — minimo, test; colori (TC-17), 17/10. In
+  `frontend/e2e/transactions/tx-picker-pagination.spec.ts`, `openPicker` (:59-70) aspetta il pulsante 3 s (:63) e la modale 5 s
+  (:67), poi le righe 10 s: al carico 90–140 la modale arriva oltre i 5 s. Cura: un budget unico e legato a uno stato osservabile
+  (il frame e la prima riga `data-row-id` con lo stesso tempo, o uno `data-state` della modale), mai un'attesa nuda; dopo C-97b o in
+  un lotto di spec. Dettagli: TC-17 del team colori, via il coordinatore.
 - **W-B58 · Un valore enorme blocca gli asset di tutti (C-97a)** — medio, sicurezza e dati; E, 17/10 (R13-SEC2,
   reperto 1, MEDIUM 8/10; note 1, 2, 4, 5). `RealDecimal` solleva leggendo un REAL ±inf o da 1e54 in su, e nessuno limita la
   grandezza (`1E+60` passa `decimal_limit_issue`): un BUY da `1E+60` su un broker con scoperto e short dà 500 a ogni utente su
@@ -4937,6 +4942,20 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (R13-SEC2, nota 12, 9/10, provata). `_get_pool()` imposta il precaricamento anche col prewarm spento: su 3.13 il primo parse
   dopo un avvio blocca il loop per tutto l'import di BRIM (~4 s a riposo, 30–50 s sotto carico), contro N56. Cura: il
   precaricamento solo col prewarm acceso. Dettagli: piano 04, sezione «W-B58 e W-B59».
+- **W-B64 · Il Form accetta 12 cifre intere per la quantità, il backend 15 (N63)** — minimo, chiarezza; W, 17/10 (C-97b). Le tre
+  quantità del Form (`features/transactions/form/TxFormSingleSection.svelte` ×2, `TxFormPairSection.svelte`) hanno
+  `maxIntegerDigits={12}`: una quantità da mille miliardi in su è segnata invalida nel Form, mentre il backend la accetta (N63:
+  15). Gli importi non hanno un limite intero nel Form. E `ExactDecimalInput` conta gli zeri finali (`0.10000000000`, 11
+  decimali, è rifiutato a 10), mentre il backend e la mini-modale degli eventi non li contano. Cura: `maxIntegerDigits={15}` e la
+  guardia `1000000000000.1` di `TransactionFormModal.test.ts` spostata a 16 cifre intere, dopo che il developer ha confermato N63;
+  gli zeri finali non contati nel budget dei decimali (anche il PAC usa il componente). Dettagli: piano 04, sezione «C-97b — i
+  decimali in input: la cura».
+- **W-B65 · «Applica» senza modifiche su una SELL nel Bulk mostra il segno e chiede di scartare** — minimo, chiarezza; W, 17/10
+  (test-author, guardia E2E di C-97b). Aprendo una SELL esistente nel Bulk e premendo «Applica» nel Form senza toccare nulla, la riga
+  riprende i campi dal payload del Form, che porta il segno: la cella mostra `-0.00000001` invece della grandezza, e chiudendo il
+  Bulk si chiede di scartare modifiche che non ci sono. Precedente a C-97b (la guardia chiude con «Annulla»). Da verificare con un
+  rosso, poi l'«Applica» riporta il segno della convenzione del Bulk (grandezza). Dettagli: piano 04, sezione «C-97b — i decimali in
+  input: la cura».
 - **W-B60 · Gli importi tornano col rumore del double (C-97)** — minimo, numeri; W, 17/10 (W-B58, N63). `Transaction.amount` e
   `AssetEvent.value` sono `Numeric(18, 6)`, che SQLAlchemy rilegge col formato `'%.6f'`: da 11 cifre intere il rumore del double
   compare nei decimali (`123456789012.345` torna `123456789012.345001`; con le 15 cifre intere di N63 `99999999999999.9` torna

@@ -173,7 +173,7 @@
                     onvaliditychange={onQuantityValidityChange}
                     step="1"
                     maxIntegerDigits={12}
-                    maxFractionDigits={6}
+                    maxFractionDigits={10}
                     allowNegative
                     signRule={quantityInputSignRule}
                     resetKey={`${open}:${openKey ?? 0}`}
@@ -221,7 +221,7 @@
                     onvaliditychange={onQuantityValidityChange}
                     step="1"
                     maxIntegerDigits={12}
-                    maxFractionDigits={6}
+                    maxFractionDigits={10}
                     allowNegative
                     signRule={quantityInputSignRule}
                     resetKey={`${open}:${openKey ?? 0}`}

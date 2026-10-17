@@ -53,7 +53,8 @@
     import PromoteAllModal, {type PromoteAllStrategy} from './PromoteAllModal.svelte';
     import {createValidateScheduler} from '$lib/features/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/features/transactions/txCommitApi';
-    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ImportTodo} from '$lib/features/transactions/txPayloadHelpers';
+    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySign, applySignRules, exactDecimalSign, upgradeAutoToDetail, type TxFields, type TxOriginal, type ImportTodo} from '$lib/features/transactions/txPayloadHelpers';
+    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {
         buildBulkOperationIndex,
         buildBulkRowLabels,
@@ -180,11 +181,18 @@
         return {op: 'create', tempId: generateUUID(), createdSeq: nextCreatedSeq(), fields: defaultFields(), link_uuid: null};
     }
 
+    /** A quantity's digits as the grid shows them, trailing zeros dropped, never in exponent notation (C-97b): through
+     *  Number a satoshi read `1e-8`, in the cell and in the payload. Never cut: a value past the budget stays whole, and
+     *  the Save says why. */
+    function quantityText(value: string): string {
+        return formatDecimalForDisplay(value, {maxFrac: value.length});
+    }
+
     /** Extract display-ready DraftFields from a TXReadItem (auto-sign applied). */
     function fieldsFromTx(tx: TXReadItem): DraftFields {
         const rule = getTypeRule(tx.type);
         let qty = tx.quantity;
-        if (rule.quantityRule === 'negative' && Number(qty) < 0) qty = String(Math.abs(Number(qty)));
+        if (rule.quantityRule === 'negative' && exactDecimalSign(qty) === -1) qty = quantityText(applySign(String(qty), 'positive'));
         let cash = tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null;
         if (cash && rule.cashSign === 'negative' && Number(cash.amount) < 0) {
             cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
@@ -1704,17 +1712,14 @@
                     const rule = getTypeRule(row.fields.type);
                     const pOp = getPartnerOp(row.tempId);
                     if (rule.requiresPair && pOp && Number(qty) !== 0) {
-                        const absVal = Math.abs(Number(qty));
+                        const absVal = escapeHtml(quantityText(applySign(String(qty), 'positive')));
                         const fromQty = `-${absVal} 📉`;
                         const toQty = `+${absVal} 📈`;
                         return {type: 'html', html: renderDualHtml(fromQty, toQty)};
                     }
-                    // Format with trailing zeros removal
-                    const fmtQty = (() => {
-                        const n = parseFloat(qty);
-                        return isNaN(n) ? qty : n.toString();
-                    })();
-                    return {type: 'html', html: `<span class="font-mono text-sm">${fmtQty}</span>`};
+                    // Trailing zeros removed, the digits as written (C-97b)
+                    const fmtQty = quantityText(String(qty));
+                    return {type: 'html', html: `<span class="font-mono text-sm">${escapeHtml(fmtQty)}</span>`};
                 },
             },
             {
@@ -2210,7 +2215,7 @@
 
         // Quantity: convert storage sign → display sign
         let qty = String(tx.quantity ?? '0');
-        if (rule.quantityRule === 'negative' && Number(qty) < 0) qty = String(Math.abs(Number(qty)));
+        if (rule.quantityRule === 'negative' && exactDecimalSign(qty) === -1) qty = quantityText(applySign(String(qty), 'positive'));
 
         // Cash: convert storage sign → display sign
         let cash: {code: string; amount: string} | null = null;
