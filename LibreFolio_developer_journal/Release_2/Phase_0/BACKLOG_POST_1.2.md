@@ -6299,13 +6299,30 @@ sulla base `23f6578f3`.
   (il codice del controllo) all'avvio del controllo; lì ogni altro `OSError` dà 500 `stage_failed` con una riga nel log,
   mai più il 500 senza codice. `jobs.out_of_space` è pubblica. Corretta anche la doppia `close` di `UploadWriter.finish()`
   (trovata da TA-B). Test: 21 rossi API e 18 nei servizi, poi tutti verdi; 4 guardie Vitest.
-- **B-31 · Conferma, annullamento e riavvio di un ripristino: un guasto del disco senza codice o senza messaggio** —
+- ✅ **B-31 · Conferma, annullamento e riavvio di un ripristino: un guasto del disco senza codice o senza messaggio** —
   basso; B, 17/10 (analisi di B-30). `POST /restore/stage/{id}/confirm` e `DELETE /restore/pending` lasciano uscire un
   `OSError` come 500 senza codice; `restore_restart_failed` (il biglietto del riavvio non scritto) ha un codice ma
   nessun messaggio nella UI (fuori da `ERROR_KEYS`: dice «unexpected») né una riga nella guida. Cura: un 500 con un
   codice e un messaggio suo per ciascuno (3 chiavi × 4 lingue, `ERROR_KEYS`, l'elenco §5 di `restoreI18n.test.ts`) e
   507 `backup_no_space` per un disco pieno alla conferma. Lotto separato, dopo B-30 (coordinatore, 07:18). Dettagli:
   piano 07, «B-30» (punti 4, 6, 7).
+
+  ✅ **Fatto il 17/10** (checkpoint delle 08:46). Conferma: 507 `backup_no_space` su un disco pieno, 500
+  `restore_confirm_failed` altrimenti, nulla confermato. Annullamento: 500 `restore_cancel_failed` prima di togliere il
+  ripristino, che resta in attesa; una copia che non si toglie dopo → 204 e un WARNING (anche da CLI). Riavvio: il suo
+  500 ora ha il messaggio e un test. Tre messaggi × 4 lingue in `ERROR_KEYS`. Test: 17 rossi API, 2 nei servizi, 6
+  Vitest, poi tutti verdi.
+- **B-32 · Dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile** — basso; B, 17/10 (B-31: TA-F,
+  TA-B, il docs-writer).
+  - In `restoreFlow.cancelPending()` la riga `state = 'pending'` è morta (`#fail` mette subito `failed`): un
+    annullamento rifiutato finisce sulla schermata di errore con «Try again», non sul blocco del ripristino in attesa con
+    l'errore accanto, come per il riavvio. Da decidere quale delle due.
+  - `dev.py backup pending --cancel` prende solo `RestoreNotPendingError`: un `OSError` prima della rimozione dello stato
+    finisce in un traceback; e la riga ✅ dice «with its copy» anche quando la copia è rimasta (B-31 la registra con un
+    WARNING).
+  - Uno stato illeggibile (EACCES, EIO) fa dire a `_read_state` `None`: l'annullamento risponde 404 «not pending», lo
+    stato del ripristino dice «none», mentre un ripristino può essere ancora in attesa.
+  Dettagli: piano 07, «B-31».
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
