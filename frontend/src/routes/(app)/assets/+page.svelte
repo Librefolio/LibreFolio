@@ -67,6 +67,7 @@
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import {BULK_SIGNAL_MARGIN_DAYS, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
+    import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
@@ -780,6 +781,9 @@
             const unansweredIds = new Set(queryItems.filter((item) => !answeredIds.has(item.asset_id)).map((item) => item.asset_id));
             if (outcome.failed) {
                 console.error('Failed to fetch prices bulk:', outcome.error);
+                // X-R58: a request the backend refused as too large is said, not left as cards without prices.
+                const refusal = bulkRefusalMessage(outcome.error, $t);
+                if (refusal !== null) toasts.error(refusal);
             }
             const anySignals = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
             const unansweredSignals = [...requestContexts].some(([assetId, context]) => unansweredIds.has(assetId) && context.plan.requests.length > 0);
