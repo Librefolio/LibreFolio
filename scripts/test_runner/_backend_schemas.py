@@ -42,6 +42,14 @@ def schemas_assets(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Asset schemas tests", verbose=verbose)
 
 
+def schemas_scheduled_investment_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC7-2: the bounds of a scheduled investment schedule."""
+    print_section("Schemas: Scheduled Investment Bounds (R13-SEC7-2)")
+    print_info("Testing: backend/app/schemas/assets/scheduled_investment.py (dates, span, periods, grace), ScheduledInvestmentProvider.validate_params")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_scheduled_investment_bounds.py", test_names)
+    return run_command(cmd, "Scheduled investment bounds tests", verbose=verbose)
+
+
 def schemas_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Test transaction Pydantic schemas."""
     print_section("Schemas: Transactions (TXCreateItem, TXReadItem, etc.)")
@@ -189,5 +197,6 @@ Tests for Pydantic/SQLModel schema validation:
         # backend.app.main (the real document, read as api sync reads it) runs configure_logging, which creates
         # <data dir>/logs/ and opens librefolio.log there, the lane's log that the shared backend writes too.
     )
+    add_test(cat, "scheduled-investment-bounds", schemas_scheduled_investment_bounds, name="Scheduled Investment Bounds", desc="R13-SEC7-2 (N73): period dates 1900-2200, span ≤ 36 525 days, ≤ 1 200 periods, grace ≤ 36 525 days")
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")
     registry["schemas"] = cat

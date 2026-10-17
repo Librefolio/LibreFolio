@@ -37,6 +37,14 @@ Then add the periods with **Add First Period**, and **Add Period** for the next 
 Periods must follow one another, with no gaps or overlaps. **Split** cuts a period in two; select
 neighbouring periods and click **Merge** to join them.
 
+!!! note "Limits of a schedule"
+
+    Every period must lie between 1 January 1900 and 31 December 2200, and the whole schedule may
+    span at most 100 years, with at most 1,200 periods. The grace days of
+    [late interest](#late-interest) are at most 100 years too (36,525 days). A schedule outside
+    these limits is refused: **Test Configuration**, and the price calculation (**Recalculate** on
+    the asset page), report invalid parameters.
+
 ### ⚡ Late Interest {: #late-interest }
 
 For a loan repaid late, turn on **⚡ Late Interest** below the periods: the asset keeps growing
