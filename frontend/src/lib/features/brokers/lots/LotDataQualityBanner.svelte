@@ -19,7 +19,7 @@
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import {buildIssueGroups, groupedSeverity, type IssueGroup, type IssueSeverity} from './lotDataQualityHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {STATUS_TONES} from '$lib/theme/toneClasses';
+    import {DATA_QUALITY_TONE, STATUS_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
         /** Raw FIFO data-quality issues (one per lot for lot-scoped codes). */
@@ -54,17 +54,10 @@
         return parts.join(', ');
     }
 
+    /** The colours of a severity: its state's tint, icon and divider, and its lot chips (designer, round 3). */
     function severityStyles(severity: IssueSeverity) {
-        if (severity === 'error' || severity === 'warning') {
-            return {
-                container: STATUS_TONES.dataQuality.attention.container,
-                chip: STATUS_TONES.dataQuality.attention.button,
-            };
-        }
-        return {
-            container: STATUS_TONES.dataQuality.info.container,
-            chip: STATUS_TONES.dataQuality.info.button,
-        };
+        const tone = DATA_QUALITY_TONE[severity] ?? 'info';
+        return {tone, ...STATUS_TONES.dataQuality[tone], chip: `border ${STATUS_TONES.bannerChip[tone].base} ${STATUS_TONES.bannerChip[tone].hover}`};
     }
 
     function severityIcon(severity: IssueSeverity) {
@@ -76,19 +69,21 @@
 
 {#if groups.length > 0}
     {@const styles = severityStyles(groupedSeverity(errorCount, warningCount))}
-    <div class="border rounded-xl text-sm {styles.container} flex flex-col" data-testid="lot-data-quality-banner" role="status">
+    <div class="border rounded-xl text-sm {styles.container} flex flex-col" data-testid="lot-data-quality-banner" data-tone={styles.tone} role="status">
         <!-- Header — a toggle that folds/unfolds the whole list ("N warning(s)" when collapsed). -->
         <button type="button" class="flex items-center gap-2 font-medium p-4 w-full text-left" onclick={() => (expanded = !expanded)} aria-expanded={expanded} data-testid="lot-data-quality-toggle">
-            {#if errorCount > 0 || warningCount > 0}
-                <AlertTriangle size={16} class="shrink-0" />
+            {#if errorCount > 0}
+                <AlertCircle size={16} class="shrink-0 {styles.icon}" />
+            {:else if warningCount > 0}
+                <AlertTriangle size={16} class="shrink-0 {styles.icon}" />
             {:else}
-                <Info size={16} class="shrink-0" />
+                <Info size={16} class="shrink-0 {styles.icon}" />
             {/if}
             <span class="flex-1 min-w-0">{headerText()}</span>
             {#if expanded}
-                <ChevronUp size={16} class="shrink-0 opacity-70" />
+                <ChevronUp size={16} class="shrink-0" />
             {:else}
-                <ChevronDown size={16} class="shrink-0 opacity-70" />
+                <ChevronDown size={16} class="shrink-0" />
             {/if}
         </button>
 
@@ -97,18 +92,19 @@
             <div class="flex flex-col gap-3 px-4 pb-4 ml-6">
                 {#each groups as group (group.code)}
                     {@const Icon = severityIcon(group.severity)}
-                    <div class="flex flex-col gap-1.5 text-xs" data-testid="lot-data-quality-issue-{group.code}">
+                    {@const groupStyles = severityStyles(group.severity)}
+                    <div class="flex flex-col gap-1.5 text-xs" data-testid="lot-data-quality-issue-{group.code}" data-severity={group.severity} data-tone={groupStyles.tone}>
                         {#each group.messages as message (message.key)}
                             <div class="flex items-center gap-2 flex-wrap min-w-0" data-testid="lot-data-quality-message">
-                                <Icon size={13} class="shrink-0" />
+                                <Icon size={13} class="shrink-0 {groupStyles.icon}" />
                                 <span>{$_(message.messageKey, {values: message.params})}</span>
                             </div>
                         {/each}
                         {#if group.lots.length > 0}
                             <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
-                                <span class="opacity-70 text-[11px]">{$_('dataQuality.affectedLots')}</span>
+                                <span class="text-[11px]">{$_('dataQuality.affectedLots')}</span>
                                 {#each group.lots as lot (lot.lotId)}
-                                    <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.chip} transition-colors font-medium text-[11px] min-w-0" onclick={() => onLotClick?.(lot.lotId)} data-testid="lot-data-quality-chip-{lot.lotId}">
+                                    <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded {groupStyles.chip} transition-colors font-medium text-[11px] min-w-0" onclick={() => onLotClick?.(lot.lotId)} data-testid="lot-data-quality-chip-{lot.lotId}">
                                         <Crosshair size={10} class="shrink-0" />
                                         <span class="truncate">{lot.label}</span>
                                     </button>

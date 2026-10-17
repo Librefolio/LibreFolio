@@ -1259,8 +1259,9 @@ function topLevelParts(/** @type {string} */ text) {
 }
 
 /**
- * The colour of a token expression for a theme: a hex, `transparent`, `var(--x)` or `color-mix(in oklab, A p, B)` —
- * the forms tokens.css uses. Mixing follows CSS Color 5: premultiplied alpha, OKLab.
+ * The colour of a token expression for a theme: a hex, `transparent`, `var(--x)` or `color-mix(in oklab, A p, B)`, or
+ * `in srgb` — the forms tokens.css uses. Mixing follows CSS Color 5: premultiplied alpha, in OKLab, or in the
+ * gamma-encoded sRGB channels for `in srgb` (round 3: the tints of the categories, as the designer computed them).
  * @param {Tokens} tokens
  * @param {string} expression
  * @param {'light' | 'dark'} theme
@@ -1281,9 +1282,9 @@ export function resolveColour(tokens, expression, theme, depth = 0) {
         const digits = normalizeHex(text).slice(1);
         return {r: parseInt(digits.slice(0, 2), 16) / 255, g: parseInt(digits.slice(2, 4), 16) / 255, b: parseInt(digits.slice(4, 6), 16) / 255, alpha: 1};
     }
-    const mix = /^color-mix\(in oklab,([\s\S]*)\)$/.exec(text);
+    const mix = /^color-mix\(in (oklab|srgb),([\s\S]*)\)$/.exec(text);
     if (mix) {
-        const parts = topLevelParts(mix[1]);
+        const parts = topLevelParts(mix[2]);
         if (parts.length !== 2) throw new Error(`tokens.css: «${text}» is not a two-colour mix`);
         const [[c1, p1], [c2, p2]] = parts.map((part) => {
             const m = /^(\S+(?:\([^)]*\))?)\s*(.*)$/.exec(part);
@@ -1297,6 +1298,10 @@ export function resolveColour(tokens, expression, theme, depth = 0) {
         const w2 = Number.isNaN(p2) ? 1 - w1 : p2;
         const alpha = c1.alpha * w1 + c2.alpha * w2;
         if (alpha === 0) return {r: 0, g: 0, b: 0, alpha: 0};
+        if (mix[1] === 'srgb') {
+            const channel = (/** @type {'r' | 'g' | 'b'} */ key) => (c1[key] * c1.alpha * w1 + c2[key] * c2.alpha * w2) / alpha;
+            return {r: channel('r'), g: channel('g'), b: channel('b'), alpha};
+        }
         const [a, b] = [toOklab(c1), toOklab(c2)];
         return fromOklab(
             a.map((v, i) => (v * c1.alpha * w1 + b[i] * c2.alpha * w2) / alpha),

@@ -2833,6 +2833,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   il 16/10 sera (`bab52635d`, `0c3275057`); la spec è ferma dal 13/10. Verdetto della triage: difetto del prodotto. Cura
   per il proprietario del WAC: arrotondare il costo proposto alla scala della colonna prima del commit, o quantizzarlo
   nel backend; il test resta com'è. Dettagli: piano di T, «`CompactCashCell`», passo 4.
+- **TC-19 · La pagina per sviluppatori del banner della qualità dei dati dice ancora «amber/sky»** — minimo, docs; T,
+  17/10, R3-a (giro 3). `mkdocs_src/docs/developer/frontend/data-quality-banner.md`, riga ~46, descrive il modo
+  raggruppato come «Single amber/sky container»: da R3-a il contenitore prende il tono del problema più grave (`danger`,
+  `warning` o `info`, via `DATA_QUALITY_TONE`), ogni riga il suo, e i chip stanno sulla card col bordo nel colore dello
+  stato (proposta a, T3-b). Va scritta anche la regola del developer per i banner (rosso per gli errori veri, ambra per
+  i dati mancanti, blu per le note, verde per i successi) e il `MISSING_PRICE` del rischio diventato un avviso. Per la
+  passata della documentazione a fine programma (docs-writer). Dettagli: piano di T, «Giro 3 della designer».
 
 ---
 
