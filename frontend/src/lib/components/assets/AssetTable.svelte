@@ -41,8 +41,6 @@
         active: boolean;
         quote_base_quantity?: number | null;
         lastPrice?: number | null;
-        deltaAbs?: number | null;
-        deltaPercent?: number | null;
         deltas?: Record<string, number | null>;
         /** F15 — transactions using this asset. */
         txCount?: number;
