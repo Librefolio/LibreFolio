@@ -100,6 +100,7 @@
     "savedCount": "{n, plural, one {# guardado} other {# guardados}}",
     "deletedCount": "{n, plural, one {# eliminado} other {# eliminados}}",
     "skippedCount": "{n, plural, one {# omitido (no válido)} other {# omitidos (no válidos)}}",
-    "saveFailed": "Error al guardar los tipos de cambio: {error}"
+    "saveFailed": "Error al guardar los tipos de cambio: {error}",
+    "refusedCount": "{n, plural, one {# rechazado} other {# rechazados}}"
   }
 }

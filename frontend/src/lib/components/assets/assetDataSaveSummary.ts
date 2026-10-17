@@ -9,6 +9,8 @@
 /** What one save did. */
 export interface AssetDataSaveCounts {
     pricesSaved: number;
+    /** Prices the server left out, each named in the save's warning (X-R46). */
+    pricesRefused?: number;
     pricesDeleted: number;
     /** Price rows left out because invalid. */
     pricesSkipped: number;
@@ -21,12 +23,14 @@ export type Translate = (key: string, options?: {values: Record<string, string |
 
 /**
  * The toast message of a save, or null when it did nothing to report. Parts, in this order and only when non-zero:
- * prices saved, prices deleted, prices skipped, events deleted, events saved; joined by «, » inside
+ * prices saved, prices refused, prices deleted, prices skipped, events deleted, events saved; joined by «, » inside
  * `assets.dataEditor.saved`.
  */
 export function assetDataSaveSummary(counts: AssetDataSaveCounts, translate: Translate): string | null {
     const parts: string[] = [];
     if (counts.pricesSaved > 0) parts.push(translate('assets.dataEditor.pricesSaved', {values: {count: counts.pricesSaved}}));
+    const refused = counts.pricesRefused ?? 0;
+    if (refused > 0) parts.push(translate('assets.dataEditor.pricesRefused', {values: {count: refused}}));
     if (counts.pricesDeleted > 0) parts.push(translate('assets.dataEditor.pricesDeleted', {values: {count: counts.pricesDeleted}}));
     if (counts.pricesSkipped > 0) parts.push(translate('assets.dataEditor.pricesSkipped', {values: {count: counts.pricesSkipped}}));
     if (counts.eventsDeleted > 0) parts.push(translate('events.deleteSuccess', {values: {n: counts.eventsDeleted}}));
