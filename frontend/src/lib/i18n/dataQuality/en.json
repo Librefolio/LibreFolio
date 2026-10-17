@@ -24,8 +24,8 @@
       "sync_fx_pair": "Sync rates",
       "sync_asset_prices": "Sync prices"
     },
-    "referencePriceFallback": "Lot opening price unavailable on the exact date — using last known price {reference_price} as reference for relative return",
-    "referencePriceUnavailable": "No reference price available for a lot opening — relative return cannot be computed",
+    "referencePriceFallback": "Lots opened by an adjustment on a day without a market quote: their Open Return starts from the last price on or before that day, an earlier quote or the price of a purchase or sale",
+    "referencePriceUnavailable": "Lots opened by an adjustment before any price: their Open Return starts from their own purchase cost per unit, and is not available without one",
     "shortTransferNotSupported": "Transferring a short position is not supported yet",
     "shortAdjustmentNotSupported": "An adjustment cannot open or close a short position yet",
     "fifoSourceQuantityMissing": "Removes {missing_quantity} more than the broker held that day",

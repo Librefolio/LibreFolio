@@ -3982,6 +3982,13 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Sempre nello stesso lotto, la frase sul motore di Alembic: il listener di `env.py` è una cura vera.
   - Verifica nello slot: i miei test, le suite delle migrazioni e `api backup-restore`.
 
+  ✅ **Fatto il 17/10** (checkpoint delle 15:50).
+  - `set_sqlite_pragma()` spegne `trusted_schema` per primo e rilegge lo schema per ultimo
+    (`writable_schema=RESET`). Il listener gira prima che il dialetto registri le funzioni e legge lo schema
+    presto: senza il reset un CHECK o un indice le chiamava ancora, anche nel processo dell'upgrade (sonda
+    `files/h51/`).
+  - La frase di B-18 in `security.md` è riscritta, insieme alla doc dei motori.
+  - Test: `db session-pragmas` (15).
   Dettagli: piano H, §14, «Review di B-36/B-37» e il lotto H-51.
 
 ## A · Account e accessi (fase 01)
@@ -5560,6 +5567,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (`784.0774475`: prima `…447`, ora `…448`, 0,000001); un valore di 10 o più cifre intere può superare le 15 significative. Cura:
   `storable_value(value, AssetEvent, "value")` anche per gli eventi dei provider, come i prezzi (letto = scritto). Dettagli: piano 04,
   sezione «W-B60».
+  ✅ 17/10: `_storable_events` (`event_store.py`) tronca col `storable_value` di `AssetEvent.value`, solo quando il numero cambia
+  (la forma resta), e giudica il rapporto dello split sul valore troncato (`1E-7` si scarta, prima si rileggeva 0). 12 rossi verdi
+  (`asset-digit-limits` 99), `event-split-ratio` 78, `asset-event-store` 71, `asset-source-guards` 29, `asset-source-refresh` 18,
+  `asset-source` 61. Residuo di X: i valori degli eventi di un piano d'investimento programmato (parametri dell'utente) oltre i 6
+  decimali si troncano in silenzio; rifiutarli all'ingresso è del provider. Dettagli: piano 04, sezione «W-B68».
 - **W-B60 · Gli importi tornano col rumore del double (C-97)** — minimo, numeri; W, 17/10 (W-B58, N63). `Transaction.amount` e
   `AssetEvent.value` sono `Numeric(18, 6)`, che SQLAlchemy rilegge col formato `'%.6f'`: da 11 cifre intere il rumore del double
   compare nei decimali (`123456789012.345` torna `123456789012.345001`; con le 15 cifre intere di N63 `99999999999999.9` torna
@@ -5649,6 +5661,7 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
   rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
   (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
+  ➡️ 17/10: passata a **H** (bilanciamento del coordinatore); io la rivedo al checkpoint di H.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
@@ -5757,11 +5770,17 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Dettagli: [piano J](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §1.2 «Copie nuove».
 - ↪ **J-2 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — spostata nella sezione C
   dal coordinatore il 15/10 (runner condiviso), come C-94.
-- **J-3 · Monte Carlo e ricampionamento a 365 giorni fissi** — da verificare; T, 11/10 (piano 43, §5, «da segnalare a
+- ✅ **J-3 · Monte Carlo e ricampionamento a 365 giorni fissi** — da verificare; T, 11/10 (piano 43, §5, «da segnalare a
   parte»), ripresa da J, che ora possiede il rischio. `risk/quant/quantlib_worker.py:116,195` e
   `risk/quant/resampling.py:235` contano 365 giorni all'anno, mentre il resto del rischio usa il fattore osservato. Può
   essere una convenzione di calendario coerente: prima un test che lo provi, poi l'eventuale cura in CP-10. Dettagli:
   [piano 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), §5.
+  - ✅ 17/10: **verificata da J, non è un difetto** (chiusa col checkpoint J-49). Il GBM cammina `horizon_days/365` anni
+    a passi di un giorno di calendario, con deriva e covarianza annue stimate col fattore osservato
+    (`quant/estimation.py:52-53`): dopo 365 giorni la varianza è quella di un anno, qualunque sia la frequenza della
+    storia. Il bootstrap (algoritmo 4.0.0) converte i giorni nei passi osservati (`calendar_days_to_observations`), e
+    `resampling.py:235` è solo la conversione inversa per dichiarare la lunghezza del blocco. Dettagli:
+    [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-49».
 - ✅ **G-8 · Il catalogo dei Tool sotto carico supera i 2 s d'ingresso** — basso; G (galleria del programma colori),
   assegnata a J dal coordinatore il 14/10, dopo CP-1. Sotto carico la lettura del catalogo supera
   `ToolRoute.ingress_timeout_ms` (2 000 ms, `schemas/tools.py:83`, applicato in `api/v1/tools.py:92`) e la pagina
@@ -6168,7 +6187,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     zero o ignoto. Se ignoto: un segno `cost_known` sul lotto, messo dal motore, e niente valore al costo senza di
     esso (sintesi e storici); rosso prima.
   - Dettagli: piano J, §10 «CP-7b — codice».
-- **J-36 · I due messaggi del prezzo di riferimento dei lotti dicono cose inesatte** — basso, chiarezza; J, 16/10
+- ✅ **J-36 · I due messaggi del prezzo di riferimento dei lotti dicono cose inesatte** — basso, chiarezza; J, 16/10
   (docs-writer di CP-7b). Chiavi `dataQuality.referencePriceFallback` / `referencePriceUnavailable`, quattro cataloghi.
   - `referencePriceUnavailable` («relative return cannot be computed»): falso per un lotto col suo costo, che ripiega
     sul proprio prezzo (`opening_reference_price`, sorgente `exact`). Vero solo per un lotto a costo zero.
@@ -6179,6 +6198,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     known price, a carried quote or a trade price»; «no price on or before the opening day — the relative return uses
     the lot's own price, when it has one»), e il prezzo convertito con la sua valuta; quattro lingue.
   - Dettagli: piano J, §10 «CP-7b — codice».
+  - ✅ 17/10: fatta da J (checkpoint J-36). I due testi dicono cosa fa il calcolo, nei 4 cataloghi, senza il prezzo: il
+    banner dei lotti raggruppa le issue per codice in un messaggio solo (i parametri della prima) con un chip per lotto,
+    quindi un prezzo non può valere per tutti. Il parametro `reference_price` resta nei `message_params`, non letto.
+    Dettagli: piano 05, sezione «J-36».
 - **J-38 · La guida dei plugin dei segnali descrive male l'ordine del taglio e il piano** — minimo, documentazione; J,
   17/10 (docs-writer di CP-10c). Pagina `developer/architecture/patterns/signal_plugin_guide.md`, solo inglese.
   - Il diagramma di sequenza del grafico disegna «Slice to visible range and assign status» dopo le annotazioni. Nel
@@ -6307,7 +6330,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     la finestra del rigioco, proposta compresa: prima un prezzo piantato all'anno 1 faceva proporre una finestra
     dall'anno 1 (~739 000 giorni). La cura alla fonte, un pavimento sulle date dei prezzi scritti a mano, è **N83** di X.
     Dettagli: piano 05, sezione «SEC8-1b».
-- **J-49 · Un controllo statico per i lettori di `latest_range_end`** — basso, test; proposta del test-author di Z
+- ✅ **J-49 · Un controllo statico per i lettori di `latest_range_end`** — basso, test; proposta del test-author di Z
   con X-R55, girata dal coordinatore (17/10 08:30), non ora. La cucitura di SEC7-1
   (`test_scripts/test_services/_range_bounds.py`, `RANGE_BOUND_CONSUMERS`) toglie il limite solo nei moduli della
   sua lista. Z ci ha aggiunto `price_query` e `currencies` a mano, e SEC8-1b porterà un altro lettore. Un modulo di
@@ -6316,6 +6339,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   (`from …datetime_utils import latest_range_end`) è uguale alla lista. Prima un rilevatore che vede un modulo finto,
   come le regole di `test_layer_boundaries.py`. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «R13-SEC7-1».
+  - ✅ 17/10: fatta da J (checkpoint J-49). `TestRangeBoundSeamCoversEveryReader` in `test_date_range_bounds.py`, con la
+    prova del rilevatore su 10 sorgenti finte. Il rosso ha trovato due lettori arrivati oggi e mancanti dalla lista:
+    `utils/date_range_limits.py` (X-R65) e `api/v1/assets/prices.py` (R13-SEC9-4). Erano una lacuna latente, nessuna
+    suite ci passava. Aggiunti alla lista. Dettagli: piano 05, sezione «J-49».
 - ✅ **J-50 · Il rifiuto dei troppi giorni di `get_prices_bulk` diventa un 500 nel rischio e nell'AI Export** — basso,
   chiarezza (è già un rifiuto, non un DoS); dal coordinatore (17/10 08:34), dopo SEC8-1b. Con Z-25 (N77)
   `get_prices_bulk` alza `BulkTooManyDaysError` (il nome lo darà Z all'ingresso di Z-25) oltre 5 M giorni-asset per
@@ -6343,6 +6370,14 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     (`read_arrivals_at_scope_boundary`); una partenza tiene la compagna (le unità in viaggio contano per l'origine). Il
     costo resta il WAC della posizione della Dashboard: con la base della gamba un valore, senza `MISSING_WAC`.
     Dettagli: piano 05, sezione «J-51».
+- **J-53 · Il banner dei lotti mostra un solo fondo orfano per codice** — medio, numeri e chiarezza; J, 17/10 (analisi
+  di J-36). **Titolare: Y** (frontend, decisione del coordinatore 17/10), dopo i lotti A/B di X-R59, nella 1.3.
+  `lotDataQualityHelpers.buildIssueGroups` raggruppa le issue per codice e mostra il messaggio coi parametri della
+  prima; `ASSET_INCOME_NO_ELIGIBLE_LOTS` e `ASSET_COST_NO_ELIGIBLE_LOTS` arrivano una per fondo orfano («…of
+  {target_amount} {target_currency} on {as_of_date} — income left unallocated»), senza lotto, quindi senza chip: con più
+  fondi il banner mostra l'importo e la data di uno solo e nasconde gli altri. La cura: una riga per issue per i codici
+  senza lotto (non un totale del backend, che sommerebbe valute diverse e perderebbe le date). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-36».
 - **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
   alla revisione di SEC8-1b (17/10), facoltativa. Per una richiesta fuori dai limiti la finestra preparata
   (`requested_range`, che fa da ripiego di `metadata.analyzed_range`) è quella limitata, mentre `output.replay_range` e
@@ -6608,13 +6643,25 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     Revisori: W (BRIM) e H (post-migrazione).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-28 — due file di lock
   aperti con `open()`».
-- **Z-30 · Le righe di prezzi e cambi già salvate prima del 1900** — basso; coordinatore, 17/10 (X-R65, decisione D3).
+- ✅ **Z-30 · Le righe di prezzi e cambi già salvate prima del 1900** — basso; coordinatore, 17/10 (X-R65, decisione
+  D3). **Chiusa il 17/10 col lotto Z-30** (decisione: strada (a); il commit è del coordinatore; revisore MF).
   - Da X-R65 (N83) le scritture le rifiutano, ma una riga già nel database resta: il riempimento dei prezzi parte dal
     primo prezzo salvato, e uno del 0001-01-01 fa camminare ~740 000 giorni per asset (sotto il budget di 1 milione).
   - Strade: un pavimento in lettura nel riempimento (`_build_backward_filled_series` e `_fill_span` da
     `max(primo prezzo, 1900)`), o una correzione post-migrazione che le segnala o le toglie. Da decidere.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «X-R65 (N83) — date assurde
-  nelle scritture manuali di prezzi e cambi: analisi».
+  - Fatto: in `get_prices_bulk` una storia intera (`requires_full_history`) si carica dal 1900-01-01, o dall'inizio
+    visibile se è prima. Una riga più vecchia fa solo da seme: un giorno visibile cammina ~45 800 giorni, non
+    ~740 000. I riscaldamenti finiti restano com'erano. I cambi non camminano dalla prima riga: fuori.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «X-R65 (N83) — date assurde
+  nelle scritture manuali di prezzi e cambi: analisi» e «Z-30 — le righe salvate prima del 1900: lavoro».
+- **Z-31 · La query dei prezzi non limita l'inizio visibile** — basso, residuo di Z-30, **dopo la 1.3**
+  (coordinatore, 17/10); Z, 17/10 (nota di test-author).
+  - `get_prices_bulk` taglia solo la fine (`latest_range_end()`). Un intervallo chiesto a mano prima del 1900 su un
+    asset con una riga vecchia emette ancora fino a ~740 000 punti visibili, dentro il budget di 1 milione.
+  - Lo scope di rischio e la conversione FX limitano già l'inizio a 100 anni dalla fine (`range_span_floor`, X-R55);
+    «All» della UI parte dal 2000-01-01. Rimedio: lo stesso limite nel percorso dei prezzi (file di MF).
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-30 — le righe salvate
+  prima del 1900: lavoro», passo 4.
 
 ## B · Backup e Docker (fase 01)
 
@@ -7619,47 +7666,66 @@ punto di partenza, l'audit dello stesso giorno:
 - **MF-A…MF-P · I 16 lotti dell'audit** — tutti nella 1.3 per decisione del developer (16/10). Voci per lotto
   scritte da MF nell'analisi del 16/10 (base `f77743d47`); la ripartizione con J (CP-3, CP-5, U3/U7, CP-12, CP-13) è
   la domanda Q1 al coordinatore. Ordine e ondate: piano MF, §4.
-- **MF-A · Contributo per posizione dal motore** (CP-3 di J: B8, V2/P2, R4, B19; TRANSFER per broker secondo P22) —
+- ✅ **MF-A · Contributo per posizione dal motore** (CP-3 di J: B8, V2/P2, R4, B19; TRANSFER per broker secondo P22) —
   grande, numeri; audit 16/10. Dettagli: [piano MF](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md),
   sezione «MF-A».
-- **MF-B · NAV e utile per broker dal motore** — piccolo; audit 16/10. Dettagli: piano MF, sezione «MF-B».
-- **MF-C · Una funzione «pesi» nella casa, HHI unico** (con i due difetti di Y su `allocation_percent` e
+  **Entrato** il 17/10: dev `536501541` (la tabella Performance valutata dal motore). Seguito MF-A2 (doc) in corso.
+- ✅ **MF-B · NAV e utile per broker dal motore** — piccolo; audit 16/10. Dettagli: piano MF, sezione «MF-B».
+  **Entrato** il 16/10: dev `bcc644491`.
+- ✅ **MF-C · Una funzione «pesi» nella casa, HHI unico** (con i due difetti di Y su `allocation_percent` e
   `nav_weight_percent`; T-U7, W1–W5) — piccolo-medio, numeri nei casi limite; audit 16/10, Y. Decisione D-MF7.
   Dettagli: piano MF, sezione «MF-C».
-- **MF-D · Rapporti, rendimenti di prezzo, annualizzazione, composizione** (R6–R10 del 43; `drawdown_context.py:498`
+  **Entrato** il 16/10: dev `0eb85aa9b`. Seguito: MF-C2 (decisione).
+- ✅ **MF-D · Rapporti, rendimenti di prezzo, annualizzazione, composizione** (R6–R10 del 43; `drawdown_context.py:498`
   senza guardia sullo zero) — piccolo; audit 16/10. Dettagli: piano MF, sezione «MF-D».
+  **Entrato** il 16–17/10: prima parte dev `8d244d1c6` (ondata 1/1b), resto dev `aca75c7ca`, D3 `482343eb3`, D4
+  `c2feaf3e4`.
 - **MF-E · Sintesi del lotto nella casa, segno dei corti nella storia di performance, T-B8** — medio, numeri (corti
   aperti); audit 16/10, riverifica MF (`histories.py:63-72`). Dettagli: piano MF, sezione «MF-E».
-- **MF-F · Segno del reddito nei lotti e nella timeline dei redditi dell'AI Export** (O3, B9) — piccolo, numeri; audit
+  **E1 entrato** il 17/10: dev `e43dfae68`. **E2** (corti nella storia di performance) attende la decisione del
+  developer.
+- ✅ **MF-F · Segno del reddito nei lotti e nella timeline dei redditi dell'AI Export** (O3, B9) — piccolo, numeri; audit
   16/10. Decisione D-MF3. Dettagli: piano MF, sezione «MF-F».
+  **Entrato** il 16/10: F1 e F2 in dev `8d244d1c6`.
 - **MF-G · Quantità e cassa senza `SUM` SQL** (PAC; `balances.py` col via di W, accanto a W-B19; O4) — piccolo-medio;
   audit 16/10. Dettagli: piano MF, sezione «MF-G».
-- **MF-H · Finestra di detenzione nella casa** (T-B4, T-U6, L1–L2) — piccolo-medio, numeri; audit 16/10. Decisione
+  **G1 entrato** il 16/10 (dev `8d244d1c6`); **G2** (`balances.py`) resta col via di W, accanto a W-B19.
+- ✅ **MF-H · Finestra di detenzione nella casa** (T-B4, T-U6, L1–L2) — piccolo-medio, numeri; audit 16/10. Decisione
   D-MF2. Dettagli: piano MF, sezione «MF-H».
-- **MF-I · Un caricatore degli split, `financial_math/splits.py`** (T-U2, S1–S3) — piccolo; audit 16/10. Dettagli:
+  **Entrato** il 16/10: dev `bcc644491` (D-MF2 = arrivo al broker).
+- ✅ **MF-I · Un caricatore degli split, `financial_math/splits.py`** (T-U2, S1–S3) — piccolo; audit 16/10. Dettagli:
   piano MF, sezione «MF-I».
-- **MF-J · `DailyStateBuilder` più lineare** (J1 refactor senza pre-frame; J2 ripartizione K/R all'arrivo) — medio
+  **Entrato** il 16/10: I1 dev `8d244d1c6`, I2 dev `3741b95b0`.
+- ✅ **MF-J · `DailyStateBuilder` più lineare** (J1 refactor senza pre-frame; J2 ripartizione K/R all'arrivo) — medio
   (J1), piccolo-medio (J2, numeri); audit 16/10. Decisione D-MF4. Dettagli: piano MF, sezione «MF-J».
-- **MF-K · Un MWRR solo** (un costruttore dei flussi, una politica della radice; card = grafico anche con prelievi
+  **Entrato** il 17/10: J1 dev `d93de2899`, J2 dev `04a5088ff`. Seguiti: MF-J3 (decisione), MF-J4 (J).
+- ✅ **MF-K · Un MWRR solo** (un costruttore dei flussi, una politica della radice; card = grafico anche con prelievi
   netti) — piccolo-medio, numeri; audit 16/10, riverifica MF (`portfolio_service.py:882`). Decisione D-MF5. Dettagli:
   piano MF, sezione «MF-K».
+  **Entrato** il 16/10: K1 e K2 in dev `8d244d1c6`. Seguito: MF-K3 (decisione).
 - **MF-L · `BRSummary.holdings`: togliere o valutare col motore** — piccolo/medio, API; audit 16/10. Decisione D-MF1,
   file di W. Dettagli: piano MF, sezione «MF-L».
-- **MF-M · PAC: prova del cambio del WAC da `CostStep.conversion`** — piccolo; audit 16/10. Dettagli: piano MF, sezione
+- ✅ **MF-M · PAC: prova del cambio del WAC da `CostStep.conversion`** — piccolo; audit 16/10. Dettagli: piano MF, sezione
   «MF-M».
-- **MF-N · AI Export: efficienza dei costi con la quota effettiva** (O3, B9) — piccolo, numeri (AI Export); audit
+  **Entrato** il 16/10: dev `8d244d1c6`.
+- ✅ **MF-N · AI Export: efficienza dei costi con la quota effettiva** (O3, B9) — piccolo, numeri (AI Export); audit
   16/10. Dettagli: piano MF, sezione «MF-N».
-- **MF-O · Yield on Cost: mai il WAC convertito al cambio di `as_of`** — minimo; audit 16/10. Dettagli: piano MF,
+  **Entrato** il 16/10: dev `8d244d1c6`.
+- ✅ **MF-O · Yield on Cost: mai il WAC convertito al cambio di `as_of`** — minimo; audit 16/10. Dettagli: piano MF,
   sezione «MF-O».
+  **Entrato** il 16/10: dev `8d244d1c6`.
 - **MF-P · Campi del backend per il frontend** (T-U8 lato backend, CP-13 meno CP-13a; W8, P4, P5, V11, R17 di Y; il
   consumo è di Y) — medio; audit 16/10, Y12a. Decisione D-MF6. Dettagli: piano MF, sezione «MF-P».
-- **MF-O2 · Yield on Cost: un reddito netto negativo nella finestra fa fallire il report** — basso (dati legacy),
+  **Lato backend entrato** il 17/10: P dev `536501541`, P4b `d93de2899`, P2 `aa4370905`, P2b `c9b1162d4`; il consumo
+  nel web app è di Y.
+- ✅ **MF-O2 · Yield on Cost: un reddito netto negativo nella finestra fa fallire il report** — basso (dati legacy),
   robustezza; test-author di MF, 16/10 (letto nel codice, non provato). Il reddito per unità somma i redditi col segno
   (`yield_on_cost.py`, `_calculate_income_position`): se nei 365 giorni le correzioni negative superano i dividendi, il
   risultato `AVAILABLE` ha un valore negativo che il validatore di `YieldOnCostResult` rifiuta
   (`schemas/portfolio.py:335-340`), con un errore invece di «—». Cura proposta: `UNAVAILABLE` con un motivo nuovo
   (`negative_net_income`) nello schema di J, poi `api sync` e l'etichetta nei 4 cataloghi; rosso prima. Dettagli: piano
   MF, sezione «MF-F1».
+  **Chiusa** il 16/10: `negative_net_income`, dev `8d244d1c6` (commit `2650a7da4`).
 - **MF-K3 · La card e la linea del TWRR e del ROI semplice in due casi limite** — basso, numeri (proposta, da decidere);
   test-author di MF, 16/10 (K2). (1) Come l'MWRR prima di D-MF5: la card calcola il TWRR solo con NAV > 0
   (`portfolio_service.py`, `get_summary`), la linea (`calculate_twrr_series`) no: col portafoglio svuotato la card dice
@@ -7677,17 +7743,29 @@ punto di partenza, l'audit dello stesso giorno:
   «negative-sum»). Proposta: con una somma ≤ 0 le fette restano `value` null («—») e gli importi restano; serve l'ok
   del developer (cambia il grafico, lo schema — `AllocationItem.value` oggi obbligatorio — e il dataset AI Export
   che lo copia, `portfolio_financial.py:251-253`). Dettagli: piano MF, sezione «Lotto C».
-- **MF-W56 · L'anteprima del WAC arrotondata alla colonna dov'è usata** — basso, numeri oltre la 12ª cifra; W (W-B56) e
+- ✅ **MF-W56 · L'anteprima del WAC arrotondata alla colonna dov'è usata** — basso, numeri oltre la 12ª cifra; W (W-B56) e
   MF, 17/10. `compute_wac_iterative` (facciata di `portfolio_service`) restituisce un WAC non arrotondato, a volte
   periodico: «congelato» in un costo manuale è rifiutato da C-97a (D2), e il costo automatico
   (`auto_cost._write_auto_cost`) lo scrive così in `cost_basis_override`. Cura concordata: alla facciata
   `round_computed_value(…, Transaction, "cost_basis_override")` (D6), mai nella casa (`average_cost` resta esatto). Di
   MF dopo MF-E, rossi prima. Dettagli: piano MF, sezione «MF-W56».
+  **Chiusa** il 17/10: dev `04a5088ff` (commit `c129e82a9`).
 - **MF-A2 · Documentare l'annualizzato delle posizioni chiuse nel periodo e la definizione del non realizzato** — basso,
   doc; MF (docs-writer), 17/10. `period-pnl`/`net-annualized-return` non dicono che una posizione chiusa nel periodo
   annualizza sul costo venduto e sul suo tempo di volo; `portfolio-engine/index` §5 definisce il non realizzato come
   NAV − Book (transito incluso) mentre il periodo usa valore di mercato − costo aperto (§7 ora lo dice). Dettagli:
   piano MF, sezione «MF-A — codice».
+- **MF-A3 · Una posizione chiusa presto nel periodo annualizza sull'anno intero** — basso, numeri (domanda, da
+  decidere); docs-writer di MF, 17/10 (MF-A2). Quando la regola delle posizioni chiuse non dà valore (nulla venduto al
+  costo, o meno di 30 giorni tenuti: `closed_position_annualized`, `returns.cumulative_to_annualized`),
+  `period_annualized` ricade sulla regola generale, |StartValue| su t₀→t₁: una posizione tenuta a t₀ e venduta dopo 10
+  giorni d'un periodo d'un anno è annualizzata sull'anno. Documentato com'è (`net-annualized-return` «Positions Closed
+  in the Period»). Scelte: (a) com'è; (b) «—» quando la regola chiusa non vale. Dettagli: piano MF, «MF-A2».
+- **MF-A4 · Doc: il «non realizzato» della card punta alla pagina sbagliata** — minimo, doc; docs-writer di MF, 17/10.
+  `book-value.en.md` definisce il non realizzato come NAV − Book; `user/dashboard/kpi-cards.en.md:31` collega la card
+  **Unrealized change** (che mostra la cifra di periodo, valore di mercato − costo aperto) a quella pagina; le
+  descrizioni API di `period_unrealized_gain_loss_*` non dicono MV − OCB. Cura: il collegamento a
+  `portfolio-engine/index#two-unrealized-figures` e una riga nelle descrizioni (`api sync`).
 - **MF-J3 · Un trasferimento di cassa che attraversa il confine del perimetro non tocca i pool K/R** — basso-medio,
   numeri (proposta, da decidere); test-author e docs-writer di MF, 17/10 (J2), provato con una sonda su HEAD e su J2.
   Una gamba `linked_external_inflow`/`_outflow` (l'altra gamba è in un broker fuori dal perimetro scelto) entra nel
@@ -7745,7 +7823,9 @@ punto di partenza, l'audit dello stesso giorno:
   MF-SEC8-2). Una coppia con l'arrivo datato `0001-01-01` (`portfolio/classifier.py:217`, `arrival.date − 1`) e un
   provento datato `0001-01-01` (`financial_math/yield_on_cost.py:631`) sollevano `OverflowError`. Cura: confrontare prima
   di sottrarre, o partire da `EARLIEST_RANGE_START`. Rossi prima. Dettagli: piano MF, sezione «MF-SEC8-2».
-- **MF-SEC9a · Altri 500 dei prezzi che ripetono l'errore; `DELETE /prices` senza tetto** — basso, sicurezza;
+- ✅ **MF-SEC9a · Altri 500 dei prezzi che ripetono l'errore; `DELETE /prices` senza tetto** — basso, sicurezza;
+  **chiusa il 17/10**: prima parte dev `dd416f5bb` (commit `34cc1a58b`), il resto (BRIM, WAC, bisezione LOW-1) dev
+  `29e30b6cc`; E, W e H OK.
   test-author di MF, 17/10 (R13-SEC9). In `api/v1/assets/prices.py` restano `detail=str(e)` sui 500 di `POST /prices`
   (~:90), `DELETE /prices` (~:104) e `POST /prices/sync` (~:249). `DELETE /prices` costruisce un termine OR per
   intervallo senza tetto agli elementi: da ~1000 intervalli SQLite risponde «Expression tree is too large», un 500 che
@@ -7761,12 +7841,25 @@ punto di partenza, l'audit dello stesso giorno:
   fornitore lento sono ~33 minuti di chiamate in uscita per richiesta, e più richieste si sommano. Proposta: un
   semaforo per fornitore, condiviso fra richieste e scheduler, accanto alle pause dopo un 429. Solo informazione per ora.
   Dettagli: piano MF, sezione «MF-SEC9a».
+  **Entrata la prima parte** il 17/10 (dev `dd416f5bb`, E OK); il resto — `brim_provider.py` (soglia reale ~90 titoli
+  con ISIN, ticker e nome: l'`or_()` annidato del nome conta 7 termini) e `wac.py`, più il ciclo di conteggio di
+  `delete_rates_bulk` per bisezione (LOW-1 di E) — col lotto «BRIM/WAC/SEC9c».
+- **MF-SEC9e · `bulk_delete_prices` conta con una query per intervallo** — basso, prestazioni; E, 17/10 (revisione di
+  MF-SEC9a). Prima del DELETE a blocchi, i conteggi per asset sono una `COUNT` attesa per intervallo: fino a 10 000
+  query al tetto `MAX_BULK_WRITE_ITEMS`. Lento, non blocca il ciclo degli eventi. Cura possibile: contare dalle righe
+  lette a blocchi (id per asset), che rende esatti anche gli intervalli sovrapposti (oggi contati due volte).
+  Dettagli: piano MF, sezione «MF-SEC9a».
+- **MF-SEC9f · Altri OR per elemento, censiti da E** — minimo, informazione; E, 17/10 (revisione di MF-SEC9a).
+  `scheduler/jobs.py:100` costruisce un termine per coppia configurata: rifiutato solo con ~1 000 coppie, improbabile.
+  `portfolio/engine.py:133` è sicuro. Nessuna azione ora. Dettagli: piano 08 di E, «MF-SEC9a».
 - **MF-SEC9b · `Currency.validate_code` accetta nomi e codici numerici** — basso, preesistente, tutta l'app;
   test-author di MF, 17/10 (Y D1). La ricerca generale di pycountry accetta `EURO`, `978`, `US Dollar` e restituisce
   l'input in maiuscolo (`EURO`, `978`, `US DOLLAR`), non il codice a tre lettere: ogni campo valuta li lascia passare
   (con D1 finiscono in `convert_bulk`, nessun cambio, variazioni null; nessun 500). Cura: solo alpha-3, cambio di
   contratto da decidere. Dettagli: piano MF, sezione «R13-SEC9».
-- **MF-SEC9c · Il ripiego dal DB del prezzo corrente usa una sessione sola da task paralleli** — basso, preesistente;
+- ✅ **MF-SEC9c · Il ripiego dal DB del prezzo corrente usa una sessione sola da task paralleli** — basso, preesistente;
+  **chiusa il 17/10**: le quotazioni in parallelo senza sessione, i ripieghi in una lettura raggruppata dopo, dev
+  `29e30b6cc`.
   test-author di MF, 17/10 (R13-SEC9). `get_current_prices_bulk` (`services/assets/price_query.py` ~:929) lancia i recuperi
   con `asyncio.gather`, e i ripieghi sul prezzo salvato interrogano la stessa `AsyncSession`, che SQLAlchemy non
   ammette fra task concorrenti. La deduplica degli id (SEC9-1) lo rende più raro, non lo toglie. Cura: le letture del

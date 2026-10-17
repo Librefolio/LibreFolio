@@ -6119,3 +6119,165 @@ prossimo checkpoint.
   Doc: la pagina teorica dello YoC (un punto, solo EN: la cache di traduzione era già indietro, nessun timbro) e
   `lots_analysis_service.md` («Yield on cost»); devWiki `decisions/yield-on-cost-definition.md`.
 - ⏳ **Checkpoint J-51** (FROZEN).
+- ✅ **Checkpoint J-51** (2026-10-17): entrato (dev `1becf502f`), CHANGELOG 🐛 `85b067b1b`; worktree in fast-forward.
+  Nessuno slot `api portfolio` (forma invariata; lo copre il prossimo cancello).
+
+#### J-36 — i due messaggi del prezzo di riferimento dei lotti (17/10, dalle 14:55; base `85b067b1b`)
+
+- **Analisi (sola lettura)**: `referencePriceUnavailable` diceva il rendimento relativo non calcolabile, mentre ripiega sul
+  costo unitario del lotto (`opening_reference_price`, sorgente `exact`) e manca solo senza costo d'acquisto;
+  `referencePriceFallback` diceva «ultimo prezzo noto {reference_price}», mentre il riferimento può essere anche il prezzo
+  degli scambi dello stesso giorno, e il parametro è un numero nativo senza valuta. **Scoperta**: il banner dei lotti
+  (`lotDataQualityHelpers.buildIssueGroups`) raggruppa per codice, un messaggio coi parametri della prima issue e un chip
+  per lotto: `{reference_price}` nominava il prezzo di un lotto davanti a più lotti. Deviazione dalla nota dell'indice
+  (prezzo convertito con la valuta): il prezzo esce dal testo.
+- **Coordinatore (15:0x)**: OK; **J-53** (lo stesso raggruppamento nasconde i fondi orfani dopo il primo) al frontend, una
+  riga per issue per i codici senza lotto, titolare Y, dopo X-R59 A/B, nella 1.3: scritta nella sezione J con Y titolare.
+- ✅ **Testi (15:0x)** con `dev.py i18n update`, 4 lingue, termini dell'interfaccia (Open Return / rendimento aperto /
+  rendement ouvert / rendimiento abierto; rettifica; costo d'acquisto). EN: «Lots opened by an adjustment on a day without
+  a market quote: their Open Return starts from the last price on or before that day, an earlier quote or the price of a
+  purchase or sale»; «Lots opened by an adjustment before any price: their Open Return starts from their own purchase
+  cost per unit, and is not available without one». Nessun cambio del backend (`reference_price` resta, non letto). Doc:
+  una frase in `lots_analysis_service.md` («Reference Price»). Nessun rosso: un test non asserisce testi.
+- ✅ **Verdi (14:57–15:00)**: `i18n check` stretto (5 051 chiavi), `gate-i18n-catalog` **176**, `gate-i18n-usage` **195**,
+  `front check` 0/0 (comprende il formato dei JSON), `mkdocs build` stretto ✓, check-links ✓; nessun test né E2E cita i
+  testi vecchi. Porta 6185 libera.
+- ⏳ **Checkpoint J-36** (FROZEN).
+- ✅ **Checkpoint J-36** (2026-10-17): entrato (dev `e5a975c8b`), CHANGELOG 🐛 `5d242b415`; worktree in fast-forward.
+  Prossimo: J-49; i lotti del riordino aspettano una finestra tranquilla (coordinatore).
+
+#### J-49 — il controllo statico dei lettori di `latest_range_end` (17/10, dalle 15:05; base `5d242b415`)
+
+- **Brief al test-author (solo test)**: la classe `TestRangeBoundSeamCoversEveryReader` in
+  `test_financial/test_date_range_bounds.py` (un'unità di directory di `roi-fifo-utils`, il runner non cambia), pura.
+  - **La regola**: una lettura `ast` dei 616 file di `backend/app`, tranne `utils/datetime_utils.py` che definisce il
+    nome. L'insieme dei moduli che legano il nome a livello di modulo (`from …datetime_utils import latest_range_end`,
+    assoluto o relativo) deve essere uguale a `RANGE_BOUND_CONSUMERS`.
+  - **Le violazioni**: l'alias; l'import dentro una funzione o una classe; la lettura dall'oggetto modulo
+    (`datetime_utils.latest_range_end`, `du.latest_range_end`, il percorso puntato intero).
+  - **La prova del rilevatore**: 10 sorgenti finte, mai i file. Cinque erano nel brief, cinque le ha aggiunte il
+    test-author: l'import relativo, l'import in una funzione, il percorso puntato, l'oggetto modulo con alias, un altro
+    aiuto letto dall'oggetto modulo.
+- **Il rosso è un reperto vero (15:0x)**: 11 selezionati, **1 fallito**, 10 verdi. Nessuna violazione, e nessun modulo
+  in lista che non lega il nome. Due moduli lo legano ma mancano dalla lista, tutti e due arrivati oggi:
+  - `backend.app.utils.date_range_limits` (riga 17, X-R65, `30e19b9d9`): `stored_date_bounds()`, i limiti delle date
+    dei prezzi e dei cambi salvati (`price_store.py:213` e `:286`, `refresh.py:570`, `currencies.py:129`);
+  - `backend.app.api.v1.assets.prices` (riga 38, R13-SEC9-4, `ad399d383`): `_range_start_in_bounds`, il `range_start`
+    di `POST /prices/current`.
+
+  È una lacuna latente, non un guasto di oggi: nessuna suite che toglie il limite scrive prezzi o cambi per quelle vie.
+  `test_range_ceiling.py` raggiunge `stored_date_bounds`, ma sostituisce il nome in `date_range_limits` da sé (RC-W01).
+- **La scelta (J)**: aggiungere i due moduli alla lista, non escluderli.
+  - La lista resta «tutti i moduli che legano il nome», senza eccezioni da mantenere a mano.
+  - Il senso della cucitura («come se oggi fosse dopo i loro dati») vale anche per una scrittura: una suite 2032–2091
+    deve poter salvare i suoi prezzi e cambi.
+  - La docstring del modulo nomina i due lettori, che rifiutano una data invece di chiudere un cammino, e rinvia a J-49.
+- > **Note implementazione**: due righe in `RANGE_BOUND_CONSUMERS` e la docstring di `_range_bounds.py`; la classe del
+  > test-author invariata. Revisione: un `import *` sfuggirebbe al rilevatore, ma ruff lo vieta già (F403, nella
+  > selezione `F`); lo stesso per l'import in una funzione (PLC0415).
+- ✅ **Verdi (15:12–15:16)**:
+  - ruff e black puliti sui due file;
+  - `roi-fifo-utils TestRangeBoundSeamCoversEveryReader` **11**;
+  - `range-ceiling` **57**;
+  - `roi-fifo-utils` intero **1386**: comprende le 9 suite di `test_financial/` che tolgono il limite, ora coi due moduli
+    in più;
+  - check-orphans ✓.
+
+  Porta 6185 libera. Script e log in `files/j/j49/` della sessione.
+- **J-3 verificata: non è un difetto** (chiusa insieme a J-49).
+  - **GBM** (`quantlib_worker.py:116,195`): cammina `horizon_days/365` anni a passi di un giorno di calendario. Deriva
+    e covarianza annue sono stimate col fattore osservato (`estimation.py:52-53`), quindi dopo 365 giorni la varianza
+    è quella di un anno, qualunque sia la frequenza della storia.
+  - **Bootstrap** (`resampling.py`, algoritmo `4.0.0`): converte i giorni di calendario nei passi della storia
+    (`calendar_days_to_observations`, frequenza osservata), poi torna ai giorni. La riga `:235` è la conversione
+    inversa, e serve solo a dichiarare la lunghezza del blocco.
+  - Resta una scelta di modello, non un errore: un percorso GBM ha un punto per ogni giorno di calendario.
+- ⏳ **Checkpoint J-49** (FROZEN).
+- ✅ **Checkpoint J-49** (2026-10-17): entrato (dev `e2e883136`: `42185231b` test, `0767fba38` diario); worktree in
+  fast-forward. Prossimo (coordinatore): la guardia `Intl` di `riskAnalysisHelpers.ts:168`, poi l'analisi di T-B7.
+
+#### Guardia `Intl` di `riskAnalysisHelpers.ts` (MF-SEC9b / E-18; 17/10, dalle 15:25; base `e2e883136`)
+
+- **Analisi**: E-18 ha reso stretti i codici di valuta sugli schemi di scrittura, ma le letture restano tolleranti.
+  Quindi un codice salvato prima della 1.3 (`978`, `EURO`, `US DOLLAR`) arriva ancora al frontend, e
+  `Intl.NumberFormat(…, {style: 'currency'})` lancia `RangeError` per un codice che non è di tre lettere ASCII.
+  - Dei quattro siti dell'analisi di E, tre prendono già l'errore: `snapshotDataRenderer.ts:226` (→ 0,01),
+    `planner/format.ts:38` (→ 2) e `lotComparisonChartHelpers.ts:229` (il numero mascherato, poi il codice).
+  - Resta solo **`formatCurrencyAmount`** (`riskAnalysisHelpers.ts:163-169`), letto da `formatScopedCurrencyAmount`
+    (`RiskAnalysisPanel.svelte:550`), `L4Replay`, `L4Shock` e `L1HowMuchItHurts`: un lancio rompe la vista del rischio.
+  - Il formattatore comune (`utils/currency/currencyFormat.ts`) non usa lo stile valuta di `Intl`, quindi non lancia.
+- **Contratto** (come il grafico dei lotti): quando `Intl` rifiuta il codice, l'importo scritto nella lingua con due
+  decimali, uno spazio, poi il codice com'è salvato. Con la privacy le cifre diventano il segnaposto e il segno resta
+  fuori (`maskFormattedNumber`, D8). L'assenza vince ancora (`—`). Un codice ben formato, anche non assegnato
+  (`XYZ`), passa da `Intl` come oggi.
+- ✅ **Rosso (15:2x)** del test-author, in `riskAnalysisHelpers.test.ts` (righe 469–599): 13 casi nuovi, **8 rossi**, tutti
+  `RangeError: Invalid currency code` a `riskAnalysisHelpers.ts:168`.
+  - Verdi già prima, e così devono restare: la precondizione (il runtime rifiuta i cinque codici), il controllo `XYZ`
+    (uguale all'uscita di `Intl` stessa, calcolata nel test) e tre casi d'assenza e d'ambito.
+  - In più rispetto al brief: `'euro'` e `' EURO '` fissano il «com'è salvato»; un controllo di runtime per de-DE; un
+    secondo importo (`'9999999'`) sotto privacy, perché il codice `978` è fatto di cifre.
+- ✅ **Codice (15:33)**: la patch, applicata dopo il rosso. Un `try/catch` attorno a `Intl.NumberFormat`; il ripiego
+  `${maskFormattedNumber(amount.toLocaleString(locale, {min 2, max 2}))} ${currency}`; due frasi nella JSDoc.
+  Nessuna pagina MkDocs descrive i ripieghi `Intl` dei tre siti fratelli: la regola sta nella JSDoc, come per loro.
+- ✅ **Verdi (15:35–15:37)**: `front-utility core-unit` intero **8 605** (209 file); `front check` 0 errori e 0
+  avvisi; prettier pulito sui due file. Porta 6185 libera.
+- ⏳ **Checkpoint della guardia `Intl`** (FROZEN).
+
+#### T-B7 — dichiarare le colonne tolte perché nulle in ogni riga (analisi 17/10 ~15:40, sola lettura; base `e2e883136`)
+
+- **Oggi** il renderer compatto toglie una colonna vuota in ogni riga in due punti:
+  - `pipeTable` (`snapshotDataRenderer.ts:310`), per ogni tabella di dati, quelle tecniche comprese;
+  - `renderGenericPayload` (`:1390`), per ogni altro componente, lotti e FIFO compresi.
+
+  Restano solo i contatori `empty_columns_removed` / `empty_parent_columns_removed` (diagnostica, mai nel prompt) e,
+  per i lotti, `unavailable_amount_lot_count`.
+  - Sonde reali J-26 e MF-E1 (11 prompt): da 7 a 40 colonne tolte per prompt, di cui da 0 a 15 genitrici. Restano da
+    7 a 34 colonne tolte in silenzio.
+- **Proposta**:
+  - si continua a togliere la colonna (niente `null` ripetuto in ogni riga);
+  - dopo la tabella, una riga `omitted_null_columns=a,b` nomina le colonne tolte che avevano un `null` esplicito, cioè
+    il «non disponibile» del backend. Le nomina con l'intestazione pubblica, escapata come una cella d'intestazione.
+  - **Non le nomina**:
+    - una colonna genitrice: i suoi valori vivono in `x.amount` / `x.code`;
+    - una colonna vuota perché il renderer non ha nulla per quell'ambito (`undefined`: `portfolio_weight_percent` in
+      una serie di un solo Asset). Quella è «non si applica», non «non disponibile».
+  - **Dopo la tabella**, non fra titolo e intestazione: così continuano a leggere le stesse tabelle gli aiuti dei test
+    (`pipeTableAfter`), la scansione di `TABLE broker_scope` della sonda (`index + 2`) e l'audit delle tabelle
+    pubbliche (blocchi `|…|`).
+  - Preambolo: una riga di regola. Diagnostica: un contatore nuovo `null_columns_declared`; la sonda somma il
+    dizionario, senza un elenco fisso di chiavi.
+  - Lotti: `unavailable_amount_lot_count` resta, perché conta i lotti, mentre la riga nomina le colonne.
+- **Valori che cambiano** (dichiarati):
+  - ogni prompt con una colonna nulla tolta guadagna una riga per tabella;
+  - il test `removes all-empty generic columns…` (`snapshotDataRenderer.test.ts:1758`) rovescia il suo
+    `not.toContain('empty_metric')`;
+  - stima: da +300 a +900 caratteri per prompt reale, da +0,7% a +4%.
+- **Versioni**:
+  - componenti: **nessun salto**, perché né il builder né il payload cambiano. Restano uguali
+    `COMPACT_COMPONENT_VERSIONS`, i segnaposto del catalogo e OpenAPI; niente `api sync`;
+  - istruzioni e contratti di risposta: invariati;
+  - renderer: le due etichette del preambolo (`compact_pipe_tables_v1`, `generic_pipe_tables_v1`) sono ferme dalla
+    1.1.0 (`7dbc76d42`) e nessun codice le legge (un solo test, `promptRenderer.test.ts:199`). **Proposta: +1 su
+    tutte e due**, una volta nella 1.3. In alternativa restano a v1, perché la riga del preambolo viaggia con ogni
+    prompt.
+- **Rossi proposti** (`front-ai-export unit`):
+  - generico: la colonna nominata, la genitrice no, contatori 2/1/1;
+  - lotti con l'unico lotto ignoto;
+  - tecnico: una colonna dei BUCKETS nulla nominata; `undefined` no;
+  - posizione dopo l'ultima riga;
+  - escape di `|` e dell'a capo;
+  - niente tolto, quindi niente riga;
+  - la regola nel preambolo;
+  - un campo rapporto nominato col suo nome pubblico `_percent` (la sonda vieta i nomi `_ratio` grezzi);
+  - l'equivalenza UI/sonda (test esistente).
+- **Doc**: `ai_export_composition.md` («Snapshot Data Tables») e `ai_export_probe_workflow.md` (regola e contatore),
+  solo EN, perché queste pagine non hanno traduzioni. CHANGELOG: una riga 🔄.
+- **Sonda** (skill: cambio del renderer e del formato pubblico): mirata, dopo l'ingresso, nella lista del developer
+  come J-12. Un Portfolio e un Broker con un lotto senza cambio, un Asset con dati tecnici. Si leggono tutti i prompt,
+  le righe, la differenza di lunghezza, i byte UI/sonda e l'audit.
+- ✅ **Coordinatore (15:4x)**: OK; **sì al salto delle etichette**, `compact_pipe_tables_v2` e `generic_pipe_tables_v2`, una
+  volta nella 1.3, col pin di `promptRenderer.test.ts:199` aggiornato.
+  - Le colonne `undefined` («non si applica») restano senza nome; quelle con un `null` esplicito («non disponibile») si
+    nominano. La distinzione è il punto: i rossi fissano tutti e due i lati.
+  - Sonda mirata nella lista del developer.
+  - Prossimo: i rossi, dopo il checkpoint della guardia `Intl`.

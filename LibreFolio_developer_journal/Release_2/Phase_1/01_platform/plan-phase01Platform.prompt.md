@@ -6925,3 +6925,166 @@ Fatta durante W-B75, su richiesta del coordinatore. Sola lettura; sonde su file 
         regola usa str e int.
      4. Nel batch un `greater_than` di campo arriva senza `{gt}`, già prima di W-B72.
      5. Ci sono due copie della regola, come per `_loc_to_field`: unificarle si fa a parte.
+
+### Review dell'helper di profilo di A (`9db6cb0be`, doc `6700a04b4`; dev `d7641f368`) (2026-10-17, 14:55) — ✅ OK, nessun reperto
+
+Fatta mentre gli specialisti di H-51 lavoravano, in sola lettura. Chiude il mio nit della review di A9: la regola
+`loaded && profile === …` scritta a mano in più posti.
+
+- **Semantica**:
+  - `loaded` (`instanceConfig.svelte.ts`) diventa vero solo con una risposta riuscita e resta vero se un
+    ricaricamento fallisce dopo. Quindi `selfHostedConfirmed()` e `managedConfirmed()` sono falsi finché il server non
+    ha risposto;
+  - sono reattivi, perché leggono i getter di `$state`.
+- **Siti**: 5 sostituzioni meccaniche. `ForgotPasswordCard` tiene la sua alternativa `!loaded && failed`.
+- **Gate** (`instanceProfile.gate.test.ts`):
+  - lavora sull'albero sintattico (TypeScript e Svelte) e ha controlli positivi;
+  - `profile.ts` è l'unico file esente;
+  - dichiara i suoi limiti;
+  - è registrato in `core-unit`.
+- **Doc**: coerente con il codice.
+- **Evidenza**: Vitest del gate e di `profile.test.ts` alla HEAD `9ba7ef9d3`: 2 file, 19 passed.
+
+### Review dei doc di A-42/A-43 (`145adbf27`, dev `7156a24af`; seguito A-50 `6700a04b4`) (2026-10-17, 15:45) — ✅ OK, un nit facoltativo
+
+Fatta durante lo slot di H-51, in sola lettura. Riguarda le sezioni di A in `hosting_providers.en.md` (la riga
+«withdrawn», «🔁 A New Link», il punto ⏱️) e in `security.md` («♻️ The Setup Link's Lifecycle» e le righe della
+Revocation).
+
+- **Verificato sul codice di `59161e5e2`**:
+  - revoke e retire: `retire_tokens()` mette `revoked_at` e poi `consumed_at`;
+  - l'emissione sotto il lock, con la nuova lettura di `is_pending_admin()`, il rollback e le due righe INFO;
+  - la spesa rifiutata: prima `consume_token()`, poi «già attivo» e `_setup_spent_before()`, poi retire e la WARNING,
+    tutto prima di bcrypt;
+  - `_end_setup_links()`: revoca per l'admin in attesa, con la WARNING, retire per gli altri;
+  - i 409 `PENDING_SETUP` e `ACCOUNT_PROTECTED`;
+  - `account_tokens.user_id` è `ON DELETE CASCADE`.
+- Gli ID dei test e le ancore esistono. La WARNING «was withdrawn (cancelled, or its address changed)» citata nella
+  pagina per i provider è identica a quella del codice (`bootstrap_admin_service.py:205`).
+- **Nit**: «Another administrator … can do the same with **Cancel setup link**» non vale per un account protetto, cioè
+  l'amministratore che paga un'istanza gestita. La pagina linkata lo dice, e la CLI resta sopra la protezione.
+
+### Lotto «H-51: `trusted_schema` spento anche sui motori del server; la chiave d'istanza nel ripristino, com'è dopo B-18» (2026-10-17) — analisi e passi
+
+> Dal coordinatore (14:45, dopo la review di B-36/B-37), testuale:
+> - «`trusted_schema=OFF` nel listener globale di `db/session.py`: lo prendi tu, come lotto H. Rossi prima: l'archivio
+>   con `DEFAULT (regexp(…))` fa girare il `regexp` al primo insert. Nel tuo slot di verifica metti anche le suite delle
+>   migrazioni e `api backup-restore`, oltre ai tuoi test.»
+> - «`security.md`, r.706: la frase è superata, B-18 è entrato (`5c4d7456a`). Riscrivila col percorso vero»:
+>   - `dev.py backup restore --instance-key-file FILE`, solo da CLI, mai con un upload dalla UI;
+>   - il file è letto da root prima del cambio di utente (B-38);
+>   - `stage_archive(..., instance_key=…)` lo controlla prima di creare qualsiasi cosa (`instance_key_invalid`);
+>   - se l'archivio porta la sua chiave, vince quella (D1).
+>   Nello stesso lotto va la frase sul motore di Alembic.
+>
+> W-B75 è entrato (`21a2610c8`, dev `9ba7ef9d3`): parto da lì.
+
+**Analisi** (HEAD `9ba7ef9d3`):
+- `set_sqlite_pragma()` (`db/session.py`) è un listener `connect` sulla classe `Engine`, quindi vale per ogni motore
+  sincrono del processo, compreso quello sotto il motore async. Imposta `foreign_keys`, WAL e `busy_timeout`, ma non
+  `trusted_schema`, che vale 1 di default.
+- SQLAlchemy 2.0.52 (pysqlite, ereditato da aiosqlite) registra `regexp` e `floor` in Python su ogni connessione.
+- L'app non usa `regexp`, `floor` né `create_function` nelle sue query. In ogni caso `trusted_schema` limita solo le
+  chiamate che vengono dallo schema.
+- Lo schema di LibreFolio (head 009) chiama solo il built-in `lower()` (`ux_users_email_lower`).
+- Le prove sono le sonde della review di B-37 (`files/b36review/`).
+
+**Proposta**:
+- **Cura**: `PRAGMA trusted_schema=OFF` come prima istruzione di `set_sqlite_pragma()`, con una voce nella sua
+  docstring.
+- **Test** (test-author): un file nuovo, `test_db/test_session_pragmas.py`, `db session-pragmas`, isolamento pure.
+  - Rossi:
+    - ogni connessione nuova, sincrona e async, ha `trusted_schema` a 0;
+    - un archivio con `DEFAULT (regexp(…))`: l'insert che omette la colonna è rifiutato, e non gira il Python;
+    - un CHECK con `regexp`;
+    - `floor`.
+  - Guardie: gli altri pragma restano come sono; il genere dello schema di LibreFolio (`lower()` in un indice, i
+    built-in) funziona; `regexp` e `floor` funzionano ancora nelle query.
+- **Runner**: in `_backend_db.py`, la funzione, l'`add_test` e la voce in `db_order`.
+- **Doc** (docs-writer):
+  - `security.md`: la frase della chiave d'istanza nel ripristino (r. ~706); il punto di B-37 con Alembic e il server;
+  - `database/index.md`: r. 52, i pragma del motore.
+- **Verifica**:
+  - senza slot: `db session-pragmas`, `db migration-005…009`, `db post-migration`, `db autoincrement-schema`,
+    `utils dev-cli-db-path`, `services backup-staging`;
+  - nello slot: `api backup-restore`.
+
+**Passi**:
+
+1. ✅ (2026-10-17, 15:05) **Runner e doc**.
+   - **Runner**: `files/h51/apply.py --runner-only`, `cmp` OK. In `_backend_db.py`: `db_session_pragmas`, l'`add_test`
+     «session-pragmas» (isolamento pure) e la voce in `db_order`.
+   - **Doc** (docs-writer), verificata da me sul codice:
+     - `security.md`, la chiave d'istanza nel ripristino (r. ~707-731): la frase superata è riscritta con il percorso
+       vero (i quattro punti del coordinatore, più D2: una chiave abbastanza lunga ma sbagliata non è un errore e il
+       comando avvisa). Anche la frase prima è corretta: senza chiave, dell'archivio o data al ripristino;
+     - `security.md`, nel punto di B-37: un nuovo punto «Why the upgrade needs it», sul motore di Alembic;
+     - `security.md`: una sottosezione nuova, «`trusted_schema` Off in the Server's Engines» (`#trusted-schema-server`);
+     - `database/index.md` r. 53: una voce per il pragma.
+   - **Due scoperte di docs-writer**, verificate:
+     - `env.py` importa `db.base`, che passa per `db/__init__.py` e importa `session.py`. Quindi nelle connessioni
+       dell'upgrade il listener globale girava **prima** di `_schema_untrusted`: «before any other statement» non era
+       esatto. Con H-51 diventa vero. Le tre istruzioni di prima non valutano lo schema: nessun effetto.
+     - Nota per B (basso): `describe_database()` esegue `PRAGMA integrity_check` su una connessione semplice. Su un
+       archivio con un CHECK che chiama una funzione sconosciuta, come `regexp`, alza `sqlite3.OperationalError`
+       (provato dalla sonda di B-37). Non è uno `StagingError`: `stage_archive()` ripulisce lo stage e la rilancia.
+       L'API dice `stage_failed`; la CLI (`_check_on_a_copy()` prende solo `StagingBusyError`, `StagingError` e
+       `BackupPathError`) molto probabilmente finisce in un traceback. Cura di B: tradurre `sqlite3.DatabaseError` in
+       `database_damaged`, come fa `_refuse_foreign_objects`.
+2. ✅ (2026-10-17, 15:17) **Rossi** (test-author, nessuna esecuzione): `test_db/test_session_pragmas.py`, 15 casi.
+   - Rossi, per sync e async:
+     - H51-1, `trusted_schema` a 0;
+     - H51-2 e H51-3, un `DEFAULT` con `regexp` o con `floor`;
+     - H51-4, un CHECK con `regexp`, rifiutato a ogni istruzione.
+   - Guardie:
+     - H51-5, gli altri pragma;
+     - H51-6, il genere dello schema di LibreFolio;
+     - H51-7, l'SQL di primo livello;
+     - H51-8, un database alla head tramite il motore async.
+   - **Evidenza** (`files/runs/h51-reds.sh`): 8 failed / 7 passed, come previsto; ruff e black puliti sul test.
+   > **⚠️ Fuori pista**: test-author ha previsto, e una sonda (`files/h51/probe_order.py` / `.out`, tre varianti in
+   > processi separati) ha confermato, che la cura come l'avevo scritta non basta per il CHECK.
+   > - `set_sqlite_pragma()` è un listener di classe: gira **prima** dell'`on_connect` del dialetto che registra
+   >   `regexp` e `floor`.
+   > - Il suo `journal_mode=WAL` fa leggere lo schema subito, quando la funzione ancora non esiste. SQLite legge allora un
+   >   CHECK o un'espressione d'indice senza segnare la chiamata come dello schema, e poi non la ricontrolla.
+   > - Risultati:
+   >   - oggi, anche sul motore di Alembic con `_schema_untrusted`, un CHECK o un indice con `regexp` **fanno girare** il
+   >     Python; solo il DEFAULT è rifiutato;
+   >   - con il solo `trusted_schema=OFF` per primo, lo stesso;
+   >   - con `PRAGMA writable_schema=RESET` per ultimo, lo schema si rilegge all'istruzione successiva, a funzioni
+   >     registrate: CHECK e indice sono rifiutati alla prima istruzione, sui due motori.
+   > - Il rifiuto arriva a un'istruzione e non dentro il listener: un listener che alza lascerebbe aperta la connessione.
+   >   Il costo è una lettura dello schema in più per connessione (`NullPool`).
+   > - Questo corregge la mia review di B-37: la mia prima sonda non importava `db/session.py`, mentre il processo
+   >   dell'upgrade lo importa (`env.py` → `db.base` → `db/__init__.py`).
+   > - Oggi non si sfrutta attraverso il controllo del ripristino: un archivio così si ferma prima, all'`integrity_check`
+   >   di `describe_database()` («unknown function»), anche se con un errore non codificato (la nota per B).
+3. ✅ (2026-10-17, 15:38) **Cura e verdi senza slot**.
+   - Cura (`files/h51/apply.py --cure-only`, `cmp` OK): in `set_sqlite_pragma()`, `PRAGMA trusted_schema=OFF` per primo
+     e `PRAGMA writable_schema=RESET` per ultimo, con il commento che spiega l'ordine; una voce nella docstring.
+   - Doc (docs-writer, seconda passata sulla cura vera): in `security.md`, la sottosezione `#trusted-schema-server` con
+     «Why the reset, last» e «When SQLite refuses», poi il punto «In the upgrade's process too» e «Why the upgrade needs
+     it» corretti; in `database/index.md` r. 53, il reset.
+   - Ho corretto i testi rimasti alla prima versione: la docstring del test (r. 5 e 15) e le tre righe del runner, che
+     dicevano anche «CHECK con floor», non provato.
+   - **Evidenza** (`files/runs/h51-greens.sh`, poi `h51-recheck.sh`):
+     - ruff e black puliti. Il runner ha 3 PLC0415, gli stessi già alla HEAD;
+     - `db session-pragmas` 15 passed;
+     - `db migration-005` 25 (1 avviso già noto: SQLAlchemy non riflette l'indice d'espressione `lower(email)`), `006`
+       37, `007` 29, `008` 23, `009` 11;
+     - `db post-migration` 45, `db autoincrement-schema` 4, `utils dev-cli-db-path` 17, `services backup-staging` 168;
+     - `mkdocs build` stretto senza avvisi; `check-links` 97; `git diff --check` pulito.
+4. ✅ (2026-10-17, 15:48) **Slot** (GO del coordinatore alle 15:39, carico 35): `api backup-restore` sul server della
+   corsia con la cura, 161 passed. Porta 6181 libera dopo il run (lsof vuoto).
+5. ✅ (2026-10-17, 15:50) **Checkpoint**.
+   - Commit proposti:
+     - `fix(db): untrusted schema on every connection` (`session.py`, il test, il runner);
+     - `docs(security): untrusted schema, restore instance key` (`security.md`, `database/index.md`);
+     - `docs(journal): H-51, A profile and A-42/A-43 reviews` (piano e backlog).
+   - CHANGELOG 🔒, proposta: «A restored backup's database can no longer make the server run code through its
+     schema: every database connection turns SQLite's `trusted_schema` off first and reads the schema again last, so a
+     `CHECK`, a `DEFAULT` or an index that calls a function the app registers is refused instead of run, in the server
+     and in the restore check's upgrade.»
+   - Note per B, le passa il coordinatore: l'`OperationalError` grezzo di `describe_database()`; la docstring di
+     `env.py`.

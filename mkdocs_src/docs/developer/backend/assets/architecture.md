@@ -228,7 +228,10 @@ history walk starts from) to `latest_range_end()`, tomorrow by the server's cale
 included. The helper lives in `backend/app/utils/date_range_limits.py`, with
 `DateOutOfRangeError` and `date_out_of_range_detail()`, the builder of the 422 `detail`. The
 reason is J's SEC8-1b: a price stored at 0001-01-01 made a backward fill or a risk replay walk
-about 740,000 days per asset.
+about 740,000 days per asset. A price row an older version stored before 1900 stays, but since
+Z-30 a full history reaches back no further than 1900-01-01, where such a row at most seeds the
+fill, and never cuts a point-derived warm-up that starts earlier
+([bulk request limits](#bulk-request-limits)).
 {: #stored-date-bounds }
 
 - **Manual call**: right after the digit check, `_reject_dates_out_of_range()` refuses the
@@ -247,8 +250,8 @@ about 740,000 days per asset.
 The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same bounds, and
 transactions have had the same floor since N74, with an end a year ahead
 ([Transaction dates](../transactions/service.md#transaction-dates), where the code is
-`dateOutOfRange`). Price and rate rows already stored before 1900 are left as they are (backlog
-Z-30). The web app's data editors still show these 422s as a generic error; their coded message
+`dateOutOfRange`). Price and rate rows already stored before 1900 are left as they are (Z-30).
+The web app's data editors still show these 422s as a generic error; their coded message
 is a follow-up (workstream X).
 
 A manual call is all or nothing on the currency of its prices, as on its digits and dates
@@ -337,9 +340,14 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   `{"code": "bulk_too_many_items", "message", "max_items", "items"}` from the route, before any
   work: no database read. Exactly 1,000 pass.
 - **Writes** (MF-SEC9a): `DELETE /assets/prices` takes at most `MAX_BULK_WRITE_ITEMS` (10,000) date ranges, all
-  assets together, the same 422 with that `max_items`; the deletion runs one `DELETE` per chunk of
-  `OR_TERMS_PER_QUERY` (500) ranges (`utils/sql_chunks.py`), in one transaction: one `DELETE` with an `OR` of every
-  range failed from 1,000 ranges. A failure of `POST`, `DELETE /assets/prices` or `POST /assets/prices/sync` answers
+  assets together, the same 422 with that `max_items`. Each asset's ranges, from every item that names it, are merged
+  into disjoint day intervals (inclusive bounds, `end` defaulting to `start`), then counted with one
+  `COUNT … GROUP BY asset_id` and deleted with one `DELETE` per chunk of `OR_TERMS_PER_QUERY` (500) intervals
+  (`utils/sql_chunks.py`), in one transaction: one `DELETE` with an `OR` of every range failed from 1,000 ranges, and
+  one `COUNT` per range made 10,000 queries at the cap. Each result's `deleted_count` is the rows its asset lost, a
+  row counted once however many ranges cover it, an asset named by two items counted over both (MF-SEC9e: before,
+  overlaps counted twice and such an asset reported its last item only); the counts add up to `total_deleted`. An
+  empty request answers an empty result, no longer a 500. A failure of `POST`, `DELETE /assets/prices` or `POST /assets/prices/sync` answers
   500 with a fixed message, the error in the log.
 - **Item-days**: once the prices and the seeds are read, before the events query and the fills,
   `get_prices_bulk()` sums the points each item's backward fill will emit. `_fill_span()` mirrors
@@ -352,9 +360,15 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   (1,000,000) the method raises `BulkTooManyDaysError`, its `item_days` the request's exact total,
   and the route answers 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
 
-The count follows the fill, not the requested range: a full-history signal (`RISK_DRAWDOWN`) loads
-from `date.min`, so its fill emits from the first stored price even when the visible range is one
-day. The budget was 5,000,000 until R13-SEC9-2 lowered it: a point costs about 25.5 µs to fill,
+The count follows the fill, not the requested range. A full-history signal (`RISK_DRAWDOWN`) loads
+from the earlier of `EARLIEST_RANGE_START` (1900-01-01) and the start of the item's point-derived
+warm-up (Z-30): the full history can lengthen that warm-up, never shorten it, and adds nothing
+before a range that starts before 1900. The fill emits from the first stored price, or from the
+load start when an older version's row, dated before it, seeds the fill. So a full history over a
+visible range of one day, today, still counts about 9,800 days for an asset priced since
+2000-01-01, and about 46,300 with such a row (before Z-30 the load started at `date.min`; a row
+stored at 0001-01-01 made it about 740,000).
+The budget was 5,000,000 until R13-SEC9-2 lowered it: a point costs about 25.5 µs to fill,
 about as much to serialize, and about 1.9 KB, so even a million is close to a minute of the event
 loop and a few GB. The item cap is the route's, the budget `get_prices_bulk()`'s: the risk
 preparation and AI Export call the method directly, once for their whole scope, and reach the
@@ -522,6 +536,10 @@ The fallback is the most recent `PriceHistory` row whose close reads a number
 number, reads `None` through `RealDecimal`
 ([Decimal Columns](../../architecture/database/index.md#decimal-columns)) and is passed over;
 before, `Decimal(str(None))` raised, and the whole bulk call, every asset, answered 500.
+The fallbacks are read once the live quotes are in (MF-SEC9c): `_last_readable_prices()` reads the latest row of
+every asset without a quote in one grouped query, and looks up alone, one after the other, only an asset whose latest
+close does not read. The quotes run in parallel and never touch the request's session: the fallbacks used to read it
+from those parallel tasks, which one `AsyncSession` does not allow.
 
 A successful provider quote dated today is written back to today's OHLC row:
 
