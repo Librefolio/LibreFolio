@@ -3107,3 +3107,82 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
   frase «CostOut non è solo costo storico: per le unità ricevute la base tiene il loro valore all'arrivo». `mkdocs
   build` stretto + `check-links` verdi dopo il nit. Rinomina CP-10d (`series_preparation` → `market_series`): A9 non
   importa nessuno dei due. **CHECKPOINT READY** inviato, FROZEN.
+
+#### A9 entrato (dev `130002b5c`); il prossimo lotto senza decisioni (17/10, 18:5x)
+- Coordinatore: A9 **entrato** (dev `130002b5c`, merge `22eb7510f`, clausola CHANGELOG `5726486bc`); worktree a
+  `5726486bc`. Backlog: chiuse con ✅ MF-A9, e le già entrate senza segno MF-A2 e MF-SEC9e (`4507f7507`), MF-SEC9g
+  (`650c02b17`).
+- Richiesta: proporre la voce senza decisioni più utile per la 1.3. Proposta inviata (in attesa): MF-A7 + il lato doc
+  di MF-A6 (la soglia della polvere in `oldest_open_lot_date`, letta da Holdings `:814` e dalla finestra di ricaduta
+  `:1724`), poi MF-J45c (guardia sul report L2 condiviso); SEC9f e SEC9d restano informazione.
+- Coordinatore (18:48): **1 poi 2** — MF-A7 con la riga 🐛 e la doc «polvere a parte» di MF-A6 (l'allineamento di
+  `daily_state.py` resta dopo la 1.3), poi MF-J45c (la guardia). Rossi prima; revisore J. I ✅ del backlog viaggiano col
+  checkpoint di A7.
+
+#### MF-A7 — la soglia della polvere in `oldest_open_lot_date` (17/10, 18:5x)
+- ✅ **Codice**: `holding_window.oldest_open_lot_date(moves, dust=QUANTITY_DUST_THRESHOLD)` — i lotti aperti più vecchi
+  che insieme tengono `dust` o meno (il residuo d'una vendita) sono messi da parte: la data è quella del primo lotto
+  oltre il quale l'aperto cumulato supera `dust`, None se tutta la posizione tiene `dust` o meno (come
+  `closed_position_window` e le righe). Cumulato e non per lotto: una posizione aperta (> polvere) ha sempre una data,
+  anche fatta di lotti minuscoli. Nessun cambio ai chiamanti.
+  Numeri visibili: colonna «Lotto aperto più vecchio» di Esposizione (`get_summary` :814) e Performance (:1767) — una
+  riga chiusa a polvere dice «—» (prima la data del residuo), una riga col residuo vecchio e un acquisto nuovo dice la
+  data dell'acquisto; l'annualizzato della regola generale (:1724) parte dal lotto vero (finestra più corta) e, per
+  una riga chiusa a polvere in ricaduta, da `date_from` come una chiusa a zero. L'annualizzato di Esposizione usa la
+  prima transazione: invariato.
+- ✅ **Doc**: `net-annualized-return.en.md` (inizio finestra: i lotti di polvere messi da parte, MF-A7); MF-A6 lato doc:
+  `portfolio-engine/index.en.md` §7 e `period-pnl.en.md` «polvere a parte» (la riga non tiene un residuo ≤ 1e-5, lo
+  stato del portafoglio sì). Solo EN: debito di traduzione vero, niente stamp.
+- **Fuori pista**: i verdi pre-test danno 4 rossi in `TestParityOnSplitFreeStreams` (`dust-residual`,
+  `dust-residual-in-tranches`): il corpus di parità fissava il comportamento di HEAD sulla polvere (D1), che A7 cambia
+  apposta. Riparazione autorizzata al test-author `a7-tests` (attesa None, HEAD come «prima»).
+- ✅ Lanciato: test-author `a7-tests` (rossi puri e di servizio). Script `files/a7.sh` (PRODUCT = `holding_window.py`;
+  rossi `financial-math holding_window`, `roi-fifo-utils test_holding_window_service`; slot `api portfolio`).
+- ✅ **Codice, ritocco**: ruff C901 (12 > 10) → la riesecuzione FIFO in `_open_lots(moves)`, `oldest_open_lot_date` fa
+  solo la scansione della polvere. Stesso comportamento.
+- ✅ **Test A7** (test-author `a7-tests`): puro `TestDustResidualIsNotAnOpenLot` (residuo prima d'un acquisto nuovo → D3;
+  solo polvere, sotto e alla soglia → None; 0,000011 resta aperto; soglia sul cumulato; split che alza o abbassa un
+  residuo) e `TestTheDustIsAParameterOfTheOldestOpenLot` (`dust=0` = HEAD su tutto il corpus; soglie maggiori; il
+  default è quello della piattaforma). Riparato il corpus di parità: `dust-residual`, `dust-residual-in-tranches`
+  attendono None, HEAD (D1) tenuto come «prima» in `DUST_SET_ASIDE_BY_MF_A7`; `test_oldest_open_lot_date_is_heads`
+  sul corpus senza polvere. Servizio `TestDustResidual`: Esposizione e riga aperta datano dall'acquisto dopo il
+  residuo (annualizzato 0,741177 su 120 giorni, HEAD 0,243821 su 305); riga chiusa a polvere → None; la sua ricaduta
+  parte da `date_from` (−0,166700 su 365, HEAD −0,196064 su 305, il caso di J); guardie: la regola chiusa invariata,
+  un residuo sopra la polvere resta aperto. 9 mutanti, tutti presi dal puro; il servizio prova che entrambi i
+  consumatori usano la regola.
+- ✅ **Corsia** (19:04; prodotto tolto `holding_window.py`, sha `3be9bc4f…` uguale dopo): `financial-math
+  holding_window` rosso **45** / 86 (34 `TypeError … 'dust'`, il resto sulle date); `roi-fifo-utils
+  test_holding_window_service` rosso **4** / 9. Verdi: `financial-math` **1474**, `roi-fifo-utils` **1439**,
+  `portfolio-engine` 41. ruff, black, diff-check; `mkdocs build` stretto e `check-links` verdi. Porta libera. Slot
+  chiesto (`files/a7.sh slot`: `api portfolio`).
+- ✅ **Slot** (GO 19:12; HEAD `5726486bc`): `api portfolio` **53** passati; porta 6190 libera. Riga CHANGELOG 🐛
+  approvata dal coordinatore. **CHECKPOINT READY** inviato, FROZEN. Poi MF-J45c (analisi: i quattro consumatori di
+  `get_report` — `risk/scope.py`, `ai_export` `asset_resources`, `payloads/portfolio_broker`, `fx_core` — non
+  modificano il report in luogo; l'API lo serializza: guardia sola, istantanea profonda prima e dopo).
+
+#### A7 entrato (dev `09d29671d`); MF-J45c — la guardia del report L2 condiviso (17/10, 19:1x)
+- Coordinatore: A7 **entrato** (dev `09d29671d`, merge `b7bf1ca6b`, CHANGELOG 🐛 `5af05312b`); worktree a `5af05312b`.
+- **MF-J45c**: guardia sola, nessun cambio di prodotto previsto. `get_report` restituisce l'oggetto in cache L2 tale e
+  quale (`return cached`, ~:1992). Consumatori: API (serializza), `risk/scope.py:178`, `load_portfolio_report`
+  (`ai_export/components/payloads/portfolio_broker.py:899`, memoizzato per richiesta, letto da `broker_financial`,
+  `broker_cost_efficiency`, `portfolio_broker_technical`, `portfolio_financial`, `portfolio_income`…),
+  `asset_resources.py:259`, `fx_core.py:313`. Lettura statica: nessuna scrittura in luogo trovata.
+- In corso: test-author `j45c-tests` — file nuovo in `test_financial/` (lo copre `roi-fifo-utils`), istantanea
+  strutturale profonda di ogni report memorizzato in L2 prima e dopo i consumatori, precondizione «hit» per ciascuno,
+  metatest che l'istantanea vede una scrittura, mutanti che scrivono nel report.
+- ✅ **Test J45c** (test-author `j45c-tests`): `test_financial/test_portfolio_l2_report_shared.py` (nuovo, 847 righe; base
+  SQLite privata, due broker, EUR e USD). `TestTheCachedReportIsShared` (due chiamate → lo stesso oggetto, letto dalla
+  cache); `TestTheCachedReportIsNotMutatedByItsConsumers` (`_L2Watch`: ogni report memorizzato con l'istantanea
+  all'ingresso; due passate, la seconda tutta da L2 — 33 di 42 chiamate; consumatori: la rotta vera `POST
+  /portfolio/report` con la serializzazione di FastAPI, `RiskService.execute` su tre perimetri (tutte le analitiche del
+  portafoglio tranne simulazione e ottimizzazione, in processi figli), `AiExportSnapshotService.build_snapshot` per gli
+  8 dataset pubblici e i 67 componenti dei quattro domini, `model_dump`/`model_dump_json`/`jsonable_encoder`);
+  `TestTheSnapshotSeesAWrite` (esponente d'un Decimal, append, inversione, campo annidato, dict; un tipo ignoto
+  solleva). 6 mutanti (loader AI Export che ordina o riscrive un Decimal, rischio che ordina, `serialize_response` che
+  ordina la storia, append d'una riga, `generated_at`): tutti rossi col percorso. **Nessuna scrittura di prodotto**.
+  Nota: i risultati del rischio portano l'oggetto `data_quality` del report in cache tale e quale (`merge_data_quality`
+  riusa le voci annidate): un secondo riferimento, oggi senza scritture.
+- ✅ **Corsia** (19:44, nessun cambio di prodotto, nessuno slot): `roi-fifo-utils test_portfolio_l2_report_shared` **4**;
+  `roi-fifo-utils` **1443**; `financial-math` **1474**. ruff, black, diff-check. Il runner raccoglie tutta
+  `test_financial/` (`_backend_services.py:994`, registrata a `:2399`): nessuna riga nuova. Porta libera.
+  **CHECKPOINT READY** inviato, FROZEN.

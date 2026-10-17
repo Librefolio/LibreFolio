@@ -160,13 +160,24 @@ edit of an older row carrying a stray one commits and keeps it — and never an 
 A create meets its business rules at the lenient parse (`_parse_lenient()`,
 `transaction_batch_stages.py`): `TXCreateItem` raises a lone business-rule error as it is,
 and packs several into `multipleBusinessRuleErrors`, which the parse unpacks into one issue
-each, with its context as `params`. Since W-B72 a lone one keeps its context as `params`
-too (`_lone_error_params()`), when its `loc` is empty and its context holds plain data
-(str, int, float, bool or `None` values); before, it reached the app with `params` null, so
-its message lost the `{type}` it names. A field's error (`loc` not empty, such as
-`string_too_long`) and a `value_error`, whose context holds the exception itself, keep
-`params` null. An update's and a promote's rule errors, raised after the parse, already
-carried their context.
+each. The parse takes each issue's `params` from `error_params()` and an error's `field`
+from `loc_to_field()` (a packed sub-error has none), both in
+`backend/app/utils/pydantic_errors.py`: the one home of the rule (W-B77), which the broker
+import's `BRIMProvider._create_transaction()` shares, so a row the import's parse refuses
+and the same row the batch refuses carry the same `field` and `params`. `params` is a copy
+of the error's context when every value is plain data (`PLAIN_PARAM_TYPES`: str, int,
+float, bool or `None`), `null` otherwise, whatever the error: a lone business rule
+(`{type}`, `{type, qty}`; since W-B72, before which its message lost the `{type}` it
+names), each sub-error of a packed one, filtered one by one (W-B70; before, each context
+was copied as it came), and a field's error (W-B70), so the app's message can name the
+limit (`transactions.pydantic.stringTooLong` for `string_too_long`, in
+`resolveValidationMessage.ts`): `string_too_long` keeps `{max_length: 500}` on a
+description, `greater_than` `{gt: 0}` on an id, `greater_than_equal` `{ge: 0}` on an
+update's `asset_event_id`, a date's parsing error pydantic's `{error: <text>}`,
+`model_type` `{class_name}`. A `value_error`, whose context holds the exception itself, a
+bound held as a `Decimal`, and an error without context (`missing`, `extra_forbidden`,
+`string_type`) keep `params` null. An update's and a promote's rule errors, raised after
+the parse, already carried their context.
 
 The frontend reads the two codes as `transactions.errors.costBasisNotAllowed` and
 `transactions.errors.costBasisModeIncompatible`, messages that name the type and leave

@@ -1,0 +1,35 @@
+{
+  "about": "Content-Security-Policy violations the E2E collector (H-43, e2e/fixtures/playwright.ts and e2e/fixtures/csp.ts) already knows: each one is recorded and attached to the test, and does not fail it. A ratchet: an entry is added only by a recorded decision, with its reason and its owner, never to silence a red, and removed by the lot that cures it.",
+  "entries": [
+    {
+      "id": "index-inline-script-0",
+      "directive": "script-src-elem",
+      "blockedURI": "inline",
+      "indexInlineScript": 0,
+      "reason": "The inline script of frontend/src/app.html, in every page of the app: the theme before the first paint, the PWA install prompt, the service worker's registration.",
+      "owner": "H: the lot that hashes the inline scripts of index.html, after H-43 (D4)"
+    },
+    {
+      "id": "index-inline-script-1",
+      "directive": "script-src-elem",
+      "blockedURI": "inline",
+      "indexInlineScript": 1,
+      "reason": "SvelteKit's inline bootstrap script, which the SPA's index.html needs to start the app.",
+      "owner": "H: the lot that hashes the inline scripts of index.html, after H-43 (D4)"
+    },
+    {
+      "id": "cheetah-grid-global-probe",
+      "directive": "script-src",
+      "blockedURI": "eval",
+      "reason": "cheetah-grid 1.16.7 (both of its builds; it ships no ES module) bundles webpack's global probe, new Function(\"return this\")(), inside a try/catch that falls back to window: harmless under an enforced policy. Seen by the first cloud smoke on the BRIM table preview (files.spec.ts). Until it is narrowed, this entry knows every eval.",
+      "owner": "H: the D4 lot narrows it ('report-sample' in CSP_REPORT_ONLY_POLICY, then a match on the sample «return this»); removed when cheetah-grid stops probing with eval"
+    },
+    {
+      "id": "address-probe-other-origin",
+      "directive": "connect-src",
+      "blockedPath": "/api/v1/auth/address-probe",
+      "reason": "The address check of a link (Settings › Users) fetches <the address the admin typed>/api/v1/auth/address-probe, whatever its origin: admin-users.spec.ts AUSR-E-07 types other origins on purpose (127.0.0.1 for localhost, a closed port, an .invalid host). Under an enforced connect-src 'self', a probe of another origin than the page's would be blocked.",
+      "owner": "A (the probe's experience) + H (the enforcement lot: the configured public origin in connect-src, or a server-side probe)"
+    }
+  ]
+}

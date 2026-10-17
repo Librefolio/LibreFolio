@@ -122,8 +122,8 @@ At the end of a dev session, review what was learned:
 ## Examples
 
 ```
-Discovered: SQLModel's Decimal columns need explicit Numeric(18,6) to avoid precision loss.
-→ File as: wiki/problems/sqlmodel-decimal-precision.md
+Discovered: SQLite stores a decimal column as a REAL double, so exact values need RealDecimal (C-97).
+→ File as: wiki/problems/sqlite-decimal-stored-as-double.md
 → Tags: [db, sqlmodel, decimal]
 
 Decided: All provider calls go through _run_provider_in_thread(), no exceptions.

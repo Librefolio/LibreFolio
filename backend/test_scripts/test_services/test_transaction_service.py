@@ -27,7 +27,8 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError, model_validator
+from pydantic_core import PydanticCustomError, PydanticSerializationError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -335,13 +336,38 @@ class TestServiceHelpers:
 
 
 # ============================================================================
-# THE PARAMS OF A LONE BUSINESS-RULE ERROR (N78, W-B72)
+# THE PARAMS OF A PARSE ERROR (N78, W-B72; W-B70, D-W70-1)
 # ============================================================================
 
 # A BUY of -5 units paying 500 EUR, valid but for rule 10: qtyPositive is its one error, a lone one.
 LONE_RULE_BUY = {"broker_id": 1, "asset_id": 1, "type": "BUY", "date": "2025-02-03", "quantity": "-5", "cash": {"code": "EUR", "amount": "-500"}}
 # A DEPOSIT valid but for its description, one character past the 500 TXCreateItem allows: a field-level error, alone.
 LONG_DESCRIPTION_DEPOSIT = {"broker_id": 1, "type": "DEPOSIT", "date": "2025-02-03", "cash": {"code": "EUR", "amount": "100"}, "description": "x" * 501}
+# The plain data a context may hold to become params (D-W70-1): str, int, float, bool, None.
+PLAIN_DATA = (str, int, float, bool, type(None))
+# A context made only of plain data, each of the five.
+PLAIN_SUB_CONTEXT = {"type": "BUY", "qty": "1.5", "count": 2, "ratio": 0.5, "flag": True, "none": None}
+# An object no response can carry.
+AN_OBJECT = object()
+# The sub-errors ``_PackedRules`` packs, shaped as ``TXCreateItem`` packs its own (``{code, msg, ctx}``): an object beside a
+# plain value and an exception — contexts no rule of TXCreateItem packs today —, a plain context and an empty one.
+PACKED_SUB_ERRORS = [
+    {"code": "objectRule", "msg": "an object in its context", "ctx": {"type": "BUY", "obj": AN_OBJECT}},
+    {"code": "exceptionRule", "msg": "an exception in its context", "ctx": {"error": ValueError("not plain data")}},
+    {"code": "plainRule", "msg": "a plain context", "ctx": dict(PLAIN_SUB_CONTEXT)},
+    {"code": "emptyRule", "msg": "an empty context", "ctx": {}},
+]
+
+
+class _PackedRules(BaseModel):
+    """A row refused the way ``TXCreateItem`` refuses one breaking several rules: one ``multipleBusinessRuleErrors``, its
+    ``ctx.errors`` the ``PACKED_SUB_ERRORS``. ``row`` only gives it something to validate."""
+
+    row: int
+
+    @model_validator(mode="after")
+    def _pack(self) -> "_PackedRules":
+        raise PydanticCustomError("multipleBusinessRuleErrors", "{error_count} business-rule validation errors", {"error_count": len(PACKED_SUB_ERRORS), "errors": PACKED_SUB_ERRORS})
 
 
 def _pydantic_errors(model, raw: dict) -> list[dict]:
@@ -361,26 +387,33 @@ def _lone_parse_issues(raw: dict, model, operation: str) -> list[tuple]:
 
 
 class TestParseLenientParamsOfALoneError:
-    """The params of a lone business-rule error: the coordinator's approval of 17/10, with the refined N78 (W-B72).
+    """The params of an error the parse meets alone: the coordinator's approval of 17/10, with the refined N78 (W-B72), and
+    the coordinator's D-W70-1 (W-B70, 17/10).
 
     ``_parse_lenient`` (``transaction_batch_stages.py``) unpacks ``multipleBusinessRuleErrors`` into one issue per packed
-    error, each with its context as ``params`` (``test_parse_lenient_unpacks_multiple_business_rule_errors``), but gives a
-    LONE error ``params`` None: a create breaking one business rule reaches the app without the ``{type}`` its message names.
-    The contract: a lone model-level business-rule error — ``loc`` empty, its context plain data (str, int, float, bool or
-    None values) — keeps that context as ``params``. A field-level pydantic error (``loc`` not empty) and a ``value_error``
-    (``loc`` empty too, but its context holds the exception itself) keep ``params`` None: the H-41 and decimal-places pins
-    stay valid. Each case first checks what pydantic answers, so it tests the kind of error it names.
+    error (``test_parse_lenient_unpacks_multiple_business_rule_errors``; their params: ``TestParseLenientParamsOfAPackedError``).
+    An error met alone keeps its context as ``params`` when that context is plain data (str, int, float, bool or None
+    values): a lone model-level business rule's (N78), and — D-W70-1 — a field's too, ``loc`` no longer read: today a
+    field's error gets ``params`` None whatever its context, so the app's message cannot name the limit it broke. A
+    ``value_error`` keeps ``params`` None, on the model or on a field: its context holds the exception itself. The rule is
+    ``backend.app.utils.pydantic_errors.error_params`` (W-B77), its own contract in ``test_pydantic_errors.py``. Each case
+    first checks what pydantic answers, so it tests the kind of error it names.
 
-    - RED until the lone-params cure: a BUY of −5 units paying 500 EUR breaks rule 10 alone, ``qtyPositive``; its issue
-      carries ``{"type": "BUY"}``, today None.
-    - Guard: a description of 501 characters gets ``string_too_long`` on ``description``, ``params`` None.
+    - Green since the lone-params cure: a BUY of −5 units paying 500 EUR breaks rule 10 alone, ``qtyPositive``; its issue
+      carries ``{"type": "BUY"}``.
+    - RED until the W-B70 cure: a description of 501 characters gets ``string_too_long`` on ``description``, ``params``
+      ``{"max_length": 500}``; today None.
+    - RED until the W-B70 cure: a split or a promote with ``id_a`` 0 gets ``greater_than`` on ``id_a``, ``params``
+      ``{"gt": 0}``, and an update with ``asset_event_id`` -1 ``greater_than_equal`` on it, ``{"ge": 0}`` — each as the
+      batch hands it to ``_parse_lenient`` (``TXMixedBatch`` keeps a row a dict, unvalidated); today None.
     - Guard: a split or a promote its own model validator refuses with a ``ValueError`` — a split's ``id_a == id_b``, a
       promote without a reference to its TX B (a promote's validator does not compare the two ids) — gets ``value_error``,
-      no field, ``params`` None.
+      no field, ``params`` None; a create whose cash amount ``Currency`` refuses (exponent past ±100) gets ``value_error``
+      on ``cash.amount``, ``params`` None.
     """
 
     def test_a_lone_business_rule_error_keeps_its_context_as_params(self):
-        """RED until the lone-params cure: ``("create", 0, "qtyPositive", None, {"type": "BUY"})``; today ``params`` None."""
+        """Green since the lone-params cure: ``("create", 0, "qtyPositive", None, {"type": "BUY"})``."""
         errors = _pydantic_errors(TXCreateItem, LONE_RULE_BUY)
         assert [(error["type"], error["loc"], error.get("ctx")) for error in errors] == [("qtyPositive", (), {"type": "BUY"})], f"scaffold: the BUY of -5 units must break rule 10 alone, a model-level error with the context {{'type': 'BUY'}}; pydantic answers {errors}"
 
@@ -392,33 +425,92 @@ class TestParseLenientParamsOfALoneError:
             "_parse_lenient keeps the ctx of a business-rule error only when several are packed (multipleBusinessRuleErrors), so the app cannot name the type"
         )
 
-    def test_guard_a_field_level_error_keeps_params_none(self):
-        """Guard, green today and after: ``("create", 0, "string_too_long", "description", None)`` — the context
-        ``{"max_length": 500}`` is plain data, but the error is the field's, not the model's."""
+    def test_a_field_level_error_keeps_its_plain_context_as_params(self):
+        """RED until the W-B70 cure: ``("create", 0, "string_too_long", "description", {"max_length": 500})`` — the
+        context is plain data, and a field's error keeps it (D-W70-1); today ``params`` None."""
         errors = _pydantic_errors(TXCreateItem, LONG_DESCRIPTION_DEPOSIT)
-        assert [(error["type"], error["loc"]) for error in errors] == [("string_too_long", ("description",))], f"scaffold: the DEPOSIT must fail on its description alone, a field-level error; pydantic answers {errors}"
+        assert [(error["type"], error["loc"], error.get("ctx")) for error in errors] == [("string_too_long", ("description",), {"max_length": 500})], f"scaffold: the DEPOSIT must fail on its description alone, a field-level error with the context {{'max_length': 500}}; pydantic answers {errors}"
 
         issues = _lone_parse_issues(LONG_DESCRIPTION_DEPOSIT, TXCreateItem, "create")
 
-        assert issues == [("create", 0, "string_too_long", "description", None)], f"A field-level pydantic error keeps params None (the approval of 17/10): {issues}"
+        expected = [("create", 0, "string_too_long", "description", {"max_length": 500})]
+        assert issues == expected, f"W-B70 (D-W70-1): a field's error keeps its plain context as params, {{'max_length': 500}}, which the app's message reads; got {issues}. Today _parse_lenient gives a field's error (loc not empty) params None, whatever its context"
 
     @pytest.mark.parametrize(
-        ("model", "operation", "raw"),
+        ("model", "operation", "raw", "code", "field", "params"),
         [
-            pytest.param(TXSplitBatchItem, "split", {"id_a": 7, "id_b": 7}, id="split-id_a-equals-id_b"),
-            pytest.param(TXPromoteBatchItem, "promote", {"id_a": 7}, id="promote-without-a-reference-to-tx-b"),
+            pytest.param(TXSplitBatchItem, "split", {"id_a": 0, "id_b": 7}, "greater_than", "id_a", {"gt": 0}, id="split-id_a-0"),
+            pytest.param(TXPromoteBatchItem, "promote", {"id_a": 0, "id_b": 7}, "greater_than", "id_a", {"gt": 0}, id="promote-id_a-0"),
+            pytest.param(TXUpdateItem, "update", {"id": 5, "asset_event_id": -1}, "greater_than_equal", "asset_event_id", {"ge": 0}, id="update-asset_event_id--1"),
         ],
     )
-    def test_guard_a_value_error_of_a_model_validator_keeps_params_none(self, model, operation, raw):
-        """Guard, green today and after: ``(operation, 0, "value_error", None, None)`` — a model-level error like a business
-        rule's, ``loc`` empty, but its context ``{"error": ValueError(...)}`` is no plain data."""
+    def test_a_bound_on_a_field_keeps_its_plain_context_as_params(self, model, operation, raw, code, field, params):
+        """RED until the W-B70 cure: ``(operation, 0, code, field, params)`` — pydantic's bound on the field, its context
+        ``{"gt": 0}`` or ``{"ge": 0}`` (the ``{gt}`` the app's ``greaterThan`` message reads, and never receives today);
+        today ``params`` None."""
         errors = _pydantic_errors(model, raw)
-        assert [(error["type"], error["loc"]) for error in errors] == [("value_error", ())], f"scaffold: the {operation} {raw} must fail its own model validator alone, a model-level value_error; pydantic answers {errors}"
+        assert [(error["type"], error["loc"], error.get("ctx")) for error in errors] == [(code, (field,), params)], f"scaffold: the {operation} {raw} must fail on {field} alone, {code} with the context {params}; pydantic answers {errors}"
+        assert all(isinstance(value, PLAIN_DATA) for value in params.values()), f"scaffold: the context {params} must be plain data"
+
+        issues = _lone_parse_issues(raw, model, operation)
+
+        assert issues == [(operation, 0, code, field, params)], f"W-B70 (D-W70-1): the {operation}'s {code} on {field} must keep its plain context {params} as params; got {issues}. Today a field's error carries params None"
+
+    @pytest.mark.parametrize(
+        ("model", "operation", "raw", "loc", "field"),
+        [
+            pytest.param(TXSplitBatchItem, "split", {"id_a": 7, "id_b": 7}, (), None, id="split-id_a-equals-id_b"),
+            pytest.param(TXPromoteBatchItem, "promote", {"id_a": 7}, (), None, id="promote-without-a-reference-to-tx-b"),
+            pytest.param(TXCreateItem, "create", {"broker_id": 1, "type": "DEPOSIT", "date": "2025-02-03", "cash": {"code": "EUR", "amount": "1E+101"}}, ("cash", "amount"), "cash.amount", id="create-cash-amount-exponent"),
+        ],
+    )
+    def test_guard_a_value_error_keeps_params_none(self, model, operation, raw, loc, field):
+        """Guard, green today and after: ``(operation, 0, "value_error", field, None)`` — a model validator's refusal, ``loc``
+        empty like a business rule's, or a field's, ``loc`` not empty like a bound's; either way its context
+        ``{"error": ValueError(...)}`` is no plain data."""
+        errors = _pydantic_errors(model, raw)
+        assert [(error["type"], error["loc"]) for error in errors] == [("value_error", loc)], f"scaffold: the {operation} {raw} must fail one validator alone, a value_error at {loc}; pydantic answers {errors}"
         assert isinstance((errors[0].get("ctx") or {}).get("error"), ValueError), f"scaffold: the context of a validator's value_error holds the exception itself; pydantic answers {errors[0].get('ctx')!r}"
 
         issues = _lone_parse_issues(raw, model, operation)
 
-        assert issues == [(operation, 0, "value_error", None, None)], f"A value_error keeps params None (the approval of 17/10): {issues}"
+        assert issues == [(operation, 0, "value_error", field, None)], f"A value_error keeps params None (the approval of 17/10; D-W70-1): {issues}"
+
+
+class TestParseLenientParamsOfAPackedError:
+    """The params of the sub-errors of a packed error (``multipleBusinessRuleErrors``): the coordinator's D-W70-1 (W-B70,
+    17/10) — each sub-error goes through the plain-data filter of a lone one (``pydantic_errors.error_params``).
+
+    ``TXCreateItem`` packs several broken rules into one error whose ``ctx.errors`` lists ``{code, msg, ctx}``, and
+    ``_parse_lenient`` makes each its own issue, on no field. Today it copies each sub-context as it comes: every rule of
+    ``TXCreateItem`` packs plain data, so nothing shows it — but a context holding an object or an exception would reach
+    the response, which then cannot be serialized: ``/transactions/validate`` and ``/commit`` would answer 500.
+    ``_PackedRules``, a model of the test's own, packs that shape the way ``TXCreateItem`` does; ``_parse_lenient`` takes
+    any model, as the batch hands it each list's.
+    """
+
+    def test_a_packed_sub_error_keeps_only_a_plain_context(self):
+        """RED until the W-B70 cure: of the four packed rules, each its own issue of create 0 on no field, ``plainRule``
+        keeps its context as params, and ``objectRule`` (an object beside a plain ``type``), ``exceptionRule`` (a
+        ``ValueError``, as in a value_error's context) and ``emptyRule`` carry None; every issue serializes. Today
+        ``objectRule`` and ``exceptionRule`` carry the object and the exception, and neither issue serializes."""
+        errors = _pydantic_errors(_PackedRules, {"row": 1})
+        assert [(error["type"], error["loc"]) for error in errors] == [("multipleBusinessRuleErrors", ())], f"scaffold: the row must be refused by one packed error, model-level; pydantic answers {errors}"
+        assert [sub_error["code"] for sub_error in errors[0]["ctx"]["errors"]] == ["objectRule", "exceptionRule", "plainRule", "emptyRule"], f"scaffold: pydantic must hand the four sub-errors over as packed; it answers {errors[0]['ctx']}"
+
+        parsed, issues = _parse_lenient([{"row": 1}], _PackedRules, "create")
+
+        assert parsed == [], f"scaffold: the row must be refused at the parse; it parsed: {parsed}"
+        by_code = {issue.code: (issue.operation, issue.index, issue.field, issue.params) for issue in issues}
+        expected = {"objectRule": ("create", 0, None, None), "exceptionRule": ("create", 0, None, None), "plainRule": ("create", 0, None, PLAIN_SUB_CONTEXT), "emptyRule": ("create", 0, None, None)}
+        assert len(issues) == len(by_code) and by_code == expected, f"W-B70 (D-W70-1): each packed sub-error must keep its context as params only when it is plain data; got {by_code}. Today _parse_lenient copies each sub-context as it comes, an object and an exception included"
+        unserializable = []
+        for issue in issues:
+            try:
+                issue.model_dump_json()
+            except PydanticSerializationError as exc:
+                unserializable.append(f"{issue.code}: {exc}")
+        assert unserializable == [], f"W-B70: every issue the batch answers must serialize, or the endpoint answers 500: {unserializable}"
 
 
 # ============================================================================

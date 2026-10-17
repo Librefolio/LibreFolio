@@ -25,6 +25,7 @@ from backend.app.schemas.fx import (
     FXDeleteResult,
     FXPeriodChangesRequest,
     FXPeriodChangesResponse,
+    FXRateRejection,
     FXSignalQueryResult,
     FXUpsertItem,
     FXUpsertResult,
@@ -34,7 +35,7 @@ from backend.app.schemas.signals import SignalCadence, SignalCatalogResponse, Si
 from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.fx.period_changes import get_fx_period_changes_bulk
-from backend.app.services.fx.storage import delete_rates_bulk, fx_rate_refusal, normalize_storable_rate, upsert_rates_bulk
+from backend.app.services.fx.storage import FXRateNotStorableError, delete_rates_bulk, fx_rate_refusal, normalize_storable_rate, upsert_rates_bulk
 from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
@@ -124,6 +125,10 @@ async def upsert_rates_endpoint(
 
     A date outside ``stored_date_bounds()`` (1900-01-01 to tomorrow) refuses the whole request with 422
     ``date_out_of_range``, before anything is written (X-R65, N83).
+
+    An item refused on its own is left out, the others written: ``rejected`` names it (index, date, reason) and
+    ``errors`` says it as a sentence. Every item refused: 400 with ``detail`` ``{code: "fx_rates_refused", message,
+    rejected}`` (X-R46).
     """
     if len(rates) > MAX_BULK_WRITE_ITEMS:
         raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(rates), MAX_BULK_WRITE_ITEMS))
@@ -134,6 +139,7 @@ async def upsert_rates_endpoint(
 
     results = []
     errors = []
+    rejected: list[FXRateRejection] = []
 
     for idx, rate_item in enumerate(rates):
         base = rate_item.base.upper()
@@ -143,6 +149,7 @@ async def upsert_rates_endpoint(
         if base == quote:
             error_msg = f"Rate {idx}: Base and quote must be different (got {base})"
             errors.append(error_msg)
+            rejected.append(FXRateRejection(index=idx, date=rate_item.rate_date, reason="same_currency"))
             continue
 
         try:
@@ -150,7 +157,7 @@ async def upsert_rates_endpoint(
             # rate overflows (1 / 1E-1000000) and a rate fx_rates.rate cannot keep is the item's error, never a 500 (X-R38)
             normalized = normalize_storable_rate(base, quote, rate_item.rate)
             if normalized is None:
-                raise ValueError(fx_rate_refusal(base, quote, rate_item.rate_date))
+                raise FXRateNotStorableError(fx_rate_refusal(base, quote, rate_item.rate_date))
             base, quote, rate_value = normalized
 
             # Use bulk service function
@@ -172,16 +179,22 @@ async def upsert_rates_endpoint(
         except ValueError as e:
             error_msg = f"Rate {idx}: Validation error: {e!s}"
             errors.append(error_msg)
+            reason = "rate_not_storable" if isinstance(e, FXRateNotStorableError) else "invalid_rate"
+            rejected.append(FXRateRejection(index=idx, date=rate_item.rate_date, reason=reason))
         except Exception:
             # MF-SEC9a: the log keeps the error; the answer never echoes it
             logger.exception("FX rate upsert failed", item=idx)
             errors.append(f"Rate {idx}: Failed: internal error")
+            rejected.append(FXRateRejection(index=idx, date=rate_item.rate_date, reason="internal_error"))
 
-    # If all rates failed, return 400
+    # If all rates failed, return 400: the same sentence, and which items with their reasons (X-R46)
     if errors and not results:
-        raise HTTPException(status_code=400, detail=f"All rates failed: {'; '.join(errors)}")
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "fx_rates_refused", "message": f"All rates failed: {'; '.join(errors)}", "rejected": [item.model_dump(mode="json") for item in rejected]},
+        )
 
-    return FXBulkUpsertResponse(results=results, success_count=len(results), errors=errors)
+    return FXBulkUpsertResponse(results=results, success_count=len(results), errors=errors, rejected=rejected)
 
 
 @router_currencies.delete("/rate", response_model=FXBulkDeleteResponse)

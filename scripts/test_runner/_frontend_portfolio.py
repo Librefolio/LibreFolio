@@ -49,6 +49,18 @@ def front_portfolio_price_refresh(verbose: bool = False, ui: bool = False, heade
     return _run_playwright("portfolio/price-refresh-reload.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_lazy_report_retry(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the lazy report retry E2E (backlog Y-24): a failed P&L candles or contribution request is asked again 2, 4 and 8 s after each failure, four times at most, on the page clock."""
+    print_section("Frontend Portfolio Lazy Report Retry Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/lazy-report-retry.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_allocation_negative_cash(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the negative-cash allocation E2E tests (Y10, decision 49)."""
     print_section("Frontend Portfolio Negative Cash Allocation Tests")
@@ -177,10 +189,12 @@ def front_portfolio_store_unit(verbose: bool = False, ui: bool = False, headed: 
 
     portfolioStore, portfolioMutation, lotsAnalysisStore, dashboardViewStore, and pageBusy (Y11): the
     «big» requests a page's Refresh button spins on, their per-token timeout and the reset on a route change.
+    Also lazyReportRetry (Y-24): when a failed lazy section of the report — the P&L candles, the contribution —
+    may be asked again: 2, 4 and 8 s after each failure, four requests at most per scope.
     """
     print(f"\n{Colors.BLUE}Running: Portfolio store Vitest unit tests{Colors.NC}")
     result = subprocess.run(
-        ["npx", "vitest", "run", "src/lib/stores/portfolio/portfolioStore.test.ts", "src/lib/stores/portfolio/portfolioMutation.test.ts", "src/lib/features/brokers/lots/lotsAnalysisStore.test.ts", "src/lib/features/dashboard/dashboardViewStore.test.ts", "src/lib/stores/app/pageBusy.test.ts"],
+        ["npx", "vitest", "run", "src/lib/stores/portfolio/portfolioStore.test.ts", "src/lib/stores/portfolio/portfolioMutation.test.ts", "src/lib/features/brokers/lots/lotsAnalysisStore.test.ts", "src/lib/features/dashboard/dashboardViewStore.test.ts", "src/lib/stores/app/pageBusy.test.ts", "src/lib/stores/portfolio/lazyReportRetry.svelte.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
     )
@@ -525,6 +539,14 @@ def populate_registry(registry: dict) -> None:
         name="Price Refresh E2E",
         desc="Lots Z5, Z-13, Z-18 and Z-14, desktop: a stubbed catch-up (the status route answered in the browser, the header set on real answers) shows the instance notice while a job runs and hides it at idle; once a catch-up that updated something is over, the open Dashboard and a broker's page ask for their report again, once, with no navigation; none when no job was seen running or nothing was updated; through that reload in background neither the Dashboard's root nor a Refresh button says busy (data-busy recorded in the page), the Positions tab's contribution included, while a Refresh the user asks for does; back in-app after a catch-up that updated something, the asset detail asks again the prices of the range it had loaded and the FX detail its rates, while without a catch-up the session cache answers (Z-14)",
         tests="portfolio/price-refresh-reload.spec.ts",
+    )
+    add_test(
+        cat,
+        "lazy-report-retry",
+        front_portfolio_lazy_report_retry,
+        name="Lazy Report Retry Tests",
+        desc="Backlog Y-24, desktop, on the page clock (page.clock: installed before the page opens, frozen once it has settled, moved only by runFor): a P&L candles or contribution request that POST /portfolio/report fails — answered 500 in the browser by its body, every other report let through — is not asked again while the clock stands still, then once 2, 4 and 8 s after each failure, not 1 ms before, four requests in all and none over a further minute; counted exactly by the stub and by an init script in the page (sent, and back one task after loadend), each absence read after the presence of the request before it. Dashboard: P&L → Candles, then a 6M period change asks them again, once, for the new period; a request that fails once is asked again 2 s later and its candles are drawn (the ECharts option), with no request more; Positions → Performance, then the Refresh button asks the contribution again, once. Broker detail (Interactive Brokers, by name; legacy mode): P&L → Candles, then its Refresh asks them again; Positions → Performance, then a 6M period change asks the contribution again; and, from a review of the first cure, P&L → Candles with the candles request held at the network: a 6M period change meanwhile, that request then failing, asks the new period's candles, once, and draws them; leaving Candles for Line and coming back meanwhile, its failure is not asked again at once nor 1 ms before 2 s, and exactly once at 2 s. Read-only: TEST_USER's seeded data",
+        tests="portfolio/lazy-report-retry.spec.ts",
     )
     add_test(cat, "allocation-negative-cash", front_portfolio_allocation_negative_cash, name="Negative Cash Allocation", desc="Decision 49 on an intercepted report: the type and sector tabs state the overdraft under the pie, signed and in the display currency, masked under privacy with the sign kept; the pie draws no arc for the cash; without the interception no note", tests="portfolio/allocation-negative-cash.spec.ts")
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
