@@ -2049,8 +2049,10 @@ waiting (`waiting`), and the session version given at the commit.
   the system's words, never a path, through `read_restore`, `cancel_restore`, `prepare_restart` and `confirm_restore`
   (a `500` on the routes, exit `1` in `backup pending` and `backup restore`); a link or a folder in its place, or a
   content that does not validate, still reads as none, as above; the startup steps (`apply_pending_restore`,
-  `finish_pending_restore`), the outcome (`GET /backup/restore/outcome`) and the pruning (`protected_stage`) keep
-  reading it as none, the error logged, so a start applies nothing and goes on with the data as it is.
+  `finish_pending_restore`), the outcome (`GET /backup/restore/outcome`, which reads the state only for the ticket of
+  a restart not expired, so no other caller makes LibreFolio read it nor log the error, lot B-41) and the pruning
+  (`protected_stage`) keep reading it as none, the error logged, so a start applies nothing and goes on with the data
+  as it is.
 - **One at a time.** While a restore is not finished (`pending`, `applying`, `applied`, `rolling_back`), another one is
   refused (`restore_already_pending`), and its checked copy is never dropped nor pruned, however old
   (`restore_jobs.remove_check`, `prune`).
@@ -2163,8 +2165,11 @@ a session, the state of that restore and nothing else.
   answers `500` and the server keeps running.
 - **Kept as a hash.** Only its SHA-256 is stored, in `.restore/outcome-ticket.json` (`OutcomeTicket`), with the stage
   of its restore, `issued_at` and `expires_at`: `0600`, written atomically, never through a link, and read only in the
-  shape this LibreFolio writes. `.restore` is never swapped, so the ticket outlives the restart, the swap, the commit and
-  a rollback.
+  shape this LibreFolio writes. Any well-formed ticket reaches that file without a session, so a file that cannot be
+  read (a link included) or is not in that shape is logged as an error once per data directory in each server process,
+  then at `debug` while the same failure lasts. A failure of another kind, or one after the file was written, removed
+  or read successfully, is logged as an error again (lot B-42). `.restore` is never swapped, so the ticket outlives the
+  restart, the swap, the commit and a rollback.
 - **In a header.** The page sends it in `X-Restore-Ticket`, never in the URL, which the access log records
   ([Request Logs](#request-logs)): the route ignores the query string, and a `?ticket=…` typed by hand is written there
   as `***`. LibreFolio never logs it, and the page keeps it in memory only.
@@ -2178,7 +2183,8 @@ a session, the state of that restore and nothing else.
 - **One answer for every miss.** No ticket, a malformed one, an unknown one (never issued, replaced or removed), an
   expired one (then removed) or one of another restore: the same `404` `restore_outcome_not_found`. The hashes are
   compared in constant time (`hmac.compare_digest`), and a wrong ticket changes nothing: the route removes a ticket
-  only when its own holder presents it expired.
+  only when its own holder presents it expired. The ticket is checked before the state of the restore, so a caller
+  without the ticket of a restart not expired never makes LibreFolio read that state, nor log that it cannot (lot B-41).
 - **Nothing more.** `RestoreOutcome` holds `state`, `reason` and `waiting`: no name, date, version or path.
 
 When the route answers `404`, `401` or `423` (a ticket expired, replaced or removed, a server without the route, a
