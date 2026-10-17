@@ -41,6 +41,22 @@ Red before the cure: (1) because the worker starts with none of it; (2) and (3) 
 runs, never at collection. (5) is green before the cure and must stay so. A fresh interpreter
 runs in a session of its own, killed with its process group (forkserver and workers) if it
 outlives its deadline. No assertion depends on a duration.
+
+W-B59 (R13-SEC2, E's review of 17/10, note 12): ``_get_pool()`` sets the forkserver preload whatever the prewarm
+(``LIBREFOLIO_BRIM_PREWARM``, ``config/brim.py``, off by default: decision N56) says. On Python 3.13 the first
+``run_in_executor`` waits, on the event-loop thread, for the new worker's pid, which a preloading forkserver sends only
+once BRIM and its 33 plugins are imported: the loop stalls ~4 s idle, 30–50 s under load (E measured, with a module that
+sleeps 3 s at import: a stall of 3.14 s with the preload, 0.18 s without). The contract:
+
+6. ``_get_pool()`` sets the preload only when ``brim_prewarm_enabled()`` is true, a ``BrimConfigError`` counting as off:
+   with ``LIBREFOLIO_BRIM_PREWARM=0`` or ``=bogus`` the pool's first worker is born WITHOUT the BRIM module, the plugin
+   module and the discovery (red today: it is born with them), the pool built and not disabled;
+7. with ``LIBREFOLIO_BRIM_PREWARM=1``, (1) and (2) hold as before: the two W-B53 tests now set it explicitly, so the
+   environment of the run (``LIBREFOLIO_TEST_MODE``, which a blank value follows) never decides for them — guards,
+   green today and after.
+
+The event-loop stall itself is not measured here: under the load of a shared test machine (100 and more) no margin
+tells a preload from a busy scheduler, and the worker's birth is the cause the stall follows from.
 """
 
 from __future__ import annotations
@@ -272,8 +288,9 @@ def _tail(text: str, lines: int = 80) -> str:
     return "\n".join(text.splitlines()[-lines:])
 
 
-def _fresh_interpreter_env() -> dict[str, str]:
-    """This process's environment, with the project root first on ``PYTHONPATH``, as the server has it.
+def _fresh_interpreter_env(overrides: dict[str, str] | None = None) -> dict[str, str]:
+    """This process's environment, with the project root first on ``PYTHONPATH``, as the server has it, and ``overrides``
+    on top (W-B59: ``LIBREFOLIO_BRIM_PREWARM`` set by the test, never inherited by chance).
 
     The root matters beyond the script's own imports: ``multiprocessing.forkserver.main`` swallows the ``ImportError`` of a
     preload module in silence, so a forkserver whose ``sys.path`` missed it would start "preloaded" with nothing — the first
@@ -282,11 +299,13 @@ def _fresh_interpreter_env() -> dict[str, str]:
     """
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join([str(REPO_ROOT), *(part for part in os.environ.get("PYTHONPATH", "").split(os.pathsep) if part)])
+    env.update(overrides or {})
     return env
 
 
-def _in_a_fresh_interpreter(tmp_path: Path, label: str, script: str, *args: str) -> dict[str, Any]:
-    """What ``script`` saw in a new interpreter, started in a session of its own with ``args``: the JSON after ``PROBE_MARK``.
+def _in_a_fresh_interpreter(tmp_path: Path, label: str, script: str, *args: str, env: dict[str, str] | None = None) -> dict[str, Any]:
+    """What ``script`` saw in a new interpreter, started in a session of its own with ``args`` and the variables ``env`` on
+    top of this process's: the JSON after ``PROBE_MARK``.
 
     Its output goes to a file in ``tmp_path`` — never to a pipe its forkserver could keep open — and is shown when it fails.
     Past ``PROCESS_SECONDS`` it is killed with its whole process group, forkserver and workers included, and reaped.
@@ -294,7 +313,7 @@ def _in_a_fresh_interpreter(tmp_path: Path, label: str, script: str, *args: str)
     log_path = tmp_path / f"fresh-interpreter-{label}.log"
     command = [sys.executable, "-c", script, *args]
     with log_path.open("wb") as log:
-        process = subprocess.Popen(command, cwd=REPO_ROOT, env=_fresh_interpreter_env(), stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        process = subprocess.Popen(command, cwd=REPO_ROOT, env=_fresh_interpreter_env(env), stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     try:
         with contextlib.suppress(subprocess.TimeoutExpired):
             process.wait(timeout=PROCESS_SECONDS)
@@ -313,11 +332,11 @@ def _in_a_fresh_interpreter(tmp_path: Path, label: str, script: str, *args: str)
     return json.loads(lines[0][len(PROBE_MARK) :])
 
 
-def _in_a_fresh_pool_interpreter(tmp_path: Path, scenario: str) -> dict[str, Any]:
-    """``FRESH_POOL_SCRIPT`` run for ``scenario``, with the barriers on its probe passed: it finds nothing alone, and it finds
-    all a worker must be born with once the interpreter itself has run the discovery. Without them, what the probe answers
-    proves nothing either way."""
-    seen = _in_a_fresh_interpreter(tmp_path, scenario, FRESH_POOL_SCRIPT, PROBE_MARK, scenario, str(RESULT_SECONDS))
+def _in_a_fresh_pool_interpreter(tmp_path: Path, scenario: str, *, env: dict[str, str] | None = None) -> dict[str, Any]:
+    """``FRESH_POOL_SCRIPT`` run for ``scenario``, with the variables ``env`` set, and the barriers on its probe passed: it
+    finds nothing alone, and it finds all a worker must be born with once the interpreter itself has run the discovery.
+    Without them, what the probe answers proves nothing either way."""
+    seen = _in_a_fresh_interpreter(tmp_path, scenario, FRESH_POOL_SCRIPT, PROBE_MARK, scenario, str(RESULT_SECONDS), env=env)
     assert not any(seen["probe_alone"].values()), f"barrier: _brim_pool_probe alone finds the BRIM modules or the discovery in a fresh interpreter, so a worker answering True would prove nothing: {seen}"
     assert not _lacking(seen["after_discovery_here"]), f"barrier: once the interpreter has run the discovery itself, the probe still misses {_lacking(seen['after_discovery_here'])}: it looks for the wrong names, or the discovery fails here, and then it fails in a forkserver too: {seen}"
     return seen
@@ -358,26 +377,63 @@ def _spawn_only(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(multiprocessing, "get_context", get_context)
 
 
+#: The variable of the BRIM prewarm (``config/brim.py``), set explicitly in every fresh interpreter that builds the pool.
+PREWARM_VARIABLE = "LIBREFOLIO_BRIM_PREWARM"
+PREWARM_ON = {PREWARM_VARIABLE: "1"}
+
+
 @FORKSERVER_ONLY
-def test_a_worker_of_the_pool_starts_with_the_brim_module_and_its_plugins_already_loaded(tmp_path):
-    """W-B53, red before the cure: the forkserver ``_get_pool()`` forks its workers from has preloaded the BRIM module, its
-    plugins and the registry's discovery (``brim_parse_preload``).
+def test_with_the_prewarm_on_a_worker_of_the_pool_starts_with_the_brim_module_and_its_plugins_already_loaded(tmp_path):
+    """W-B53, now a guard: green today and after. With the prewarm on (``LIBREFOLIO_BRIM_PREWARM=1``, set here, never
+    inherited), the forkserver ``_get_pool()`` forks its workers from has preloaded the BRIM module, its plugins and the
+    registry's discovery (``brim_parse_preload``).
 
     In a fresh interpreter, where no forkserver has started yet, ``_get_pool()`` builds the pool and its first worker runs
-    ``_brim_pool_probe.worker_report``. Today it finds none of it: the forkserver started with the default preload, and each
-    worker imports the BRIM module when its first parse unpickles ``parse_file``, then discovers every plugin in that parse —
-    the first parse after the server starts pays for both.
+    ``_brim_pool_probe.worker_report``. Before W-B53 it found none of it: the forkserver started with the default preload,
+    and each worker imported the BRIM module when its first parse unpickled ``parse_file``, then discovered every plugin in
+    that parse. W-B59 keeps this with the prewarm on, and drops the preload with it off (the tests below).
     """
-    seen = _in_a_fresh_pool_interpreter(tmp_path, "pool")
+    seen = _in_a_fresh_pool_interpreter(tmp_path, "pool", env=PREWARM_ON)
 
     worker = _worker_of_a_forkserver(seen)
     lacking = _lacking(worker)
-    assert not lacking, f"W-B53: worker {worker['pid']} started without {'; '.join(lacking)}: its forkserver (pid {worker['ppid']}) did not preload them, so the first parse pays; _get_pool() must set the preload {PRELOAD_MODULE} first (loaded there: {worker['preload_module_loaded']}): {seen}"
+    assert not lacking, f"W-B53: with the prewarm on, worker {worker['pid']} started without {'; '.join(lacking)}: its forkserver (pid {worker['ppid']}) did not preload them ({PRELOAD_MODULE} loaded there: {worker['preload_module_loaded']}): {seen}"
+
+
+@FORKSERVER_ONLY
+@pytest.mark.parametrize(
+    ("value", "reading"),
+    [
+        pytest.param("0", "off", id="prewarm-0"),
+        pytest.param("bogus", "neither on nor off, so BrimConfigError, which counts as off", id="prewarm-bogus"),
+    ],
+)
+def test_with_the_prewarm_off_the_first_worker_is_born_without_the_brim_module_its_plugins_or_the_discovery(tmp_path, value, reading):
+    """W-B59 (R13-SEC2). Red today: ``_get_pool()`` sets the forkserver preload whatever ``LIBREFOLIO_BRIM_PREWARM``
+    says, so the first worker is born with the BRIM module, a plugin module and the discovery. On Python 3.13 the first
+    ``run_in_executor`` waits on the event-loop thread for that worker's pid, which a preloading forkserver sends only
+    once BRIM and its 33 plugins are imported: the server stalls ~4 s idle, 30–50 s under load — with the prewarm off,
+    against decision N56.
+
+    Contract: ``_get_pool()`` sets the preload only when ``brim_prewarm_enabled()`` is true; a ``BrimConfigError`` counts
+    as off. In a fresh interpreter with ``LIBREFOLIO_BRIM_PREWARM`` at ``0`` (off) or at ``bogus`` (neither on nor off:
+    ``BrimConfigError``), the pool is built — not disabled, nothing raised (the barrier of ``_worker_of_a_forkserver``)
+    — and its first worker, forked by a lazy forkserver without preload, lacks all three of ``BORN_WITH``: it imports
+    them at its first parse, outside the event loop, as before W-B53. The ``bogus`` case guards the error path: green
+    after the cure only if the configuration error is read as off, never raised out of ``_get_pool()`` (which would
+    disable the pool and fail the barrier).
+    """
+    seen = _in_a_fresh_pool_interpreter(tmp_path, f"pool-prewarm-{value}", env={PREWARM_VARIABLE: value})
+
+    worker = _worker_of_a_forkserver(seen)
+    loaded = [what for key, what in BORN_WITH.items() if worker.get(key) is True]
+    assert not loaded, f"W-B59: with LIBREFOLIO_BRIM_PREWARM={value} ({reading}), worker {worker['pid']} was born with {'; '.join(loaded)}: its forkserver (pid {worker['ppid']}) preloaded them, and the loop waited for it: {seen}"
 
 
 @FORKSERVER_ONLY
 def test_prewarm_starts_the_preloaded_forkserver_before_any_parse_and_leaves_the_pool_lazy(tmp_path):
-    """W-B53, red before the cure (``prewarm`` does not exist): ``prewarm()`` starts the forkserver now, preloaded.
+    """W-B53, now a guard: green today and after. With the prewarm on (``LIBREFOLIO_BRIM_PREWARM=1``, set here, never
+    inherited), ``prewarm()`` starts the forkserver now, preloaded.
 
     In a fresh interpreter: ``prewarm()`` returns None, the pool still unbuilt and not disabled, and the processes it started
     are new children of the interpreter. The pool built afterwards forks its first worker from one of them — the forkserver
@@ -388,7 +444,7 @@ def test_prewarm_starts_the_preloaded_forkserver_before_any_parse_and_leaves_the
     """
     assert callable(brim_parse_pool.prewarm), "brim_parse_pool.prewarm must be a function"
 
-    seen = _in_a_fresh_pool_interpreter(tmp_path, "prewarm")
+    seen = _in_a_fresh_pool_interpreter(tmp_path, "prewarm", env=PREWARM_ON)
 
     assert seen["prewarm_returned"] == "None", f"prewarm() returned {seen['prewarm_returned']}, not None: {seen}"
     assert seen["pool_after_prewarm"] == "None", f"prewarm() built the pool: the pool stays lazy, built by the first parse: {seen}"

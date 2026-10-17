@@ -13,7 +13,7 @@ import {waitLocale} from 'svelte-i18n';
 import type {RenderedSignal} from '$lib/charts/signals';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
-import {CHART_GAIN_LOSS, GROWTH_CHART_COLORS, GROWTH_SERIES} from '$lib/theme/chartTheme';
+import {CHART_GAIN_LOSS, chartNeutrals, GROWTH_SERIES} from '$lib/theme/chartTheme';
 import {themed} from '$lib/theme/themePair';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
@@ -4203,7 +4203,7 @@ describe('canonical overlay axis and reference helpers', () => {
                     full.forEach((series, index) => expect(series.data).toBe(update[index].data));
                     expect(full[0]).toMatchObject({type: 'line', smooth: false, connectNulls: false, lineStyle: {color: gain}, itemStyle: {color: gain}, areaStyle: {color: gain}});
                     expect(full[1]).toMatchObject({type: 'line', smooth: false, connectNulls: false, lineStyle: {color: loss}, itemStyle: {color: loss}, areaStyle: {color: loss}});
-                    expect(full[2]).toMatchObject({name: PNL_REFERENCE_SERIES_NAME, type: 'line', lineStyle: {color: themed(GROWTH_CHART_COLORS.pnlReference, isDark), type: 'dashed'}, tooltip: {show: false}, silent: true});
+                    expect(full[2]).toMatchObject({name: PNL_REFERENCE_SERIES_NAME, type: 'line', lineStyle: {color: chartNeutrals(isDark).growth.pnlReference, type: 'dashed'}, tooltip: {show: false}, silent: true});
                     expect(full.slice(3).map((series) => series.lineStyle)).toEqual([0, 1].map((index) => ({color: brokerColor(index, isDark), width: 1.5, type: 'dashed'})));
                 }
             });

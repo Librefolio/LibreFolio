@@ -1621,16 +1621,16 @@ async def test_a_password_reset_link_goes_to_its_account_in_its_language_with_th
     """EMA-031 — contract 6: the member's live reset link, the member's language ``it``, the instance's ``fr``; the request names a stranger's site as its Host, Origin, X-Forwarded-Host and Referer.
 
     200 ``{purpose: password_reset, to: <the member's address>, language: it}``; one message, to the member's address,
-    exactly ``build_password_reset`` in Italian for the member with ``{PUBLIC_URL}/reset-password#token=…`` and the
-    instance of ``LIBREFOLIO_PUBLIC_URL``; every link a mail client opens is that one; nothing of the stranger's site;
-    one unit spent; the link still live, its token in no log event (barrier: the send was captured with its id).
+    exactly ``build_password_reset`` in Italian with ``{PUBLIC_URL}/reset-password#token=…`` and the instance of
+    ``LIBREFOLIO_PUBLIC_URL``, greeting nobody by name — the member's username in no part of it (decision N62) —; every
+    link a mail client opens is that one; nothing of the stranger's site; one unit spent; the link still live, its token
+    in no log event (barrier: the send was captured with its id).
     """
     print_section("EMA-031: a reset link to its account")
     await _set_default_language(private.engine, "fr")
     await _set_account_language(private.engine, private.member.id, "it")
     issued = await _issue(private.engine, PASSWORD_RESET, user_id=private.member.id, created_by_user_id=private.admin.id)
     link = f"{PUBLIC_URL}/reset-password#token={issued.token}"
-    expected = build_password_reset(language="it", username=MEMBER, link=link, ttl=DEFAULT_TTL[PASSWORD_RESET], instance=PUBLIC_URL_HOST)
 
     with FakeSmtpServer() as fake:
         _links_ready(monkeypatch, fake)
@@ -1642,7 +1642,8 @@ async def test_a_password_reset_link_goes_to_its_account_in_its_language_with_th
     assert [message.rcpt_tos for message in fake.messages] == [[private.member.email]], f"{len(fake.messages)} message(s)"
     received = fake.messages[0]
     assert _mailboxes(received.message["From"]) == [SENDER]
-    _assert_is(received, expected)
+    assert MEMBER not in _text(received) + _html(received), "a reset email greets nobody by name: the username is text its owner chose (N62)"
+    _assert_is(received, build_password_reset(language="it", link=link, ttl=DEFAULT_TTL[PASSWORD_RESET], instance=PUBLIC_URL_HOST))
     opened = [href for href in _hrefs(_html(received)) if "token=" in href]
     assert opened and set(opened) == {link}, f"the links a mail client opens: {opened}"
     assert _stranger_in(received) == [], f"the stranger's site is in {_stranger_in(received)}"
@@ -1840,8 +1841,9 @@ async def test_forgot_password_emails_the_account_a_live_link_on_the_public_url(
 
     A request naming the member by username, or by address, with a stranger's site as its Host, Origin,
     X-Forwarded-Host and Referer: 202, and once it has returned one message went to the member's address — exactly
-    ``build_password_reset`` in Spanish for the member, with ``{PUBLIC_URL}/reset-password#token=…`` and the instance
-    of ``LIBREFOLIO_PUBLIC_URL``; every link a mail client opens is that one; nothing of the stranger's site. Its token
+    ``build_password_reset`` in Spanish, greeting nobody by name (the member's username in no part of it: decision N62),
+    with ``{PUBLIC_URL}/reset-password#token=…`` and the instance of ``LIBREFOLIO_PUBLIC_URL``; every link a mail
+    client opens is that one; nothing of the stranger's site. Its token
     is a live reset link of the member, the earlier link is revoked, the member has those two rows; one unit spent.
     Neither the identifier nor the token is in any log event (barrier: ``Forgotten password: reset link emailed`` was
     captured).
@@ -1863,7 +1865,8 @@ async def test_forgot_password_emails_the_account_a_live_link_on_the_public_url(
     token = _token_in(_text(received), PASSWORD_RESET)
     link = f"{PUBLIC_URL}/reset-password#token={token}"
     assert _mailboxes(received.message["From"]) == [SENDER]
-    _assert_is(received, build_password_reset(language="es", username=MEMBER, link=link, ttl=DEFAULT_TTL[PASSWORD_RESET], instance=PUBLIC_URL_HOST))
+    assert MEMBER not in _text(received) + _html(received), "a reset email greets nobody by name: the username is text its owner chose (N62)"
+    _assert_is(received, build_password_reset(language="es", link=link, ttl=DEFAULT_TTL[PASSWORD_RESET], instance=PUBLIC_URL_HOST))
     opened = [href for href in _hrefs(_html(received)) if "token=" in href]
     assert opened and set(opened) == {link}, f"the links a mail client opens: {opened}"
     assert _stranger_in(received) == [], f"the stranger's site is in {_stranger_in(received)}"
