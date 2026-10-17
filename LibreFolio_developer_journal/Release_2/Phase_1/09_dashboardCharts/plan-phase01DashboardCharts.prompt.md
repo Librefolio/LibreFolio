@@ -4902,3 +4902,97 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >     `check-links` con 97 collegamenti validi.
 > - **Backlog**: T-U8 («il frontend solo di presentazione») sta nella sezione T, che non è mia. Lo segnalo al
 >   coordinatore: con Y12a e questo lotto restano solo V11 e P5, che aspettano MF-E e il CP-7b di J.
+> - **E2E breve verde** (05:11–05:25): `dashboard` 27/27, `privacy-masking` 18/18, `front-broker detail` 38/38. **Entrato**:
+>   `9d40a1df0`, `879cfc9d7`, `f24096f01` → dev `1565b6bbb`; CHANGELOG `a3662b3ef` con le mie due righe 🐛. T-U8 lo
+>   riconcilia il coordinatore.
+
+## Coda del mattino del 17/10: Y-16, Y-2, Y-13, Y-8 (dalle 05:30; HEAD `a3662b3ef`)
+
+### Y-16 · la vista Candele salvata si carica per una dipendenza involontaria — opzione A approvata (05:4x)
+
+> **Note implementazione**.
+> - **Meccanismo**, verificato sul codice:
+>   - l'`$effect` di `GrowthChart` (`:975-979`) legge solo `viewMode`, `pnlSubmode` e `pnlCandles`, e chiama
+>     `onRequestPnlCandles()` in modo sincrono;
+>   - nella Dashboard la callback è `pageBusy.join('dashboard-pnl-candles', loadPnlCandles)`, e `loadPnlCandles` legge
+>     prima del primo `await` `canAsk`, `pnlCandles`, `pnlCandlesLoading`, `activeBrokerIds`, `dateRangeCtl` e
+>     `targetCurrency`. Diventano tutte dipendenze dell'effetto del figlio;
+>   - è il passaggio di `canAsk` a true, quando i broker diventano noti, a far ripartire la richiesta di una vista
+>     Candele salvata;
+>   - la pagina del broker non ha una guardia di prontezza.
+> - **Trovato analizzando: Y-24**, nel backlog, per il developer insieme a Y-18. La stessa dipendenza nascosta da
+>   `pnlCandlesLoading` riarma la richiesta dopo ogni errore, perché `requestReport` restituisce `null` invece di
+>   lanciare: richieste senza limite finché il backend fallisce. `PositionsPanel` fa lo stesso per il contributo,
+>   attraverso la sua prop dichiarata.
+> - **Opzione A** (coordinatore, 05:4x): nessun cambio di comportamento.
+>   - Un E2E diretto in `page-busy.spec.ts` (`test-author` `13eb06ea`): la richiesta dei broker è trattenuta, quindi
+>     niente candele; al rilascio parte la richiesta delle candele.
+>   - La prova di mutazione: un `untrack` attorno alla chiamata deve far diventare rosso il test.
+>   - Due commenti. In `GrowthChart.svelte`, sopra l'effetto: la callback gira tracciata apposta (Y-16), il test che lo
+>     fissa, Y-24. Nella Dashboard, sul JSDoc di `loadPnlCandles`: le letture della guardia sono dipendenze
+>     dell'effetto, e vanno tenute prima del primo `await`.
+> - **Opzione B, per il developer**: una prop esplicita `canRequestPnlCandles` più `untrack`. Toglie il ciclo, ma dopo
+>   un errore, o in un passaggio di periodo da null a null, non si richiederebbe più niente. Serve una «chiave di
+>   scope» e uno stato d'errore: è la decisione di Y-18.
+
+### Y-13 · ✅ già chiuso da T
+
+> `4a7ba1d7e` (16/10): `brokers-detail.spec.ts:392-419` usa `data-selected`. Aggiunta la ✅ nella mia sezione del backlog
+> (via del coordinatore, 05:4x).
+
+### Y-2 · il buco nella cascata settimanale — analisi e rosso (dalle 05:45)
+
+> **Note implementazione**.
+> - **Il difetto**, verificato:
+>   - `buildBucketInfos` (`growthChartData.ts:225`) dà a ogni secchio settimanale o mensile, come `date`, l'ultimo
+>     giorno di quel secchio presente in storia;
+>   - `aggregateMetric` (`:380`) cerca il valore aggregato **per `bucket.date`**, mentre `aggregateLineSeries`
+>     (`components/charts/timeSeriesAggregation.ts`) lo data sull'ultimo punto con un valore;
+>   - quindi una linea che si ferma a metà settimana (valori da lunedì a mercoledì, poi null) non trova niente il
+>     venerdì e fa un buco. La scala a gradini delle candele (`ladderLast`) tiene invece l'ultimo valore. Lo stesso
+>     vale per il mese.
+> - **La correzione prevista**: cercare per `bucketEnd`, il bordo di calendario che i due lati calcolano con la stessa
+>   `mapDateToBucket`, cioè l'ultimo valore esistente nel secchio. Il punto resta su `bucket.date`; un secchio senza
+>   valori resta un buco. Non è matematica finanziaria: è la scelta del punto che rappresenta il secchio, come già
+>   fanno `aggregateLineSeries` e `ladderLast`.
+> - Il rosso lo scrive `test-author` (`e6cd112c`) in `components/charts/chartCoreHelpers.test.ts`, nella sezione di
+>   growthChartData (FE6a), che ha già le fixture `week` e `weekBucket`.
+> - **I rossi di Y-2** (`test-author` `e6cd112c`, `chartCoreHelpers.test.ts` dopo `:4577`), tre casi:
+>   - settimanale, la linea si ferma a metà settimana: `[null]` contro `[30]`;
+>   - due settimane: `[null, null]` contro `[30, null]`. La seconda settimana resta un buco vero, quindi un valore non
+>     viene portato nella settimana dopo;
+>   - mensile, il secchio da `buildResolutionData`: `[null]` contro `[119]`, più un controllo che passa anche oggi;
+>   - il controllo «valore l'ultimo giorno» c'era già (`:4577` e la cascata a `:3874`).
+>   - **Lanciati** alle 05:45 (carico 47): **3 rossi su asserzioni**, 287 verdi (`files/logs/y2_red.log`).
+> - **Correzione di Y-2 applicata** (`files/scripts/y2_apply.py`): `aggregateMetric` cerca per `bucketEnd`, con un
+>   commento sul perché. Verdi: `chartCoreHelpers` 290/290, `GrowthChart` 166/166, `GrowthChart.tooltip` 6/6,
+>   `growthLadderAxis` 138/138.
+> - **Nota, fuori da Y-2**: `aggregateCandleMetric` (`:481-497`) cerca anch'esso per `bucket.date`. Ma la vista Candele
+>   prende la scala a gradini (`getActiveAggregation`: `ladderActive` → `buildLadderData` → `ladderCandleMetric`), quindi
+>   quella candela della cascata non si disegna mai. Nessun effetto visibile, niente voce nel backlog.
+> - **L'E2E di Y-16** (`test-author` `13eb06ea`): `page-busy.spec.ts` ~l.867, «Dashboard loaded from scratch on a saved
+>   P&L candles view: the candles are asked, and drawn, once the brokers are known…».
+>   - Usa `saveCandlesView`, `hold(BROKERS_PATH, isBrokerList)`, `expectBusy` e le prove di montaggio (`aria-pressed`
+>     di `growth-toggle-pnl` e `growth-pnl-submode-candles`).
+>   - Con i broker trattenuti, nessun corpo con `include_pnl_candles`. Al rilascio parte la richiesta, con `broker_ids`
+>     non vuoti, e le candele vengono disegnate (`candleBodies` attraverso `[data-chart-ready]`).
+>   - Con la mutazione `untrack` si aspetta un timeout con un messaggio proprio.
+> - **Prove leggere su Y-16 e Y-2** (05:5x, carico 36): svelte-check 0/0, Prettier pulito sui 5 file,
+>   `theme-roles --check` pulito, `git diff --check` pulito.
+> - **Slot chiesto**: `files/scripts/y16_e2e.sh`.
+>   - Prima la mutazione su `GrowthChart.svelte` (provata su una copia: diventa `untrack(() => onRequestPnlCandles?.())`
+>     più l'import), e `page-busy` che si aspetta rossa.
+>   - Poi il ripristino controllato con l'hash, con una trap anche in caso d'errore.
+>   - Infine `page-busy` e `dashboard` sul codice vero.
+> - **E2E di Y-16 e Y-2** (slot 1, 05:50–06:07; `files/scripts/y16_e2e.sh`). La guardia sul carico a 5 minuti sotto 50
+>   l'ho aggiunta allo script prima di lanciarlo: il coordinatore la dava per già presente, ma non c'era. Partenza dopo
+>   150 s, con il carico a 47.
+>   - **Mutazione** (`untrack(() => onRequestPnlCandles?.())` più l'import): `page-busy` 15 verdi e **2 rossi, per la
+>     ragione giusta**:
+>     - `:867`, il test di Y-16, con il suo messaggio: «Y-16: the brokers are known, and the candles the chart asked
+>       before them are never asked — the refused ask was not re-armed when the brokers landed»;
+>     - `:774`, N55, sulla sua precondizione: «the saved candles view never drew its candles».
+>   - **Ripristino**: l'hash è uguale (`54d25178…`) e nel codice non resta nessun `untrack` (`grep` dà 0).
+>   - **Codice vero**: `front-portfolio page-busy` **17/17** e `front-portfolio dashboard` **27/27**.
+>   - Porta 6189 libera. Log in `files/logs/y16_e2e_*.log`.
+> - **Backlog**: Y-16 ✅ (opzione A; la correzione vera è Y-24) e Y-2 ✅.
