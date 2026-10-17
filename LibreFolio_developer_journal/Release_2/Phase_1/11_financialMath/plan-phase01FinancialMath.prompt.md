@@ -2321,3 +2321,53 @@ centinaia di migliaia di giorni: le storie partono al più presto dal 1° gennai
   `portfolio-engine` 41, `financial-math` **1116**, `lots-analysis-pure` **181**, `portfolio-allocation-source` 98;
   `check-orphans` exit 0; ruff/black puliti; `git diff --check` pulito; porta 6190 libera.
 - Da fare: slot `api portfolio` prima dell'ingresso; J rivede `lots_analysis_service.py`.
+- ✅ **MF-SEC8-2 committed** (fix + journal, tip `c233ac717`); **base** `fddeb819a` = mio + dev `d28a6d7df`, pulito.
+  Revisione J: **OK**; un LOW di doc (la gamba di trasferimento non si riporta al primo NAV: le serve il prezzo del suo
+  giorno) → applicato in `lots_analysis_service.md` dentro MF-P2b. Slot `api portfolio`: in coda dal coordinatore.
+
+#### MF-P2b — i limiti degli endpoint dei cambi a periodo fisso (17/10, 09:4x; nota di E, R13-SEC8)
+- **Difetto**: le liste di `POST /assets/prices/period-changes` e `POST /fx/currencies/period-changes` non hanno un
+  massimo; il servizio degli asset fa **una query raggruppata per giorno distinto** (10 per `as_of` distinto), quindi N
+  voci con `as_of` tutti diversi sono 10·N query; `as_of` prima di ~0006-01-01 fa sollevare `OverflowError` a
+  `fixed_period_dates` (`as_of − 1826 giorni`) → 500.
+- **Decisione** (coordinatore, 09:4x, sulla mia proposta): tetto alla lista (asset **10 000**: la lista degli asset non è
+  paginata e il frontend manda tutti gli asset elencati; FX **1 000** coppie), **≤ 5 `as_of` distinti** per richiesta,
+  `as_of ≥ EARLIEST_RANGE_START`; nessun tetto superiore (un `as_of` futuro è innocuo). X rivede le rotte.
+- ✅ **Codice**:
+  - `schemas/common.py`: `PERIOD_CHANGES_MAX_AS_OF_DAYS = 5`, `period_changes_as_of()` e il tipo
+    `PeriodChangesAsOf = Annotated[date, AfterValidator(period_changes_as_of)]`.
+  - `schemas/prices.py`: `PERIOD_CHANGES_MAX_ASSETS = 10_000`; `FAPeriodChangesQueryItem.as_of: PeriodChangesAsOf`;
+    descrizione di `change_ratio` resa univoca («(prezzo su as_of ÷ prezzo su as_of − days) − 1», il nit di X-R53).
+  - `schemas/fx.py`: `PERIOD_CHANGES_MAX_PAIRS = 1_000`; `FXPeriodChangesRequest.as_of: PeriodChangesAsOf`; le due
+    descrizioni rese univoche.
+  - rotte `api/v1/assets/prices.py` e `api/v1/fx/currencies.py`: `Annotated[List[…], Body(max_length=…)]` (→ `maxItems`
+    nell'OpenAPI) e il controllo degli `as_of` distinti → `HTTPException(422)`.
+  ⚠️ **Fuori pista**: il validatore riusabile `_as_of_bound = field_validator("as_of")(…)` scartato (in pydantic v2 un
+  nome con `_` rischia di diventare attributo privato): tipo `Annotated` con `AfterValidator`. Sonda in-process
+  (`TestClient` su un'app di prova): 3 voci 200, 4 voci 422, `maxItems` 3 nell'OpenAPI; 1899-12-31 e 0005-12-31
+  rifiutati, 1900-01-01 accettato, entrambi gli schemi.
+  - Docs: `assets/architecture.md` e `fx/architecture.md`, punto **Request** di «Fixed-Period Changes» (EN-only).
+- ✅ **Test** (test-author `p2b-tests`, 09:4x–09:5x):
+  - NUOVO `test_schemas/test_period_changes_bounds.py` (puro, 12): i due schemi rifiutano 1899-12-31, 0005-12-31,
+    0005-12-30, 0001-01-01 (8 rossi su HEAD: accettati), accettano 1900-01-01 e 9999-12-31 (nessun tetto superiore).
+    Registrato: `schemas period-changes-bounds` in `scripts/test_runner/_backend_schemas.py` (funzione + `add_test`,
+    `isolation="pure"`; righe del test-author).
+  - `test_api/test_period_changes_api.py` sezione «BOUNDS OF A REQUEST» (18 casi `[assets|fx]`): al tetto 200, oltre 422
+    (il `detail` porta il numero); 5 `as_of` distinti 200, 6 → 422 (il `detail` nomina `as_of`); prima del 1900 → 422 con
+    `loc ["body", 0, "as_of"]`; dal 1900 → 200. Asset: l'id `2**62 − 1` ripetuto (10 query vuote, nessuna scrittura);
+    FX: AWG/TMT, sola lettura. Rossi su HEAD (dal codice): oltre il tetto 200; il sesto `as_of` 200; 1899-12-31 e
+    0005-12-31 200, 0005-12-30 e 0001-01-01 500.
+  - Descrizione di `api period-changes` in `_backend_api.py` estesa (MF-P2b).
+  ⚠️ **Fuori pista — 1825, non 1826**: il 5Y di `FIXED_PERIODS` è 1825 giorni; l'ultimo `as_of` che va in
+  `OverflowError` è **0005-12-30** (0005-12-31 dà 200 oggi). Corretti docstring e docs.
+- ✅ **Rossi leggeri** (`files/p2b.sh red`, prodotto invertito, sha `cb4da187…` uguale dopo): `schemas
+  period-changes-bounds` **8 failed, 4 passed**; `services period-changes` 20 (invariato).
+- ✅ **Verdi leggeri** (`files/p2b.sh green`): `period-changes-bounds` 12, `services period-changes` 20, `schemas
+  scheduled-investment-bounds` 18, `financial-math returns` 141. `api sync` exit 0 (client generato non tracciato:
+  `.max(10000)`, `.max(1000)`). ruff/black puliti, mkdocs build strict 0 e check-links 0, `check-orphans` 0, `git diff
+  --check` pulito.
+- ✅ **Slot** (`files/p2b.sh slot`, via del coordinatore 09:5x, carico a 5 min 28; insieme allo slot J-10 di J e a un
+  giro API breve di H): P2b invertito (sha `def2eac8…`, uguale dopo) → la revisione `fddeb819a` = SEC8-2 pura:
+  **SEC8-2 `api portfolio` 51**; P2b **rossi `api period-changes` 12 failed, 12 passed** (oltre il tetto ×2 e sesto
+  `as_of` ×2: 200 invece di 422; prima del 1900 ×8: 200, o 500 per 0005-12-30 e 0001-01-01); P2b rimesso → **verdi
+  `api period-changes` 24/24**; porta 6190 libera.
