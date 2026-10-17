@@ -4,10 +4,14 @@
 
   Self-contained, like the backup card above it. Published state: `data-state` (the controller's), `data-error-code`,
   `data-busy`. Events: `backup.restore.*` (`restoreFlow.svelte.ts`); a failure also raises an error toast.
+
+  A secure backup (an .lfbk, lot B4) asks for its password before it is sent (state `password`); a wrong password asks
+  again, and the file is not sent again. The password leaves the field as soon as it is submitted.
 -->
 <script lang="ts">
     import {onMount} from 'svelte';
-    import {ArchiveRestore, FileArchive, LoaderCircle, RefreshCw, RotateCcw, ShieldAlert, TriangleAlert, Upload, X} from 'lucide-svelte';
+    import {ArchiveRestore, FileArchive, KeyRound, LoaderCircle, RefreshCw, RotateCcw, ShieldAlert, TriangleAlert, Upload, X} from 'lucide-svelte';
+    import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import {_} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
@@ -19,6 +23,7 @@
     import {restoreErrorKey, restoreReasonKey, restoreWaitingKey} from './restoreText';
 
     const PHASE_KEYS: Record<RestorePhase, string> = {
+        decrypting: 'backup.restore.phase.decrypting',
         checking: 'backup.restore.phase.checking',
         unpacking: 'backup.restore.phase.unpacking',
         upgrading: 'backup.restore.phase.upgrading',
@@ -37,6 +42,7 @@
 
     let fileInput = $state<HTMLInputElement | null>(null);
     let reportOpen = $state(true);
+    let restorePassword = $state('');
 
     onMount(() => {
         void controller.load();
@@ -67,6 +73,18 @@
         input.value = '';
         if (file) void controller.upload(file);
     }
+
+    function submitPassword(event: SubmitEvent) {
+        event.preventDefault();
+        const typed = restorePassword;
+        restorePassword = '';
+        void controller.submitPassword(typed);
+    }
+
+    function cancelPassword() {
+        restorePassword = '';
+        controller.cancelPassword();
+    }
 </script>
 
 <section class="space-y-4 rounded-xl border border-lf-subtle bg-lf-panel p-4 text-lf-primary sm:p-5" data-testid="restore-card" data-state={controller.state} data-error-code={controller.errorCode ?? ''} data-busy={controller.busy ? 'true' : 'false'} aria-busy={controller.busy}>
@@ -95,6 +113,50 @@
             <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
             <span>{$_('backup.restore.last.rolledBack', {values: {date: formatDateTime(lastResult.finished_at ?? ''), reason: $_(restoreReasonKey(lastResult.reason))}})}</span>
         </div>
+    {/if}
+
+    {#if controller.state === 'password'}
+        <form class="space-y-3" data-testid="restore-password-form" onsubmit={submitPassword} novalidate>
+            <p class="flex items-start gap-2 text-sm text-lf-secondary">
+                <KeyRound class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
+                <span>{$_('backup.restore.password.intro')}</span>
+            </p>
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-lf-secondary" for="restore-password">{$_('backup.restore.password.label')}</label>
+                <PasswordInput autocomplete="off" bind:value={restorePassword} disabled={controller.submitting} hasError={controller.errorCode !== null} id="restore-password" name="restore-password" testId="restore-password" />
+            </div>
+            {#if controller.errorCode !== null}
+                <p class="flex items-start gap-2 text-sm text-lf-danger" role="alert" data-testid="restore-password-error" data-error-code={controller.errorCode}>
+                    <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
+                    <span>{$_(restoreErrorKey(controller.errorCode))}</span>
+                </p>
+            {/if}
+            <div class="flex flex-wrap items-center gap-2">
+                <button
+                    class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                    type="submit"
+                    data-testid="restore-password-submit"
+                    disabled={restorePassword === '' || controller.submitting}
+                >
+                    {#if controller.submitting}
+                        <LoaderCircle class="animate-spin" size={16} aria-hidden="true" />
+                    {:else}
+                        <KeyRound size={16} aria-hidden="true" />
+                    {/if}
+                    {$_('backup.restore.password.submit')}
+                </button>
+                <button
+                    class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-neutral focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
+                    type="button"
+                    data-testid="restore-password-cancel"
+                    disabled={controller.submitting}
+                    onclick={cancelPassword}
+                >
+                    <X size={16} aria-hidden="true" />
+                    {$_('backup.restore.password.cancel')}
+                </button>
+            </div>
+        </form>
     {/if}
 
     {#if controller.state === 'uploading'}
@@ -238,7 +300,7 @@
 
     {#if controller.state === 'idle' || controller.state === 'failed'}
         <div class="flex flex-wrap items-center gap-2">
-            <input bind:this={fileInput} class="hidden" type="file" accept=".zip,application/zip" data-testid="restore-file-input" onchange={fileChosen} />
+            <input bind:this={fileInput} class="hidden" type="file" accept=".zip,.lfbk,application/zip,application/octet-stream" data-testid="restore-file-input" onchange={fileChosen} />
             <button
                 class="inline-flex items-center gap-2 rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
                 type="button"

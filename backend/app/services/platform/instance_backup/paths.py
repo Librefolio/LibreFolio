@@ -26,6 +26,9 @@ DATABASE_ENTRY = "sqlite/app.db"
 ARCHIVED_FOLDERS = ("custom-uploads", "broker_reports", "scenario_catalog")
 #: The description of the archive, its last entry.
 MANIFEST_ENTRY = "manifest.json"
+#: The instance key inside a password-protected archive only (decision 39, lot B4): never among the manifest's files,
+#: never unpacked into a data directory, only read to re-encrypt the restored secrets.
+INSTANCE_KEY_ENTRY = "secrets/instance.key"
 
 BACKUPS_FOLDER = "backups"
 JOBS_FOLDER = ".jobs"
@@ -39,6 +42,8 @@ STAGE_FOLDER = "stage"
 #: Inside one stage: the data directory as the archive rebuilds it, and the report of the check.
 STAGE_DATA_FOLDER = "data"
 STAGE_REPORT_FILE = "report.json"
+#: Inside one stage, while it is checked: a password-protected archive decrypted (lot B4), removed once unpacked.
+STAGE_DECRYPTED_ARCHIVE = "archive.zip"
 #: The lock that lets one archive be checked at a time.
 STAGE_LOCK_FILE = ".stage.lock"
 #: Inside ``.restore``: the archives uploaded for a check (lot B2b), and the state of each check.

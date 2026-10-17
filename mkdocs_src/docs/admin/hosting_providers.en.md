@@ -351,8 +351,11 @@ After signing in, users get a full page instead of the app, **This instance is b
   their text tells them to ask their administrator for a backup;
 - **Logout** signs out.
 
-The card makes the same archive as your [hosting panel](#panel-backups): it leaves out the logs and
-the instance key, and the card says so. Keep your copy of the instance's key, its
+The card makes, by default, the same archive as your [hosting panel](#panel-backups): it leaves out
+the logs and the instance key, and the card says so. An administrator may choose a secure backup
+instead, encrypted with a password of their own: it carries the instance key only when LibreFolio
+generated it (`secrets/instance.key`), never a key you configured
+([Secure Backups](backup_restore.md#secure)). Keep your copy of the instance's key, its
 `secrets/instance.key` or the key you configured, with the data: without it, what LibreFolio
 encrypted can no longer be read. See «The Instance Key» in [Environment Variables](configuration.md).
 
@@ -368,7 +371,7 @@ On a blocked instance, only these API calls answer as usual:
 | Signing in and out, and who is signed in | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` |
 | Following a link already sent: checking it, and setting a new password with a reset link | `POST /api/v1/auth/tokens/inspect`, `POST /api/v1/auth/password-reset` |
 | Deleting one's own account, and seeing first what it would delete | `DELETE /api/v1/auth/users/me`, `GET /api/v1/auth/users/me/deletion-preview`: the block page has no button for it yet |
-| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the backup card of the block page calls them ([What Users See](#what-users-see)). For your panel, its [four routes](#panel-jobs), with its token |
+| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`, and `GET /api/v1/backup/instance/options`, the rules of a secure backup's password, so that the card can offer a secure backup too: the backup card of the block page calls them ([What Users See](#what-users-see)). For your panel, its [four routes](#panel-jobs), with its token |
 | The outcome of a restore, for the page that asked the restart, with the one-time ticket of that request: when the block took effect at that restart, it says that the restore waits for the unblock, and starts nothing | `GET /api/v1/backup/restore/outcome` |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |

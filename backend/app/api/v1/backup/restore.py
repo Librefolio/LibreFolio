@@ -6,7 +6,8 @@ never held in memory, never past the limit the hosting provider set (``LIBREFOLI
 413) or the free space (507). ``POST /backup/restore/stage`` then checks it in the background on a copy — unpacked,
 brought to this LibreFolio's schema, checked — and the client polls ``GET /backup/restore/stage/{stage_id}`` until the
 report of what a restore would do, or the code of the refusal. ``DELETE`` drops a check and its copy. One check runs at
-a time.
+a time. A secure backup (an ``.lfbk`` envelope, lot B4) comes with its password, checked at once: a missing or wrong
+one is refused (400) and keeps the upload, for another try. A 422 never repeats the body (``api/no_echo.py``).
 
 The restore (lot B3, ``services/platform/instance_backup/apply.py``): ``POST /backup/restore/stage/{stage_id}/confirm``
 confirms the restore of a checked copy, which changes nothing yet: the next start of the server applies it, before any
@@ -27,21 +28,35 @@ import asyncio
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response, status
 from starlette.requests import ClientDisconnect
 
+from backend.app.api.no_echo import NoInputEchoRoute
 from backend.app.api.v1.backup.job_views import backup_error
 from backend.app.api.v1.settings import require_admin
 from backend.app.config import get_data_dir
 from backend.app.config.backup import BackupConfigError, backup_max_upload_mb
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
-from backend.app.schemas.backup import RestoreMigration, RestoreOutcome, RestoreRestartAccepted, RestoreStage, RestoreStageReport, RestoreStageRequest, RestoreStatus, RestoreTableRows, RestoreTotalsDifference, RestoreUpload
+from backend.app.schemas.backup import (
+    RestoreMigration,
+    RestoreOutcome,
+    RestoreRestartAccepted,
+    RestoreSecretCounts,
+    RestoreStage,
+    RestoreStageReport,
+    RestoreStageRequest,
+    RestoreStatus,
+    RestoreTableRows,
+    RestoreTotalsDifference,
+    RestoreUpload,
+)
 from backend.app.services.platform.instance_backup import outcome, restart, restore_jobs
 from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreState, RestoreStateError, cancel_restore, prepare_restart, read_restore
+from backend.app.services.platform.instance_backup.envelope import EnvelopeError
 from backend.app.services.platform.instance_backup.paths import BackupPathError
 from backend.app.services.platform.instance_backup.staging import StagingBusyError, StagingReport, read_report
 
 logger = get_logger(__name__)
 
-restore_router = APIRouter()
+restore_router = APIRouter(route_class=NoInputEchoRoute)
 
 #: Pieces of the body are gathered up to this size before each write, so a large archive is not one thread hop per
 #: network read.
@@ -94,7 +109,7 @@ async def upload_restore_archive(request: Request, _admin: User = Depends(requir
         if failure is exc:
             raise
         raise failure from None
-    return RestoreUpload(upload_id=uploaded.upload_id, size=uploaded.size)
+    return RestoreUpload(upload_id=uploaded.upload_id, size=uploaded.size, kind=uploaded.kind)
 
 
 def _upload_limit() -> tuple[int, int | None]:
@@ -154,6 +169,9 @@ def _report_view(report: StagingReport) -> RestoreStageReport:
         files_size=report.files_size,
         database_size=report.database_size,
         instance_key_included=report.instance_key_included,
+        encrypted=report.encrypted,
+        secrets_rekeyed=report.secrets_rekeyed,
+        secrets_unreadable=RestoreSecretCounts(system=report.secrets_unreadable.system, user=report.secrets_unreadable.user),
         administrators=report.administrators,
         warnings=report.warnings,
         control_totals=report.control_totals,
@@ -190,19 +208,29 @@ def _stage_view(check: restore_jobs.RestoreCheck) -> RestoreStage:
     status_code=status.HTTP_202_ACCEPTED,
     response_model=RestoreStage,
     responses={
+        400: {"description": "A secure backup without its password (code `password_required`), with a wrong one (code `wrong_password`), or not a whole envelope (code `envelope_damaged`): the upload stays, for another try"},
         404: {"description": "No uploaded archive has this id: never received, replaced, or already checked (code `backup_upload_not_found`)"},
-        409: {"description": "Another archive is being checked (code `restore_busy`)"},
+        409: {"description": "Another archive is being checked (code `restore_busy`), or a secure backup this LibreFolio cannot read: update it first (code `envelope_unsupported`)"},
         500: _FOLDER_UNUSABLE,
     },
 )
 def start_restore_check(body: RestoreStageRequest, _admin: User = Depends(require_admin)) -> RestoreStage:
-    """Check an uploaded archive on a copy, in the background, and return the check to poll. The instance is not touched."""
+    """Check an uploaded archive on a copy, in the background, and return the check to poll. The instance is not touched.
+
+    A secure backup's password is checked first, in this request; it is never kept, logged or sent back.
+    """
+    password = body.password.get_secret_value() if body.password is not None else None
     try:
-        return _stage_view(restore_jobs.start_check(body.upload_id))
+        return _stage_view(restore_jobs.start_check(body.upload_id, password=password))
     except restore_jobs.UploadNotFoundError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "backup_upload_not_found", "No uploaded archive has this id") from None
     except StagingBusyError:
         raise backup_error(status.HTTP_409_CONFLICT, "restore_busy", "Another archive is being checked") from None
+    except restore_jobs.PasswordRequiredError:
+        raise backup_error(status.HTTP_400_BAD_REQUEST, "password_required", "The backup is protected by a password") from None
+    except EnvelopeError as exc:
+        code = status.HTTP_409_CONFLICT if exc.code == "envelope_unsupported" else status.HTTP_400_BAD_REQUEST
+        raise backup_error(code, exc.code, str(exc)) from None
     except BackupPathError:
         raise _folder_unusable() from None
 
