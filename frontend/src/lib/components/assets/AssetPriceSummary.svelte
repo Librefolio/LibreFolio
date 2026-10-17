@@ -22,7 +22,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
@@ -96,7 +96,7 @@
                         data-testid="asset-detail-live-price"
                         data-live-price-direction={livePriceDirection}
                     >
-                        {formatFixed(lastPrice, 2)}
+                        {formatPrice(lastPrice)}
                     </span>
                 {/key}
                 <span class="text-xs text-lf-muted">{livePriceConversionFailed ? assetCurrency : displayCurrency}</span>
@@ -109,7 +109,7 @@
                 {/if}
                 {#if deltaAbs !== null}
                     <span class="text-xs text-lf-muted" data-testid="asset-price-summary-range-delta-abs">
-                        ({formatFixed(deltaAbs, 2, {signed: true})})
+                        ({formatPrice(deltaAbs, {signed: true})})
                     </span>
                 {/if}
             </div>

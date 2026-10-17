@@ -9,10 +9,11 @@
  *
  * The month label is asserted with an explicit locale so the expected string is
  * deterministic regardless of the machine's locale; without one it follows the
- * interface language (M-18), pinned in the last describe, which also writes the
- * tooltip delta in French.
+ * interface language (M-18), pinned in the M-18 describe, which also writes the
+ * tooltip delta in French. The last describe (C-97c-3): the tooltip's absolute
+ * delta keeps its significant digits.
  */
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 // The interface locale is the UI language regionalised by `navigator.language` (M-18). Node's tag
 // follows the host's ICU locale, so it is pinned to en-US — jsdom's own — before any import.
@@ -28,6 +29,7 @@ import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
 import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import type {LineDataPoint} from './LineChart.svelte';
@@ -1735,5 +1737,64 @@ describe('buildDeltaHtml and formatMonthLabel in the interface language (M-18)',
 
         await uiLanguage('fr');
         expect(formatMonthLabel('2024-01-15', 'de-DE')).toBe('Januar 2024');
+    });
+});
+
+/**
+ * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits.
+ *
+ * In absolute view the main tooltip row ends on `(Δ abs / pct)`, and its absolute part is written with four fixed
+ * decimals, `formatFixed(deltaAbs, 4, {signed: true})`: on an asset priced in millionths a rise of 1.2e-7 — 3.47 % —
+ * reads `+0.0000`, a fall `-0.0000`. The contract: `formatPrice(deltaAbs, {minDecimals: 4, signed: true})` — still
+ * four decimals at least, a `+` on a rise and no sign on a zero, but as many as the first four significant digits need
+ * (`priceFractionDigits`, formatFixed.ts). The relative part and the colours are not touched.
+ *
+ * Reds: a rise and a fall of 1.2e-7 between two prices in millionths (today `+0.0000` and `-0.0000`). Guards, green
+ * today and after: a Δ of 1.5 (`+1.5000`), a flat move (`0.0000`, no sign), and the colours of the tiny moves. The
+ * absolute part is read off the suffix's text; English UI on the en-US browser this file pins, checked before each case:
+ * the expected digits are typed.
+ */
+describe('buildDeltaHtml — the absolute Δ keeps its significant digits (C-97c-3, D-C97c-1)', () => {
+    /** Two prices in millionths, 1.2e-7 apart (the float difference is 1.2000000000000012e-7). */
+    const LOW = 0.0000034573;
+    const HIGH = 0.0000035773;
+    const GREEN = '#10b981';
+    const RED = '#ef4444';
+
+    /** A delta suffix's colour, and its absolute and relative parts: `(Δ abs / pct)`. */
+    function partsOf(html: string): {color: string; abs: string; pct: string} {
+        const match = /color:\s*(#[0-9a-f]{3,8})[^>]*>\(Δ (\S+) \/ ([^)]*)\)</i.exec(html);
+        if (!match) throw new Error(`not a (Δ abs / pct) suffix: ${html}`);
+        return {color: match[1], abs: match[2], pct: match[3]};
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the suffix is written en-US, checked.
+        expect(uiLocale(), 'control: an English UI on the en-US browser this file pins is written en-US').toBe('en-US');
+    });
+
+    it('a rise of 1.2e-7 on a price in millionths reads +0.00000012, not +0.0000', () => {
+        expect(partsOf(buildDeltaHtml(HIGH, LOW, false)).abs, 'the absolute Δ of a 3.47 % rise (today +0.0000)').toBe('+0.00000012');
+    });
+
+    it('a fall of 1.2e-7 on a price in millionths reads -0.00000012, not -0.0000', () => {
+        expect(partsOf(buildDeltaHtml(LOW, HIGH, false)).abs, 'the absolute Δ of a 3.35 % fall (today -0.0000)').toBe('-0.00000012');
+    });
+
+    it('guard: a Δ of 1.5 reads +1.5000 and a flat move 0.0000, with no sign — both with their relative part', () => {
+        expect({rise: partsOf(buildDeltaHtml(101.5, 100, false)), flat: partsOf(buildDeltaHtml(100, 100, false))}).toEqual({
+            rise: {color: GREEN, abs: '+1.5000', pct: formatPercent(1.5)},
+            flat: {color: GREEN, abs: '0.0000', pct: formatPercent(0)},
+        });
+    });
+
+    it('guard: the tiny moves keep their colours and their relative part — green and the percentage on the rise, red on the fall', () => {
+        const rise = partsOf(buildDeltaHtml(HIGH, LOW, false));
+        const fall = partsOf(buildDeltaHtml(LOW, HIGH, false));
+
+        expect({rise: [rise.color, rise.pct], fall: [fall.color, fall.pct]}).toEqual({
+            rise: [GREEN, formatPercent(((HIGH - LOW) / LOW) * 100)],
+            fall: [RED, formatPercent(((LOW - HIGH) / HIGH) * 100)],
+        });
     });
 });
