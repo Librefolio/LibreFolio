@@ -32,6 +32,12 @@ never at module level, so the file collects on HEAD and every test fails there o
   no opening, a split then a full sale closes on the sale;
 - ``TestQuantityMoves`` — replay order, the split flag, a quantity of None.
 
+MF-A5 adds ``exits_in(moves, date_from, end)``: how many outgoing quantity moves the position had in
+``(date_from, end]``, a split's aside — what a closed position's base must cover (``contributions.closed_position_base``).
+``TestExitsIn``, red on HEAD by absence (AttributeError): the window's bounds (``date_from`` exclusive, ``end``
+inclusive, no ``date_from`` = from the beginning), each outgoing move counted once even on the same day, splits and
+incoming or zero moves never counted.
+
 Pure: no database, no server, no network.
 """
 
@@ -352,3 +358,58 @@ class TestQuantityMoves:
 
     def test_no_transaction_no_move(self):
         assert _holding_window().quantity_moves([], {1, 2}) == []
+
+
+# =============================================================================
+# exits_in (MF-A5): the outgoing moves of a period
+# =============================================================================
+
+
+def _exits(txns: list[_Tx], date_from: date | None, end: date, split_ids: tuple[int, ...] = ()) -> int:
+    module = _holding_window()
+    return module.exits_in(module.quantity_moves(txns, set(split_ids)), date_from, end)
+
+
+class TestExitsIn:
+    # BUY 10 on D1, then one SELL of 1 on each of D2, D3, D4, D5.
+    ONE_EXIT_A_DAY = [_tx(D1, 1, "10"), _tx(D2, 2, "-1"), _tx(D3, 3, "-1"), _tx(D4, 4, "-1"), _tx(D5, 5, "-1")]
+
+    @pytest.mark.parametrize(
+        ("date_from", "end", "expected"),
+        [
+            # (D2, D4]: the exit on D2 is the start state's, the one on D4 the period's.
+            pytest.param(D2, D4, 2, id="from-exclusive-end-inclusive"),
+            pytest.param(D1, D5, 4, id="all-four"),
+            pytest.param(D3, D3, 0, id="empty-window"),
+            pytest.param(D4, D5, 1, id="last-day-only"),
+            pytest.param(D5, D5, 0, id="after-the-last-exit"),
+            # No date_from: from the beginning.
+            pytest.param(None, D3, 2, id="no-start"),
+            pytest.param(None, D1, 0, id="no-start-before-any-exit"),
+        ],
+    )
+    def test_the_window_bounds(self, date_from, end, expected):
+        assert _exits(self.ONE_EXIT_A_DAY, date_from, end) == expected
+
+    def test_every_outgoing_move_counts_once(self):
+        """A SELL, a TRANSFER out and an ADJUSTMENT out on the same day: three exits — the quantity stream cannot tell
+        them apart, and each must be covered by the base."""
+        txns = [_tx(D1, 1, "10"), _tx(D2, 2, "-3"), _tx(D2, 3, "-3"), _tx(D2, 4, "-4")]
+
+        assert _exits(txns, D1, D2) == 3
+
+    def test_a_split_is_no_exit(self):
+        """A reverse split (−10) between two SELLs: two exits. Without the split link the same −10 is a third."""
+        txns = [_tx(D1, 1, "20"), _tx(D2, 2, "-5"), _tx(D3, 3, "-10"), _tx(D4, 4, "-5")]
+
+        assert _exits(txns, D1, D4, split_ids=(3,)) == 2
+        assert _exits(txns, D1, D4) == 3
+
+    def test_incoming_and_zero_moves_are_no_exit(self):
+        """BUYs, a TRANSFER in, a forward split and quantities of 0 or None: no exit."""
+        txns = [_tx(D2, 1, "10"), _tx(D3, 2, "5"), _tx(D3, 3, "15"), _tx(D4, 4, "0"), _tx(D4, 5, None)]
+
+        assert _exits(txns, D1, D5, split_ids=(3,)) == 0
+
+    def test_no_move_no_exit(self):
+        assert _holding_window().exits_in([], D1, D5) == 0
