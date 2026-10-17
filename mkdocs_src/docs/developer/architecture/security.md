@@ -429,8 +429,8 @@ address `rate_limit_address(http_request)` gives, and workstream E's «send the 
 - **Per process, in memory.** A restart forgets every count, and with N worker processes (`dev.py server --workers N`)
   each keeps its own, so the limits are N times these; the Docker image runs one worker. Each limiter holds at most
   10,000 keys (the limiter's `max_keys`): a new key beyond them evicts the key with the fewest failures still in the
-  window, the least recently used among them ([The Sliding-Window Limiter](../backend/email.md#rate-window), lot
-  E-14). So a spray of fresh identifiers, one failure each, never pushes out an identifier with more failures, locked
+  window, the one used or regrouped longest ago among them ([The Sliding-Window Limiter](../backend/email.md#rate-window),
+  lot E-14). So a spray of fresh identifiers, one failure each, never pushes out an identifier with more failures, locked
   or one short of the lock, and behind a [proxy nobody trusts](#untrusted-proxy) no limit per address slows such a
   spray. To push out an identifier with n failures, every other key must hold n failures too: about 90,000 failures
   within 15 minutes buy 9 more guesses. The eviction of decision N70 (the first key not full among the 32 least
