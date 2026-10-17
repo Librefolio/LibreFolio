@@ -515,7 +515,8 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 | `409` | A start while another backup runs | `backup_busy` |
 | `409` | A download of a job that has no archive: still running, or failed | `backup_job_not_ready` |
 | `409` | A delete while the job runs | `backup_job_running` |
-| `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written. The log has the cause | `backup_folder_unusable`, `backup_failed` |
+| `507` | A start while the disk of the data directory, or a quota, is full: free some space, then start again | `backup_no_space` |
+| `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written for another reason. The log has the cause | `backup_folder_unusable`, `backup_failed` |
 
 The `code` comes in the `detail` of the answer, with a `message` in English:
 
@@ -558,8 +559,9 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
   the log has an error that names the variable: `The upload limit of a restore cannot be read`.
 - The disk of the data directory needs room for the archive and, while it is checked, for its copy
   unpacked as well (how much: «Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)): short of
-  space, the upload answers `507` with the code `backup_no_space`, and the check refuses the archive
-  with `no_space`.
+  space, the upload answers `507` with the code `backup_no_space`, also when the disk reports itself
+  full only at the end of the file, as a network file system or a quota may. The check answers with
+  its own code, `no_space`: a `507` when it cannot even start, a refusal of the archive once it runs.
   An upload that cannot be written for another reason answers `500` with the code
   `backup_upload_failed`, and the log has the cause.
 - An administrator reads the limit in force in `upload_limit_mb` of
