@@ -6254,13 +6254,29 @@ sulla base `23f6578f3`.
   esatta 1e70). Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J
   legge accanto a una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince
   `absent`.
-- **B-30 · La cartella degli upload creata su un disco pieno dà 500, non 507** — minimo; TA-B, 17/10 (B-9, rilettura
-  delle etichette di `test_backup_restore.py`). `UploadWriter` crea la cartella degli upload con `ensure_private_dir`
-  fuori dal `try` che riconosce lo spazio esaurito: un `ENOSPC` lì (il primo upload su un disco pieno) diventa
-  `500 backup_upload_failed`, mentre la creazione del file e la scrittura danno già `507 backup_no_space`
-  (`restore_jobs.py`, `_out_of_space`). Cura: lo stesso controllo attorno alla creazione della cartella, più un test.
-  Dettagli: piano 07, «B-9».
+- ✅ **B-30 · Un disco pieno negli avvii brevi del backup e del ripristino risponde col codice sbagliato, o senza codice**
+  — piccolo; TA-B, 17/10 (B-9, rilettura delle etichette di `test_backup_restore.py`), allargato dall'analisi del 17/10.
+  Annotato per la cartella degli upload. `jobs._out_of_space` copre le fasi lunghe, non gli avvii brevi:
+  - la cartella degli upload e la fine dell'upload (`fsync`/`close`, dove NFS e le quote segnalano il disco pieno)
+    danno 500 `backup_upload_failed`, non 507;
+  - l'avvio di un controllo (`POST /restore/stage`) lascia uscire ogni `OSError` come 500 senza codice;
+  - l'avvio di un backup (scheda e pannello) dà 500 `backup_failed`, non `backup_no_space`.
+  Cura decisa dal coordinatore (17/10, 07:18), ambito 1+2+3+5: 507 `backup_no_space` per un disco pieno in tutti e
+  quattro; all'avvio del controllo, ogni altro `OSError` → 500 `stage_failed` con una riga nel log. Solo backend, con
+  codici e chiavi che esistono già. Dettagli: piano 07, «B-30».
 
+  ✅ **Fatto il 17/10** (checkpoint delle 08:00). Un disco pieno (ENOSPC o EDQUOT, anche fra le cause) risponde 507
+  `backup_no_space` alla cartella e alla fine dell'upload e all'avvio del backup (scheda e pannello), e 507 `no_space`
+  (il codice del controllo) all'avvio del controllo; lì ogni altro `OSError` dà 500 `stage_failed` con una riga nel log,
+  mai più il 500 senza codice. `jobs.out_of_space` è pubblica. Corretta anche la doppia `close` di `UploadWriter.finish()`
+  (trovata da TA-B). Test: 21 rossi API e 18 nei servizi, poi tutti verdi; 4 guardie Vitest.
+- **B-31 · Conferma, annullamento e riavvio di un ripristino: un guasto del disco senza codice o senza messaggio** —
+  basso; B, 17/10 (analisi di B-30). `POST /restore/stage/{id}/confirm` e `DELETE /restore/pending` lasciano uscire un
+  `OSError` come 500 senza codice; `restore_restart_failed` (il biglietto del riavvio non scritto) ha un codice ma
+  nessun messaggio nella UI (fuori da `ERROR_KEYS`: dice «unexpected») né una riga nella guida. Cura: un 500 con un
+  codice e un messaggio suo per ciascuno (3 chiavi × 4 lingue, `ERROR_KEYS`, l'elenco §5 di `restoreI18n.test.ts`) e
+  507 `backup_no_space` per un disco pieno alla conferma. Lotto separato, dopo B-30 (coordinatore, 07:18). Dettagli:
+  piano 07, «B-30» (punti 4, 6, 7).
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
