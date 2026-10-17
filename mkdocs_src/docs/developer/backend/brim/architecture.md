@@ -190,7 +190,7 @@ serialised by the server no matter how parallel the client was.
 |---|---|
 | **Upload** | `save_uploaded_file` runs in `asyncio.to_thread`. A thread is enough: the transfer itself is the OS's work; we only write the file and re-read it to sniff compatible plugins |
 | **Plugin discovery** | `auto_discover()` (`backend/app/services/provider_registry.py`) imports the plugin modules once, under the registry's own `RLock`, and marks discovery done only after every module has run. The first uploads after a start run on worker threads: one that arrives mid-discovery waits for the full catalogue instead of detecting against a half-filled one |
-| **Parse** | `backend/app/services/brim/brim_parse_pool.py` — a **lazy** `ProcessPoolExecutor`, `min(cpu_count, 4)` workers. Parsing is CPU work: a thread would leave it serialised by the GIL. Its forkserver preloads the BRIM module and every plugin, so each worker is born with them, and with the opt-in [warm-up](#parse-pool-warm-up) it starts at application startup instead of at the first parse |
+| **Parse** | `backend/app/services/brim/brim_parse_pool.py` — a **lazy** `ProcessPoolExecutor`, `min(cpu_count, 4)` workers. Parsing is CPU work: a thread would leave it serialised by the GIL. With the opt-in [warm-up](#parse-pool-warm-up), its forkserver starts at application startup preloaded with the BRIM module and every plugin, so each worker is born with them; with it off nothing is preloaded, and each worker imports them at its first parse |
 | **Sidecar writes** | Every write of a broker's sidecars holds that broker's lock (`broker_metadata_lock`: a re-entrant thread lock plus an advisory `flock` on `broker_reports/.locks/broker_<id>.lock`). `combine_set` holds it, in a worker thread, from the reuse check to the save of the combined file: analysing the same set twice — a double click, two tabs — reuses the first combined file instead of building a second one. See [The broker metadata lock](../../architecture/patterns/brim_plugin_guide.md#broker-metadata-lock) |
 | **File reads** | The preview and download routes (`get_brim_file_preview`, `download_file` in `backend/app/api/v1/brokers.py`) resolve the file's path in a worker thread, `await asyncio.to_thread(brim_provider.get_file_path, file_id)`: `get_file_path` finds and reads the sidecar. `./dev.py test utils gate-event-loop-io` fails on any direct call of a synchronous `brim_provider.py` function inside an `async def` of `backend/app/api/v1/`. See the [Event Loop Blocking Rule](../../architecture/patterns/async.md) |
 | **Candidate search** | `search_asset_candidates_bulk` issues **one** query per file instead of up to five per extracted asset, then applies the same five priorities in memory |
@@ -228,21 +228,34 @@ The pool is shut down from the FastAPI `lifespan`, next to the other pools.
 
 ### 🔥 Preload and warm-up {: #parse-pool-warm-up }
 
-With `forkserver`, every worker of the pool is forked from one forkserver process, and `_get_pool()`
-has it preload `brim_parse_preload` (`set_forkserver_preload`). That module, imported only by the
-forkserver, imports `brim_provider` and runs `BRIMProviderRegistry.auto_discover()`: every worker is
-born with the BRIM module and every plugin imported and discovered, sharing those pages with the
-forkserver, instead of importing them itself at its first parse. The preload is on the lazy path:
-the first parse starts the forkserver, which loads them before it forks the first worker.
+With `forkserver`, every worker of the pool is forked from one forkserver process. With the
+warm-up on (below), that forkserver preloads `brim_parse_preload` (`set_forkserver_preload`):
+`prewarm()` sets the preload at startup, and `_get_pool()` sets it too, which counts only
+while the forkserver has not started. That module, imported only by the forkserver, imports
+`brim_provider` and runs `BRIMProviderRegistry.auto_discover()`: every worker is born with
+the BRIM module and every plugin imported and discovered, sharing those pages with the
+forkserver, instead of importing them itself at its first parse.
 
-So that first parse waits for the forkserver to start and load them: about 4 s on an idle machine,
-30-50 s on an overloaded test machine, longer than the 30-second request timeout of
-`backend/test_scripts/test_api/test_brim_api.py`. The **warm-up** (W-B53) takes that wait away: the
-`brim-parse-pool` step of the [startup sequence](../../architecture/overview.md#server-startup) runs
-`prewarm()` in a worker thread, in the background. `prewarm()` sets the preload, calls
-`multiprocessing.forkserver.ensure_running()` and returns at once; the forkserver loads the preload in
-its own process, and the first parse forks a ready worker (a parse that comes sooner waits only for
-what is left of the preload). The pool and its workers stay lazy.
+With the warm-up off, nothing is preloaded (W-B59): `_get_pool()` sets the preload only when
+`_prewarm_enabled()` answers true, that is `brim_prewarm_enabled()` with an invalid value
+counting as off. The first parse starts the forkserver with nothing preloaded, and each
+worker imports the BRIM module and its plugins itself, at its first parse, away from the
+event loop. A preload has no place on that lazy path: on Python 3.13 the first
+`run_in_executor()` waits, on the event loop's thread, for the new worker's pid, which a
+preloading forkserver sends only once the preload is done. When `_get_pool()` preloaded
+whatever the setting, the first parse after every start held every request for the whole
+import, even with the warm-up off (decision N56, below).
+
+So, with the warm-up off, the first parse waits for its worker to load them: about 4 s on an
+idle machine, 30-50 s on an overloaded test machine, longer than the 30-second request
+timeout of `backend/test_scripts/test_api/test_brim_api.py`. The **warm-up** (W-B53) takes
+that wait away: the `brim-parse-pool` step of the
+[startup sequence](../../architecture/overview.md#server-startup) runs `prewarm()` in a
+worker thread, in the background. `prewarm()` sets the preload, calls
+`multiprocessing.forkserver.ensure_running()` and returns at once; the forkserver loads the
+preload in its own process, and the first parse forks a ready worker (a parse that comes
+sooner waits, on the event loop's thread, only for what is left of the preload). The pool
+and its workers stay lazy.
 
 The warm-up is **opt-in** (decision N56): it holds about 80 MB from the start and costs about 1.4 s
 of CPU at every start of the server, to make the first import after a start about 4 s faster, a bad
@@ -255,7 +268,9 @@ spaces around the value:
 | unset or blank | Off, except in test mode (`is_test_mode()`) |
 | `1`, `true`, `yes`, `on` | On |
 | `0`, `false`, `no`, `off` | Off |
-| anything else | Off: `brim_prewarm_enabled()` raises `BrimConfigError`, which names the variable; the step logs the warning `BRIM parse pool prewarm off: invalid setting` and the startup goes on |
+| anything else | Off: `brim_prewarm_enabled()` raises `BrimConfigError`, which names the variable; the step logs the warning `BRIM parse pool prewarm off: invalid setting` and the startup goes on, and `_get_pool()` reads it as off too |
+
+Off, nothing is preloaded, at startup or at the first parse.
 
 `configure_test_runtime()` (`scripts/cli_base.py`), which `./dev.py server --test` and the test
 runner call, drops the variable with the other `LIBREFOLIO_*` names a test lane does not keep, and
@@ -263,21 +278,24 @@ sets `LIBREFOLIO_TEST_MODE=1`: a test server always warms up. For operators, the
 of [Configuration](../../../admin/configuration.md).
 
 - **Never fatal.** `prewarm()` never raises: a failure is logged as
-  `BRIM parse pool prewarm failed; the first parse will start the pool`, and the first parse starts
-  everything, as with the warm-up off. It does nothing where the platform offers only `spawn`, or
-  once the pool has been given up.
+  `BRIM parse pool prewarm failed; the first parse will start the pool`, and the first parse
+  starts everything, the forkserver preloaded since the warm-up is on: on that lazy path, it
+  holds the event loop for the import, as described above. It does nothing where the platform
+  offers only `spawn`, or once the pool has been given up.
 - **A discovery failure** is logged inside the forkserver
   (`BRIM plugin discovery failed in the parse pool's forkserver; the first parse reports it`) and goes
   no further: a forkserver survives only an `ImportError` in a preload, so `brim_parse_preload` lets
   nothing escape. The worker's first parse reports it, as it always did.
 - **One forkserver per process.** The preload list and the forkserver belong to the whole process,
   and the BRIM pool is their only user: the Tools, the risk worker pools and the market calendar
-  spawn their processes. A new user of the forkserver would get this preload too.
+  spawn their processes. A new user of the forkserver would get this preload too, with the
+  warm-up on.
 - **Single-threaded.** The workers are forks of the forkserver, and forking a process that runs
   threads is what the pool avoids (see above): once preloaded, the forkserver must still run one
   thread, so importing the BRIM module or a plugin must not start one.
 
-Tests: `./dev.py test services brim-parse-pool` (the preload, `prewarm()`, the single-thread guard),
+Tests: `./dev.py test services brim-parse-pool` (the preload with the warm-up on, none with it
+off or invalid, `prewarm()`, the single-thread guard),
 `./dev.py test services config-brim` (the variable) and `./dev.py test services app-lifecycle` (the
 step: on, off, invalid).
 

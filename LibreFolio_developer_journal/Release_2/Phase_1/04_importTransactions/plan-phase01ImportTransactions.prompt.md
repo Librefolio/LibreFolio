@@ -4533,3 +4533,314 @@ checkpoint a sé, subito dopo l'ingresso di FE8b, prima di C-97b.
    `transaction-cost-basis-rule` **80**. **Simulazione del cherry-pick** su `dev_release2` (`778156983`), i 3 file: 0 conflitti,
    lint pulito, `mkdocs build` strict e `check-links` exit 0. Da girare in uno slot, come conferma: `api transactions-validate` e
    i 3 E2E che l'hanno trovato.
+4. ✅ **Conferma prima dell'ingresso** (slot 1, 23:34–23:46, carico 42–92; dopo il commit del coordinatore `de901f228` e
+   `11baeab0f`; `files/scripts/c97a_auto_confirm.sh`): `db populate --force`; `api transactions-validate` **12**;
+   `front-transaction tx-commit-all-types` **19** (il TRANSFER fra due broker passa), `tx-wac-bulk` **11** (con WB4),
+   `tx-wac-formmodal` **10** (con FM6). Porta libera. **Pronto per l'ingresso.**
+
+**C-97a, il costo Auto, committato** (coordinatore, 23:3x): `de901f228` (codice) e `11baeab0f` (journal). Conferma prima
+dell'ingresso nello slot 2 (`files/scripts/c97a_auto_confirm.sh`: `db populate --force`, `api transactions-validate`, i 3 E2E).
+
+### C-97b — i decimali in input: analisi ⏳ (2026-10-16)
+
+**Stato reale** (HEAD `11baeab0f`, percorsi dopo FE8b; sola lettura). Il backend (C-97a) accetta una quantità a 10 decimali, un
+prezzo o un costo per unità a 12, un importo a 6, ogni valore a 15 cifre significative; un evento a 6 (`AssetEvent.value`
+`Numeric(18, 6)`, `EVENT_TOO_MANY_DIGITS`). Oltre il limite rifiuta col massimo (D2). In input:
+1. **Form, quantità a 6**: `ExactQuantityInput maxFractionDigits={6}` sul campo `draft.quantity` in `form/TxFormSingleSection.svelte:176,
+   :224` e `form/TxFormPairSection.svelte:192` → **10**.
+2. **I due input** (`components/ui/input/ExactQuantityInput.svelte`, `ExactDecimalInput.svelte`): oltre il massimo il valore è
+   segnato non valido (`digitsValid` falso) ma **nessun messaggio** dice perché; `ExactDecimalInput.svelte:169` calcola un
+   `maxlength` dalle cifre ammesse, quindi un incolla più lungo è **troncato in silenzio** dal browser. → un messaggio sotto il
+   campo, con le chiavi che già traducono `decimalPlacesExceeded` e `significantDigitsExceeded` (stessa frase della conferma), e
+   niente `maxlength` che tagli. Li usa anche il PAC (`features/tools/pac-allocator/planner/steps/RoutingStep.svelte:277`,
+   `BrokerEditor.svelte:380`): il messaggio comparirebbe anche lì. Test che fissano i 6: `ExactQuantityInput.test.ts:36`,
+   `ExactDecimalInput.test.ts:89, :142, :219`.
+3. **Bulk, segno via `Number`** (`bulk/TransactionBulkModal.svelte:187, :190`, `fieldsFromTx`): `String(Math.abs(Number(x)))` scrive
+   «1e-8» per un satoshi `-0.00000001`, nella cella e nel payload → un helper per stringa (`txPayloadHelpers.ts` ha già
+   `applySign`, `:142`). Gli altri ~30 `Number()` del Bulk confrontano o leggono il segno: entro 15 cifre sono esatti, li lascio.
+4. **Evento al volo** (`events/EventCreateMiniModal.svelte:84–87`): `parseFloat` e `toFixed(min(max(2, decimali), 8))` arrotonda
+   **in silenzio** a 8, oltre i 6 del backend; il valore suggerito è arrotondato a 2 (`:97`, `toFixed(2)`). → stringa
+   normalizzata, al più 6 decimali col messaggio, il suggerito com'è.
+5. **Editor dei dati dei prezzi**: i valori sono numeri JS, esatti entro 15 cifre, e il backend li legge bene anche in notazione
+   esponenziale; ma le colonne `close/open/high/low` e `amount` degli eventi hanno `step: 0.01`
+   (`components/assets/AssetDataEditorSection.svelte:73–76, :99`): per il browser un prezzo PEPE è «fuori passo» → `step: 'any'`.
+   La visualizzazione a 4 decimali (`ui/data-editor/DataEditor.svelte:212`) è di C-97c.
+6. **Passo di correzione dell'import** (`import/FixFlaggedStep.svelte:760, :855`): campi di testo normalizzati come stringhe,
+   nessun `Number` scritto; oltre il limite li rifiuta la conferma, col messaggio nel wizard (D2). → **niente** in C-97b.
+
+**Proprietà e colori**: `features/transactions/**` (1, 3, 4) è mio dopo FE8b e i lotti dei colori sono entrati;
+`components/ui/input/*` (2) è condiviso (anche il PAC) → serve il via; `components/assets/AssetDataEditorSection.svelte` (5) è
+di X (righe concesse, come in E1b) e nell'area AF → serve il via.
+
+**Prove proposte**: rossi Vitest per i due input (il messaggio oltre il massimo, l'incolla intero), per le tre sezioni del Form
+(10 decimali validi, 11 col messaggio), per l'helper del segno (mai «1e-8»), per l'evento al volo (6 col messaggio, nessun
+arrotondamento); l'editor con `step: 'any'` (un prezzo PEPE accettato). Poi `front check`, Vitest `tx-unit`, `core-unit`,
+`component-unit`, `asset-unit`, e in uno slot `front-transaction` (la parte del Form e del Bulk) e `front-asset
+asset-data-editor`. Doc utente: le pagine che dicono 6 decimali, da cercare; CHANGELOG: la riga di C-97.
+
+**Peso**: medio (6 file di codice, ~6 file di test). Ordine: rossi (test-author), cura, prove, doc, handoff.
+
+**C-97a, il costo Auto, entrato** (coordinatore, 23:5x): `c91bd41b2` in `dev_release2` (i 2 commit); il plan 04 entra con C-97b.
+**C-97b: via pieno** (coordinatore, 23:5x): il team dei colori non ha nulla di aperto su `ExactQuantityInput`, `ExactDecimalInput`,
+`AssetDataEditorSection`; per il messaggio `text-lf-danger`, bordo `border-lf-danger`, nessuna classe di palette. X avvisato per
+O-8 su `AssetDataEditorSection` (solo le mie righe `step`; chi entra per secondo risolve).
+
+**Disegno della cura** (dopo i rossi del test-author `d227471f`):
+- **Gli input condivisi**: il messaggio è un elemento fratello dopo l'`<input>` (Svelte 5 ammette più radici: fuori dallo stato
+  d'errore il DOM resta quello di oggi, e i 10 chiamanti — 8 nel PAC, in `div.relative` o righe `flex`, e i 2 `TxForm` — non
+  cambiano layout), solo quando la **parte decimale** supera il budget: `data-testid="<testid>-digits-error"`,
+  `data-max=<maxFractionDigits>`, `text-xs text-lf-danger`; il bordo c'è già (`aria-invalid:border-lf-danger`). Le cifre
+  significative e la parte intera restano come oggi: segnate, e rifiutate alla conferma col messaggio del backend. Via il
+  `maxlength`. Chiave nuova e generica `common.decimalPlacesExceeded` in `base` (4 lingue, la frase di
+  `transactions.errors.decimalPlacesExceeded`, che è un prefisso dinamico protetto: doppione accettato come `assets.types.OTHER` e
+  `common.other`), con `./dev.py i18n add`.
+- **Form**: `maxFractionDigits={10}` sui 3 input della quantità.
+- **Bulk**: `absDecimal` per stringa in `txPayloadHelpers.ts`, e `exactDecimalSign` per il segno, in `fieldsFromTx`.
+- **Evento al volo**: niente `parseFloat`/`toFixed` per mostrare il valore: la stringa normalizzata, con almeno 2 decimali aggiunti
+  come zeri; oltre 6 decimali il messaggio e niente invio; il suggerito com'è.
+- **Il rifiuto dell'evento** (punto 6 in più): `EVENT_TOO_MANY_DIGITS` di C-97a non è tradotto (`eventSaveError.ts` non lo conosce,
+  nessuna chiave): un messaggio col massimo e gli eventi, come gli altri codici del file.
+- **Editor dei prezzi**: `step?: number | 'any'` in `ui/data-editor/DataEditorTypes.ts` (mio dall'inizio) e `step: 'any'` sulle 5
+  colonne di `AssetDataEditorSection`.
+
+**I rossi** (test-author `d227471f`, 16/10 sera): Vitest diretto sui 6 file, **21 falliti, 339 passati**, tutti per il motivo
+atteso. Il punto 5 (lo `step` dell'editor dei prezzi) è **caduto**: le celle dell'editor sono campi di testo o
+`ErasableNumberCell`, e `ColumnDef.step` è solo il passo delle frecce, la premessa era sbagliata. Il punto 3 è una guardia:
+`applySign(value, 'positive')` fa già il valore assoluto per stringa. Aggiunto il punto 6 (la traduzione di
+`EVENT_TOO_MANY_DIGITS`). File dei rossi: `ExactDecimalInput.test.ts`, `ExactQuantityInput.test.ts`, `TransactionFormModal.test.ts`,
+`txPayloadHelpers.test.ts`, `eventSaveError.test.ts`, il nuovo `EventCreateMiniModal.test.ts` (registrato in `front_component_unit`
+di `_frontend_utility.py`).
+
+**⏸️ In pausa** (coordinatore, 17/10 00:0x): prima W-B58 e W-B59 della revisione R13-SEC2 di E (sezione qui sotto). La cura di
+C-97b non è applicata; i rossi restano nel worktree, fuori dai checkpoint di W-B58/W-B59. Da ricordare alla ripresa: il rifiuto
+dell'evento porterà anche `max_integer_digits` (W-B58), e la frase di `events.saveError.tooManyDigits` deve poterlo dire.
+
+### W-B58 e W-B59 — la revisione R13-SEC2 di E: ✅ handoff FROZEN (2026-10-17)
+
+**Fonte**: piano 08 di E, «R13-SEC2» (in dev da `6cadaf427`): reperto 1 (MEDIUM 8/10) e note 1, 2, 4, 5 → **W-B58**; nota 12
+(disponibilità 9/10, provata) → **W-B59**. Priorità del coordinatore (17/10, 00:0x): prima di C-97b, da chiudere prima del rilascio;
+rossi prima; `price_query.py` è di X: lo scrivo io, X lo rivede al checkpoint; niente riga 🔒 nel CHANGELOG (C-97a non è uscita).
+HEAD `11baeab0f` (in dev); i file toccati sono identici fra HEAD e la punta di dev (`git diff HEAD dev_release2` vuoto su di loro).
+
+**Stato reale verificato (W-B58)**:
+- **Lettura** — `db/real_decimal.py:53-62`: un REAL ±inf solleva `TypeError` (l'esponente `'F'` confrontato con un intero); da
+  1e54 in su `InvalidOperation` (il riempimento a 6 decimali in un contesto di 60 cifre). Le colonne `RealDecimal`: quantità
+  `(22, 10)`, costo per unità `(24, 12)`, i cinque prezzi `(24, 12)`. `services/assets/crud.py:283-287` legge le quantità di
+  tutti: una riga così dà 500 a ogni utente su `/assets/all` e `/assets/query`, e non si cancella dall'API (la cancellazione la
+  carica).
+- **Limite** — `db/precision.py:157-172`: `normalize(_WIDE_CONTEXT)` va in `decimal.Overflow` per `1E+1000000` (500), porta
+  `1E-2000000` a 0 (passa), e nessuno limita la grandezza (`1E+60`: 1 cifra, 0 decimali, passa). `truncate_to_db_precision`
+  (`:130`) va in `InvalidOperation` da `1E+48` (12 decimali in 60 cifre).
+- **Scrittori**:
+  - transazioni: `transaction_batch_stages.py:106-134` controlla creates e updates; la promozione scrive
+    `resolved_fields.cost_basis_override` senza controllo (`batch_creates.py:255-299`: il REAL arrotonda, nessun limite);
+  - prezzi manuali: `price_store.py:30-46` controlla open/high/low/close (decimali, cifre) prima di scrivere, **non** il volume né
+    la grandezza;
+  - prezzi dei provider: `price_store.py:165-255` tronca e scrive a blocchi di 1 000 date, ognuno col suo commit: un
+    `InvalidOperation` nel blocco 2 lascia scritto il blocco 1;
+  - prezzo corrente: `price_query.py:858-904` (di X) scrive `Decimal(str(item.value))` senza `truncate_priceHistory` né limite;
+  - eventi manuali: `event_store.py:331-356` controlla decimali e cifre, non la grandezza; eventi dei provider
+    (`_upsert_asset_events`, da `refresh.py:580`): nessun controllo.
+- Le colonne `Numeric` (importo, valore dell'evento, volume, cambio) si leggono col `'%.Nf'` di SQLAlchemy: un inf diventa
+  `Decimal('Infinity')` senza eccezione, e rompe dopo, nelle risposte.
+
+**Disegno della cura (W-B58)**:
+1. **La lettura non solleva mai** (`RealDecimal.process_result_value`): un double finito torna come il suo decimale esatto, con
+   un contesto largo quanto il valore (niente tetto a 60 cifre); un double non finito (±inf; un NaN SQLite lo salva come NULL)
+   torna `None`, con un avviso nel log una volta per processo. La riga si carica, l'elenco funziona, la riga si cancella. Un
+   valore finito oltre le cifre intere della colonna **resta com'è**: una DB della 1.2 può avere una quantità oltre 12 cifre intere,
+   mai controllata, e leggerla come `None` cancellerebbe una posizione.
+2. **La scrittura**: `RealDecimal.process_bind_param` (nuovo) rifiuta con `ValueError` un valore che come double diventa ±inf:
+   rete di sicurezza, chiunque scriva.
+3. **Il limite** (`decimal_limit_issue`): calcolato dalle cifre, senza contesto (niente overflow, underflow né arrotondamento):
+   decimali → cifre significative → **cifre intere ≤ precisione − scala** (codice nuovo `integerDigitsExceeded`, `{max}`); un
+   valore non finito → `integerDigitsExceeded`. L'ordine tiene i risultati di C-97a (una quantità di 16 cifre dice ancora «cifre
+   significative»). Due aiuti nuovi: `integer_digits_issue` (solo la grandezza, per il volume) e `storable_value` (un valore di
+   provider troncato alla colonna, o `None` se nessun troncamento lo fa entrare).
+4. **Transazioni**: il codice nuovo arriva da `decimal_limit_issue` (testo «digits before the decimal point»);
+   `TXValidationCode.INTEGER_DIGITS_EXCEEDED`; e la **promozione**: `resolved_fields.cost_basis_override` controllato sulla colonna
+   `cost_basis_override` (issue `operation="promote"`, campo `cost_basis_override`). Frontend: `FIELD_PREFIXED_CODES` e la chiave
+   `transactions.errors.integerDigitsExceeded` (4 lingue, `dev.py i18n add`).
+   **Il batch si ferma** (aggiunto 00:3x, dopo aver letto `execute_batch`): `check_decimal_limits` aggiunge l'issue ma il batch va
+   avanti per tutti gli stadi (C-97a: «la riga resta nel batch»), che calcolano coi valori — prodotti, medie, il double del REAL. Un
+   valore di un milione di cifre li manda in `Overflow` (500), e uno di 400 cifre tutte diverse prende per primo
+   `significantDigitsExceeded`, va avanti, diventa inf al flush e torna come testo grezzo «Balance validation error». Quindi
+   `check_decimal_limits` risponde se un valore supera le cifre intere della colonna, **qualunque codice abbia preso**, e
+   `execute_batch` si ferma dopo il controllo degli accessi (lo stesso ritorno anticipato dell'accesso negato: `committed=False`,
+   le issue, `results` vuoto). Gli altri codici di C-97a lasciano la riga nel batch come prima. Tre rossi in più chiesti al
+   test-author: quantità `1E+1000000`, quantità di 400 cifre, importo `-1E+1000000`.
+5. **Prezzi manuali**: `_reject_prices_over_the_limit` rifiuta anche le cifre intere, e un volume non finito o oltre 24 cifre intere
+   (un volume con decimali resta accettato: è un conteggio, letto arrotondato come prima); il messaggio dice anche il limite
+   intero. Prima di scrivere qualsiasi cosa.
+6. **Prezzi dei provider** (`bulk_upsert_prices` non MANUAL): **prima dei blocchi**, una data con un valore non memorizzabile
+   (un prezzo non finito o oltre 12 cifre intere, un volume oltre 24, una chiusura che il troncamento porta a 0) è scartata e
+   riportata come un OHLC impossibile (`rejected …`), con un avviso; le altre si scrivono. Niente eccezione a metà. Un punto si
+   scrive intero o si scarta (un volume sbagliato scarta la data: un dato del provider così non è affidabile). La regola dello zero
+   vale solo per la chiusura (un minimo di `1E-13` diventa 0, ammesso). E i valori **già salvati** che la fusione F.4 riprende
+   (open, high, low, volume di una riga esistente): uno scritto da una versione vecchia oltre le cifre della colonna (la 1.2
+   salvava il prezzo corrente com'era) faceva sollevare il troncamento a metà dei blocchi → scritto come NULL (`_kept_price`,
+   `_kept_volume`).
+7. **Prezzo corrente** (`price_query.py`, di X): attraverso `storable_value` (`truncate_priceHistory` più i limiti); non
+   memorizzabile → non salvato, con un avviso; valido → troncato come lo storico.
+8. **Eventi**: i manuali (`_reject_too_many_digits`) rifiutano anche le cifre intere (`EVENT_TOO_MANY_DIGITS`, parametro in più
+   `max_integer_digits`); quelli dei provider (`_upsert_asset_events`): un evento non memorizzabile è scartato, con un avviso,
+   prima di scrivere.
+9. **Non tocco**: `truncate_to_db_precision` (ogni chiamante ora controlla la grandezza prima, tranne il cambio, di X); `crud.py`
+   (la lettura basta: `position_quantities` salta una quantità `None`).
+
+**Fuori dal lotto** (al backlog, approvato dal coordinatore 00:5x): la nota 3 (il testo grezzo «Balance validation error»: con
+l'arresto del batch non è più raggiungibile da un valore troppo grande, nessuna voce); **W-B60** (il rumore del double negli importi,
+sopra); **W-B61** i cambi, manuali (`api/v1/fx/currencies.py:92` → `fx/storage.py:60`: nessun limite, `1E+400` salvato come inf e
+il suo inverso `1E-400` come 0) e dei provider (`truncate_fx_rate` solleva da `1E+50`), di X — il coordinatore avvisa X; **W-B62**
+la nota 6 (`/prices/current` scrive per intero un `1E+50000000` del provider nella **risposta**, `schemas/common.py:47`: la cura non
+lo salva più, ma lo risponde); **W-B63** un inf **già salvato** in una colonna `Numeric` (importo, valore di evento, volume, cambio)
+si rilegge `Decimal('Infinity')` e rompe le risposte: per importo e valore dell'evento lo chiude W-B60 (`RealDecimal` lo legge
+`None`), volume e cambio restano.
+
+**Prova a secco della cura** (00:41, carico 50): `files/scripts/wb58_wb59_cure.py` (sostituzioni esatte, 11 file) applicato a una
+copia del backend in `/tmp/libreFolio_wb58_sim` (non nel worktree), con uno script di controllo degli aiuti: `1E+60`,
+`1000000000000`, `-1E+13` (importo), `1E+48` (chiusura), `1E+1000000`, ±Infinity e NaN → `integerDigitsExceeded` (12; volume
+`1E+25` → 24); `1234567890123.456` e 400 cifre → `significantDigitsExceeded` per primo, ma `integer_digits_issue` li segna (il
+batch si ferma); `1E-2000000` e `1E-13` (chiusura) → `decimalPlacesExceeded`; `999999999999`, `1.50000000000000`, `-1`, `0` →
+nessun limite. `storable_value`: `1E+400` → None, `123.4567890123456` → `123.456789012345`; `storable_price`: chiusura `1E-13` →
+None, minimo `1E-13` → `0E-12`, `65432.1234567890999` → `65432.1234567890`. Lettura: ±inf e `'abc'` → None (un avviso), 1e54,
+1e60, 1.79e308 → il decimale esatto, 10 → `10.000000`; scrittura di `1E+400` → `ValueError`, `1.5` e None passano.
+
+**Domanda per il developer (D-W58-1)**: 12 cifre intere per quantità e importo (precisione − scala, la direzione di E)
+rifiutano una quantità da 1 000 000 000 000 in su (meme coin: mille miliardi di PEPE ≈ 10 M$) e un importo da mille miliardi in
+su (IDR, VND, IRR). **Predefinito**: 12, come dichiarato dalle colonne. Alternativa: la quantità a 15 (il limite delle cifre
+significative). Lavoro col predefinito.
+
+**Deciso — N63** (coordinatore, decisione notturna del 17/10, 00:5x; il developer la rivede al mattino): **15 cifre intere per
+quantità e importo**, non 12. Ragioni: mille miliardi di VND ≈ 40 k$, di IDR ≈ 60 k$, importi realistici; la 1.2 non ha mai fatto
+rispettare `Numeric(18,6)` su SQLite, quindi dati oltre 12 cifre intere possono già esistere e diventerebbero immodificabili; il
+DoS si chiude con qualunque limite lontano da 1e54; 15 come le cifre significative di C-97a. Le altre colonne restano come
+dichiarate: costo per unità (un prezzo, D5) 12, i cinque prezzi 12, il valore dell'evento (per unità) 12, il volume 24. Nella
+cura: `max_integer_digits(model, column)` in `db/precision.py` (15 per `transactions.quantity` e `transactions.amount`, altrimenti
+precisione − scala), letto da `decimal_limit_issue`, `integer_digits_issue` e dai messaggi dei prezzi e degli eventi. Il
+test-author aggiornato (stessi rossi, i massimi nuovi). Prova a secco rifatta sulla copia: quantità `1E+15` e importo `-1E+15` →
+15; `999999999999999` e importo `-1E+13` → nessun limite; costo `1E+13`, chiusura `1E+13`, valore evento `1E+13` → 12; volume
+`1E+25` → 24; `1234567890123.456` → solo `significantDigitsExceeded` (13 cifre intere, entro 15: il batch non si ferma).
+
+**Un limite di N63 da sapere (pre-esistente, non della cura)**: l'importo (e il valore dell'evento) è `Numeric(18, 6)`, che
+SQLAlchemy rilegge col formato `'%.6f'`: da 11 cifre intere il rumore del double compare nei decimali —
+`123456789012.345` torna `123456789012.345001` già oggi, e con 15 cifre intere `99999999999999.9` torna `99999999999999.906250`.
+Gli importi interi (VND, IDR) tornano esatti. Cura proposta: `RealDecimal(18, 6)` (stesso DDL, nessuna migrazione), dopo aver
+controllato le `SUM` in SQL su quelle colonne → **W-B60**, fuori da questo lotto.
+
+**Stato reale verificato (W-B59)**: `services/brim/brim_parse_pool.py:86-88` imposta il precaricamento in `_get_pool()` qualunque
+sia il prewarm. Su 3.13 il primo `run_in_executor` aspetta sul thread del loop il pid del worker, che il forkserver manda solo dopo
+il precaricamento: il loop resta fermo per tutto l'import di BRIM e dei 33 plugin (~4 s a riposo, 30–50 s sotto carico; la prova
+di E: stallo massimo 3,14 s col precaricamento, 0,18 s senza). Contro N56 («il default lascia invariato il self-hosted»). La
+docstring di `config/brim.py` («the first parse starts the forkserver, which loads the plugins») e la doc
+(`developer/backend/brim/architecture.md`, «Preload and warm-up») descrivono proprio questo.
+
+**Disegno della cura (W-B59)**: `_get_pool()` imposta il precaricamento solo se `brim_prewarm_enabled()` (un `BrimConfigError`
+vale spento). Spento: il forkserver pigro parte senza precaricamento e ogni worker importa BRIM da sé al primo parse, fuori dal
+loop, come prima di W-B53. In modalità di test (prewarm acceso) non cambia nulla. Doc: le due docstring e la sezione della doc;
+`.env.example` resta.
+
+**Prove**:
+- rossi (test-author): `utils real-decimal` (lettura di ±inf, 1e54, 1e60, 1.79e308 senza eccezione; la scrittura di un inf
+  rifiutata; `decimal_limit_issue` con `1E+60`, 13 cifre intere, `1E+1000000`, `1E-2000000`, ±Infinity, e le guardie
+  dell'ordine; `storable_value`); `services transaction-decimal-places` (BUY `1E+60` su un broker con scoperto e short, importo e
+  costo oltre 12 cifre intere, la promozione, la lista degli asset con una riga REAL 1e60 e una inf); `services
+  asset-digit-limits` (prezzi manuali e volume, provider a blocchi, prezzo corrente, eventi manuali e dei provider);
+  `services brim-parse-pool` (worker senza precaricamento col prewarm spento; il test esistente esplicito col prewarm acceso);
+  Vitest `resolveValidationMessage.decimals.test.ts`;
+- dopo la cura: gli stessi più `db numeric-truncation`, `utils decimal-precision`, `services config-brim`, `api
+  transactions-validate`, `api assets-events`, `front-transaction tx-unit`, `i18n check`, `lint`, `api sync`, `front check`; le prove
+  API nello slot del coordinatore.
+
+**Passo 1 — i rossi ✅ (01:0x)**, test-author `0746298a`, nessun codice di produzione toccato, nessun file nuovo (nessuna voce del
+runner). Prove nella corsia, una alla volta, carico < 50:
+
+| Azione | Rossi prima della cura |
+|---|---|
+| `utils real-decimal` | 94 falliti / 113 passati |
+| `services transaction-decimal-places` | 33 / 88 (due giri) |
+| `services asset-digit-limits` | 36 / 40 |
+| `services brim-parse-pool` | 2 / 17 |
+| Vitest `resolveValidationMessage.decimals.test.ts` | 11 / 21 |
+
+Ogni rosso per l'assenza del contratto (asserzione o `pytest.fail` che nomina l'eccezione), nessun errore di raccolta né di
+fixture. > **Note implementazione**: due scoperte del test-author, che correggono la mia analisi: la BUY di 400 cifre oggi non dà
+il testo grezzo «Balance validation error» ma un **500** (`TypeError` in `validate_cost_basis`, che rilegge la riga inf); e le create
+di `1E+60` (quantità o costo) sollevano `InvalidOperation` nello stesso punto. L'arresto del batch le chiude tutte. Il contratto
+dell'arresto (`check_decimal_limits` → bool) e N63 (15 cifre intere per quantità e importo) sono arrivati al test-author durante la
+scrittura (`write_agent`). Casi derivati marcati `derived-` (`sNaN`, `FxRate.rate` → 14, un evento di provider `1E+13`).
+> **⚠️ Fuori pista**: `_assert_names_the_refusal` (helper condiviso di `test_asset_digit_limits.py`) ha un parametro `extra_limits`
+(il 24 del volume) e toglie la notazione scientifica; `_run_as_the_endpoint` accetta `deletes` e `promotes`.
+
+**Passo 2 — la cura ✅ (01:1x)**: `files/scripts/wb58_wb59_cure.py --apply` (11 file: `db/real_decimal.py`, `db/precision.py`,
+`schemas/transactions/batch.py`, `transactions/transaction_batch_stages.py`, `transactions/transaction_service.py`,
+`assets/price_store.py`, `assets/price_query.py`, `assets/event_store.py`, `brim/brim_parse_pool.py`, `config/brim.py`,
+`frontend/…/resolveValidationMessage.ts`); chiave `transactions.errors.integerDigitsExceeded` con `dev.py i18n add` (4 lingue, nel
+sottosistema `transactions`). > **Note implementazione**: `process_bind_param` e la lettura passano da `_as_double` (un `sNaN` o un
+testo → NaN, mai un'eccezione: il messaggio dice sempre «finite»). Ruff B009 su `getattr(price, "volume")` → gli aiuti di
+`price_store` tipizzati `FAPricePoint`, accesso diretto (a mano dopo lo script). `truncate_to_db_precision` non cambia: ogni
+chiamante passa ora da un controllo della grandezza (`storable_value`, i rifiuti manuali), e i valori già salvati che la fusione
+F.4 riprende passano da `_kept_price`/`_kept_volume`.
+
+**Passo 3 — le prove leggere ✅ (01:1x–01:2x, carico 43–48)**: i cinque rossi verdi — `utils real-decimal` **207**, `services
+transaction-decimal-places` **121**, `services asset-digit-limits` **76**, `services brim-parse-pool` **19**, Vitest dei due file del
+risolutore **85**. I vicini (`/tmp/libreFolio_wb58_neighbours.sh`): `utils decimal-precision` 21, `db numeric-truncation` 4, `db
+validate` 17, `services config-brim` 51, `services app-lifecycle` 51, `services current-price-bootstrap` 8, `services
+transaction-cost-basis-rule` 80, `services asset-source` 61, `utils provider-core-cache` 46: tutti verdi. `ruff` e `black` puliti
+sui 14 file toccati, `prettier` pulito, `dev.py i18n check` stretto (4 912 chiavi). > **⚠️ Fuori pista**: la prima prova (`utils
+real-decimal`, 1,2 s) è partita col carico a 88, contro la regola del carico; dalle successive lo script aspetta < 50.
+L'E2E `tx-fx-completeness.spec.ts:249` (importo di 12 cifre intere e 18 significative) legge solo il payload e resta fuori
+dall'arresto (12 ≤ 15).
+
+**Passo 4 — le prove senza porta e la doc ✅ (01:2x–01:5x)**: `external brim-providers` **736** passati, 1 saltato (carico 39);
+`front check` **0 errori, 0 avvisi** (carico 40). Regola aggiornata in `.github/instructions/backend-db.instructions.md` (la lettura
+che non solleva, la terza soglia con `max_integer_digits` e N63, `storable_value`/`storable_price`). Doc per sviluppatori dal
+docs-writer `04364ca8` (sei pagine: `architecture/database/index.md` — una colonna «Digits before the point» nella tabella —,
+`backend/transactions/service.md`, `backend/assets/architecture.md`, `backend/assets/events.md`,
+`architecture/database/assets_pricing.md`, `backend/brim/architecture.md` «Preload and warm-up»), `mkdocs build` stretto e
+`check-links` verdi; un secondo giro per i passi fuori sezione che ha segnalato (la riga Parse di «Concurrency & off-loading», ora
+falsa col prewarm spento; l'arresto anticipato fra i confini degli errori; `brim_plugin_guide.md`; `brokers_transactions.md`).
+> **⚠️ Fuori pista** (dal docs-writer, corregge il punto 9 del disegno): non **ogni** chiamante di `truncate_to_db_precision`
+controlla la grandezza prima. `refresh.py:423` (`_count_actual_price_changes`, di X) tronca la chiusura del provider senza
+controllo: un `1E+60` vi solleva `InvalidOperation`, che il suo `try/except` raccoglie (ripiego: tutte le date contate come
+nuove, nessun 500); e le date poi scartate per grandezza restano nei conteggi `inserted`/`updated`/`changed_points`, come già
+quelle con un OHLC impossibile. Gli eventi dei provider scartati sono solo nel log, non nel risultato della sincronizzazione.
+Cosmetico (conteggi), nessuna voce nuova; lo dice la doc. La pagina utente `user/transactions/import/how-to.en.md` (~284) nomina solo i
+decimali: lasciata così (un caso limite, il messaggio si spiega da sé, e cambiarla aprirebbe un debito di traduzione).
+
+**Passo 5 — lo slot 2 ✅ (01:31–01:50)**, `files/scripts/wb58_slot.sh` (cancello a 70): `db populate --force` ok, `api
+transactions-validate` **12**, `api batch-split-promote` **36**, `api assets-events` **45**, `api brim` **118**, `api
+prices-currency-coherence` **5**, `api prices-sync-delta` **5**: tutto verde; porta 6184 libera (lsof: 0 in ascolto, 01:50).
+In `api brim` il server di prova ha il prewarm acceso (modalità di test): il percorso caldo di W-B53 non cambia.
+
+**Passo 6 — il secondo giro della doc e la simulazione ✅ (01:5x)**: il docs-writer ha corretto la riga Parse di «Concurrency &
+off-loading» (falsa col prewarm spento), l'arresto anticipato fra i confini degli errori di `service.md`, la riga di `price_store.py`,
+`brim_plugin_guide.md` (la terza soglia) e `brokers_transactions.md` (15, 15, 12 cifre intere); build stretta (carico 36) e
+`check-links` (97 link) verdi. > **⚠️ Fuori pista**: provando il codice su SQLite in memoria ha trovato che `round_computed_value`
+limita le cifre significative solo su una colonna `RealDecimal`: su un importo (`Numeric(18, 6)`) `1234567890.1234567` diventa
+`1234567890.123457`, ancora 16 cifre significative → la docstring (già di C-97a: «always passes») corretta a mano in
+`db/precision.py`, solo testo. Il `git fetch` che avevo messo in una riga di controllo l'ho fermato subito: nessun ref cambiato
+(`FETCH_HEAD` del 16/10), e non lo rifaccio (git in sola lettura). Simulazione (`sim_cherry_pick.sh dev_release2 --docs`, 31 file
+compresi piano e backlog) su dev **`3a5ff5194`** (dopo la fine del blocco dei segnali di J, `b36e3873f`): **0 conflitti**,
+`price_query.py` fuso con l'import da `services/signals/`; ruff e black puliti sui `.py` fusi; `mkdocs build` stretto e `check-links`
+verdi sull'albero simulato (carico 48). `git diff --check` pulito; porta 6184 libera.
+
+**Handoff FROZEN (02:0x)** — tre commit proposti:
+1. `fix(decimals): bound size, reads never raise` (W-B58, 26 file): `.github/instructions/backend-db.instructions.md`,
+   `backend/app/db/{precision,real_decimal}.py`, `backend/app/schemas/transactions/batch.py`,
+   `backend/app/services/assets/{event_store,price_query,price_store}.py`,
+   `backend/app/services/transactions/{transaction_batch_stages,transaction_service}.py`,
+   `backend/test_scripts/test_services/{test_asset_digit_limits,test_transaction_decimal_places}.py`,
+   `backend/test_scripts/test_utilities/test_real_decimal.py`, `frontend/src/lib/features/transactions/resolveValidationMessage{,.decimals.test}.ts`,
+   `frontend/src/lib/i18n/transactions/{en,it,fr,es}.json`, `mkdocs_src/docs/developer/architecture/database/{index,assets_pricing,brokers_transactions}.md`,
+   `mkdocs_src/docs/developer/architecture/patterns/brim_plugin_guide.md`, `mkdocs_src/docs/developer/backend/assets/{architecture,events}.md`,
+   `mkdocs_src/docs/developer/backend/transactions/service.md`;
+2. `fix(brim): preload parse pool only on prewarm` (W-B59, 4 file): `backend/app/services/brim/brim_parse_pool.py`,
+   `backend/app/config/brim.py`, `backend/test_scripts/test_services/test_brim_parse_pool.py`,
+   `mkdocs_src/docs/developer/backend/brim/architecture.md`;
+3. `docs(journal): W-B58, W-B59, N63` (2 file): questo piano e `BACKLOG_POST_1.2.md`.
+**Fuori dal checkpoint** (C-97b, in pausa): `ExactDecimalInput.test.ts`, `ExactQuantityInput.test.ts`, `TransactionFormModal.test.ts`,
+`txPayloadHelpers.test.ts`, `eventSaveError.test.ts`, il nuovo `EventCreateMiniModal.test.ts`, `scripts/test_runner/_frontend_utility.py`.
+X rivede `price_query.py` (e, se vuole, `price_store.py` ed `event_store.py`, che toccano i suoi prezzi ed eventi). Nessuna riga 🔒 nel
+CHANGELOG (C-97a e W-B53 non sono usciti). Dopo l'ingresso: C-97b riprende (la cura, poi la frase di `tooManyDigits` col
+`max_integer_digits`).

@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Any, Iterator, Optional, Tuple
 from pydantic import ValidationError
 
 from backend.app.db.models import Transaction, UserRole
-from backend.app.db.precision import DECIMAL_PLACES_EXCEEDED, decimal_limit_issue
+from backend.app.db.precision import DECIMAL_PLACES_EXCEEDED, INTEGER_DIGITS_EXCEEDED, SIGNIFICANT_DIGITS_EXCEEDED, decimal_limit_issue, integer_digits_issue
+from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchOperation, TXBatchResponse, TXPromoteBatchItem, TXSplitBatchItem, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem
 from backend.app.services.transactions.transaction_batch_context import (
@@ -86,6 +87,8 @@ def parse_inputs(context: TransactionBatchContext) -> None:
 
 # C-97: the fields of a create or an update whose digits are checked, with their labels in the English text.
 _DECIMAL_LIMIT_LABELS = {"quantity": "Quantity", "cash.amount": "Cash amount", "cost_basis_override": "Cost basis override"}
+# The limit each code names, in the English text.
+_DECIMAL_LIMIT_UNITS = {DECIMAL_PLACES_EXCEEDED: "decimal places", SIGNIFICANT_DIGITS_EXCEEDED: "significant digits", INTEGER_DIGITS_EXCEEDED: "digits before the decimal point"}
 
 
 def _decimal_limit_values(item: Any) -> Iterator[tuple[str, str, Decimal]]:
@@ -103,35 +106,67 @@ def _decimal_limit_values(item: Any) -> Iterator[tuple[str, str, Decimal]]:
             yield field, column, value
 
 
-def check_decimal_limits(context: TransactionBatchContext) -> None:
+def _promote_cost_amount(item: TXPromoteBatchItem) -> Optional[Decimal]:
+    """The amount of the cost basis a promotion resolves (``resolved_fields.cost_basis_override``), or None.
+
+    One that does not parse is left to the promotion, which refuses it as before.
+    """
+    raw = (item.resolved_fields or {}).get("cost_basis_override")
+    if raw is None:
+        return None
+    try:
+        return Currency.model_validate(raw).amount
+    except (ValidationError, TypeError, ValueError):
+        return None
+
+
+def check_decimal_limits(context: TransactionBatchContext) -> bool:
     """Refuse, never round, a quantity, cash amount or manual cost basis over its column's limit (C-97, issue #43).
 
     A quantity keeps 10 decimal places, an amount 6, a per-unit cost basis 12 (a price: decision D5), any of them
-    15 significant digits
+    15 significant digits; and 15 digits before the decimal point, 12 for a cost basis (W-B58, decision N63)
     (``db/precision.decimal_limit_issue``, from the model). Over the limit the row gets one issue per field —
-    ``decimalPlacesExceeded`` or ``significantDigitsExceeded``, ``params`` ``{"max": N}`` — and the batch is not saved;
-    the row stays in the batch, so a linked pair is not broken by it. Checked here, at confirmation, and not when a
-    broker import builds its rows (decision D2): the import shows the refusal with the other issues of the batch.
+    ``decimalPlacesExceeded``, ``significantDigitsExceeded`` or ``integerDigitsExceeded``, ``params`` ``{"max": N}`` —
+    and the batch is not saved; the row stays in the batch, so a linked pair is not broken by it. Checked here, at
+    confirmation, and not when a broker import builds its rows (decision D2): the import shows the refusal with the other
+    issues of the batch. The cost basis a promotion resolves is a value of the user's too, checked on the same column
+    (W-B58: it skipped the check, and the REAL rounded it in silence).
+
+    Returns:
+        True when a value is past its column's integer digits, whatever the code its issue got: ``execute_batch`` then
+        stops after the access check. The stages after it compute with the values (products, averages, the double a
+        REAL stores), and a value of a million digits overflows them: a 500, where the user is owed the issue (W-B58).
     """
+    out_of_range = False
     for operation, parsed in (("create", context.parsed_creates), ("update", context.parsed_updates)):
         for index, item in parsed:
             for field, column, value in _decimal_limit_values(item):
-                limit = decimal_limit_issue(value, Transaction, column)
-                if limit is None:
-                    continue
-                code, maximum = limit
-                unit = "decimal places" if code == DECIMAL_PLACES_EXCEEDED else "significant digits"
-                context.issues.append(
-                    TXValidationIssue(
-                        operation=operation,
-                        index=index,
-                        ref_id=item.id if operation == "update" else None,
-                        error=f"{_DECIMAL_LIMIT_LABELS[field]}: at most {maximum} {unit}",
-                        code=code,
-                        params={"max": maximum},
-                        field=field,
-                    )
-                )
+                out_of_range |= _check_limit(context, operation, index, item.id if operation == "update" else None, field, column, value)
+    for index, item in context.parsed_promotes:
+        amount = _promote_cost_amount(item)
+        if amount is not None:
+            out_of_range |= _check_limit(context, "promote", index, None, "cost_basis_override", "cost_basis_override", amount)
+    return out_of_range
+
+
+def _check_limit(context: TransactionBatchContext, operation: str, index: int, ref_id: Optional[int], field: str, column: str, value: Decimal) -> bool:
+    """Add the issue of ``value`` over its column's limit, if any (``check_decimal_limits``); True when it is past the
+    column's integer digits."""
+    limit = decimal_limit_issue(value, Transaction, column)
+    if limit is not None:
+        code, maximum = limit
+        context.issues.append(
+            TXValidationIssue(
+                operation=operation,
+                index=index,
+                ref_id=ref_id,
+                error=f"{_DECIMAL_LIMIT_LABELS[field]}: at most {maximum} {_DECIMAL_LIMIT_UNITS[code]}",
+                code=code,
+                params={"max": maximum},
+                field=field,
+            )
+        )
+    return integer_digits_issue(value, Transaction, column) is not None
 
 
 async def preload_and_authorize(

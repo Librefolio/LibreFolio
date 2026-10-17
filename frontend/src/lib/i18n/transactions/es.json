@@ -244,7 +244,8 @@
       "pairBrokerMismatch": "Los dos lados de un cambio de divisas deben estar en el mismo broker",
       "cashNonzero": "{type} requiere un importe distinto de cero",
       "decimalPlacesExceeded": "Como máximo {max} decimales",
-      "significantDigitsExceeded": "Como máximo {max} cifras significativas"
+      "significantDigitsExceeded": "Como máximo {max} cifras significativas",
+      "integerDigitsExceeded": "Como máximo {max} cifras en la parte entera"
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",

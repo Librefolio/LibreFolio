@@ -33,13 +33,13 @@ presence except the probes and ``wake-sync``. The contract pinned here:
     span of it is open, whichever thread opened it; an exception going through propagates and closes the span. An
     empty or blank ``reason`` is a ``ValueError`` before anything is counted.
 (i) ``register_busy_check(name, check)``: a blank name is a ``ValueError``; a name registered again replaces its check.
-    The check runs at every ``busy_reasons()`` and ``is_busy()``, never cached: truthy lists ``name``, falsy does not;
-    an ``Exception`` lists it too — when in doubt, not idle — and is logged — WARNING, "Busy check failed",
-    ``check=<name>`` — at the first failure of a streak only: one answer without an exception, true or false, ends the
-    streak. Each check has a streak of its own.
+    The check runs at every ``busy_reasons()``, never cached: truthy lists ``name``, falsy does not; an ``Exception``
+    lists it too — when in doubt, not idle — and is logged — WARNING, "Busy check failed", ``check=<name>`` — at the
+    first failure of a streak only: one answer without an exception, true or false, ends the streak. Each check has a
+    streak of its own.
 (j) ``busy_reasons()``: a tuple of str, no reason twice — ``"requests"`` while ``in_flight > 0``, wake requests
     included; every open ``busy()`` reason; every check truthy or raising —; empty at rest; its order is not part of the
-    contract. ``is_busy()`` is ``bool(busy_reasons())``.
+    contract.
 (k) Thread safety: threads opening and closing requests and busy spans together never find their own open span
     missing, and leave ``in_flight`` at 0 and ``busy_reasons()`` empty.
 (l) ``ACTIVITY`` is the process's ``Activity``; ``current_activity()`` returns the module's ``ACTIVITY`` as it is at the
@@ -469,7 +469,7 @@ def test_a_new_activity_starts_at_its_clock_with_nothing_in_flight_or_busy() -> 
 
     assert activity.started_at == START
     assert (activity.in_flight, activity.last_user_request_at) == (0, None)
-    assert (activity.busy_reasons(), activity.is_busy()) == ((), False)
+    assert activity.busy_reasons() == ()
     assert activity.idle_seconds(START) == 0.0
     print_success(f"started at {START}, idle and empty")
 
@@ -516,12 +516,12 @@ def test_a_user_request_is_in_flight_and_stamped_when_it_starts_and_when_it_ends
     inside: list[tuple[Any, ...]] = []
 
     with activity.request() as entered:
-        inside.append((entered, activity.in_flight, activity.last_user_request_at, set(activity.busy_reasons()), activity.is_busy()))
+        inside.append((entered, activity.in_flight, activity.last_user_request_at, activity.busy_reasons()))
         clock.now = 1_130.0
 
-    assert inside == [(None, 1, 1_100.0, {"requests"}, True)]
+    assert inside == [(None, 1, 1_100.0, ("requests",))]
     assert (activity.in_flight, activity.last_user_request_at) == (0, 1_130.0)
-    assert (activity.busy_reasons(), activity.is_busy()) == ((), False)
+    assert activity.busy_reasons() == ()
     print_success("in flight inside; stamped at 1100, then 1130")
 
 
@@ -742,9 +742,9 @@ def test_busy_lists_a_reason_while_one_of_its_spans_is_open() -> None:
         with activity.busy("backup"), activity.busy("export"):
             seen.append(("both", sorted(activity.busy_reasons())))
         seen.append(("outer", activity.busy_reasons()))
-    seen.append(("closed", activity.busy_reasons(), activity.is_busy()))
+    seen.append(("closed", activity.busy_reasons()))
 
-    assert seen == [(None, ("backup",)), ("both", ["backup", "export"]), ("outer", ("backup",)), ("closed", (), False)]
+    assert seen == [(None, ("backup",)), ("both", ["backup", "export"]), ("outer", ("backup",)), ("closed", ())]
     print_success("listed until its last span is closed")
 
 
@@ -803,7 +803,7 @@ def test_a_blank_busy_reason_is_refused_before_anything_is_counted(reason: str) 
             ran.append(reason)
 
     assert ran == []
-    assert (activity.busy_reasons(), activity.is_busy()) == ((), False)
+    assert activity.busy_reasons() == ()
     print_success("ValueError; nothing counted")
 
 
@@ -822,7 +822,7 @@ def test_a_blank_busy_check_name_is_refused_and_nothing_is_registered(name: str)
     with pytest.raises(ValueError):
         activity.register_busy_check(name, check)
 
-    assert (activity.busy_reasons(), activity.is_busy()) == ((), False)
+    assert activity.busy_reasons() == ()
     assert check.calls == 0
     print_success("ValueError; nothing registered")
 
@@ -848,27 +848,28 @@ def test_a_busy_check_lists_its_name_when_its_answer_is_truthy(answer: object, l
     activity.register_busy_check("tools", Answers(answer))
 
     with _activity_log() as events:
-        reasons, busy = activity.busy_reasons(), activity.is_busy()
+        reasons = activity.busy_reasons()
 
-    assert (reasons, busy) == ((("tools",), True) if listed else ((), False))
+    assert reasons == (("tools",) if listed else ())
     assert _logged(events, CHECK_FAILED, "check") == []
     print_success("listed" if listed else "not listed")
 
 
 def test_a_busy_check_runs_at_every_reading_never_cached() -> None:
-    """SWA-021 — contract (i): a check whose answer flips four times is read afresh by every ``busy_reasons()`` and every ``is_busy()``."""
+    """SWA-021 — contract (i): a check whose answer flips four times is read afresh by every ``busy_reasons()``: both readings after each flip follow the answer of the moment, and each of the eight readings runs the check."""
     print_section("SWA-021: a busy check is never cached")
     activity, _ = _activity()
     check = Answers()
     activity.register_busy_check("tools", check)
-    trace: list[tuple[tuple[str, ...], bool]] = []
+    trace: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
 
     for answer in (True, False, True, False):
         check.answer = answer
-        trace.append((activity.busy_reasons(), activity.is_busy()))
+        trace.append((activity.busy_reasons(), activity.busy_reasons()))
 
-    assert trace == [(("tools",), True), ((), False), (("tools",), True), ((), False)]
-    print_success("each reading follows the answer of the moment")
+    assert trace == [(("tools",), ("tools",)), ((), ()), (("tools",), ("tools",)), ((), ())]
+    assert check.calls == 2 * len(trace), f"{check.calls} runs of the check for {2 * len(trace)} readings: a reading answered without running it"
+    print_success("each reading runs the check and follows the answer of the moment")
 
 
 def test_registering_a_busy_check_name_again_replaces_the_check() -> None:
@@ -881,7 +882,7 @@ def test_registering_a_busy_check_name_again_replaces_the_check() -> None:
     old_calls = old.calls
 
     activity.register_busy_check("tools", new)
-    assert (activity.busy_reasons(), activity.is_busy()) == ((), False)
+    assert activity.busy_reasons() == ()
     new.answer = True
     assert activity.busy_reasons() == ("tools",)
     assert old.calls == old_calls, "the replaced check is still read"
@@ -889,32 +890,31 @@ def test_registering_a_busy_check_name_again_replaces_the_check() -> None:
 
 
 def test_a_failing_busy_check_counts_as_busy_and_warns_once_per_streak() -> None:
-    """SWA-023 — contract (i): a check that raises lists its name — when in doubt, not idle — and is logged — WARNING, "Busy check failed", ``check="flaky"`` — at the first failure of a streak only, whether ``busy_reasons()`` or ``is_busy()`` reads it; one answer without an exception, false or true, ends the streak, and the next failure warns again."""
+    """SWA-023 — contract (i): a check that raises lists its name — when in doubt, not idle — and is logged — WARNING, "Busy check failed", ``check="flaky"`` — at the first failure of a streak only, however many readings the streak lasts; one answer without an exception, false or true, ends the streak, and the next failure warns again."""
     print_section("SWA-023: a failing busy check, its streaks")
     activity, _ = _activity()
     check = Answers()
     activity.register_busy_check("flaky", check)
     failure = RuntimeError("provoked: the check fails")
-    readers: dict[str, Callable[[], bool]] = {"reasons": lambda: "flaky" in activity.busy_reasons(), "is_busy": activity.is_busy}
     steps = [
-        # (answer, read by, busy, warnings logged so far)
-        (failure, "reasons", True, 1),  # the first failure: logged
-        (failure, "reasons", True, 1),  # the streak goes on: not again
-        (failure, "is_busy", True, 1),
-        (False, "reasons", False, 1),  # an answer ends the streak
-        (failure, "is_busy", True, 2),  # a new streak, first read by is_busy(): logged
-        (failure, "reasons", True, 2),
-        (True, "reasons", True, 2),  # a true answer ends it too
-        (failure, "reasons", True, 3),
+        # (answer, busy_reasons(), warnings logged so far)
+        (failure, ("flaky",), 1),  # the first failure: logged
+        (failure, ("flaky",), 1),  # the streak goes on: not again
+        (failure, ("flaky",), 1),
+        (False, (), 1),  # an answer ends the streak
+        (failure, ("flaky",), 2),  # a new streak: logged
+        (failure, ("flaky",), 2),
+        (True, ("flaky",), 2),  # a true answer ends it too
+        (failure, ("flaky",), 3),
     ]
-    trace: list[tuple[bool, int]] = []
+    trace: list[tuple[tuple[str, ...], int]] = []
 
     with _activity_log() as events:
-        for answer, reader, _, _ in steps:
+        for answer, _, _ in steps:
             check.answer = answer
-            trace.append((readers[reader](), len(_logged(events, CHECK_FAILED, "check"))))
+            trace.append((activity.busy_reasons(), len(_logged(events, CHECK_FAILED, "check"))))
 
-    assert trace == [(busy, warnings) for _, _, busy, warnings in steps]
+    assert trace == [(reasons, warnings) for _, reasons, warnings in steps]
     assert _logged(events, CHECK_FAILED, "check") == [("flaky", "warning")] * 3
     print_success("busy at every failure; three streaks, three warnings")
 
@@ -946,28 +946,27 @@ def test_each_busy_check_has_a_streak_of_its_own() -> None:
 
 
 def test_busy_reasons_lists_requests_spans_and_checks_each_once() -> None:
-    """SWA-025 — contract (j): a request without presence, ``busy("backup")`` and ``busy("requests")``, a true check "backup", a failing check "export" and a false one "tools" give "requests", "backup" and "export", each once, a tuple of str; with the spans and the request closed, the two checks; with the checks answering false, nothing. ``is_busy()`` agrees every time."""
+    """SWA-025 — contract (j): a request without presence, ``busy("backup")`` and ``busy("requests")``, a true check "backup", a failing check "export" and a false one "tools" give "requests", "backup" and "export", each once, a tuple of str; with the spans and the request closed, the two checks; with the checks answering false, nothing."""
     print_section("SWA-025: busy_reasons() without duplicates")
     activity, _ = _activity()
     backup, export = Answers(True), Answers(RuntimeError("provoked: the check fails"))
     activity.register_busy_check("backup", backup)
     activity.register_busy_check("export", export)
     activity.register_busy_check("tools", Answers(False))
-    states: list[tuple[tuple[str, ...], bool]] = []
+    states: list[tuple[str, ...]] = []
 
     with _activity_log():
         with activity.busy("backup"), activity.busy("requests"), activity.request(presence=False):
-            states.append((activity.busy_reasons(), activity.is_busy()))
-        states.append((activity.busy_reasons(), activity.is_busy()))
+            states.append(activity.busy_reasons())
+        states.append(activity.busy_reasons())
         backup.answer = export.answer = False
-        states.append((activity.busy_reasons(), activity.is_busy()))
+        states.append(activity.busy_reasons())
 
-    for reasons, busy in states:
+    for reasons in states:
         assert isinstance(reasons, tuple) and all(isinstance(reason, str) for reason in reasons), reasons
         assert len(reasons) == len(set(reasons)), f"a reason listed twice: {reasons}"
-        assert busy is bool(reasons), (reasons, busy)
-    assert [set(reasons) for reasons, _ in states] == [{"requests", "backup", "export"}, {"backup", "export"}, set()]
-    print_success("each reason once; is_busy() == bool(busy_reasons())")
+    assert [set(reasons) for reasons in states] == [{"requests", "backup", "export"}, {"backup", "export"}, set()]
+    print_success("each reason once, in a tuple of str; nothing at rest")
 
 
 # =============================================================================
@@ -1002,7 +1001,7 @@ def test_concurrent_requests_and_busy_spans_balance_out() -> None:
     _join(threads)
 
     assert problems == [], problems[:10]
-    assert (activity.in_flight, activity.busy_reasons(), activity.is_busy()) == (0, (), False)
+    assert (activity.in_flight, activity.busy_reasons()) == (0, ())
     assert len(calls) == THREADS * CYCLES // 2
     print_success(f"{THREADS * CYCLES} requests and {2 * THREADS * CYCLES} spans balanced")
 

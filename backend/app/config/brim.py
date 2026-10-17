@@ -13,8 +13,10 @@ keeps no other variable, so the mode decides there).
 
 ``1``/``true``/``yes``/``on`` turn it on, ``0``/``false``/``no``/``off`` off, case-insensitive; unset or blank follows
 the mode. Any other value raises ``BrimConfigError``, which names the variable; the caller decides what follows (the
-startup step logs it and leaves the pool lazy). With it off nothing changes but the order of events: the first parse
-starts the forkserver, which loads the plugins, and the workers after it are born ready.
+startup step logs it and leaves the pool lazy, and the pool counts it as off). With it off nothing changes from before
+W-B53: the first parse starts the forkserver with nothing preloaded, and each worker imports the BRIM module and its
+plugins itself, at its first parse, away from the event loop (W-B59: preloading on that path held the loop for the whole
+import).
 """
 
 import os
