@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from backend.app.config import SecretFileError, read_secret_file
 from backend.app.services.accounts.password_policy import PasswordRule, failed_rules, rules_with_minimum_length
+from backend.app.services.platform.instance_backup.archive import INSTANCE_KEY_MAX_BYTES
 from backend.app.services.platform.instance_key import INSTANCE_KEY_MIN_LENGTH, instance_key_status
 
 #: P12: the shortest password an archive accepts, unless the accounts' own minimum is longer.
@@ -36,8 +37,8 @@ def exportable_instance_key() -> str | None:
     """The instance key a password-protected backup carries: the generated one, when it can be used; else ``None``.
 
     ``None`` for a key the environment configures, for an instance that has none yet (nothing is encrypted with a key
-    that does not exist), and for a generated key that cannot be used (``generated_key_unusable``). Never creates the key
-    file, never raises.
+    that does not exist), and for a generated key that cannot be used (``generated_key_unusable``), a key longer than an
+    archive can give back included. Never creates the key file, never raises.
     """
     status = instance_key_status()
     if status.source != "generated" or status.problem is not None or status.path is None:
@@ -46,10 +47,30 @@ def exportable_instance_key() -> str | None:
         key = read_secret_file(status.path, "instance key file")
     except SecretFileError:
         return None
-    return key if len(key) >= INSTANCE_KEY_MIN_LENGTH else None
+    return key if _fits_an_archive(key) else None
 
 
 def generated_key_unusable() -> bool:
-    """Whether a generated instance key is there but cannot be used: a secure backup then leaves it out, with a warning."""
+    """Whether a generated instance key is there but cannot be used: a secure backup then leaves it out, with a warning.
+
+    Unusable: H's status names a problem, or the key is longer than an archive can give back (``INSTANCE_KEY_MAX_BYTES``
+    in UTF-8: every restore refuses a longer entry; lot B4b). Never raises.
+    """
     status = instance_key_status()
-    return status.source == "generated" and status.problem is not None
+    if status.source != "generated":
+        return False
+    if status.problem is not None:
+        return True
+    if status.path is None:
+        return False
+    try:
+        key = read_secret_file(status.path, "instance key file")
+    except SecretFileError:
+        return True
+    return len(key.encode("utf-8")) > INSTANCE_KEY_MAX_BYTES
+
+
+def _fits_an_archive(key: str) -> bool:
+    """Whether a key can travel in an archive and come back: as long as H asks, and no longer in UTF-8 than every restore
+    reads (``INSTANCE_KEY_MAX_BYTES``)."""
+    return len(key) >= INSTANCE_KEY_MIN_LENGTH and len(key.encode("utf-8")) <= INSTANCE_KEY_MAX_BYTES

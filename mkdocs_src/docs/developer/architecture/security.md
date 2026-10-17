@@ -584,7 +584,8 @@ job's folder `backups/.jobs/<id>/` (`0700`, the zip `0600`), with the instance k
 reports the phase `encrypting` (`done_bytes` of `total_bytes`: the zip's bytes) and writes
 `librefolio-backup-<UTC>.lfbk` beside it. The job records `encrypted: true` and the envelope's name, size and SHA-256
 (`InstanceBackupJob`); `_remove_work_files()` removes the clear zip with the other work files, on success as on
-failure.
+failure. A run killed outright (a power cut, `kill -9`) removes nothing: the next read of its job, or the next start,
+ends it and removes them ([What a Run Killed Outright Leaves](#backup-leftovers)).
 
 **The password's life.**
 
@@ -611,21 +612,28 @@ failure.
   with `LFBK`, `zip` otherwise.
 - **In the command line.** `scripts/backup_cli.py` reads it from `--password-file` (`read_secret_file()`: the file's
   text without a leading byte order mark and its trailing line breaks, a blank file refused), from `--password-stdin`
-  (one line) or with `getpass` at a terminal (twice for `create`), never from an argument. The subparsers of
+  (one line, when the standard input is not a terminal) or with `getpass` at a terminal (twice for `create`), never
+  from an argument. At a terminal, `--password-stdin` takes the `getpass` path too (`_password()`, B-25): a line read
+  there would show the password as it is typed, and for `create` it would not be asked twice. The subparsers of
   `create`, `inspect`, `restore` and `decrypt` set `allow_abbrev=False`, so `--password` is refused instead of being
   taken for one of the two options.
 - **In the app.** The Backup tab empties its password fields as soon as a password is submitted
-  (`BackupDownloadCard.svelte`, `RestoreCard.svelte`). For another try after a wrong password,
-  `restoreFlow.svelte.ts` keeps the file and the id of its upload (state `password`), never the password.
+  (`BackupDownloadCard.svelte`, `RestoreCard.svelte`). The two fields of a new secure backup are
+  `autocomplete="new-password"`, so that a password manager does not fill in the account's password;
+  the restore card's field stays `autocomplete="off"`, as `current-password` would offer the account's. For another
+  try after a wrong password, `restoreFlow.svelte.ts` keeps the file and the id of its upload (state `password`),
+  never the password.
 
 **The key entry**, `secrets/instance.key` (`INSTANCE_KEY_ENTRY` in `paths.py`):
 
 - **Written** only by a backup with a password, and only when `exportable_instance_key()` (`secure.py`) gives the key:
-  `instance_key_status()` reports the source `generated` without a `problem`, and `read_secret_file()` reads at least
-  `INSTANCE_KEY_MIN_LENGTH` characters from the file. A configured key (`LIBREFOLIO_INSTANCE_KEY`, its `_FILE`), no key
-  yet, or a generated key that cannot be used gives no entry; the last one adds the job's warning
-  `instance_key_unusable` (`generated_key_unusable()`), and the backup completes. Neither function creates the key
-  file.
+  `instance_key_status()` reports the source `generated` without a `problem`, and the key `read_secret_file()` reads
+  from the file fits an archive (`_fits_an_archive()`): at least `INSTANCE_KEY_MIN_LENGTH` characters, and at most
+  `INSTANCE_KEY_MAX_BYTES` (4096) bytes in UTF-8, as every restore reads no more (`read_instance_key()`; B-26). A
+  configured key (`LIBREFOLIO_INSTANCE_KEY`, its `_FILE`), no key yet, or a generated key that cannot be used gives no
+  entry. The last one adds the job's warning `instance_key_unusable` (`generated_key_unusable()`): H's status names a
+  problem, the file cannot be read, or the key is longer than that bound, which H's own check, a minimum length, lets
+  through. The backup completes. Neither function creates the key file, and neither raises.
 - **Announced** by the manifest, outside `manifest.files`:
   `instance_key: {included: true, sha256: <hex of the entry>}` (`ManifestInstanceKey`, whose validator wants `sha256`
   exactly when `included`). The entry holds the key's text, UTF-8.
@@ -641,15 +649,22 @@ failure.
 
 **The check of an envelope** (`staging.py`). `_decrypt()` comes first, in the phase `decrypting` (`done_bytes` of
 `total_bytes`, over the envelope): free space for the envelope's size plus 64 MiB (`no_space`), then `decrypt_file()`
-into `.restore/stage/<id>/archive.zip` (`STAGE_DECRYPTED_ARCHIVE`, `0600` in the stage's `0700` folder). The checks of
-a zip follow on that archive, which is removed once unpacked. A chunk that fails ends the check `failed` with
-`envelope_damaged`, and nothing of the stage is left; `stage_archive(…, key=None)` on an envelope is
-`password_required`. `RestoreErrorCode` gains only these two codes: `wrong_password` and `envelope_unsupported` are
-synchronous answers of `POST /backup/restore/stage`, never the end of a check. On the command line, `inspect`
-decrypts into a folder `mkdtemp(prefix=".decrypt-")` of `backups/` (made private by `ensure_private_dir()`) and removes
-it at the end; `restore` decrypts through `stage_archive()`; `decrypt FILE -o OUT` writes `OUT` through `_NewFile`,
-and refuses, before it asks the password, an `OUT` that exists and a `FILE` that is not an envelope
-(`not_an_envelope`).
+into `.restore/stage/<id>/archive.zip` (`STAGE_DECRYPTED_ARCHIVE`, `0600` in the stage's `0700` folder), through
+`archive.zip.part`. The checks of a zip follow on that archive, which is removed once unpacked; a check killed outright
+leaves it, or its `.part`, until the next start ([What a Run Killed Outright Leaves](#backup-leftovers)). A chunk that
+fails ends the check `failed` with `envelope_damaged`, and nothing of the stage is left; `stage_archive(…, key=None)`
+on an envelope is `password_required`. `RestoreErrorCode` gains only these two codes: `wrong_password` and
+`envelope_unsupported` are synchronous answers of `POST /backup/restore/stage`, never the end of a check.
+
+On the command line, `inspect` decrypts into a folder `mkdtemp(prefix=".decrypt-")` of `backups/` (made private by
+`ensure_private_dir()`) and removes it at the end. A killed `inspect` leaves its folder: before it makes its own,
+`inspect` removes the `.decrypt-*` folders older than an hour (`remove_stale_decrypt_folders()` in `leftovers.py`; a
+younger one may be another `inspect`'s, still running), and every start applies the same rule. `restore` decrypts
+through `stage_archive()`. `decrypt FILE -o OUT` writes `OUT` through `_NewFile`, and refuses, before it asks the
+password, an `OUT` that exists and a `FILE` that is not an envelope (`not_an_envelope`). Once `OUT` is written, it
+reads the manifest of the zip, and when the key is announced it adds
+`🔑 It also holds the instance key: with it, every saved provider key can be read.` (`_carries_instance_key()`, B-24;
+a manifest it cannot read adds nothing, and the command still exits with `0`).
 
 **The secrets of the copy** (`_plugin_secrets()`, after the upgrade and the post-migration fixes, with X's functions
 on a `sqlite3` connection to the copy's database):
@@ -678,6 +693,7 @@ gives zeros. The command line prints them, and the report window of the Backup t
 | `backend/app/services/platform/instance_backup/archive.py`, `manifest.py`, `paths.py` | The key entry written, checked and read (`read_instance_key()`, `check_archive()`); `ManifestInstanceKey`; `INSTANCE_KEY_ENTRY`, `STAGE_DECRYPTED_ARCHIVE` |
 | `backend/app/services/platform/instance_backup/staging.py` | The check of an envelope (`_decrypt()`), the key entry, the secrets of the copy (`_plugin_secrets()`) |
 | `backend/app/services/platform/instance_backup/restore_jobs.py` | The password tried in the request, the upload kept, `kind` |
+| `backend/app/services/platform/instance_backup/leftovers.py` | What a run killed outright leaves in clear, removed at every start ([below](#backup-leftovers)) |
 | `backend/app/api/v1/backup/instance.py`, `backend/app/api/v1/backup/restore.py`, `backend/app/schemas/backup.py` | The routes and their models |
 | `backend/app/api/no_echo.py` | `NoInputEchoRoute` |
 | `scripts/backup_cli.py` | `create --encrypt`, `--password-file`, `--password-stdin`, `decrypt` |
@@ -694,6 +710,64 @@ creation, the check of an envelope, the key entry, the secrets re-encrypted or c
 (`backupApi.test.ts`, `backupJob.test.ts`, `restoreFlow.test.ts`, `restoreI18n.test.ts`) and
 `./dev.py test front-utility component-unit` (`BackupDownloadCard.test.ts`, `RestoreCard.test.ts`,
 `RestoreReportModal.test.ts`, `PasswordStrength.test.ts`).
+
+#### What a Run Killed Outright Leaves {: #backup-leftovers }
+
+A run killed outright (a power cut, `kill -9`, a container stopped past its grace period) runs no clean-up, and three
+runs of the backup keep clear data on disk while they work (lot B4b, B-23, after E's review R13-SEC4):
+
+- the check of a secure backup decrypts it into its copy, `.restore/stage/<id>/archive.zip` (written through
+  `archive.zip.part`), until it is unpacked: the backup's data, and the instance key when the backup carries it;
+- `dev.py backup inspect` decrypts one into a folder `backups/.decrypt-<random>/`;
+- a backup writes the database's copy and the zip into its job folder, `backups/.jobs/<id>/`: a secure one keeps the
+  clear zip there until it is encrypted, then writes the envelope through `.lfbk.part`.
+
+The startup step `backup-leftovers`, right after `restore-commit` (decision N66; see the
+[startup steps](overview.md)), removes them at every start: `sweep_backup_leftovers()` in
+`backend/app/services/platform/instance_backup/leftovers.py`, in a thread. Three parts, in this order:
+
+1. **`restore`.** `restore_jobs.prune()`, as at the start of a check: while no check runs, a check still recorded as
+   `running` is ended `failed`, `restore_interrupted`, its copy and its upload removed, and `prune()` returns how many
+   it ended; what is older than `STAGE_LIFETIME` (24 hours) goes as before. Then
+   `restore_jobs.remove_stray_decrypted_archives()`: while `.restore/` and `.restore/stage/` are plain folders and the
+   lock of the checks (`.restore/stage/.stage.lock`) is free, it removes `archive.zip` and `archive.zip.part` from
+   every copy (a plain folder with a job-id name, the copy of a restore waiting for the next start included), each only
+   when it is a regular file (`lstat`): a link or a folder of that name stays. A check removes the decrypted archive
+   once unpacked, or the whole copy on any error, always under that lock: with the lock free, one still there is what a
+   killed run left. The rest of the copy stays, its `data/` and its report: `prune()` removes it at its age.
+2. **`decrypt_folders`.** `remove_stale_decrypt_folders()`, on `backups/`, removes with their content the entries named
+   `.decrypt-*` (`DECRYPT_FOLDER_PREFIX`) that are folders themselves (`lstat`, never followed) and were last modified
+   more than `DECRYPT_FOLDER_LIFETIME` (one hour) before: a younger one may be an `inspect` still running, and a link or
+   a file of that name stays. `inspect` applies the same function before it makes its own folder: one rule, one home.
+3. **`jobs`.** `jobs.end_interrupted_jobs()`: while no run holds the run lock (`backups/.jobs/.lock`), every job
+   folder (a plain folder with a job-id name) whose state reads `running` gets the end `get_job()` gives a run that
+   died with its process (`_end_interrupted()`): `failed`, `backup_interrupted`, `finished_at` now, its state written,
+   then everything in the folder but `state.json` removed. A state that cannot be read is left to the expiry. Then
+   `jobs.remove_expired_jobs()`, as at the start of every backup, removes the jobs that ended more than `JOB_RETENTION`
+   (one hour) ago, and a folder whose state cannot be read once it is that old: an interrupted job's state stays for
+   that hour, like any finished job's. Both act only while `backups/` and `backups/.jobs/` are plain folders: with
+   `backups` a link, `.jobs` in its target would look plain.
+
+A read of a job, through `get_job()` (the Backup tab and the hosting panel following their jobs, the downloads), ends
+a dead run the same way, its work files included, without waiting for a restart.
+
+- **Nothing a running process holds**: the run lock of the backups (a `dev.py backup create` running while the server
+  starts keeps its job), the lock of the checks (a check of the command line or of the app), an `inspect` younger than
+  an hour. **Nothing through a link**: a folder is acted on only when `lstat` finds a folder itself (`is_plain_dir()`),
+  and an entry that is a link is never followed.
+- **Never raises.** After `restore-commit`, a step that raises stops the start, and a cause that stays would stop every
+  start ([Steps and Middleware: the Contract](overview.md#lifecycle-contract)). Each part runs in its own `try`: one
+  that raises is logged as an error, `A cleanup of backup leftovers failed`, with `part` (`restore`,
+  `decrypt_folders` or `jobs`) and `error`, the exception's type name only, no path and no message; the next parts
+  still run.
+- **The log.** When something was ended or removed, one INFO line, `Backup leftovers removed at startup`, with
+  `checks_interrupted`, `decrypted_archives`, `decrypt_folders`, `jobs_interrupted` and `jobs_expired`, in this order.
+  A clean data directory, or one without `.restore/` and `backups/`, logs nothing.
+
+Tests: `./dev.py test services backup-leftovers` (`backend/test_scripts/test_services/test_backup_leftovers.py`: each
+part on its own, the locks held, the links, a part that raises, a clean data directory, the step), and the order
+`restore-commit` before `backup-leftovers` in `./dev.py test services backup-apply` (`test_backup_apply.py`, section
+(j)).
 
 ## 🩺 Configuration Checks {: #configuration-checks }
 
@@ -1308,8 +1382,10 @@ a difference is a warning (`control_totals_changed`), never a refusal, since a m
 totals, like the snapshot's at the backup, come from J's `compute_control_totals()` on an engine of their own over an
 immutable, read-only connection (`mode=ro&immutable=1`), because every engine of the process sets the journal mode when
 it connects (`set_sqlite_pragma`, `db/session.py`), which a plain read-only connection to a rollback-journal file
-refuses; the amounts the manifest recorded must be plain decimal text, at most 60 digits on each side of the point,
-before J reads them, since an exponent would be expanded in full.
+refuses. The totals the manifest recorded go as they are to J's `ControlTotals.from_json()`, which reads an amount only
+as plain decimal text, at most 60 digits on each side of the point, and refuses any other before reading it (J-27): an
+exponent an archive recorded is never expanded, and the comparison is then `absent`. The rule has one home, J's:
+`compare_totals()` does not repeat it (B-22).
 
 ### 🔐 The Routes {: #backup-restore-routes }
 
@@ -1330,7 +1406,10 @@ only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error
 
 Every `RestoreStatus` carries `upload_limit_mb`, the largest archive `PUT /backup/restore/upload` accepts at the time of
 the answer, in megabytes: `0` for no limit, `null` when the limit cannot be read (the upload then answers `503`
-`backup_upload_unavailable`, and an error naming the variable is logged).
+`backup_upload_unavailable`, and an error naming the variable is logged). It cannot be read when
+`LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not a whole number (`BackupConfigError`), or when `ENVIRONMENT_PROFILE_DEFAULTS`
+gives the active profile a value of the wrong type for it (`ProfileDefaultError`, [Settings](settings.md); B-21):
+`_upload_limit()` and `_readable_limit_mb()` in `restore.py` treat the two alike, so the status still answers `200`.
 
 On the server, `./dev.py backup restore ARCHIVE` confirms as `cli`, once the word `restore` is typed at a terminal or
 with `--yes`, and `./dev.py backup pending [--cancel]` shows the restore, or drops it with its copy. The command prints

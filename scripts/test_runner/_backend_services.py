@@ -1312,6 +1312,14 @@ def services_backup_secure(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Secure backup tests", verbose=verbose)
 
 
+def services_backup_leftovers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the startup cleanup of what killed runs left in clear (lot B4b, B-23, decision N66)."""
+    print_section("Services: Backup Leftovers")
+    print_info("Testing: backend/app/services/platform/instance_backup/leftovers.py, restore_jobs.py, jobs.py (lot B4b)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_leftovers.py", test_names)
+    return run_command(cmd, "Backup leftovers tests", verbose=verbose)
+
+
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger and closing the handlers it removes."""
     print_section("Services: Credentials in uvicorn's Request Lines")
@@ -2321,10 +2329,20 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "backup-leftovers",
+        services_backup_leftovers,
+        name="Backup Leftovers",
+        desc="The startup cleanup of what runs killed outright left in clear (lot B4b, B-23, decision N66): a check its server left running ended (restore_interrupted, copy and upload removed); a decrypted archive.zip left in a copy removed while no check runs, never a link, the rest of the copy kept; the inspect folders .decrypt-* older than an hour removed, younger ones, links and files kept; a backup that died with its process ended (backup_interrupted) with its work files removed, also by get_job; nothing touched under a held lock; expired jobs removed; a part that fails logged while the others still run, never raised; quiet on a clean data directory; the step backup-leftovers",
+        # PURE: data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables. No lane DB, no server,
+        # no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "backup-totals",
         services_backup_totals,
         name="Instance Backup Ledger Totals",
-        desc="Lot B-13 (contract §7). ledger_totals_of: J's JSON of a real database's ledger, equal to J's control_totals of the same rows read with sqlite3, no line for an empty ledger; read as immutable (bytes, mtime, nothing created beside it, in rollback-journal mode, in WAL mode, with an empty -wal and its -shm); a -wal still holding frames never read past (None, PendingWriteAheadLog); the path a name, never a URI (spaces, accents, #, ?, &, %41); never raises (missing, folder, not a database, empty, truncated, no ledger table, a decimal trap, a running event loop): None and one error with the exception's type only. compare_totals: the decision order (absent; other_version before reading; absent for amounts that are not plain text, lines not lists of objects, decided before J's from_json, never expanding 1E+999999999, and for what from_json refuses, a version that is not an int included; unreadable; then the lines as maps, canonical text, zero lines dropped: same without a difference, reordered or zero lines included, changed with one line at least); differences cash first, by broker, currency or asset, canonical text, None for an absent line, the first 20 kept and all counted, none for another status; frozen; the documents given unchanged",
+        desc="Lot B-13 (contract §7). ledger_totals_of: J's JSON of a real database's ledger, equal to J's control_totals of the same rows read with sqlite3, no line for an empty ledger; read as immutable (bytes, mtime, nothing created beside it, in rollback-journal mode, in WAL mode, with an empty -wal and its -shm); a -wal still holding frames never read past (None, PendingWriteAheadLog); the path a name, never a URI (spaces, accents, #, ?, &, %41); never raises (missing, folder, not a database, empty, truncated, no ledger table, a decimal trap, a running event loop): None and one error with the exception's type only. compare_totals: the decision order (absent; other_version before reading; absent for amounts that are not plain text and lines not lists of objects, refused by J's from_json (one rule, J's home since J-27; never expanding 1E+999999999), and for the rest from_json refuses, a version that is not an int included; unreadable; then the lines as maps, canonical text, zero lines dropped: same without a difference, reordered or zero lines included, changed with one line at least); differences cash first, by broker, currency or asset, canonical text, None for an absent line, the first 20 kept and all counted, none for another status; frozen; the documents given unchanged",
         # PURE: one alembic process makes the module's database on a tmp_path file; every file read is a copy under
         # tmp_path, with a production data directory of the test configured (which must stay absent). No lane DB, no
         # server, no network.
