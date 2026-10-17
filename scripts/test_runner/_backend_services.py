@@ -2376,7 +2376,7 @@ Note: No backend server required.
         "bulk-writes-chunked",
         services_bulk_writes_chunked,
         name="Bulk Writes Chunked (MF-SEC9a)",
-        desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused",
+        desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused; guard: POST /assets/prices answers a service ValueError (the digits refusal) 400 with its own message",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; services, the FX provider lookup
         # and route loggers replaced by monkeypatch; the cap/failure cases hand the routes stand-in sessions.
         isolation="pure",
@@ -2428,9 +2428,9 @@ Note: No backend server required.
         "asset-source-guards",
         services_asset_source_guards,
         name="Asset Source Guards",
-        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion; X-R65 (N83): a manual price outside [1900-01-01, tomorrow] refuses the whole upsert before any statement (DateOutOfRangeError: items per asset, count), a provider's is dropped, named and logged, the others stored",
+        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion; X-R65 (N83): a manual price outside [1900-01-01, tomorrow] refuses the whole upsert before any statement (DateOutOfRangeError: items per asset, count), a provider's is dropped, named and logged, the others stored; X-R71: a manual currency mismatch refuses the whole upsert after one SELECT of the assets' currencies, nothing written (PriceCurrencyMismatchError, no ValueError: items per asset at fault with expected, found first seen, ten dates at most; count every date; the 422 detail keeps ten items), the dates checked first, a provider's mismatch still a ValueError",
         # WRITE_GLOBAL: Asset, PriceHistory and AssetEvent carry no user_id, so the
-        # assets this unit creates (one for the module, a second for one X-R65 test)
+        # assets this unit creates (one for the module, a second for one X-R65 test, twelve for one X-R71 test)
         # and every price/event row written against them are visible to all
         # concurrent tests. Rows are uniquely named and dropped in teardown, but the
         # tables themselves are shared surfaces.
