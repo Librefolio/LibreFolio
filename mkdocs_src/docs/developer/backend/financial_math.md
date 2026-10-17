@@ -186,17 +186,18 @@ thread instead, `await loop.run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_c
   in its queue. The GIL still runs one replay at a time, but the loop gets its turn in between: the interpreter
   switches threads every 5 ms (`sys.getswitchinterval()`, which the backend leaves at its default).
 - **The copied context.** Unlike `asyncio.to_thread()`, `run_in_executor()` does not copy the context variables:
-  `copy_context().run` runs the replay in a copy of the request's context, so its log lines keep what that context
-  holds — the structlog context that `merge_contextvars` merges (`logging_config.py`) and the secrets
-  `secrets_in_flight()` masks.
+  `copy_context().run` runs the replay in a copy of the request's context. Today that copy carries the secrets
+  `secrets_in_flight()` masks in log lines, and the `decimal` context, which `decimal` keeps in a context variable:
+  the replay computes with the precision and rounding of the request that started it. No code binds a structlog
+  context today (`merge_contextvars` in `logging_config.py` merges nothing); one bound later reaches the replay too.
 - **What crosses the thread.** The builder reads loaded data only: the maps the earlier steps built, and the column
   attributes of the `Transaction` rows (`id`, `date`, `type`, `broker_id`, `asset_id`, `quantity`, `amount`,
   `currency`, `cost_basis_currency`, `cost_basis_override`). It reads no relationship: `related_transaction` loads
-  lazily, and the builder never touches it. `Transaction` defers no column, `calculate()` commits and expires
-  nothing, and the API's session (`get_session()`, `db/session.py`) is opened with `expire_on_commit=False`: no
-  attribute reloads. No session enters the thread: every query of `calculate()` runs before the await, and no
-  caller runs another task on the engine's session meanwhile. The replay's modules hold no mutable state, only
-  constants and a logger. The `portfolio_blob` cache is written on the loop, after the await.
+  lazily, and the builder never touches it. `Transaction` defers no column, and the builder reads only rows that
+  `calculate()`'s own queries loaded, which never commits, rolls back or expires: no attribute reloads. No session
+  enters the thread: every query of `calculate()` runs before the await, and no caller runs another task on the
+  engine's session meanwhile. The replay's modules hold no mutable state, only constants and a logger. The
+  `portfolio_blob` cache is written on the loop, after the await.
 - **Cancellation.** A thread cannot be cancelled. When the request is cancelled while its replay runs — its client
   disconnected — the replay runs to its end and its result is dropped, since the cache write comes after the
   await; a replay still waiting in the queue is cancelled before it starts. The range cap of step 2
@@ -204,7 +205,9 @@ thread instead, `await loop.run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_c
 
 When you give the builder a new input, give it loaded data — a column already read, or a value an earlier step
 computed — never a lazy relationship or an expired attribute. The worker thread would try to load it outside the
-event loop, and the replay would fail with `MissingGreenlet`.
+event loop, and the replay would fail with `MissingGreenlet`. `test_engine_off_the_loop.py`
+(`test_financial/test_portfolio_engine/`) pins the worker thread, the loop running meanwhile, the parity with a replay
+on the loop, the copied context, and a guard that fails on any lazy load during the replay.
 
 #### 📅 The Days the Engine Recomputes {: #recomputed-days }
 
