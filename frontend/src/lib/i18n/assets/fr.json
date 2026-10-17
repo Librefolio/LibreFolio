@@ -420,7 +420,9 @@
       "generic": "Rien n'a été enregistré : {message}",
       "inUse": "Rien n'a été enregistré : l'événement {type} du {date} est lié à {n, plural, one {# transaction} many {# transactions} other {# transactions}} et ne peut pas être supprimé. Retirez d'abord le lien dans les transactions{more, plural, =0 {} one { (et # autre événement)} many { (et # autres événements)} other { (et # autres événements)}}.",
       "notDeletable": "Rien n'a été enregistré : l'un des événements à supprimer n'existe plus ou ne peut pas être supprimé ici. Rechargez les données et réessayez.",
-      "tooManyDigits": "Rien n'a été enregistré : la valeur de l'événement {type} du {date}{more, plural, =0 {} one { (et # autre)} many { (et # autres)} other { (et # autres)}} a trop de chiffres. La valeur d'un événement a au maximum {max} décimales, {significant} chiffres significatifs et {integer} chiffres avant la virgule."
+      "tooManyDigits": "Rien n'a été enregistré : la valeur de l'événement {type} du {date}{more, plural, =0 {} one { (et # autre)} many { (et # autres)} other { (et # autres)}} a trop de chiffres. La valeur d'un événement a au maximum {max} décimales, {significant} chiffres significatifs et {integer} chiffres avant la virgule.",
+      "invalidSplitRatio": "Rien n'a été enregistré : l'événement {type} du {date}{more, plural, =0 {} one { (et # autre)} many { (et # autres)} other { (et # autres)}} a un rapport de {ratio}. Le rapport d'une division doit être un nombre supérieur à 0 : 2 pour une division 2 pour 1, 0,5 pour un regroupement 1 pour 2.",
+      "splitAdjustmentsWithoutCost": "Rien n'a été enregistré : l'événement {type} du {date} a {n, plural, one {# ajustement lié} many {# ajustements liés} other {# ajustements liés}} sans coût d'achat{hidden, plural, =0 {} one { (dont # chez un courtier que vous ne voyez pas)} many { (dont # chez des courtiers que vous ne voyez pas)} other { (dont # chez des courtiers que vous ne voyez pas)}}. Sans la division, ces unités compteraient comme achetées à un prix inconnu : donnez d'abord un coût d'achat aux ajustements, puis changez le type de l'événement."
     }
   },
   "providerErrors": {

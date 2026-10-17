@@ -62,7 +62,10 @@ Today the profile changes seven things:
   for the idle risk workers, then `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` (see
   «Main Options» and «Risk engine workers» in [Environment Variables](configuration.md)). A value you
   set always wins over the profile, even one equal to the `selfhosted` default:
-  `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` keeps 600 seconds on a managed instance.
+  `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` keeps 600 seconds on a managed instance. If your panel
+  or your environment turns `LIBREFOLIO_FRAME_PROTECTION` or `LIBREFOLIO_CSP_REPORT_ONLY` off, the
+  log says so at every start, a warning for frame protection and an `info` for the policy, and so do
+  the security checks: see «Startup Checks» in [Configuration](configuration.md).
 - **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
   `Content-Security-Policy: frame-ancestors 'self'` to every response: a browser then shows
   LibreFolio in a frame only inside LibreFolio's own pages. If your hosting panel, or any page at
@@ -449,9 +452,11 @@ LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN=<the 64 characters printed by openssl>
   end are dropped, spaces are not.
 - The panel sends it in one header, `Authorization: Bearer <token>`, and never in the URL, where
   access logs would keep it.
-- LibreFolio reads the token when the panel calls, not at startup: a token it cannot use does not
-  stop the server, but every call then answers `503` and logs an error that names the variable,
-  never the token: `The hosting panel's backup token cannot be used: its routes refuse every request`.
+- LibreFolio checks the token at startup, and reads it again at every call: a token it cannot use does
+  not stop the server. The start log has an error that names the variable, never the token
+  (`check` is `backup.panel_token`: see «Startup Checks» in [Environment Variables](configuration.md)),
+  and every call then answers `503` and logs an error that names the variable too:
+  `The hosting panel's backup token cannot be used: its routes refuse every request`.
 - Anyone who has the token can download all the data of the instance: keep it as private as the
   archives, and call the routes over HTTPS only.
 
@@ -508,12 +513,13 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 | --- | --- | --- |
 | `404` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` is not set: every route answers as a path that does not exist | — |
 | `401` | No token, or not the token of this instance | `backup_panel_unauthorized` |
-| `503` | The token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. The log has the error | `backup_panel_unavailable` |
+| `503` | The token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. The start log names it already (`check` is `backup.panel_token`), and each call logs it | `backup_panel_unavailable` |
 | `404` | A job your panel did not start, or one that does not exist, or no longer does | `backup_job_not_found` |
 | `409` | A start while another backup runs | `backup_busy` |
 | `409` | A download of a job that has no archive: still running, or failed | `backup_job_not_ready` |
 | `409` | A delete while the job runs | `backup_job_running` |
-| `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written. The log has the cause | `backup_folder_unusable`, `backup_failed` |
+| `507` | A start while the disk of the data directory, or a quota, is full: free some space, then start again | `backup_no_space` |
+| `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written for another reason. The log has the cause | `backup_folder_unusable`, `backup_failed` |
 
 The `code` comes in the `detail` of the answer, with a `message` in English:
 
@@ -550,13 +556,15 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
   `client_max_body_size`, whose default is only 1 MB (`client_max_body_size 2048m;` matches the
   example above), and your platform or CDN, if it limits the size of a request. A `413` without the
   code `backup_too_large` comes from the proxy, not from LibreFolio.
-- A value other than a whole number, such as `500MB` or `-1`, does not stop the server: each upload
-  then answers `503` with the code `backup_upload_unavailable`, and the log has an error that names
-  the variable: `The upload limit of a restore cannot be read`.
+- A value other than a whole number, such as `500MB` or `-1`, does not stop the server: the start log
+  already has an error, `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB cannot be used: …` (`check` is
+  `backup.upload_limit`), then each upload answers `503` with the code `backup_upload_unavailable`, and
+  the log has an error that names the variable: `The upload limit of a restore cannot be read`.
 - The disk of the data directory needs room for the archive and, while it is checked, for its copy
   unpacked as well (how much: «Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)): short of
-  space, the upload answers `507` with the code `backup_no_space`, and the check refuses the archive
-  with `no_space`.
+  space, the upload answers `507` with the code `backup_no_space`, also when the disk reports itself
+  full only at the end of the file, as a network file system or a quota may. The check answers with
+  its own code, `no_space`: a `507` when it cannot even start, a refusal of the archive once it runs.
   An upload that cannot be written for another reason answers `500` with the code
   `backup_upload_failed`, and the log has the cause.
 - An administrator reads the limit in force in `upload_limit_mb` of

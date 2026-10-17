@@ -68,7 +68,7 @@ backend/app/services/financial_math/
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
 ├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series, fixed-period changes of a price or rate (1D … 5Y, both orientations), recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
-├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360) and simple interest: the primitives the Scheduled Investment provider builds its accrual on
+├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
@@ -142,9 +142,17 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
 
 1. resolves the target currency (by default `get_effective_base_currency()`) and the broker
    scope, each broker at its `effective_share()`;
-2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`;
-   an unusable ratio raises `ValueError`), and classifies them
-   (`ScopeAwareTransactionClassifier`, `classifier.py`);
+2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`),
+   and classifies them
+   (`ScopeAwareTransactionClassifier`, `classifier.py`). A split whose stored ratio fails `is_valid_split_ratio()`
+   (missing, not finite, or not above 0) counts as missing, never an exception (lot MF-D4; before, a `ValueError`).
+   Its linked rows stay in `split_linked_tx_ids`, the split's rescale with their cost kept. Only the ratio is dropped:
+   the event adds no `SplitRecord` to `split_history`, and goes once into `PortfolioCalculationResult.invalid_split_events`
+   (`InvalidSplitEvent`, sorted by event id), which the data-quality report turns into `INVALID_SPLIT_RATIO`.
+   The range it replays starts no earlier than the first
+   transaction and ends no later than `latest_range_end()` (tomorrow, `utils/datetime_utils.py`): the replay walks every
+   day, and an end far in the future held the instance (R13-SEC7-1). A range that ends before the first transaction
+   gives an empty result;
 3. returns the cached `PortfolioCalculationResult` when the `portfolio_blob` cache holds one for
    the same key — scope, currency, options, data fingerprints and the day of
    `position_states_start` — that starts on or before the requested start and ends on the
@@ -154,7 +162,8 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
 5. computes the average cost of every position (`compute_average_costs()` over
    `build_cost_positions()`), one `AssetPriceSeries` per held asset
    (`build_asset_price_series()`) and the native cash (`compute_native_cash()`);
-6. runs `DailyStateBuilder` (`daily_state.py`) and stores its result in the cache.
+6. runs `DailyStateBuilder` (`daily_state.py`) in a worker thread, [off the event loop](#off-the-event-loop), and
+   stores its result in the cache.
 
 `position_states_start` holds the positions at the end of `calculate(period_start=…)` — the caller's period start, while
 the daily states run from `date_from` (t=0 for the Dashboard) — or of `date_from` when it is not named.
@@ -164,6 +173,41 @@ arrival and the cost the sender moved: the Performance table's transfer split (`
 Callers derive their views from the result with `DerivedViewsBuilder` (`derived_views.py`) —
 history, per-broker P&L, candles, acquisition funding, performance inputs, allocation — and the
 data-quality report with `build_data_quality_report()` (`data_quality.py`).
+
+#### 🧵 Off the Event Loop {: #off-the-event-loop }
+
+`DailyStateBuilder.build()` is pure CPU, and a wide range makes it long: run on the event loop, one user's wide
+report held every other request until it ended (finding R13-SEC7, lot J-45). `calculate()` hands it to a worker
+thread instead, `await loop.run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_context().run, builder.build)`:
+
+- **A dedicated executor.** `_ENGINE_EXECUTOR`, in `portfolio/engine.py`, is a module-level
+  `ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")`, not the default executor that every
+  `asyncio.to_thread()` call of the backend shares. Its two workers bound how many replays run at once; a third waits
+  in its queue. The GIL still runs one replay at a time, but the loop gets its turn in between: the interpreter
+  switches threads every 5 ms (`sys.getswitchinterval()`, which the backend leaves at its default).
+- **The copied context.** Unlike `asyncio.to_thread()`, `run_in_executor()` does not copy the context variables:
+  `copy_context().run` runs the replay in a copy of the request's context. Today that copy carries the secrets
+  `secrets_in_flight()` masks in log lines, and the `decimal` context, which `decimal` keeps in a context variable:
+  the replay computes with the precision and rounding of the request that started it. No code binds a structlog
+  context today (`merge_contextvars` in `logging_config.py` merges nothing); one bound later reaches the replay too.
+- **What crosses the thread.** The builder reads loaded data only: the maps the earlier steps built, and the column
+  attributes of the `Transaction` rows (`id`, `date`, `type`, `broker_id`, `asset_id`, `quantity`, `amount`,
+  `currency`, `cost_basis_currency`, `cost_basis_override`). It reads no relationship: `related_transaction` loads
+  lazily, and the builder never touches it. `Transaction` defers no column, and the builder reads only rows that
+  `calculate()`'s own queries loaded, which never commits, rolls back or expires: no attribute reloads. No session
+  enters the thread: every query of `calculate()` runs before the await, and no caller runs another task on the
+  engine's session meanwhile. The replay's modules hold no mutable state, only constants and a logger. The
+  `portfolio_blob` cache is written on the loop, after the await.
+- **Cancellation.** A thread cannot be cancelled. When the request is cancelled while its replay runs — its client
+  disconnected — the replay runs to its end and its result is dropped, since the cache write comes after the
+  await; a replay still waiting in the queue is cancelled before it starts. The range cap of step 2
+  (R13-SEC7-1) bounds the work.
+
+When you give the builder a new input, give it loaded data — a column already read, or a value an earlier step
+computed — never a lazy relationship or an expired attribute. The worker thread would try to load it outside the
+event loop, and the replay would fail with `MissingGreenlet`. `test_engine_off_the_loop.py`
+(`test_financial/test_portfolio_engine/`) pins the worker thread, the loop running meanwhile, the parity with a replay
+on the loop, the copied context, and a guard that fails on any lazy load during the replay.
 
 #### 📅 The Days the Engine Recomputes {: #recomputed-days }
 
@@ -398,7 +442,9 @@ flowchart LR
    `frontend/src/lib/charts/signals/` — and each exception must be declared where it lives.
    The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in
    `MeasureSignal.ts` is held to `_MIN_ANNUALIZATION_DAYS` of `returns.py` by a parity test in
-   `measureSignal.test.ts`, so changing one without the other fails that test.
+   `measureSignal.test.ts`, so changing one without the other fails that test. Its `changePct` (null on a zero
+   start, N65) is also the one Δ% rule of the chart tooltip (`priceChartHelpers.ts::buildDeltaHtml`, J-44), which
+   imports it rather than keeping a copy.
    The declaration is the tag `@financial-math-exception` in the file's leading JSDoc block,
    followed by what the exception computes and why it stays in the browser. The [gate](#frontend-exceptions-gate)
    (`frontend/src/financialMathExceptions.gate.test.ts`) holds the list of declared files and
@@ -514,6 +560,18 @@ stays, so the guard follows the names rather than a file: it fails when one of t
 defined exactly once in `interest.py`, or is defined anywhere else in `backend/app` — a method,
 a nested function or a fallback under `except ImportError` included.
 
+Lots R13-SEC7-2 and MF-SI1 added `compound_growth()` to `interest.py`: the growth factor of
+daily compounding over a span, `Π (1 + r × Δt(d − 1, d))` over its days, in closed form and at a
+cost that does not grow with the span — one power under ACT/365 and ACT/360; under ACT/ACT the
+first and last years' days, and one power each for the whole common and the whole leap years
+between; under 30/360 one power per step size (0, 1, 2 or 3 days over 360), from exact integer
+step counts. It is memoized (`_compound_growth`, an LRU cache of 4 096 entries) on the rate as
+written and the caller's `Decimal` precision and rounding; `_calculate_act_act()` memoizes its
+full-year prefix the same way (`_act_act_years_before`), with the digits of the per-year sum.
+Its one caller is COMPOUND late interest (see
+[Scheduled Investment Provider](assets/provider_scheduled_investment.md#late-interest)). The
+guard's five names do not include it.
+
 The other rule over `backend/app` keeps one question in one place, «which rows are linked to a
 SPLIT asset event», and fails when:
 
@@ -552,7 +610,7 @@ for. The gate runs with the chart-safety unit tests:
 
 | Command | Runs (under `backend/test_scripts/`) | Covers |
 |---------|--------------------------------------|--------|
-| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`) and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
+| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`), `compound_growth()` of `interest.py` (`test_compound_growth.py`, against the day-by-day product in a 60-digit context), its ACT/ACT fraction across years, digit for digit with the year loop, and its memo (`test_act_act_fraction.py`), and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
@@ -580,7 +638,7 @@ for. The gate runs with the chart-safety unit tests:
 | `yield_on_cost.py` | — | [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) |
 | `splits.py` | — | [Split](../../financial-theory/instruments/asset-events/split.md) |
 | `ledger_totals.py` | [Ledger control totals](#ledger-totals) | — |
-| `interest.py` | [Scheduled Investment Provider](assets/provider_scheduled_investment.md#accrual-walk), its only consumer | [Day Count Conventions](../../financial-theory/fundamentals/day-count.md); simple interest in [Interest](../../financial-theory/instruments/asset-events/interest.md) |
+| `interest.py` | [Scheduled Investment Provider](assets/provider_scheduled_investment.md#accrual-walk), its only consumer; `compound_growth()` in its [late interest](assets/provider_scheduled_investment.md#late-interest) | [Day Count Conventions](../../financial-theory/fundamentals/day-count.md); simple interest in [Interest](../../financial-theory/instruments/asset-events/interest.md) |
 
 ---
 

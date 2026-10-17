@@ -1,9 +1,10 @@
 """Configuration checks: the settings that leave an instance weaker than it should be.
 
 Owner: workstream H (platform). Each check reads the configuration and returns its state as a ``ConfigCheck``: an id,
-a severity, the i18n key of its message for the admin interface (``instance.checks.*``, or ``email.checks.*`` for the
-checks of workstream E, written whole so the i18n audit sees it), the parameters of that message and an English summary
-for the log. A check changes nothing, never raises and never puts a secret value in its result.
+a severity, the i18n key of its message for the admin interface (``instance.checks.*``, or ``auth.checks.*``,
+``backup.checks.*`` and ``email.checks.*`` for the checks of workstreams A, B and E, written whole so the i18n audit sees
+it), the parameters of that message and an English summary for the log. A check changes nothing, never raises and never
+puts a secret value in its result.
 
 At startup, ``log_configuration_audit()`` first stops on a configured secret that cannot be used, then logs every check
 that is not ``ok``. The «Security» tab of the admin settings will evaluate the same checks on demand. A check may report
@@ -17,11 +18,13 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from backend.app.config import SecretFileError, get_settings, secrets_set_twice
-from backend.app.config.accounts import admin_bootstrap_config
+from backend.app.config.accounts import admin_bootstrap_config, login_limit_enabled
 from backend.app.config.platform import configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date
 from backend.app.logging_config import get_logger
+from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
 from backend.app.services.platform.client_address import PUBLIC_FORWARDING_SUMMARY, UNTRUSTED_PROXY_SUMMARY, untrusted_forwarding_seen
+from backend.app.services.platform.instance_backup.checks import BACKUP_CONFIG_CHECKS
 from backend.app.services.platform.instance_key import InstanceKeyError, instance_key_status
 
 logger = get_logger(__name__)
@@ -140,6 +143,52 @@ def check_client_address() -> ConfigCheck:
     return ConfigCheck(check_id, "ok", "instance.checks.clientAddress.ok")
 
 
+#: The managed profile's expectations the two checks below hold, written here and not read from ``PROFILE_DEFAULTS``: a
+#: managed entry lost from that table would otherwise change the expectation along with the value, and nothing would show.
+MANAGED_PROFILE = "managed"
+
+
+def check_frame_protection() -> ConfigCheck:
+    """``LIBREFOLIO_FRAME_PROTECTION`` off in the managed profile, which turns it on (D5): any site can frame the app.
+
+    Self-hosted, off is the default (dashboards at another address may embed the app), so it is ok either way. In the
+    managed profile, off means its ``PROFILE_DEFAULTS`` entry was lost or a hosting panel switched it off (H-39): a
+    warning, at startup and in the admin's security checks.
+    """
+    check_id = "platform.frame_protection"
+    settings = get_settings()
+    if settings.LIBREFOLIO_FRAME_PROTECTION:
+        return ConfigCheck(check_id, "ok", "instance.checks.frameProtection.on")
+    if settings.LIBREFOLIO_PROFILE == MANAGED_PROFILE:
+        return ConfigCheck(
+            check_id,
+            "warning",
+            "instance.checks.frameProtection.offManaged",
+            summary="LIBREFOLIO_FRAME_PROTECTION is off in the managed profile: any site can show LibreFolio in a frame; the managed profile turns it on",
+        )
+    return ConfigCheck(check_id, "ok", "instance.checks.frameProtection.offSelfHosted")
+
+
+def check_csp_report_only() -> ConfigCheck:
+    """``LIBREFOLIO_CSP_REPORT_ONLY`` off in the managed profile, which turns it on (D5): no violation is listed.
+
+    The policy only reports and blocks nothing, so losing it is info, not a warning. Self-hosted, off is the default,
+    ok either way (H-39).
+    """
+    check_id = "platform.csp_report_only"
+    settings = get_settings()
+    if settings.LIBREFOLIO_CSP_REPORT_ONLY:
+        return ConfigCheck(check_id, "ok", "instance.checks.cspReportOnly.on")
+    if settings.LIBREFOLIO_PROFILE == MANAGED_PROFILE:
+        return ConfigCheck(
+            check_id,
+            "info",
+            "instance.checks.cspReportOnly.offManaged",
+            summary="LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on",
+        )
+    return ConfigCheck(check_id, "ok", "instance.checks.cspReportOnly.offSelfHosted")
+
+
 def check_log_level() -> ConfigCheck:
     """A ``DEBUG`` or ``TRACE`` log records operational detail that a production log does not need."""
     check_id = "platform.log_level"
@@ -161,7 +210,13 @@ CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (
     check_instance_key,
     check_session_cookie,
     check_client_address,
+    check_frame_protection,
+    check_csp_report_only,
     check_log_level,
+    # Workstream B: the hosting panel's backup token and the restore's upload limit (instance_backup/checks.py, B-9)
+    *BACKUP_CONFIG_CHECKS,
+    # Workstream A: the limit on failed sign-ins (services/accounts/checks.py)
+    *ACCOUNTS_CONFIG_CHECKS,
     # Workstream E: the SMTP configuration and its encryption (services/email/checks.py)
     *EMAIL_CONFIG_CHECKS,
 )
@@ -192,6 +247,8 @@ def log_configuration_audit() -> None:
         instance_deletion_date()
     # F02 (workstream A): an unusable LIBREFOLIO_ADMIN_* variable raises AdminBootstrapConfigError, naming it
     admin_bootstrap_config()
+    # F15 (workstream A): a LIBREFOLIO_LOGIN_LIMIT other than on or off raises ValueError, naming it
+    login_limit_enabled()
     status = instance_key_status()
     if status.source == "configured" and status.problem is not None:
         raise InstanceKeyError(status.problem)

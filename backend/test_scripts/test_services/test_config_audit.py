@@ -15,7 +15,12 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
 (b) A check never puts a secret in its result: recognisable values for ``JWT_SECRET``, the instance key and the content
     of the secret files appear in no field of any result, in no log record and in no startup error.
 (c) A check changes nothing: ``run_config_checks`` evaluates every check in the order of ``CONFIG_CHECKS``, leaves the
-    environment as it was and generates no key file.
+    environment as it was and generates no key file. ``CONFIG_CHECKS`` is the platform's checks (the two of (g) right
+    after the client address check), then workstream B's ``BACKUP_CONFIG_CHECKS``, then workstream A's
+    ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it; it holds no check without an id here (a new check comes
+    with its tests), and each result carries the id of its check. [updated
+    in A8a (accounts check, H reviews): A's checks are imported by that one test, red until lot A8a lands them; every
+    other test runs without them.]
 (d) ``log_configuration_audit``: a ``JWT_SECRET_FILE`` that cannot be read stops the start (``SecretFileError``), and so
     does a configured instance key that cannot be used (``InstanceKeyError``), since the admin asked for that source and
     the server must not start without it; nothing is logged first, and a blank ``NAME`` beside the file hides nothing. A
@@ -39,6 +44,26 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     detail: the state at startup, since nothing is noted before the first request. The check runs right after
     ``check_session_cookie``. Its tests set what was noted with ``monkeypatch.setitem`` on ``_untrusted_forwarding``, put
     back after each test (H-22: no production reset).
+(g) The switches the managed profile turns on (H-39, security reviewer E after H-37). ``PROFILE_DEFAULTS`` gives the
+    ``managed`` profile ``LIBREFOLIO_FRAME_PROTECTION`` and ``LIBREFOLIO_CSP_REPORT_ONLY`` on, while their code defaults
+    are off: an entry lost from that table, or a hosting panel that switches one off by mistake, would silently leave a
+    managed instance without that protection. Nothing switches them back on at runtime; two checks show it instead, in
+    the startup log and in the admin's security checks. ``check_frame_protection`` (``platform.frame_protection``) reads
+    ``get_settings()``: the switch on is ok, ``instance.checks.frameProtection.on``, whatever the profile; off in the
+    ``managed`` profile, a warning, ``instance.checks.frameProtection.offManaged``, whose summary is this file's
+    ``FRAME_PROTECTION_OFF_MANAGED`` word for word; off otherwise (``selfhosted``, the profile unset included), ok,
+    ``instance.checks.frameProtection.offSelfHosted``. ``check_csp_report_only`` (``platform.csp_report_only``) is the
+    same on ``LIBREFOLIO_CSP_REPORT_ONLY``, with ``instance.checks.cspReportOnly.on``, ``.offManaged`` and
+    ``.offSelfHosted``, but off in ``managed`` it is info, summary ``CSP_REPORT_ONLY_OFF_MANAGED``. The detail is empty
+    in every state. A switch is read as ``Settings`` reads it (``true``/``false``, ``1``/``0``, ``yes``/``no``,
+    ``on``/``off``, in any case), and so is the profile (``MANAGED`` and `` Managed `` are ``managed``); in ``managed``
+    a switch left unset takes the profile's default, on, so its check is ok with its ``.on`` key. The managed
+    expectation is written in the checks, not read from ``PROFILE_DEFAULTS``: read from the table, a lost entry would
+    change the expectation along with the value, and the check would stay ok on the very instance it is for. One test
+    removes such an entry with ``monkeypatch.delitem``, put back after it. A check changes nothing: no variable, no
+    entry of the table, no file. Both run right after ``check_client_address``, frame protection first, then the
+    report-only policy, before ``check_log_level``. At startup, in ``managed`` with both switches off, the warning then
+    the info are logged, in that order, and the start goes on; self-hosted with both off, its default, logs neither.
 
 Pure: the data directory is in ``tmp_path``, every variable the checks read is set or removed through ``monkeypatch``
 (environment values win over a ``.env``), and the module's logger is replaced by a recorder. No database, no server, no
@@ -49,16 +74,18 @@ in ``tmp_path`` (``LIBREFOLIO_TEST_MODE=0``): in test mode the guard of test roo
 from __future__ import annotations
 
 import errno
+import importlib  # updated in A8a (accounts check, H reviews)
 import os
 import traceback
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType  # updated in A8a (accounts check, H reviews)
 
 import pytest
 
-from backend.app.config import SECRET_FILE_MAX_BYTES, SecretFileError
-from backend.app.services.email.checks import check_email_links, check_smtp_configuration, check_smtp_encryption
+from backend.app.config import PROFILE_DEFAULTS, SECRET_FILE_MAX_BYTES, SecretFileError, get_settings
+from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS, check_email_links, check_smtp_configuration, check_smtp_encryption  # updated in A8a (accounts check, H reviews)
 from backend.app.services.platform import config_audit
 from backend.app.services.platform.client_address import PUBLIC_FORWARDING_SUMMARY, UNTRUSTED_PROXY_SUMMARY, _untrusted_forwarding
 from backend.app.services.platform.config_audit import (
@@ -67,6 +94,8 @@ from backend.app.services.platform.config_audit import (
     ConfigCheck,
     WeakSecretError,
     check_client_address,
+    check_csp_report_only,
+    check_frame_protection,
     check_instance_key,
     check_jwt_secret,
     check_log_level,
@@ -77,6 +106,23 @@ from backend.app.services.platform.config_audit import (
 )
 from backend.app.services.platform.instance_key import INSTANCE_KEY_FILE, InstanceKeyError, derive_key, instance_key_path
 from backend.test_scripts.test_utils import print_section, print_success
+
+# B-9 (workstream B; H reviews): the two checks of instance_backup.checks, imported guarded while that module does not
+# exist yet, so that this file still collects; only its own absence is tolerated. Until then these stand-ins are what
+# CHECK_IDS lists, and (c) finds them missing from CONFIG_CHECKS.
+_BACKUP_CHECKS_MODULE = "backend.app.services.platform.instance_backup.checks"
+try:
+    from backend.app.services.platform.instance_backup.checks import check_panel_token, check_upload_limit
+except ModuleNotFoundError as missing:
+    if missing.name != _BACKUP_CHECKS_MODULE:
+        raise
+
+    def check_panel_token() -> ConfigCheck:
+        pytest.fail(f"{_BACKUP_CHECKS_MODULE} does not exist yet: lot B-9 is not written")
+
+    def check_upload_limit() -> ConfigCheck:
+        pytest.fail(f"{_BACKUP_CHECKS_MODULE} does not exist yet: lot B-9 is not written")
+
 
 POSIX = os.name != "nt"
 needs_posix_modes = pytest.mark.skipif(not POSIX, reason="file modes are POSIX only")
@@ -89,11 +135,20 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_instance_key: "platform.instance_key",
     check_session_cookie: "platform.session_cookie",
     check_client_address: "platform.client_address",
+    check_frame_protection: "platform.frame_protection",
+    check_csp_report_only: "platform.csp_report_only",
     check_log_level: "platform.log_level",
     check_smtp_configuration: "email.smtp",
     check_smtp_encryption: "email.smtp_encryption",
     check_email_links: "email.links",
+    check_panel_token: "backup.panel_token",
+    check_upload_limit: "backup.upload_limit",
 }
+# updated in A8a (accounts check, H reviews): workstream A's checks, right before E's three in CONFIG_CHECKS, and their
+# ids by function name. Their module is imported only by the test that pins CONFIG_CHECKS whole (``_accounts_checks``):
+# until lot A8a lands it, that test alone is red. There CHECK_IDS learns them.
+ACCOUNTS_CHECKS_MODULE = "backend.app.services.accounts.checks"
+ACCOUNTS_CHECK_IDS: dict[str, str] = {"check_login_limit": "accounts.login_limit"}
 SEVERITIES = ("ok", "info", "warning", "error")
 I18N_PREFIX = "instance.checks."
 
@@ -138,7 +193,7 @@ class Configuration:
 
 
 def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: bool) -> Configuration:
-    """No secret set either way, cookie ``auto``, log level ``INFO``, profile ``selfhosted``, not blocked, no key yet, a data directory in ``tmp_path``."""
+    """No secret set either way, cookie ``auto``, log level ``INFO``, profile ``selfhosted``, frame protection and the report-only policy unset, not blocked, no key yet, a data directory in ``tmp_path``."""
     for variable in [name for name in os.environ if name.endswith("_FILE") and (name == "JWT_SECRET_FILE" or name.startswith("LIBREFOLIO_"))]:
         monkeypatch.delenv(variable)
     for variable in ("JWT_SECRET", "LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_LOG_LEVEL", "LIBREFOLIO_DATA_DIR", "LIBREFOLIO_TEST_DATA_DIR", "LIBREFOLIO_BLOCKED", "LIBREFOLIO_DELETION_DATE"):
@@ -146,6 +201,16 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
     # Workstream E: email off whatever the environment holds, so its two checks are ok
     for variable in [name for name in os.environ if name.startswith("LIBREFOLIO_SMTP_")]:
         monkeypatch.delenv(variable)
+    # Workstream B: no panel token and no upload limit whatever the environment holds, so its two checks are ok
+    for variable in ("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN", "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"):
+        monkeypatch.delenv(variable, raising=False)
+    # updated in A8a (accounts check, H reviews): workstream A's login limit on whatever the environment holds (the lane's
+    # server runs with it off), so its check is ok and the variable cannot stop the audit
+    monkeypatch.delenv("LIBREFOLIO_LOGIN_LIMIT", raising=False)
+    # H-39: the two switches the managed profile turns on, unset whatever the environment holds, so the profile's default
+    # decides them and no shell can switch one off under a managed case
+    for variable in ("LIBREFOLIO_FRAME_PROTECTION", "LIBREFOLIO_CSP_REPORT_ONLY"):
+        monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "0" if production else "1")
     monkeypatch.setenv("LIBREFOLIO_DATA_DIR" if production else "LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "auto")
@@ -200,6 +265,21 @@ def _assert_check(result: ConfigCheck, check: Callable[[], ConfigCheck], severit
     assert all(isinstance(value, str | int) for value in result.detail.values()), f"the parameters of an i18n message are strings or integers: {result.detail}"
     if severity != "ok":
         assert result.summary.strip(), f"{check.__name__}() is {severity} without a summary for the log"
+
+
+# updated in A8a (accounts check, H reviews)
+def _accounts_checks() -> ModuleType:
+    """Workstream A's checks module, holding ``ACCOUNTS_CONFIG_CHECKS`` and every check ``ACCOUNTS_CHECK_IDS`` names; else a red of lot A8a naming what is missing. A module that exists and cannot be imported raises as it is."""
+    try:
+        module = importlib.import_module(ACCOUNTS_CHECKS_MODULE)
+    except ModuleNotFoundError as exc:
+        if exc.name != ACCOUNTS_CHECKS_MODULE:
+            raise
+        pytest.fail(f"red until A8a: {ACCOUNTS_CHECKS_MODULE} does not exist; CONFIG_CHECKS must hold its ACCOUNTS_CONFIG_CHECKS right before E's three email checks", pytrace=False)
+    missing = [name for name in ("ACCOUNTS_CONFIG_CHECKS", *ACCOUNTS_CHECK_IDS) if not hasattr(module, name)]
+    if missing:
+        pytest.fail(f"red until A8a: {ACCOUNTS_CHECKS_MODULE} has no {', '.join(missing)}", pytrace=False)
+    return module
 
 
 # =============================================================================
@@ -469,19 +549,39 @@ def test_no_secret_value_reaches_a_result_a_log_record_or_a_startup_error(config
 
 
 def test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing(configuration):
-    """(c) The order of CONFIG_CHECKS, each result what the check alone returns; no variable changed, no key generated."""
+    """(c) The order of CONFIG_CHECKS, each result what the check alone returns; no variable changed, no key generated. Which checks CONFIG_CHECKS holds, where, with which ids: the next test."""
     print_section("Configuration checks: run_config_checks")
     environment = dict(os.environ)
 
     results = run_config_checks()
 
-    assert [result.check_id for result in results] == [CHECK_IDS[check] for check in CONFIG_CHECKS], f"run_config_checks must follow CONFIG_CHECKS: {[result.check_id for result in results]}"
-    assert set(CONFIG_CHECKS) == set(CHECK_IDS), f"CONFIG_CHECKS changed: {[check.__name__ for check in CONFIG_CHECKS]}: give every check its tests"
-    assert results == [check() for check in CONFIG_CHECKS], "run_config_checks must return what each check returns on its own"
+    # updated in A8a (accounts check, H reviews): the ids and the membership of CONFIG_CHECKS moved to the next test, the
+    # one that needs workstream A's checks; what needs nobody's checks stays here, green whatever the state of lot A8a
+    assert results == [check() for check in CONFIG_CHECKS], "run_config_checks must return what each check returns on its own, in the order of CONFIG_CHECKS"
     assert all(result.severity in SEVERITIES for result in results), f"unknown severity in {results}"
     assert dict(os.environ) == environment, "a configuration check changed the environment"
     assert not configuration.data_dir.exists(), f"a configuration check created files: {list(configuration.data_dir.rglob('*'))}"
     print_success(f"{len(results)} checks in order, nothing changed")
+
+
+# updated in A8a (accounts check, H reviews): red until A8a, the one test of this file that needs workstream A's checks
+def test_config_checks_holds_every_check_in_its_place_with_its_id(configuration):
+    """(c) ``CONFIG_CHECKS`` is the platform's checks, then workstream B's two backup checks, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it (``test_email_checks.py``, EMK-010); it holds every check with an id here, A's ``check_login_limit`` (``accounts.login_limit``) included, and no other — a new check comes with its tests —; ``run_config_checks`` gives each result the id of its check."""
+    print_section("Configuration checks: CONFIG_CHECKS whole")
+    accounts = _accounts_checks()
+    check_ids = {**CHECK_IDS, **{getattr(accounts, name): check_id for name, check_id in ACCOUNTS_CHECK_IDS.items()}}
+    backup = (check_panel_token, check_upload_limit)
+    platform = tuple(check for check in CHECK_IDS if check not in EMAIL_CONFIG_CHECKS and check not in backup)
+
+    results = run_config_checks()
+
+    names = [check.__name__ for check in CONFIG_CHECKS]
+    assert tuple(CONFIG_CHECKS) == (*platform, *backup, *accounts.ACCOUNTS_CONFIG_CHECKS, *EMAIL_CONFIG_CHECKS), f"CONFIG_CHECKS must be the platform's checks, then B's two backup checks, then ACCOUNTS_CONFIG_CHECKS, then E's three email checks: {names}"
+    missing = [check.__name__ for check in check_ids if check not in CONFIG_CHECKS]
+    untested = [check.__name__ for check in CONFIG_CHECKS if check not in check_ids]
+    assert (missing, untested) == ([], []), f"CONFIG_CHECKS must hold every check with an id here and no other: missing {missing}; without an id here, give it its tests: {untested}"
+    assert [result.check_id for result in results] == [check_ids[check] for check in CONFIG_CHECKS], f"each result must carry the id of its check: {[result.check_id for result in results]}"
+    print_success(f"{len(results)} checks in their places: {', '.join(names)}")
 
 
 # =============================================================================
@@ -816,10 +916,195 @@ def test_check_client_address_changes_nothing(configuration, monkeypatch, local,
 
 
 def test_the_client_address_check_runs_right_after_the_session_cookie_check():
-    """(f) Registered in CONFIG_CHECKS right after check_session_cookie, before check_log_level."""
+    """(f) Registered in CONFIG_CHECKS right after check_session_cookie; what follows it is pinned by (g) (H-39)."""
     index = CONFIG_CHECKS.index(check_session_cookie)
 
-    following = CONFIG_CHECKS[index + 1 : index + 3]
+    following = CONFIG_CHECKS[index + 1 : index + 2]
 
-    assert following == (check_client_address, check_log_level), f"CONFIG_CHECKS must run check_client_address right after check_session_cookie and before check_log_level: {[check.__name__ for check in CONFIG_CHECKS]}"
-    print_success(f"{[check.__name__ for check in CONFIG_CHECKS[index : index + 3]]}")
+    assert following == (check_client_address,), f"CONFIG_CHECKS must run check_client_address right after check_session_cookie: {[check.__name__ for check in CONFIG_CHECKS]}"
+    print_success(f"{[check.__name__ for check in CONFIG_CHECKS[index : index + 2]]}")
+
+
+# =============================================================================
+# (g) The switches the managed profile turns on (H-39)
+# =============================================================================
+
+
+#: (g) The summary of each check with its switch off in the managed profile, word for word.
+FRAME_PROTECTION_OFF_MANAGED = "LIBREFOLIO_FRAME_PROTECTION is off in the managed profile: any site can show LibreFolio in a frame; the managed profile turns it on"
+CSP_REPORT_ONLY_OFF_MANAGED = "LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on"
+
+
+@dataclass(frozen=True)
+class Switch:
+    """(g) A setting the managed profile turns on, as its check reports it: the variable, the stem of the check's i18n
+    keys, and the severity and the summary of the switch off in the managed profile."""
+
+    variable: str
+    stem: str
+    severity: str
+    summary: str
+
+
+#: (g) The switch of each check.
+SWITCHES: dict[Callable[[], ConfigCheck], Switch] = {
+    check_frame_protection: Switch("LIBREFOLIO_FRAME_PROTECTION", "frameProtection", "warning", FRAME_PROTECTION_OFF_MANAGED),
+    check_csp_report_only: Switch("LIBREFOLIO_CSP_REPORT_ONLY", "cspReportOnly", "info", CSP_REPORT_ONLY_OFF_MANAGED),
+}
+#: (g) The two checks, one case each.
+SWITCH_CHECKS = [pytest.param(check_frame_protection, id="frame-protection"), pytest.param(check_csp_report_only, id="csp-report-only")]
+
+
+def _profile(configuration: Configuration, profile: str | None) -> None:
+    """(g) ``LIBREFOLIO_PROFILE`` as the case writes it; ``None`` removes it, and test mode reads no ``.env``, so the profile is the code default, ``selfhosted``."""
+    if profile is None:
+        configuration.monkeypatch.delenv("LIBREFOLIO_PROFILE")
+    else:
+        configuration.set(LIBREFOLIO_PROFILE=profile)
+
+
+@pytest.mark.parametrize(
+    ("profile", "value", "state"),
+    [
+        pytest.param(None, None, "offSelfHosted", id="profile-unset-switch-unset"),
+        pytest.param(None, "true", "on", id="profile-unset-true"),
+        pytest.param(None, "false", "offSelfHosted", id="profile-unset-false"),
+        pytest.param("selfhosted", None, "offSelfHosted", id="selfhosted-switch-unset"),
+        pytest.param("selfhosted", "true", "on", id="selfhosted-true"),
+        pytest.param("selfhosted", "YES", "on", id="selfhosted-yes-in-any-case"),
+        pytest.param("selfhosted", "false", "offSelfHosted", id="selfhosted-false"),
+        pytest.param("selfhosted", "0", "offSelfHosted", id="selfhosted-0"),
+        pytest.param("selfhosted", "off", "offSelfHosted", id="selfhosted-off"),
+        pytest.param("managed", None, "on", id="managed-switch-unset-on-by-the-profile"),
+        pytest.param("managed", "true", "on", id="managed-true"),
+        pytest.param("managed", "YES", "on", id="managed-yes-in-any-case"),
+        pytest.param("managed", "false", "offManaged", id="managed-false"),
+        pytest.param("managed", "0", "offManaged", id="managed-0"),
+        pytest.param("managed", "off", "offManaged", id="managed-off"),
+        pytest.param("MANAGED", None, "on", id="managed-in-capitals-switch-unset-on-by-the-profile"),
+        pytest.param("MANAGED", "false", "offManaged", id="managed-in-capitals-false"),
+        pytest.param(" Managed ", None, "on", id="managed-padded-switch-unset-on-by-the-profile"),
+        pytest.param(" Managed ", "off", "offManaged", id="managed-padded-off"),
+    ],
+)
+@pytest.mark.parametrize("check", SWITCH_CHECKS)
+def test_the_switch_checks_in_each_of_their_states(configuration, check, profile, value, state):
+    """(g) On is ok whatever the profile; off is the switch's severity in the managed profile, with its summary word for
+    word, and ok otherwise; unset takes the profile's default, on in managed, off elsewhere. No detail in any state."""
+    switch = SWITCHES[check]
+    _profile(configuration, profile)
+    if value is not None:
+        configuration.set(**{switch.variable: value})
+    expected_on = state == "on"
+    assert getattr(get_settings(), switch.variable) is expected_on, f"Precondition: with LIBREFOLIO_PROFILE={profile!r} and {switch.variable}={value!r}, Settings must read the switch as {expected_on}"
+
+    result = check()
+
+    severity = switch.severity if state == "offManaged" else "ok"
+    _assert_check(result, check, severity, f"{switch.stem}.{state}", {})
+    if severity != "ok":
+        assert result.summary == switch.summary, f"{check.__name__}() is {severity}: its summary must be, word for word:\n  expected {switch.summary!r}\n  got      {result.summary!r}"
+    print_success(f"LIBREFOLIO_PROFILE={profile!r}, {switch.variable}={value!r}: {severity} {result.i18n_key}")
+
+
+@pytest.mark.parametrize("check", SWITCH_CHECKS)
+def test_a_switch_lost_from_the_managed_profile_defaults_is_still_reported(configuration, monkeypatch, check):
+    """(g) The managed expectation is the check's own: with its entry lost from ``PROFILE_DEFAULTS``, a managed instance
+    that leaves the switch unset falls back to the code default, off, and the check reports it instead of following the
+    table that lost it."""
+    switch = SWITCHES[check]
+    monkeypatch.delitem(PROFILE_DEFAULTS["managed"], switch.variable, raising=False)
+    configuration.set(LIBREFOLIO_PROFILE="managed")
+    assert getattr(get_settings(), switch.variable) is False, f"Precondition: without its managed entry, {switch.variable} unset must fall back to its code default, off"
+
+    result = check()
+
+    _assert_check(result, check, switch.severity, f"{switch.stem}.offManaged", {})
+    assert result.summary == switch.summary, f"{check.__name__}() is {switch.severity}: its summary must be, word for word:\n  expected {switch.summary!r}\n  got      {result.summary!r}"
+    print_success(f"{switch.variable} lost from the managed defaults: {result.severity} {result.i18n_key}")
+
+
+@pytest.mark.parametrize(
+    ("profile", "value"),
+    [
+        pytest.param("managed", "false", id="managed-off"),
+        pytest.param("managed", None, id="managed-unset-on-by-the-profile"),
+        pytest.param("selfhosted", "false", id="selfhosted-off"),
+        pytest.param("selfhosted", "true", id="selfhosted-on"),
+    ],
+)
+@pytest.mark.parametrize("check", SWITCH_CHECKS)
+def test_the_switch_checks_change_nothing(configuration, check, profile, value):
+    """(g) A check reads the settings and leaves everything as it was: the environment (no switch turned on, no profile
+    changed), the profiles' table, and no file written; the same configuration gives the same result."""
+    switch = SWITCHES[check]
+    configuration.set(LIBREFOLIO_PROFILE=profile)
+    if value is not None:
+        configuration.set(**{switch.variable: value})
+    environment = dict(os.environ)
+    table = {name: dict(values) for name, values in PROFILE_DEFAULTS.items()}
+
+    results = [check(), check()]
+
+    assert results[0] == results[1], f"the same configuration gives the same result: {results}"
+    assert dict(os.environ) == environment, f"{check.__name__}() changed the environment"
+    assert {name: dict(values) for name, values in PROFILE_DEFAULTS.items()} == table, f"{check.__name__}() changed PROFILE_DEFAULTS"
+    assert not configuration.data_dir.exists(), f"{check.__name__}() created files: {list(configuration.data_dir.rglob('*'))}"
+    print_success(f"LIBREFOLIO_PROFILE={profile!r}, {switch.variable}={value!r}: unchanged")
+
+
+def test_the_switch_checks_run_right_after_the_client_address_check():
+    """(g) Registered in CONFIG_CHECKS right after check_client_address, frame protection first, then the report-only
+    policy, before check_log_level."""
+    index = CONFIG_CHECKS.index(check_client_address)
+
+    following = CONFIG_CHECKS[index + 1 : index + 4]
+
+    assert following == (check_frame_protection, check_csp_report_only, check_log_level), f"CONFIG_CHECKS must run check_frame_protection, then check_csp_report_only, right after check_client_address and before check_log_level: {[check.__name__ for check in CONFIG_CHECKS]}"
+    print_success(f"{[check.__name__ for check in CONFIG_CHECKS[index : index + 4]]}")
+
+
+def test_startup_logs_the_switches_off_in_the_managed_profile_and_goes_on(configuration, logged, monkeypatch):
+    """(g)(d) Managed, both switches off: the frame protection warning, then the report-only info, in the order of
+    CONFIG_CHECKS, each once with its summary word for word, its id and no detail; the start goes on."""
+    print_section("Configuration checks: the managed profile's switches at startup")
+    _noted(monkeypatch, set(), set())
+    configuration.set(LIBREFOLIO_PROFILE="managed", JWT_SECRET=GOOD_JWT_SECRET, LIBREFOLIO_FRAME_PROTECTION="false", LIBREFOLIO_CSP_REPORT_ONLY="false")
+    switch_ids = {CHECK_IDS[check] for check in SWITCHES}
+    others = [(result.check_id, result.severity) for result in run_config_checks() if result.severity != "ok" and result.check_id not in switch_ids]
+    assert others == [], f"Precondition: every other check ok, so the two switches are the only records: {others}"
+
+    log_configuration_audit()
+
+    expected = [
+        ("warning", FRAME_PROTECTION_OFF_MANAGED, {"check": "platform.frame_protection", "detail": {}}),
+        ("info", CSP_REPORT_ONLY_OFF_MANAGED, {"check": "platform.csp_report_only", "detail": {}}),
+    ]
+    assert logged == expected, f"managed with both switches off: the frame protection warning, then the report-only info, each once, with its summary, id and detail:\n  expected {expected}\n  got      {logged}"
+    print_success(f"{[(level, fields['check']) for level, _, fields in logged]}")
+
+
+@pytest.mark.parametrize(
+    ("profile", "variables"),
+    [
+        pytest.param("selfhosted", {}, id="selfhosted-both-unset-the-default"),
+        pytest.param("selfhosted", {"LIBREFOLIO_FRAME_PROTECTION": "false", "LIBREFOLIO_CSP_REPORT_ONLY": "false"}, id="selfhosted-both-false"),
+        pytest.param(None, {"LIBREFOLIO_FRAME_PROTECTION": "off", "LIBREFOLIO_CSP_REPORT_ONLY": "0"}, id="profile-unset-both-off"),
+    ],
+)
+def test_startup_logs_neither_switch_off_in_the_selfhosted_profile(configuration, logged, monkeypatch, profile, variables):
+    """(g)(d) Self-hosted, both switches off, as by default: both checks are ok, and neither is logged. Barriers: the
+    audit runs both checks, and its record of the unset JWT secret reaches the recorder, so the silence about the
+    switches is heard, not assumed."""
+    _noted(monkeypatch, set(), set())
+    _profile(configuration, profile)
+    configuration.set(**variables)
+    states = {result.check_id: (result.severity, result.i18n_key) for result in run_config_checks() if result.check_id in ("platform.frame_protection", "platform.csp_report_only")}
+    expected_states = {"platform.frame_protection": ("ok", "instance.checks.frameProtection.offSelfHosted"), "platform.csp_report_only": ("ok", "instance.checks.cspReportOnly.offSelfHosted")}
+    assert states == expected_states, f"Precondition: the audit runs both checks, ok since off is the self-hosted default: {states}"
+
+    log_configuration_audit()
+
+    flagged = [(level, fields.get("check")) for level, _, fields in logged]
+    assert flagged == [("info", "platform.jwt_secret")], f"self-hosted with both switches off: neither check is logged, only the unset JWT secret's info: {logged}"
+    print_success(f"LIBREFOLIO_PROFILE={profile!r}, {variables or 'both unset'}: neither switch logged")

@@ -374,6 +374,7 @@ describe('BackupDownloadCard — failures', () => {
     it.each<[string, string, 'start' | 'read' | 'job', string | null, () => Promise<void>]>([
         ['a start refused as busy (409)', 'backup_busy', 'start', null, refusedStart(() => refusal(409, 'backup_busy'))],
         ['a start refused: the backups folder is a link or a file (500)', 'backup_folder_unusable', 'start', null, refusedStart(() => refusal(500, 'backup_folder_unusable'))],
+        ['a start refused: not enough free space on the server (507, B-30)', 'backup_no_space', 'start', null, refusedStart(() => refusal(507, 'backup_no_space'))],
         ['a start refused as failed (500)', 'backup_failed', 'start', null, refusedStart(() => refusal(500, 'backup_failed'))],
         ['a start with no answer', 'network', 'start', null, refusedStart(noAnswer)],
         ['a start answered without a code', 'unexpected', 'start', null, refusedStart(codelessAnswer)],

@@ -91,6 +91,17 @@ in ``schemas/email.py``. The contract pinned here:
    the server, an error while the email is built or while the account's language is read — is revoked, and an
    unexpected error is logged as its type alone, without a traceback. Nothing escapes the request; neither the
    identifier nor the token reaches the logs.
+8. Behind a reverse proxy LibreFolio does not trust (decision N70; lot E-13, on H's helper H-36) — the usual deployment:
+   the Docker image behind the proxy HTTPS needs, neither ``LIBREFOLIO_CLIENT_IP_HEADER`` nor ``FORWARDED_ALLOW_IPS``
+   set —, every visitor arrives from the proxy's private address with an ``X-Forwarded-For`` the app does not trust.
+   Two visitors behind one private proxy never share one «forgot password» budget per address: the route counts H-36's
+   ``rate_limit_address(request)``, the address of 7 but for a request from a local peer (``classify_ip``: loopback,
+   private, link-local, unique-local, CGNAT) carrying ``X-Forwarded-For``, ``Forwarded`` or ``X-Real-IP`` whose
+   address neither ``LIBREFOLIO_CLIENT_IP_HEADER`` nor uvicorn gave: ``None``, counted under no address — the limit per
+   identifier still holds, as for a request without an address (EMA-043). A public address's own forwarding headers
+   move nothing, as 7 says (EMA-035), and a private address without one — a device of the local network talking to
+   LibreFolio directly — keeps its own budget. EMA-050 pins the skip, red before the cure; EMA-051 and EMA-052 are
+   guards, green before and after; the three set the limiter per address at one request.
 
 In-process: the real routers of auth and email, and the instance route of the system router (``instance_router``, under
 ``/system``), mounted under the API prefix as ``api/v1/router.py`` mounts them, in an
@@ -154,6 +165,7 @@ from backend.app.services.accounts.settings_service import get_user_settings, in
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus
 from backend.app.services.email import delivery, flows, smtp
 from backend.app.services.email.messages import EmailRecipientError, build_invite, build_password_reset, build_test_message
+from backend.app.services.platform.client_address import _untrusted_forwarding, untrusted_forwarding_seen
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.fixtures.email.fake_smtp import FakeSmtpServer, closed_port
@@ -344,6 +356,13 @@ def _nothing_reported_yet() -> Iterator[None]:
     delivery._report_invalid.cache_clear()
     yield
     delivery._report_invalid.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _nothing_noted_yet(monkeypatch: pytest.MonkeyPatch) -> None:
+    """H's ``_untrusted_forwarding`` (decision N70) holds fresh empty sets for each test, the process's own put back after it: the forwarding headers this module sends — «local» from EMA-050, «public» from EMA-051 and EMA-035's forged one — leave no note, so a later reader's first noting of a class, the only one that logs its warning, still logs it."""
+    monkeypatch.setitem(_untrusted_forwarding, "local", set())
+    monkeypatch.setitem(_untrusted_forwarding, "public", set())
 
 
 @pytest.fixture
@@ -2180,3 +2199,92 @@ async def test_forgot_password_ships_open_with_email_and_a_public_url(private: _
     assert len(rows) == 1, f"the member's reset rows: {[row.id for row in rows]}"
     assert budget.count() == 1
     print_success("202, one email to the member with a live reset link on the public URL")
+
+
+# =============================================================================
+# 12. BEHIND A PROXY LIBREFOLIO DOES NOT TRUST (DECISION N70, LOT E-13)
+# =============================================================================
+
+#: The address every request comes from behind a reverse proxy LibreFolio does not trust: the proxy's own, private —
+#: the Docker bridge's, or an IPv6 unique-local one. Any port: the key of an address never holds it.
+PRIVATE_PROXIES = [pytest.param("172.17.0.1", id="docker-bridge-ipv4"), pytest.param("fd00::2", id="unique-local-ipv6")]
+PROXY_PORT = 40100
+#: Two visitors, as a forwarding header names them: A asks first, B after.
+VISITOR_A = "203.0.113.10"
+VISITOR_B = "203.0.113.20"
+#: A device of the local network that talks to LibreFolio directly: a private address, and no forwarding header.
+LAN_DEVICE = ("192.168.1.5", 40200)
+#: H-36's forwarding headers, exactly its list: (the header, what precedes the address in it). A reverse proxy writes
+#: them for the visitor it forwards.
+FORWARDING_HEADERS = [
+    pytest.param("X-Forwarded-For", "", id="x-forwarded-for"),
+    pytest.param("Forwarded", "for=", id="forwarded"),
+    pytest.param("X-Real-IP", "", id="x-real-ip"),
+]
+#: The forwarding headers a client at a public address may write itself: the same three.
+OWN_FORWARDING_HEADERS = FORWARDING_HEADERS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("header", "prefix"), FORWARDING_HEADERS)
+@pytest.mark.parametrize("proxy", PRIVATE_PROXIES)
+async def test_forgot_password_two_visitors_behind_one_private_proxy_do_not_share_a_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, proxy: str, header: str, prefix: str) -> None:
+    """EMA-050 — contract 8, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``FORGOT_BY_ADDRESS`` at one request for this test — the limiter per identifier the fixture's, with its shipped limit —, email and links ready towards a running fake. Both requests come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor and each for another name no account has. Visitor A: 202. Visitor B, through the same proxy: 202 too, the same body, never 429. Then the skip itself, which B's answer alone would not prove: the limiter per address holds no key at all — neither visitor counted under an address, the proxy's or their own. Nothing sent. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
+    print_section(f"EMA-050: two visitors behind {proxy}, {header}")
+    by_address = SlidingWindowLimiter(1, SHIPPED_BY_ADDRESS.window_seconds, clock=clock)
+    monkeypatch.setattr(flows, "FORGOT_BY_ADDRESS", by_address)
+    peer = (proxy, PROXY_PORT)
+
+    with FakeSmtpServer() as fake:
+        _links_ready(monkeypatch, fake)
+        first = await _forgot(private, f"{NOBODY}_a", client=peer, headers={header: f"{prefix}{VISITOR_A}"})
+        second = await _forgot(private, f"{NOBODY}_b", client=peer, headers={header: f"{prefix}{VISITOR_B}"})
+
+    assert (first.status_code, set(first.json())) == (202, {"message"}), f"barrier: visitor A is admitted: {first.status_code} {first.text}"
+    assert second.status_code != 429, f"two visitors behind one private proxy ({proxy}) shared one per-address budget: visitor B was refused because visitor A had asked: {second.text}"
+    assert (second.status_code, second.json()) == (202, first.json()), f"{second.status_code} {second.text}"
+    assert len(by_address) == 0, f"a request through a reverse proxy LibreFolio does not trust ({proxy}, {header}) is counted under no address (N70): the limiter per address holds {len(by_address)} key(s)"
+    assert untrusted_forwarding_seen("local") == (header,), f"N70's skip notes the {header} of a local peer: noted {untrusted_forwarding_seen('local')}"
+    assert fake.messages == []
+    print_success("202 for each visitor, and no key in the limiter per address: the skip")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("header", "prefix"), OWN_FORWARDING_HEADERS)
+async def test_forgot_password_a_public_clients_own_forwarding_header_moves_nothing(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, header: str, prefix: str) -> None:
+    """EMA-051 — contract 8, a guard, green before and after the cure: ``FORGOT_BY_ADDRESS`` at one request for this test, email and links ready towards a running fake. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10``, then ``203.0.113.20``, each time for another name no account has: 202, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 900 and ``Retry-After: 900`` — the whole window, counted from the first —: what a client writes never moves its own budget, as EMA-035 pins at the shipped limit. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    print_section(f"EMA-051: a public client's own {header}")
+    monkeypatch.setattr(flows, "FORGOT_BY_ADDRESS", SlidingWindowLimiter(1, SHIPPED_BY_ADDRESS.window_seconds, clock=clock))
+
+    with FakeSmtpServer() as fake:
+        _links_ready(monkeypatch, fake)
+        first = await _forgot(private, f"{NOBODY}_a", client=FIRST_CLIENT, headers={header: f"{prefix}{VISITOR_A}"})
+        second = await _forgot(private, f"{NOBODY}_b", client=FIRST_CLIENT, headers={header: f"{prefix}{VISITOR_B}"})
+
+    assert first.status_code == 202, f"barrier: the first request is admitted: {first.status_code} {first.text}"
+    assert second.status_code == 429, f"a client at a public address chose its own budget with a {header} header it wrote itself: {second.status_code} {second.text}"
+    detail = _detail(second)
+    assert (detail.get("error_code"), detail.get("retry_after")) == ("EMAIL_RATE_LIMITED", 900), detail
+    assert second.headers.get("Retry-After") == "900", second.headers
+    assert fake.messages == []
+    print_success(f"202, then 429 whatever its own {header} says")
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_a_private_client_without_a_forwarding_header_keeps_its_own_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
+    """EMA-052 — contract 8, a guard, green before and after the cure: ``FORGOT_BY_ADDRESS`` at one request for this test, email and links ready towards a running fake. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header —, each time for another name no account has: 202, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 900 and ``Retry-After: 900``: a private address alone is not a proxy, and keeps its own budget. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    print_section("EMA-052: a device of the local network")
+    monkeypatch.setattr(flows, "FORGOT_BY_ADDRESS", SlidingWindowLimiter(1, SHIPPED_BY_ADDRESS.window_seconds, clock=clock))
+
+    with FakeSmtpServer() as fake:
+        _links_ready(monkeypatch, fake)
+        first = await _forgot(private, f"{NOBODY}_a", client=LAN_DEVICE)
+        second = await _forgot(private, f"{NOBODY}_b", client=LAN_DEVICE)
+
+    assert first.status_code == 202, f"barrier: the first request is admitted: {first.status_code} {first.text}"
+    assert second.status_code == 429, f"a private address without a forwarding header lost its own budget: {second.status_code} {second.text}"
+    detail = _detail(second)
+    assert (detail.get("error_code"), detail.get("retry_after")) == ("EMAIL_RATE_LIMITED", 900), detail
+    assert second.headers.get("Retry-After") == "900", second.headers
+    assert fake.messages == []
+    print_success("202, then 429: its own budget")

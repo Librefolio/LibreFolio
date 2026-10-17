@@ -420,7 +420,9 @@
       "generic": "No se ha guardado nada: {message}",
       "inUse": "No se ha guardado nada: el evento {type} del {date} está vinculado a {n, plural, one {# transacción} other {# transacciones}} y no se puede eliminar. Quita primero el vínculo en las transacciones{more, plural, =0 {} one { (y # evento más)} other { (y # eventos más)}}.",
       "notDeletable": "No se ha guardado nada: uno de los eventos que se van a eliminar ya no existe o no se puede eliminar aquí. Vuelve a cargar los datos e inténtalo de nuevo.",
-      "tooManyDigits": "No se ha guardado nada: el valor del evento {type} del {date}{more, plural, =0 {} one { (y # más)} other { (y # más)}} tiene demasiadas cifras. El valor de un evento tiene como máximo {max} decimales, {significant} cifras significativas y {integer} cifras en la parte entera."
+      "tooManyDigits": "No se ha guardado nada: el valor del evento {type} del {date}{more, plural, =0 {} one { (y # más)} other { (y # más)}} tiene demasiadas cifras. El valor de un evento tiene como máximo {max} decimales, {significant} cifras significativas y {integer} cifras en la parte entera.",
+      "invalidSplitRatio": "No se ha guardado nada: el evento {type} del {date}{more, plural, =0 {} one { (y # más)} other { (y # más)}} tiene una proporción de {ratio}. La proporción de un desdoblamiento debe ser un número mayor que 0: 2 para un desdoblamiento de 2 por 1, 0,5 para un contrasplit de 1 por 2.",
+      "splitAdjustmentsWithoutCost": "No se ha guardado nada: el evento {type} del {date} tiene {n, plural, one {# ajuste vinculado} other {# ajustes vinculados}} sin coste de compra{hidden, plural, =0 {} one { (# en un bróker que no puedes ver)} other { (# en brókers que no puedes ver)}}. Sin el desdoblamiento, esas unidades contarían como compradas a un precio desconocido: da primero un coste de compra a los ajustes y luego cambia el tipo del evento."
     }
   },
   "providerErrors": {

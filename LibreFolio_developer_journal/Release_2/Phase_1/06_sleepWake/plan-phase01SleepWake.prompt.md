@@ -3881,3 +3881,284 @@ mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 sono ✅ nel backlog.
    `git diff --check` pulito. Prove (sotto 50): `services scheduler-catchup` 93/93, con la riga nuova stampata;
    `api system-wake` 76/76 (3,5 min: l'avvio del backend della corsia ha rifatto il build del frontend). Porta 6186
    libera.
+
+### X-R55 — intervalli di date senza tetto su prezzi e cambi: analisi (17/10 ~06:45, sola lettura)
+
+> **Via** (coordinatore, 17/10 ~06:38): «New lot for you: X-R55 (moved from X, which has a long queue; X reviews,
+> since they're its files). It's the same DoS vector as R13-SEC7-1 (E's MEDIUM 8/10), ranges with no ceiling in the
+> request: `assets/price_query.py:140-183` `_build_backward_filled_series` […]; `api/v1/fx/currencies.py:427/471`:
+> the FX convert loop over the request's range. Direction, consistent with J (SEC7-1, coming in): the end clamped to
+> today+1 (timezone slack). J introduces `datetime_utils.latest_range_end()`: until J enters, write your own clamp,
+> and align it to the helper at the merge. The start at the first data point, or a 100-year span. Analysis first
+> (every entry point, who reads the clamped end, the test files), then reds with moderate dates, and the extreme dates
+> as guards with a time bound. Lane 6186.» Base: HEAD `3d13fbcdc`.
+
+**Stato reale.**
+- **Prezzi degli asset.** `PriceQueryOperations.get_prices_bulk` (`services/assets/price_query.py:226`) prende
+  `end = req.date_range.end or req.date_range.start`, senza tetto.
+  - `_build_backward_filled_series` (140–183) cammina ogni giorno da `start` a `end`. Prima del primo prezzo (o del
+    seme) non emette nulla, ma cammina; dopo l'ultimo prezzo emette un `FAPricePoint` riempito all'indietro per ogni
+    giorno fino a `end`.
+  - Con `end` 9999-12-31 sono circa 2,9 milioni di punti per voce: memoria, CPU, JSON. La serie del confronto (riga
+    444) ha lo stesso intervallo.
+  - A valle leggono la serie: il contesto dei segnali (`SignalExecutionContext(requested_range=req.date_range)`),
+    `prepare_asset_series_set` (lavora sui punti), le annotazioni, il rischio.
+  - Il riscaldamento dei segnali a storia intera porta il caricamento fino a `date.min`, ma sul DB: arrivano solo le
+    righe che esistono.
+- **Chi entra in `get_prices_bulk`:**
+  - `POST /assets/prices/query` (`api/v1/assets/prices.py`, `List[FAPriceQueryItem]`);
+  - `/risk/query` sugli asset con prezzo (`services/risk/scope.py:337`);
+  - l'AI Export (`ai_export/components/asset_resources.py:268`, `technical_shared.py:399` e `:578`).
+  Un taglio all'ingresso di `get_prices_bulk` li copre tutti.
+- **Cambi.** `POST /fx/currencies/convert` (`api/v1/fx/currencies.py:393`, `List[FXConversionRequest]`).
+  - Per ogni conversione, una voce del convertitore e i suoi metadati per ogni giorno da `start` a `end` (427–446).
+  - Con i segnali, un secondo ciclo dal riscaldamento a `end` (471–490); con un segnale a storia intera il
+    riscaldamento parte da `date.min`.
+  - Nessuno dei due capi ha un tetto: `end` 9999 → 2,9 milioni di voci; `start` `date.min` con un segnale → circa
+    740 000.
+- **I modelli.** `DateRangeModel` (`schemas/common.py:445`) controlla solo `end >= start`. Le liste delle due API non
+  hanno un tetto di lunghezza: N voci moltiplicano qualunque tetto per voce.
+- **Già a posto o fuori:**
+  - la sincronizzazione (`services/assets/refresh.py`) taglia già la fine a oggi (X-R12). Però, con una cache,
+    costruisce l'insieme dei giorni mancanti da `start` (riga ~258): `date.min` dà circa 740 000 date. È il capo
+    dell'inizio, nella stessa famiglia;
+  - le variazioni a periodo fisso (MF, `ed954008e`) calcolano poche date da `as_of`, senza cicli per giorno;
+  - gli altri cicli per giorno (motore del portafoglio, lotti, matematica finanziaria, AI Export
+    `technical_shared.py:888`) sono di SEC7-1 (J) o di altri.
+- **Il web app** manda le fini dei selettori di date e i buchi dei negozi, di solito oggi.
+- **L'ora.** `utils/datetime_utils.today_date()` (UTC) c'è già; `latest_range_end()` arriva con J.
+- **Ultimi tocchi di X** su questi file, stanotte: `ed954008e` (05:50) e `a7b572ce2` (04:54).
+
+**Proposta** (decisioni N-XR55-1…4, «da rivedere»):
+- N-XR55-1, il taglio all'ingresso. `get_prices_bulk` e `convert_currency_bulk`, come primo passo, sostituiscono il
+  `date_range` di ogni voce con una copia tagliata. Così ogni lettore a valle vede l'intervallo tagliato: serie,
+  confronto, segnali, annotazioni, rischio, AI Export.
+  - La fine diventa `min(end or start, _latest_range_end())`, dove `_latest_range_end()` è `today_date()` più un
+    giorno. È una funzione privata mia, da sostituire con quella di J al merge.
+  - Una voce tutta nel futuro dà una serie vuota (asset), o nessuna conversione (cambi): niente errore.
+  - Oggi la stessa richiesta riempie il futuro con l'ultimo prezzo; dopo, il grafico si ferma a domani.
+- N-XR55-2, l'inizio:
+  - asset: il ciclo del riempimento parte dal primo punto della mappa o dal seme. Gratis, e i punti emessi non
+    cambiano;
+  - cambi: l'inizio, anche quello del riscaldamento, non va più indietro di 100 anni dalla fine tagliata (36 525
+    giorni). Niente query del primo cambio: la storia reale (BCE dal 1999) ne usa meno di un terzo.
+- N-XR55-3, facoltativa, da decidere: lo stesso tetto dei 100 anni sull'insieme dei giorni mancanti della
+  sincronizzazione (`refresh.py`). Stessa famiglia, file di X.
+- N-XR55-4, fuori dal lotto: un tetto alla lunghezza delle due liste. Lo segnalo, una riga nel backlog; lo decide il
+  coordinatore.
+
+**Test** (test-author; rossi con date moderate, le date estreme come guardie con un limite di tempo):
+- Rossi moderati:
+  - un asset con l'ultimo prezzo di ieri e `end` = oggi + 10: l'ultimo punto è oggi + 1 (oggi è oggi + 10);
+  - la conversione con `end` = oggi + 10: nessuna voce dopo oggi + 1;
+  - un segnale a storia intera con `start` 1900: il riscaldamento parte da fine − 100 anni.
+- Guardie estreme, con un limite di tempo largo e un tetto al numero di punti: `end` 9999-12-31 e `start` 0001-01-01
+  su `POST /assets/prices/query`, `POST /fx/currencies/convert` e su `get_prices_bulk` diretta.
+- Non regressione: i file esistenti
+  - `test_services/test_fx_conversion.py` (runner `services`, voce della riga 180);
+  - `test_api/test_fx_api.py` (`api fx`), `test_api/test_fx_signals_api.py` (`api fx-signals`);
+  - `test_api/test_assets_prices.py` (`api assets-price`), `test_services/test_asset_signals.py`
+    (`services asset-signals`);
+  - `test_series_preparation.py` e `test_ai_export_components_asset.py` (`services asset-source`);
+  - i test del rischio che passano da `get_prices_bulk`.
+- Un file nuovo, `test_services/test_range_ceiling.py`, puro dove si può, più un caso per API nei file `api`. La
+  registrazione nel runner è un file condiviso: serve il via da scrittore.
+
+**Superfici:**
+- di X, che rivede: `services/assets/price_query.py` e `api/v1/fx/currencies.py`, più `refresh.py` se N-XR55-3;
+- condiviso: il runner;
+- doc, solo inglese: le pagine di sviluppo dell'interrogazione dei prezzi e della conversione, se parlano
+  dell'intervallo;
+- nessun frontend, nessuna migrazione;
+- non tocco `utils/datetime_utils.py`, dove J aggiunge l'aiuto.
+
+**Conflitti:** X ha toccato i due file stanotte: serve sapere se ha modifiche aperte e dove. Con J: al merge,
+`_latest_range_end()` diventa `datetime_utils.latest_range_end()`.
+
+**Stima:** S–M, mezza giornata con i test. Controlli leggeri: le azioni sopra; le `api` avviano il backend della
+corsia.
+
+> **Via** (coordinatore, 17/10 ~06:43): «X-R55: **go**, with **item 3 included** (the 100-year cap on the sync's set
+> of missing days in `refresh.py`). N-XR55-1…4 become **night decision N75**, for review. **Files**: no worktree has
+> open edits on `price_query.py`, `currencies.py`, `refresh.py`, `test_fx_api.py` or `test_assets_prices.py`
+> (checked now). **Runner**: writer OK for the new `test_range_ceiling.py`. But J, X and MF have open, uncommitted
+> add-only edits in `_backend_services.py`, so add yours **only, in the block next to fx/assets**, without
+> reordering. Item 4 (cap on the list length) → backlog. Reds first; X reviews.»
+
+**Contratto** (N75):
+- **Un modulo nuovo, mio:** `backend/app/utils/date_range_limits.py`, per non toccare `datetime_utils.py`, dove J
+  aggiunge il suo aiuto.
+  - `RANGE_SPAN_LIMIT_DAYS = 36_525` (100 anni).
+  - `latest_range_end()`: `today_date()` (UTC) più un giorno. Al merge con J diventa la sua.
+  - `range_span_floor(end)`: `end` meno `RANGE_SPAN_LIMIT_DAYS` giorni.
+- **Asset** (`get_prices_bulk`):
+  - prima di tutto, ogni voce prende una fine tagliata, `min(end or start, latest_range_end())`. La vedono la serie,
+    il confronto, il contesto dei segnali, il caricamento e gli eventi;
+  - una voce che inizia dopo la fine tagliata dà, al suo posto nella lista, un risultato vuoto (`prices` e `events`
+    vuoti); le altre voci della stessa chiamata non cambiano.
+  > **Rivisto** (17/10 ~06:55, prima del codice): all'inizio volevo lasciare agli eventi l'intervallo chiesto. Per farlo
+  > ogni struttura della pipeline avrebbe dovuto portare due fini, e una voce tutta nel futuro non entra in
+  > `DateRangeModel` (`end < start`). Gli eventi sono righe del DB, senza ciclo per giorno, ma la via semplice è quella
+  > di N-XR55-1: ogni lettore vede l'intervallo tagliato. Per gli eventi annunciati c'è `POST /assets/events/query`.
+  > test-author informato.
+- **Il riempimento** (`_build_backward_filled_series`): senza seme cammina dal primo punto della mappa, e una mappa
+  vuota senza seme rende subito `[]`. I punti emessi non cambiano.
+- **Cambi** (`convert_currency_bulk`), per ogni conversione:
+  - fine tagliata come sopra; inizio `max(start, range_span_floor(fine))`; il riscaldamento dei segnali non va prima
+    di `range_span_floor(fine)`;
+  - una conversione che inizia dopo la fine tagliata non dà risultati; i suoi segnali, se ce ne sono, girano su una
+    serie vuota, come per una coppia senza cambi.
+- **Sincronizzazione** (`refresh.py`, l'insieme dei giorni mancanti con una cache):
+  - enumera solo da `max(start, range_span_floor(history_end))` a `history_end`;
+  - se `start` è prima del tetto, aggiunge come mancanti `start` e il giorno prima del tetto. Così il fetch non chiede
+    mai meno di oggi: al più qualcosa in più, solo nel caso estremo.
+
+**Passi.**
+1. ✅ 17/10 06:47–07:30 — Rossi (test-author):
+   - **`test_services/test_range_ceiling.py`**, nuovo, 31 casi, puro:
+     - i prezzi su un SQLite privato in `tmp_path`;
+     - il gestore dei cambi chiamato direttamente, con un `convert_bulk` che registra;
+     - la sincronizzazione con un fornitore e cache finte;
+     - l'oggi fermato al 2025-06-18 attraverso `date_range_limits.today_date`.
+   - **Due casi a testa** in `test_assets_prices.py` e `test_fx_api.py`. Quelli dei cambi usano CHF→CHF (nessun dato
+     scritto); quelli degli asset creano il loro asset e lo cancellano.
+   - **La voce `range-ceiling`** nel runner, solo aggiunte, `isolation="pure"`.
+   - **Col codice di allora:**
+     - `range-ceiling`: 19 rossi e 12 verdi. Verdi apposta: i punti del riempimento, uguali a un riferimento
+       indipendente, e le finestre del fetch dal tetto in poi. I rossi:
+       - il riempimento cammina 45 826 giorni invece di ≤ 7;
+       - 9 punti dopo domani;
+       - il segnale riceve la serie fino a oggi + 10;
+       - il convertitore riceve date dal 1899;
+       - la sincronizzazione prova 82 348 giorni;
+     - le guardie estreme sono rosse: una miccia dentro il ciclo le ferma in 0,1–0,5 s;
+     - le azioni esistenti verdi: `asset-source-refresh` 18, `asset-signals` 30, `asset-source` 61,
+       `fx-conversion` 44, `api fx-signals` 8;
+     - `api assets-price` 18 più 2 rossi, `api fx` 21 più 2 rossi. Due di questi rossi sono **HTTP 500**: oggi
+       una richiesta che finisce il 9999-12-31 va in `OverflowError` dopo averne pagato tutto il costo
+       (`price_query.py:182`, `currencies.py:446`).
+   - Le domande di test-author e le mie risposte:
+     - il pavimento si ferma a `date.min`: c'è nel codice;
+     - la storia intera nei segnali dei cambi resta com'è;
+     - un asset tutto nel futuro dà un risultato vuoto, segnali compresi;
+     - nessun caso del confronto: il taglio è all'ingresso.
+   > **⚠️ Fuori pista** (test-author): la prima `api fx` è partita a carico 52,70, perché il controllo era nello
+   > stesso comando della prova. Rifatta dopo un controllo a parte (44,26), con gli stessi esiti.
+2. ✅ 17/10 06:47–06:52 — Bozza del codice fuori dal repo: `files/xr55-draft/date_range_limits.py` e `apply_xr55.py`,
+   con nove sostituzioni esatte in tre file più il modulo nuovo. Provata su una copia: applicazione, compilazione,
+   black pulito (anche HEAD lo era), inverso esatto.
+   > **⚠️ Fuori pista**: disegnando ho trovato un trabocchetto. `end - 100 anni` va in `OverflowError` (un 500) per
+   > una fine nel primo secolo dopo Cristo: `range_span_floor` si ferma a `date.min`.
+3. ✅ 17/10 07:31 — Codice (`files/xr55-draft/apply_xr55.py <repo> apply`; impronta in
+   `files/xr55-draft/xr55_applied.md5`):
+   - `backend/app/utils/date_range_limits.py`, nuovo;
+   - `price_query.py`: il taglio all'ingresso di `get_prices_bulk`, con le voci tutte nel futuro rimesse vuote al loro
+     posto, e il riempimento che parte dal primo punto;
+   - `currencies.py`: il taglio di ogni conversione, compresi il riscaldamento e le conversioni tutte nel futuro;
+   - `refresh.py`: il cammino limitato a 100 anni.
+   Sul repo ruff e black puliti.
+4. ✅ 17/10 07:31–07:49 — Controlli col codice, sotto 50, uno alla volta (`files/xr55_light.sh green`; alle 07:32 il
+   carico era a 104, la catena ha aspettato):
+   - `services`: `range-ceiling` 31/31, `fx-conversion` 44/44, `asset-source-refresh` 18/18, `asset-source` 61/61,
+     `asset-signals` 30/30, `series-preparation` 22/22, `risk-all` 902/902, `ai-export` 1064/1064;
+   - `api`: `assets-price` 20/20 e `fx` 23/23 (i quattro casi nuovi verdi, comprese le due guardie che oggi davano
+     500), `fx-signals` 8/8.
+   Porta 6186 libera.
+5. ✅ 17/10 07:36–07:52 — Doc (docs-writer, verificata sul codice applicato, solo inglese, nessuno stamp):
+   - `developer/backend/assets/architecture.md`:
+     - «Sync Pipeline»: il cammino della cache, ancora `#history-cache-walk`;
+     - «Data Flow: Price Query»: il tetto, ancora `#price-query-range-ceiling`;
+     - una frase in «Backward Fill Logic»;
+     - in «Fixed-Period Changes», il periodo fisso non ha tetto su `as_of`.
+   - `developer/backend/fx/architecture.md`:
+     - «Conversion Logic»: `#convert-range-ceiling`;
+     - in «Fixed-Period Changes», «il cambio del giorno» ora vale fino al tetto di `/convert`.
+   - `mkdocs build` stretto e `check-links` puliti (carico 33 e 36). Le altre pagine controllate non dicevano nulla
+     che il cambio renda falso.
+   > **⚠️ Fuori pista** (dalla verifica di docs-writer): la docstring del modulo nuovo diceva «no price or rate exists
+   > after it». Non è vero alla lettera: le scritture a mano di prezzi e cambi non rifiutano una data futura, e il
+   > taglio ora nasconde quelle righe. Riscritta: «no market price or rate is dated later (a value stored by hand
+   > with a later date is not returned)». Bozza e repo identici; impronta aggiornata.
+   - Punto per la revisione di X, lasciato com'è: il risultato dei segnali dei cambi (`FXSignalQueryResult`,
+     `currencies.py:556–562`) ripete il `date_range` chiesto, mentre i segnali girano sull'intervallo tagliato. Per una
+     conversione tutta nel futuro non c'è un intervallo tagliato valido (`end < start`): cambiare l'eco vorrebbe un
+     ramo in più.
+6. ✅ 17/10 07:55 — Checkpoint FROZEN al coordinatore (rivede X).
+
+> **Congelamento** (coordinatore, 17/10 ~07:29): fino all'ingresso di A8b non toccare
+> `frontend/e2e/settings/scheduler.spec.ts`. A cambia un clic alla riga 32 (il percorso della nuova scheda di A8b), e
+> io lo rivedo al checkpoint di A. X-R55 non cambia.
+
+**Allineamento con J e revisione di X** (17/10 ~07:57–08:05):
+- **Allineamento** (coordinatore, ~07:57): «X-R55 committed: `fix(prices)…` + journal, tip `79fe54183`. Base updated:
+  `4655adf3d` = yours + dev `7e6cf7914` (J's SEC7-1 included), clean. Now J's `datetime_utils.latest_range_end()`
+  (line 102) is in the base: align `date_range_limits.py` to it […] so there's a single helper; check that J's test
+  seam (`latest_range_end` patched in its consumers) still covers your modules, or say why not.»
+  - L'aiuto di J è `date.today() + 1`, cioè il **calendario del server**, non UTC, come i `date.today()` dei suoi
+    consumatori (e di `refresh.py`, X-R12).
+  - `date_range_limits.py` ora tiene solo `RANGE_SPAN_LIMIT_DAYS` e `range_span_floor`. `price_query.py` e
+    `currencies.py` importano `latest_range_end` da `datetime_utils`: controllato che sia proprio la funzione di J.
+  - Il seam di J (`test_services/_range_bounds.py`, `RANGE_BOUND_CONSUMERS`, «every module that reads
+    `latest_range_end`, imported by name») non copriva i miei due moduli. Oggi nessuna suite che alza il tetto ci
+    passa (le due righe di `test_portfolio_service.py` sono commenti), ma secondo la sua stessa definizione la lista
+    deve contenerli: li aggiunge test-author (file di J, solo aggiunte).
+  - I test che fermavano `date_range_limits.today_date` passano al seam di J; i casi API prendono il tetto da
+    `latest_range_end()` (stesso host e fuso del server della corsia); la doc dice «server's calendar» invece di UTC.
+- **Revisione di X** (~08:00): «X reviewed X-R55: **OK**. Two points: 1. **LOW, in your current commit** (the helper
+  alignment): `FXSignalQueryResult.date_range` echoes the requested range, not the one served. Echo the cut range
+  (keep the `DateRangeModel` per index) or say so in the field's description. Your choice; no frontend reads it.
+  2. **Z-25 promoted to 1.3, right after X-R55's entry** […] Cap the items per bulk request (and/or items × days) with
+  a 422 code, reds first, X reviews.»
+  - Punto 1, fatto: `served_ranges[conv_idx]` tiene il `DateRangeModel` servito, cioè quello tagliato, o quello chiesto
+    per una conversione tutta nel futuro. La descrizione del campo in `schemas/fx.py` dice entrambe le cose.
+  - La descrizione rispetta le regole del generatore del client (`test_openapi_client_text.py`): una riga, senza `"`,
+    `\` né `*/`. test-author fissa l'eco in tre casi.
+- ✅ 17/10 08:05–08:29 — Il commit dell'allineamento:
+  - **Test** (test-author):
+    - `test_range_ceiling.py` ferma il tetto col seam di J (`latest_range_end` sostituito per nome in `price_query`
+      e `currencies`, fixture `frozen_ceiling` non più automatica);
+    - RC-000 fissa l'aiuto unico, `36_525` e il pavimento a `date.min`;
+    - nuovi RC-001 (`lift_range_bound` toglie davvero il taglio dei due moduli) e RC-F06 (l'eco dei segnali dei
+      cambi: tagliato, pavimento, tutto nel futuro, non tagliato);
+    - i casi API leggono il tetto da `latest_range_end()`;
+    - `_range_bounds.py` di J ha i due moduli nuovi in coda, senza riordinare.
+  - **Doc** (docs-writer): «tomorrow by the server's calendar (`datetime_utils.latest_range_end()`, the helper
+    R13-SEC7-1 also uses)» nelle due pagine, il modulo citato solo per i 100 anni, un collegamento alla sezione di J
+    in `financial_math.md`, una frase sull'eco in `#convert-range-ceiling`. Build stretto e `check-links` puliti.
+  - **Prove** (sotto 50, uno alla volta):
+    - `services range-ceiling` 33/33, `fx-conversion` 44/44, `asset-source-refresh` 18/18;
+    - `schemas openapi-client-text` 78/78 (la descrizione nuova del campo rispetta il generatore);
+    - `api assets-price` 20/20, `api fx` 23/23;
+    - dalle prove di test-author: `services roi-fifo-utils` su `test_broker_cards.py`, 21 su 21, una suite che usa
+      `lift_range_bound` (il `setattr` sui due moduli nuovi non fallisce).
+    Porta 6186 libera.
+  - **Fuori**: nessun controllo obbliga un modulo futuro a entrare in `RANGE_BOUND_CONSUMERS`. test-author propone
+    un controllo statico: è di J, lo segnalo.
+> **Z-26 nuova** (coordinatore, 17/10 ~08:29, da R13-SEC8 di E): l'attesa del lock fra processi non ha un tempo
+> massimo; dopo X-R55 e Z-25, prima un'analisi. Riga nel backlog.
+
+### Z-25 — un tetto alle richieste di massa di prezzi e cambi: analisi (17/10 ~08:05, sola lettura)
+
+**Stato reale**:
+- I corpi sono `List[FAPriceQueryItem]` (`api/v1/assets/prices.py`) e `List[FXConversionRequest]`
+  (`api/v1/fx/currencies.py`), senza tetto. La convenzione del repo è `Field(..., min_length=1, max_length=N)` sulle
+  liste: `risk.asset_ids` 100, `analytics` 32, i membri degli scenari 300.
+- **Il web app** manda in una richiesta sola tutte le voci di una pagina:
+  - la lista asset, una per asset (`assets/+page.svelte`, `fetchAllPriceData`, `axiosInstance.post` dell'intera
+    `queryItems`);
+  - la lista e il registro dei cambi, una per coppia o per buco (`fxStoreRegistry.ts`).
+  Nessun lotto.
+- **Il costo dopo X-R55**: voci × giorni. Un tetto alle sole voci non basta: 500 voci di cambi × 36 525 giorni fanno
+  18 milioni di conversioni. L'uso vero: 300 asset × «All» (circa 9 000 giorni) fa 2,7 milioni di punti, che oggi il
+  server costruisce davvero.
+- I chiamanti interni di `get_prices_bulk` (rischio, AI Export) non passano dal corpo HTTP: un tetto sullo schema non
+  li tocca.
+
+**Opzioni** (decisione del coordinatore o del developer):
+- **A** — solo voci, per esempio 1 000 per richiesta: nessun cambio nel web app, ma il costo resta voci × 36 525.
+- **B** — un budget di voci-giorno per richiesta (la somma dei giorni tagliati, riscaldamento compreso): misura il
+  costo vero, ma la lista asset su «All» di un portafoglio grande va divisa in lotti nel web app (file di Y e X).
+- **C, la mia proposta** — entrambi, larghi: 1 000 voci e 5 milioni di voci-giorno, con un 422 dal codice chiaro
+  (`bulk_too_many_items`, `bulk_too_many_days`). L'uso reale (2,7 milioni) passa senza toccare il web app; 1 000 voci
+  di cambi su 100 anni (36,5 milioni) no. Il lotto nel web app resta un seguito, se un portafoglio vero arriva vicino
+  al budget.
