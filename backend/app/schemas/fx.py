@@ -33,7 +33,7 @@ from __future__ import annotations
 import math
 from datetime import date as date_type
 from decimal import Decimal
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 
 from pydantic import (
     BaseModel,
@@ -54,6 +54,7 @@ from backend.app.schemas.common import (
     PeriodChangesAsOf,
     SafeDecimal,
     StrictModel,
+    iso_currency_code,
 )
 from backend.app.schemas.signals import (
     SignalAnnotationRequest,
@@ -226,7 +227,8 @@ class FXUpsertItem(BaseModel):
     @field_validator("base", "quote", mode="before")
     @classmethod
     def uppercase_currency(cls, v):
-        return Currency.validate_code(v)
+        """An ISO 4217 alphabetic code, upper-case: a manual rate is never stored under a name or a number (E-18)."""
+        return iso_currency_code(v)
 
 
 class FXUpsertResult(BaseModel):
@@ -413,6 +415,10 @@ class FXConversionRouteItem(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
+    #: Whether the pair and the steps must be ISO 4217 alphabetic codes (E-18): true for what a request writes. The read
+    #: item, a subclass built from the stored routes, turns it off, so a route stored before E-18 still lists.
+    iso_currencies_required: ClassVar[bool] = True
+
     base: str = Field(..., min_length=3, max_length=3, description="Base currency. Stored alphabetically: posting EUR/DKK yields a DKK-EUR row.")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency. See `base` — the pair is sorted on write, not rejected.")
     priority: int = Field(..., ge=1)
@@ -428,11 +434,23 @@ class FXConversionRouteItem(BaseModel):
         validate_chain_steps(self.chain_steps, self.base, self.quote)
         return self
 
+    @model_validator(mode="after")
+    def iso_currencies(self) -> FXConversionRouteItem:
+        """A route a request writes names ISO 4217 alphabetic codes, in its pair and every step, never a name or a number
+        (E-18). The steps stay ``FXRouteStep``, lenient, because the routes listing rebuilds them from what was stored."""
+        if self.iso_currencies_required:
+            for code in (self.base, self.quote, *(code for step in self.chain_steps for code in (step.from_currency, step.to_currency))):
+                iso_currency_code(code)
+        return self
+
 
 class FXConversionRouteReadItem(FXConversionRouteItem):
     """Configured route with derived, response-only routing metadata."""
 
     model_config = ConfigDict(extra="forbid")
+
+    #: Built from the stored routes (``GET /fx/providers/routes``): no ISO 4217 re-check, a route stored before E-18 lists.
+    iso_currencies_required: ClassVar[bool] = False
 
     is_chain: bool = Field(..., description="Whether the configured route contains more than one step", json_schema_extra={"readOnly": True})
     providers_used: list[str] = Field(
