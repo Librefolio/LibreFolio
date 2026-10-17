@@ -275,6 +275,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A username can no longer contain `@`, and an email address can no longer be another account's username. Sign-in reads an identifier with `@` as an email address first, so an account named after someone else's address can no longer take over their sign-in or lock them out. Existing usernames with `@` stay; their owners sign in with their email address.
 - Price and FX queries no longer accept date ranges without a ceiling: the end stops at tomorrow and the FX start at 100 years before it; a range reaching year 9999, which previously exhausted the server and ended in an error, now answers at once.
+- Price and FX queries now refuse at once, with an explicit error, a request of more than 1,000 items or one that would build more than 5 million daily points; such a request could previously hold the server for minutes.
 - A number that is not finite (`NaN`, `Infinity`) nested in a provider's parameters or in a risk analytic's parameters is refused (422): a provider's was saved and read back as `null`.
 - A password change and an administrator's sign-out-everywhere arriving at the same moment both end the sessions: the cookie the first issued no longer survives the second.
 - The in-memory limits forget the visitor with the fewest attempts first: a flood of new usernames or addresses no longer resets the count of one being guessed.
