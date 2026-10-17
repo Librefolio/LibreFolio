@@ -77,6 +77,8 @@ A save is refused, with a message that names the event at fault, when:
     - **One event per date and type**: rows sharing both a date and a type are all left out as duplicates; a dividend and a split on the same day import together.
     - **Every row becomes your own event**, a provider's included: leave out the rows whose `source` is `PROVIDER` if the provider will send them again, or they will show twice.
 
+    In that file, a note that starts with `=`, `+`, `-` or `@` has an apostrophe in front of it, so that a spreadsheet shows it as text instead of running it as a formula: the import removes that apostrophe, and the note comes back as it was.
+
 - Dates are `YYYY-MM-DD`, and decimals can use `.` or `,`.
 - Columns are separated by `;` or `,`; with `,`, write decimals with `.`.
 - Other columns are ignored, so a price file exported by LibreFolio imports as it is.
