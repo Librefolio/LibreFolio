@@ -14,7 +14,7 @@ Chart overlays that extract trend, momentum, volatility, volume, or risk informa
 - ⚡ **[Momentum](indicators/momentum.md)** — RSI, MACD, ROC, Stochastic RSI, PPO, CCI
 - 🌊 **[Volatility](indicators/volatility.md)** — Bollinger Bands, ATR, NATR, Donchian Channels
 - 📊 **[Volume](indicators/volume.md)** — OBV, MFI
-- ⚠️ **Risk** — Underwater Drawdown, Rolling Return, Rolling Volatility, Rolling Sharpe Ratio, Rolling Beta (Asset-only; concepts under [Risk Metrics](risk-metrics/index.md))
+- ⚠️ **Risk** — Underwater Drawdown, Rolling Return, Rolling Volatility, Rolling Sharpe Ratio, Rolling Beta (Asset-only; concepts under [Risk Metrics](risk-metrics/index.md), the Rolling Return's under [Returns](../fundamentals/returns.md#rolling-return))
 
 ### 🎯 [Synthetic Benchmarks](synthetic-benchmarks/index.md)
 
