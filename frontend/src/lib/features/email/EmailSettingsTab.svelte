@@ -1,5 +1,5 @@
 <!--
-  Settings › Email, for administrators (workstream E, lots E2 and E3): the state of the instance's email, the
+  Settings › Administration › Email, for administrators (workstream E, lots E2 and E3): the state of the instance's email, the
   configuration checks worth a word, the hourly budget, a test email to one's own address, and the base of the emailed
   links checked from this browser (developer decision 45).
 
