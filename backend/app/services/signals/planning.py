@@ -67,7 +67,8 @@ class SignalExecutionPlan:
     annotation_requests: tuple[SignalAnnotationRequest, ...]
     # E1: at least one computation declared full-history warm-up (e.g.
     # drawdown). The fetch path then loads from the start of the available
-    # history, not from a points-derived day count.
+    # history, which Z-30 sets at 1900-01-01, or from the points-derived
+    # warm-up's start when that is earlier.
     requires_full_history: bool = False
     # The same warm-up split by what a plugin counts: sessions (quote days) or calendar days.
     max_session_total_points: int = 0

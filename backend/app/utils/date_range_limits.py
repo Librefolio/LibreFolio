@@ -93,7 +93,7 @@ def date_out_of_range_detail(items: list[dict], count: int, earliest: date, late
     ``count`` the dates refused in all."""
     return {
         "code": "date_out_of_range",
-        "message": f"Dates must lie between {earliest.isoformat()} and {latest.isoformat()}: {count} do not",
+        "message": f"Dates must lie between {earliest.isoformat()} and {latest.isoformat()}: {count} {'does' if count == 1 else 'do'} not",
         "params": {"min": earliest.isoformat(), "max": latest.isoformat()},
         "items": items[:10],
         "count": count,
