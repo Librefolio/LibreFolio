@@ -256,12 +256,12 @@
             <div class="space-y-3" data-testid="backup-password-fields">
                 <div class="space-y-2">
                     <label class="block text-sm font-medium text-lf-secondary" for="backup-password">{$_('backup.download.password.label')}</label>
-                    <PasswordInput autocomplete="off" bind:value={password} id="backup-password" name="backup-password" testId="backup-password" />
+                    <PasswordInput autocomplete="new-password" bind:value={password} id="backup-password" name="backup-password" testId="backup-password" />
                     <PasswordStrength {password} rules={archiveRules} bind:valid={passwordValid} />
                 </div>
                 <div class="space-y-2">
                     <label class="block text-sm font-medium text-lf-secondary" for="backup-password-confirm">{$_('backup.download.password.confirmLabel')}</label>
-                    <PasswordInput autocomplete="off" bind:value={confirmation} hasError={mismatch} id="backup-password-confirm" name="backup-password-confirm" testId="backup-password-confirm" />
+                    <PasswordInput autocomplete="new-password" bind:value={confirmation} hasError={mismatch} id="backup-password-confirm" name="backup-password-confirm" testId="backup-password-confirm" />
                     {#if mismatch}
                         <p class="text-xs text-lf-danger" data-testid="backup-password-mismatch">{$_('backup.download.password.mismatch')}</p>
                     {/if}

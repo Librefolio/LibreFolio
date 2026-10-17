@@ -31,7 +31,7 @@ from starlette.requests import ClientDisconnect
 from backend.app.api.no_echo import NoInputEchoRoute
 from backend.app.api.v1.backup.job_views import backup_error
 from backend.app.api.v1.settings import require_admin
-from backend.app.config import get_data_dir
+from backend.app.config import ProfileDefaultError, get_data_dir
 from backend.app.config.backup import BackupConfigError, backup_max_upload_mb
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
@@ -116,7 +116,7 @@ def _upload_limit() -> tuple[int, int | None]:
     """The limit in megabytes (0: none), and in bytes (``None``: none). 503 when it cannot be read."""
     try:
         limit_mb = backup_max_upload_mb()
-    except BackupConfigError as exc:
+    except (BackupConfigError, ProfileDefaultError) as exc:
         logger.error("The upload limit of a restore cannot be read", error=str(exc))
         raise backup_error(status.HTTP_503_SERVICE_UNAVAILABLE, "backup_upload_unavailable", "The upload limit of this instance cannot be read") from None
     return limit_mb, (limit_mb * _MEGABYTE if limit_mb else None)
@@ -276,7 +276,7 @@ def _readable_limit_mb() -> int | None:
     """The upload limit in megabytes (0: none), or ``None`` when it cannot be read (logged, as the upload logs it)."""
     try:
         return backup_max_upload_mb()
-    except BackupConfigError as exc:
+    except (BackupConfigError, ProfileDefaultError) as exc:
         logger.error("The upload limit of a restore cannot be read", error=str(exc))
         return None
 
