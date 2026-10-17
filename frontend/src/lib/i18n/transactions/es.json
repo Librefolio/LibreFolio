@@ -246,7 +246,8 @@
       "decimalPlacesExceeded": "Como máximo {max} decimales",
       "significantDigitsExceeded": "Como máximo {max} cifras significativas",
       "integerDigitsExceeded": "Como máximo {max} cifras en la parte entera",
-      "dateOutOfRange": "Entre {min} y {max}"
+      "dateOutOfRange": "Entre {min} y {max}",
+      "autoCostUnreadable": "Coste automático no disponible: {count, plural, one {# transacción usada} other {# transacciones usadas}} para el coste medio de este activo {count, plural, one {contiene} other {contienen}} un valor que no es un número. Introduce el coste a mano."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",

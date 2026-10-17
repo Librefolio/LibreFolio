@@ -5519,3 +5519,30 @@ allora, e quelli parcheggiati di W-B69 non si riscrivono due volte.
    service.md` (`get_balances_at_end_of`, query inclusiva), `developer/architecture/patterns/brim_plugin_guide.md` (i giorni attorno a H0
    e alla copertura, tenuti ai bordi). Nessuna pagina utente: il comportamento visibile è «nessun suggerimento» invece di un errore.
 5. ⏳ **Simulazione e handoff**.
+
+### W-B69 — la metà del batch (W) e il pavimento di N74 condiviso ✅ (2026-10-17) — 🧊 FROZEN
+
+**Base**: HEAD `2dddaa95d` (dev con W-B71 dentro: `b801dc687` + `0955164a6` → `1431e20df`, CHANGELOG `2dddaa95d`). Il cuore di W-B69 è
+di MF (`1b4e4a27d`, rivisto qui sopra); a me il batch, col pavimento condiviso `EARLIEST_RANGE_START` (MF-SEC8-2, già in dev).
+
+1. ✅ **Rossi**: la mia metà ripresa da `files/wb69_mine/` (il file non era cambiato dalla base del parcheggio; diff identico): `services
+   transaction-cost-basis-rule` **33 rossi**, 104 verdi (11:15, carico 24); ogni rosso ora fallisce su un `UnreadablePoolError` che esce
+   dal batch (lo stato intermedio di MF: un 500), cioè per il rifiuto del batch che manca. Il rosso del pavimento (test-author
+   `3f86d648`, `TestTheDateFloorIsTheReplayFloor`): «N74's floor is the replay floor, EARLIEST_RANGE_START (MF-SEC8-2), never a copy:
+   transaction_batch_stages still defines its own TRANSACTION_DATE_MIN = 1900-01-01; transaction_batch_stages has no
+   EARLIEST_RANGE_START» (carico 35).
+2. ✅ **Cura**: `files/scripts/wb69_batch_cure.py --apply` (6 file) e `files/scripts/wb69_batch_i18n.sh`
+   (`transactions.errors.autoCostUnreadable`, 4 lingue, plurale ICU su `{count}`, il FR col ramo `many`). `compute_wac_and_fx_issues`
+   passa la lista al cucito di MF e fa di ogni elemento l'issue `autoCostUnreadable` sulla riga (`cost_basis_override`, `params
+   {"count": N}`, nessun id); il `_handover_cost` della gamba che cede di una divisione lo prende per riga (operazione `split`, `ref_id`
+   la gamba). `TXValidationCode.AUTO_COST_UNREADABLE`. `transaction_date_bounds()` rende `EARLIEST_RANGE_START`, `TRANSACTION_DATE_MIN`
+   tolto (nessun test lo importava).
+   > **⚠️ Fuori pista**: ruff C901 su `compute_wac_and_fx_issues` (11 > 10) con le due prese: il giro della divisione estratto in
+   > `_cost_split_handovers()`, stesso comportamento, dentro lo stesso `if` (niente `noqa`).
+3. ✅ **Verdi** (11:19–11:20, carico 23–25): `services transaction-cost-basis-rule` 137, `services transaction-decimal-places` 195,
+   `services auto-cost-unreadable-pool` 17 (di MF), `services lone-transfer-legs` 20, `services transaction` 104; `i18n check` (5025
+   chiavi), Vitest 107 (ICU per lingua e il risolutore). Non girati i file `api`: la sorgente i18n cambiata rende vecchia la build del
+   frontend (ricostruzione); il batch lo esercitano i test dei servizi, in processo.
+4. ✅ **Doc**: `wac.md#unreadable-pool` (il paragrafo finale: il batch ora rifiuta), `split_promote.md` (il rifiuto della divisione e la
+   riga della tabella dei codici), `service.md` (il pavimento di N74 è `EARLIEST_RANGE_START`).
+5. ⏳ **Simulazione e handoff**.

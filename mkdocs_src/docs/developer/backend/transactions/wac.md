@@ -742,9 +742,11 @@ averaged from that pool is written:
 | `delete_by_broker()` | The deletion of that broker fails whole (see [Broker Deletion](service.md#broker-deletion)) |
 | `convert_lone_giving_legs()`, through `_handover_cost()` | That leg stays a `TRANSFER` without its partner, answered with the error's message as its reason; the other legs are converted (see [Lone giving legs](../../architecture/database/index.md#lone-transfer-legs)) |
 
-`compute_wac_and_fx_issues()` passes no list yet — the batch's own refusal is wired
-separately — so in a batch the error, like one from `_handover_cost()` on the giving
-leg of a split `TRANSFER`, propagates out of `execute_batch()`.
+`compute_wac_and_fx_issues()` (`batch_costs.py`) passes a list: each item in it becomes
+the issue `autoCostUnreadable` on its row — field `cost_basis_override`, `params`
+`{"count": N}`, no transaction id, since the pool can be another user's — and the giving
+leg of a split `TRANSFER` whose `_handover_cost()` raises gets the same issue on its
+split, with the leg's id as `ref_id`. The batch is not saved.
 
 ### 🔗 Promote boundary {: #promote-boundary }
 
