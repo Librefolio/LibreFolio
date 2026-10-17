@@ -242,6 +242,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scheduled investments with the ACT/ACT day count: late interest across a year end no longer loses one day per year end.
 - Scheduled investments: the maturity settlement no longer includes the last coupon, already paid the same day as interest; after maturity the asset is worth its principal.
 - Measure tool: the yearly rate (Δ%/yr) appears from 30 days, as in the rest of the app (`—` below); a measure that starts from 0 shows `—` instead of 0 % for Δ% and Δ%/yr, and a line that ends on the other side of zero has no yearly rate.
+- Growth chart: in the weekly and monthly views, a broker line that stops in the middle of a week or month keeps its last value for that period instead of leaving a gap.
 
 #### 🔒 Security
 
