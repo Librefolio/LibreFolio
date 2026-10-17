@@ -6554,13 +6554,25 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     Revisori: W (BRIM) e H (post-migrazione).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-28 — due file di lock
   aperti con `open()`».
-- **Z-30 · Le righe di prezzi e cambi già salvate prima del 1900** — basso; coordinatore, 17/10 (X-R65, decisione D3).
+- ✅ **Z-30 · Le righe di prezzi e cambi già salvate prima del 1900** — basso; coordinatore, 17/10 (X-R65, decisione
+  D3). **Chiusa il 17/10 col lotto Z-30** (decisione: strada (a); il commit è del coordinatore; revisore MF).
   - Da X-R65 (N83) le scritture le rifiutano, ma una riga già nel database resta: il riempimento dei prezzi parte dal
     primo prezzo salvato, e uno del 0001-01-01 fa camminare ~740 000 giorni per asset (sotto il budget di 1 milione).
   - Strade: un pavimento in lettura nel riempimento (`_build_backward_filled_series` e `_fill_span` da
     `max(primo prezzo, 1900)`), o una correzione post-migrazione che le segnala o le toglie. Da decidere.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «X-R65 (N83) — date assurde
-  nelle scritture manuali di prezzi e cambi: analisi».
+  - Fatto: in `get_prices_bulk` una storia intera (`requires_full_history`) si carica dal 1900-01-01, o dall'inizio
+    visibile se è prima. Una riga più vecchia fa solo da seme: un giorno visibile cammina ~45 800 giorni, non
+    ~740 000. I riscaldamenti finiti restano com'erano. I cambi non camminano dalla prima riga: fuori.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «X-R65 (N83) — date assurde
+  nelle scritture manuali di prezzi e cambi: analisi» e «Z-30 — le righe salvate prima del 1900: lavoro».
+- **Z-31 · La query dei prezzi non limita l'inizio visibile** — basso, residuo di Z-30, **dopo la 1.3**
+  (coordinatore, 17/10); Z, 17/10 (nota di test-author).
+  - `get_prices_bulk` taglia solo la fine (`latest_range_end()`). Un intervallo chiesto a mano prima del 1900 su un
+    asset con una riga vecchia emette ancora fino a ~740 000 punti visibili, dentro il budget di 1 milione.
+  - Lo scope di rischio e la conversione FX limitano già l'inizio a 100 anni dalla fine (`range_span_floor`, X-R55);
+    «All» della UI parte dal 2000-01-01. Rimedio: lo stesso limite nel percorso dei prezzi (file di MF).
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-30 — le righe salvate
+  prima del 1900: lavoro», passo 4.
 
 ## B · Backup e Docker (fase 01)
 
