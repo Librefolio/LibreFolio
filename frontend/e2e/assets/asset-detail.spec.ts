@@ -2619,6 +2619,72 @@ test.describe('Asset Detail Page', () => {
             return mainResponse.request();
         };
 
+        // Y11, developer decision 48: the toolbar's Refresh is disabled while a
+        // big request of the page is in flight — a refresh, a period, a signal
+        // change, and since N64 a mode or a calendar window — so it can never
+        // start a refresh beside one the test holds. The page's own Sync can:
+        // the reload after a sync (`handlePageSyncComplete` → `handleRefresh`,
+        // the very same refresh) holds no token (P3). Every item answers
+        // `skipped`: the run is not accepted, so no fixture flag moves (an
+        // accepted FX leg would set `priceComparisonSyncSucceeded` and clear
+        // the missing routes) and no portfolio write is reported. The dialog
+        // asks the exchange-rate provider catalogue when it opens, for icons
+        // (`getCurrencyGraph()`), and the backend builds that catalogue by
+        // asking the providers, some over the network: it is answered here,
+        // empty, from the first call on (a page route, so across reloads too).
+        // Returns with the dialog closed and the reload under way, its requests
+        // the caller's to hold and await; `settled()` waits until that reload
+        // has reached its metadata — the provider assignment `reloadMetadata`
+        // asks once `handleRefresh` is over.
+        let fxProviderCatalogAnswered = false;
+        const refreshThroughPageSync = async (): Promise<{settled: () => Promise<void>}> => {
+            if (nextAssetSyncStatusesById !== null || nextFxSyncStatusesBySlug !== null || deferredAssetSyncResponse !== null || deferredFxSyncResponse !== null || deferredFxSyncResponses.size > 0) {
+                throw new Error('refreshThroughPageSync needs the sync stubs at rest: no per-item status and no held answer');
+            }
+            if (!fxProviderCatalogAnswered) {
+                await page.route(
+                    (url) => url.pathname === '/api/v1/fx/providers',
+                    async (route) => {
+                        if (route.request().method() !== 'GET') return route.fallback();
+                        await route.fulfill({json: []});
+                    },
+                );
+                fxProviderCatalogAnswered = true;
+            }
+            const statusesBefore = {asset: nextAssetSyncStatus, fx: nextFxSyncStatus};
+            const assetSyncRequestsBefore = assetSyncRequestCount;
+            const metadataReload = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/assets/provider/assignments', {timeout: 60_000});
+            // Handled, so a scenario that fails before `settled()` leaves no rejection behind.
+            void metadataReload.catch(() => undefined);
+            nextAssetSyncStatus = 'skipped';
+            nextFxSyncStatus = 'skipped';
+            try {
+                const pageSyncTrigger = page.getByTestId('asset-detail-sync-btn');
+                await expect(pageSyncTrigger).toBeEnabled();
+                await pageSyncTrigger.click();
+                const pageSyncDialog = page.getByTestId('page-sync-modal');
+                await expect(pageSyncDialog).toBeVisible();
+                await pageSyncDialog.getByTestId('sync-modal-start').click();
+                const pageSyncOutcome = pageSyncDialog.getByTestId('sync-modal-results');
+                await expect(pageSyncOutcome).toBeVisible({timeout: 10_000});
+                // Every section has answered, and `onsynced` — the reload — has run.
+                await expect(pageSyncDialog.getByTestId('sync-modal-body')).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+                await expect(pageSyncOutcome, 'every item answered skipped: the run was not accepted').toHaveAttribute('data-success', '0');
+                expect(assetSyncRequestCount, 'the page sync asked the Asset stub once').toBe(assetSyncRequestsBefore + 1);
+                await pageSyncDialog.getByTestId('sync-modal-close').click();
+                await expect(pageSyncDialog).toBeHidden();
+            } finally {
+                nextAssetSyncStatus = statusesBefore.asset;
+                nextFxSyncStatus = statusesBefore.fx;
+            }
+            return {
+                settled: async () => {
+                    const response = await metadataReload;
+                    expect(response.ok(), 'the metadata reload after the page sync failed').toBe(true);
+                },
+            };
+        };
+
         await expect(chart).toHaveAttribute('data-primary-mode', 'price');
         await expect(chart).toHaveAttribute('data-series-state', 'ready');
         await expect(pricePrimary).toHaveAttribute('aria-pressed', 'true');
@@ -3340,11 +3406,15 @@ test.describe('Asset Detail Page', () => {
         // peer/range/currency fingerprint. Changing the range starts a
         // successor which must be the only response allowed to publish runtime
         // points, event summaries, or FX diagnostics.
+        // The switch to Price runs its own load (N64, `asset-mode`) and the
+        // Refresh button waits for it: settled before the gate is armed, so the
+        // comparison the gate holds is always Refresh's own.
+        await pricePrimary.click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+        await expect(refreshButton).toBeEnabled();
         const stalePriceComparisonGate = deferStalePriceComparisonResponse(longRange, true);
         const stalePriceComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, longRange, asset.currency);
         const stalePriceComparisonResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, longRange, asset.currency);
-        await pricePrimary.click();
-        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
         await refreshButton.click();
         const stalePriceComparisonRequest = await stalePriceComparisonRequestPromise;
         assertPriceComparisonRequest(stalePriceComparisonRequest.postDataJSON(), comparisonPeerIds, longRange, asset.currency);
@@ -3380,6 +3450,9 @@ test.describe('Asset Detail Page', () => {
         // comparison already in flight. Hold both generations so the first
         // stale payload can be released while its forced successor is still
         // pending, and count the two main/comparison request pairs exactly.
+        // The first generation is the reload after the page's own Sync — the
+        // same `handleRefresh`, with no token (P3) — since Refresh itself is
+        // disabled while a refresh it started is still in flight (Y11).
         const ninetyDayComparisonRangeKey = `${ninetyDayRange.start}|${ninetyDayRange.end}`;
         const sameFingerprintPriceQueriesBefore = priceQueryRequestCount;
         const sameFingerprintMainRequestsBefore = mainPriceRequestCount;
@@ -3391,7 +3464,7 @@ test.describe('Asset Detail Page', () => {
         const preForcedRefreshMainResponsePromise = waitForMainPriceResponse(ninetyDayRange);
         const preForcedRefreshComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, ninetyDayRange, asset.currency);
         const preForcedRefreshComparisonResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, ninetyDayRange, asset.currency);
-        await refreshButton.click();
+        const preForcedRefreshSync = await refreshThroughPageSync();
 
         const preForcedRefreshMainRequest = await preForcedRefreshMainRequestPromise;
         assertMainDateRange(preForcedRefreshMainRequest.postDataJSON(), ninetyDayRange);
@@ -3402,6 +3475,8 @@ test.describe('Asset Detail Page', () => {
         const preForcedRefreshComparisonRequest = await preForcedRefreshComparisonRequestPromise;
         assertPriceComparisonRequest(preForcedRefreshComparisonRequest.postDataJSON(), comparisonPeerIds, ninetyDayRange, asset.currency);
         await expect.poll(() => priceComparisonRequestCountsByRange.get(ninetyDayComparisonRangeKey) ?? 0).toBe(sameFingerprintRangeRequestsBefore + 1);
+        // The first generation is held, and Refresh can be pressed: nothing the
+        // page waits for is pending.
         await expect(refreshButton).toBeEnabled();
 
         const forcedRefreshSuccessorGate = deferNextPriceComparisonResponse();
@@ -3445,6 +3520,7 @@ test.describe('Asset Detail Page', () => {
         expect(calendarRequestCount).toBe(sameFingerprintCalendarRequestsBefore);
         priceComparisonRaceActive = false;
         await expectSuccessorPriceComparisonState();
+        await preForcedRefreshSync.settled();
 
         // The forced successor above has completed, and the focus round-trip
         // runs after its promise-settlement microtask clears the remembered
@@ -3888,6 +3964,9 @@ test.describe('Asset Detail Page', () => {
         // hold its main await, then let the older comparison inject runtime data
         // while the style editor replaces the persisted signal object. The
         // current owner must continue with exactly one forced successor.
+        // The refresh is the one the page's own Sync runs, the same
+        // `handleRefresh` with no token (P3): the held peer change keeps the
+        // Refresh button disabled (Y11), and a peer change has no untracked path.
         const cosmeticRefreshPriceQueriesBefore = priceQueryRequestCount;
         const cosmeticRefreshMainRequestsBefore = mainPriceRequestCount;
         const cosmeticRefreshComparisonRequestsBefore = priceComparisonRequestCount;
@@ -3904,8 +3983,7 @@ test.describe('Asset Detail Page', () => {
         const cosmeticRefreshMainRequestPromise = waitForMainPriceRequest(ninetyDayRange);
         const cosmeticRefreshMainResponsePromise = waitForMainPriceResponse(ninetyDayRange);
         const cosmeticRefreshComparisonRequestPromise = waitForPriceComparisonRequest(replacementPeerIds, ninetyDayRange, asset.currency);
-        await expect(refreshButton).toBeEnabled();
-        await refreshButton.click();
+        const cosmeticRefreshSync = await refreshThroughPageSync();
         const cosmeticRefreshMainRequest = await cosmeticRefreshMainRequestPromise;
         assertMainDateRange(cosmeticRefreshMainRequest.postDataJSON(), ninetyDayRange);
 
@@ -3950,6 +4028,7 @@ test.describe('Asset Detail Page', () => {
         expect(mainPriceRequestCount).toBe(cosmeticRefreshMainRequestsBefore + 1);
         expect(priceComparisonRequestCount).toBe(cosmeticRefreshComparisonRequestsBefore);
         await expect(readySignalCard.getByRole('button', {name: '📈3', exact: true})).toBeVisible();
+        await cosmeticRefreshSync.settled();
 
         const restoreCosmeticPeerResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, ninetyDayRange, asset.currency);
         await selectComparisonAsset(readySignalId, readyPeer.id);
@@ -7253,6 +7332,8 @@ test.describe('Asset Detail Page', () => {
         await expect(chart.getByTestId('asset-calendar-window-3m')).toHaveAttribute('aria-pressed', 'false');
         await expect(pageRoot).toHaveAttribute('data-busy', 'true');
         await expect(loadingNotice).toBeVisible();
+        // The 1Y window's load, still gated, holds the Refresh button (N64,
+        // `asset-calendar-window`): the stale refresh's end must not free it.
         await expect(refreshButton).toBeDisabled();
 
         const latestPartialResponsePromise = waitForCalendarResponse(365);
@@ -7464,6 +7545,11 @@ test.describe('Asset Detail Page', () => {
         // resolves the concrete range and auto-schedules one forced comparison
         // successor. handleRefresh() must join that owned successor rather
         // than issuing a second same-fingerprint request.
+        // The refresh is the one the page's own Sync runs, the same
+        // `handleRefresh` with no token (P3): the MAX period and both returns
+        // to Price above still wait on the gated concrete and provisional
+        // comparisons, so the Refresh button is disabled (Y11, N64), and
+        // releasing them first would lose what their late answers prove below.
         const maxRefreshPriceQueriesBefore = priceQueryRequestCount;
         const maxRefreshMainRequestsBefore = mainPriceRequestCount;
         const maxRefreshComparisonRequestsBefore = priceComparisonRequestCount;
@@ -7491,7 +7577,7 @@ test.describe('Asset Detail Page', () => {
         );
         const maxRefreshComparisonGate = deferNextPriceComparisonResponse();
         const maxRefreshComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, concreteMaxRange, asset.currency);
-        await refreshButton.click();
+        const maxRefreshSync = await refreshThroughPageSync();
         const maxRefreshMainRequest = await maxRefreshMainRequestPromise;
         expect(parseQueries(maxRefreshMainRequest.postDataJSON()).find((query) => query.asset_id === assetId)?.date_range).toEqual({
             start: '2000-01-01',
@@ -7551,6 +7637,7 @@ test.describe('Asset Detail Page', () => {
         await expect(pricePrimary).toBeFocused();
         await expect.poll(() => priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0).toBe(forcedConcreteMaxComparisonRequestCount + 2);
         await expect.poll(readChartComparisonLineLabels).toEqual(expect.arrayContaining(comparisonPeers.map((peer) => peer.display_name)));
+        await maxRefreshSync.settled();
 
         const concreteMaxCalendarGate = deferCalendarResponse(365, 'ready');
         const concreteMaxCalendarRequestPromise = waitForCalendarRequest(365);

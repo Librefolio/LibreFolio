@@ -387,6 +387,17 @@ def utils_dev_port_check(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "dev.py port check tests", verbose=verbose)
 
 
+def utils_dev_server_interrupt(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that Ctrl+C on dev.py server waits for the server's own shutdown instead of killing it after 0.25 s, and that a SIGTERM to dev.py reaches the server (Z-10)."""
+    print_section("Utils: dev.py server interrupt")
+    print_info("Testing: scripts/cli_base.py run_server_live, dev.py _server_stop_grace and cmd_server's launch")
+    print_info(
+        "Tests: a real stand-in for dev.py and a fake server in a session of their own under tmp_path: Ctrl+C to the group waited for (130, not forwarded), the server SIGKILLed when the grace runs out or at a second Ctrl+C; SIGTERM to dev.py alone forwarded and waited for (143), to the group waited for, a second one forces; the server's own exit code, 1 when it cannot start, the SIGTERM handler given back; grace = shutdown budget + 2 s; cmd_server launches through run_server_live, --coverage still execs"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_server_interrupt.py", test_names)
+    return run_command(cmd, "dev.py server interrupt tests", verbose=verbose)
+
+
 def utils_dev_designer_lab_banner(verbose: bool = False, test_names: list = None) -> bool:
     """Test that dev.py lists the Designer Lab (/designer-lab) among the server's endpoints only when the frontend build carries it, and under front dev unless LF_DESIGNER_LAB=0."""
     print_section("Utils: dev.py Designer Lab banner")
@@ -814,6 +825,20 @@ Tests for utility modules and helper functions:
         # platform.system and subprocess.run monkeypatched for the Linux case, a 127.0.0.1
         # socket on a port the OS picks, read-only lsof/fuser/ps children, dev.py parsed:
         # no DB, no server, no network beyond loopback, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "dev-server-interrupt",
+        utils_dev_server_interrupt,
+        name="Dev server interrupt",
+        desc="Ctrl+C on dev.py server lets the server finish its own shutdown (Z-10): scripts/cli_base.py run_server_live does not forward the first Ctrl+C (the terminal gave it to the whole group), waits for the server up to the grace (none = no limit) and returns 130; when the grace runs out, or at a second Ctrl+C, it SIGKILLs the server and waits for it; a SIGTERM to dev.py alone is forwarded once and waited for the same way (143), a SIGTERM to the whole group too, a second SIGTERM forces; dev.py never returns before its server is gone; a server that stops by itself gives its own exit code, one that cannot start gives 1 and an error; the server runs in the project root with os.environ plus env; the SIGTERM handler in force before the call is back after it, on every path; dev.py _server_stop_grace(env) is shutdown_timeout_seconds(env) + 2 s (unset or blank 10.0, 5 → 7.0, 2 → 4.0, 600 → 602.0, 0 → None, unusable → 10.0), read from the env it is given; cmd_server launches uvicorn through run_server_live with that grace and never through run_command_live, and --coverage still execs coverage run",
+        # Real child processes: a stand-in for dev.py and a fake server, two Python scripts written under tmp_path,
+        # started in a session of their own (start_new_session) without the runner's coverage wiring; signals go only
+        # to that process group or to the stand-in's pid, and whatever survives a case is SIGKILLed through that group.
+        # In-process cases start a child that exits at once, or a program that does not exist; cmd_server runs in-process
+        # with its builds, port check and launchers stood in for, every real process, exec and signal forbidden.
+        # No DB, no server, no network, no port, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(

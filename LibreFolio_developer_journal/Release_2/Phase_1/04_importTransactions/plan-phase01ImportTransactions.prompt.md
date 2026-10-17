@@ -4844,3 +4844,94 @@ verdi sull'albero simulato (carico 48). `git diff --check` pulito; porta 6184 li
 X rivede `price_query.py` (e, se vuole, `price_store.py` ed `event_store.py`, che toccano i suoi prezzi ed eventi). Nessuna riga 🔒 nel
 CHANGELOG (C-97a e W-B53 non sono usciti). Dopo l'ingresso: C-97b riprende (la cura, poi la frase di `tooManyDigits` col
 `max_integer_digits`).
+
+### C-97b — i decimali in input: la cura ✅, handoff FROZEN, E2E nello slot ⏳ (2026-10-17)
+
+**Ripresa** (coordinatore, 02:0x): W-B58/W-B59 committati (`7a4fdf024`, `e69544f79`, journal `94fbd54fd`) ed entrati in dev
+(`4e9d1815f`, revisione di X ok; le sue 2 note su `price_query.py` vanno a X come X-R40). HEAD `94fbd54fd` verificato; nel
+worktree solo i file di C-97b. W-B57 (TC-17 dei colori) aggiunta alla mia sezione del backlog: entra con C-97b.
+
+**Passo 1 — la cura ✅ (02:1x)**: `files/scripts/c97b_cure.py --apply` (6 file), poi `prettier` (nessuna modifica):
+- `components/ui/input/ExactDecimalInput.svelte`: `fractionOverflow` (la parte decimale oltre `maxFractionDigits`, sul valore
+  normalizzato) e, dopo l'`<input>`, `<p class="mt-1 text-xs text-lf-danger" data-testid="<testid>-digits-error"
+  data-max=…>` con `common.decimalPlacesExceeded`; via `maxLength` e `maxlength`. Il bordo c'era (`aria-invalid:border-lf-danger`).
+- `form/TxFormSingleSection.svelte` (×2) e `form/TxFormPairSection.svelte`: `maxFractionDigits` 6 → **10**.
+- `bulk/TransactionBulkModal.svelte`: `quantityText()` (le cifre come scritte, senza zeri finali, mai notazione esponenziale, mai
+  tagliate: `formatDecimalForDisplay` con `maxFrac` lungo quanto il valore) con `applySign(…, 'positive')` ed `exactDecimalSign` al
+  posto di `String(Math.abs(Number(x)))` in `fieldsFromTx` e in `txCreateItemToPendingOp` (la stessa riga, due volte: un satoshi
+  importato da BRIM diventava `1e-8` anche nel payload, che il backend rifiuta), e nella cella della quantità (vista doppia e
+  singola), ora con `escapeHtml` (prima un valore non numerico entrava nell'HTML così com'era). La cassa resta col `Number`: un
+  importo ha al più 6 decimali e 15 cifre, esatto in un double, e cambiarla toccherebbe la forma mostrata in edit (`100.1`).
+- `events/EventCreateMiniModal.svelte`: `plainAmount` (decimale semplice senza segno, dopo `normalizeDecimalInput`),
+  `withTwoDecimals` (almeno 2, quelli scritti tenuti), `amountDecimals` (gli zeri finali non contano, come nel backend),
+  `EVENT_VALUE_DECIMALS = 6`; al blur niente `parseFloat`/`toFixed`; oltre 6 il messaggio
+  (`event-create-amount-digits-error`, `data-max="6"`), `aria-invalid` sul campo e «Crea» disabilitato; il suggerito intero
+  (`0.2345` resta); l'importo inviato come stringa (lo schema accetta `number | string`). Il toast resta a 2 decimali (C-97c).
+- `events/eventSaveError.ts`: ramo `EVENT_TOO_MANY_DIGITS` → `events.saveError.tooManyDigits` con `date`, `type`, `more`, `max`
+  (`max_decimal_places`), `significant`, `integer` (`max_integer_digits` di W-B58).
+- i18n con `dev.py i18n add`: `common.decimalPlacesExceeded` in `base` (EN «At most {max} decimal places», la frase di
+  `transactions.errors.decimalPlacesExceeded`, prefisso dinamico protetto: doppione accettato) ed `events.saveError.tooManyDigits`
+  nel sottosistema `assets` (4 lingue, nello stile di `inUse`; il FR col ramo `many`). `i18n check` stretto: 4 914 chiavi.
+> **Note implementazione**: lasciati `maxIntegerDigits={12}` sulle tre quantità del Form: con N63 il backend ne accetta 15, ma la
+guardia del test-author (`1000000000000.1` invalido nel Form) e N63 da rivedere al mattino dicono di non muoverli qui → **W-B64**.
+
+**Passo 2 — i rossi verdi ✅ (02:2x–02:4x)**: primo giro (carico 39) sui 6 file: **347 passati, 13 falliti**, tutti
+`[svelte-i18n] Cannot format a message without first setting the initial locale` in `ExactDecimalInput.test.ts` ed
+`ExactQuantityInput.test.ts`, che non inizializzano i18n (il messaggio ora è tradotto): i rossi di C-97b e due test vecchi che
+digitano un overflow. > **⚠️ Fuori pista**: riparazione del test-author `d227471f` (`setupI18n` in un `beforeAll` a livello di
+modulo, nei due file; nessuna asserzione cambiata) → i 6 file **360/360** (carico 33). Poi `front-transaction tx-unit` **914**
+passati (23 file). > **⚠️ Fuori pista**: `front-utility component-unit` fermato prima di partire: era ancora nel cancello del carico
+quando il coordinatore ha dichiarato il **blocco della galleria fino alle ~03:30** (carico 160–170: niente `api`, E2E,
+`all-backend`, `--workers`; prove leggere solo a carico < 50); il mio ciclo d'attesa sarebbe partito comunque dopo 30 minuti, quindi
+l'ho fermato e da qui il cancello non ricade mai in una prova.
+
+**Passo 3 — la guardia E2E e la doc ✅ (02:2x–02:4x)**:
+- **Guardia** (test-author `d227471f`), `tx-bulk-operations.spec.ts`, blocco «commit on owned rows»: «C-97b: an untouched
+  one-satoshi SELL opens as original, shows 0.00000001, and closing writes nothing». Seme proprio su Interactive Brokers, marcato
+  `E2E-satoshi-sell-<suffisso>`: deposito `0.02` USD, BUY `0.00000002` BTC (`BTC-USD`, letto solo) per `-0.02`, SELL `-0.00000001`
+  per `0.01` (300–302 giorni fa; pulizia nell'`afterEach` del blocco). Asserisce `data-status="original"`, la cella `0.00000001`, la
+  chiusura senza «scarta» e la riga riletta per id ancora `-0.00000001` con lo stesso `updated_at`. Verde per costruzione (la
+  cura c'è già): nessun rosso possibile, lo dico nell'handoff. Tipi: `tsc -p tsconfig.e2e.json` pulito sullo spec (4 errori
+  vecchi altrove: `e2e/fixtures/sync-overwrite.ts:89,125`, `e2e/onboarding-tour.spec.ts:863`, `src/lib/types/files.ts` senza
+  l'alias `$lib`). > **⚠️ Fuori pista**: il test-author chiude il Form con «Annulla», non «Applica»: «Applica» senza modifiche su
+  una SELL riprende i campi col segno (cella `-0.00000001`, chiusura che chiede di scartare), precedente a C-97b → **W-B65**. Il
+  seme era 1 BTC intero: ridotto a un satoshi e pochi centesimi, perché il valore del portafoglio dell'utente E2E non si muova
+  sotto i vicini.
+- **Doc** (docs-writer `421124da`): `core-ui/atoms.md` (#exactdecimalinput: il messaggio, niente `maxlength`, il valore com'è;
+  #exactquantityinput: il testid passato, 12 + 10 nel Form), `features/transaction-form.md` (la riga `quantity` a 10, il punto
+  **Quantity**, una frase sull'importo di «+ New event» e su `events.saveError.tooManyDigits`); build stretta e `check-links`
+  verdi. Il Bulk non è descritto da nessuna pagina: niente. > **⚠️ Fuori pista**: dalle sue verifiche sul codice — i campi
+  priorità del PAC (`maxFractionDigits={0}`) avrebbero detto «At most 0 decimal places» → `common.decimalPlacesExceeded` ora è un
+  plurale ICU (`=0` «Whole numbers only», `one` «At most 1 decimal place», il FR col ramo `many`; `dev.py i18n update`), non più
+  un doppione di `transactions.errors.decimalPlacesExceeded`; `ExactDecimalInput` conta gli zeri finali (il backend no) → in
+  **W-B64**; le frecce e il toast della mini-modale passano ancora dal `Number` (le frecce esatte per costruzione: `toFixed` sui
+  decimali del passo; il toast a 2 decimali è di C-97c). Secondo giro chiesto: `data-editor.md` (il codice nuovo nell'elenco di
+  `eventSaveErrorMessage()`) e la frase sul plurale in `atoms.md`.
+
+**Passo 4 — le prove leggere ✅ (02:36–03:1x)** (`files/scripts/c97b_light.sh`, cancello < 50 che salta e non forza): i 6 file
+più `catalogIcuLocale.test.ts` **377 passati** (carico 39), `front check` **0/0** (46), `utils gate-i18n-catalog` passato (42),
+`utils gate-i18n-usage` **195** (36), `front-utility core-unit` **7 294** (46), `front-utility component-unit` **4 169 passati,
+99 saltati**, uscita 1. > **⚠️ Fuori pista**: i 99 saltati sono 3 file di `features/backup` (`RestartOverlay`, `RestoreCard`,
+`RestoreReportModal`): «Hook timed out in 60000ms» nel caricamento del componente, sotto il carico del blocco della galleria;
+rilanciati da soli (carico 47) → **99/99** passati. Verdetto: lentezza, area non toccata. Il secondo giro della doc (docs-writer
+`421124da`): `core-ui/data-editor.md` (`EVENT_TOO_MANY_DIGITS` nell'elenco di `eventSaveErrorMessage()`) e `atoms.md` (il testo
+segue il budget: «Whole numbers only» a 0); build stretta e `check-links` verdi. Doc utente: nessuna pagina dice 6 decimali per la
+quantità del Form (`user/transactions/import/how-to.en.md` ~284 dice già 10): niente.
+
+**Passo 5 — la simulazione ✅ (03:0x)**: `sim_cherry_pick.sh dev_release2 --docs`, 27 file (codice, test, i18n, doc, runner,
+journal) su dev **`2818924b7`**: **0 conflitti**, JSON validi, `mkdocs build` stretto e `check-links` verdi sull'albero simulato
+(carico 42). `git diff --check` pulito.
+
+**Handoff FROZEN (03:1x)**, chiesto dal coordinatore prima dello slot: lui committa, unisce dev, e lo slot prova la revisione
+combinata. Due commit proposti: `feat(transactions): 10-decimal input, digit message` (codice, test, i18n, doc, runner: 25 file) e
+`docs(journal): C-97b, W-B57, W-B64, W-B65` (piano e backlog). Slot di C-97b (~35 min) **dopo le 04:45** (nuovo blocco della
+galleria 03:50–04:45, poi Y): prima, sulla HEAD nuova, `api sync` (il client generato è ignorato da git) e `front check` a carico
+< 50; poi `files/scripts/c97b_slot.sh`. Riga del CHANGELOG da aggiungere alla voce C-97 (#43), all'ingresso, dal coordinatore.
+
+**Passo 6 — gli E2E ⏳**: nello slot del coordinatore, dopo le 04:45: `db populate --force`, poi
+`tx-bulk-operations` (con la guardia), `tx-event-create-exists`, `tx-event-picker`, `transactions-modals`, `tx-commit-all-types`,
+`tx-wac-bulk`, `tx-bulk-promote-cost-basis`, `tx-bulk-import-handoff` (la conversione import → Bulk), `tx-fx-completeness`. Il PAC
+non ha E2E che scrivano nei campi toccati (solo la fixture della galleria li nomina).
+Restano, a carico < 50: `front check`, `front-utility component-unit` e `core-unit`, `utils gate-i18n-catalog` e
+`gate-i18n-usage`; poi lo slot (dopo il blocco) per gli E2E: `tx-bulk-operations` (la guardia), `tx-event-create-exists`,
+`tx-event-picker`, `transactions-modals`, `tx-commit-all-types`, `tx-wac-bulk`, `tx-bulk-promote-cost-basis`.

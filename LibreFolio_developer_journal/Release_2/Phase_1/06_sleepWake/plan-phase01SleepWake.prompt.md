@@ -3407,3 +3407,122 @@ aspetta lo spegnimento; un secondo Ctrl+C forza). Nessun file del frontend, ness
 
 **Costo e rischi:** S, una quarantina di righe e quattro casi. I test con segnali e processi veri sono sensibili al
 carico: lo scambio su file evita le attese fisse, e le grazie dei casi restano larghe.
+
+> **Decisione** (coordinatore, 17/10, con l'ingresso di Z-22, dev `22d46da6e`): «**Go for Z-10** as you propose
+> (N-Z10-1; `cli_base.py`/`dev.py:448`, writer OK). **Yes to forwarding SIGTERM** in the same function: a supervisor
+> that stops `dev.py` must not leave the server orphaned. And yes to the wiki-file for the Vite gotcha, at the end.»
+
+**Contratto, dopo il sì** (N-Z10-1 e N-Z10-2, «da rivedere»):
+- `scripts/cli_base.py`: `run_server_live(cmd, env=None, grace_seconds=None) -> int`.
+  - Avvia `cmd` con `Popen`. Se il figlio esce da sé, rende il suo codice.
+  - Primo Ctrl+C: il SIGINT non viene inoltrato, perché il terminale l'ha già dato a tutto il gruppo e un secondo
+    SIGINT farebbe forzare l'uscita a uvicorn. Aspetta fino a `grace_seconds` (None: senza limite). Rende 130.
+  - SIGTERM a `dev.py` (N-Z10-2): lo inoltra al figlio, perché un supervisore può segnalare `dev.py` da solo, e
+    aspetta come sopra. Rende 143. Un SIGTERM doppio (gruppo più inoltro) è innocuo: il watchdog del budget si arma
+    una volta sola (`arm()`), e uvicorn forza solo al secondo SIGINT.
+  - Un secondo segnale (Ctrl+C o SIGTERM), o la grazia scaduta: SIGKILL, poi attesa del figlio.
+  - I gestori **registrano** il segnale in una lista e tornano, senza sollevare eccezioni; il ciclo la legge a ogni
+    giro (sonno di 50 ms). Un gestore che solleva (`KeyboardInterrupt`, o un'eccezione per il SIGTERM) potrebbe
+    cadere dentro `Popen.poll()` fra `_waitpid_lock.acquire(False)` e il suo `try` (CPython 3.13.16,
+    `subprocess.py`, `_internal_poll`; anche `send_signal` chiama `poll()`): il lock resterebbe preso, e ogni
+    `poll()` dopo direbbe che il server gira ancora, cioè un'attesa senza fine. Si sostituiscono solo i gestori
+    usuali (`default_int_handler` per SIGINT, `SIG_DFL` per SIGTERM): un segnale che chi lancia ignora o gestisce
+    resta com'è. Solo nel thread principale; alla fine tornano quelli di prima.
+  - I gestori si installano prima di `Popen`, così nessun segnale arriva senza gestore. Un segnale arrivato mentre il
+    server partiva può essergli sfuggito: quello si inoltra (SIGINT o SIGTERM). È una finestra di millisecondi, che
+    non si può provocare in un test.
+  - Il primo segnale stampa una riga con `Interrupted` (o `SIGTERM`) prima di aspettare: i test la usano solo per
+    mettere in fila i segnali.
+- `dev.py`: `_server_stop_grace(env)`, cioè il budget di `shutdown_timeout_seconds(env)` più 2 s (non impostato:
+  10.0; `5`: 7.0; `0`: None; illeggibile: 10.0). La chiamata del server diventa
+  `run_server_live(uvicorn_cmd, env=env, grace_seconds=_server_stop_grace(env))`.
+
+**Superfici trovate dopo il sì** (17/10 ~04:10; chiesto al coordinatore il via da scrittore, i file non sono miei):
+tre test fanno le veci del lancio del server su `dev.run_command_live`.
+- `test_runtime_isolation.py`, `capture_server_child` (riga 1172). Pericolo: senza sostituto, `dev.main()` avvierebbe
+  un uvicorn vero su 6126/6127 e il test resterebbe appeso.
+- `test_dev_designer_lab_banner.py`, `record_launches` (205–214): lì `Popen` è vietato, quindi nessuna fuga, ma il
+  test diventerebbe rosso.
+- `test_test_server_preparation.py:181`: l'elenco dei divieti di `--build-only` deve nominare anche
+  `run_server_live`.
+
+Regola: il codice di prodotto entra solo insieme a questi tre adattamenti. Loro tengono anche `run_command_live`
+sostituito, così restano sicuri in entrambi gli stati.
+
+> **Via da scrittore** (coordinatore, 17/10): «**Writer OK on all three** (stub/forbid `run_server_live` alongside
+> `run_command_live`, which stays; the product code only together with the three seams). Two of them are H's
+> (`test_runtime_isolation.py`, `test_test_server_preparation.py`) and one is the colour team's L
+> (`test_dev_designer_lab_banner.py`): I'm telling both.»
+
+**Passi.**
+1. ✅ 17/10 04:12–04:44 — Rossi (test-author, nel worktree; i tre adattamenti col via da scrittore):
+   - il file nuovo `backend/test_scripts/test_utilities/test_dev_server_interrupt.py`, puro, 27 casi:
+     - (a)–(f) con processi veri: un sostituto di `dev.py` e un finto server, in una sessione loro sotto `tmp_path`,
+       segnali solo a quel gruppo o al pid del sostituto, scambi su file e righe, nessuna attesa fissa;
+     - (g), (g'), (h) nel processo: il codice d'uscita, la cartella e l'ambiente, un comando che non parte, i gestori
+       uguali (gli stessi oggetti) dopo la chiamata, dai gestori usuali e da quelli del test;
+     - (i) `_server_stop_grace` su 11 valori, con un budget diverso in `os.environ` (letto dall'env passato);
+     - (j) `cmd_server` passa da `run_server_live` con la grazia del budget (5 → 7.0; 0 → None), in produzione e
+       in `--test`; (j') `--coverage` fa ancora `os.execvpe` (verde apposta: una guardia);
+   - la registrazione `utils dev-server-interrupt` in `scripts/test_runner/_backend_utils.py` (`isolation="pure"`);
+   - i tre adattamenti, additivi: `capture_server_child` e `record_launches` fanno le veci anche di
+     `run_server_live`; `--build-only` vieta anche `run_server_live` (`raising=False` finché il nome non c'era).
+   Rossi nella mia corsia (`files/z10_light.sh red`, 04:44, carico 26): 26 su 27, per il motivo giusto (11 «dev.py
+   has no _server_stop_grace», 7 + 4 «no run_server_live», 4 «launched the server through run_command_live»); verde
+   la guardia di `--coverage`. Prova di test-author, su due sostituti di `cli_base` buttati poi: uno scritto sul
+   contratto passa tutti i 27 casi, uno che fa come `subprocess.run` cade per il difetto (uscita 0,29 s dopo il
+   Ctrl+C, server ucciso; con SIGTERM a `dev.py` il server resta orfano). I tre file adattati, col codice di
+   allora: `runtime-isolation` 291, `dev-designer-lab-banner` 37, `test-server-preparation` 91, tutti verdi.
+2. ✅ 17/10 04:13 — Prova del difetto, a parte (`files/z10-draft/prove_defect.py`, non nel repo; carico 41): un
+   «server» che al SIGINT lavora 1 s prima di uscire, lanciato con `run_command_live` del codice di oggi, e Ctrl+C
+   mandato al gruppo. Risultato: `rc=130` 0,29 s dopo il Ctrl+C; il figlio ha ricevuto `['SIGINT']` ma non ha
+   finito il suo spegnimento, ucciso. È il difetto letto nel codice.
+   Codice preparato fuori dal repo: `files/z10-draft/apply_z10.py`, provato su una copia (`/tmp/z10-copy`):
+   applicazione, compilazione, ruff con gli stessi 45 rilievi di prima (nessuno nuovo; `dev.py` e `cli_base.py` ne
+   avevano già), black pulito sulle righe nuove, inverso esatto (`cmp`).
+   > **⚠️ Fuori pista** (04:20–04:30): rileggendo la bozza ho trovato una corsa nella prima versione, che sollevava
+   > un'eccezione dal gestore (vedi il contratto sopra, i gestori che registrano). Bozza riscritta e riprovata sulla
+   > copia (ruff: nessun rilievo nuovo; black e ruff puliti sui blocchi nuovi), più la prova funzionale sulla copia,
+   > col «server» che lavora 1 s:
+   > - `run_command_live`: uscita 0,28 s dopo il Ctrl+C, figlio ucciso;
+   > - `run_server_live` con grazia 10 s: uscita 1,10 s dopo, il figlio finisce il suo spegnimento, `rc=130`, un solo
+   >   SIGINT ricevuto (niente inoltro);
+   > - con grazia 0,3 s: uscita 0,45 s dopo, figlio ucciso alla scadenza.
+3. ✅ 17/10 04:44 — Codice (`files/z10-draft/apply_z10.py <repo> apply`; impronta in `files/z10-draft/z10_applied.md5`):
+   - `scripts/cli_base.py`: `run_server_live`, `_record_stop_signals` (i gestori che registrano, solo al posto dei
+     gestori usuali, solo nel thread principale), `_supervise_server` (il ciclo: inoltro del SIGTERM, grazia, un
+     secondo segnale uccide); gli import `signal`, `threading`, `time`;
+   - `dev.py`: l'import di `run_server_live`, `SERVER_STOP_MARGIN_SECONDS = 2` e `_server_stop_grace(env)`, la
+     chiamata del server.
+4. ✅ 17/10 04:12–04:25 — Doc (docs-writer, scritta sul contratto; verificata da me sul codice applicato):
+   - `developer/dev_workflow.en.md`: una sezione nuova «⏹️ Stopping the Server» (Ctrl+C, SIGTERM a `dev.py`, la
+     grazia, il secondo segnale, i codici 130 e 143, `--coverage` senza involucro, gli altri comandi ancora con
+     `run_command_live`);
+   - `admin/cli_tools.en.md#start-the-server`: un punto ⏹️;
+   - `admin/configuration.en.md#shutdown`: una frase, `./dev.py server` tiene da sé i 2 s di margine.
+   `mkdocs build` stretto senza avvisi (carico 17), `check-links` 97 validi. Nessuno stamp: sono aggiunte di
+   contenuto, e le due pagine admin avevano già debito di traduzione (cache di Aphra del 10/10). Debito nuovo per
+   il prossimo giro: il punto di `cli_tools` e la frase di `configuration` (`translate-validate`: 6 link mancanti
+   in IT, FR ed ES, più un punto e un paragrafo). La frase vecchia di `configuration.en.md` («SIGINT from Ctrl+C»,
+   righe 396–397), falsa per `./dev.py server` fino a oggi, diventa vera col codice.
+5. ✅ 17/10 04:44–04:52 — Controlli col codice, sotto 50 (`files/z10_light.sh green`):
+   - `utils dev-server-interrupt` 27/27 (7,9 s);
+   - `utils runtime-isolation` 291/291, `utils dev-designer-lab-banner` 37/37,
+     `utils test-server-preparation` 91/91;
+   - `utils dev-cli-image` 94/94 (il segreto JWT condiviso di `cmd_server`);
+   - la prova col codice del repo: `rc=130` 1,08 s dopo il Ctrl+C, il «server» finisce il suo spegnimento.
+   Lint: ruff sui due file di prodotto con gli stessi 45 rilievi di HEAD, nessuno nuovo; ruff e black puliti sui
+   cinque file di test e del runner. Porta 6186 libera, nessun processo di prova rimasto.
+   Non eseguita: la prova a mano con un `dev.py server` vero. Il build del frontend del worktree è vecchio (Z-22 e
+   la base), e `cmd_server` lo rifarebbe prima di partire: un passo pesante, da fare in uno slot se il
+   coordinatore lo vuole. La meccanica è la stessa dei casi (a)–(f). Con `--reload` e `--workers` il figlio di
+   `dev.py` è il supervisore di uvicorn 0.52.4, che aspetta i suoi processi: `supervisors/basereload.py`
+   `shutdown()` fa `process.terminate()` e `process.join()`, `supervisors/multiprocess.py` `run()` fa
+   `terminate_all()` e `join_all()`. Il server riceve così il SIGINT del gruppo e il SIGTERM del supervisore, e
+   uvicorn forza l'uscita solo a un secondo SIGINT (`server.py:344`).
+6. ✅ 17/10 04:52–04:56 — Backlog: Z-10 ✅. Wiki-file approvato dal coordinatore, sulla trappola di Vite di Z-22:
+   - la pagina nuova `LibreFolio_devWiki/wiki/problems/vite-hmr-dispose-only-on-the-accepted-module.md`, con la sua
+     riga in `index.md` e la voce in `log.md`;
+   - `check_source_paths.py`: 7 percorsi mancanti su 4118, tutti di prima e in altre pagine, nessuno nella nuova;
+   - il grafo non è aggiornato: graphify non c'è in questo worktree, come per le altre voci di stanotte.
+   Checkpoint FROZEN al coordinatore.

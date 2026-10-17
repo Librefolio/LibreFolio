@@ -3719,6 +3719,40 @@ stay in the plan. `developer/backend/email.md` still shows the masked notice and
 Updated: [[domains/email]].
 Graph: not updated; graphify is not available in this worktree.
 
+## [2026-10-17] file | Page busy, the E2E budget, and a direct Playwright run in a lane
+Three pages from Y's night of 16→17/10 (Y11 closing lots, Y-21, Y-22). The concept: the `pageBusy` contract of
+decision 48 / P3: tokens on the trigger and never in a load function, `join` (N55), the post-sync rule, N64, the
+panels' own tokens, the button contract and the hold/record/control E2E pattern; nothing in the wiki described it.
+Two problems: waits chained past the 30 s test budget (a block budget, real poll deadlines, the tooltip retry's
+per-attempt rest); and a direct Playwright run in a coordinated lane (`LF_SETUP_DONE=1`, the lane guard, never
+edit a script bash is running). `check_source_paths.py`: 7 missing (12 occurrences) of 4127, all pre-existing,
+none on these pages.
+Filed: [[concepts/page-busy-refresh-button]], [[problems/e2e-chained-waits-outlast-the-test-budget]],
+[[problems/direct-playwright-run-in-a-test-lane]].
+## [2026-10-17] file | Workstream H: the platform's night discoveries (H-24r, H-26, H-28/29, H-32, H-33)
+Filed at the coordinator's request, after lots H-24 … H-33 of release 1.3 entered `dev_release2` the night of 17/10.
+Each page carries its «why», checked in the code at `5bba93280`:
+- the frontend rebuilt for files it never bundles, and a folder's time cannot tell a `.DS_Store` from a removed file,
+  so the last successful build records the listing of the Tool codegen inputs;
+- no route serves a hidden file of the build or of the site;
+- the test runner refuses names an action cannot apply, before any side effect;
+- request floats refuse infinity and NaN, field by field, with a guard over every route;
+- a response that breaks its model no longer leaves its content in the log.
+The concept page collects five FastAPI 0.141 behaviours measured in process: included routers hidden from
+`app.routes`, `scope["route"]` without the include prefix, infinity serialised as `null`, the stock 422 that echoes the
+input and fails with a 500 on a non-finite value, and no handler for `ResponseValidationError`. Sources: plan
+`Phase_1/01_platform` §14, with the lots, measurements and real checks; backlog section H (H-24 … H-34).
+`check_source_paths.py`: 7 missing (12 occurrences) of 4149, all pre-existing, none on these pages.
+Filed: [[problems/frontend-build-looked-stale-for-files-it-never-bundles]], [[problems/static-site-served-hidden-build-files]],
+[[decisions/test-runner-refuses-test-names-it-cannot-apply]], [[decisions/request-floats-refuse-inf-and-nan]],
+[[problems/response-validation-error-wrote-the-response-to-the-log]], [[concepts/fastapi-0141-routing-and-validation-gotchas]].
+## [2026-10-17] file | Vite HMR: dispose() runs only on the module an update is accepted through
+Workstream Z, Z-22 (release 1.3). H's review of Z-20 proposed `import.meta.hot?.dispose(stop)` for the listener that
+`instanceBlock.svelte.ts` adds at every hot update. Measured with the repo's Vite 7.3.5 (module runner, same
+`HMRClient` as the browser): `dispose` runs only on the accepted module, the `(app)` layout, so the leak stays (1→4
+listeners in three edits); handing the unsubscribe over through `import.meta.hot.data` keeps one. Also filed: Vitest
+4.1.11's `import.meta.hot` has no `data`, which made the first guard throw in 24 tests. Fix `d49263b0e`.
+Filed: [[problems/vite-hmr-dispose-only-on-the-accepted-module]].
 ## [2026-10-17] update | CP-14a: day count and simple interest in the home, one accrual walk, P-10
 U10 (D-8): the day count conventions and simple interest moved, unchanged, from the Scheduled Investment provider into
 `financial_math/interest.py`. The provider's two duplicated day walks are one (`_accrual_days`), pinned by a golden
