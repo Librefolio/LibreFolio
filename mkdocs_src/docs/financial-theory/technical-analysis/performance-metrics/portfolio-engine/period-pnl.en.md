@@ -160,7 +160,7 @@ The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b
 
 Annualized period return clamps its window start to the later of the requested start and the oldest open lot date. It uses $|\mathrm{StartValue}|$ as annualization base, falling back to end cost basis for positions opened mid-period. See [Net Annualized Return](net-annualized-return.md).
 
-A position closed in the period — nothing left at $t_1$ — annualizes differently: on the historical cost of the units it sold in the period, over the time it was held inside it, from the later of $t_0$ and its first opening to the day its last units left. Its period percentage keeps $|\mathrm{StartValue}|$ as base. See [Net Annualized Return — Positions Closed in the Period](net-annualized-return.md#closed-in-period).
+A position closed in the period — nothing left at $t_1$ — annualizes differently: on the historical cost of the units that left it in the period — sold, or moved to another broker of the scope — over the time it was held inside it, from the later of $t_0$ and its first opening to the day its last units left. Its period percentage keeps $|\mathrm{StartValue}|$ as base. See [Net Annualized Return — Positions Closed in the Period](net-annualized-return.md#closed-in-period).
 
 🔗 See **[Portfolio Engine — §7 Period Contribution](index.md#7-period-contribution)** for details.
 
