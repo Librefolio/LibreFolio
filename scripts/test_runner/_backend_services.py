@@ -262,7 +262,7 @@ def services_risk_workers(verbose: bool = False, test_names: list = None) -> boo
 def services_risk_oracle(verbose: bool = False, test_names: list = None) -> bool:
     """Pin hand-written risk mathematics against riskfolio, NumPy and SciPy."""
     print_section("Services: Risk Metrics Oracle")
-    print_info("Testing: metrics.py and signal_helpers.py against independent references")
+    print_info("Testing: risk/metrics.py and signals/risk_adapters.py against independent references")
     print_info("Guards: the four name traps, undefined-window semantics, matrix/scalar consistency")
     print_info("Note: riskfolio is imported here and only here — never in the web process")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_risk_metrics_oracle.py", test_names)
@@ -395,7 +395,7 @@ def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> 
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
     print_info("Testing: SCHEDULED_YIELD asset valuation (ACT/365 SIMPLE interest)")
-    print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration")
+    print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration, the accrual golden (33 schedules, every number)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_synthetic_yield.py", test_names)
     return run_command(cmd, "Synthetic yield tests", verbose=verbose)
 
@@ -921,7 +921,7 @@ def services_lots_analysis_pure(verbose: bool = False, test_names: list = None) 
     """Run the pure lots-analysis builders (no DB, no server, no network)."""
     print_section("Services: Lots Analysis Pure Builders")
     print_info("Testing: backend/app/services/financial_math/lots/ and lots_analysis_service.py (sync, argument-driven builders)")
-    print_info("Tests: SHORT lots, estimated_mode, price-series gaps, ADJUSTMENT cost basis, transfer scope")
+    print_info("Tests: SHORT lots, estimated_mode, price-series gaps, ADJUSTMENT cost basis, transfer scope, the reference price and the days at cost")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_lots_analysis_pure.py", test_names)
     return run_command(cmd, "Lots Analysis pure builder tests", verbose=verbose)
 
@@ -1677,7 +1677,7 @@ Note: No backend server required.
         # provider_policy sees and core.configured_provider are replaced by stand-ins; each search runs a query of its own.
         isolation="pure",
     )
-    add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
+    add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(
@@ -2005,7 +2005,7 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost, native cash, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer",
+        desc="Average cost, native cash, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home",
         # PURE: each module's only I/O is convert_bulk, which every test replaces on its
         # module with a double; the session handed to it is None or a sentinel, or, for the
         # ledger control totals, one on a private SQLite file under tmp_path that no other
@@ -2046,12 +2046,13 @@ Note: No backend server required.
         "lots-analysis-pure",
         services_lots_analysis_pure,
         name="Lots Analysis Pure Builders",
-        desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver",
-        # PURE: every helper under test is a sync method that takes all of its
-        # inputs as arguments and never touches self.db, so the service is built
-        # with db=None. The two async cases stub convert_bulk instead of opening a
-        # session. Kept out of the DB-backed lots units on purpose: folding it in
-        # would declass it to the category default (write-scoped).
+        desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver, reference price and days at cost",
+        # PURE: no database, server or network. The builders under test are sync methods that take all
+        # of their inputs as arguments, so the service is built with db=None; the async cases stub
+        # convert_bulk, and the reference-price and at-cost cases drive get_lots_analysis on loader
+        # doubles and a session double, all in EUR, so no rate is asked and nothing reaches a database.
+        # Kept out of the DB-backed lots units on purpose: folding it in would declass it to the
+        # category default (write-scoped).
         isolation="pure",
     )
     add_test(
@@ -2071,7 +2072,7 @@ Note: No backend server required.
         "asset-event-store",
         services_asset_event_store,
         name="Asset Event Store",
-        desc="Manual events: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset",
+        desc="Manual events: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset, a SPLIT retype refused while a linked incoming adjustment has no cost (P-10)",
         # WRITE_GLOBAL: Asset and AssetEvent carry no user_id (nor do the AssetProviderAssignment,
         # Broker and Transaction written beside them), so the two assets this unit creates and
         # every event and transaction written against them are visible to all concurrent tests.

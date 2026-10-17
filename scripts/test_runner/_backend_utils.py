@@ -45,7 +45,7 @@ def utils_datetime(verbose: bool = False, test_names: list = None) -> bool:
 def utils_day_count(verbose: bool = False, test_names: list = None) -> bool:
     """Test day count conventions."""
     print_section("Utils: Day Count Conventions")
-    print_info("Testing: backend/app/services/asset_source_providers/scheduled_investment/plugin.py (day count functions)")
+    print_info("Testing: backend/app/services/financial_math/interest.py (day count conventions and simple interest)")
     print_info("Tests: ACT/365, ACT/360, ACT/ACT, 30/360 conventions")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_day_count_conventions.py", test_names)
     return run_command(cmd, "Day count convention tests", verbose=verbose)

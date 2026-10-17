@@ -3753,4 +3753,10 @@ Workstream Z, Z-22 (release 1.3). H's review of Z-20 proposed `import.meta.hot?.
 listeners in three edits); handing the unsubscribe over through `import.meta.hot.data` keeps one. Also filed: Vitest
 4.1.11's `import.meta.hot` has no `data`, which made the first guard throw in 24 tests. Fix `d49263b0e`.
 Filed: [[problems/vite-hmr-dispose-only-on-the-accepted-module]].
+## [2026-10-17] update | CP-14a: day count and simple interest in the home, one accrual walk, P-10
+U10 (D-8): the day count conventions and simple interest moved, unchanged, from the Scheduled Investment provider into
+`financial_math/interest.py`. The provider's two duplicated day walks are one (`_accrual_days`), pinned by a golden
+test. P-10 (decision 27): the event store refuses to change a SPLIT's type while a linked incoming adjustment has no
+cost, asking `splits.py`.
+Updated: [[decisions/financial-math-one-home]], [[decisions/scheduled-investment-redesign]].
 Graph: not updated; graphify is not available in this worktree.
