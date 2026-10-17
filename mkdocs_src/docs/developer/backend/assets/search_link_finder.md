@@ -333,8 +333,9 @@ and absolute, never the raw value: a spelling such as `https:host` would otherwi
 href, to a path on the instance itself. Anything else, user info included, counts as missing, like
 an unset value: `github` (a prefilled new issue) with `githubFallback`, `null` without it.
 
-N61: `AssetSearchAutocomplete.svelte` passes
-`githubFallback = instanceConfig.loaded && instanceConfig.config.profile === 'selfhosted'`, since a
+N61: `AssetSearchAutocomplete.svelte` passes `githubFallback = selfHostedConfirmed()` (the helper of
+`lib/features/instance/profile.ts`: `loaded`, and `profile` is `selfhosted`; see
+[Instance configuration](../../frontend/state/app-state.md#instance-config)), since a
 public issue would publish the profile, the provider codes and the identifiers. On a managed
 instance, or while `GET /api/v1/system/instance` has not answered on this page load (until then
 `instanceConfig` holds `DEFAULT_INSTANCE_CONFIG`, which says `selfhosted`: hence the `loaded`
