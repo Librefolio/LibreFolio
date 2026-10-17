@@ -68,7 +68,7 @@ backend/app/services/financial_math/
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
 ├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series, fixed-period changes of a price or rate (1D … 5Y, both orientations), recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
-├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360) and simple interest: the primitives the Scheduled Investment provider builds its accrual on
+├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
@@ -142,9 +142,17 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
 
 1. resolves the target currency (by default `get_effective_base_currency()`) and the broker
    scope, each broker at its `effective_share()`;
-2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`;
-   an unusable ratio raises `ValueError`), and classifies them
-   (`ScopeAwareTransactionClassifier`, `classifier.py`);
+2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`),
+   and classifies them
+   (`ScopeAwareTransactionClassifier`, `classifier.py`). A split whose stored ratio fails `is_valid_split_ratio()`
+   (missing, not finite, or not above 0) counts as missing, never an exception (lot MF-D4; before, a `ValueError`).
+   Its linked rows stay in `split_linked_tx_ids`, the split's rescale with their cost kept. Only the ratio is dropped:
+   the event adds no `SplitRecord` to `split_history`, and goes once into `PortfolioCalculationResult.invalid_split_events`
+   (`InvalidSplitEvent`, sorted by event id), which the data-quality report turns into `INVALID_SPLIT_RATIO`.
+   The range it replays starts no earlier than the first
+   transaction and ends no later than `latest_range_end()` (tomorrow, `utils/datetime_utils.py`): the replay walks every
+   day, and an end far in the future held the instance (R13-SEC7-1). A range that ends before the first transaction
+   gives an empty result;
 3. returns the cached `PortfolioCalculationResult` when the `portfolio_blob` cache holds one for
    the same key — scope, currency, options, data fingerprints and the day of
    `position_states_start` — that starts on or before the requested start and ends on the
@@ -293,7 +301,7 @@ version are not comparable, which is not the same as a difference.
 - **Why:** a manifest written by hand, or damaged, could otherwise make `_canonical()` write an
   exponent out in full; `"1E+50000000"` alone costs about 121 MB.
 - **Round trip:** it holds for every total within that bound, and every ledger the database can
-  hold stays within it (amounts `Numeric(18, 6)`, quantities `RealDecimal(22, 10)`).
+  hold stays within it (amounts `RealDecimal(18, 6)`, quantities `RealDecimal(22, 10)`).
 
 What the totals promise their caller:
 
@@ -398,7 +406,9 @@ flowchart LR
    `frontend/src/lib/charts/signals/` — and each exception must be declared where it lives.
    The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in
    `MeasureSignal.ts` is held to `_MIN_ANNUALIZATION_DAYS` of `returns.py` by a parity test in
-   `measureSignal.test.ts`, so changing one without the other fails that test.
+   `measureSignal.test.ts`, so changing one without the other fails that test. Its `changePct` (null on a zero
+   start, N65) is also the one Δ% rule of the chart tooltip (`priceChartHelpers.ts::buildDeltaHtml`, J-44), which
+   imports it rather than keeping a copy.
    The declaration is the tag `@financial-math-exception` in the file's leading JSDoc block,
    followed by what the exception computes and why it stays in the browser. The [gate](#frontend-exceptions-gate)
    (`frontend/src/financialMathExceptions.gate.test.ts`) holds the list of declared files and
@@ -514,6 +524,18 @@ stays, so the guard follows the names rather than a file: it fails when one of t
 defined exactly once in `interest.py`, or is defined anywhere else in `backend/app` — a method,
 a nested function or a fallback under `except ImportError` included.
 
+Lots R13-SEC7-2 and MF-SI1 added `compound_growth()` to `interest.py`: the growth factor of
+daily compounding over a span, `Π (1 + r × Δt(d − 1, d))` over its days, in closed form and at a
+cost that does not grow with the span — one power under ACT/365 and ACT/360; under ACT/ACT the
+first and last years' days, and one power each for the whole common and the whole leap years
+between; under 30/360 one power per step size (0, 1, 2 or 3 days over 360), from exact integer
+step counts. It is memoized (`_compound_growth`, an LRU cache of 4 096 entries) on the rate as
+written and the caller's `Decimal` precision and rounding; `_calculate_act_act()` memoizes its
+full-year prefix the same way (`_act_act_years_before`), with the digits of the per-year sum.
+Its one caller is COMPOUND late interest (see
+[Scheduled Investment Provider](assets/provider_scheduled_investment.md#late-interest)). The
+guard's five names do not include it.
+
 The other rule over `backend/app` keeps one question in one place, «which rows are linked to a
 SPLIT asset event», and fails when:
 
@@ -552,7 +574,7 @@ for. The gate runs with the chart-safety unit tests:
 
 | Command | Runs (under `backend/test_scripts/`) | Covers |
 |---------|--------------------------------------|--------|
-| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`) and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
+| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`), `compound_growth()` of `interest.py` (`test_compound_growth.py`, against the day-by-day product in a 60-digit context), its ACT/ACT fraction across years, digit for digit with the year loop, and its memo (`test_act_act_fraction.py`), and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
@@ -580,7 +602,7 @@ for. The gate runs with the chart-safety unit tests:
 | `yield_on_cost.py` | — | [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) |
 | `splits.py` | — | [Split](../../financial-theory/instruments/asset-events/split.md) |
 | `ledger_totals.py` | [Ledger control totals](#ledger-totals) | — |
-| `interest.py` | [Scheduled Investment Provider](assets/provider_scheduled_investment.md#accrual-walk), its only consumer | [Day Count Conventions](../../financial-theory/fundamentals/day-count.md); simple interest in [Interest](../../financial-theory/instruments/asset-events/interest.md) |
+| `interest.py` | [Scheduled Investment Provider](assets/provider_scheduled_investment.md#accrual-walk), its only consumer; `compound_growth()` in its [late interest](assets/provider_scheduled_investment.md#late-interest) | [Day Count Conventions](../../financial-theory/fundamentals/day-count.md); simple interest in [Interest](../../financial-theory/instruments/asset-events/interest.md) |
 
 ---
 

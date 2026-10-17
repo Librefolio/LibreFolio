@@ -96,6 +96,16 @@ def is_valid_split_ratio(ratio: Decimal | None) -> bool:
     return ratio is not None and ratio.is_finite() and ratio > 0
 
 
+def is_split_event_type(value: object) -> bool:
+    """Whether ``value`` is the SPLIT asset event type: the member, or its text in any case, blanks around ignored.
+
+    How code outside this module asks «is this event a split» without naming the member (the layer's rule d): the event
+    store, checking the type of an event it is handed. Anything that is not text, ``None`` included, is not a split; it
+    never raises.
+    """
+    return isinstance(value, str) and value.strip().upper() == AssetEventType.SPLIT
+
+
 async def split_linked_ids(db: AsyncSession, transactions: Sequence[Transaction]) -> set[int]:
     """The ids of the given transactions linked to a SPLIT asset event; an empty set without candidates.
 

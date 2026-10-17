@@ -575,7 +575,8 @@ class TestPortfolioWACSplit:
         split-linked: 15 shares acquired at a cost nobody knows (MISSING_COST_BASIS on the
         Dashboard and in the lots). P-10 (decision 27, option A) refuses that retype: 409
         EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, its params naming the event, its date and the
-        costless ADJUSTMENT. Nothing changes: the SPLIT keeps its id and type, the ADJUSTMENT
+        costless ADJUSTMENT, and counting no hidden one (R13-SEC7: ``hidden_transactions_count``
+        0, the test's user owns the broker). Nothing changes: the SPLIT keeps its id and type, the ADJUSTMENT
         has no cost, the pool is still 30 shares at WAC 50, and no view reports a missing cost.
 
         Then the ADJUSTMENT is given a cost through the transactions API, 40 EUR a share.
@@ -632,7 +633,7 @@ class TestPortfolioWACSplit:
                 assert refused.status_code == 409, f"retyping SPLIT {event_id} with a costless ADJUSTMENT linked: expected 409, got {refused.status_code}: {refused.text}"
                 detail = refused.json()["detail"]
                 assert detail["error_code"] == "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST", detail
-                assert detail["params"] == {"asset_id": asset_id, "item_index": 0, "event_id": event_id, "date": "2026-02-01", "transaction_ids": [adj_tx_id]}, detail
+                assert detail["params"] == {"asset_id": asset_id, "item_index": 0, "event_id": event_id, "date": "2026-02-01", "transaction_ids": [adj_tx_id], "hidden_transactions_count": 0}, detail
                 assert await _events_on_date(client, asset_id, "2026-02-01") == [(event_id, "SPLIT")]
                 kept_tx = await _read_tx(client, adj_tx_id)
                 assert (kept_tx["asset_event_id"], kept_tx["cost_basis_override"]) == (event_id, None), kept_tx

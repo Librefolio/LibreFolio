@@ -31,6 +31,17 @@ in place. The contract:
    is 409 ``{error_code: EMAIL_VERIFICATION_UNAVAILABLE, message, key}`` and nothing of the request is saved; with
    email and a public URL it is saved; turning it off is always saved; sending it on again while already on, email
    broken, saves (only off → on is checked).
+5. Behind a reverse proxy LibreFolio does not trust (decision N70; lot E-13, on H's helper H-36) — the usual deployment:
+   the Docker image behind the proxy HTTPS needs, neither ``LIBREFOLIO_CLIENT_IP_HEADER`` nor ``FORWARDED_ALLOW_IPS``
+   set —, every visitor arrives from the proxy's private address with an ``X-Forwarded-For`` the app does not trust.
+   Two visitors behind one private proxy never share one budget of registration emails: the route gives
+   ``registration_email_allowed`` H-36's ``rate_limit_address(request)``, the client address of 1 but for a
+   registration from a local peer (``classify_ip``: loopback, private, link-local, unique-local, CGNAT) carrying
+   ``X-Forwarded-For``, ``Forwarded`` or ``X-Real-IP`` whose address neither ``LIBREFOLIO_CLIENT_IP_HEADER`` nor
+   uvicorn gave: ``None``, counted under no address. A public address's own forwarding headers move nothing, and a
+   private address without one — a device of the local network talking to LibreFolio directly — keeps its own budget:
+   past it the account is created and waits with its hold, as in 1. EVH-014 pins the skip, red before the cure;
+   EVH-015 and EVH-016 are guards, green before and after.
 
 Pure: the real auth, users, settings and email routers run in-process on a private SQLite file under ``tmp_path``
 (NullPool, disposed at teardown), the option set in that file only; accounts are rows with a real bcrypt hash at cost
@@ -81,6 +92,7 @@ from backend.app.services.accounts import auth_service, token_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import IssuedToken, TokenStatus
 from backend.app.services.email import delivery, smtp, verification
+from backend.app.services.platform.client_address import _untrusted_forwarding, untrusted_forwarding_seen
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.fixtures.email.fake_smtp import FakeSmtpServer
@@ -153,6 +165,13 @@ def _nothing_reported_yet() -> Iterator[None]:
     delivery._report_invalid.cache_clear()
     yield
     delivery._report_invalid.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _nothing_noted_yet(monkeypatch: pytest.MonkeyPatch) -> None:
+    """H's ``_untrusted_forwarding`` (decision N70) holds fresh empty sets for each test, the process's own put back after it: the forwarding headers of section 5 — «local» from EVH-014, «public» from EVH-015 — leave no note, so a later reader's first noting of a class, the only one that logs its warning, still logs it."""
+    monkeypatch.setitem(_untrusted_forwarding, "local", set())
+    monkeypatch.setitem(_untrusted_forwarding, "public", set())
 
 
 @pytest.fixture
@@ -332,22 +351,22 @@ def _email_off(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @contextlib.asynccontextmanager
-async def _browser(private: _Private) -> AsyncIterator[httpx.AsyncClient]:
-    transport = httpx.ASGITransport(app=private.app, client=CLIENT)
+async def _browser(private: _Private, *, client: tuple[str, int] = CLIENT) -> AsyncIterator[httpx.AsyncClient]:
+    transport = httpx.ASGITransport(app=private.app, client=client)
     async with httpx.AsyncClient(transport=transport, base_url=BASE_URL, timeout=TIMEOUT) as browser:
         yield browser
 
 
-async def _post(private: _Private, path: str, body: object) -> httpx.Response:
-    async with _browser(private) as browser:
-        return await browser.post(path, json=body)
+async def _post(private: _Private, path: str, body: object, *, client: tuple[str, int] = CLIENT, headers: dict[str, str] | None = None) -> httpx.Response:
+    async with _browser(private, client=client) as browser:
+        return await browser.post(path, json=body, headers=headers)
 
 
-async def _register(private: _Private, username: str, *, invite_token: str | None = None) -> httpx.Response:
+async def _register(private: _Private, username: str, *, invite_token: str | None = None, client: tuple[str, int] = CLIENT, headers: dict[str, str] | None = None) -> httpx.Response:
     body: dict[str, object] = {"username": username, "email": f"{username}@example.com", "password": PASSWORD}
     if invite_token is not None:
         body["invite_token"] = invite_token
-    return await _post(private, REGISTER, body)
+    return await _post(private, REGISTER, body, client=client, headers=headers)
 
 
 async def _login(private: _Private, username: str, password: str = PASSWORD) -> httpx.Response:
@@ -701,3 +720,108 @@ async def test_the_option_turns_on_with_email_off_always_and_on_again_whatever_e
     assert again.status_code == 200 and after_again == ("true", "48"), again.text
     assert turned_off.status_code == 200 and await _setting(private.engine, OPTION_KEY) == "false", turned_off.text
     print_success("on with email; on again without; off always")
+
+
+# =============================================================================
+# 5. BEHIND A PROXY LIBREFOLIO DOES NOT TRUST (DECISION N70, LOT E-13)
+# =============================================================================
+
+#: The address every request comes from behind a reverse proxy LibreFolio does not trust: the proxy's own, private —
+#: the Docker bridge's, or an IPv6 unique-local one. Any port: the key of an address never holds it.
+PRIVATE_PROXIES = [pytest.param("172.17.0.1", id="docker-bridge-ipv4"), pytest.param("fd00::2", id="unique-local-ipv6")]
+PROXY_PORT = 40100
+#: Two visitors, as a forwarding header names them: A registers first, B after.
+VISITOR_A = "203.0.113.10"
+VISITOR_B = "203.0.113.20"
+#: Their accounts, each with its own mailbox (``<username>@example.com``).
+ACCOUNT_A = "zq_visitor_a"
+ACCOUNT_B = "zq_visitor_b"
+#: A device of the local network that talks to LibreFolio directly: a private address, and no forwarding header.
+LAN_DEVICE = ("192.168.1.5", 40200)
+#: H-36's forwarding headers, exactly its list: (the header, what precedes the address in it). A reverse proxy writes
+#: them for the visitor it forwards.
+FORWARDING_HEADERS = [
+    pytest.param("X-Forwarded-For", "", id="x-forwarded-for"),
+    pytest.param("Forwarded", "for=", id="forwarded"),
+    pytest.param("X-Real-IP", "", id="x-real-ip"),
+]
+#: The forwarding headers a client at a public address may write itself: the same three.
+OWN_FORWARDING_HEADERS = FORWARDING_HEADERS
+
+
+async def _one_registration_email_an_hour(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+    """``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour, so that each case needs two registrations; the administrator, the option on, registration open. ``LIBREFOLIO_MAX_USERS`` stays unset, and the mailbox limiter and the hourly budget are the autouse fixtures' private ones: only the limit per address decides. Returns that limiter."""
+    limiter = SlidingWindowLimiter(1, 3600, clock=clock)
+    monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", limiter)
+    await _add_user(private.engine, ADMIN, admin=True)
+    await _option(private.engine, "true")
+    await _registration_open(private.engine)
+    return limiter
+
+
+async def _wait_of(private: _Private, username: str) -> tuple[bool, list[tuple[Any, ...]]]:
+    """Whether the account is active, and its verification tokens as ``(email, consumed_at, revoked_at)``: ``(False, [(None, None, None)])`` is an account waiting with its hold, its email never sent."""
+    user = await _user(private.engine, username)
+    return user.is_active, [(row.email, row.consumed_at, row.revoked_at) for row in await _verification_rows(private.engine, user.id)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("header", "prefix"), FORWARDING_HEADERS)
+@pytest.mark.parametrize("proxy", PRIVATE_PROXIES)
+async def test_two_visitors_behind_one_private_proxy_each_get_their_registration_email(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, proxy: str, header: str, prefix: str) -> None:
+    """EVH-014 — contract 5, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. Both registrations come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor. Visitor A registers: 201 ``verification_required: true``, and A's verification email goes. Visitor B registers through the same proxy: 201 ``verification_required: true``, and B's email goes too, never held. Then the skip itself, which B's email alone would not prove: the limiter per address holds no key at all — neither registration counted under an address, the proxy's or its visitor's. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
+    print_section(f"EVH-014: two visitors behind {proxy}, {header}")
+    by_address = await _one_registration_email_an_hour(private, monkeypatch, clock)
+    peer = (proxy, PROXY_PORT)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        first = await _register(private, ACCOUNT_A, client=peer, headers={header: f"{prefix}{VISITOR_A}"})
+        second = await _register(private, ACCOUNT_B, client=peer, headers={header: f"{prefix}{VISITOR_B}"})
+        recipients = [message.rcpt_tos for message in fake.messages]
+
+    assert [(answer.status_code, answer.json().get("verification_required")) for answer in (first, second)] == [(201, True), (201, True)], [answer.text for answer in (first, second)]
+    assert [f"{ACCOUNT_A}@example.com"] in recipients, f"barrier: visitor A's verification email goes: {recipients}"
+    assert [f"{ACCOUNT_B}@example.com"] in recipients, f"two visitors behind one private proxy ({proxy}) shared one per-address budget: visitor B's verification email was held because visitor A had registered: {recipients}"
+    assert len(by_address) == 0, f"a registration through a reverse proxy LibreFolio does not trust ({proxy}, {header}) is counted under no address (N70): the limiter per address holds {len(by_address)} key(s)"
+    assert untrusted_forwarding_seen("local") == (header,), f"N70's skip notes the {header} of a local peer: noted {untrusted_forwarding_seen('local')}"
+    print_success("201 twice, each visitor's verification email goes, and no key in the limiter per address: the skip")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("header", "prefix"), OWN_FORWARDING_HEADERS)
+async def test_a_public_clients_own_forwarding_header_does_not_release_a_held_registration_email(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, header: str, prefix: str) -> None:
+    """EVH-015 — contract 5, a guard, green before and after the cure: ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10`` for the first registration, ``203.0.113.20`` for the second: both answer 201 ``verification_required: true``; the first one's email goes, the second's is held — its account created and waiting with its hold: inactive, one verification token without an address, neither consumed nor revoked —: what a client writes never moves its own budget. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    print_section(f"EVH-015: a public client's own {header}")
+    await _one_registration_email_an_hour(private, monkeypatch, clock)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        first = await _register(private, ACCOUNT_A, client=CLIENT, headers={header: f"{prefix}{VISITOR_A}"})
+        second = await _register(private, ACCOUNT_B, client=CLIENT, headers={header: f"{prefix}{VISITOR_B}"})
+        recipients = [message.rcpt_tos for message in fake.messages]
+
+    assert [(answer.status_code, answer.json().get("verification_required")) for answer in (first, second)] == [(201, True), (201, True)], [answer.text for answer in (first, second)]
+    assert [f"{ACCOUNT_A}@example.com"] in recipients, f"barrier: the first registration's email goes: {recipients}"
+    assert [f"{ACCOUNT_B}@example.com"] not in recipients, f"a client at a public address chose its own budget with a {header} header it wrote itself: {recipients}"
+    assert await _wait_of(private, ACCOUNT_B) == (False, [(None, None, None)]), "the second account is created and waits with its hold"
+    print_success(f"201 twice; the second email held whatever its own {header} says")
+
+
+@pytest.mark.asyncio
+async def test_a_private_client_without_a_forwarding_header_keeps_its_own_registration_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
+    """EVH-016 — contract 5, a guard, green before and after the cure: ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header — and registers twice: both answer 201 ``verification_required: true``; the first one's email goes, the second's is held — its account created and waiting with its hold —: a private address alone is not a proxy, and keeps its own budget. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    print_section("EVH-016: a device of the local network")
+    await _one_registration_email_an_hour(private, monkeypatch, clock)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        first = await _register(private, ACCOUNT_A, client=LAN_DEVICE)
+        second = await _register(private, ACCOUNT_B, client=LAN_DEVICE)
+        recipients = [message.rcpt_tos for message in fake.messages]
+
+    assert [(answer.status_code, answer.json().get("verification_required")) for answer in (first, second)] == [(201, True), (201, True)], [answer.text for answer in (first, second)]
+    assert [f"{ACCOUNT_A}@example.com"] in recipients, f"barrier: the first registration's email goes: {recipients}"
+    assert [f"{ACCOUNT_B}@example.com"] not in recipients, f"a private address without a forwarding header lost its own budget: {recipients}"
+    assert await _wait_of(private, ACCOUNT_B) == (False, [(None, None, None)]), "the second account is created and waits with its hold"
+    print_success("201 twice; the second email held: its own budget")

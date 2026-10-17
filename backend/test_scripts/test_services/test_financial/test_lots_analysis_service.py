@@ -27,6 +27,7 @@ from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.lots_analysis_service import get_lots_analysis
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import utcnow
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 
 async def _own_fx_rate(session, *, on: date, base: str, quote: str, rate: Decimal) -> None:
@@ -83,6 +84,15 @@ def _assert_closed_lot_history_flat(result, lot_id: int, close_date: date, date_
         assert return_point.total_return == close_return.total_return
 
         current_date += timedelta(days=1)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the opening-event scenarios live in 2048, after tomorrow, so the range bound is lifted for the whole
+    module, before any fixture builds data (see ``lift_range_bound``)."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")

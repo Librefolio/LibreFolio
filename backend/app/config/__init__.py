@@ -82,8 +82,10 @@ PROFILE_DEFAULTS: dict[str, dict[str, object]] = {
 }
 
 #: The same for the variables a section module of this package reads from the environment, outside ``Settings`` (H-17):
-#: while such a variable is unset, ``profile_default(name, fallback)`` gives the active profile's value, or the code's
-#: own ``fallback`` when the profile lists none. A self-hosted install keeps every fallback.
+#: while such a variable is unset, ``profile_default(name, fallback)`` gives the active profile's value. ``selfhosted``
+#: lists none, so a self-hosted install keeps every code fallback. Every other profile lists every variable a reader
+#: asks for, even at the fallback's value: one it does not list raises ``ProfileDefaultError`` (H-37), never the
+#: self-hosted fallback, which for a limit may mean none.
 ENVIRONMENT_PROFILE_DEFAULTS: dict[str, dict[str, object]] = {
     "selfhosted": {},
     "managed": {
@@ -497,6 +499,8 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         Path("broker_reports/failed"),
         Path("logs"),
         Path("scheduler_state.json"),
+        # The scheduler's lock across worker processes (workstream Z, Z-11: run_lock.LOCK_FILE_NAME)
+        Path(".scheduler.lock"),
         Path("scenario_catalog"),
         Path("secrets"),
         Path("secrets/instance.key"),
@@ -574,10 +578,12 @@ def get_settings() -> Settings:
 
 
 class ProfileDefaultError(TypeError):
-    """A profile's value in ``ENVIRONMENT_PROFILE_DEFAULTS`` that is not of the type of its reader's own default (H-27).
+    """An entry of ``ENVIRONMENT_PROFILE_DEFAULTS`` its reader cannot use: not of the type of the reader's own default
+    (H-27), or missing from a profile other than ``selfhosted`` (H-37).
 
-    The table is code, so such a value is a bug: the reader stops on it rather than use it. Read as it is, a ``None``
-    upload limit would mean no limit at all.
+    The table is code, so such an entry is a bug: the reader stops on it rather than use it or fall back. Read as it is,
+    a ``None`` upload limit would mean no limit at all, and so would the self-hosted fallback ``0`` of a managed profile
+    that lost its entry.
     """
 
 
@@ -586,14 +592,17 @@ def profile_default[T](name: str, fallback: T) -> T:
 
     ``ENVIRONMENT_PROFILE_DEFAULTS`` holds the profile's values; ``fallback`` is the code's own default, the one a
     self-hosted install gets. The section module asks only while its variable is unset, and keeps its own rules for a
-    blank or an invalid value. The profile is read at each call, normalised by ``Settings``. A profile's value is of the
-    exact type of ``fallback`` (``500`` for ``0``; never ``None``, ``"500"``, ``500.0`` nor ``True``): any other raises
-    ``ProfileDefaultError``.
+    blank or an invalid value. The profile is read at each call, normalised by ``Settings``. Every profile but
+    ``selfhosted`` must list ``name``: a name it does not list raises ``ProfileDefaultError`` rather than give the
+    self-hosted ``fallback`` (H-37, fail closed). A profile's value is of the exact type of ``fallback`` (``500`` for
+    ``0``; never ``None``, ``"500"``, ``500.0`` nor ``True``): any other raises ``ProfileDefaultError`` too.
     """
     profile = get_settings().LIBREFOLIO_PROFILE
     values = ENVIRONMENT_PROFILE_DEFAULTS.get(profile, {})
     if name not in values:
-        return fallback
+        if profile == "selfhosted":
+            return fallback
+        raise ProfileDefaultError(f"{name}: the {profile} profile gives it no value; every profile but selfhosted must give one to each variable a reader asks for, rather than leave it the self-hosted default: ENVIRONMENT_PROFILE_DEFAULTS is missing it")
     value = values[name]
     if type(value) is not type(fallback):
         raise ProfileDefaultError(f"{name}: the {profile} profile gives {value!r}, a {type(value).__name__}, where its reader expects a {type(fallback).__name__} like its own default {fallback!r}: ENVIRONMENT_PROFILE_DEFAULTS is wrong")

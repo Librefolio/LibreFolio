@@ -38,7 +38,10 @@ What is pinned (W E1a is not written yet; each test says how it fails before the
   (quantity > 0) without ``cost_basis_override`` is linked to the event: retyped, that row would stop
   being a split rescale and become an acquisition of unknown cost (MISSING_COST_BASIS).
   EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, ``details`` {"event_id", "date" of the stored SPLIT,
-  "transaction_ids" sorted}, for the first such edit in request order, before the first write.
+  "transaction_ids": those the caller can see, sorted, "hidden_transactions_count": the others}, for
+  the first such edit in request order, before the first write. Without a caller none is named
+  (X-R47b): these refusal tests answer the holder, a second user of the module holding an access to
+  the unit's broker, who sees every transaction written there, so they keep pinning which ones.
   Before: every retype is accepted.
 
 "Nothing persisted" is read on a fresh connection (the engine has no pool) with raw SQL, so a
@@ -67,10 +70,10 @@ from backend.test_scripts.test_db_config import setup_test_database
 setup_test_database()
 
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import bindparam, delete, func, select, text
+from sqlalchemy import bindparam, delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, Transaction, TransactionType, User
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.assets.events import FAAssetEventPoint, FAEventQueryItem, FAEventUpsert, FAEventUpsertPoint, FAEventUpsertResult
 from backend.app.schemas.assets.scheduled_investment import FAScheduledInvestmentSchedule
@@ -97,17 +100,24 @@ def _day(offset: int) -> date:
 
 @dataclass(frozen=True)
 class _Owned:
-    """What the module created: two USD assets (the first with a provider assignment), a broker, a user."""
+    """What the module created: two USD assets (the first with a provider assignment), a broker, and two users: ``user_id``,
+    with no access to the broker, and ``holder_id``, holding an OWNER access to it, so every transaction this unit writes
+    is one the holder can see."""
 
     asset_id: int
     other_asset_id: int
     assignment_id: int
     broker_id: int
     user_id: int
+    holder_id: int
 
     @property
     def asset_ids(self) -> list[int]:
         return [self.asset_id, self.other_asset_id]
+
+    @property
+    def user_ids(self) -> list[int]:
+        return [self.user_id, self.holder_id]
 
 
 async def _wipe(owned: _Owned) -> None:
@@ -123,7 +133,8 @@ async def _wipe(owned: _Owned) -> None:
 
 @pytest.fixture(scope="module")
 def owned_module() -> _Owned:
-    """Two assets, a provider assignment, a broker and a user, dropped in FK-safe order in teardown."""
+    """Two assets, a provider assignment, a broker, two users and the holder's access to the broker, dropped in FK-safe
+    order in teardown."""
     marker = unique_id("EventStore")
 
     async def _create() -> _Owned:
@@ -132,7 +143,8 @@ def owned_module() -> _Owned:
             other = Asset(display_name=f"Event Store Other {marker}", currency="USD", asset_type=AssetType.STOCK, active=True)
             broker = Broker(name=f"Event Store {marker}", allow_cash_overdraft=True)
             user = User(username=f"evstore_{marker}".lower(), email=f"evstore_{marker}@example.test".lower(), hashed_password="not-a-real-hash")
-            session.add_all([asset, other, broker, user])
+            holder = User(username=f"evholder_{marker}".lower(), email=f"evholder_{marker}@example.test".lower(), hashed_password="not-a-real-hash")
+            session.add_all([asset, other, broker, user, holder])
             await session.commit()
             assignment = AssetProviderAssignment(
                 asset_id=asset.id,
@@ -141,17 +153,19 @@ def owned_module() -> _Owned:
                 identifier_type=ProviderInputType.TICKER,
                 provider_params="{}",
             )
-            session.add(assignment)
+            access = BrokerUserAccess(user_id=holder.id, broker_id=broker.id, role=UserRole.OWNER, share_percentage=Decimal("1"))
+            session.add_all([assignment, access])
             await session.commit()
-            return _Owned(asset.id, other.id, assignment.id, broker.id, user.id)
+            return _Owned(asset.id, other.id, assignment.id, broker.id, user.id, holder.id)
 
     async def _drop(owned: _Owned) -> None:
         await _wipe(owned)
         async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            await session.execute(delete(BrokerUserAccess).where(or_(BrokerUserAccess.broker_id == owned.broker_id, BrokerUserAccess.user_id.in_(owned.user_ids))))
             await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(owned.asset_ids)))
             await session.execute(delete(Broker).where(Broker.id == owned.broker_id))
             await session.execute(delete(Asset).where(Asset.id.in_(owned.asset_ids)))
-            await session.execute(delete(User).where(User.id == owned.user_id))
+            await session.execute(delete(User).where(User.id.in_(owned.user_ids)))
             await session.commit()
 
     owned = asyncio.run(_create())
@@ -318,15 +332,18 @@ async def _upsert(data: list[FAEventUpsert]):
     return result
 
 
-async def _upsert_refused(data: list[FAEventUpsert]) -> AssetSourceError:
+async def _upsert_refused(data: list[FAEventUpsert], *, current_user_id: int | None = None) -> AssetSourceError:
     """``POST /assets/events`` minus HTTP, for a request that must be refused.
+
+    ``current_user_id`` is the caller the route passes: a refusal that lists transactions names only those that user can
+    see (X-R47b); None, a call without a caller, for the refusals that name none.
 
     As in the endpoint, nobody commits: the session closes on the error and drops whatever was
     not committed. What the service committed by itself is what "nothing persisted" then sees.
     """
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         try:
-            result = await AssetSourceManager.bulk_upsert_events(data, session)
+            result = await AssetSourceManager.bulk_upsert_events(data, session, current_user_id=current_user_id)
         except AssetSourceError as exc:
             return exc
     pytest.fail(f"bulk_upsert_events accepted a request it must refuse: {result}")
@@ -1270,9 +1287,12 @@ async def test_a_create_item_sees_the_key_an_earlier_item_freed(owned):
 # whose STORED row is a SPLIT and whose NEW type is not, when at least one transaction linked to that
 # event is an ADJUSTMENT with quantity > 0 and ``cost_basis_override IS NULL``. The check runs before
 # the first write: the request writes nothing. Code EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST; ``details``
-# {"event_id", "date" of the stored SPLIT, "transaction_ids": those adjustments, sorted}, for the first
-# such edit in request order (``_write_manual_item`` adds ``asset_id`` and ``item_index``, as for every
-# refusal).
+# {"event_id", "date" of the stored SPLIT, "transaction_ids": those adjustments the caller can see, sorted,
+# "hidden_transactions_count": the others}, for the first such edit in request order (``_write_manual_item``
+# adds ``asset_id`` and ``item_index``, as for every refusal). Without a caller none is named (X-R47b, fail
+# closed: ``transaction_ids`` [], all of them counted hidden), so the refusal tests answer the module's
+# holder (``holder_id``, an OWNER access to the unit's broker), who sees every adjustment written here:
+# they keep pinning WHICH transactions, none hidden.
 #
 # Allowed, before and after P-10 (the GUARD tests): an incoming adjustment with a known cost, 0
 # included; a reverse split's outgoing row, which never carries a cost and, retyped, becomes a plain
@@ -1295,8 +1315,9 @@ async def _link_adjustment(owned: _Owned, split_id: int, offset: int, quantity: 
 
 
 def _split_refusal(owned: _Owned, split_id: int, offset: int, transaction_ids: list[int]) -> dict:
-    """The ``details`` of EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST for a one-item request, as ``_plain`` renders them."""
-    return {"asset_id": owned.asset_id, "item_index": 0, "event_id": split_id, "date": _day(offset).isoformat(), "transaction_ids": sorted(transaction_ids)}
+    """The ``details`` of EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST for a one-item request asked by the holder, as ``_plain``
+    renders them: every adjustment named, none hidden."""
+    return {"asset_id": owned.asset_id, "item_index": 0, "event_id": split_id, "date": _day(offset).isoformat(), "transaction_ids": sorted(transaction_ids), "hidden_transactions_count": 0}
 
 
 @pytest.mark.asyncio
@@ -1304,16 +1325,16 @@ async def test_retyping_a_split_with_an_incoming_adjustment_without_cost_is_refu
     """A forward SPLIT and an ADJUSTMENT +10 linked to it with no cost: the SPLIT cannot become a PRICE_ADJUSTMENT.
 
     Before: accepted — the event becomes a PRICE_ADJUSTMENT, and the +10 an acquisition of unknown cost.
-    Contract: EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST; details {"asset_id", "item_index": 0, "event_id": the SPLIT,
-    "date": its date, "transaction_ids": [the ADJUSTMENT]}; the event (type, value, date, notes, updated_at) and the
-    transaction as they were.
+    Contract, asked by the holder: EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST; details {"asset_id", "item_index": 0,
+    "event_id": the SPLIT, "date": its date, "transaction_ids": [the ADJUSTMENT], "hidden_transactions_count": 0}; the
+    event (type, value, date, notes, updated_at) and the transaction as they were.
     """
     split_id = await _add_split(owned, 200, "2", notes="2-for-1")
     adjustment_id = await _link_adjustment(owned, split_id, 200, "10")
     events_before = await _snapshot(owned, stamped=True)
     transactions_before = await _tx_snapshot(owned)
 
-    refused = await _upsert_refused([_item(owned.asset_id, [_ev(200, "PRICE_ADJUSTMENT", "2", event_id=split_id, notes="relabelled")])])
+    refused = await _upsert_refused([_item(owned.asset_id, [_ev(200, "PRICE_ADJUSTMENT", "2", event_id=split_id, notes="relabelled")])], current_user_id=owned.holder_id)
 
     assert refused.error_code == "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST", (refused.error_code, refused.details)
     assert _plain(refused.details) == _split_refusal(owned, split_id, 200, [adjustment_id])
@@ -1328,8 +1349,8 @@ async def test_a_refused_split_retype_writes_nothing_of_its_item(owned):
     Item: 0 changes a DIVIDEND's amount and notes (valid on its own), 1 retypes a SPLIT that has an incoming
     ADJUSTMENT without cost.
     Before: both edits accepted and written.
-    Contract: EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST naming the SPLIT; neither event written (updated_at included); the
-    transaction as it was.
+    Contract, asked by the holder: EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST naming the SPLIT and its ADJUSTMENT, none
+    hidden; neither event written (updated_at included); the transaction as it was.
     """
     dividend_id = await _add_manual(owned.asset_id, 210, AssetEventType.DIVIDEND, "1.00", notes="before")
     split_id = await _add_split(owned, 211, "2")
@@ -1338,7 +1359,7 @@ async def test_a_refused_split_retype_writes_nothing_of_its_item(owned):
     transactions_before = await _tx_snapshot(owned)
     request = [_item(owned.asset_id, [_ev(210, "DIVIDEND", "1.25", event_id=dividend_id, notes="after"), _ev(211, "PRICE_ADJUSTMENT", "2", event_id=split_id)])]
 
-    refused = await _upsert_refused(request)
+    refused = await _upsert_refused(request, current_user_id=owned.holder_id)
 
     assert refused.error_code == "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST", (refused.error_code, refused.details)
     assert _plain(refused.details) == _split_refusal(owned, split_id, 211, [adjustment_id])
@@ -1355,8 +1376,8 @@ async def test_a_refused_split_retype_names_the_first_offending_edit_and_only_it
     give the order of their ids), one in with a cost of 0 and one out without cost. Linked to A: one ADJUSTMENT in
     without cost.
     Before: accepted, both SPLITs retyped.
-    Contract: details name B, the first offending edit in request order, with B's STORED date, and only B's two
-    costless incoming ADJUSTMENTs, sorted by id; nothing written.
+    Contract, asked by the holder: details name B, the first offending edit in request order, with B's STORED date,
+    and only B's two costless incoming ADJUSTMENTs, sorted by id, none hidden; nothing written.
     """
     split_a = await _add_split(owned, 220, "2")
     split_b = await _add_split(owned, 222, "3")
@@ -1370,7 +1391,7 @@ async def test_a_refused_split_retype_names_the_first_offending_edit_and_only_it
     transactions_before = await _tx_snapshot(owned)
     request = [_item(owned.asset_id, [_ev(224, "PRICE_ADJUSTMENT", "3", event_id=split_b), _ev(220, "PRICE_ADJUSTMENT", "2", event_id=split_a)])]
 
-    refused = await _upsert_refused(request)
+    refused = await _upsert_refused(request, current_user_id=owned.holder_id)
 
     assert refused.error_code == "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST", (refused.error_code, refused.details)
     assert _plain(refused.details) == _split_refusal(owned, split_b, 222, [later_costless, earlier_costless])

@@ -3705,6 +3705,18 @@ Graph: not updated; graphify is not available in this worktree.
 execution to `signals/execution.py` and the output checks to `signals/validation.py`; the annotation helpers join
 `signals/annotations.py`. No behaviour change. Source-file rows point at the module that now holds the behaviour.
 Updated: [[domains/signals]], [[decisions/signal-backend-plugin-architecture]], [[decisions/drawdown-full-history-warmup]].
+## [2026-10-17] update | Domain: EMAIL — E-13: the per-address limits skip an untrusted local proxy
+Workstream E's lot E-13 (release 1.3), approved by the coordinator after H-36 and A8a+N70. The three per-address
+limits of E (forgot password, «send the link again», the registration emails) take workstream H's
+`rate_limit_address(request)` instead of `client_address(request)`: `None`, which each of them already read as «no
+count», behind a reverse proxy LibreFolio does not trust on a local address (the usual Docker setup), where one count
+would let 10 requests from anyone block the feature for everyone. The «Behind a proxy» limitation is rewritten: the
+local case skips, the public case (a CDN) still shares one count, `FORWARDED_ALLOW_IPS` takes networks; the old
+example «Fly's, without the variable» is dropped, since Fly's proxy may reach the app from a private address.
+Sources: plan 08 «E-13», H's `client_address.py`, `security.md` «The Client's Address».
+Updated: [[domains/email]].
+Graph: not updated; graphify is not available in this worktree.
+
 ## [2026-10-17] update | Domain: EMAIL — E-9 done as night decision N62 (aliases folded, no stranger's text)
 Workstream E's lot E-9 (release 1.3), done the night of 17/10 as the coordinator's night decision N62, to be reviewed
 by the developer. Checked in the code first: the three per-mailbox limits count on `delivery.mailbox_budget_key()`
@@ -3768,4 +3780,19 @@ zero start. All three fixed red first, with the changed values declared before t
 mistyped literal, not on the behaviour, which the page on the settlement keeps as a lesson.
 Filed: [[problems/act-act-lost-a-day-per-year-end]], [[problems/maturity-settlement-counted-the-final-coupon-twice]].
 Updated: [[features/F-045]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | J-43 (transfer share mismatch) and R13-SEC7-1 (unbounded date ranges)
+The share-mismatch warning of the portfolio classifier skipped same-day pairs and never reached the user, so a transfer
+between brokers owned at different shares made P&L with no explanation: now an INFO data-quality issue. And an
+unbounded date range (`end: 9999-12-30`) froze the instance through the portfolio, lots, risk and AI Export routes:
+every range now ends by tomorrow and starts at the first transaction, with a test seam for the far-future suites.
+Filed: [[problems/share-mismatch-warning-never-left-the-classifier]], [[problems/unbounded-date-range-froze-the-instance]].
+## [2026-10-17] file | Y-8: the arrow markers are re-aimed once a zoom settles, not on every tick
+`updateArrowRotations()` read `getOption()`, a deep clone of the whole option, and wrote every series back on each
+`dataZoom` tick of `LineChart`, `CandlestickChart` and `PriceChartFull`. The arrows are now re-aimed in the debounce
+that re-spaces the labels, reading the option afresh each time: a cached option would paint pre-rebuild colours back
+after a theme or Designer Lab rebuild, which a light → dark → zoom unit test pins. A full render of `LineChart` now
+restores the saved zoom before it re-aims, as `CandlestickChart` did: the restore's event only schedules the settle (Y-8b).
+Updated: [[concepts/echarts-chart-gotchas]].
 Graph: not updated; graphify is not available in this worktree.

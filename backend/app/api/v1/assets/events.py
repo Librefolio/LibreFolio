@@ -30,6 +30,7 @@ _REFUSAL_STATUS = {
     "EVENT_ASSET_NOT_FOUND": 400,
     "EVENT_CURRENCY_MISMATCH": 400,
     "EVENT_TOO_MANY_DIGITS": 400,
+    "EVENT_INVALID_SPLIT_RATIO": 400,
     "EVENT_NOT_EDITABLE": 400,
     "EVENT_KEY_CONFLICT": 400,
     "EVENT_EXISTS": 409,
@@ -63,14 +64,18 @@ async def upsert_events_bulk(
     - 400 ``EVENT_CURRENCY_MISMATCH`` (R3-3 Policy D, symmetric to
       ``bulk_upsert_prices``): ``expected`` and ``events`` (``event_index``, ``date``,
       ``type``, ``currency`` of each event whose currency is not the asset's);
+    - 400 ``EVENT_INVALID_SPLIT_RATIO`` (X-R47): ``events`` (``event_index``, ``date``,
+      ``type``, ``ratio`` of each SPLIT, new or edited, whose ratio is not a number above 0:
+      linked to a transaction, such a split made the portfolio report fail);
     - 400 ``EVENT_NOT_EDITABLE``: ``ids`` unknown, of another asset or of a provider
       event;
     - 400 ``EVENT_KEY_CONFLICT``: ``date`` and ``type`` — an edit that changes its date
       or type would land on a key another edit of the item ends on, or that a manual
       event the item does not edit holds; or an event without ``id`` would take a key
       an edit ends on;
-    - 409 ``EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST``: ``event_id``, ``date`` and
-      ``transaction_ids`` — an edit changes the type of a SPLIT while linked incoming
+    - 409 ``EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST``: ``event_id``, ``date``,
+      ``transaction_ids`` (only those the caller can see) and ``hidden_transactions_count``
+      (the others, R13-SEC7) — an edit changes the type of a SPLIT while linked incoming
       adjustments have no cost: without the split they would be acquisitions of unknown
       cost (P-10). Give them a cost first;
     - 409 ``EVENT_EXISTS``, ``mode: "create"`` only: ``existing``, the events already
@@ -94,7 +99,8 @@ async def upsert_events_bulk(
     item, or an id in a create item is a 422.
     """
     try:
-        result = await AssetSourceManager.bulk_upsert_events(assets, session)
+        # A refusal names only the transactions the caller can see (R13-SEC7, X-R47b)
+        result = await AssetSourceManager.bulk_upsert_events(assets, session, current_user_id=_current_user.id)
         results_list = [FAEventUpsertResult(**r) for r in result["results"]]
         return FABulkEventUpsertResponse(
             results=results_list,

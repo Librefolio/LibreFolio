@@ -2,12 +2,19 @@
 
 Verifies that all 5 active portfolio IssueCodes are generated correctly
 from input data. Pure tests — no DB, no async.
+
+``TestTransferShareMismatchIssue`` (J-43b) reads ``ShareMismatch`` from ``models`` inside its tests, so on a ``models``
+without it only those tests fail, never the module's collection.
 """
 
+import re
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+import pytest
+
+import backend.app.services.financial_math.portfolio.models as portfolio_models
 from backend.app.schemas.portfolio import (
     DataQualityStatus,
     IssueCode,
@@ -533,3 +540,157 @@ class TestValuedAtCostIssue:
         codes = {i.code for i in report.issues}
         assert IssueCode.TRANSACTION_IMPLIED not in codes
         assert IssueCode.MISSING_PRICE not in codes
+
+
+# =============================================================================
+# TRANSFER_SHARE_MISMATCH (J-43b)
+# =============================================================================
+
+
+def _share_mismatch(tx_ids: tuple[int, int], dt: str, *, broker_ids: tuple[int, int] = (10, 20), shares: tuple[str, str] = ("1", "0.5")):
+    """A ``ShareMismatch`` (J-43): a linked internal pair between brokers owned at different shares, read from
+    ``models`` when the test runs."""
+    return portfolio_models.ShareMismatch(tx_ids=tx_ids, broker_ids=broker_ids, shares=(Decimal(shares[0]), Decimal(shares[1])), date=date.fromisoformat(dt))
+
+
+def _share_mismatch_issues(report) -> list:
+    """The report's TRANSFER_SHARE_MISMATCH issues, matched on the code's value (HEAD has no enum member to name)."""
+    return [i for i in report.issues if i.code == "TRANSFER_SHARE_MISMATCH"]
+
+
+def _numbers_in(text: str) -> set[int]:
+    """Every integer written in ``text``, whole: 7101 is not found in 71012."""
+    return {int(number) for number in re.findall(r"\d+", text)}
+
+
+def _strings_naming(report, tx_ids: tuple[int, int]) -> list[str]:
+    """The ``share_mismatch_warnings`` strings that name both transactions of a pair."""
+    return [text for text in report.share_mismatch_warnings if set(tx_ids) <= _numbers_in(text)]
+
+
+class TestTransferShareMismatchIssue:
+    """J-43b: ``build_data_quality_report(share_mismatches=...)`` turns the linked internal pairs between brokers owned
+    at different shares (``ShareMismatch``, from the engine's classification) into the user's explanation of the P&L
+    their gap makes (D-MF4 = a): one string per pair in ``share_mismatch_warnings``, naming both transactions (the rest
+    of its text is not pinned), and one INFO issue ``TRANSFER_SHARE_MISMATCH`` counting them — key
+    ``dataQuality.transferShareMismatch``, params ``{count}``, group ``transfer_share_mismatch``, no CTA, no asset, no
+    pair. Only the pairs dated on or before ``period_to`` count (every pair without one); none counted, no issue. An INFO
+    issue: the status does not move.
+
+    On HEAD 252835dce ``models`` has no ``ShareMismatch`` (AttributeError, raised while the arguments are built),
+    ``build_data_quality_report`` takes no ``share_mismatches`` (TypeError, once ``ShareMismatch`` exists) and
+    ``IssueCode`` has no ``TRANSFER_SHARE_MISMATCH`` (ValueError): every test that passes mismatches is red for that
+    alone, the guards of the bound and of the status included.
+    """
+
+    def test_transfer_share_mismatch_is_a_portfolio_issue_code(self):
+        """Red (J-43b). HEAD: ValueError — IssueCode has no TRANSFER_SHARE_MISMATCH."""
+        assert IssueCode("TRANSFER_SHARE_MISMATCH") == "TRANSFER_SHARE_MISMATCH"
+
+    def test_no_share_mismatches_produce_no_issue(self):
+        """Guard (green on HEAD and after J-43): nothing passed, no issue and no string."""
+        report = _make_views([_complete_state("2025-06-30")]).build_data_quality_report(period_to=date(2025, 6, 30))
+        assert _share_mismatch_issues(report) == []
+        assert report.share_mismatch_warnings == []
+
+    @pytest.mark.parametrize("share_mismatches", [None, []], ids=["none", "empty"])
+    def test_an_empty_share_mismatch_list_produces_no_issue(self, share_mismatches):
+        """Red (J-43b) on HEAD only by construction: TypeError, no ``share_mismatches``. After J-43 it guards that
+        nothing to report gives no issue at all, not one counting 0."""
+        report = _make_views([_complete_state("2025-06-30")]).build_data_quality_report(share_mismatches=share_mismatches, period_to=date(2025, 6, 30))
+        assert _share_mismatch_issues(report) == []
+        assert report.share_mismatch_warnings == []
+
+    def test_one_share_mismatch_produces_one_info_issue_with_its_shape(self):
+        """Red (J-43b). One pair (7101, 7102), brokers 10 at 1 and 20 at 0.5, dated 2025-06-10 inside the window
+        2025-06-01..2025-06-30: one INFO issue with the contract's shape, and one string naming both transactions.
+
+        HEAD: AttributeError — ``models`` has no ShareMismatch (then TypeError: build_data_quality_report has no
+        ``share_mismatches``)."""
+        states = [_complete_state("2025-06-01"), _complete_state("2025-06-30")]
+
+        report = _make_views(states).build_data_quality_report(share_mismatches=[_share_mismatch((7101, 7102), "2025-06-10")], period_from=date(2025, 6, 1), period_to=date(2025, 6, 30))
+
+        matching = _share_mismatch_issues(report)
+        assert len(matching) == 1, [i.code for i in report.issues]
+        issue = matching[0]
+        assert {
+            "code": issue.code,
+            "domain": issue.domain,
+            "severity": issue.severity,
+            "message_i18n_key": issue.message_i18n_key,
+            "message_params": issue.message_params,
+            "count": issue.count,
+            "affected_asset_ids": issue.affected_asset_ids,
+            "affected_asset_names": issue.affected_asset_names,
+            "affected_fx_pairs": issue.affected_fx_pairs,
+            "cta_action": issue.cta_action,
+            "group_key": issue.group_key,
+        } == {
+            "code": IssueCode("TRANSFER_SHARE_MISMATCH"),
+            "domain": IssueDomain.PORTFOLIO,
+            "severity": IssueSeverity.INFO,
+            "message_i18n_key": "dataQuality.transferShareMismatch",
+            "message_params": {"count": 1},
+            "count": 1,
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "cta_action": None,
+            "group_key": "transfer_share_mismatch",
+        }
+        assert len(report.share_mismatch_warnings) == 1, report.share_mismatch_warnings
+        assert {7101, 7102} <= _numbers_in(report.share_mismatch_warnings[0]), report.share_mismatch_warnings
+
+    def test_each_share_mismatch_is_counted_and_named(self):
+        """Red (J-43b). Two pairs: (7201, 7202) on 2025-06-05, 10 -> 20, and (7203, 7204) on 2025-06-20 the other way,
+        20 -> 10. One issue counting 2, two strings, each naming both transactions of its own pair.
+
+        HEAD: AttributeError (no ShareMismatch), then TypeError (no ``share_mismatches``)."""
+        mismatches = [_share_mismatch((7201, 7202), "2025-06-05"), _share_mismatch((7203, 7204), "2025-06-20", broker_ids=(20, 10), shares=("0.5", "1"))]
+
+        report = _make_views([_complete_state("2025-06-30")]).build_data_quality_report(share_mismatches=mismatches, period_to=date(2025, 6, 30))
+
+        assert [(i.count, i.message_params) for i in _share_mismatch_issues(report)] == [(2, {"count": 2})], [i.code for i in report.issues]
+        assert len(report.share_mismatch_warnings) == 2, report.share_mismatch_warnings
+        assert [len(_strings_naming(report, ids)) for ids in ((7201, 7202), (7203, 7204))] == [1, 1], report.share_mismatch_warnings
+
+    def test_only_the_pairs_up_to_period_to_count(self):
+        """Red (J-43b). Window 2025-06-01..2025-06-30. The bound is ``period_to`` alone: a pair from before the window
+        (2025-03-10) still counts — its gap stays in the cumulative P&L —, one dated on ``period_to`` counts, one dated
+        the day after does not. One issue counting 2; the strings name the first two pairs and never the third.
+
+        HEAD: AttributeError (no ShareMismatch), then TypeError (no ``share_mismatches``)."""
+        mismatches = [_share_mismatch((7301, 7302), "2025-03-10"), _share_mismatch((7303, 7304), "2025-06-30"), _share_mismatch((7305, 7306), "2025-07-01")]
+        states = [_complete_state("2025-06-01"), _complete_state("2025-06-30")]
+
+        report = _make_views(states).build_data_quality_report(share_mismatches=mismatches, period_from=date(2025, 6, 1), period_to=date(2025, 6, 30))
+
+        assert [i.count for i in _share_mismatch_issues(report)] == [2], [i.code for i in report.issues]
+        assert len(report.share_mismatch_warnings) == 2, report.share_mismatch_warnings
+        assert [len(_strings_naming(report, ids)) for ids in ((7301, 7302), (7303, 7304))] == [1, 1], report.share_mismatch_warnings
+        assert [text for text in report.share_mismatch_warnings if _numbers_in(text) & {7305, 7306}] == [], report.share_mismatch_warnings
+
+    def test_a_pair_after_period_to_is_not_reported(self):
+        """Red (J-43b) on HEAD only by construction (AttributeError: no ShareMismatch; then TypeError: no
+        ``share_mismatches``); after J-43 it guards the bound. Barrier first: without ``period_to`` the pair (7401, 7402)
+        of 2025-07-15 is reported. With the window ending 2025-06-30 nothing is counted: no issue at all, not one
+        counting 0, and no string."""
+        mismatch = _share_mismatch((7401, 7402), "2025-07-15")
+        views = _make_views([_complete_state("2025-06-30")])
+
+        unbounded = views.build_data_quality_report(share_mismatches=[mismatch])
+        assert [i.count for i in _share_mismatch_issues(unbounded)] == [1], [i.code for i in unbounded.issues]
+
+        bounded = views.build_data_quality_report(share_mismatches=[mismatch], period_to=date(2025, 6, 30))
+        assert _share_mismatch_issues(bounded) == []
+        assert bounded.share_mismatch_warnings == []
+
+    def test_share_mismatches_alone_keep_the_status_ok(self):
+        """Red (J-43b) on HEAD only by construction (AttributeError: no ShareMismatch; then TypeError: no
+        ``share_mismatches``); after J-43 it guards the status. Barrier first: the pair is counted. Then a report with
+        nothing else is still ``ok``: an INFO issue and its strings degrade nothing."""
+        report = _make_views([_complete_state("2025-06-30")]).build_data_quality_report(share_mismatches=[_share_mismatch((7501, 7502), "2025-06-10")], period_to=date(2025, 6, 30))
+
+        assert [i.count for i in _share_mismatch_issues(report)] == [1], [i.code for i in report.issues]
+        assert report.data_quality_status == DataQualityStatus.OK
