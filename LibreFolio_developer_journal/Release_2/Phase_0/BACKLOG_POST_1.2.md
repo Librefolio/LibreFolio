@@ -8024,6 +8024,10 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - 17/10, E: **E-19b1** (il selettore, l'endpoint `suggest`, l'avviso `non_iso_currencies` del ripristino): parte 1 nel
     commit `6e539da02`; `staging.py` sopra B-43, con le tre condizioni di B, va col checkpoint E-19b1. Resta **E-19b2**:
     `NON_ISO_CURRENCY` nel rapporto di qualità, sul lettore di Z-32 (c).
+  - 17/10, E: **E-19b1 entrato** (dev `1742aaaaa`), e le due LOW di H su E-19a (dev `0897502a9`: `trusted_schema` nella
+    lettura, l'audit d'avvio in background dopo `plugin-secrets-check`). **E-19b2 fatto** (rossi `0e787dfb4`, codice al
+    checkpoint): una voce `NON_ISO_CURRENCY` per valore salvato, senza CTA fino a D1/D2, e `MISSING_FX_*` senza le
+    coppie con un lato non ISO. Resta di E-19 solo la correzione (D1/D2, dallo sviluppatore) ed E-20.
   - Per D1, se si sceglie C: la rietichettatura automatica deve escludere anche `GBp`, non solo GBX/ZAC/ILA.
   - ✅ Il pezzo di J: la guardia di `Intl` in `riskAnalysisHelpers.ts:168`, entrata in dev `b13ed7944` (CHANGELOG
     `826f99f17`).
