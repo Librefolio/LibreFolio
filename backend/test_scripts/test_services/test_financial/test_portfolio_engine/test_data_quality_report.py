@@ -4,12 +4,16 @@ Verifies that all 5 active portfolio IssueCodes are generated correctly
 from input data. Pure tests — no DB, no async.
 
 ``TestTransferShareMismatchIssue`` (J-43b) reads ``ShareMismatch`` from ``models`` inside its tests, so on a ``models``
-without it only those tests fail, never the module's collection.
+without it only those tests fail, never the module's collection. ``TestTransactionsBeforeFloorIssue`` (MF-SEC8-2a) reads
+``RowsBeforeFloor`` the same way. ``TestReportSentences`` (MF-SEC8-2a) reads two files and writes none: the builder's
+source and the four UI catalogues (merged in memory by ``scripts.i18n_catalog.load_catalog``).
 """
 
+import ast
 import re
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -26,6 +30,7 @@ from backend.app.schemas.portfolio import (
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
+from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
 # HELPERS
@@ -694,3 +699,189 @@ class TestTransferShareMismatchIssue:
 
         assert [i.count for i in _share_mismatch_issues(report)] == [1], [i.code for i in report.issues]
         assert report.data_quality_status == DataQualityStatus.OK
+
+
+# =============================================================================
+# TRANSACTIONS_BEFORE_FLOOR (MF-SEC8-2a)
+# =============================================================================
+
+TRANSACTIONS_BEFORE_FLOOR = "TRANSACTIONS_BEFORE_FLOOR"
+
+
+def _rows_before_floor(count: int, earliest: date):
+    """A ``RowsBeforeFloor`` (MF-SEC8-2a), read from ``models`` when the test runs."""
+    record = getattr(portfolio_models, "RowsBeforeFloor", None)
+    if record is None:
+        pytest.fail("financial_math.portfolio.models has no RowsBeforeFloor (MF-SEC8-2a): nothing carries the rows dated before 1900 to the report")
+    return record(count=count, earliest=earliest)
+
+
+def _floor_report(rows_before_floor):
+    """The report of one complete day, given ``rows_before_floor``: a TypeError (no such parameter) fails the test."""
+    try:
+        return _make_views([_complete_state("2025-06-30")]).build_data_quality_report(rows_before_floor=rows_before_floor)
+    except TypeError as exc:
+        pytest.fail(f"build_data_quality_report(…, rows_before_floor=…) raised {exc!r}: it takes the scope's rows dated before 1900 (MF-SEC8-2a)")
+
+
+def _floor_issues(report) -> list:
+    """The report's TRANSACTIONS_BEFORE_FLOOR issues, matched on the code's value (HEAD has no enum member to name)."""
+    return [i for i in report.issues if i.code == TRANSACTIONS_BEFORE_FLOOR]
+
+
+class TestTransactionsBeforeFloorIssue:
+    """MF-SEC8-2a: a transaction stored before ``EARLIEST_RANGE_START`` (1900-01-01; an older version or a hand edit — N74
+    refuses new ones) is replayed on its own date, but no state is emitted before the floor, so the histories start on
+    1900-01-01 silently. ``build_data_quality_report(rows_before_floor=RowsBeforeFloor(count, earliest))`` turns the
+    engine's count into one WARNING ``TRANSACTIONS_BEFORE_FLOOR`` (coordinator's decision, no CTA): key
+    ``dataQuality.transactionsBeforeFloor``, params ``{count, earliest}`` (the date in ISO form), ``count``, group
+    ``transactions_before_floor``, no asset, no pair, no CTA. None, or a count of 0, gives none. Like the other warnings
+    that fill no legacy gap field (MISSING_COST_BASIS, INVALID_SPLIT_RATIO), it does not move ``data_quality_status``.
+
+    On HEAD f4a1e374f ``IssueCode`` has no ``TRANSACTIONS_BEFORE_FLOOR``, ``models`` no ``RowsBeforeFloor`` and the builder
+    no ``rows_before_floor``: each test that needs one of them fails on that alone, and the module still collects.
+    """
+
+    def test_transactions_before_floor_is_a_portfolio_issue_code(self):
+        """Red on HEAD: IssueCode has no TRANSACTIONS_BEFORE_FLOOR (the frontend keys on the string)."""
+        assert getattr(IssueCode, TRANSACTIONS_BEFORE_FLOOR, None) == TRANSACTIONS_BEFORE_FLOOR, "schemas.portfolio.IssueCode has no TRANSACTIONS_BEFORE_FLOOR (MF-SEC8-2a)"
+
+    def test_rows_before_the_floor_produce_one_warning_with_their_shape(self):
+        """Red on HEAD (no RowsBeforeFloor). Three rows, the earliest on 0001-01-01 (``date.min``, the oldest a stored row
+        can be): one WARNING with the contract's shape — the date written in full, four digits."""
+        report = _floor_report(_rows_before_floor(3, date(1, 1, 1)))
+
+        matching = _floor_issues(report)
+        assert len(matching) == 1, [i.code for i in report.issues]
+        issue = matching[0]
+        assert {
+            "domain": issue.domain,
+            "severity": issue.severity,
+            "message_i18n_key": issue.message_i18n_key,
+            "message_params": issue.message_params,
+            "count": issue.count,
+            "affected_asset_ids": issue.affected_asset_ids,
+            "affected_asset_names": issue.affected_asset_names,
+            "affected_fx_pairs": issue.affected_fx_pairs,
+            "cta_action": issue.cta_action,
+            "cta_target": issue.cta_target,
+            "group_key": issue.group_key,
+        } == {
+            "domain": IssueDomain.PORTFOLIO,
+            "severity": IssueSeverity.WARNING,
+            "message_i18n_key": "dataQuality.transactionsBeforeFloor",
+            "message_params": {"count": 3, "earliest": "0001-01-01"},
+            "count": 3,
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "cta_action": None,
+            "cta_target": None,
+            "group_key": "transactions_before_floor",
+        }
+
+    def test_the_params_are_the_count_and_the_earliest_date_given(self):
+        """Red on HEAD (no RowsBeforeFloor). One row on 1899-12-31, the floor's eve: the params follow the record, they
+        are not a constant."""
+        issues = _floor_issues(_floor_report(_rows_before_floor(1, date(1899, 12, 31))))
+
+        assert [(i.count, i.message_params) for i in issues] == [(1, {"count": 1, "earliest": "1899-12-31"})], issues
+
+    @pytest.mark.parametrize("count", [pytest.param(None, id="none"), pytest.param(0, id="zero-count")])
+    def test_nothing_before_the_floor_produces_no_issue(self, count):
+        """Red on HEAD only by construction (TypeError: no ``rows_before_floor``; for a count of 0, no RowsBeforeFloor
+        either). After the cure it guards that nothing to report gives no issue, not one counting 0."""
+        rows_before_floor = None if count is None else _rows_before_floor(count, date(1, 1, 1))
+
+        assert _floor_issues(_floor_report(rows_before_floor)) == []
+
+    def test_guard_the_default_call_gives_no_issue(self):
+        """Green on HEAD and after: a caller that does not pass the parameter gets no such issue."""
+        report = _make_views([_complete_state("2025-06-30")]).build_data_quality_report()
+
+        assert _floor_issues(report) == []
+
+    def test_the_warning_alone_moves_the_status_as_the_other_warnings_do(self):
+        """Red on HEAD (no RowsBeforeFloor). Barrier first: the warning is there. Then the status is what a warning that
+        fills no legacy gap field leaves (MISSING_COST_BASIS alone, on the same day): ``ok`` — the histories are complete
+        from the floor on, nothing in them is missing or carried forward."""
+        report = _floor_report(_rows_before_floor(2, date(1890, 1, 1)))
+        other_warning = _make_views([_complete_state("2025-06-30")]).build_data_quality_report(missing_cost_basis_assets=[(7, "ACME")])
+
+        assert [i.count for i in _floor_issues(report)] == [2], [i.code for i in report.issues]
+        assert [i.severity for i in other_warning.issues] == [IssueSeverity.WARNING], "precondition: the comparison is another warning, alone"
+        assert report.data_quality_status == other_warning.data_quality_status == DataQualityStatus.OK
+
+
+# =============================================================================
+# THE REPORT'S SENTENCES (MF-SEC8-2a) — every key the builder writes has one in each language
+# =============================================================================
+
+REPO_ROOT = Path(__file__).resolve().parents[5]
+DATA_QUALITY_SOURCE = REPO_ROOT / "backend" / "app" / "services" / "financial_math" / "portfolio" / "data_quality.py"
+LANGUAGES = ("en", "it", "fr", "es")
+
+
+def _issue_constructions() -> list[ast.Call]:
+    """Every ``DataQualityIssue(...)`` call written in ``data_quality.py``."""
+    tree = ast.parse(DATA_QUALITY_SOURCE.read_text(encoding="utf-8"), filename=str(DATA_QUALITY_SOURCE))
+    return [node for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "DataQualityIssue"]
+
+
+def _literal_key(call: ast.Call) -> str | None:
+    for keyword in call.keywords:
+        if keyword.arg == "message_i18n_key" and isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+            return keyword.value.value
+    return None
+
+
+def _sentence(catalogue: dict, key: str) -> object:
+    node: object = catalogue
+    for part in key.split("."):
+        node = node.get(part) if isinstance(node, dict) else None
+    return node
+
+
+def _has_sentence(catalogue: dict, key: str) -> bool:
+    sentence = _sentence(catalogue, key)
+    return isinstance(sentence, str) and bool(sentence.strip())
+
+
+class TestReportSentences:
+    """The builder's ``message_i18n_key`` values are read from its source (a key built on a rare branch would escape a
+    run), then looked up in the four UI catalogues merged from their sources without the English fallback
+    (``scripts.i18n_catalog.load_catalog``, as ``test_risk_warnings_i18n.py`` does for the risk warnings). No gate checked
+    this for ``data_quality.py`` before MF-SEC8-2a.
+
+    On HEAD f4a1e374f the scan and the gate are green (twelve keys, all translated); the floor's sentence is red: no
+    catalogue has ``dataQuality.transactionsBeforeFloor``.
+    """
+
+    def test_the_scan_reaches_the_builder_s_keys(self):
+        """Presence barrier (green on HEAD and after): a scan that found nothing would make the gate vacuous; and every
+        issue the builder writes carries a literal key, the only kind the gate can check."""
+        calls = _issue_constructions()
+        keys = {_literal_key(call) for call in calls}
+
+        assert {"dataQuality.missingPrice", "dataQuality.invalidSplitRatio", "dataQuality.transferShareMismatch"} <= keys, sorted(map(str, keys))
+        assert [call.lineno for call in calls if _literal_key(call) is None] == [], "DataQualityIssue built without a literal message_i18n_key"
+
+    @pytest.mark.parametrize("language", LANGUAGES)
+    def test_every_key_the_builder_writes_has_a_sentence(self, language):
+        """Gate (green on HEAD and after): each literal key of ``data_quality.py`` has a non-empty sentence in the
+        language — the floor's key included once the builder writes it."""
+        catalogue = load_catalog(language, fallback=False)
+        keys = sorted({key for call in _issue_constructions() if (key := _literal_key(call)) is not None})
+
+        missing = [key for key in keys if not _has_sentence(catalogue, key)]
+        assert missing == [], f"{language}: no sentence for {missing}"
+
+    @pytest.mark.parametrize("language", LANGUAGES)
+    def test_the_floor_sentence_names_the_count_and_the_earliest_date(self, language):
+        """Red on HEAD: no sentence. After the cure each language has one, and it uses both params the warning sends —
+        a translation without ``{earliest}`` would hide the date the user has to correct."""
+        catalogue = load_catalog(language, fallback=False)
+
+        assert _has_sentence(catalogue, "dataQuality.transactionsBeforeFloor"), f"{language}: no sentence for dataQuality.transactionsBeforeFloor"
+        sentence = str(_sentence(catalogue, "dataQuality.transactionsBeforeFloor"))
+        assert {"{count}", "{earliest}"} <= set(re.findall(r"\{\w+\}", sentence)), f"{language}: {sentence!r}"

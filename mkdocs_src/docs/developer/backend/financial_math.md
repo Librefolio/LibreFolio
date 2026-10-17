@@ -275,7 +275,10 @@ gives, and the part of the replay before `date_from` costs its dirty days, not i
 A movement stored before `EARLIEST_RANGE_START` (1 January 1900, `utils/datetime_utils.py`) is
 replayed exactly, on its own date and in its own order, never moved onto 1900; `calculate()` never
 passes a `date_from` before that floor, so the replay crosses the years between such a movement
-and `date_from` from dirty day to dirty day.
+and `date_from` from dirty day to dirty day. `calculate()` counts those rows into
+`PortfolioCalculationResult.rows_before_floor` (`RowsBeforeFloor(count, earliest)`), which the
+data-quality report turns into the warning `TRANSACTIONS_BEFORE_FLOOR` (MF-SEC8-2a; see
+[Data Quality Banner](../frontend/data-quality-banner.md)).
 
 !!! info "Why: R13-SEC8"
 

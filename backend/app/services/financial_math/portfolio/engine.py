@@ -26,7 +26,7 @@ from backend.app.services.financial_math.native_cash import cash_movement_from_t
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
-from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, SplitHistory, SplitRecord
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, RowsBeforeFloor, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
 from backend.app.services.financial_math.splits import is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import convert_bulk
@@ -454,6 +454,9 @@ class PortfolioCalculationEngine:
         # J-43: the pairs between brokers owned at different shares, for the data-quality report (the cache key holds the shares).
         result.share_mismatches = classification.share_mismatches
         result.invalid_split_events = sorted(invalid_split_events.values(), key=lambda event: event.event_id)
+        # MF-SEC8-2a: the rows replayed before the floor the histories start on, for the data-quality report.
+        before_floor = [tx.date for tx in all_txs if tx.date < EARLIEST_RANGE_START]
+        result.rows_before_floor = RowsBeforeFloor(count=len(before_floor), earliest=min(before_floor)) if before_floor else None
 
         # ── 12. Store in blob cache ──
         _portfolio_blob_cache.set(blob_key, result)
