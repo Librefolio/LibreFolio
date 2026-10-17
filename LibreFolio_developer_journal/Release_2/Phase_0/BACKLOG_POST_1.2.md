@@ -6536,12 +6536,15 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   fondi il banner mostra l'importo e la data di uno solo e nasconde gli altri. La cura: una riga per issue per i codici
   senza lotto (non un totale del backend, che sommerebbe valute diverse e perderebbe le date). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-36».
-- **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
+- ✅ **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
   alla revisione di SEC8-1b (17/10), facoltativa. Per una richiesta fuori dai limiti la finestra preparata
   (`requested_range`, che fa da ripiego di `metadata.analyzed_range`) è quella limitata, mentre `output.replay_range` e
   `metadata.params` ripetono la richiesta. Visibile solo fuori dai limiti. Da scegliere una convenzione sola, o da dire
   nella pagina. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione
   «SEC8-1b».
+  - ✅ 17/10: fatta da J (checkpoint J-52). `metadata.params` ripete la richiesta; l'output (`replay_range`) e
+    `metadata.analyzed_range` dicono la finestra rigiocata, quella limitata. Lo stress passa a `algorithm_version` 3.0.1,
+    un salto solo per SEC8-1b e J-52. Dettagli: piano 05, sezione «J-52».
 - **J-54 · Nell'AI Export `null` vuol dire anche «nessuno», e T-B7 lo nomina come «non disponibile»** — minimo,
   chiarezza; J, 17/10 (rossi di T-B7, letto nel codice).
   - Il backend scrive ogni `None` come `null` (`model_dump(mode="json")`, senza `exclude_none`), anche dove vuol dire

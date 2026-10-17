@@ -6420,6 +6420,8 @@ prossimo checkpoint.
 - **devWiki**: il punto di T-B7 in `decisions/ai-export-versioned-snapshot-boundary.md` ora descrive la lista; una voce
   nel registro.
 - ⏳ **Checkpoint J-54** (FROZEN).
+- ✅ **Checkpoint J-54** (2026-10-17): entrato (dev `f9aef5d99`, `0081cb950`); la riga 🔄 di T-B7 estesa
+  (`a3d4d60a7`); worktree in fast-forward. Il coordinatore conferma le 11 voci; T-B9 chiusa come verificata.
 - **Celle delle tabelle miste**: restano `null` (decisione del coordinatore); il seguito, dopo la 1.3, è **J-55**.
 - ⏳ **Rossi** (test-author, brief 16:2x).
 - Patch pronte, non applicate: `files/j/j54/apply_fix.py` (7 ancore: la costante, la ricerca, `pipeTable` col contesto,
@@ -6445,3 +6447,71 @@ prossimo checkpoint.
   - Lo fissa già `test_engine_closing_term_reconciles_despite_decimal_rounding` (`1E-24`, reconciled).
 - **Proposta**: chiudere T-B9 come verificata, senza codice. Una regola del renderer che non azzera `residual` quando
   `reconciled` è falso aggiungerebbe un caso speciale per una combinazione che il servizio non produce.
+
+- ✅ **T-B9 chiusa come verificata** dal coordinatore (17/10, con l'ingresso di J-54).
+
+#### Revisioni di MF-J45b e C-97c-2 (17/10 ~17:10–17:30, sola lettura; base `a3d4d60a7`)
+
+- **MF-J45b** (`00397db34`, single-flight nel motore): **OK**.
+  - La chiave del volo è `(blob_key, actual_from, actual_to)`, e `blob_key` contiene già utente, perimetro, quote,
+    valuta, impronte (transazioni, prezzi, cambi, split), i due `include_*` e `period_start or date_from`: nessun
+    seguace riceve il risultato di altri ingressi.
+  - Il ciclo di vita del future è corretto: `shield`, regolato prima di togliere la chiave, `exception()` letto, futures
+    di un altro loop ignorati.
+  - LOW: un errore deterministico si ritenta in fila, uno per seguace.
+  - Nit di doc: il volo vuole il range esatto, mentre la cache accetta anche un blob che parte prima.
+  - Il LOW e il nit vanno a MF (coordinatore).
+- **C-97c-2** (`a8ec9d309`, cifre dei lotti, W): **OK**.
+  - Il dubbio sui float a 10 decimali non regge: una quantità salvata ha al più 15 cifre significative
+    (`REAL_SIGNIFICANT_DIGITS`), che un float tiene.
+  - Nit: il messaggio del commit dice che la somma della custodia non somma più float, invece somma ancora in float;
+    l'arrotondamento alla decima ne nasconde il rumore, e una somma oltre 15 cifre perde una fetta minuscola.
+  - Nit: «a price under a cent» sottostima l'effetto. Ogni prezzo unitario sotto 10 prende fino a 4 cifre
+    significative (`1.23456` → `1.235`), coerente con `formatPrice` di C-97c-1.
+- **Proposta del prossimo lotto** (al coordinatore, 17:3x):
+  - **J-52**: l'output dello stress dice la finestra rigiocata (`prepared.requested_range`), mentre `metadata.params`
+    ripete la richiesta. Proposto il salto `algorithm_version` 3.0.0 → 3.0.1 per il valore che cambia fuori dai limiti;
+    copre anche SEC8-1b, che non l'aveva fatto (regola del rischio: «bump whenever the values change»).
+  - Poi **CP-10d**, il lotto di riordino più piccolo, sbloccato da MF-D1 (`aca75c7ca`): `series_preparation.py` →
+    `services/market_series.py`, solo import e `applyTo`, circa 16 file.
+
+#### J-52 — una convenzione sola per la finestra del rigioco (17/10, dalle 17:3x; base `a3d4d60a7`)
+
+- **Via del coordinatore (17:3x)**: GO, e sì al salto 3.0.0 → 3.0.1, una volta, per SEC8-1b e J-52; riga 🐛 nel
+  CHANGELOG che nomina il salto. Dopo l'ingresso, «ready for CP-10d»: il coordinatore controlla che `assets/`,
+  `ai_export/components/` e il runner siano quieti in tutti i worktree.
+- **Convenzione**: `metadata.params` ripete ciò che è stato chiesto; l'output e `metadata.analyzed_range` dicono ciò che
+  è stato rigiocato.
+  - `risk_plugins/stress/plugin.py:637`: `replay_range=params.replay_range` → `prepared.requested_range`, la richiesta
+    limitata da SEC8-1b (`risk/replay.py:51`).
+  - Cambia solo per una finestra fuori dai limiti. Nessun lettore: il frontend manda `replay_range` nella richiesta
+    (`riskRequest.ts:153`) e non legge l'eco; l'AI Export non usa lo stress.
+- **La versione**: `StressAnalytic.algorithm_version` 3.0.0 → 3.0.1 (regola del rischio: «bump whenever the values
+  change»). SEC8-1b aveva cambiato la finestra rigiocata senza salto; uscita nella 1.2.0 come 3.0.0. Nessuno fissa
+  `3.0.0` nei test, nel frontend o nella doc.
+- ✅ **Rossi (17:2x)** del test-author, sul codice vecchio (`-k replay_range_bounds`): **3 rossi, 7 verdi**.
+  - R1: l'eco è la finestra grezza (fino a oggi + 400), e il controllo «niente oltre domani» ora la vede.
+  - **R6** (nuovo): una finestra che parte prima del pavimento, su un libro F quotato il giorno prima del pavimento,
+    quindi rigiocabile. L'eco grezza parte dal 1917 invece del pavimento del 1926.
+  - **R7** (nuovo): la versione è `3.0.0` invece di `3.0.1`.
+  - R2, R3, R5 e G2 non fissano un'eco: lì il rigioco non è disponibile, quindi non c'è output. G1 è verde.
+  - Il test-author ha verificato nel codice:
+    - `prepared.requested_range` è la richiesta limitata (`replay.py:51,104`);
+    - `metadata.params` è la richiesta grezza (`results.py:446`);
+    - `bounded_range()` restituisce lo stesso oggetto dentro i limiti.
+  - Nota: `test_risk_analytics.py:1660` fissa `output.replay_range == replay_range` su un contesto sintetico dove le
+    due finestre coincidono: resta verde, ma non distingue la fonte.
+- ✅ **Codice (17:29)**: la patch applicata dopo il rosso. La versione 3.0.1 col commento, l'eco
+  `prepared.requested_range` e la frase di «Replay Coverage».
+- ✅ **Verdi (17:29–17:38)**:
+  - ruff e black puliti;
+  - il file **10**;
+  - `risk-all` **918**;
+  - `schemas risk` **93**;
+  - `mkdocs build` stretto ✓, check-links ✓.
+
+  Porta 6185 libera.
+- ⏳ **Checkpoint J-52** (FROZEN).
+- Patch pronta, non applicata: `files/j/j52/apply_fix.py` (3 ancore: versione col commento, l'eco, la frase di «Replay
+  Coverage» in `risk/architecture.md`). Prova a secco OK. Verdi previsti: lint, il file, `risk-all`, `schemas risk`,
+  doc.
