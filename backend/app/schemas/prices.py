@@ -47,6 +47,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
+    PeriodChangesAsOf,
     SafeDecimal,
     StrictModel,
 )
@@ -377,11 +378,15 @@ class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
 # ============================================================================
 
 
+#: The most assets one fixed-period changes request may list (MF-P2b): the Assets table sends every asset it lists.
+PERIOD_CHANGES_MAX_ASSETS = 10_000
+
+
 class FAPeriodChangesQueryItem(StrictModel):
     """One asset of a fixed-period changes request: the Assets table's Δ columns (1D … 5Y), up to ``as_of``."""
 
     asset_id: int = Field(..., description="Asset ID")
-    as_of: date_type = Field(..., description="Anchor day: the end of the range the table shows")
+    as_of: PeriodChangesAsOf = Field(..., description="Anchor day: the end of the range the table shows (1900-01-01 or later)")
     target_currency: Optional[str] = Field(None, description="Value the prices in this currency, each day's at that day's rate (None = native currency)")
 
     @field_validator("target_currency")
@@ -397,7 +402,7 @@ class FAPeriodChange(StrictModel):
 
     key: str = Field(..., description="Period key: 1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y")
     days: int = Field(..., ge=1, description="Calendar days of the period")
-    change_ratio: Optional[SafeDecimal] = Field(None, description="Price on as_of / price on as_of − days − 1; null without a usable price on either day")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="(Price on as_of ÷ price on as_of − days) − 1; null without a usable price on either day")
 
 
 class FAPeriodChangesResult(StrictModel):

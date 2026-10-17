@@ -50,6 +50,14 @@ def schemas_scheduled_investment_bounds(verbose: bool = False, test_names: list 
     return run_command(cmd, "Scheduled investment bounds tests", verbose=verbose)
 
 
+def schemas_period_changes_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC8 (MF-P2b): the as_of floor of a fixed-period changes item."""
+    print_section("Schemas: Period Changes Bounds (R13-SEC8, MF-P2b)")
+    print_info("Testing: backend/app/schemas/prices.py (FAPeriodChangesQueryItem), backend/app/schemas/fx.py (FXPeriodChangesRequest)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_period_changes_bounds.py", test_names)
+    return run_command(cmd, "Period changes bounds tests", verbose=verbose)
+
+
 def schemas_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Test transaction Pydantic schemas."""
     print_section("Schemas: Transactions (TXCreateItem, TXReadItem, etc.)")
@@ -198,5 +206,14 @@ Tests for Pydantic/SQLModel schema validation:
         # <data dir>/logs/ and opens librefolio.log there, the lane's log that the shared backend writes too.
     )
     add_test(cat, "scheduled-investment-bounds", schemas_scheduled_investment_bounds, name="Scheduled Investment Bounds", desc="R13-SEC7-2 (N73): period dates 1900-2200, span ≤ 36 525 days, ≤ 1 200 periods, grace ≤ 36 525 days")
+    add_test(
+        cat,
+        "period-changes-bounds",
+        schemas_period_changes_bounds,
+        name="Period Changes Bounds",
+        desc="R13-SEC8 (MF-P2b): the as_of of an asset or FX period-changes item is 1900-01-01 or later (no upper bound)",
+        # PURE: imports schemas.prices and schemas.fx only and validates items; no row, no server, no network.
+        isolation="pure",
+    )
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")
     registry["schemas"] = cat

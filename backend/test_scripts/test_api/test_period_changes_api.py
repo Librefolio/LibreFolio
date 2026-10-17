@@ -9,19 +9,27 @@ The routes' contract for their consumer (workstream X, the Assets and FX tables'
 - the numbers are the pages': the Assets page's ``computePeriodDelta`` on the dense series of
   ``POST /assets/prices/query``, the FX page's on the per-day rates of ``POST /fx/currencies/convert`` — both ported in
   ``fixtures/period_changes/page_ports.py`` and compared exactly (seeds of the form 2^a·5^b);
-- base == quote is a 422.
+- base == quote is a 422;
+- the bounds of a request (R13-SEC8, lot MF-P2b), each a 422: at most 10 000 assets or 1 000 pairs, at most 5 distinct
+  ``as_of`` (each costs ten valued days), every ``as_of`` 1900-01-01 or later (on or before 0005-12-30 its 5Y reference,
+  1825 days back, overflowed ``date``: a 500). The limits are written out, not imported: the contract the review fixed.
 
 The services' cases (young and stale histories, currencies, missing rates, bulk order) are
 ``test_services/test_period_changes.py``.
 
 Isolation. The asset is this test's (unique name, deleted with its prices). The rates are on AWG/TMT, a pair nothing
 else in the repository uses, dated 1981-1987, deleted (``delete_all``) before seeding — a killed run's leftovers — and
-after.
+after. The bounds' tests write nothing: their assets are an id no row can carry, their pair AWG/TMT, read only, and they
+assert the status, the request's own items and the 422's ``detail``, never a value.
 """
 
+import json
+import re
 import uuid
+from collections.abc import Callable
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import NamedTuple
 
 import httpx
 import pytest
@@ -52,6 +60,16 @@ RATES_LAST = date(1987, 4, 30)
 #: The range the pages load for the comparison: ``[as_of − 5Y − a bit, as_of]``.
 PAGE_RANGE_DAYS = 1825 + 10
 EXPECTED_PERIODS = [list(period) for period in PAGE_PERIODS]
+
+# The bounds of a request (R13-SEC8, MF-P2b), written out.
+MAX_ASSETS = 10_000
+MAX_PAIRS = 1_000
+MAX_AS_OF_DAYS = 5
+AS_OF_FLOOR = date(1900, 1, 1)
+#: An asset id no row can carry: the 10 000 items of the cap's guard value nothing, ten grouped queries that find nothing.
+UNKNOWN_ASSET_ID = 2**62 - 1
+#: The bounds' requests: a list at its cap values 10 000 assets, or 1 000 pairs × 10 days; room for a loaded lane (the rest keep TIMEOUT).
+BULK_TIMEOUT = 120
 
 
 async def create_user_and_login(client: httpx.AsyncClient) -> None:
@@ -165,6 +183,148 @@ async def test_fx_period_changes_refuse_one_currency_on_both_sides(test_server, 
         resp = await client.post(FX_PATH, json=[{"base": base, "quote": quote, "as_of": SUNDAY.isoformat()}], timeout=TIMEOUT)
     assert resp.status_code == 422, f"expected 422 for {base}/{quote}, got {resp.status_code}: {resp.text}"
     print_success(f"{base}/{quote} refused with 422")
+
+
+# ============================================================================
+# BOUNDS OF A REQUEST (R13-SEC8, MF-P2b)
+# ============================================================================
+
+
+def _asset_item(as_of: date) -> dict:
+    return {"asset_id": UNKNOWN_ASSET_ID, "as_of": as_of.isoformat()}
+
+
+def _fx_item(as_of: date) -> dict:
+    return {"base": FX_BASE, "quote": FX_QUOTE, "as_of": as_of.isoformat()}
+
+
+class _Route(NamedTuple):
+    """A period-changes route: its path, the most items one request may list, one item at a given ``as_of``."""
+
+    path: str
+    cap: int
+    item: Callable[[date], dict]
+
+
+BOUNDED_ROUTES = [
+    pytest.param(_Route(ASSET_PATH, MAX_ASSETS, _asset_item), id="assets"),
+    pytest.param(_Route(FX_PATH, MAX_PAIRS, _fx_item), id="fx"),
+]
+
+#: Days before the floor: the day before it; the first day whose 5Y reference exists (``0001-01-01``) and the day before
+#: it, the last whose 5Y reference overflowed ``date`` (a 500, as the first day was).
+BEFORE_THE_FLOOR = [
+    pytest.param(date(1899, 12, 31), id="1899-12-31"),
+    pytest.param(date(5, 12, 31), id="0005-12-31"),
+    pytest.param(date(5, 12, 30), id="0005-12-30"),
+    pytest.param(date(1, 1, 1), id="0001-01-01"),
+]
+
+
+def _distinct_days(count: int) -> list[date]:
+    return [SUNDAY - timedelta(days=offset) for offset in range(count)]
+
+
+async def _post(client: httpx.AsyncClient, route: _Route, as_ofs: list[date]) -> httpx.Response:
+    return await client.post(route.path, json=[route.item(as_of) for as_of in as_ofs], timeout=BULK_TIMEOUT)
+
+
+def _refusal(resp: httpx.Response) -> list:
+    """The 422's ``detail``: pydantic's error list (FastAPI drops each error's ``input``) or the route's own detail."""
+    assert resp.status_code == 422, f"expected 422, got {resp.status_code}: {resp.text[:500]}"
+    detail = resp.json()["detail"]
+    return detail if isinstance(detail, list) else [detail]
+
+
+def _names(detail: list, token: str) -> bool:
+    """Whether the 422 names ``token`` (a field, a limit) as a whole word or number, wherever the route puts it."""
+    return re.search(rf"(?<!\w){re.escape(token)}(?!\w|\.\d)", json.dumps(detail)) is not None
+
+
+def _locs(detail: list) -> list:
+    return [error.get("loc") for error in detail if isinstance(error, dict)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", BOUNDED_ROUTES)
+async def test_period_changes_accept_a_list_at_its_cap(test_server, route):
+    """Guard: a list of exactly the cap (10 000 assets, 1 000 pairs) is answered, one item per entry."""
+    print_section(f"MF-P2b: {route.path} with {route.cap} items")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        resp = await _post(client, route, [SUNDAY] * route.cap)
+    assert resp.status_code == 200, f"expected 200 for {route.cap} items, got {resp.status_code}: {resp.text[:500]}"
+    items = resp.json()["items"]
+    assert len(items) == route.cap, f"one answer per requested item: {len(items)} for {route.cap}"
+    assert {item["as_of"] for item in items} == {SUNDAY.isoformat()}
+    print_success(f"{route.cap} items answered")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", BOUNDED_ROUTES)
+async def test_period_changes_refuse_a_list_over_its_cap(test_server, route):
+    """RED: one item over the cap (10 001 assets, 1 001 pairs) is a 422 that names the cap."""
+    print_section(f"MF-P2b: {route.path} with {route.cap + 1} items")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        resp = await _post(client, route, [SUNDAY] * (route.cap + 1))
+    detail = _refusal(resp)
+    assert _names(detail, str(route.cap)), f"the 422 must name the cap {route.cap}: {detail}"
+    print_success(f"{route.cap + 1} items refused with 422")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", BOUNDED_ROUTES)
+async def test_period_changes_accept_five_distinct_as_of(test_server, route):
+    """Guard: five distinct ``as_of``, each asked twice, are answered in request order — the cap counts days, not items."""
+    print_section(f"MF-P2b: {route.path} with {MAX_AS_OF_DAYS} distinct as_of")
+    as_ofs = _distinct_days(MAX_AS_OF_DAYS) * 2
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        resp = await _post(client, route, as_ofs)
+    assert resp.status_code == 200, f"expected 200 for {MAX_AS_OF_DAYS} distinct as_of, got {resp.status_code}: {resp.text[:500]}"
+    assert [item["as_of"] for item in resp.json()["items"]] == [as_of.isoformat() for as_of in as_ofs]
+    print_success(f"{MAX_AS_OF_DAYS} distinct as_of answered")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", BOUNDED_ROUTES)
+async def test_period_changes_refuse_a_sixth_distinct_as_of(test_server, route):
+    """RED: six distinct ``as_of`` — sixty valued days — are a 422 that names ``as_of``."""
+    print_section(f"MF-P2b: {route.path} with {MAX_AS_OF_DAYS + 1} distinct as_of")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        resp = await _post(client, route, _distinct_days(MAX_AS_OF_DAYS + 1))
+    detail = _refusal(resp)
+    assert _names(detail, "as_of"), f"the 422 must name as_of: {detail}"
+    print_success(f"{MAX_AS_OF_DAYS + 1} distinct as_of refused with 422")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("as_of", BEFORE_THE_FLOOR)
+@pytest.mark.parametrize("route", BOUNDED_ROUTES)
+async def test_period_changes_refuse_as_of_before_1900(test_server, route, as_of):
+    """RED: an ``as_of`` before 1900-01-01 is a 422 on that item's ``as_of`` — on or before 0005-12-30 it was a 500."""
+    print_section(f"MF-P2b: {route.path} at {as_of.isoformat()}")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        resp = await _post(client, route, [as_of])
+    detail = _refusal(resp)
+    assert ["body", 0, "as_of"] in _locs(detail), f"the 422 must be on the item's as_of: {detail}"
+    print_success(f"as_of {as_of.isoformat()} refused with 422")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", BOUNDED_ROUTES)
+async def test_period_changes_accept_as_of_from_1900(test_server, route):
+    """Guard: the floor itself, 1900-01-01, is answered."""
+    print_section(f"MF-P2b: {route.path} at {AS_OF_FLOOR.isoformat()}")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        resp = await _post(client, route, [AS_OF_FLOOR])
+    assert resp.status_code == 200, f"expected 200 at the floor, got {resp.status_code}: {resp.text[:500]}"
+    assert [item["as_of"] for item in resp.json()["items"]] == [AS_OF_FLOOR.isoformat()]
+    print_success("as_of 1900-01-01 answered")
 
 
 # ============================================================================

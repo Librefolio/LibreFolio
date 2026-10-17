@@ -316,7 +316,10 @@ the pair through its `requiredFxPairs` banners, and its comparison loader drops 
 change itself is the house's `fixed_period_changes()`
 ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
 
-- **Request**: a list of `{asset_id, as_of, target_currency?}`.
+- **Request**: a list of `{asset_id, as_of, target_currency?}`. The limits (MF-P2b, finding R13-SEC8): at most
+  `PERIOD_CHANGES_MAX_ASSETS` (10 000) items; at most `PERIOD_CHANGES_MAX_AS_OF_DAYS` (5) distinct `as_of` days,
+  since each costs ten grouped queries below; each `as_of` on or after `EARLIEST_RANGE_START` (1 January 1900; up to
+  0005-12-30 the 5Y day fell before year 1, a 500). Past a limit the request is refused (422).
 - **Response**: `items[]`, in request order, of `{asset_id, as_of, currency, periods[], errors[]}`. Each period is
   `{key, days, change_ratio}`, with `change_ratio = price(as_of) / price(as_of − days) − 1`: a fraction, null when
   either price is missing or ≤ 0.
