@@ -12,7 +12,7 @@ command line, through environment variables, or in the app's **Settings › Admi
 - 🐳 **[Advanced Docker](docker_advanced.md)**: Containerized deployment using Docker Compose, volume bindings, and user GID/UID ownership configuration.
 - 🌐 **[Expose Securely](service_exposure.md)**: Securely expose your private LibreFolio instance over the internet.
 - 🔍 **[Check Connection Security](connection_checks.md)**: Verify that your users connect securely, and fix the session cookie or the reverse proxy when they do not.
-- 🏢 **[Hosting for Others](hosting_providers.md)**: Run LibreFolio for other people: the managed profile, the initial administrator, how to block an instance, backups for your hosting panel and the upload limit of a restore.
+- 🏢 **[Hosting for Others](hosting_providers.md)**: Run LibreFolio for other people: the managed profile, the initial administrator, how to block an instance, backups for your hosting panel, the upload limit of a restore and your legal pages.
 - 💤 **[Sleep and Wake](sleep_wake.md)**: Let an unused Fly.io machine suspend itself, and wake it on a schedule: a hosting panel or a cron job brings prices and exchange rates up to date.
 
 ### ⚙️ System Configuration
@@ -48,6 +48,9 @@ a **How to update** link to the [updating guide](../user/installation.md#updatin
 - To check right away, use **Check for updates** in the
   [changelog](../user/settings/about.md#changelog-modal): it reports errors, and versions you
   skipped too.
+- On an instance in the `managed` profile, run by a hosting provider, there is no check at all:
+  none at sign-in, and no **Check for updates** in the changelog. The provider updates the instance
+  ([Hosting for Others](hosting_providers.md#managed-profile)).
 
 ??? note "👥 Other users — when someone who is not an administrator checks"
 

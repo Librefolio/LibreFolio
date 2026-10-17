@@ -808,12 +808,54 @@ runs `security/SecurityTab.test.ts` (the store it is given, the placeholder, the
 words, the links, the all-clear, the passed checks, «check again», the failures, colour roles only,
 every key a message of the four catalogues).
 
-### ℹ️ AboutTab
+### ℹ️ AboutTab {: #abouttab }
 
 Read-only system information:
 
 - Version (from Git tag)
 - Backend/frontend info
+
+Between the links (website, GitHub, license) and the system information sit two cards:
+
+- **Support** (`about-support-card`): `SupportActions`, whose **Buy Me a Coffee** link and «Or share»
+  divider follow `donationsVisible()`, shown only once `GET /system/instance` has answered
+  `selfhosted` ([Instance configuration](../../state/app-state.md#instance-config)). The share
+  buttons stay on every instance.
+- **Legal notice** (`about-legal-card`): the `legal.title` heading, then
+  [`LegalNotice`](#legal-notice). It does not depend on the diagnostics: it shows, links included,
+  when `GET /system/info` fails.
+
+#### The legal notice {: #legal-notice }
+
+`lib/features/legal/` holds the legal notice of the instance (F09, workstream A; its places are
+decision D-A11): two components that read `legal` of `instanceConfig`, the `{terms_url, privacy_url}`
+of `GET /system/instance`
+([Public instance configuration](../../../architecture/settings.md#public-instance-configuration)).
+
+| Component | Shows | Used by |
+|---|---|---|
+| `LegalNotice.svelte` (`legal-notice`) | `legal.disclaimer`, then a row with **Terms of service** (`legal-terms-link`, `legal.terms`) and **Privacy policy** (`legal-privacy-link`, `legal.privacy`), each only while its address is set; no row without either | `AboutTab` (`about-legal-card`); `WelcomePage`, under its card ([Welcome](../../onboarding.md#welcome)) |
+| `LegalLinks.svelte` (`legal-links`) | One line: `legal.disclaimerShort`, then the same two links, each after a `·`. Prop `tone`: `page` (the default) or `bar`, the colours of the sidebar's bar | [`AuthPageFrame`](auth.md#authpageframe-and-authcard) (`auth-legal-links`), under the card of every sign-in page; `Sidebar` (`sidebar-legal-links`, `tone="bar"`), after the version while the sidebar is expanded |
+
+- Both links open in a new tab, with `rel="noopener noreferrer"`: the page they open gets no
+  `window.opener` and no `Referer`.
+- Neither component loads the configuration: the page around it does (the `(app)` layout,
+  `AuthPageFrame`). The default configuration has no `legal`, so until the answer the notice shows
+  without links, and the links appear in place when it lands.
+- The keys `legal.title`, `legal.disclaimer`, `legal.disclaimerShort`, `legal.terms` and
+  `legal.privacy` belong to the `app` i18n subsystem (`frontend/src/lib/i18n/app/`, prefix `legal`).
+  The English wording of the disclaimer is quoted in
+  [Hosting for Others](../../../../admin/hosting_providers.md#legal-pages).
+- AI Export renders `legal.title` and `legal.disclaimer` too, without the components and without
+  links, as the `legal_notice` section of every prompt
+  ([Exact Prompt Order](../../../architecture/patterns/ai_export_composition.md)): a change to
+  either text changes every exported prompt.
+- Colour roles only, as everywhere: no palette class and no `dark:` variant, which the tests check in
+  each place.
+- Tests: `./dev.py test front-utility component-unit` runs `LegalNotice.test.ts`,
+  `LegalLinks.test.ts`, `AboutTab.legal.test.ts`, `AuthPageFrame.legal.test.ts` and
+  `Sidebar.legal.test.ts`; `./dev.py test front-utility onboarding-component-unit` runs
+  `WelcomePage.legal.test.ts`.
 
 ### 🔧 Field Components
 

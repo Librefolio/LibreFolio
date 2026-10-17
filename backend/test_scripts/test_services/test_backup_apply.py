@@ -7,7 +7,8 @@ Written RED, before B3. ``apply.py``, ``restart.py`` and the new names of ``path
 needs them (``apply_module``, ``restart_module``, ``new_path_name``), never imported at the top: the file collects
 without them, and each test fails on its own, saying what is missing ("[new] …"). The tests of (m) were written red the
 same way, before P7 (§11), and those of (n) before B5c (``instance_backup/outcome.py``, ``outcome_module``); the B-31
-case of (f), a copy that cannot be removed, before B-31.
+case of (f), a copy that cannot be removed, before B-31; those of (o) before B-32, each failing on today's answer first
+(``None``, ``restore_not_pending``, a confirmation that goes on), ``apply.RestoreStateUnreadableError`` looked up last.
 
 (a) §1 The layout: ``.restore/restore.json`` (the state), ``.restore/apply.lock``, ``.restore/previous/`` (the data a
     restore replaced), ``.restore/failed/`` (the restored data a rollback set aside); ``SWAPPED_FOLDERS``, the database's
@@ -120,6 +121,15 @@ case of (f), a copy that cannot be removed, before B-31.
     ``expires_at`` it opens nothing, and its file goes. ``prepare_restart``, the restart's first step, returns the
     restore waiting and a new ticket for its stage, issued while the restore's lock is held; without a pending restore
     ``RestoreNotPendingError``, nothing written (without a restore not even the lock), an earlier ticket kept.
+(o) B-32 §3, a state the file system cannot read (placed after the B-31 cases of (f)): the state file there and regular,
+    its opening failing (EACCES, EIO; its mode 000), or a ``.restore/`` the server cannot search. A restore may still
+    wait, so the strict callers say so: ``read_restore`` raises ``RestoreStateUnreadableError``
+    (``restore_state_unreadable``, its ``reason`` the system's words, the contract's message, never a path), an error
+    logged, nothing created or changed; ``cancel_restore`` raises it too, never ``RestoreNotPendingError`` (the state,
+    the copy and the ticket byte for byte); ``prepare_restart`` (no ticket) and ``confirm_restore`` of another copy (the
+    state never written over, nothing removed) as well. Lenient, as before: ``apply_pending_restore``,
+    ``finish_pending_restore`` and ``protected_stage`` give ``None``, nothing moved, an error logged. A state that is a
+    folder reads as none, logged; a link and a content no restore can hold stay as (d) has them.
 
 How. Real databases and archives come from ``test_backup_staging.py`` (its module fixtures, imported: two databases made
 once by ``alembic upgrade`` in a process of their own, the archives at the head and at ``OLDER``). The head archive is
@@ -145,7 +155,9 @@ file description. ``apply._boot_of`` keeps the boots it read for the life of a p
 emptied before and after every test (``fresh_boots``). The block is ``LIBREFOLIO_BLOCKED`` in this process's environment,
 which ``config.platform.instance_blocked()`` reads at each call: the one a developer's shell may carry is removed before
 every test (``no_inherited_block``), and each test of (m) sets its own with ``monkeypatch`` — after any spawn child it
-needs has started, so that the child never sees it.
+needs has started, so that the child never sees it. A state (o) cannot read: ``os.open`` replaced for the test, failing
+for that one file and opening every other path as it is; or a mode taken away (``Modes``: put back before the tree is
+compared, and in any case when the test ends), those cases skipped as root, which reads everything.
 
 Pure: every data directory under ``tmp_path``. This process, and the processes it starts, are configured with a
 production data directory of the test that must stay absent (``configured_data_dir`` of the staging tests, imported,
@@ -1454,6 +1466,242 @@ def test_a_cancel_that_keeps_the_copy_never_tries_to_remove_it(tmp_path, databas
     cancelled = [(event.get("log_level"), event.get("copy_dropped")) for event in events if event.get("event") == RESTORE_CANCELLED]
     assert cancelled == [("info", False)], f"one info line says the restore is cancelled, its copy not dropped: {cancelled}"
     print_success("drop_copy=False: _remove_leftovers never called, copy_dropped=False")
+
+
+# =============================================================================
+# (o) B-32 §3 A state the file system cannot read
+# =============================================================================
+#
+# The state file is there, a regular file, and it cannot be read: opening it fails (EACCES or EIO: ``os.open`` failing
+# for that file alone, every other path opened as it is; or its mode 000), or ``.restore/`` cannot be searched. A
+# restore may still wait, so the callers that act on it say so (strict); the startup steps and ``protected_stage`` read
+# it as none, the error logged (lenient). A content no restore can hold stays «none», as (d) has it (``UNTRUSTED``).
+
+#: (B-32) What ``RestoreStateUnreadableError`` says before its reason, the system's words.
+STATE_UNREADABLE = "The state of the restore cannot be read: "
+#: How a state file comes to be unreadable: its opening failing (EACCES, EIO), or its mode 000 (root reads it all the same).
+UNREADABLE_STATES = [
+    pytest.param("EACCES", id="its-opening-fails-EACCES"),
+    pytest.param("EIO", id="its-opening-fails-EIO"),
+    pytest.param("mode-000", id="its-mode-000", marks=cases.needs_permission_checks),
+]
+#: The callers that keep reading such a state as none (lenient): the two startup steps, and ``protected_stage``.
+LENIENT = ["apply_pending_restore", "finish_pending_restore", "protected_stage"]
+
+
+class Modes:
+    """``chmod`` for a test: every mode it changed is put back by ``put_back``, at the latest when the test ends, whatever
+    happened (pytest must clean ``tmp_path``, and the tree is read whole to be compared)."""
+
+    def __init__(self) -> None:
+        self._changed: list[tuple[Path, int]] = []
+
+    def chmod(self, path: Path, mode: int) -> None:
+        self._changed.append((path, cases.mode(path)))
+        path.chmod(mode)
+
+    def put_back(self) -> None:
+        while self._changed:
+            path, mode = self._changed.pop()
+            path.chmod(mode)
+
+
+@pytest.fixture
+def modes() -> Iterator[Modes]:
+    changed = Modes()
+    try:
+        yield changed
+    finally:
+        changed.put_back()
+
+
+def make_state_unreadable(patch: pytest.MonkeyPatch, modes: Modes, root: Path, how: str) -> str:
+    """The state file of ``root`` made one the file system cannot read, as ``how`` says (``UNREADABLE_STATES``); the
+    reason a reader gives for it, the system's words. ``os.open`` fails only when it is asked for that very file."""
+    if how == "mode-000":
+        modes.chmod(state_file(root), 0o000)
+        return os.strerror(EACCES)
+    code = {"EACCES": EACCES, "EIO": EIO}[how]
+    target = os.path.realpath(state_file(root))
+    real_open = os.open
+
+    def failing_open(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
+        if kwargs.get("dir_fd") is None and os.path.realpath(os.fsdecode(path)) == target:
+            raise OSError(code, os.strerror(code), os.fsdecode(path))
+        return real_open(path, flags, *args, **kwargs)
+
+    patch.setattr(os, "open", failing_open)
+    return os.strerror(code)
+
+
+def answer_of(call: Callable[[], Any]) -> tuple[Any, Exception | None]:
+    """What ``call`` returned, or the exception it raised."""
+    try:
+        return call(), None
+    except Exception as exc:
+        return None, exc
+
+
+def assert_state_unreadable(apply: Any, what: str, returned: Any, raised: Exception | None, reason: str, root: Path) -> None:
+    """``what`` said that the state cannot be read: ``RestoreStateUnreadableError``, a ``RestoreStateError``, its code,
+    its reason the system's words, the contract's message, no path in it. Asked in this order, so that a failure shows
+    today's answer first (``None``, ``restore_not_pending``, a confirmation that went on)."""
+    assert raised is not None, f"{what} answered {returned!r} for a state it cannot read: a restore may still wait there, so it must raise, not answer as if none did"
+    code = getattr(raised, "code", None)
+    assert code == "restore_state_unreadable", f"{what} raised {type(raised).__name__} ({code}) for a state it cannot read: restore_state_unreadable expected: {raised}"
+    unreadable = getattr(apply, "RestoreStateUnreadableError", None)
+    assert unreadable is not None and isinstance(raised, unreadable) and isinstance(raised, apply.RestoreStateError), f"[new] {what}: an apply.RestoreStateUnreadableError, a RestoreStateError: {type(raised).__mro__}"
+    assert (getattr(raised, "reason", None), str(raised)) == (reason, STATE_UNREADABLE + reason), f"{what}: its reason the system's words, the contract's message: {getattr(raised, 'reason', None)!r}, {raised}"
+    cases.holds_no_path(str(raised), state_file(root), root)
+
+
+def bytes_of(path: Path) -> bytes | None:
+    """The bytes of a file, ``None`` where nothing stands."""
+    return path.read_bytes() if lexists(path) else None
+
+
+@pytest.mark.parametrize("how", UNREADABLE_STATES)
+def test_read_restore_says_that_a_state_it_cannot_read_cannot_be_read(tmp_path, databases, checked, monkeypatch, modes, how):
+    """(o) B-32 §3 (s1) A restore waits, its state a regular file that cannot be read: ``read_restore`` raises
+    ``RestoreStateUnreadableError`` (``restore_state_unreadable``, its reason «Permission denied» or «Input/output
+    error», no path), an error logged; nothing created or changed. Red before B-32: ``None``, as if no restore waited."""
+    print_section("(o) B-32: a state the file system cannot read")
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    reason = make_state_unreadable(monkeypatch, modes, instance.root, how)
+    with logs() as events:
+        returned, raised = answer_of(lambda: apply.read_restore(instance.root))
+    modes.put_back()
+    assert_state_unreadable(apply, "read_restore", returned, raised, reason, instance.root)
+    assert an_error(events), f"an error logged: {logged(events)}"
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), "nothing created or changed"
+    print_success(f"{how}: restore_state_unreadable, {reason}")
+
+
+@cases.needs_permission_checks
+@pytest.mark.parametrize("caller", ["read_restore", "cancel_restore"])
+def test_a_restore_folder_the_server_cannot_search_is_unreadable_never_no_restore(tmp_path, databases, checked, modes, caller):
+    """(o) B-32 §3 (s2) ``.restore/`` without its search permission: whether a state is there cannot be known, and a
+    restore may wait. ``read_restore`` raises ``RestoreStateUnreadableError``, and so does ``cancel_restore`` — not
+    ``RestoreNotPendingError``, which its look for the file before the lock (``lexists``) answered. Nothing created or
+    changed. Red before B-32: ``None``; ``restore_not_pending``."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    folder = restore_dir(instance.root)
+    modes.chmod(folder, cases.mode(folder) & ~0o111)
+    calls = {"read_restore": lambda: apply.read_restore(instance.root), "cancel_restore": lambda: apply.cancel_restore(data_dir=instance.root, drop_copy=True)}
+    with logs() as events:
+        returned, raised = answer_of(calls[caller])
+    modes.put_back()
+    assert_state_unreadable(apply, caller, returned, raised, os.strerror(EACCES), instance.root)
+    assert an_error(events), f"an error logged: {logged(events)}"
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), "nothing created or changed"
+    print_success(f"{caller}: restore_state_unreadable")
+
+
+@pytest.mark.parametrize("how", UNREADABLE_STATES)
+def test_a_pending_restore_whose_state_cannot_be_read_is_not_cancelled(tmp_path, databases, checked, monkeypatch, modes, how):
+    """(o) B-32 §3 (s3) ``cancel_restore(drop_copy=True)`` while the state of a waiting restore cannot be read: raises
+    ``RestoreStateUnreadableError``; the state file, the copy and the ticket stay byte for byte, nothing else changes.
+    Red before B-32: ``restore_not_pending``, as if none waited."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    ticket_of(instance)
+    kept = (bytes_of(state_file(instance.root)), tree(stage_dir(instance.root, instance.stage_id)), bytes_of(ticket_file_of(instance.root)))
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    reason = make_state_unreadable(monkeypatch, modes, instance.root, how)
+    returned, raised = answer_of(lambda: apply.cancel_restore(data_dir=instance.root, drop_copy=True))
+    modes.put_back()
+    assert_state_unreadable(apply, "cancel_restore", returned, raised, reason, instance.root)
+    assert (bytes_of(state_file(instance.root)), tree(stage_dir(instance.root, instance.stage_id)), bytes_of(ticket_file_of(instance.root))) == kept, "the state file, the copy and the ticket byte for byte"
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), "nothing else changed"
+    print_success(f"{how}: not cancelled, restore_state_unreadable")
+
+
+@pytest.mark.parametrize("how", UNREADABLE_STATES)
+def test_a_restart_with_a_state_that_cannot_be_read_issues_no_ticket(tmp_path, databases, checked, monkeypatch, modes, how):
+    """(o) B-32 §3 (s4) ``prepare_restart``, the restart's first step, while the state cannot be read: raises
+    ``RestoreStateUnreadableError``; no ticket written, nothing changed. Red before B-32: ``restore_not_pending``."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    assert not lexists(ticket_file_of(instance.root)), "precondition: no ticket yet"
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    reason = make_state_unreadable(monkeypatch, modes, instance.root, how)
+    returned, raised = answer_of(lambda: apply.prepare_restart(data_dir=instance.root))
+    modes.put_back()
+    assert_state_unreadable(apply, "prepare_restart", returned, raised, reason, instance.root)
+    assert not lexists(ticket_file_of(instance.root)), "no ticket written"
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), "nothing changed"
+    print_success(f"{how}: no ticket, restore_state_unreadable")
+
+
+@pytest.mark.parametrize("how", UNREADABLE_STATES)
+def test_a_confirmation_never_writes_over_a_state_it_cannot_read(tmp_path, databases, checked, monkeypatch, modes, how):
+    """(o) B-32 §3 (s5) Another checked copy confirmed while the state cannot be read: the restore found there is
+    unknown, maybe half applied, and its journal must not be written over. ``confirm_restore`` raises
+    ``RestoreStateUnreadableError``; the state file byte for byte, nothing removed or written. Red before B-32: the
+    confirmation goes on, and replaces the state."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    add_stage(instance, checked, OTHER_STAGE)
+    state = bytes_of(state_file(instance.root))
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    reason = make_state_unreadable(monkeypatch, modes, instance.root, how)
+    returned, raised = answer_of(lambda: confirm(apply, instance, OTHER_STAGE))
+    modes.put_back()
+    assert_state_unreadable(apply, "confirm_restore", returned, raised, reason, instance.root)
+    assert bytes_of(state_file(instance.root)) == state, "the state file byte for byte: never written over"
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), "nothing removed or written"
+    print_success(f"{how}: not confirmed, restore_state_unreadable")
+
+
+@pytest.mark.parametrize("how", UNREADABLE_STATES)
+@pytest.mark.parametrize("caller", LENIENT)
+def test_the_startup_steps_and_protected_stage_read_a_state_they_cannot_read_as_none(tmp_path, databases, checked, monkeypatch, modes, caller, how):
+    """(o) B-32 §3 (s6) A guard, green before B-32 too: lenient, the startup steps go on with the data as it is —
+    ``apply_pending_restore`` and ``finish_pending_restore`` give ``None``, nothing moved, written or removed — and
+    ``protected_stage`` gives ``None``; an error logged by the reader."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    make_state_unreadable(monkeypatch, modes, instance.root, how)
+    calls = {
+        "apply_pending_restore": lambda: apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at),
+        "finish_pending_restore": lambda: apply.finish_pending_restore(instance.root, boot=never_ran(apply), now=instance.committed_at),
+        "protected_stage": lambda: apply.protected_stage(instance.root),
+    }
+    with moving(apply) as mover, logs() as events:
+        returned, raised = answer_of(calls[caller])
+    modes.put_back()
+    assert (returned, raised) == (None, None), f"{caller}: None, nothing raised: {returned!r}, {raised!r}"
+    assert mover.calls == 0, f"{caller}: nothing moved: {mover.moved}"
+    assert an_error(events), f"{caller}: an error logged: {logged(events)}"
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), f"{caller}: nothing written or removed"
+    print_success(f"{caller}, {how}: None, an error logged")
+
+
+def test_a_state_that_is_a_folder_reads_as_none(tmp_path, databases, checked):
+    """(o) B-32 §3 (s7) A guard, green before B-32 too: a state that is not a regular file — a folder — is never read as
+    one: ``read_restore`` gives ``None``, an error logged, nothing changed. A link and a content no restore can hold stay
+    as (d) has them."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    state_file(instance.root).mkdir(mode=0o700)
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    with logs() as events:
+        returned, raised = answer_of(lambda: apply.read_restore(instance.root))
+    assert (returned, raised) == (None, None), f"None, nothing raised: {returned!r}, {raised!r}"
+    assert an_error(events), f"an error logged: {logged(events)}"
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), "nothing changed"
+    print_success("a folder: None, an error logged")
 
 
 # =============================================================================

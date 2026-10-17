@@ -477,9 +477,12 @@ address `rate_limit_address(http_request)` gives, and workstream E's «send the 
   accounts. `dev.py server --test` sets `LIBREFOLIO_LOGIN_LIMIT=off` in the environment of the lane's server, after
   `configure_test_runtime()` has dropped every `LIBREFOLIO_*` of `.env` and of the shell: the lane's server always
   runs with the limit off ([Test lanes and the instance's configuration](#test-lanes-and-the-instances-configuration)).
-  `backend/test_scripts/conftest.py` sets it in every pytest process too, with `os.environ.setdefault()` (a value
-  already in that process's environment wins), since the in-process apps of many test files share one process and
-  its two limiters. The limit's own tests turn it on with `monkeypatch`, on limiters of their own.
+  `backend/test_scripts/conftest.py` sets it in every pytest process too, since the in-process apps of many test
+  files share one process and its two limiters. It sets it at import with `os.environ.setdefault()` (a value
+  already in that process's environment wins), and an autouse fixture puts that value back before each test that
+  no longer has it: `configure_test_runtime()`, which `setup_test_database()` reaches when a test module is
+  imported, removes it at collection. The limit's own tests turn it on, or remove it, with `monkeypatch` after
+  that fixture, on limiters of their own.
 - **Per process, in memory.** A restart forgets every count, and with N worker processes (`dev.py server --workers N`)
   each keeps its own, so the limits are N times these; the Docker image runs one worker. Each limiter holds at most
   10,000 keys (the limiter's `max_keys`): a new key beyond them evicts the key with the fewest failures still in the
@@ -655,8 +658,10 @@ limits) can neither reach the tests nor change their outcome.
   `configure_test_runtime()`, which would remove it again).
 - One setting is the lanes' own, on purpose: the [failed sign-in limit](#login-limit) is off, since the
   suites sign in wrongly on purpose. `dev.py server --test` sets `LIBREFOLIO_LOGIN_LIMIT=off` for the
-  lane's server after the cleanup, and `backend/test_scripts/conftest.py` sets it in every pytest
-  process that does not have it already.
+  lane's server after the cleanup. `backend/test_scripts/conftest.py` sets it in every pytest process
+  that does not have it already, and puts it back before each test that lost it: set once at import, it
+  did not survive the modules that configure the lane at collection, and in a combined run the limit was
+  on for every test.
 
 ### 🧬 Instance Key {: #instance-key }
 
@@ -1833,10 +1838,10 @@ only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error
 |-------|--------------|
 | `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)). At its start (its folders, its first state), `POST /backup/restore/stage` answers `507` `no_space`, the check's own code, on a full disk or quota, logged as a warning, `A check of a backup archive could not start: not enough free space`, and `500` `stage_failed` on any other failure of the file system (permissions, a read-only disk, `EIO`), logged as an error, `A check of a backup archive could not start`, with the error's type and the system's reason; either way the upload stays, for another try (lot B-30) |
 | `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
-| `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable`. A full disk or quota anywhere in the confirmation (the `.restore` folder, the lock, the state's write) is `507` `backup_no_space`, logged as a warning, `A restore could not be confirmed: not enough free space`; any other failure of the file system is `500` `restore_confirm_failed`, logged as an error, `A restore could not be confirmed`, with the error's type and the system's reason. Either way nothing is confirmed, as the state is written last and atomically, and the check and its copy stay: the same confirmation answers `202` once the failure is gone (lot B-31) |
-| `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting |
-| `DELETE /backup/restore/pending` | Drops the restore waiting (`204`) with its checked copy and its check record, as `backup pending --cancel` does (B-17): confirming that check again answers `404` `restore_stage_not_found`. `404` `restore_not_pending`. A failure of the file system before the restore is dropped (its lock, or removing its state) is `500` `restore_cancel_failed`, logged as an error, `A pending restore could not be cancelled`: the restore still waits. Once the state is dropped, `apply.cancel_restore(drop_copy=True)`, behind the route and the command alike, logs a copy it cannot remove as a warning, `The copy of a cancelled restore could not be removed: it goes when its check expires`, with `stage_id` and the error, and never raises: the route answers `204`, and `prune` removes the copy at its age (lot B-31) |
-| `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `202` `RestoreRestartAccepted`: the `RestoreStatus` and `outcome_ticket`, with `Cache-Control: no-store`. `409` `restore_not_pending`; `500` `restore_restart_failed` when the ticket cannot be written, a full disk included, logged as an error, `The ticket of the restore's outcome could not be written: no restart`, with the error's type and the system's reason, or `restore_folder_unusable`: no restart then, no ticket, and the restore still waits. Lot B-31 pins it, and gives `restore_restart_failed` its sentence on the card |
+| `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable`. A full disk or quota anywhere in the confirmation (the `.restore` folder, the lock, the state's write) is `507` `backup_no_space`, logged as a warning, `A restore could not be confirmed: not enough free space`; any other failure of the file system is `500` `restore_confirm_failed`, logged as an error, `A restore could not be confirmed`, with the error's type and the system's reason. Either way nothing is confirmed, as the state is written last and atomically, and the check and its copy stay: the same confirmation answers `202` once the failure is gone (lot B-31). A state the file system cannot read, met under the lock, is `500` `restore_state_unreadable`, and nothing is written: the restore it holds may be half applied, and its journal must not be overwritten (lot B-32) |
+| `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting. `500` `restore_state_unreadable`, «The state of the restore cannot be read: the server's log has the cause», when the file system cannot read the state: it never answers `none` then (lot B-32) |
+| `DELETE /backup/restore/pending` | Drops the restore waiting (`204`) with its checked copy and its check record, as `backup pending --cancel` does (B-17): confirming that check again answers `404` `restore_stage_not_found`. `404` `restore_not_pending`. A failure of the file system before the restore is dropped (its lock, or removing its state) is `500` `restore_cancel_failed`, logged as an error, `A pending restore could not be cancelled`: the restore still waits. Once the state is dropped, `apply.cancel_restore(drop_copy=True)`, behind the route and the command alike, logs a copy it cannot remove as a warning, `The copy of a cancelled restore could not be removed: it goes when its check expires`, with `stage_id` and the error, and never raises: the route answers `204`, and `prune` removes the copy at its age (lot B-31). A state the file system cannot read is `500` `restore_state_unreadable`, with the state, the copy and the ticket untouched: `cancel_restore` reads it strictly before its lock, as `prepare_restart` does; before, a `.restore/` the server could not search read as no state, `404` `restore_not_pending` (lot B-32) |
+| `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `202` `RestoreRestartAccepted`: the `RestoreStatus` and `outcome_ticket`, with `Cache-Control: no-store`. `409` `restore_not_pending`; `500` `restore_restart_failed` when the ticket cannot be written, a full disk included, logged as an error, `The ticket of the restore's outcome could not be written: no restart`, with the error's type and the system's reason, or `restore_folder_unusable`: no restart then, no ticket, and the restore still waits. Lot B-31 pins it, and gives `restore_restart_failed` its sentence on the card. A state the file system cannot read is `500` `restore_state_unreadable`, with no ticket and no restart; before, it answered `409` `restore_not_pending` (lot B-32) |
 | `GET /backup/restore/outcome` | No session: the ticket of the restart in the `X-Restore-Ticket` header. `200` `RestoreOutcome`, `state` (`pending`, `in_progress`, `committed` or `rolled_back`), `reason` and `waiting` only, with `Cache-Control: no-store`, as often as asked until the ticket expires, a final outcome included; the same `404` `restore_outcome_not_found` for every ticket that does not give it. See [The Outcome Ticket](#backup-restore-outcome) |
 
 A full disk or quota that a backup route meets before it answers is a `507` (lot B-30), recognised by
@@ -1880,6 +1885,14 @@ waiting (`waiting`), and the session version given at the commit.
 - **Checked strictly.** A state is used only in the shape this LibreFolio writes: the journal may name only the four
   swapped folders, and the stage id must be 32 lowercase hexadecimal digits, so nothing read from a file of the data
   directory becomes a path outside the swap. Any other state is ignored, with an error logged.
+- **What cannot be read is not none** (lot B-32). A state the file system cannot read (`EACCES` or `EPERM` on the
+  file or on the search of `.restore/`, `EIO`, a link swapped in as it is opened) is reported, never read as none:
+  `_read_state` logs the error and raises `RestoreStateUnreadableError`, `restore_state_unreadable`, whose `reason` is
+  the system's words, never a path, through `read_restore`, `cancel_restore`, `prepare_restart` and `confirm_restore`
+  (a `500` on the routes, exit `1` in `backup pending` and `backup restore`); a link or a folder in its place, or a
+  content that does not validate, still reads as none, as above; the startup steps (`apply_pending_restore`,
+  `finish_pending_restore`), the outcome (`GET /backup/restore/outcome`) and the pruning (`protected_stage`) keep
+  reading it as none, the error logged, so a start applies nothing and goes on with the data as it is.
 - **One at a time.** While a restore is not finished (`pending`, `applying`, `applied`, `rolling_back`), another one is
   refused (`restore_already_pending`), and its checked copy is never dropped nor pruned, however old
   (`restore_jobs.remove_check`, `prune`).
@@ -2210,13 +2223,19 @@ browser that the table and card views of `/assets` show it as text and run nothi
     user text where it enters an HTML string, sanitizes the sinks that receive mixed markup,
     and adds the first two gates above.
 
-## 🐳 Container Image Check
+## 🐳 Container Image Check {: #container-image-check }
 
 The automatic update check runs only for superusers, after login
-(`frontend/src/routes/(app)/+layout.svelte`). Its release lookup is cached in `localStorage`
+(`frontend/src/routes/(app)/+layout.svelte`), and only on a self-hosted instance (F05):
+`checkForNewerRelease()` awaits `instanceConfig.load()` and asks nothing of GitHub or of the registry,
+and writes nothing to its cache, unless `GET /system/instance` answered `profile: selfhosted`. A
+managed instance is updated by its hosting provider, and a failed configuration request skips the
+check too. Its release lookup is cached in `localStorage`
 (`librefolio-update-check`) for one hour (`CHECK_INTERVAL_MS`), and **Skip this version** is
 stored in the same entry. A manual **Check for updates** in the changelog modal bypasses both the
-cache and the dismissal, and reports errors.
+cache and the dismissal, and reports errors. `ChangelogModal` shows that button only once
+`GET /system/instance` has answered `profile: selfhosted`: not on a managed instance, not before the
+answer, and not when the configuration request failed.
 
 The update check reports a new release only once its Docker image can be pulled from GHCR.
 GHCR's anonymous token handshake is not available to browsers through CORS, so the frontend

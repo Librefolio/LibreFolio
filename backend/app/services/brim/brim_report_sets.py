@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -43,6 +43,7 @@ from backend.app.schemas.brim import (
 from backend.app.services.brim import brim_provider
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.utils.datetime_utils import shift_date
 
 logger = structlog.get_logger(__name__)
 
@@ -161,7 +162,7 @@ async def history_start(session: AsyncSession, *, broker_id: int, history_tag: s
 def _first_history_day(dated: Sequence[Tuple[date, bool]]) -> Optional[date]:
     if not dated:
         return None
-    return min(tx_date + timedelta(days=1) if is_gap_fix else tx_date for tx_date, is_gap_fix in dated)
+    return min(shift_date(tx_date, 1) if is_gap_fix else tx_date for tx_date, is_gap_fix in dated)
 
 
 def _gap_fix_days(dated: Sequence[Tuple[date, bool]]) -> List[date]:
@@ -240,7 +241,7 @@ def build_preview(  # noqa: C901 — one pass per concern (members, roles, cover
         role_statuses.append(BRIMSetRoleStatus(code=role.code, required=role.required, multiple=role.multiple, status=status, file_ids=list(file_ids)))
         if status == "missing" and role.required:
             covered = _trade_range(coverage_by_role.get(role.must_cover, [])) if role.must_cover else None
-            start, end = (covered[0] - timedelta(days=1), covered[1]) if covered else (None, None)
+            start, end = (shift_date(covered[0], -1), covered[1]) if covered else (None, None)
             missing.append(BRIMSetMissing(role=role.code, start=start, end=end))
 
     for role in plugin.report_roles:
@@ -250,7 +251,7 @@ def build_preview(  # noqa: C901 — one pass per concern (members, roles, cover
             continue
         own_start = min(item.start for item in own)
         own_end = max(item.end for item in own)
-        if own_start > covered[0] - timedelta(days=1):
+        if own_start > shift_date(covered[0], -1):
             warnings.append(_notice("coverage_starts_late", f"The {role.code} export starts after the {role.must_cover} period", role=role.code, covered_role=role.must_cover, date=own_start.isoformat()))
         if own_end < covered[1]:
             warnings.append(_notice("coverage_ends_early", f"The {role.code} export ends before the {role.must_cover} period", role=role.code, covered_role=role.must_cover, date=own_end.isoformat()))
@@ -434,10 +435,10 @@ async def apply_history(
         if plugin.pre_checkpoint_policy == "import" and output.transactions:
             start = min(tx.date for tx in output.transactions)
         elif output.checkpoints:
-            start = min(checkpoint.as_of for checkpoint in output.checkpoints) + timedelta(days=1)
+            start = shift_date(min(checkpoint.as_of for checkpoint in output.checkpoints), 1)
     if start is None:
         return list(output.checkpoints), list(output.verifications), None
-    floor = start - timedelta(days=1)
+    floor = shift_date(start, -1)
     kept = [checkpoint for checkpoint in output.checkpoints if checkpoint.as_of >= floor]
     if later_import:
         kept = [_without_represented_rows(checkpoint, start) for checkpoint in kept]

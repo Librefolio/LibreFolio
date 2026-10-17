@@ -77,11 +77,12 @@ export function eventMarkerKind(event: {kind: string}): EventMarkerKind {
 }
 
 /**
- * The i18n key of a closure row's value: an outbound adjustment hands its units over at
- * their cost (nothing was sold), every other closure brings proceeds.
+ * The i18n key of a closure row's value: an outbound adjustment hands its units over — at their
+ * cost, at their own FIFO cost, or, for a transfer leg leaving the lots' scope, at that day's market
+ * value (J-10) — so nothing was sold; every other closure brings proceeds.
  */
 export function closureValueLabelKey(kind: string): string {
-    return kind === 'ADJUSTMENT_OUT' ? 'brokers.lots.modal.historyDetail.handedOverAtCost' : 'brokers.lots.modal.historyDetail.proceeds';
+    return kind === 'ADJUSTMENT_OUT' ? 'brokers.lots.modal.historyDetail.handedOver' : 'brokers.lots.modal.historyDetail.proceeds';
 }
 
 /** The subset of a custody slice needed to group it. */

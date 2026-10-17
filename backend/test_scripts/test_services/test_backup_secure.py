@@ -65,6 +65,15 @@ Under test, in ``backend/app/services/platform/instance_backup/``: ``jobs.py`` (
     backup done and its check restorable; ``exportable_instance_key()`` is ``None`` and ``generated_key_unusable()``
     true for it. Exactly 4096 bytes, in either form, travels, and a check reads it back: the copy's secrets are
     re-encrypted with it.
+(i) Lot B-18 §1, the old instance key given to a check (``stage_archive(..., instance_key=)``, which ``dev.py backup
+    restore --instance-key-file`` passes; placed after (f)): a clear archive whose secrets K1 encrypted, checked on this
+    instance (K2). Given K1: every secret re-encrypted (5, none unreadable), K1 in no file of the stage nor in the log,
+    restorable. Given another key of 32 characters: nothing rekeyed, every secret unreadable and as the backup holds it,
+    no error. A key shorter than 32 characters (31, or empty): ``instance_key_invalid`` in the contract's words, checked
+    before the lock and any folder (no ``.restore`` where there was none, the one an earlier check left byte for byte, no
+    progress), neither the key nor what ``derive_key_from`` says of its length in the message or the log. A secure
+    archive carrying K1, given another key: its own key wins. Guards: ``instance_key=None`` is today's check; a wrong key
+    on an archive of this very instance (its secrets under K2 already) changes nothing.
 
 How. The database of every source is ``test_backup_staging.py``'s, made once by ``alembic upgrade`` at the head (its
 module fixture, imported), copied into a data directory of the test with that module's accounts and files. The live
@@ -92,7 +101,9 @@ Written RED, before B4: ``envelope.py`` and ``secure.py`` do not exist, and are 
 (``envelope_module``, ``secure_module``), never imported at the top: the file collects without them, and each test fails
 on its own with a "[new] …" message, as the new parameters, fields and errors do, each asserted before it is used. (h)
 was written red after B4, before B4b: its cases over the bound fail on the key B4 still exports; those at the bound
-pin what B4b must keep.
+pin what B4b must keep. (i) was written red before B-18: each of its cases asks ``stage_archive`` for ``instance_key``
+first (``new_parameter``), then for the behaviour; its two guards pass the key only once the parameter exists, green
+before B-18 as after it.
 """
 
 from __future__ import annotations
@@ -251,9 +262,9 @@ def secure_module() -> ModuleType:
     return _new_module(SECURE)
 
 
-def new_parameter(function: Callable[..., Any], name: str) -> None:
-    """``function`` takes the keyword ``name``, which lot B4 adds."""
-    assert name in inspect.signature(function).parameters, f"[new] {function.__qualname__}() has no parameter {name!r} yet: lot B4 adds it (contract §4, §5)"
+def new_parameter(function: Callable[..., Any], name: str, *, by: str = "lot B4 adds it (contract §4, §5)") -> None:
+    """``function`` takes the keyword ``name``, which a lot adds (``by``: lot B4, unless another is named)."""
+    assert name in inspect.signature(function).parameters, f"[new] {function.__qualname__}() has no parameter {name!r} yet: {by}"
 
 
 def new_field(value: object, name: str) -> Any:
@@ -1196,6 +1207,170 @@ def test_an_archive_key_that_cannot_be_derived_from_is_as_no_key(instance, tmp_p
     assert b4_report(report) == {"encrypted": True, "secrets_rekeyed": 0, "secrets_unreadable": SECRETS_BY_SCOPE}, f"as without a key: {b4_report(report)}"
     assert stored_secrets(copy_database(root, report)) == held, "the secrets of the copy are the backup's, untouched"
     print_success("an archive key too short: as no key")
+
+
+# =============================================================================
+# (i) Lot B-18: the old instance key, given to the check of a clear archive
+# =============================================================================
+
+#: (B-18) Keys a check may be given besides the archive (``stage_archive(..., instance_key=)``): one of 32 characters,
+#: the fewest a key has, that is neither K1 nor this instance's; one of 31, which no key is. Test keys, not secrets.
+OTHER_INSTANCE_KEY = "LibreFolio-b18-another-key-".ljust(32, "0")
+SHORT_INSTANCE_KEY = "LibreFolio-b18-short-key-".ljust(31, "0")
+#: What the check says of a key too short (contract §1): never the key, nor its length.
+INSTANCE_KEY_TOO_SHORT = "The instance key given is too short: an instance key has at least 32 characters"
+#: This instance's own key, K2: the text of the staging tests' live instance's key file.
+OWN_KEY = cases.SECRET.decode("utf-8")
+#: Keys too short, and whether an earlier check left a ``.restore`` behind.
+SHORT_KEYS = [pytest.param(SHORT_INSTANCE_KEY, id="31-characters"), pytest.param("", id="empty")]
+EARLIER_CHECK = [pytest.param(False, id="no-restore-folder"), pytest.param(True, id="an-earlier-check-left-one")]
+
+
+def b18_parameter() -> None:
+    """``stage_archive`` takes ``instance_key``, which lot B-18 adds: each red case of (i) asks it first."""
+    new_parameter(stage_archive, "instance_key", by="lot B-18 adds it (contract §1)")
+
+
+def instance_key_given(value: str | None) -> dict[str, Any]:
+    """``instance_key=value`` for ``stage_archive`` once lot B-18 adds the parameter, nothing before. The guards of (i)
+    pass it so: today they pin today's check, and after B-18 the same check with the key given."""
+    return {"instance_key": value} if "instance_key" in inspect.signature(stage_archive).parameters else {}
+
+
+def logged_text(events: list[dict[str, Any]]) -> list[str]:
+    """Each event logged in the block but the barrier's, as text: where a key, or what is said of its length, must never
+    be."""
+    return [repr(event) for event in events if event.get("event") != cases.LOG_CANARY]
+
+
+def restore_tree(root: Path) -> dict[str, tuple] | None:
+    """What ``.restore`` holds, every path with its mode and, for a file, its size and SHA-256; ``None`` where there is
+    none."""
+    folder = restore_dir(root)
+    return cases.fingerprint(folder) if os.path.lexists(folder) else None
+
+
+def an_earlier_check(root: Path) -> None:
+    """What an earlier check leaves in ``.restore``: the checks' folder with its lock file, and a stage with its report."""
+    ensure_private_dir(stages_dir(root), root)
+    (stages_dir(root) / STAGE_LOCK_FILE).touch(mode=0o600)
+    stage = stage_dir(root, new_stage_id())
+    stage.mkdir(mode=0o700)
+    (stage / STAGE_REPORT_FILE).write_text("{}\n", encoding="utf-8")
+
+
+def test_a_clear_archive_checked_with_the_old_instance_key_has_every_secret_re_encrypted(instance, tmp_path, databases, monkeypatch):
+    """(i) B-18 §1 (k1) A clear archive carries no key; its check is given the source's, K1 (``instance_key``), on this
+    instance (K2): every secret re-encrypted from it — ``secrets_rekeyed`` 5, none unreadable — each decrypting with
+    K2's subkey to its value under K2's key id; K1 in no file of the stage and in no line of the log; restorable."""
+    print_section("B-18: the old instance key, given to the check of a clear archive")
+    b18_parameter()
+    source = secret_source(tmp_path / "source", databases, monkeypatch)
+    archive = clear_backup(source.data)
+    root = checked_on(monkeypatch, instance)
+    own = own_subkey(root)
+    with cases.staging_logs() as events:
+        report = stage_archive(archive, root, instance_key=SOURCE_KEY)
+    assert b4_report(report) == {"encrypted": False, "secrets_rekeyed": len(SECRET_ROWS), "secrets_unreadable": NO_UNREADABLE}, f"every secret re-encrypted from the key given: {b4_report(report)}"
+    assert (report.instance_key_included, report.restorable) == (False, True), f"a clear archive, restorable: {report.instance_key_included}, {report.blockers}"
+    assert_rekeyed_to(own, root, report, source)
+    assert [line for line in logged_text(events) if SOURCE_KEY in line] == [], "the key given is in no line of the log"
+    print_success(f"{len(SECRET_ROWS)} secrets re-encrypted from the key given")
+
+
+def test_a_wrong_instance_key_reads_no_secret_and_the_check_ends_without_an_error(instance, tmp_path, databases, monkeypatch):
+    """(i) B-18 §1 (k2) The key given is a key (32 characters) but not the source's: it reads none of the secrets.
+    Nothing rekeyed, every secret counted unreadable by scope and left as the backup holds it, and the check ends without
+    an error, restorable — as with a wrong archive key; the key in no line of the log."""
+    b18_parameter()
+    source = secret_source(tmp_path / "source", databases, monkeypatch)
+    archive = clear_backup(source.data)
+    held = stored_secrets(source.data / DATABASE_ENTRY)
+    root = checked_on(monkeypatch, instance)
+    own = own_subkey(root)
+    assert len(OTHER_INSTANCE_KEY) == 32 and subkey_of(OTHER_INSTANCE_KEY) not in (subkey_of(SOURCE_KEY), own), "precondition: a key of 32 characters, neither K1 nor this instance's"
+    with cases.staging_logs() as events:
+        report = stage_archive(archive, root, instance_key=OTHER_INSTANCE_KEY)
+    assert b4_report(report) == {"encrypted": False, "secrets_rekeyed": 0, "secrets_unreadable": SECRETS_BY_SCOPE}, f"nothing rekeyed, every secret unreadable: {b4_report(report)}"
+    assert report.restorable, f"the check ends, restorable: {report.blockers}"
+    assert stored_secrets(copy_database(root, report)) == held, "the secrets of the copy are the backup's, untouched"
+    assert [line for line in logged_text(events) if OTHER_INSTANCE_KEY in line] == [], "the key given is in no line of the log"
+    print_success(f"a wrong key: unreadable {SECRETS_BY_SCOPE}, no error")
+
+
+@pytest.mark.parametrize("earlier", EARLIER_CHECK)
+@pytest.mark.parametrize("key", SHORT_KEYS)
+def test_an_instance_key_too_short_is_refused_before_anything_is_created(instance, tmp_path, databases, monkeypatch, key, earlier):
+    """(i) B-18 §1 (k3) A key shorter than 32 characters is no key: ``StagingError`` ``instance_key_invalid``, in the
+    contract's words, checked first — before the lock and before any folder: no ``.restore`` where there was none (no
+    stage, no lock file), the one an earlier check left byte for byte, no progress reported. Neither the key nor what
+    ``derive_key_from`` says of its length is in the message or in any line of the log."""
+    b18_parameter()
+    source = secret_source(tmp_path / "source", databases, monkeypatch)
+    archive = clear_backup(source.data)
+    root = checked_on(monkeypatch, instance)
+    if earlier:
+        an_earlier_check(root)
+    before = restore_tree(root)
+    assert (before is None) is not earlier, f"precondition: .restore {'left by an earlier check' if earlier else 'absent'}"
+    with pytest.raises(InstanceKeyError) as derivation:
+        derive_key_from(key, SUBKEY_PURPOSE, SUBKEY_LENGTH)
+    length_said = str(derivation.value)
+    progress = cases.Progress()
+    with cases.staging_logs() as events, pytest.raises(staging.StagingError) as raised:
+        stage_archive(archive, root, progress=progress, instance_key=key)
+    error = raised.value
+    assert (error.code, str(error)) == ("instance_key_invalid", INSTANCE_KEY_TOO_SHORT), f"instance_key_invalid, in the contract's words: {error.code}: {error}"
+    assert (restore_tree(root), progress.events) == (before, []), f"checked first: nothing created or changed in .restore, no progress: {progress.events}"
+    leaked = [line for line in logged_text(events) if (key and key in line) or length_said in line]
+    assert not leaked, f"neither the key nor its length in any line of the log: {leaked}"
+    print_success(f"{len(key)} characters: instance_key_invalid, nothing created")
+
+
+def test_a_secure_archive_s_own_key_wins_over_the_instance_key_given(instance, tmp_path, databases, monkeypatch):
+    """(i) B-18 §1 (k4) The archive carries K1 (an envelope, its ``key`` given) and the check is given another valid key:
+    the archive's own key wins — every secret re-encrypted from K1, ``secrets_rekeyed`` 5, none unreadable."""
+    b18_parameter()
+    env = envelope_module()
+    source = secret_source(tmp_path / "source", databases, monkeypatch)
+    _job, path = secure_backup(source.data)
+    root = checked_on(monkeypatch, instance)
+    own = own_subkey(root)
+    report = stage_archive(path, root, key=env.unlock(path, PASSWORD), instance_key=OTHER_INSTANCE_KEY)
+    assert b4_report(report) == {"encrypted": True, "secrets_rekeyed": len(SECRET_ROWS), "secrets_unreadable": NO_UNREADABLE}, f"re-encrypted from the archive's own key: {b4_report(report)}"
+    assert (report.instance_key_included, report.restorable) == (True, True), f"the key included, restorable: {report.instance_key_included}, {report.blockers}"
+    assert_rekeyed_to(own, root, report, source)
+    print_success("the archive's own key wins")
+
+
+def test_no_instance_key_given_is_today_s_check_of_a_clear_archive(instance, tmp_path, databases, monkeypatch):
+    """(i) B-18 §1 (k5) A guard, green before B-18 too: ``instance_key=None`` (passed once the parameter exists) is
+    today's check of a clear archive — nothing rekeyed, every secret unreadable by scope, the rows as the backup holds
+    them."""
+    source = secret_source(tmp_path / "source", databases, monkeypatch)
+    archive = clear_backup(source.data)
+    held = stored_secrets(source.data / DATABASE_ENTRY)
+    root = checked_on(monkeypatch, instance)
+    own_subkey(root)
+    report = stage_archive(archive, root, **instance_key_given(None))
+    assert b4_report(report) == {"encrypted": False, "secrets_rekeyed": 0, "secrets_unreadable": SECRETS_BY_SCOPE}, f"nothing rekeyed, every secret unreadable: {b4_report(report)}"
+    assert stored_secrets(copy_database(root, report)) == held, "the secrets of the copy are the backup's, untouched"
+    print_success(f"no key given: unreadable {SECRETS_BY_SCOPE}")
+
+
+def test_a_wrong_instance_key_on_an_archive_of_this_very_instance_changes_nothing(instance, tmp_path, databases, monkeypatch):
+    """(i) B-18 §1 (k6) A guard, green before B-18 too: the archive's secrets are under this instance's own key (K2)
+    already; a wrong key given (passed once the parameter exists) rekeys nothing and finds nothing unreadable, the rows
+    as the backup holds them."""
+    source = secret_source(tmp_path / "source", databases, monkeypatch, key=OWN_KEY)
+    archive = clear_backup(source.data)
+    held = stored_secrets(source.data / DATABASE_ENTRY)
+    root = checked_on(monkeypatch, instance)
+    assert settings_subkey() == subkey_of(OWN_KEY) != subkey_of(OTHER_INSTANCE_KEY), "precondition: an archive of this very instance, its secrets under this instance's key; the key given another"
+    report = stage_archive(archive, root, **instance_key_given(OTHER_INSTANCE_KEY))
+    assert b4_report(report) == {"encrypted": False, "secrets_rekeyed": 0, "secrets_unreadable": NO_UNREADABLE}, f"nothing to rekey, nothing unreadable: {b4_report(report)}"
+    assert stored_secrets(copy_database(root, report)) == held, "the secrets of the copy are the backup's, untouched"
+    print_success("this very instance's archive: nothing rekeyed, nothing unreadable")
 
 
 # =============================================================================

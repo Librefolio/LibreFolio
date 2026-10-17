@@ -393,9 +393,11 @@ Dataset selections produce `data_only`:
 
 1. **Snapshot Metadata and Dataset Manifest**
 2. **Snapshot Data**
+3. **Legal Notice**
 
-No analysis objective, verification instructions, response contract, domain notes,
-user notes, or response language is added.
+The Legal Notice is the only text after the data: no analysis objective, verification
+instructions, response contract, domain notes, user notes, or response language is
+added.
 
 ### 🔬 Request Analysis
 
@@ -409,11 +411,26 @@ Analysis selections produce `full_prompt` in this exact order:
 6. **Additional LibreFolio Data**
 7. **Domain Notes**
 8. **User Notes**, only when non-empty and supported
-9. **Response Language**
+9. **Legal Notice**
+10. **Response Language**
 
 Trusted frontend templates provide instructions. Metadata/manifests use safe YAML;
 Snapshot Data uses deterministic compact text/pipe tables with a safe YAML fallback
 for unknown component versions. User notes remain safely serialized untrusted data.
+
+The Legal Notice (section `legal_notice`, `renderLegalNotice()` in `promptRenderer.ts`)
+is the instance's disclaimer, the one the app shows in Settings › About
+([The legal notice](../../frontend/components/features/settings.md#legal-notice)):
+a `##` heading with `legal.title`, a blank line, then `legal.disclaimer`, both from the
+caller's `translate`, so in the interface language (the probe translates from the same
+catalogue, `probeTranslation`). It is local, allow-listed copy: never inside a fenced
+block, no URL (the instance's terms and privacy links stay out), nothing from the
+snapshot. In an analysis it comes after the untrusted User Notes and right before
+Response Language, so that the app's trusted instruction stays the prompt's last
+word; in Export Data it is the last section. `promptRenderer.test.ts`
+(`./dev.py test front-ai-export unit`) pins both places, with and without user notes,
+and renders the section once, under its own heading, with no fence and no URL in any
+of the four languages.
 
 Snapshot Data joins its tables through prompt-local references. Its Entity Directory
 resolves A# (Assets, with display name and identifiers), B# (Brokers), and F# (FX
@@ -598,7 +615,9 @@ Composition applies the same discipline per request. `Composer` (`composer.py`) 
 `DatasetVersionMismatchError` or `AnalysisVersionMismatchError` for an explicit version that
 differs from the registry; all three derive from `ComposerError`. The runtime maps the version
 errors to `409 version_mismatch` and the detail-level error to `422 selection_not_applicable`
-with `reason_code` `unsupported_detail_level`. A `BuildContext` whose bucket plan does not match
+with `reason_code` `unsupported_detail_level`. A required component whose prices exceed one request's
+budget (`BulkTooManyDaysError`, Z-25) is the same 422 with `reason_code` `too_many_price_days`
+(J-50): a shorter period brings it back within reach, so the panel says so. A `BuildContext` whose bucket plan does not match
 its scope raises `BuildContextScopeError` (`dependencies.py`).
 
 The guards add no identity of their own: component, dataset, and analysis IDs, their versions,
@@ -611,7 +630,7 @@ and without `-O`, and expects the typed error each time.
 
 | Situation                                         | Result                                                                                                             |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Required component raises                         | Whole snapshot fails with `503 snapshot_source_failure`.                                                           |
+| Required component raises                         | Whole snapshot fails with `503 snapshot_source_failure`; too many days of prices: `422`, `too_many_price_days`.        |
 | Optional component raises                         | Component omitted; diagnostic remains internal.                                                                    |
 | Required dataset component raises                 | Analysis fails closed.                                                                                             |
 | Optional dataset has a required-component failure | Entire optional dataset is skipped.                                                                                |

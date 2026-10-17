@@ -199,6 +199,7 @@ The whole story of one lot. Open it with **View lot detail** (⋮) or by clickin
 **How to read it**
 
 - **Quantities are the broker's full holdings**, as the ⓘ beside them says.
+- **A transfer with a broker outside the panel** counts as units coming in or going out. Units received open a new lot on the day they arrive, at the cost the transfer carries. Units sent close their lots on the day they leave, at that day's market price, so the gain they made at this broker counts as realized here. The lot's History shows these moves as adjustments. To follow the original lots through the move, open the panel with both brokers (no broker filter on the Dashboard). A transfer still on its way on the panel's last day shows its units as in transit.
 - **Go to transaction** opens the transaction of the History row you picked — by default, the opening one.
 
 ??? warning "⚠️ When the panel warns you"

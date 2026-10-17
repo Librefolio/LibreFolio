@@ -234,7 +234,7 @@
           "splitRatio": "Rapporto split",
           "sourceBroker": "Da",
           "destinationBroker": "A",
-          "handedOverAtCost": "Valore ceduto al costo"
+          "handedOver": "Valore ceduto"
         },
         "openingValue": "Valore apertura",
         "cumulativeProceeds": "Incassi cumulati"

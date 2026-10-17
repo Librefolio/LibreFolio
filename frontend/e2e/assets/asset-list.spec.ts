@@ -16,8 +16,9 @@ import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
 import {uniqueToken} from '../fixtures/unique';
 import {t} from '../fixtures/i18n-data';
-import {daysAgoIso} from '../fixtures/dates';
-import {describeShown, overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
+import {daysAgoIso, localIso} from '../fixtures/dates';
+import {describeShown, isStoredPoint, overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
+import {schemas} from '../../src/lib/api/generated';
 
 type SyntheticAsset = {
     id: number;
@@ -1014,33 +1015,77 @@ test.describe('Asset List Page', () => {
 // ============================================================================
 
 /**
- * «Sync all» syncs every asset with a provider over the page's period, and a sync replaces the prices stored in that
- * period with the provider's, manual edits included. Before the start the dialog says so, in one warning for its one
- * section: `asset-sync-modal-overwrite-warning`, `data-existing` of its `data-total` assets storing a price in the
- * period. A day the page shows filled backward from an earlier price is not a stored row of the period, so it is never
- * counted.
+ * The last full weekend at least two weeks back, on the local calendar `daysAgoIso` reads: its Saturday and Sunday as
+ * the period, with the Friday before and the Monday after. Computed from today, never a fixed date.
+ */
+function pastWeekend(): {friday: string; period: SyncPeriod; monday: string} {
+    const today = new Date();
+    // Fourteen days back is today's weekday again; `getDay()` days further back (Sunday 0 … Saturday 6) is a Sunday.
+    const sundayBack = 14 + today.getDay();
+    const daysBack = (days: number): string => {
+        const date = new Date(today);
+        date.setDate(date.getDate() - days);
+        return localIso(date);
+    };
+    return {friday: daysBack(sundayBack + 2), period: {start: daysBack(sundayBack + 1), end: daysBack(sundayBack)}, monday: daysBack(sundayBack - 1)};
+}
+
+/**
+ * What the list will show of each of the test's own assets over `period`, read as `storedAssetPrices` reads every asset
+ * «Sync all» syncs — from the endpoint the page reads its prices from: the points inside the period, and of those the
+ * stored rows (`isStoredPoint`, the page's rule).
+ */
+async function ownAssetPrices(page: Page, assetIds: number[], period: SyncPeriod): Promise<Map<number, {shown: number; stored: number}>> {
+    const items = assetIds.map((assetId) => schemas.FAPriceQueryItem.parse({asset_id: assetId, date_range: period}));
+    const queried = await page.request.post('/api/v1/assets/prices/query', {data: items});
+    expect(queried.ok(), `POST /api/v1/assets/prices/query over ${period.start} → ${period.end}: HTTP ${queried.status()} ${await queried.text()}`).toBe(true);
+    const answer = schemas.FAPriceQueryResponse.parse(await queried.json());
+    return new Map(
+        assetIds.map((assetId): [number, {shown: number; stored: number}] => {
+            const points = ((answer.items ?? []).find((item) => item.asset_id === assetId)?.prices ?? []).filter((point) => point.date >= period.start && point.date <= period.end);
+            return [assetId, {shown: points.length, stored: points.filter(isStoredPoint).length}];
+        }),
+    );
+}
+
+/** A list row's selection box, driven to `selected`: its state is asked first, never a blind click on a toggle. */
+async function selectRow(page: Page, assetId: number, selected: boolean): Promise<void> {
+    const box = page.getByTestId(`dt-row-checkbox-${assetId}`);
+    const state = selected ? 'checked' : 'unchecked';
+    if ((await box.getAttribute('data-state')) !== state) await box.click();
+    await expect(box).toHaveAttribute('data-state', state);
+}
+
+/**
+ * The list's sync dialog syncs assets with a provider over the page's period — «Sync all» every one of them, the
+ * selection's Sync the selected ones — and a sync replaces the prices stored in that period with the provider's, manual
+ * edits included. Before the start the dialog says so, in one warning for its one section:
+ * `asset-sync-modal-overwrite-warning`, `data-existing` of its `data-total` assets storing a price in the period. A day
+ * the page shows filled backward from an earlier price is not a stored row of the period, so it is never counted.
  *
- * Both periods are chosen by data, read through the endpoint the page reads its prices from (`storedAssetPrices`),
- * never assumed from the seed:
- *   · the 30 days up to yesterday, where some asset the dialog syncs stores prices — verified;
- *   · a week starting a week from now: no day of it has happened, so nothing is stored there, while every asset with a
- *     history shows its last stored price carried forward — filled backward. The page shows prices in that period and
- *     must not count them: the negative is the rule, not an empty period.
+ * Neither test assumes what its period holds: each reads it through the endpoint the page reads its prices from —
+ *   · «Sync all» over the 30 days up to yesterday, where some asset it syncs stores prices (`storedAssetPrices`);
+ *   · the selection's Sync over a past weekend, between the only two prices an asset of the test's own stores — the
+ *     Friday before and the Monday after: the page shows both days filled backward from the Friday and must not count
+ *     them — the negative is the rule, not an empty period. A second asset of the test's own, storing the Saturday
+ *     too, is the control: selected with the first, it is the one counted.
  *
  * Neither test starts the dialog: no sync request may leave the page, so no provider is ever called.
  */
 test.describe('Assets list — the sync dialog warns before replacing stored prices (C-66)', () => {
-    // A ceiling, never a delay: each test reads every priced asset over its period before loading the list's two waves,
-    // and a describe's timeout also covers the sign-in below — at load, more than the default 30 s leaves the dialog.
-    // Only the timeout is set: the file's parallel mode is inherited unchanged.
+    // A ceiling, never a delay: each test reads prices over its period before loading the list's two waves — every
+    // priced asset's, or two assets it first creates; the second also opens the dialog twice — and a describe's timeout
+    // also covers the sign-in below: at load, more than the default 30 s leaves the dialog. Only the timeout is set: the
+    // file's parallel mode is inherited unchanged.
     test.describe.configure({timeout: 60_000});
 
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
-        // The list polls live prices whenever its period reaches today — by the page's UTC reckoning, which a local
-        // «yesterday» can still reach just after midnight — and a fresh quote is written as today's price of a shared
-        // asset. Answered here, empty: no provider is called, nothing is written. The warning reads the stored prices,
-        // never the live ones.
+        // The list polls live prices while its period reaches today: the user's today since Z-3 (`todayIso()`), the
+        // local calendar `daysAgoIso` reads too — the config sets no `timezoneId` — so no period below does. A poll would
+        // ask the providers and write each fresh quote as today's price of a shared asset: answered here, empty, so that
+        // «no provider is called, nothing is written» does not rest on the periods' arithmetic. The warning reads the
+        // stored prices, never the live ones.
         await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
     });
 
@@ -1081,37 +1126,130 @@ test.describe('Assets list — the sync dialog warns before replacing stored pri
         expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
     });
 
-    test('sync all over a period whose prices are all filled backward does not warn', async ({page}) => {
-        // A week, starting a week from now: no day of it has happened.
-        const period: SyncPeriod = {start: daysAgoIso(-7), end: daysAgoIso(-14)};
-        const targets = await storedAssetPrices(page, period);
-        expect(
-            targets.filter((target) => target.stored > 0).map((target) => target.name),
-            'precondition: no asset stores a price on a day that has not happened',
-        ).toEqual([]);
-        if (!targets.some((target) => target.shown > 0)) {
-            throw new Error(`precondition: no asset with a provider shows a price filled backward between ${period.start} and ${period.end} (${describeShown(targets)}) — check populate_mock_data.py (populate_price_history): this test is about prices shown but not stored, not about an empty period`);
+    test('syncing the selection over a past weekend whose prices are all filled backward does not warn', async ({page}) => {
+        // The period: a past weekend, between the only two prices an asset of the test's own stores, the Friday before and
+        // the Monday after. Not one still to come: every price query ends tomorrow at the latest (X-R55), and a period
+        // starting later shows no price at all.
+        //
+        // The dialog: the selection's Sync, the list narrowed to the test's own assets (`handleBulkSyncAssets`: the same
+        // dialog and warning, over the selected rows with a provider). Not «Sync all», which syncs every asset with a
+        // provider whatever the list shows (`handleSyncAllAssets`) — and the seed's Bitcoin and Ethereum, both with a
+        // provider, store a price every day, weekends included (populate_mock_data.py, populate_price_history); not a
+        // row's own Sync, which starts at once, with no dialog. A second asset of the test's own, storing the Saturday
+        // too, is the control: the selection's dialog warns, and counts that one, not the first.
+        const token = uniqueToken(6);
+        const {friday, period, monday} = pastWeekend();
+        const names = {filled: `E2E C66 ${token} filled backward`, stored: `E2E C66 ${token} stored Saturday`};
+        // The Friday's close of the asset under test: the price the list shows for it over the weekend, written 123.45
+        // or 123,45 by the language of the page.
+        const fridayClose = {stored: '123.45', shown: /123[.,]45/};
+        /** Every asset the backend created, whatever failed after: what `finally` deletes. */
+        const ownIds: number[] = [];
+        try {
+            const created = await page.request.post('/api/v1/assets', {data: Object.values(names).map((display_name) => ({display_name, currency: 'EUR', asset_type: 'STOCK'}))});
+            const createdBody = (await created.json().catch(() => null)) as {results?: Array<{asset_id?: number | null; display_name?: string; success?: boolean}>} | null;
+            for (const result of createdBody?.results ?? []) if (typeof result.asset_id === 'number') ownIds.push(result.asset_id);
+            expect(created.ok(), `creating the two assets must succeed: HTTP ${created.status()} ${JSON.stringify(createdBody)}`).toBe(true);
+            const idOf = (name: string): number => {
+                const result = createdBody?.results?.find((entry) => entry.display_name === name);
+                if (!result?.success || typeof result.asset_id !== 'number') throw new Error(`"${name}" was not created: ${JSON.stringify(createdBody)}`);
+                return result.asset_id;
+            };
+            const filledId = idOf(names.filled);
+            const storedId = idOf(names.stored);
+
+            // A provider makes each a sync target: mockprov, the test-only one, under the one identifier it refuses to
+            // quote — a live poll would write nothing back. Assigned first: the prices stored next are all the assets hold.
+            const assignments = [filledId, storedId].map((assetId) => ({asset_id: assetId, provider_code: 'mockprov', identifier: 'INVALID_TICKER_12345', identifier_type: 'TICKER', provider_params: null}));
+            const assigned = await page.request.post('/api/v1/assets/provider', {data: assignments});
+            const assignedBody = (await assigned.json().catch(() => null)) as {results?: Array<{asset_id: number; success: boolean}>} | null;
+            expect(assigned.ok(), `POST /api/v1/assets/provider: HTTP ${assigned.status()} ${JSON.stringify(assignedBody)}`).toBe(true);
+            for (const assetId of [filledId, storedId]) expect(assignedBody?.results?.find((entry) => entry.asset_id === assetId)?.success, `mockprov assigned to asset ${assetId}: ${JSON.stringify(assignedBody)}`).toBe(true);
+
+            // The Friday and the Monday around the weekend; the control stores the Saturday too.
+            const upserts = [
+                {
+                    asset_id: filledId,
+                    prices: [
+                        {date: friday, close: fridayClose.stored},
+                        {date: monday, close: '130.00'},
+                    ],
+                },
+                {
+                    asset_id: storedId,
+                    prices: [
+                        {date: friday, close: '67.50'},
+                        {date: period.start, close: '68.25'},
+                        {date: monday, close: '69.00'},
+                    ],
+                },
+            ];
+            const stored = await page.request.post('/api/v1/assets/prices', {data: upserts});
+            const storedBody = (await stored.json().catch(() => null)) as {results?: Array<{asset_id: number; count: number}>} | null;
+            expect(stored.ok(), `POST /api/v1/assets/prices: HTTP ${stored.status()} ${JSON.stringify(storedBody)}`).toBe(true);
+            for (const {asset_id, prices} of upserts) expect(storedBody?.results?.find((entry) => entry.asset_id === asset_id)?.count, `every close of asset ${asset_id} is stored`).toBe(prices.length);
+
+            // The preconditions, computed: over the weekend the asset under test shows both days, filled backward from the
+            // Friday, and stores none; the control stores the Saturday and shows the Sunday filled backward from it.
+            const shown = await ownAssetPrices(page, [filledId, storedId], period);
+            expect(shown.get(filledId), `precondition: between ${period.start} and ${period.end} the asset under test shows both days, filled backward from ${friday}, and stores none — check the backward fill of POST /assets/prices/query (price_query.py)`).toEqual({shown: 2, stored: 0});
+            expect(shown.get(storedId), `precondition: the control stores ${period.start} and shows ${period.end} filled backward from it`).toEqual({shown: 2, stored: 1});
+
+            const syncRequests = recordSyncRequests(page);
+            await goToAssetsPage(page, period);
+            const assetsPage = page.getByTestId('assets-page');
+            // The list narrowed to the two assets, then shown as a table: the selection lives there.
+            await page.getByTestId('assets-search-input').fill(token);
+            await waitForSettled(assetsPage, 20_000);
+            await page.getByTestId('view-mode-list').click();
+            await waitForSettled(assetsPage, 20_000);
+            // Retrying, past the search box's debounce: the two rows of this test, and nothing a neighbour created.
+            await expect(page.locator('[data-testid^="dt-row-checkbox-"]'), 'the list narrowed to the two assets of this test').toHaveCount(2, {timeout: 10_000});
+            // Presence barrier for the absence at the end: the page holds the weekend of the asset under test — its last
+            // price is the Friday's close, carried to the Sunday — so the dialog has points to read, and must not count them.
+            await expect(page.locator(`tbody tr[data-row-id="${filledId}"] td[data-column-id="lastPrice"]`), 'the list shows the Friday’s close over the weekend').toHaveText(fridayClose.shown);
+
+            const toolbar = page.getByTestId('selection-toolbar');
+            const modal = page.getByTestId('asset-sync-modal');
+            const scope = modal.getByTestId('sync-modal-count');
+            const warning = modal.getByTestId('asset-sync-modal-overwrite-warning');
+
+            // The control: both selected, the selection's dialog warns — counting the asset that stores the Saturday, not
+            // the one whose weekend is filled backward.
+            await selectRow(page, filledId, true);
+            await selectRow(page, storedId, true);
+            await expect(toolbar).toHaveAttribute('data-selected-count', '2');
+            await toolbar.getByTestId('toolbar-action-sync').click();
+            await expect(modal).toBeVisible();
+            await expect(scope).toContainText(period.start);
+            await expect(scope).toContainText(period.end);
+            await expect(scope, 'the dialog syncs the two selected assets').toHaveAttribute('data-item-count', '2');
+            await expect(warning, 'one warning: the dialog has one section').toHaveCount(1);
+            expect(await overwriteCounts(warning), 'the control is counted; the asset whose weekend is filled backward is not').toEqual({section: 'assets', existing: 1, total: 2});
+            await modal.getByTestId('sync-modal-close').click();
+            await expect(modal).toBeHidden();
+
+            // The subject: the control deselected, the dialog syncs the asset whose weekend is all filled backward.
+            await selectRow(page, storedId, false);
+            await expect(toolbar).toHaveAttribute('data-selected-count', '1');
+            await toolbar.getByTestId('toolbar-action-sync').click();
+            await expect(modal).toBeVisible();
+            // Presence barrier: the dialog has drawn its body before the start — this period, the one asset to sync, the
+            // controls a start needs — so the absence below is the rule's, not a dialog still on its way.
+            await expect(scope).toContainText(period.start);
+            await expect(scope).toContainText(period.end);
+            await expect(scope, 'the dialog syncs the selected asset').toHaveAttribute('data-item-count', '1');
+            await expect(modal.getByTestId('sync-modal-timeout')).toBeVisible();
+            await expect(modal.getByTestId('sync-modal-start')).toBeEnabled();
+            await expect(warning, 'a price filled backward is not a stored row: the sync would replace nothing in the period').toHaveCount(0);
+
+            await modal.getByTestId('sync-modal-close').click();
+            await expect(modal).toBeHidden();
+            expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
+        } finally {
+            // Each asset goes with its prices and its provider assignment: both cascade.
+            for (const id of ownIds) await page.request.delete(`/api/v1/assets?asset_ids=${id}`).catch(() => {});
         }
-
-        const syncRequests = recordSyncRequests(page);
-        await goToAssetsPage(page, period);
-        await page.getByTestId('assets-sync-all-button').click();
-
-        const modal = page.getByTestId('asset-sync-modal');
-        await expect(modal).toBeVisible();
-        // Presence barrier: the dialog has drawn its body before the start — this period, assets to sync, the controls
-        // a start needs — so the absence below is the rule's, not a dialog still on its way.
-        const scope = modal.getByTestId('sync-modal-count');
-        await expect(scope).toContainText(period.start);
-        await expect(scope).toContainText(period.end);
-        expect(Number(await scope.getAttribute('data-item-count')), 'the dialog has assets to sync').toBeGreaterThanOrEqual(1);
-        await expect(modal.getByTestId('sync-modal-timeout')).toBeVisible();
-        await expect(modal.getByTestId('sync-modal-start')).toBeEnabled();
-        await expect(modal.getByTestId('asset-sync-modal-overwrite-warning'), 'a price filled backward is not a stored row: the sync would replace nothing in the period').toHaveCount(0);
-
-        await modal.getByTestId('sync-modal-close').click();
-        await expect(modal).toBeHidden();
-        expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
     });
 });
 

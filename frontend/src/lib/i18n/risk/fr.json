@@ -302,7 +302,8 @@
       "resource_limit_paths_or_horizon": "Cette simulation est trop volumineuse pour être exécutée. Utilisez moins de trajectoires simulées ou un horizon plus court.",
       "resource_limit_horizon_or_sampling": "Cette simulation quasi-Monte-Carlo est trop volumineuse pour être exécutée. Raccourcissez l'horizon ou choisissez l'échantillonnage Monte-Carlo.",
       "resource_limit_period": "Cette simulation est trop volumineuse pour être exécutée : la période contient trop d'historique. Choisissez une période plus courte.",
-      "resource_limit_positions": "Une simulation peut inclure au plus 100 positions, et ce portefeuille en compte davantage. Simulez plutôt un courtier avec moins de positions."
+      "resource_limit_positions": "Une simulation peut inclure au plus 100 positions, et ce portefeuille en compte davantage. Simulez plutôt un courtier avec moins de positions.",
+      "resource_limit_period_or_assets": "Cette analyse est trop volumineuse pour être exécutée : ces actifs couvrent trop de jours de prix. Choisissez une période plus courte ou moins d'actifs."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe est indéfini car la volatilité est nulle.",
