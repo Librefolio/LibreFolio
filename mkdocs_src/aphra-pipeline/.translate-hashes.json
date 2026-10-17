@@ -3769,7 +3769,7 @@
     }
   },
   "financial-theory/fundamentals/day-count.en.md": {
-    "md5": "bfa1db06c6c4f417a75fdbdacf5ec6da",
+    "md5": "bef2ffc66b8c397becaa8ab67d15ca72",
     "langs_done": [
       "es",
       "fr",
@@ -3779,15 +3779,15 @@
     "analysis_model": "deepseek/deepseek-v4-flash:free",
     "langs": {
       "it": {
-        "stamped_at": "2026-10-12T18:38:07.957651+00:00",
+        "stamped_at": "2026-10-17T01:46:43.140339+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-10-12T18:38:07.957651+00:00",
+        "stamped_at": "2026-10-17T01:46:43.140339+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-10-12T18:38:07.957651+00:00",
+        "stamped_at": "2026-10-17T01:46:43.140339+00:00",
         "stamped_by": "translate-stamp"
       }
     },

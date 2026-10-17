@@ -50,10 +50,11 @@ backend/app/services/financial_math/
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
 ├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
+├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360) and simple interest: the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
-├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule
+├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan
 ├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
@@ -303,7 +304,8 @@ flowchart LR
    routes), the Yield on Cost loaders (`yield_on_cost.py`), the
    [ledger control totals](#ledger-totals) (`compute_control_totals()`, through the session it
    is given) and the split links (`splits.load_split_links()` and `splits.split_linked_ids()`,
-   the rows of the transactions it is given).
+   the rows of the transactions it is given; `splits.costless_incoming_split_adjustments()`, the
+   rows linked to the events it is given).
 2. **Callers call the layer, never the other way round.** The layer never imports the
    orchestration services (`portfolio_service`, `broker_service`, `transaction_service`,
    `lots_analysis_service`), the API, AI Export, risk, PAC or signals: they call it.
@@ -403,9 +405,10 @@ flowchart LR
 
 ### 🚧 The Layer Guard {: #layer-guard }
 
-`backend/test_scripts/test_services/test_financial_math/test_layer_boundaries.py` parses the
-source of every module of the layer with `ast` — it imports none of them: no database, no
-server — and fails when:
+`backend/test_scripts/test_services/test_financial_math/test_layer_boundaries.py` parses with
+`ast` the source of every module of the layer and, for the two rules at the end of this section,
+of every module of `backend/app`. It imports none of them — no database, no server — and fails
+when:
 
 - a module imports an orchestration service, the API, AI Export, risk (`risk_plugins`
   included), PAC (`pac_allocator`, its planner source in `pac_allocator/source/` included) or signals (every `signal*`
@@ -418,9 +421,9 @@ server — and fails when:
 - one of the old homes below exists again, for example after merging a branch older than the
   move. A `__pycache__` folder left behind by git does not count.
 
-Each detector first proves, on synthetic sources, that it sees what it looks for, and the scan
-must reach the layer's known modules: a rule that asserts an absence never passes on an empty
-scan. The guard runs with the layer's tests:
+Each detector first proves, on synthetic sources, that it sees what it looks for, and each scan
+must reach the modules it knows of, in the layer or in `backend/app`: a rule that asserts an
+absence never passes on an empty scan. The guard runs with the layer's tests:
 
 ```bash
 ./dev.py test services financial-math
@@ -440,6 +443,35 @@ The sync builders of `LotsAnalysisService` that never touched the database moved
 functions of `lots/`; the service keeps the orchestration, the database loaders, the response
 builders and the analysis' data-quality report (see
 [Lots Analysis Service](transactions/lots_analysis_service.md#code-layout)).
+
+The day count conventions and simple interest of the Scheduled Investment provider moved too,
+unchanged (lot CP-14a, U10, developer decision D-8): `calculate_day_count_fraction()` with its
+three helpers (`_calculate_act_fixed()` for ACT/365 and ACT/360, `_calculate_act_act()`,
+`_calculate_30_360()`), and `calculate_simple_interest()`, now in `interest.py`. The provider
+imports them from there and keeps `_compute_maturation_dates()`, which reads the domain's
+maturation frequency, and its accrual walk (see
+[Scheduled Investment Provider](assets/provider_scheduled_investment.md#accrual-walk)). Its file
+stays, so the guard follows the names rather than a file: it fails when one of the five is not
+defined exactly once in `interest.py`, or is defined anywhere else in `backend/app` — a method,
+a nested function or a fallback under `except ImportError` included.
+
+The other rule over `backend/app` keeps one question in one place, «which rows are linked to a
+SPLIT asset event», and fails when:
+
+- a module of `backend/app` names `AssetEventType.SPLIT` anywhere but its two allowed homes:
+  `services/financial_math/splits.py`, the one loader of those rows, and
+  `services/transactions/event_suggestions.py`, a UI mapping of event type to transaction type
+  that loads nothing, [rule 5](#layer-rules). Every shape that reaches the member counts —
+  `AssetEventType.SPLIT`, `models.AssetEventType.SPLIT`, an alias bound by
+  `from … import AssetEventType as X`, `AssetEventType("SPLIT")`, `AssetEventType["SPLIT"]`,
+  `getattr(AssetEventType, "SPLIT")` — and nothing else does: a comment, a docstring, another
+  enum's `SPLIT` member, the string `"SPLIT"` on its own. Read the linked rows through
+  `splits.py` instead: `split_linked_ids()`, or `load_split_links()` when the ratio, the event
+  or the dates matter; the event store, before a SPLIT changes type, asks
+  `costless_incoming_split_adjustments()`. Before lot MF-I2 the WAC preview
+  (`portfolio_service.py`), the broker summary (`brokers/summary.py`) and the auto cost
+  (`transactions/auto_cost.py`) each wrote the join again. An allowed home that no longer names
+  the member is a stale entry, and fails too.
 
 ### 🚦 The Frontend Exceptions Gate {: #frontend-exceptions-gate }
 
@@ -466,6 +498,7 @@ for. The gate runs with the chart-safety unit tests:
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
 | `./dev.py test utils roi-utils` | `test_utilities/test_roi_utils.py` | `returns.py` |
+| `./dev.py test utils day-count` | `test_utilities/test_day_count_conventions.py` | `interest.py`: the four day count conventions (`calculate_day_count_fraction()`) and simple interest (`calculate_simple_interest()`) |
 
 !!! note "Test files keep their historical names"
 
@@ -488,6 +521,7 @@ for. The gate runs with the chart-safety unit tests:
 | `yield_on_cost.py` | — | [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) |
 | `splits.py` | — | [Split](../../financial-theory/instruments/asset-events/split.md) |
 | `ledger_totals.py` | [Ledger control totals](#ledger-totals) | — |
+| `interest.py` | [Scheduled Investment Provider](assets/provider_scheduled_investment.md#accrual-walk), its only consumer | [Day Count Conventions](../../financial-theory/fundamentals/day-count.md); simple interest in [Interest](../../financial-theory/instruments/asset-events/interest.md) |
 
 ---
 

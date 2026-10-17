@@ -3718,3 +3718,11 @@ stay in the plan. `developer/backend/email.md` still shows the masked notice and
 `check_source_paths.py`: 5 missing (8 occurrences) of 4108, all pre-existing, none on this page.
 Updated: [[domains/email]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] update | CP-14a: day count and simple interest in the home, one accrual walk, P-10
+U10 (D-8): the day count conventions and simple interest moved, unchanged, from the Scheduled Investment provider into
+`financial_math/interest.py`. The provider's two duplicated day walks are one (`_accrual_days`), pinned by a golden
+test. P-10 (decision 27): the event store refuses to change a SPLIT's type while a linked incoming adjustment has no
+cost, asking `splits.py`.
+Updated: [[decisions/financial-math-one-home]], [[decisions/scheduled-investment-redesign]].
+Graph: not updated; graphify is not available in this worktree.
