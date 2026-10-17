@@ -463,12 +463,35 @@ A removed column does not vanish silently (T-B7). The line right after the table
 row, `omitted_null_columns=a,b`, names the removed columns that held an explicit `null`
 — the backend's "unavailable" — as their header cells would have been written; the
 preamble states the rule and the diagnostics count the names in `null_columns_declared`.
-Two kinds of removed column are not named:
+Three kinds of removed column are not named:
 
 - a parent column, whose values live on in its `parent.child` columns;
 - a column that is empty only because the renderer has nothing for that scope
   (`undefined`, such as `portfolio_weight_percent` in the price series of one Asset):
-  that column is "not applicable", not "unavailable".
+  that column is "not applicable", not "unavailable";
+- a column whose `null` means "none for this row" (J-54). The backend writes every
+  `None` as `null` (`model_dump(mode="json")`), also where nothing of that kind exists,
+  so the renderer reads these columns from one list, `NULL_MEANS_NONE_COLUMNS` in
+  `snapshotDataRenderer.ts`. A name that could carry a real value elsewhere is bound
+  to its table, its component, or both:
+
+| Column | Table | Component | Its `null` means |
+|--------|-------|-----------|------------------|
+| `closing_date` | any | any | an open lot: it has not closed |
+| `reason_code` | any | any | a row with nothing to report |
+| `conversion_reason` | any | any | an amount converted at a known rate |
+| `component` | `OUTPUT DEFINITIONS` | any | a scalar output, not one component of a band |
+| `minimum`, `maximum` | `OUTPUT DEFINITIONS` | any | an output without that bound |
+| `asset_ref` | any | `portfolio.income_timeline` | income not tied to an asset, such as interest on cash |
+| `portfolio_weight_percent`, `technical_normalized_weight_percent` | `PERIOD SUMMARY` | `asset.indicators`, `fx.indicators` | one Asset or FX pair: there is no portfolio to weigh it in |
+
+`partial_reason_code` is not on the list: ENTITY STATUS shows only partial results, so
+a `null` there is a reason nobody knows, and it is named.
+
+A column on that list with a value in some rows keeps printing `null` in the others,
+as every column does: only the declaration of an all-`null` column changes. A new
+entry needs the backend's evidence that the field is `None` only when nothing of that
+kind exists, and a test of its own in `snapshotDataRenderer.test.ts`.
 
 The line follows the table, never its title, so every reader that takes the rows right
 after a title — the probe's table audit and scope checks, the test helpers — keeps

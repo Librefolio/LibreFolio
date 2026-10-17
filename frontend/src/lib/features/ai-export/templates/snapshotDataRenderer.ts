@@ -313,7 +313,50 @@ function isEmptyPublicValue(value: unknown): boolean {
     return value === undefined || value === null || value === '' || value === 'null';
 }
 
-function pipeTable(headers: readonly string[], rows: readonly (readonly unknown[])[], diagnostics?: MutableSnapshotFormatDiagnostics): string {
+/** One column whose `null` means "none for this row", not "unavailable" (J-54). */
+export interface NullMeansNoneColumn {
+    /** The column, as its header reads. */
+    readonly column: string;
+    /** The table, by the title the prompt prints right before it (`OUTPUT DEFINITIONS`, `TABLE rows`); absent: any table. */
+    readonly table?: string;
+    /** The component id; absent: any component. */
+    readonly component?: string;
+    /** What a null in it means. */
+    readonly means: string;
+}
+
+/**
+ * The columns whose `null` means "none for this row" rather than "unavailable" (J-54). The backend writes every `None`
+ * as `null` (`model_dump(mode="json")`), also where nothing of that kind exists for the row: a column of these, null in
+ * every row, is not applicable, so it is dropped silently and never named on the `omitted_null_columns` line. A name
+ * that could carry a real value elsewhere is bound to its table, its component, or both. A cell in a column with values
+ * keeps its `null`.
+ */
+export const NULL_MEANS_NONE_COLUMNS: readonly NullMeansNoneColumn[] = [
+    {column: 'closing_date', means: 'an open lot: it has not closed'},
+    {column: 'reason_code', means: 'a row with nothing to report'},
+    {column: 'conversion_reason', means: 'an amount converted at a known rate: no gap to explain'},
+    {column: 'component', table: 'OUTPUT DEFINITIONS', means: 'a scalar output, not one component of a band'},
+    {column: 'minimum', table: 'OUTPUT DEFINITIONS', means: 'an output with no lower bound'},
+    {column: 'maximum', table: 'OUTPUT DEFINITIONS', means: 'an output with no upper bound'},
+    {column: 'asset_ref', component: 'portfolio.income_timeline', means: 'income not tied to an asset, such as interest on cash'},
+    {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators', means: 'one asset: no portfolio weight'},
+    {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'fx.indicators', means: 'one FX pair: no portfolio weight'},
+    {column: 'technical_normalized_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators', means: 'one asset: no weight to normalize'},
+    {column: 'technical_normalized_weight_percent', table: 'PERIOD SUMMARY', component: 'fx.indicators', means: 'one FX pair: no weight to normalize'},
+];
+
+/** Where a table sits, for `NULL_MEANS_NONE_COLUMNS`: its printed title and its component. */
+interface TableContext {
+    readonly table?: string;
+    readonly component?: string;
+}
+
+function meansNoneWhenNull(column: string, context: TableContext): boolean {
+    return NULL_MEANS_NONE_COLUMNS.some((entry) => entry.column === column && (entry.table === undefined || entry.table === context.table) && (entry.component === undefined || entry.component === context.component));
+}
+
+function pipeTable(headers: readonly string[], rows: readonly (readonly unknown[])[], diagnostics?: MutableSnapshotFormatDiagnostics, context: TableContext = {}): string {
     if (rows.some((row) => row.length !== headers.length)) {
         throw new TypeError('AI Export compact table row width must match its header');
     }
@@ -323,9 +366,10 @@ function pipeTable(headers: readonly string[], rows: readonly (readonly unknown[
     const includedRows = rows.map((row) => includedIndexes.map((index) => row[index]));
     const table = [pipeRow(includedHeaders), ...includedRows.map(pipeRow)].join('\n');
     // Named only when a cell said null, the backend's "unavailable". A column of undefined or '' cells is one the
-    // renderer has nothing for in this scope ("not applicable"): it goes silently, as before (T-B7).
+    // renderer has nothing for in this scope ("not applicable"): it goes silently, as before (T-B7); so does a column
+    // whose null means "none" (J-54).
     const included = new Set(includedIndexes);
-    const nullColumns = headers.filter((_header, index) => !included.has(index) && rows.some((row) => isExplicitNull(row[index])));
+    const nullColumns = headers.filter((header, index) => !included.has(index) && !meansNoneWhenNull(header, context) && rows.some((row) => isExplicitNull(row[index])));
     return nullColumns.length ? `${table}\n${omittedNullColumnsLine(nullColumns, diagnostics)}` : table;
 }
 
@@ -901,6 +945,7 @@ function renderIndicators(
                         column.semantic_description,
                     ]),
                     diagnostics,
+                    {table: 'OUTPUT DEFINITIONS', component: componentId},
                 );
             })(),
         ].join('\n');
@@ -962,7 +1007,7 @@ function renderIndicators(
                 `INSTANCE ${instanceId}`,
                 ...(statusRows.length ? ['ENTITY STATUS', pipeTable(['entity', 'result_status', 'partial_reason_code'], statusRows, diagnostics)] : []),
                 'PERIOD SUMMARY',
-                pipeTable(['entity', 'portfolio_weight_percent', 'technical_normalized_weight_percent', 'column_key', 'latest', 'period_summary'], summaryRows, diagnostics),
+                pipeTable(['entity', 'portfolio_weight_percent', 'technical_normalized_weight_percent', 'column_key', 'latest', 'period_summary'], summaryRows, diagnostics, {table: 'PERIOD SUMMARY', component: componentId}),
             ].join('\n');
             const historyBlock = ['HISTORY', pipeTable(['entity', 'start', 'end', 'days', 'obs', ...columnKeys], historyRows, diagnostics)].join('\n');
             summaryChars += summaryBlock.length;
@@ -1358,7 +1403,7 @@ function isEmptyPublicCell(value: string | undefined): boolean {
     return value === undefined || value === '' || value === 'null';
 }
 
-function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, diagnostics: MutableSnapshotFormatDiagnostics): string {
+function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, diagnostics: MutableSnapshotFormatDiagnostics, componentId?: string): string {
     const summaryRows: unknown[][] = [];
     const arrays: GenericArrayTable[] = [];
     const visit = (record: JsonRecord, prefix: string): void => {
@@ -1422,7 +1467,8 @@ function renderGenericPayload(payload: JsonRecord, directory: EntityDirectory, d
         diagnostics.empty_parent_columns_removed += parentColumns.size;
         // Named when it would have printed null in a row: a parent's values live on in its `parent.child` columns,
         // and a column of empty strings says nothing (T-B7).
-        const nullColumns = removedColumns.filter((column) => !parentColumns.has(column) && flattenedRows.some((row) => isExplicitNull(row.get(column) ?? 'null')));
+        const table: TableContext = {table: `TABLE ${array.path}`, component: componentId};
+        const nullColumns = removedColumns.filter((column) => !parentColumns.has(column) && !meansNoneWhenNull(column, table) && flattenedRows.some((row) => isExplicitNull(row.get(column) ?? 'null')));
         blocks.push(
             `TABLE ${array.path}`,
             pipeTable(
@@ -1448,7 +1494,7 @@ function technicalPayload(
 ): {readonly format: string; readonly content: string} | undefined {
     if (componentId.includes('technical_coverage')) {
         const publicPayload = Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== null));
-        return {format: 'technical_coverage_tables_v1', content: renderGenericPayload(publicPayload, directory, diagnostics)};
+        return {format: 'technical_coverage_tables_v1', content: renderGenericPayload(publicPayload, directory, diagnostics, componentId)};
     }
     if (componentId.endsWith('.indicators') || componentId.includes('technical_indicators')) {
         const content = renderIndicators(componentId, payload, target, directory, samplingByInstance, historyLimit, signalMetrics, diagnostics);
@@ -1510,7 +1556,7 @@ function renderComponent(section: JsonRecord, target: unknown, directory: Entity
     const compactVersion = isCompactVersion(componentId, section);
     const technical = compactVersion && payload ? technicalPayload(componentId, payload, target, directory, samplingByInstance, historyLimit, signalMetrics, diagnostics) : undefined;
     if (technical) return `${componentHeader(section)}\n${technical.content}`;
-    if (compactVersion && payload) return `${componentHeader(section)}\n${renderGenericPayload(payload, directory, diagnostics)}`;
+    if (compactVersion && payload) return `${componentHeader(section)}\n${renderGenericPayload(payload, directory, diagnostics, componentId)}`;
     return `${componentHeader(section)}\nPAYLOAD YAML FALLBACK\n${serializeYaml({payload: section.payload})}`;
 }
 
