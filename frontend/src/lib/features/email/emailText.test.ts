@@ -32,6 +32,9 @@
  *     `{username}`), is in the four catalogues with exactly the placeholders the code fills;
  *   - the page on a blocked instance (lot E-10): its eighth state, `blocked`, has a key of its own, in the four
  *     catalogues without a placeholder — `email.verification.page.blocked` names nothing the page fills;
+ *   - «send the link again» on a blocked instance (lot E-11): `resendFailureMessage` words `INSTANCE_BLOCKED` with one
+ *     call for the sign-in's `auth.instanceBlocked` (lot A7b), in the four catalogues without a placeholder — E has no
+ *     key of its own for it, so that the sentence has one home —;
  *   - «send by email» and «forgot password» (lot E4a): `linkSendFailureMessage` makes one translator call per failure —
  *     `email.sendLink.errors.<CODE>` for the codes of `POST /email/links`, the minutes for a rate limit, the SMTP reason's
  *     `email.smtpErrors.<CODE>` for a refused delivery (`SEND_FAILED` when missing, unknown or inherited) but
@@ -390,6 +393,7 @@ function askedResend(failure: ResendFailure): {calls: number; key: string | unde
 /** One failure of each kind `resendFailureMessage` words, with the key and values it must ask for. */
 const RESEND_FAILURES: Array<{label: string; failure: ResendFailure; key: string; values?: Values}> = [
     {label: 'INVALID_CREDENTIALS', failure: {errorCode: 'INVALID_CREDENTIALS'}, key: 'email.verification.resendErrors.INVALID_CREDENTIALS'},
+    {label: 'INSTANCE_BLOCKED (lot E-11), in the sign-in’s own words of lot A7b', failure: {errorCode: 'INSTANCE_BLOCKED'}, key: 'auth.instanceBlocked'},
     {label: 'EMAIL_RATE_LIMITED, 180 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 180}, key: 'email.verification.resendErrors.EMAIL_RATE_LIMITED', values: {minutes: 3}},
     {label: 'EMAIL_RATE_LIMITED, 61 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 61}, key: 'email.verification.resendErrors.EMAIL_RATE_LIMITED', values: {minutes: 2}},
     {label: 'EMAIL_RATE_LIMITED, no wait said', failure: {errorCode: 'EMAIL_RATE_LIMITED'}, key: 'email.verification.resendErrors.EMAIL_RATE_LIMITED', values: {minutes: 1}},
