@@ -16,6 +16,8 @@ These Playwright tests cover fundamental UI components that are used across the 
 | **Files** | File upload, file list, drag & drop, file deletion |
 | **Select Components** | `SearchSelect`, `SimpleSelect`, currency pickers |
 | **Image Crop** | `ImageEditModal`, crop presets, zoom, rotation, format export |
+| **CSP collector** | The collector of Content-Security-Policy violations that every spec carries: its helpers and its baseline, synthetic documents under a report-only policy of their own, the sign-in page under the managed profile's (`csp-collector`) |
+| **Cloud smoke** | Thirteen specs of the suite on a managed lane, desktop only, and on any lane only when named: the managed profile's frame protection and report-only policy for real, the collector failing on any violation its baseline does not know (`cloud-smoke`) |
 
 ### 👥 Users Tab (`admin-users`) {: #admin-users }
 
@@ -71,6 +73,49 @@ users on their default. The tab's rules without a browser are in the Vitest file
 [Plugin Settings › Tests](../architecture/patterns/plugin_settings.md#tests). Run it alone with
 `./dev.py test front-utility plugin-settings`.
 
+### 🛡️ CSP Collector (`csp-collector`) {: #csp-collector }
+
+`layout/csp-collector.spec.ts` tests the [CSP collector](e2e.md#csp-collector) that every spec
+carries, with service workers blocked so that every document goes through the spec's own routes.
+It runs on any lane: on a self-hosted one the spec adds the managed profile's report-only policy to
+the sign-in page itself; on a managed one it lets the lane's own header through and checks that it
+equals its copy of `CSP_REPORT_ONLY_POLICY`.
+
+| Test | What it checks |
+|------|----------------|
+| The pure logic | `cspCollectorEnabled`, `inlineScriptLines`, `isKnown` and `loadBaseline` of `e2e/fixtures/csp.ts`, on synthetic input, without a page: an inline script known by its span; an address known by its path, whole, whatever its origin and query, and a blocked URI that is no absolute URL (`inline`, `eval`) never known by a path; every entry of the baseline well formed (exactly one of `blockedURI` and `blockedPath`, a reason, an owner), every `id` its own |
+| The first cloud smoke's findings | The real baseline knows them as the managed lane recorded them, cheetah-grid's global probe and three address checks of a link, each by the entry recorded for it and by no other |
+| A synthetic document | Served by the spec under its own report-only `script-src 'self'`: its inline script recorded once, field for field as the page saw it, and run all the same; unknown, and the test passes (`cspFailOnUnknown: false`) |
+| Two documents in a row | A navigation: the violations of both recorded, the binding and the listener back with each document |
+| An unknown violation | With `cspFailOnUnknown` at its default, the test fails at teardown: an expected failure (`test.fail()`), which Playwright reports passed only if it did fail |
+| The sign-in page | `/` under the managed profile's report-only policy reports exactly its two inline scripts, one violation each, both known to the baseline, and every entry naming an inline script of `index.html` matches one of them |
+| The kill switch | Runs only in a run started with `E2E_CSP_COLLECTOR=0`, where the synthetic and sign-in tests skip: no binding in the page, nothing recorded, nothing failed |
+
+Prerequisites: populated DB and test users. Run it alone with
+`./dev.py test front-utility csp-collector`, and its kill-switch test with
+`E2E_CSP_COLLECTOR=0 ./dev.py test front-utility csp-collector`.
+
+### ☁️ Cloud Smoke (`cloud-smoke`) {: #cloud-smoke }
+
+The main pages and the surfaces the managed profile's policies touch (the PDF preview, forms,
+frames), on a managed lane: frame protection and the report-only policy for real, with the
+[CSP collector](e2e.md#csp-collector) failing on any violation `e2e/csp-baseline.json` does not
+know. Thirteen specs of the suite, `CLOUD_SMOKE_SPECS` in `scripts/test_runner/_frontend_utility.py`,
+on desktop only (each `<name>.spec.ts` under `frontend/e2e/`): `auth`, `layout/page-policy`,
+`layout/csp-collector`, `portfolio/dashboard`, `portfolio/risk-analysis`, `assets/asset-modal`,
+`transactions/transactions-table`, `transactions/tx-brim-import`, `files`, `brokers/brokers`,
+`settings/security-tab`, `settings/admin-users` and `ai-export/ai-export-panel`.
+`layout/legal-and-managed` stays out until its tests of the lane's own answer (LGM-E-01, LGM-E-03)
+read the lane's profile: they pin a self-hosted lane, and fail on a managed one by design.
+
+On any lane it runs only when named: registered `named_only=True`, it is left out of
+`front-utility all`, `all-frontend` and `all`, their consolidated pass included (see
+[Registry Entry Shape](runner_architecture.md#registry-entry-shape)). It refuses to start unless the
+lane's `LIBREFOLIO_PROFILE` is `managed`, with an error that says to add
+`--lane-setting LIBREFOLIO_PROFILE=managed`, a flag of `./dev.py test` that goes before the
+category (see [Lane Settings](index.md#lane-settings)). Prerequisites: that lane, a populated DB
+and the test users.
+
 ## 🚀 Running
 
 ```bash
@@ -88,6 +133,9 @@ users on their default. The tab's rules without a browser are in the Vitest file
 
 # Run with visible browser
 ./dev.py test front-utility all --headed
+
+# The cloud smoke: on any lane only when named (no "all" runs it); it needs a managed lane, whose flag goes before the category
+./dev.py test --lane-setting LIBREFOLIO_PROFILE=managed front-utility cloud-smoke
 ```
 
 ## 📂 Test Location
