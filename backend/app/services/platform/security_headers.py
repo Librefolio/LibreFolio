@@ -22,8 +22,9 @@ one (``PROFILE_DEFAULTS``), each settable on its own:
   Not a PDF: Chromium shows an inline PDF with a viewer it treats as a plugin, which ``object-src 'none'`` on the PDF's
   own answer could stop;
 - ``LIBREFOLIO_CSP_REPORT_ONLY``: ``Content-Security-Policy-Report-Only: CSP_REPORT_ONLY_POLICY`` on the HTML pages of
-  the web app (``text/html`` exactly), never on ``/mkdocs`` or ``/api/``. Nothing is blocked; the browser reports each
-  violation in its console (no report endpoint).
+  the web app (``text/html`` exactly), never on ``/mkdocs`` or ``/api/``, with the hashes of the inline scripts of the
+  build's pages in its ``script-src`` (H-52, ``report_only_policy()``), read once, when the middleware is built: a new
+  build takes a restart. Nothing is blocked; the browser reports each violation in its console (no report endpoint).
 
 A ``304`` gets neither policy (H-45). A browser freshens the response it cached with the header fields of a 304, and
 a 304 has no ``Content-Type`` (Starlette's ``NotModifiedResponse``): ``frame-ancestors 'self'`` alone on it would
@@ -36,6 +37,7 @@ the headers, then lets the exception go on, so it is still logged.
 """
 
 import mimetypes
+from collections.abc import Iterable
 
 from starlette.responses import PlainTextResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -69,11 +71,14 @@ DOCUMENT_MEDIA_TYPES = frozenset({"text/html", "application/xhtml+xml", "image/s
 DOCUMENT_MEDIA_TYPE_SUFFIX = "+xml"
 
 #: The report-only policy of the web app's pages. Images may come from any HTTPS address (asset and broker icons set
-#: by URL); WebAssembly compiles for the PDF viewer; the inline styles of the app are allowed, its inline scripts not.
+#: by URL); WebAssembly compiles for the PDF viewer; the inline styles of the app are allowed, its inline scripts only by
+#: their hashes, which ``report_only_policy()`` adds (H-52). ``'report-sample'`` puts the first 40 characters of a
+#: blocked script or eval in its report: the page's own event today, since the policy names no report endpoint; if one
+#: is ever added, those characters leave the browser with the report.
 CSP_REPORT_ONLY_POLICY = "; ".join(
     (
         "default-src 'self'",
-        "script-src 'self' 'wasm-unsafe-eval'",
+        "script-src 'self' 'wasm-unsafe-eval' 'report-sample'",
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: blob: https:",
         "font-src 'self' data:",
@@ -86,7 +91,23 @@ CSP_REPORT_ONLY_POLICY = "; ".join(
         "frame-ancestors 'self'",
     )
 )
-_CSP_REPORT_ONLY_HEADER = (b"content-security-policy-report-only", CSP_REPORT_ONLY_POLICY.encode())
+_CSP_REPORT_ONLY_FIELD = b"content-security-policy-report-only"
+
+
+def report_only_policy(script_hashes: Iterable[str]) -> str:
+    """``CSP_REPORT_ONLY_POLICY`` with ``script_hashes`` (``'sha256-…'``) appended to its ``script-src``, in the order given."""
+    hashes = " ".join(script_hashes)
+    if not hashes:
+        return CSP_REPORT_ONLY_POLICY
+    return "; ".join(f"{directive} {hashes}" if directive.startswith("script-src ") else directive for directive in CSP_REPORT_ONLY_POLICY.split("; "))
+
+
+def _report_only_header() -> tuple[bytes, bytes]:
+    """The report-only header of the web app's pages, with the hashes of the build's inline scripts read now (H-52)."""
+    from backend.app.services.platform import static_site  # noqa: PLC0415 — static_site imports this module
+
+    return (_CSP_REPORT_ONLY_FIELD, report_only_policy(static_site.spa_inline_script_hashes(static_site.FRONTEND_BUILD_DIR)).encode())
+
 
 #: The types of the files the app serves (the web app, the documentation, the plugins' assets). Python's own table
 #: lacks the fonts and source maps, which without ``/etc/mime.types`` (a slim image) would go out as
@@ -151,6 +172,8 @@ class SecurityHeadersMiddleware:
         # A 304 carries no policy (H-45): the browser keeps the one of the response it cached
         self.not_modified_headers = tuple(header for header in self.headers if header[0] != b"content-security-policy")
         self.csp_report_only = settings.LIBREFOLIO_CSP_REPORT_ONLY
+        # With the hashes of the build's inline scripts, read once (H-52): never a read of the build per request
+        self.csp_report_only_header = _report_only_header() if self.csp_report_only else None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -171,8 +194,8 @@ class SecurityHeadersMiddleware:
                 else:
                     added = self.page_headers if _is_document(headers) else self.headers
                 headers.extend(header for header in added if header[0] not in present)
-                if self.csp_report_only and not not_modified and _CSP_REPORT_ONLY_HEADER[0] not in present and _is_web_app_page(scope["path"], headers):
-                    headers.append(_CSP_REPORT_ONLY_HEADER)
+                if self.csp_report_only_header and not not_modified and _CSP_REPORT_ONLY_FIELD not in present and _is_web_app_page(scope["path"], headers):
+                    headers.append(self.csp_report_only_header)
                 message = {**message, "headers": headers}
             await send(message)
 
