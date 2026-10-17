@@ -316,7 +316,8 @@
         "generic": "The action failed. Try again.",
         "load": "The accounts could not be loaded.",
         "PENDING_SETUP": "This administrator waits for its setup: it can be neither reactivated nor demoted here.",
-        "SETUP_COMPLETED": "This administrator completed its setup in the meantime: nothing was changed."
+        "SETUP_COMPLETED": "This administrator completed its setup in the meantime: nothing was changed.",
+        "LAST_ADMIN_DELETION": "You are the last active administrator: make another account an administrator before deleting yours."
       },
       "invite": {
         "button": "Invite",

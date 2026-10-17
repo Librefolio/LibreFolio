@@ -503,8 +503,9 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
 
     # #R3-2: Filter out points with currency mismatch BEFORE counting as fetched.
     # A point whose currency differs from the asset's currency is, from the asset's
-    # point of view, indistinguishable from "no data available" — the bulk_upsert
-    # would reject the whole batch with HTTPException(400) and fetched_count would
+    # point of view, indistinguishable from "no data available" — under a provider's key
+    # bulk_upsert_prices would refuse the whole batch with a ValueError (its per-asset
+    # currency check; X-R71's 422 is for manual calls only), and fetched_count would
     # remain inflated, producing a misleading PARTIAL status ("20↓ 0Δ") instead of
     # a clear FAILED with the real reason.
     errors: list[str] = []

@@ -20,6 +20,11 @@ The decided contract (developer decisions D6 and «una sola funzione condivisa»
 - the sole administrator is still refused (400): a product rule, not a technical error. Since plan
   34 step 2 (§3.2) «sole» means the last ACTIVE administrator: login refuses an inactive account,
   so the guard counts the other active administrators (``user_service.count_active_superusers``).
+  Since lot A-16 the refusal is coded, as the administrators' 409 for the same rule is: its detail is
+  ``SOLE_ADMIN_DELETE_DETAIL``, ``{"error_code": "LAST_ADMIN", "message": "Cannot delete account:
+  you are the last active administrator"}``. Red until A-16 on that detail alone: today's handler
+  answers the plain string «Cannot delete account: you are the only administrator» (ACCDEL-002,
+  ACCDEL-003).
 
 Write-scoped: every user, broker, asset, transaction and file is created here and removed here,
 also after a red. Two details keep the physical checks honest under ``--workers``:
@@ -732,21 +737,26 @@ class TestAccountDeletion:
 
     @pytest.mark.asyncio
     async def test_sole_administrator_is_still_refused(self, private_instance: _PrivateInstance):
-        """ACCDEL-002 — GUARD, green today and after the fix (D6: refusing the only administrator is a product rule).
+        """ACCDEL-002 — red until A-16 on the refusal's detail alone; the refusal and «nothing touched» are guards,
+        green today and after (D6: refusing the last active administrator is a product rule).
 
         On a private instance (fixture private_instance) «the only administrator» is a real state,
-        not a patched counter: today's handler counts with count_superusers, the cure with
-        count_active_superusers, and a patch on either name simulates nothing the day the handler
-        calls the other. The shared admin is never involved: it does not exist there.
+        not a patched counter: the handler counts with count_active_superusers (plan 34 step 2), and
+        a patch on that name would simulate nothing the day the handler calls another one. The
+        shared admin is never involved: it does not exist there.
 
         A, the instance's only administrator, is the only OWNER of a broker with a DEPOSIT and a
         BRIM report. C, a regular active user, is there too, so a guard counting active accounts
         instead of active administrators would let A go.
 
-        The refusal must be the exact 400 the cleanup helpers recognise (SOLE_ADMIN_DELETE_DETAIL),
-        and it must come before anything is touched: both accounts, the broker, its DEPOSIT, its
-        access row and its BRIM file all still exist afterwards — leaving the brokers or cleaning
-        the files before the check would delete them.
+        The refusal must be a 400 and it must come before anything is touched: both accounts, the
+        broker, its DEPOSIT, its access row and its BRIM file all still exist afterwards — leaving
+        the brokers or cleaning the files before the check would delete them. Its detail is coded
+        (A-16), as the administrators' 409 for the same rule: error_code LAST_ADMIN, exactly
+        SOLE_ADMIN_DELETE_DETAIL — ``{"error_code": "LAST_ADMIN", "message": "Cannot delete account:
+        you are the last active administrator"}``, which the cleanup helpers of the API modules
+        recognise. Today the detail is the plain string «Cannot delete account: you are the only
+        administrator», with no error_code: that is the red.
         """
         print_section("ACCDEL-002: the sole administrator is still refused, and keeps everything")
         instance = private_instance
@@ -770,32 +780,36 @@ class TestAccountDeletion:
 
         assert isinstance(outcome, HTTPException), f"The only administrator must be refused, the handler answered {outcome!r}; the instance now holds {after}"
         assert outcome.status_code == 400, f"The only administrator must be refused with 400, got {outcome.status_code}: {outcome.detail}"
-        assert outcome.detail == SOLE_ADMIN_DELETE_DETAIL, f"Unexpected refusal detail: {outcome.detail}"
         assert after == before, f"The refusal must touch nothing: before {before}, after {after}"
+        assert isinstance(outcome.detail, dict) and outcome.detail.get("error_code") == "LAST_ADMIN", f"[new] red until A-16: the refusal of the last active administrator must carry error_code LAST_ADMIN, its detail is {outcome.detail!r}"
+        assert outcome.detail == SOLE_ADMIN_DELETE_DETAIL, f"The refusal's detail must be exactly {SOLE_ADMIN_DELETE_DETAIL}, got {outcome.detail!r}"
 
-        print_success("✓ Sole administrator refused with the exact 400; accounts, broker, transaction, access and file intact")
+        print_success("✓ Sole administrator refused with the coded 400 (LAST_ADMIN); accounts, broker, transaction, access and file intact")
 
 
 class TestLastActiveAdministrator:
     """DELETE /auth/users/me refuses the last ACTIVE administrator (plan 34 step 2, §3.2), on a private instance.
 
-    Login refuses an inactive account, so an inactive administrator administers nothing. The cure
+    Login refuses an inactive account, so an inactive administrator administers nothing. The handler
     counts the OTHER ACTIVE administrators (user_service.count_active_superusers, the caller
-    excluded): when there is none, the 400 and the message of today, and nothing deleted.
+    excluded): when there is none, the coded 400 of the only administrator — error_code LAST_ADMIN,
+    SOLE_ADMIN_DELETE_DETAIL since A-16 —, and nothing deleted.
     """
 
     @pytest.mark.asyncio
     async def test_active_administrator_whose_only_fellow_is_inactive_is_refused(self, private_instance: _PrivateInstance):
-        """ACCDEL-003 — NEW, red today: an inactive fellow administrator does not count.
+        """ACCDEL-003 — red until A-16 on the refusal's detail alone; the refusal and «nothing deleted» are guards,
+        green since plan 34 step 2: an inactive fellow administrator does not count.
 
         A and B are administrators; B is then deactivated through set_user_active (`dev.py user
-        deactivate`, still allowed after the cure because A is active). A asks to delete the
-        account: the same 400 as the only administrator, with the same message, and both accounts
-        still there afterwards.
+        deactivate`, allowed because A is active). A asks to delete the account: the same refusal as
+        the only administrator — 400, error_code LAST_ADMIN, exactly SOLE_ADMIN_DELETE_DETAIL — and
+        both accounts still there afterwards.
 
-        Today the guard counts every superuser (count_superusers: 2, B included), so the handler
-        deletes A and answers {'message': 'Account deleted successfully'}. The instance is left
-        with B alone, who cannot log in: no active administrator. That is the red.
+        A guard that counted every superuser (count_superusers: 2, B included) would delete A and
+        answer {'message': 'Account deleted successfully'}, leaving the instance with B alone, who
+        cannot log in: no active administrator. Today the refusal is there, with the plain string
+        «Cannot delete account: you are the only administrator» and no error_code: that is the red.
         """
         print_section("ACCDEL-003: the last ACTIVE administrator is refused, an inactive fellow does not count")
         engine = private_instance.engine
@@ -807,11 +821,13 @@ class TestLastActiveAdministrator:
         outcome = await _delete_own_account(engine, ids["admin_a"])
         after = await _accounts(engine)
 
-        assert isinstance(outcome, HTTPException), f"[new] A is the last ACTIVE administrator (B is inactive, and login refuses it): the deletion must be refused with 400 «{SOLE_ADMIN_DELETE_DETAIL}», but the handler answered {outcome!r} and left the accounts {after}"
-        assert (outcome.status_code, outcome.detail) == (400, SOLE_ADMIN_DELETE_DETAIL), f"The refusal must be today's 400 with today's message, got {outcome.status_code}: {outcome.detail}"
+        assert isinstance(outcome, HTTPException), f"A is the last ACTIVE administrator (B is inactive, and login refuses it): the deletion must be refused with 400 {SOLE_ADMIN_DELETE_DETAIL}, but the handler answered {outcome!r} and left the accounts {after}"
+        assert outcome.status_code == 400, f"The refusal must be a 400, got {outcome.status_code}: {outcome.detail}"
         assert after == before, f"The refusal must delete nothing: before {before}, after {after}"
+        assert isinstance(outcome.detail, dict) and outcome.detail.get("error_code") == "LAST_ADMIN", f"[new] red until A-16: the refusal of the last active administrator must carry error_code LAST_ADMIN, its detail is {outcome.detail!r}"
+        assert outcome.detail == SOLE_ADMIN_DELETE_DETAIL, f"The refusal's detail must be exactly {SOLE_ADMIN_DELETE_DETAIL}, got {outcome.detail!r}"
 
-        print_success("✓ The last active administrator is refused; the inactive fellow does not count")
+        print_success("✓ The last active administrator is refused with the coded 400 (LAST_ADMIN); the inactive fellow does not count")
 
     @pytest.mark.asyncio
     async def test_administrator_with_another_active_administrator_can_delete_the_account(self, private_instance: _PrivateInstance):

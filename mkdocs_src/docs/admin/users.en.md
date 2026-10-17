@@ -148,7 +148,8 @@ active, like any other.
 The account also stops waiting when it is set up another way, without its link:
 
 - **activated on the server** with `user activate`: the command line does not refuse it, unlike
-  this tab. Its password is still the one nobody knows, until `user reset` or a reset link gives it
+  this tab, and prints no limit warning, since the account already holds its place. Its password
+  is still the one nobody knows, until `user reset` or a reset link gives it
   one;
 - **given a password**, with `user reset` on the server, or with a
   [password-reset link](#reset-links) once it is used: one you create with

@@ -4174,6 +4174,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     queste quattro. A non ha scritto né codice né test per A-9.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5.2».
 - **A-10 · Debito di traduzione delle pagine toccate da A5** — basso; A, 15/10.
+  - 17/10, lotto A-11/A-16/A-40: in EN cambiano ancora `admin/cli_tools` (i punti 📏 e 🏁 su `user activate`) e
+    `admin/configuration` («When the Instance Is Full»: `user activate` senza avviso per chi tiene già il posto).
   - Le pagine EN di A5a e A5b sono nel lotto; IT, FR ed ES sono indietro su 6 pagine: `admin/configuration`,
     `admin/cli_tools`, `admin/settings`, `admin/service_exposure`, `community/faq`, `user/getting-started`.
   - Vanno tradotte insieme: si linkano con ancore esplicite nuove (`#accounts`, `#user-limit`, `#registration`,
@@ -4206,7 +4208,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     «Changing Your Email» (un punto cambiato, uno nuovo: le maiuscole).
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
-- **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
+- ✅ **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; chiusa il 17/10 (commit del
+  coordinatore): un tema salvato che l'app non conosce si mostra come il `default_theme` noto, altrimenti `auto`, con un
+  avviso nel log; la riga non si riscrive (SET-A11-01…07); trovata dal `test-author` di E (15/10),
   letta nel codice e non ancora provata; segnalata dal coordinatore.
   - Una riga di `user_settings` con un `theme` diverso da `light`, `dark` e `auto` farebbe rispondere 500 a
     `/auth/login` e a `/settings/user`.
@@ -4254,7 +4258,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Una riga, da mettere nel lotto piccolo di H su `ALLOWED_WHEN_BLOCKED`, o da A al prossimo aggiornamento di base.
   - **Girata ad H** dal coordinatore (15/10, 16:56).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
-- **A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`** — minimo; A (15/10, dal
+- ✅ **A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`** — minimo; chiusa il 17/10
+  (commit del coordinatore): 400 `{error_code: LAST_ADMIN, message}`, nel dialogo la chiave nuova
+  `settings.usersTab.errors.LAST_ADMIN_DELETION` (ACCDEL-002/003, AERR-15…19, ADEL-28/29); A (15/10, dal
   `test-author` V4 di A6b).
   - `DELETE /auth/users/me` risponde `400 "Cannot delete account: you are the only administrator"`: una frase
     inglese e nessun codice.
@@ -4344,7 +4350,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Cura approvata dal coordinatore (16/10): solo logica, nessuna classe; un helper `sameEmail` (A–Z come il backend),
     `emailNeedsPassword` e il blocco della password solo per un indirizzo diverso; rossi prima in `ProfileTab.test.ts`.
     Lotto subito dopo l'aggiornamento di base che porta IM, come commit a sé; poi una frase in `user/settings/profile`.
-- **A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico** — minimo; dal
+- ✅ **A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico** — minimo;
+  chiusa il 17/10 (commit del coordinatore): la chiave degli indici di `_shape` viene da `_index_list` (MIG005-A26-01…03,
+  anche un indice unico con due nomi); dal
   `test-author` di P18 (16/10).
   - In `test_migration_005_accounts.py`, la chiave `indexes` di `_shape` viene dall'inspector di SQLAlchemy, che salta gli
     indici su espressione da entrambe le parti (con un avviso). Gli insiemi unici li vede (riparazione di P18), ma un
@@ -4456,7 +4464,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   administrator's address changed: the setup link handed over before no longer works; …», e quelli dopo l'avviso di
   scadenza. Una frase, e la stessa nelle tre traduzioni. Dettagli: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2.2».
-- **A-40 · `user activate` sull'admin in attesa avvisa del limite di utenti anche se il suo posto è già contato** —
+- ✅ **A-40 · `user activate` sull'admin in attesa avvisa del limite di utenti anche se il suo posto è già contato** —
+  chiusa il 17/10 (commit del coordinatore): nessun avviso anche con `is_pending_admin` (IMG-030f);
   minimo; dal `docs-writer` di A7b-2, tramite il coordinatore (17/10); preesistente. A istanza piena il CLI scrive
   l'avviso del limite (che supera), ma l'admin in attesa era già contato fra i posti (D-A10): l'attivazione non ne
   occupa uno nuovo. Cura possibile: nel CLI, nessun avviso quando l'account era in attesa. Dettagli: [piano
@@ -4538,6 +4547,37 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   attivato senza `DEMOTE_FIRST`; in più la scheda annulla con lo stesso corpo di una disattivazione (una riga vecchia
   disattiva il proprietario nuovo), e `user deactivate` può disattivare l'unico admin. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-51».
+- **A-52 · L'eliminazione di sé conta gli admin attivi prima del lock di scrittura** — basso (classe A-51); A (17/10,
+  analisi del lotto A-11/A-16/A-40/A-26). `DELETE /auth/users/me` legge `count_active_superusers()` senza
+  `begin_writes`: gli ultimi due admin attivi che si eliminano nello stesso istante passerebbero entrambi, e l'istanza
+  resterebbe senza admin. `DELETE /users/{id}` e il PATCH decidono già sotto il lock. Cura: `begin_writes(session,
+  User)` e il conteggio ripetuto, rosso prima. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Lotto A-11/A-16/A-40/A-26».
+- **A-53 · `developer/api/curl-testing.md`: l'esempio «Update preferences» usa una rotta che non esiste** — minimo
+  (doc); dal `docs-writer` del lotto A-11/A-16/A-40 (17/10). `PATCH /api/v1/auth/users/me/preferences` con
+  `{language, currency}`: le preferenze sono `PUT /api/v1/settings/user` (`language`, `base_currency`, `theme`,
+  `avatar_url`). Pagina solo EN.
+- **A-54 · Un account cancellato da un altro admin nella stessa finestra risponde 500, non 404** — basso (classe A-51);
+  dalla revisione di E di A-51 (17/10), tramite il coordinatore. Dopo `begin_writes`, `session.refresh(user)` solleva
+  `InvalidRequestError` su una riga appena cancellata (prima era `StaleDataError`, sempre un 500), in quattro punti:
+  `update_user_status` (PATCH), `set_user_active` e `set_user_admin` (CLI), il ramo «in attesa» di `DELETE /users/{id}`.
+  Cura: un aiuto che la intercetta, fa rollback e risponde il 404 di `_user_or_404` (con `USER_NOT_FOUND`: da decidere),
+  nella CLI «User 'x' not found». Proposta nel lotto «decidere sotto il lock» (A-52, A-54, A-55, A-56).
+- **A-55 · `DELETE /users/{id}` rilegge sotto il lock solo l'admin in attesa** — basso; da E (17/10), come A-54. Un
+  account promosso da un altro admin nella finestra viene cancellato senza `DEMOTE_FIRST` (non può togliere l'ultimo
+  admin attivo: chi cancella lo è). Cura: rileggere sotto il lock per ogni cancellazione.
+- **A-56 · Il limite di utenti si conta prima del lock** — basso (conta per i limiti dei piani); da E (17/10, la
+  riattivazione, preesistente), e da A la creazione degli inviti. Il PATCH guarda `usage.full` prima di
+  `update_user_status`, `create_invite` conta prima di ogni scrittura: due operazioni concorrenti a limite − 1 lo
+  superano di uno. La registrazione è già sicura: riconta dopo la sua scrittura, sotto il lock. Cura: contare dopo
+  `begin_writes`.
+- **A-57 · `legal-and-managed.spec.ts`: LGM-E-01 e LGM-E-03 devono leggere il profilo della corsia** — basso, solo test;
+  in 1.3, prima della fase 2 di H-43 (il cancello RC di H); dal coordinatore (17/10, da H-43, dev `a6adb0066`, la corsia
+  di prova gestita). I due casi danno per scontata la variante self-hosted: su una corsia gestita falliscono per
+  costruzione. Cura: leggere `GET /api/v1/system/instance` della corsia e verificare la variante corrispondente; poi H
+  rimette la spec in `CLOUD_SMOKE_SPECS`. Dopo il lotto in corso.
+- **A-58 · Con `connect-src 'self'` imposto, la verifica dell'indirizzo di un link verso un'altra origine è bloccata** —
+  basso, UX; dopo la 1.3, la metà UX di H-53; dal coordinatore (17/10). Il dialogo d'invito della scheda Utenti
+  (`LinkShare` → `checkAddress()`) oggi dice «non verificabile»: decidere cosa vede l'admin. Decisione aperta.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -5029,7 +5069,9 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Cura: mostrare il `detail` del 400 e gli `errors` del 200 (per data), contarli a parte. Prove: Vitest e
     `front-fx fx-editor`. Poi la frase della pagina utente (`user/fx/detail/data-editor.en.md`) può dire «con un messaggio
     che nomina la data».
-- **X-R75 · La modale delle rotte di un cambio cancella prima di salvare** — piccolo-medio, perdita di dati a ogni
+- ✅ **X-R75 · La modale delle rotte di un cambio cancella prima di salvare** (chiusa il 17/10 da B: `5cbc60844` frontend +
+  `970081b45` backend, entrata in dev `6ee4d2ed4`; revisione di X dopo l'ingresso: OK, il residuo delle gambe delle
+  catene è X-R79) — piccolo-medio, perdita di dati a ogni
   salvataggio fallito, **nella 1.3, fatta da B** (decisione del coordinatore, 17/10 17:05: B ha già l'analisi, con lo
   stesso gemello, e fa l'opzione A, un `replace=true` atomico su `POST /fx/providers/routes`; X rivede; la modale delle
   rotte resta a B); X, 17/10 (E, E-19, girata dal coordinatore).
@@ -5058,6 +5100,15 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     Doc: le rotte nella pagina dev dei cambi; `api sync`.
   - **Peso**: come X-R58: una rotta del backend, la modale, tre livelli di test, una finestra E2E (`fx-add-pair`).
     L'alternativa solo frontend è piccola.
+- **X-R79 · Il `replace` di X-R75 sostituisce anche le gambe delle catene** — basso, **nella 1.3, fatta da B**, dopo
+  W-B64/65 (decisione del coordinatore, 17/10 19:05); X, 17/10 (revisione di X-R75).
+  - `POST /fx/providers/routes?replace=true` vale per ogni coppia della richiesta, anche per le gambe che la modale
+    aggiunge con «crea le coppie intermedie». La voce X-R75 le voleva solo aggiunte, mai sostituite.
+  - La modale manda solo le gambe che crede non configurate, secondo la sua cache al salvataggio. Se un'altra scheda o
+    un altro utente configura quella gamba nel frattempo, la modifica ne sostituisce le rotte con quella di priorità 1
+    e cancella le altre. È una corsa stretta, e la docstring di B la dice.
+  - Cura (frontend): in modifica, prima le gambe con un upsert semplice (solo aggiunta), poi la sola coppia principale
+    con `replace=true`; un Vitest fissa l'ordine delle due richieste. Se fallisce la seconda, restano solo gambe nuove.
 - ✅ **X-R47 · Il rapporto di uno SPLIT non è mai validato** (chiusa il 17/10: `5f68a8db0`, la regola (d) con `1b6d65da7`; entrata in dev `952c68cd5`; gli SPLIT già salvati sono MF-D4) — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
   V-4 di CP-14a, F4, girato dal coordinatore).
   - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
@@ -5315,6 +5366,11 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     pensato per i provider che mandano solo la chiusura).
   - Da decidere: rifiutare un limite vero dalla parte sbagliata (`ohlc_inconsistent`), allargarlo, o scriverlo. Poi
     cambia il test.
+- ✅ **C-97c-4 · I cambi delle valute deboli letti come zeri** (chiusa il 17/10, in attesa del commit del coordinatore) —
+  piccolo, **nella 1.3**; X, 17/10 (revisione di C-97c-3, decisione del coordinatore).
+  - La lista, la card e il riepilogo dei cambi, il Δ della lista e il tooltip del cambio di una transazione usano
+    `formatPrice(x, {minDecimals: 4})`. Prima scrivevano `formatFixed(x, 4)`, e VND→USD si leggeva `0.0000`.
+  - Dettagli nel piano 03, «C-97c-4».
 
 ## W · Import e transazioni (fase 01)
 
@@ -6119,7 +6175,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   prezzo viene dall'override; la riga d'apertura della cronologia converte con la valuta del lotto e la cronologia
   registra quel cambio. Rossi in `test_fifo_adjustment_out_with_cost.py` e `test_lots_analysis_pure.py`. Commit: il
   checkpoint di CP-16. Dettagli: piano J, §10 «CP-16».
-- **J-10 · I lotti falliscono quando il broker mittente di un TRANSFER è fuori dallo scope** — medio, numeri e
+- ✅ **J-10 · I lotti falliscono quando il broker mittente di un TRANSFER è fuori dallo scope** — medio, numeri e
   chiarezza; trovata dal test-author di W, allargata da J il 15/10. Letta nel codice, non provata.
   `_load_transactions` (`lots_analysis_service.py:518-520`) carica solo i broker dello scope, e la pagina del broker
   apre i lotti con `broker_ids=[broker.id]` (`brokers/[id]/+page.svelte:676`). Quindi anche il proprietario, sulla
@@ -6131,6 +6187,8 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - per chi non vede il mittente, leggere la gamba come l'orfano dopo V-3: un ADJUSTMENT al suo costo congelato.
 
   Dettagli: piano J, §10 «Domande di W N1».
+  - ✅ 17/10: fatta da J (checkpoint J-10): entrata con `ba612882a`, CHANGELOG `4529ce9ad`. Dettagli: piano 05,
+    sezione «J-10».
 - **J-11 · Un ADJUSTMENT in uscita senza costo si legge come unità distrutte** — da decidere (developer), numeri; J,
   15/10, nella revisione di V-3. Letta nel codice, non provata.
   - **Il caso**: si cancella il broker che riceve un TRANSFER. Sopravvive la gamba in uscita, che non può avere costo
@@ -6177,7 +6235,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
       delle gambe in uscita, con la firma che il coordinatore gli gira.
 
   Dettagli: piano J, §10 «Domande di W N1» e «CP-16».
-- **J-12 · Con l'analisi dei lotti `FAILED` il pannello disegna lo stesso lotti e cifre** — medio, chiarezza (utenti
+- ✅ **J-12 · Con l'analisi dei lotti `FAILED` il pannello disegna lo stesso lotti e cifre** — medio, chiarezza (utenti
   non esperti); trovata dal test-author di W (V-3, caso speculare), confermata da J nel codice il 15/10.
   - **Il caso**: un TRANSFER in uscita orfano. FIFO salta la coppia irrisolta (`_resolve_transfer_pair`, `FAILED` con
     `TRANSFER_PAIR_MISSING`), quindi il lotto di A resta con 10 X aperti, valore 300 e P&L 100, mentre la posizione e
@@ -6196,6 +6254,8 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - AI Export: l'asset è dichiarato in `failed_lot_reconstructions` (solo identità e codici), i totali del perimetro
       sono nulli; `*.fifo_lots` v3, `asset.lot_detail` v4 con lo stato. Dettagli: piano 05, sezione «J-12 — backend e
       AI Export».
+  - ✅ 17/10: fatta. Il backend e l'AI Export da J (`4195fa857`, `fc8ab50ca` → dev `2fa8ec1a8`), il pannello da Y
+    (`46b5fbc0e`). Dettagli: piano 05, sezione «J-12».
 - ✅ **J-13 · Volatilità, Sharpe e Beta mobili mostrano «giorni» ma contano osservazioni** — basso, chiarezza (utenti
   non esperti); J, 15/10, nella nota sul punto 29 per il coordinatore.
   - `rolling_volatility`, `rolling_sharpe` e `rolling_beta` dichiarano `"x-suffix": "days"` sulla finestra (come oggi
@@ -6230,13 +6290,17 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   proposta: `flush=True` su quella riga, col via del coordinatore colori.
 
   Dettagli: piano J, §10, C-94, passo 6 (3), «Fuori pista».
-- **J-16 · Il test del gemello compatto del PAC non dice quale risultato fallisce** — basso, test; segnalata da X tramite
+- ✅ **J-16 · Il test del gemello compatto del PAC non dice quale risultato fallisce** — basso, test; segnalata da X tramite
   il coordinatore, 15/10. `test_pac_compute_plans_the_compact_twin_like_the_explicit_request` (`api pac-planner-tool`)
   è caduto una volta sotto un carico fra 75 e 121, con `(1, 1)` invece di `(2, 0)`; da solo passa. I Tools non scrivono
   nel log l'elemento fallito, e il test controlla i conteggi prima di stampare i risultati, quindi la causa non si
   vede. Proposta: mettere `results` nel messaggio d'errore dell'asserzione, poi, alla prossima caduta, il triage con la
   skill `test-triage`. Lotto piccolo, quando capita, con `test-author`.
-- **J-17 · Una rettifica col costo segna il prezzo dell'asset a quel costo** — medio, numeri (titoli quotati di rado);
+  - ✅ 17/10: fatta da J (test-author), solo il messaggio; nessuna condizione cambia (albero sintattico confrontato
+    con HEAD). Se i conteggi non tornano, il messaggio dà `(status, error)` di ogni elemento, l'`execution_id` e
+    le metriche di quello che non è riuscito (servono anche per J-19), e `server_processing_ms`. Il piano resta
+    fuori. `api pac-planner-tool` 12/12. Rivede X. Il triage, alla prossima caduta. Dettagli: piano 05, §10 «J-16».
+- ✅ **J-17 · Una rettifica col costo segna il prezzo dell'asset a quel costo** — medio, numeri (titoli quotati di rado);
   J, 15/10, in CP-16. Letta nel codice, non provata. `build_asset_price_series` (`financial_math/price_marks.py:307-309`)
   prende ogni ADJUSTMENT con `cost_basis_override` diverso da zero come un'osservazione TRADE, in entrata e in uscita.
   In un giorno senza quotazione di mercato il prezzo dell'asset, per tutti i broker, diventa quel costo, e resta fino
@@ -6252,12 +6316,19 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   un'osservazione di prezzo, in entrata e in uscita (per la SELL decide il developer). Caso senza prezzo, **opzione A**:
   una posizione senza alcuna osservazione vale il suo costo storico, come stima dichiarata («valutato al costo, nessun
   prezzo»). Lotto J-17 dopo CP-7a, disegno approvato il 16/10: piano J, §10 «J-17».
-- **J-18 · Su SQLite `Numeric(18, 6)` si salva come numero in virgola mobile** — basso, dati; trovata dal test-author di
+  - ✅ 16/10: fatta da J con la decisione (a): `638213507`, entrata con `94321d7db`. Dettagli: piano 05, §10 «J-17».
+- ✅ **J-18 · Su SQLite `Numeric(18, 6)` si salva come numero in virgola mobile** — basso, dati; trovata dal test-author di
   J il 16/10 (CP-15), con una prova su file. SQLAlchemy su SQLite non passa i Decimal al driver: li converte in `float`
   e li rilegge con 6 decimali, quindi un importo o una quantità oltre ~15 cifre significative si salva arrotondato
   (`123456789012.123456` torna `123456789012.123459`). Fino a ~1e10 il 6° decimale regge: nessun portafoglio personale
   ci arriva. Ma `backend-db.instructions.md` («`Numeric(18, 6)` for precision») fa credere a 18 cifre esatte. Proposta:
   scriverlo in quelle istruzioni e nella pagina dev del DB; nessun cambio di schema. Dettagli: piano J, §10 «CP-15».
+  - ✅ 17/10: verificata, già coperta; nessuna modifica (J, sola lettura). Le istruzioni non dicono più
+    «`Numeric(18, 6)` for precision»: da C-97 e W-B60 importi, quantità e prezzi sono `RealDecimal`
+    (`db/real_decimal.py`), che rilegge il decimale scritto con al più 15 cifre significative, e un valore oltre i
+    limiti della colonna è rifiutato (`backend-db.instructions.md`, «Conventions»). La pagina dev del DB
+    (`architecture/database/index.md`, «Decimal Columns») dice che SQLite tiene un `NUMERIC` come double e ignora
+    la precisione dichiarata, con gli esempi di lettura. Dettagli: piano 05, §10 «Documentazione».
 - **J-19 · Il PAC finisce in `worker_crashed` sotto carico** — da capire: OOM o timeout del worker; basso, robustezza;
   segnalata da G tramite il coordinatore, 16/10. Il 15/10 alle 23:05, nella galleria G-13 dei colori, il 4° e il 5°
   calcolo del PAC sono finiti in `tool_error` con `worker_crashed`: il processo isolato dello strumento è uscito prima
@@ -6279,7 +6350,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   ✅ Chiusa da J il 16/10 in CP-6: la descrizione dice la formula (`amount / sum of all slices × 100`, arrotondata a
   0,01) e che con la liquidità negativa la fetta della cassa va sotto zero e le altre possono superare 100. `api sync`
   senza file tracciati cambiati. Commit: il checkpoint di CP-6.
-- **J-21 · La linea di un segnale del backend scavalca i punti che non hanno un valore** — basso, chiarezza; trovata dal
+- ✅ **J-21 · La linea di un segnale del backend scavalca i punti che non hanno un valore** — basso, chiarezza; trovata dal
   test-author di J (CP-10a), 16/10. Il renderer toglie i punti senza numero (`charts/signals/backendRenderer.ts:215`),
   giustamente: mai uno zero finto. Ma `components/charts/chartCoreHelpers.ts:334` mette `connectNulls` a `true` quando
   il segnale non lo dice, e il renderer non lo dice mai: la linea unisce i due lati del buco come se ci fossero valori.
@@ -6287,6 +6358,11 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   riferimento a metà serie. Proposta: per i segnali del backend la linea si interrompe dove il punto non ha valore
   (`connectNulls: false` nel renderer), con un Vitest. File dei grafici: Y (FE2), o J d'accordo con Y. Dettagli: piano J,
   §10 «CP-10a».
+  - ✅ 17/10: fatta da J con l'alternativa precisa approvata dal coordinatore. `connectNulls: false` avrebbe
+    interrotto ogni indicatore delle sessioni a ogni fine settimana. Il renderer divide una linea o un'area in tratti
+    ai punti senza valore, e i giorni assenti restano uniti. Con la ricaduta (a), il badge «📈N» conta le date
+    distinte (`renderedSignalPointCount`), giusto ora anche per RSI, CCI, MFI e StochRSI. Rivedono Y (renderer) e
+    X (le due pagine). Dettagli: piano 05, §10 «J-21».
 - **J-22 · Debito di traduzione di CP-10a (un solo Rolling Return, J-13)** — basso, documentazione; J, 16/10. Pagine EN
   cambiate di senso, senza stamp: `financial-theory/fundamentals/returns` (tutta la sezione Rolling Return; esce l'ancora
   `#rolling-return-sessions`), `financial-theory/technical-analysis/indicators/index` (introduzione, righe Rolling Return e
@@ -6294,12 +6370,15 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `user/assets/detail/signals` (la voce Rolling Return e il paragrafo sulle finestre). ⚠️ `returns` e `signals` vanno
   tradotte **nello stesso giro**: le pagine IT/FR/ES dei segnali puntano a `#rolling-return-sessions`, che oggi esiste
   solo nelle `returns` IT/FR/ES; tradotta `returns` da sola, quei tre link si rompono. Dettagli: piano J, §10 «CP-10a».
-- **J-23 · Due incoerenze nelle pagine dell'analisi tecnica** — minimo, documentazione; trovate dal docs-writer di J
+- ✅ **J-23 · Due incoerenze nelle pagine dell'analisi tecnica** — minimo, documentazione; trovate dal docs-writer di J
   (CP-10a), 16/10, già prima del lotto. `financial-theory/technical-analysis/index.en.md:17` dice i concetti del gruppo
   Rischio «sotto Risk Metrics», ma quello del Rolling Return sta sotto Returns; la riga Underwater Drawdown di
   `indicators/index.en.md` porta a `max-drawdown`, mentre il `docs_path` del plugin e la pagina dei segnali portano a
   `current-drawdown`. Da allineare in un lotto di documentazione, con il loro debito di traduzione.
-- **J-24 · Consegna al costo d'un titolo estero: i lotti e la Dashboard danno totali diversi** — basso, numeri (caso
+  - ✅ 17/10: fatta da J nelle 4 lingue, due link. Il Rolling Return rimanda a Returns; la riga Underwater Drawdown
+    a `current-drawdown`. `technical-analysis/index` timbrata. `indicators/index` ha già un debito di traduzione
+    da `af919560c` (CP-10a, solo EN), lasciato alla pipeline. Dettagli: piano 05, §10 «Documentazione».
+- ✅ **J-24 · Consegna al costo d'un titolo estero: i lotti e la Dashboard danno totali diversi** — basso, numeri (caso
   raro); trovata dal docs-writer di J (CP-7a), 16/10, già da CP-16. Una rettifica in uscita col costo, su un titolo in
   un'altra valuta: i lotti valutano la consegna al cambio del giorno (da CP-7a la differenza di cambio dal giorno
   d'acquisto è realizzata; prima stava nel «di mercato»), la Dashboard toglie il costo dal capitale al valore storico e
@@ -6312,6 +6391,8 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   seguono già (CP-7a); la Dashboard no: si allinea la Dashboard (la distribuzione al cambio del giorno della rettifica,
   la differenza col costo storico nel realizzato), lotto proprio dopo J-17. La proposta (A) cade. Dettagli: piano J,
   §10 «J-24».
+  - ✅ 16/10: fatta da J con la regola P21 (`9d702ae8d`): la Dashboard realizza D − C nel giorno della consegna, come i
+    lotti. Da capo a fondo in USD con W-B55 (`2a35c1b73`). Dettagli: piano 05, §10 «J-24».
 - **J-25 · Debito di traduzione di CP-7a (lotti in un'altra valuta)** — basso, documentazione; J, 16/10. Pagine EN
   cambiate di senso, senza stamp: `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`
   (sezione nuova `#lots-in-another-currency` con l'esempio D-J1), `…/fifo-engine/index` (una frase rovesciata, un
@@ -6467,7 +6548,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     banner dei lotti raggruppa le issue per codice in un messaggio solo (i parametri della prima) con un chip per lotto,
     quindi un prezzo non può valere per tutti. Il parametro `reference_price` resta nei `message_params`, non letto.
     Dettagli: piano 05, sezione «J-36».
-- **J-38 · La guida dei plugin dei segnali descrive male l'ordine del taglio e il piano** — minimo, documentazione; J,
+- ✅ **J-38 · La guida dei plugin dei segnali descrive male l'ordine del taglio e il piano** — minimo, documentazione; J,
   17/10 (docs-writer di CP-10c). Pagina `developer/architecture/patterns/signal_plugin_guide.md`, solo inglese.
   - Il diagramma di sequenza del grafico disegna «Slice to visible range and assign status» dopo le annotazioni. Nel
     codice, prima e dopo CP-10c, taglio e stato avvengono per ogni calcolo dentro `execute_planned_signal`; le
@@ -6476,6 +6557,9 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - La sezione del piano non dice che un lotto incoerente solleva `SignalRequestValidationError` e ferma tutto il lotto,
     a differenza dei fallimenti preliminari, che restano per istanza.
   - Preesistenti, non legati al taglio. Dettagli: piano J, §10 «CP-10c».
+  - ✅ 17/10: fatta da J (docs-writer). Il diagramma taglia e assegna lo stato dentro il ciclo; le annotazioni
+    girano dopo, sulle serie estese. «3. Annotations» è riscritta. Il Piano dice che un lotto incoerente solleva
+    `SignalRequestValidationError`, ferma tutto il lotto e diventa un 422. Dettagli: piano 05, §10 «Documentazione».
 - **J-39 · Investimento programmato: l'ultima cedola contata due volte, e la mora che parte dal valore prima della
   cedola** — medio, numeri; J, 17/10 (docs-writer di CP-14a, verificata da J in memoria). Preesistente: viene da
   I-bis #26, che emette alle date di maturazione il valore prima dell'azzeramento della cedola, giusto per il grafico.
@@ -6536,7 +6620,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Area di X. Un rapporto 0 o negativo si salva (P-10 lascia passare la modifica, il tipo non cambia). Quando una
   transazione lo lega, il motore solleva `ValueError` (`engine.py:226-227`) e il rapporto della Dashboard risponde
   500. `is_valid_split_ratio` della casa (`splits.py`) esiste già. **→ X** (coordinatore, 17/10).
-- **J-43 · L'avviso delle quote diverse fra le due gambe di un trasferimento tace se cadono lo stesso giorno** —
+- ✅ **J-43 · L'avviso delle quote diverse fra le due gambe di un trasferimento tace se cadono lo stesso giorno** —
   minimo, qualità dei dati; MF (MF-J4), assegnata a J dal coordinatore il 17/10, dopo CP-14b.
   - In `financial_math/portfolio/classifier.py:131-149` l'avviso `share mismatch` sta dentro il ramo
     `if pair_key not in processed_pairs and tx.date != paired.date:`, quello che costruisce l'intervallo in transito.
@@ -6559,7 +6643,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - 17/10, coordinatore: **a J**, dopo F5, riusando `changePct` di `MeasureSignal.ts` (stessa regola di N65); X rivede in sola lettura, nessuna classe di colore toccata.
   - ✅ 17/10: fatta da J nel checkpoint di F5 (`changePct` esportato da `MeasureSignal.ts`, `buildDeltaHtml` con «—» su un
     primo valore 0); il coordinatore l'aveva passata a Y mentre era già fatta: resta nel checkpoint di J, **Y rivede**.
-- **J-45 (SEC7-1b) · Il rigioco del motore del portafoglio gira sul ciclo degli eventi** — medio, sicurezza
+- ✅ **J-45 (SEC7-1b) · Il rigioco del motore del portafoglio gira sul ciclo degli eventi** — medio, sicurezza
   (disponibilità); J, 17/10, nell'analisi di R13-SEC7-1. `PortfolioCalculationEngine.calculate` chiama
   `builder.build()` (`engine.py:424`), lavoro di CPU sincrono, dentro una funzione `async`: un rapporto lungo ferma
   tutte le richieste dell'istanza per la sua durata. SEC7-1 toglie le date senza limite, non questo. Portarlo in
@@ -6653,7 +6737,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - ✅ 17/10: fatta da J (checkpoint J-52). `metadata.params` ripete la richiesta; l'output (`replay_range`) e
     `metadata.analyzed_range` dicono la finestra rigiocata, quella limitata. Lo stress passa a `algorithm_version` 3.0.1,
     un salto solo per SEC8-1b e J-52. Dettagli: piano 05, sezione «J-52».
-- **J-54 · Nell'AI Export `null` vuol dire anche «nessuno», e T-B7 lo nomina come «non disponibile»** — minimo,
+- ✅ **J-54 · Nell'AI Export `null` vuol dire anche «nessuno», e T-B7 lo nomina come «non disponibile»** — minimo,
   chiarezza; J, 17/10 (rossi di T-B7, letto nel codice).
   - Il backend scrive ogni `None` come `null` (`model_dump(mode="json")`, senza `exclude_none`), anche dove vuol dire
     «nessuno» invece che «ignoto»:
@@ -6681,6 +6765,8 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     `partial_reason_code` è uscito: in ENTITY STATUS un null vuol dire «motivo ignoto». Nulla in ogni riga, una colonna
     dell'insieme si toglie in silenzio. Le celle delle tabelle miste restano `null` (J-55). Dettagli: piano 05, sezione
     «J-54».
+  - ✅ 17/10: fatta da J (checkpoint J-54): `96889bbfc`, entrata con `f9aef5d99`; riga 🔄 di T-B7 estesa
+    (`a3d4d60a7`). Dettagli: piano 05, sezione «J-54».
 - **J-55 · Le celle «nessuno» delle tabelle miste dell'AI Export si stampano `null` («explicitly unavailable»)** —
   minimo, chiarezza; J, 17/10 (J-54). **Dopo la 1.3** (coordinatore, 17/10).
   - Esempio: in una tabella di lotti con lotti aperti e chiusi, la cella `closing_date` di un lotto aperto dice
@@ -6690,6 +6776,17 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     riga»). Quella definizione coprirebbe anche le altre celle vuote, e non tutte vogliono dire «nessuno»: per esempio
     un `bucket_count` `undefined` delle INSTANCES.
   - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-54».
+- **J-56 · Settimanale e mensile: una linea divisa in più serie fa un gradino nel secchio del taglio** — minimo,
+  chiarezza; J, 17/10 (J-21). Proposta: dopo la 1.3; file dei grafici, Y (FE2).
+  - `downsampleRenderedSignal` (`components/charts/timeSeriesAggregation.ts`) raggruppa ogni `RenderedSignal` nei
+    secchi per conto suo. Due serie della stessa uscita con punti nello stesso secchio hanno ciascuna un
+    rappresentante a quella data. La linea fa un gradino verticale; il tooltip, che salta i nomi già visti
+    (`PriceChartFull.svelte`), mostra il valore della prima serie e non quello del secchio intero.
+  - Vale da prima per le fette di stile, a ogni attraversamento di soglia di RSI, CCI, MFI e StochRSI. Da J-21 vale
+    anche per i tratti di una linea con un punto senza valore: un buco dentro un secchio non si vede, e al suo posto
+    c'è il gradino. A risoluzione giornaliera nulla cambia.
+  - Cura possibile: aggregare l'uscita intera una volta sola, e dividerla in fette e tratti dopo l'aggregazione.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-21».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -7779,12 +7876,33 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Commit al checkpoint di E-19a.
   - Resta **E-19b**: `IssueCode.NON_ISO_CURRENCY` al posto di `MISSING_FX_*`, il banner senza bottone, il selettore
     col valore salvato, l'avviso del ripristino (via di B), i18n nelle 4 lingue, `api sync`.
+  - 17/10, E: **E-19b1** (il selettore, l'endpoint `suggest`, l'avviso `non_iso_currencies` del ripristino): parte 1 nel
+    commit `6e539da02`; `staging.py` sopra B-43, con le tre condizioni di B, va col checkpoint E-19b1. Resta **E-19b2**:
+    `NON_ISO_CURRENCY` nel rapporto di qualità, sul lettore di Z-32 (c).
   - Per D1, se si sceglie C: la rietichettatura automatica deve escludere anche `GBp`, non solo GBX/ZAC/ILA.
   - ✅ Il pezzo di J: la guardia di `Intl` in `riskAnalysisHelpers.ts:168`, entrata in dev `b13ed7944` (CHANGELOG
     `826f99f17`).
   - Smistati altrove dal coordinatore: il modale delle rotte FX che cancella prima di ripubblicare (X) e il `GBp` di
     Yahoo contro il confronto esatto del refresh (Z).
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19».
+- **E-20 · L'audit delle valute e i testi che non sono UTF-8** — piccolo; `test-author` di E-19b1.3 (dubbi 1 e 2),
+  17/10.
+  - Un solo valore TEXT che non è UTF-8 valido, in una delle 14 colonne, fa alzare a sqlite3 un `OperationalError` al
+    `fetchall`, e l'audit intero cade:
+    - l'avviso d'avvio dice «could not be checked» e non elenca nulla;
+    - il controllo di un ripristino perde `non_iso_currencies`, quindi un archivio costruito apposta nasconde tutti gli
+      altri codici non ISO. Non blocca e non perde testo (E-19b1.3), ma acceca.
+  - Il messaggio di quell'errore cita il testo salvato. Il ramo «no such table / no such column» lo confronta con
+    `str(error)`, quindi un testo che contiene quelle parole fa saltare il suo posto in silenzio.
+  - La cura proposta, in `stored_currencies.py`:
+    - leggere ogni posto come `typeof()` più `hex()` in un CTE intorno alle 14 query, e decodificare in Python;
+    - un testo non UTF-8 diventa un reperto `X'…'` come un BLOB;
+    - confrontare il messaggio solo per gli errori della `execute` (la preparazione), mai su quelli dei dati.
+  - Cambia ciò che fissano SCA-036 e RNW-109: servirà un altro errore vero per il ramo del guasto.
+  - Il caso più ampio è di B: un testo non UTF-8 nei dati di un backup passa il controllo del ripristino (RNW-109, in
+    quattro posti) e poi, con ogni probabilità, fa fallire le letture del server di quelle righe (pysqlite alza al
+    `fetch`, come prova la barriera di SCA-036; non misurato sul server). Segnalato al coordinatore.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19b1.3».
 
 ## Y · Cruscotto e grafici (fase 01)
 
@@ -7823,7 +7941,7 @@ da Y il 15/10.
   (G-12), via il coordinatore, 15/10. Righe 16–17 e 306–310: `selectIndicatorFromTree` della galleria vi espande la
   famiglia con un clic e clicca l'opzione, mentre da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Va
   corretto solo il testo dei commenti, quando Y passa da quei file (FE2, lotto Y4). Dettagli: piano di Y, §2.
-- **Y-5 · Il commento di `headerTooltip` in `table/types.ts:291` promette un'icona che non c'è** — minimo; `docs-writer`
+- ✅ **Y-5 · Il commento di `headerTooltip` in `table/types.ts:291` promette un'icona che non c'è** — minimo; `docs-writer`
   di Y, 15/10 (Y2). ✅ 16/10: ora il commento dice che il tooltip sta sull'etichetta dell'intestazione e che l'icona
   compare solo con `headerTooltipUrl`; svelte-check 0/0. Nel checkpoint di Y-21. Diceva «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
   l'icona compare solo con `headerTooltipUrl`. La pagina `core-ui/data-table.md` è già corretta (Y2). Va corretto solo
@@ -7902,7 +8020,7 @@ da Y il 15/10.
   - La regola 10 della skill design-system vuole lo stato, non le classi: la riga pubblica già `data-selected`
     (`DataTable.svelte:1098-1149`).
   - Rimedio: `test-author` passa a `toHaveAttribute('data-selected', 'true')`. Dettagli: piano di Y, «Y-12».
-- **Y-14 · «Aggiorna» della lista dei broker non ricalcola le cifre delle schede** — minimo, già presente prima di Y11;
+- ✅ **Y-14 · «Aggiorna» della lista dei broker non ricalcola le cifre delle schede** — minimo, già presente prima di Y11;
   `test-author` di Y, 16/10. ✅ 16/10: si sceglie «forzare» (coordinatore, 21:2x). `brokers-refresh` fa
   `requestPortfolioRefresh()` e chiede il report delle schede con `force`; rosso 9/10, verde 10/10 su
   `front-broker list`. Nel checkpoint di Y-14.
@@ -7932,7 +8050,7 @@ da Y il 15/10.
     cambio di `canAsk`, quando i broker diventano noti, a farlo ripartire.
   - Oggi lo fissa solo in modo indiretto la precondizione del test E2E di N55. Da rendere esplicito. Dettagli: piano di
     Y, «Passo 4b».
-- **Y-17 · I pulsanti Holdings/Performance di `PositionsPanel` non pubblicano `aria-pressed`** — minimo, già presente
+- ✅ **Y-17 · I pulsanti Holdings/Performance di `PositionsPanel` non pubblicano `aria-pressed`** — minimo, già presente
   prima di Y11; `test-author` di Y, 16/10. ✅ 16/10, chiusa da DV nel W6-d (`3805bf2ca`): `aria-pressed` sui 4 pulsanti
   Holdings/Performance e Table/Map.
   - I pulsanti di `GrowthChart` lo pubblicano. Quindi il test E2E di N55 legge la vista Performance da
@@ -7943,7 +8061,7 @@ da Y il 15/10.
   - `GrowthChart` ha solo lo scheletro della storia (`loading`), quindi finché le candele non arrivano nessun
     indicatore lo segnala. Era così anche prima di Y11. Il contributo invece ha `contributionLoading`.
   - Dettagli: piano di Y, «Passo 4b».
-- **Y-19 · La durata della caduta peggiore può venire da una fonte diversa da quella della profondità** — minimo, già
+- ✅ **Y-19 · La durata della caduta peggiore può venire da una fonte diversa da quella della profondità** — minimo, già
   presente prima di Y12b; `test-author` di Y, 16/10. ✅ 16/10: ora la durata segue la fonte della profondità, con una
   riga in `levelHelpers.ts`. Il rosso era 1/513, il verde 513/513; nel checkpoint di Y-19.
   - In `buildHurtRows` (`levelHelpers.ts`) la durata è `maximum_drawdown_duration_days` del riepilogo, con ripiego sul
@@ -7951,7 +8069,7 @@ da Y il 15/10.
   - Se il riepilogo c'è ma la sua profondità ha il segno sbagliato, si mostrano la profondità del KPI e la durata del
     riepilogo.
   - Y12b ha legato alla stessa fonte solo il recupero (`summaryDepth`). Dettagli: piano di Y, «Y12b».
-- **Y-20 · `risk-lab.md`: numeri di riga scaduti fuori dal paragrafo di L1** — minimo, documentazione per sviluppatori;
+- ✅ **Y-20 · `risk-lab.md`: numeri di riga scaduti fuori dal paragrafo di L1** — minimo, documentazione per sviluppatori;
   `docs-writer` di Y, 16/10. ✅ 16/10: aggiornati 20 riferimenti, nelle sezioni Requests, L1 e host, più quattro
   precisazioni di testo; `check-links` verde. Nel checkpoint di Y-20.
   - Y12b ha aggiornato solo il paragrafo di L1. Restano scaduti i riferimenti delle righe 302–310 e 119 della pagina:
@@ -7960,7 +8078,7 @@ da Y il 15/10.
     - `DOC_PATHS` e `TAIL_DOCS`;
     - `riskAnalysisHelpers.ts`.
   - La tabella con i valori di oggi è nel piano di Y, «Y12b».
-- **Y-21 · L4 (D377): un `poll` di 3 s che non resiste al carico** — piccolo; Y, 16/10 (triage dell'E2E di Y12b,
+- ✅ **Y-21 · L4 (D377): un `poll` di 3 s che non resiste al carico** — piccolo; Y, 16/10 (triage dell'E2E di Y12b,
   decisione del coordinatore delle 21:20). ✅ 17/10: D377 è verde nelle due corse, in 11,7 s e in 22,2 s, con le
   scadenze vere (`L4_OFFER_DEADLINE_MS`, 10 s) sui suoi quattro `poll`. Il budget di 90 s per tutto il blocco
   «functional integration» (opzione A del coordinatore) rende verdi D378 e il benchmark condiviso, rossi alle 23:25
@@ -7972,7 +8090,7 @@ da Y il 15/10.
     Alle 20:45, con il carico a 35, era verde.
   - Rimedio: una scadenza vera per i `poll` di quel test, oppure un'apertura del replay che costi meno.
   - Prove in `files/logs/y12b_l4_*` della sessione di Y. Dettagli: piano di Y, «Y12b · E2E».
-- **Y-22 · `risk-analysis.spec.ts` sotto carico 100+: due interazioni che non reggono** — piccolo; Y, 17/10 (seconda
+- ✅ **Y-22 · `risk-analysis.spec.ts` sotto carico 100+: due interazioni che non reggono** — piccolo; Y, 17/10 (seconda
   corsa di Y-21 sulla revisione combinata `a49a86a7b`, carico 94–115). Tutti e due i test erano verdi nelle tre corse
   precedenti. ✅ 17/10: `:3736` ha una scadenza più larga (20 s, con 3 s per tentativo), e da solo ×4 è verde.
   `:2871` ha la sua traccia: ×4 verde, il clic è subito eseguibile. Il verdetto è ambiente, non riprodotto; il test
@@ -7997,8 +8115,19 @@ da Y il 15/10.
     onboarding-component-unit`, con la causa «No "onNavigate" export is defined on the "$app/navigation" mock».
   - Allora quell'azione non era fra le mie prove leggere.
   - ✅ 17/10: `onNavigate: vi.fn()` nei due mock (`test-author`); 454/454. Nel checkpoint successivo a Y-21.
-- **Y-24 · La richiesta delle candele (e del contributo) si riarma da sola dopo ogni errore, senza limite** — medio,
+- ✅ **Y-24 · La richiesta delle candele (e del contributo) si riarma da sola dopo ogni errore, senza limite** — medio,
   per il developer, insieme a Y-18; Y, 17/10 (analisi di Y-16). Comportamento preesistente.
+  - ✅ 17/10, **la parte del giro** (proposta di Y, via del coordinatore alle 17:47): `createLazyReportRetry`
+    (`frontend/src/lib/stores/portfolio/lazyReportRetry.svelte.ts`) — dopo un errore, al più tre nuove richieste, 2, 4 e
+    8 s dopo, poi nessuna finché cambia l'ambito (broker, periodo, valuta) o arriva un Refresh; nessuna UI nuova. Sulla
+    Dashboard e sulla pagina del broker, per le candele e per il contributo; una risposta di un ambito già cambiato non si
+    applica più. Sulla pagina del broker le candele, prima, non riprovavano mai (il loro flag non era un segnale): ora
+    seguono la stessa regola. Rossi prima (20 d'unità; 7 E2E con l'orologio di Playwright, due dei quali per un buco
+    trovato da `docs-writer` e chiuso nello stesso lotto), poi verdi; regressioni `page-busy`, `dashboard`,
+    `dashboard-cache`, `front-broker detail`. Dettagli: piano di Y, «Y-24».
+  - **Resta per il developer, con Y-18**: l'indicatore e lo stato d'errore delle candele (oggi lo schermo resta vuoto
+    durante l'attesa e dopo l'ultimo tentativo).
+  - Era:
   - `requestReport` (`stores/portfolio/portfolioStore.svelte.ts`) intercetta l'errore e restituisce `null`.
   - Nella Dashboard e nella pagina del broker, `loadPnlCandles` legge `pnlCandlesLoading` (e `pnlCandles`) dentro
     l'`$effect` di `GrowthChart` (`:975-979`), che quindi ne dipende: alla fine di una richiesta fallita il `finally`
@@ -8296,6 +8425,9 @@ punto di partenza, l'audit dello stesso giorno:
   (10 000) su `POST`/`DELETE /fx/currencies/rate` e `DELETE /prices`, la sonda letta a ogni chiamata. Restano da
   verificare `brim_provider.py:2030` e `pac_allocator/source/wac.py:44`. Dettagli: piano MF, sezione «MF-SEC9a».
 - **MF-J45c · Il report in cache `portfolio_layer2` è un oggetto condiviso fra le richieste** — minimo, robustezza;
+  **Pronto (17/10)**: guardia `test_financial/test_portfolio_l2_report_shared.py` (API, rischio, AI Export intero), nessuna
+  scrittura trovata, nessun cambio di prodotto. Nota: i risultati del rischio portano l'oggetto `data_quality` del report
+  in cache tale e quale (secondo riferimento, oggi nessuna scrittura; la guardia la vedrebbe).
   test-author di MF, 17/10 (MF-J45b). Come il risultato del motore (ora condiviso anche dal single-flight, con una
   guardia che i consumatori non lo modificano), il report Pydantic di `_portfolio_l2_cache` (`portfolio_service.py`,
   30 minuti) è restituito tale e quale a ogni richiesta: un consumatore che lo modificasse in luogo cambierebbe le

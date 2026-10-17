@@ -6661,3 +6661,53 @@ Base `1c1456713` (X-R74 entrata). Ordine del coordinatore: X-R46 allargata, poi 
 - `check-orphans` verde; `git diff --check` pulito; porta 6183 libera.
 - ✅ **Chiusa il 17/10**, in attesa del commit del coordinatore. **X-R66 è entrata in dev fatta da A** (`7b626793c`):
   dopo X-R46 la mia coda è vuota, chiedo l'ordine.
+
+### Revisioni dopo X-R46 (17/10, 18:50–19:30)
+
+Ordine del coordinatore: X-R75 → C-97c-3 AF → X-R66 → Z-32 (c), più Y-33 e X-R71 arrivate in ritardo. Tutte in sola
+lettura, sulla revisione combinata.
+- **X-R71** (B, `d5963fa60`): OK. La nota di B sul commento di `refresh.py` è confermata, e la correzione va in C-97c-4.
+- **Y-33** (Y, `137382901`): OK con un reperto. I 4 test del lampeggio del prezzo dal vivo hanno `test.setTimeout(20_000)`
+  e passano dall'helper: sotto carico finiscono con il timeout generico prima del soffitto di 30 s dell'URL. Proposto 60 s.
+- **X-R75** (B, `5cbc60844` + `970081b45`): OK con un reperto. `replace=true` vale anche per le gambe delle catene, e la
+  voce X-R75 le voleva solo aggiunte: corsa stretta. Vitest 32. Il coordinatore ne fa **X-R79**, fatta da B (registrata).
+- **C-97c-3** (W, `6f11057fb`), lato asset e cambi: OK, Vitest 455. Reperto: il lato cambi era rimasto a `formatFixed(x, 4)`
+  (lista, card, riepilogo), così VND→USD e LBP→USD si leggevano `0.0000` e IDR→USD `0.0001`. Il coordinatore ne fa
+  **C-97c-4**, mia.
+- **X-R66** (A, `7b626793c`): OK, Vitest 192. Confrontando i registri: lo spagnolo del catalogo è informale (164 a 10),
+  quindi il mio «Guárdelos» di X-R46 va corretto in «Guárdalos» (fatto in C-97c-4).
+- **Z-32 (c)** (Z, `aa9e07544`): OK, contratto e guardie. `provider-errors` 197, `asset-source-refresh` 26,
+  `db migration-010` 13.
+- **Prova combinata** prima dell'ingresso di X-R46, su `20c9a499c`: tutto verde.
+  - `front check`, dopo un `api sync`, 0/0: il primo giro trovò 3 errori di un client generato vecchio, non del codice.
+  - X-R46 entrata in dev `2c43ac451`, con la nota ⚠️ Breaking del coordinatore in `b7f8ebeac`.
+
+### C-97c-4 ✅ — i cambi deboli non si leggono più come zeri (19:30–19:55)
+
+Base `b7f8ebeac`. Decisione del coordinatore: nella 1.3, rossi Vitest prima, nessun cambio di markup o di classi,
+`theme-roles --check` pulito, la riga C-97c del CHANGELOG estesa.
+- **Siti**, tutti a `formatFixed(x, 4)`:
+  - `FxTable.svelte`: la cella del tasso e `formatDelta()`, il Δ assoluto da `getDelta()` (`displayFxDelta` non esiste);
+  - `FxCard.svelte`;
+  - `FxPriceSummary.svelte`;
+  - in più, sul percorso, `utils/currency/fxConversionHelper.ts`, il tooltip del cambio di una transazione: tasso
+    implicito, di mercato, spread.
+- **Rossi** (test-author): 3 file nuovi di componente (`FxPriceSummary`, `FxCard`, `FxTable`, registrati in
+  `component-unit`) più un blocco in `fxConversionHelper.test.ts`.
+  - Ogni rosso controlla prima che `formatPrice` dia la stringa attesa e che `formatFixed` dia gli zeri di oggi.
+  - **11 failed, 7 passed** («today 0.0000»).
+- **Codice** (`c97c4_code.py`): `formatPrice(x, {minDecimals: 4})`, con il segno dov'era. In più:
+  - il commento di `refresh.py` (sotto la chiave di un provider è un `ValueError`, il 422 di X-R71 vale solo per i
+    salvataggi manuali);
+  - lo spagnolo «Guárdalos» (`i18n update`);
+  - CHANGELOG: «Very small prices, exchange rates and costs… the FX list and cards and a transaction's exchange-rate
+    details…».
+- **Verdi**:
+  - Vitest **211** (i 4 file, più il gate HTML, `moneyRenderSites`, `FxMissingRate`, `writeRefusal`);
+  - `theme-roles --check` «Colour gates: clean»;
+  - `i18n check` pulito; `front check` 0/0;
+  - `services asset-source-refresh` 26.
+- **Doc**: nessuna. La riga di `formatPrice` in `developer/frontend/i18n.md` dice già «an exchange rate passes 4», e
+  nessuna pagina utente promette 4 decimali.
+- **Effetto noto** (dal test-author): un Δ positivo di rumore (circa 2e-16) prima si leggeva `+0.0000`, ora `0.0000`
+  senza segno.

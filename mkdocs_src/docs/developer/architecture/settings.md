@@ -231,6 +231,20 @@ while global settings are an open-ended key space that admins extend without mig
 `settings_service.py` (user + global CRUD) and `global_settings_service.py` (typed read helpers
 for global keys) stay separate services for the same reason.
 
+**A stored theme the app does not know** (lot A-11). `UserSettings.theme` is a plain column, so a
+row edited by hand, a global `default_theme` edited by hand and copied into new rows, or a theme of a
+later release after a downgrade can hold a value outside the `Literal` of `UserSettingsRead.theme`
+(`light`, `dark`, `auto`, read into `KNOWN_THEMES` in `settings_service.py`). Every answer that
+carries the user's settings — `POST /api/v1/auth/login`, `POST /api/v1/auth/setup`,
+`GET /api/v1/settings/user` and `PUT /api/v1/settings/user` — builds them with `_settings_read()`,
+which shows such a theme as the instance's `default_theme` when that is a known theme, otherwise
+`auto` (`FALLBACK_THEME`), and logs one WARNING per read, with `user_id`, `stored` (cut to 20
+characters) and `shown`. Reading never rewrites the row, so a release that knows the theme shows it
+again; a `PUT` without `theme` keeps the stored value, and a `PUT` with `theme` replaces it. Before,
+building `UserSettingsRead` raised, and the answer was a `500`: at sign-in, after the login had set its
+cookie, so the user could not sign in. Tests: `./dev.py test api settings`,
+`TestStoredThemeUnknownToTheApp` (SET-A11-01 to SET-A11-07, in-process on a private database).
+
 Admins manage global settings from the **Global Settings** tab of Settings › Administration
 (`GlobalSettingsTab.svelte`: lock-gated, with the scheduler dialogs and `CachePanel`, writing through
 the bulk-update endpoint).

@@ -18,7 +18,7 @@
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
@@ -220,7 +220,7 @@
         {#if lastRate !== null}
             <div class="flex items-baseline gap-2">
                 <span class="text-xl font-mono font-bold text-lf-primary">
-                    {formatFixed(lastRate, 4)}
+                    {formatPrice(lastRate, {minDecimals: 4})}
                 </span>
                 {#if deltaPercent !== null}
                     <span class="text-sm font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="fx-range-delta">
