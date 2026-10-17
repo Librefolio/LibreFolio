@@ -956,7 +956,7 @@ def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = No
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
     print_info("Testing: backend/app/services/financial_math/portfolio/daily_state.py (DailyStateBuilder)")
-    print_info("Tests: inline WAC, last_buy_price fallback, 3-pool K/R/W, position snapshots, period accumulators, pre-frame/frame")
+    print_info("Tests: inline WAC, last_buy_price fallback, 3-pool K/R/W, position snapshots, period accumulators, one replay with states from date_from")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_portfolio_engine_vnext.py", test_names)
     return run_command(cmd, "Portfolio Engine vNext tests", verbose=verbose)
@@ -2030,7 +2030,7 @@ Note: No backend server required.
         # created under a unique name, and only their prices and events, written, read and wiped by asset id.
         # Nothing here counts or reads a row it did not write.
     )
-    add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
+    add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, one replay from the first movement")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
     add_test(
