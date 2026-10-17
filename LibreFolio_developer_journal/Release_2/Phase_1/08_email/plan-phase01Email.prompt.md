@@ -4751,6 +4751,116 @@ non sposti il registro.
 >
 > Alla fine la porta 6188 è libera e l'albero è pulito: le suite non hanno toccato file tracciati.
 
+### E-14 — Nessuno sfratto mirato di una chiave più pesante (`rate_window.py`)
+
+#### E-14.0 — Il via e la correzione del disegno ✅ (2026-10-17, 07:30–07:45)
+> **Il via del coordinatore** (07:30): sì, nella 1.3, subito, perché serve al cloud. Il file è mio (A non lo tocca
+> più): i test RWL con i rossi prima, poi le due frasi «310 contro 100 000». `email.md` è mia; per `security.md:431-437`
+> A ha già dato l'ok, e la rivede al checkpoint.
+>
+> **⚠️ Fuori pista: il disegno approvato non basta, e l'errore è mio.** Nella revisione di N70 non avevo contato chi si
+> ferma a **9** fallimenti: la chiave non diventa mai piena, resta «aperta», e uno spruzzo la sfratta nell'ordine
+> d'uso, come oggi. Misurato (`files/e9/e14_policies.py`, in memoria; log in `files/logs/e14_policies.log`),
+> richieste per tentativo in più:
+>
+> | Attacco | Oggi (K=32) | Indice delle aperte | Meno colpi |
+> |---|---|---|---|
+> | spruzzo ingenuo | mai | mai | mai |
+> | fermo a 9, poi spruzzo | **1 111** | **1 111** | **mai** |
+> | fermo a 9, 31 chiavi da 9 subito dopo, poi spruzzo | 1 111 | 1 111 | mai |
+> | ogni altra chiave pesante (9-10 colpi) | 10 000 | 10 000 | 10 000 |
+>
+> Lock nel caso peggiore, per chiave nuova (carico 50-59, valori gonfiati): 72 µs oggi, 6,9 µs con l'indice, 14,8 µs
+> con «meno colpi».
+>
+> **Il disegno di E-14 diventa «meno colpi»**: si sfratta la chiave con meno colpi ancora nella finestra, e tra
+> quelle la meno usata.
+> - **Scadenza esatta**: un heap con una voce per chiave (il suo colpo più vecchio) e i secchi per conteggio. Senza,
+>   una chiave i cui colpi sono scaduti terrebbe una protezione che non merita più: proprio il buco che un indice
+>   pigro aprirebbe.
+> - **Nessuna ricerca**: il costo di una chiave nuova non cresce con le chiavi.
+> - **Heap compattato** oltre il doppio delle chiavi: la memoria resta limitata, qualunque sia il ritmo delle richieste.
+> - **`eviction_scan` sparisce**: nessun chiamante dell'app lo passa.
+>
+> Ho mandato la correzione al coordinatore (07:4x), dicendo che procedo così salvo un suo stop.
+
+#### E-14.1 — Rossi ✅ (2026-10-17, 07:38–07:50)
+> **Test** (`test-author`, solo `test_rate_window.py` e la riga `rate-window` del catalogo in `_backend_utils.py`):
+> - contratto 2 senza `eviction_scan` (RWL-002, RWL-003);
+> - il contratto 8 riscritto;
+> - `len` conta solo le chiavi con un colpo nella finestra;
+> - RWL-020 (nessun limite entra nella scelta);
+> - RWL-022 (la chiave più leggera va, ovunque stia);
+> - nuovi: la chiave a 9 attraverso uno spruzzo; la chiave bloccata con 31 piene subito dopo; i colpi scaduti non
+>   proteggono; il limite dell'heap.
+
+> **Scritti** dal `test-author` `4d842cb8` (07:38–07:48). Il file e il catalogo sono gli unici toccati. L'agente ha
+> eseguito solo `py_compile`, `ruff`, `black` (carico 27-28) e `--collect-only`. I test raccolti passano da 39 a 45.
+> - RWL-003 fissa la firma intera, e passare `eviction_scan` è un `TypeError`.
+> - RWL-020 diventa `test_no_limit_enters_the_choice`.
+> - RWL-022 mette la chiave leggera in posizione 0, 20 o 39 su 40.
+> - Nuovi: RWL-025 (a 9 attraverso 1 000 fresche), RWL-026 (bloccata con 31 piene dietro), RWL-027 (due casi: i colpi
+>   scaduti non proteggono), RWL-028 (tetto di `_expiry`, white-box dichiarato), RWL-029 (`len`).
+>
+> **Rossi visti** (07:50, `files/tools/e9_suites.sh e14reds utils:rate-window`, carico 26): **9 falliti, 36 passati**,
+> proprio i 9 previsti, ognuno per la ragione giusta:
+> - la firma ha ancora `eviction_scan`;
+> - `len` conta `a` scaduta;
+> - con un limite per chiamata più basso va `b` invece di `c`;
+> - la chiave leggera in posizione 39 non viene presa;
+> - la chiave a 9 viene liberata da 1 000 fresche;
+> - la chiave bloccata con 31 piene dietro viene liberata;
+> - nei due casi di RWL-027 va `fresh` al posto di `old`;
+> - non c'è `_expiry`.
+
+#### E-14.2 — Codice ✅ (2026-10-17, 07:50–07:53)
+> **La bozza, poi applicata così com'era** (`files/e9/rate_window_e14.py` → `rate_window.py`, 07:50), dopo i rossi visti.
+> - **Struttura**: `_hits` (i colpi vivi per chiave), `_by_count` (gruppi per conteggio, ognuno dal meno usato),
+>   `_expiry` (heap di `(colpo più vecchio, seriale, chiave)`; le voci col seriale vecchio sono stantie e saltate).
+> - **Sfratto**: la prima chiave del gruppo più basso, mai quella nuova. `_compact()` ricostruisce l'heap oltre
+>   2·chiavi + 64: dopo uno sfratto, un `reset` o una scadenza.
+> - **Una chiave nuova nasce con il suo colpo**, così l'heap ricostruito non legge mai una coda vuota. Il ciclo di
+>   sfratto si ferma se non c'è un'altra chiave, quindi mai un ciclo infinito sotto il lock.
+>
+> **Fuzz differenziale** (`files/e9/e14_fuzz.py`, log `files/logs/e14_fuzz.log`): 300 semi × 4 000 operazioni a caso
+> contro un modello a forza bruta. Tornano tutti: decisioni, `retry_after`, conteggi, `len`, lo sfratto di una chiave
+> più leggera, i gruppi, i seriali e il tetto dell'heap.
+>
+> **Costi misurati sulla bozza** (`files/e9/e14_draft_cost.py`; carico 33-44):
+> - nessuno spruzzo sfratta X: bloccata, a 9, a 9 con 31 chiavi da 9, bloccata con 31 piene;
+> - rendere pesante ogni chiave: 90 000 richieste, 10 000 per tentativo;
+> - heap al massimo 19 741 voci, contro il tetto di 20 064;
+> - 28 µs per chiave nuova con i suoi 10 colpi, accanto a 10 000 chiavi piene.
+
+> **Verdi** (07:51–07:53, carico 28-38; `files/tools/e9_suites.sh e14greens …` ed `e14users …`, una suite alla
+> volta; ruff e black puliti su `rate_window.py`):
+>
+> | Suite | Passati |
+> |---|---|
+> | utils `rate-window` | 45 / 45 (i 9 rossi ora verdi) |
+> | services `login-throttle` | 33 |
+> | services `email-flows` | 149 |
+> | services `email-verification` | 127 |
+> | services `email-delivery` | 124 |
+> | api `login-throttle` | 55 |
+> | api `email` | 168 |
+> | api `email-verification` | 60 |
+> | api `email-verification-hooks` | 26 |
+> | api `email-change-notice` | 14 |
+
+#### E-14.3 — Docs, controlli e checkpoint ✅ (2026-10-17, 07:53–07:56)
+> **Documenti** (`files/e9/e14_docs.py`):
+> - `developer/backend/email.md`, «The Sliding-Window Limiter»: la firma senza `eviction_scan`, `len`, e quattro punti
+>   (memoria, perché vanno i più leggeri, scadenza esatta, nessuna ricerca) con i numeri misurati; la riga Testing
+>   (RWL-001…029).
+> - `security.md:431-437` (pagina di A, con il suo ok; A la rivede al checkpoint): la frase sullo sfratto riscritta;
+>   «310 contro 100 000» lascia il posto ai costi veri.
+> - devWiki `domains/email.md`: il punto «Eviction from the in-memory limiters», con la lezione. Più una voce in
+>   `log.md`.
+>
+> **Prove**: `mkdocs build` stretto con 0 righe WARNING/ERROR; `check-links` con 97 link validi; `git diff --check`
+> pulito; porta 6188 libera.
+
 ### R13-SEC7 — Revisione di sicurezza di ciò che è entrato in dev dopo le mie revisioni (2026-10-17, 05:40–)
 > **Il compito del coordinatore** (05:3x), mentre aspetto H-36 e poi A8a più N70, cioè E-13, ed E-8 dopo A8b:
 > - in sola lettura, dagli oggetti git, su dev `1a937b93e`, solo in `backend/app/**`: rotte, parsing dell'input,
@@ -5086,3 +5196,15 @@ non sposti il registro.
 >   IPv6 passa da `docker-proxy` e arriva dal gateway della rete, senza header di inoltro. N70 non lo vede, e tutti i
 >   visitatori IPv6 condividono un conteggio per indirizzo: il DoS di R13-SEC6, solo per IPv6 e solo con l'esposizione
 >   diretta, senza reverse proxy. La proposta è una frase nei docs, da verificare su un host Linux.
+
+> **La revisione di X-R43 a posteriori** (`f69f8bdc5`, già in dev `3e7948446`; 07:5x, sola lettura): **chiusa, nessun
+> reperto.**
+> - `validate_value` controlla gli interi con `abs ≤ 2^53−1` e i float con `isfinite`, quindi non solleva mai
+>   `OverflowError`. Il messaggio non porta il valore.
+> - Scrittura: un `INVALID_VALUE` per elemento.
+> - Env: oltre 4 300 cifre `int()` alza `ValueError`, che è preso, e diventa `invalid_env`; `float("1e999")` vale `inf`,
+>   rifiutato.
+> - Riga salvata: `_from_row` prende `ValueError` e `SettingValueError`. Le vecchie righe tra 2^53 e circa 1e308, che
+>   il vecchio `isfinite` accettava, ora diventano `invalid_stored`.
+> - Dichiarazioni: `_check_bounds` gira **prima** della verifica del default. Serve, perché `validate_value` formatta i
+>   limiti con `:g`, e `format(2**1100, 'g')` alza `OverflowError` (verificato).
