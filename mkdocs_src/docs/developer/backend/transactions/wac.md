@@ -614,7 +614,13 @@ unknown cost therefore comes from:
   (`test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`
   in `backend/test_scripts/test_api/test_portfolio_wac.py` for the retype;
   `test_market_data_wipe_split_guard.py` and `test_provider_wipe_split_guard.py` in
-  `backend/test_scripts/test_services/` for the two wipes).
+  `backend/test_scripts/test_services/` for the two wipes). Removing the provider
+  altogether never takes such a split away either: **No Provider**
+  (`DELETE /api/v1/assets/provider`) answers 409
+  `PROVIDER_REMOVAL_LINKED_TRANSACTIONS` while any transaction is linked to an
+  event the provider generated, whether or not the transaction has a cost (see
+  [Provider Removal](../assets/events.md#provider-removal);
+  `test_provider_removal_link_guard.py`, in the same folder).
 
 **An explicit `null` in an update** (decision P5, coordinator reading B, 16/10).
 An update that leaves out `cost_basis_override` changes nothing. One that sends it
