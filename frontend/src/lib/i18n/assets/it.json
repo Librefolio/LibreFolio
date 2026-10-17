@@ -56,7 +56,8 @@
       "progressWipe": "Cancellazione di {prices} prezzi + {events} eventi e scollegamento di {linkedTx} transazioni…",
       "wipeSuccess": "Eliminati {prices} prezzi, {events} eventi; scollegate {linkedTx} transazioni",
       "bodyIntro": "Il cambio valuta richiede la cancellazione di tutti i dati di mercato memorizzati (vedi riepilogo sotto). LibreFolio proverà poi a ri-sincronizzare prezzi ed eventi dal provider nella nuova valuta.",
-      "bodyCaveat": "Le transazioni collegate agli eventi cancellati verranno scollegate — sarà tua responsabilità ricollegarle ai nuovi eventi se necessario."
+      "bodyCaveat": "Le transazioni collegate agli eventi cancellati verranno scollegate — sarà tua responsabilità ricollegarle ai nuovi eventi se necessario.",
+      "splitAdjustmentsWithoutCost": "La valuta non è stata cambiata: lo split del {date} ha {n, plural, one {# rettifica collegata} other {# rettifiche collegate}} senza costo d'acquisto{hidden, plural, =0 {} one { (# in un broker che non puoi vedere)} other { (# in broker che non puoi vedere)}}{more, plural, =0 {} one {, e anche # altro split} other {, e anche altri # split}}. Cambiare la valuta cancella gli split, e quelle unità conterebbero come comprate a un prezzo sconosciuto: dai prima un costo d'acquisto alle rettifiche."
     },
     "pricesInCurrency": "Prezzi in {currency}",
     "eventsInCurrency": "Eventi in {currency}",

@@ -1,6 +1,7 @@
 """Market-data endpoints of one asset (``/assets/{asset_id}/market-data``): summary and wipe after a currency change."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
@@ -66,10 +67,19 @@ async def wipe_market_data(
     **preserved** — only their ``asset_event_id`` FK is set to ``NULL``
     so they stop referencing the now-deleted events; the user is free to
     re-associate them manually after re-inserting replacement events.
+
+    Refused, nothing written: 409 ``detail = {"error_code", "message",
+    "params"}`` with ``MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`` (X-R48) when a
+    SPLIT of the asset has linked incoming adjustments without a purchase cost:
+    deleting it would make them acquisitions of unknown cost. ``params.splits``
+    lists each such SPLIT by date (``event_id``, ``date``, ``transaction_ids`` —
+    only those the caller can see — and ``hidden_transactions_count``).
     """
     try:
-        return await AssetSourceManager.wipe_market_data_for_currency_change(asset_id=asset_id, session=session, dry_run=False)
+        return await AssetSourceManager.wipe_market_data_for_currency_change(asset_id=asset_id, session=session, dry_run=False, current_user_id=_current_user.id)
     except AssetSourceError as e:
+        if e.error_code == "MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST":
+            raise HTTPException(status_code=409, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
         status = 404 if e.error_code == "ASSET_NOT_FOUND" else 400
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:

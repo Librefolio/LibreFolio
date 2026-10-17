@@ -190,6 +190,7 @@ Every refusal below stops the whole request:
 | An `id` that is unknown, belongs to another asset, or names a provider event | HTTP 400 `EVENT_NOT_EDITABLE`; `params.ids`: those ids |
 | An edit that changes its date or type (a *mover*) landing on a key another edit of the item ends on, or on a key held by a manual row the item does not edit | HTTP 400 `EVENT_KEY_CONFLICT`; `params`: the `date` and `type` of the key |
 | An event without `id` on a key an edit of the item ends on | HTTP 400 `EVENT_KEY_CONFLICT`; `params`: `date` and `type` |
+| An edit that changes the type of a `SPLIT` while a linked incoming `ADJUSTMENT` (quantity above 0) has no `cost_basis_override` (`_reject_split_retype_without_costs()`; `costless_incoming_split_adjustments()` of `financial_math/splits.py` finds those rows). Without the split, such a row would be an acquisition of unknown cost: the rule of P-10 (decision 27). An edit that keeps the type, or an outgoing row, is never refused | HTTP 409 `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`; `params`: the first such edit in request order, `event_id`, `date` (the stored event's), `transaction_ids` (sorted, only the transactions the caller can see: a `BrokerUserAccess` row for their broker) and `hidden_transactions_count` (the others). The message names no transaction, only their count |
 | In a `create` item, an event on a `(date, type)` the asset already has, manual or from a provider | HTTP 409 `EVENT_EXISTS`; `params.existing`: the stored events on every such key of the item, ordered by date, type and id, each `{id, date, type, value: {code, amount}, notes, is_auto, linked_transactions}`, the last one the number of transactions linked to the event |
 
 A 400 or a 409 answers `detail = {error_code, message, params}` (`_REFUSAL_STATUS` in
@@ -211,16 +212,22 @@ A type change is allowed even when a transaction is linked to the event: the lin
 transaction is then read according to the new type. `compute_wac_iterative()`
 (`portfolio_service.py`) counts an `ADJUSTMENT` as split-linked only while its event is a `SPLIT`:
 the type is joined live, and the split-linked set is part of the WAC cache fingerprint. Once the
-event is retyped to `PRICE_ADJUSTMENT`, a +qty adjustment becomes an acquisition of unknown cost
-(the pool cost turns incomplete, the numbers shown do not change) and a −qty one a plain reduction
-that takes its share of the cost away (in the test, the total cost halves from 1,500 to 750). Both
-cases are pinned by the `test_*_split_relabelled_as_price_adjustment_*` tests in
+event is retyped to `PRICE_ADJUSTMENT`, a +qty adjustment becomes an acquisition at its cost basis
+and a −qty one a plain reduction that takes its share of the cost away (in the test, the total cost
+halves from 1,500 to 750). A +qty adjustment without a cost basis (the Auto mode stores none on a
+split-linked row) would become an acquisition of unknown cost (`MISSING_COST_BASIS`): that retype is
+refused, `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` above (P-10). The forward case, refused and then
+accepted once the adjustment has a cost (40 a share: WAC 70), is pinned by
+`test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`, the
+reverse one by `test_reverse_split_relabelled_as_price_adjustment_becomes_a_reduction`, both in
 `test_scripts/test_api/test_portfolio_wac.py`.
 
 Manual events are **never deleted** by the sync process. They survive provider re-syncs, provider
 changes, and bulk refreshes. Only an explicit user deletion removes them, or the market-data wipe
 of a currency change (`POST /api/v1/assets/{asset_id}/market-data/wipe`), which deletes every event
-of the asset. A user deletes events in two ways:
+of the asset, except while a `SPLIT` of the asset has linked incoming adjustments without a cost:
+then it refuses with a 409 and deletes nothing ([Market-Data Wipe](#market-data-wipe)). A user
+deletes events in two ways:
 
 - **`delete_ids` of `POST /api/v1/assets/events`**, the data editor's save: all or nothing, so an
   event a transaction uses stops the whole request (`EVENT_IN_USE`). Until 1.3 the editor sent the
@@ -235,6 +242,42 @@ Both are scoped to one asset (decision 21 of release 1.3). The `DELETE` requires
 request with `ids` alone, the form API clients sent before, is now a 422, and an id of another
 asset answers `not_found` and leaves its event alone; in `delete_ids`, such an id is
 `EVENT_NOT_DELETABLE`.
+
+### 🧹 Market-Data Wipe {: #market-data-wipe }
+
+The first step of a currency change, `POST /api/v1/assets/{asset_id}/market-data/wipe`
+(`wipe_market_data_for_currency_change()` in `assets/currency_change.py`), unlinks every
+transaction from the asset's events (`asset_event_id = NULL`), deletes every event of the asset,
+manual and from a provider, and every price, commits, then drops the history and current cache
+entries of the asset's provider assignment. Its dry run,
+`GET /api/v1/assets/{asset_id}/market-data/summary`, returns the same counts without writing, and
+the rule below never refuses it.
+
+The wipe refuses while a `SPLIT` of the asset, manual or from a provider, has a linked incoming
+`ADJUSTMENT` (quantity above 0) without a `cost_basis_override`; a cost of 0 is a cost. Linked to
+the split, such a row only rescales the position; unlinked and with the split deleted, it would be
+an acquisition of unknown cost (`MISSING_COST_BASIS`). This is the rule of P-10, which refuses a
+retype of such a split (`EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, above), and the same function finds
+the rows: `costless_incoming_split_adjustments()`. `_reject_wipe_of_costless_split_adjustments()`
+runs before any write, so a refused wipe writes nothing. It answers HTTP 409 with
+`detail = {error_code, message, params}`:
+
+- `error_code`: `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`;
+- `params.splits`: one `{event_id, date, transaction_ids, hidden_transactions_count}` per such
+  split, ordered by date, then id. An asset is shared by every user, so `transaction_ids` lists,
+  sorted, only the adjustments the caller can see (a `BrokerUserAccess` row for the transaction's
+  broker), and `hidden_transactions_count` counts the others. The route passes the caller; the
+  service called without `current_user_id` names none and counts them all;
+- `message`: the English text, which starts with the code and gives only the totals, how many
+  splits and how many adjustments.
+
+The wipe's other errors keep their answer, as the summary's: 404 `ASSET_NOT_FOUND` for an unknown
+asset, with a string `detail`. The currency-change dialog the asset form opens
+(`AssetCurrencyChangeModal.svelte`, in `frontend/src/lib/components/assets/`) shows the refusal as
+an error toast, one sentence in the interface language built by `wipeRefusalMessage()`
+(`currencyChangeErrors.ts`): the first split's date, its adjustments without a cost, the hidden
+ones among them, and how many more splits have some. Then it stops: no `PATCH /assets`, no sync,
+and the dialog stays open. Any other error keeps the dialog's generic message.
 
 ---
 

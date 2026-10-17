@@ -4678,7 +4678,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     J (file di W) rispondono a un utente che vede le transazioni: J e W rivedono. Nello stesso lotto, la nota LOW di W:
     il rapporto nel messaggio d'errore scritto nella lingua dell'interfaccia (`formatExactDecimal`). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
     sezione «X-R47b».
-- **X-R48 · `market-data/wipe` cancella gli SPLIT collegati a rettifiche senza costo** — **prima del rilascio, dopo
+- ✅ **X-R48 · `market-data/wipe` cancella gli SPLIT collegati a rettifiche senza costo** (consegnata il 17/10, 09:45; SHA all'ingresso) — **prima del rilascio, dopo
   l'ingresso di CP-14a di J**; X, 17/10 (J, F1, girato dal coordinatore).
   - `POST /assets/{id}/market-data/wipe` (il flusso del cambio di valuta, ma si può chiamare anche da solo) scollega ogni
     transazione dagli eventi dell'asset e li cancella tutti, SPLIT compresi (`currency_change.py:131-137`). Una
@@ -4719,7 +4719,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     `InvalidOperation`: un valore ostile fa uscire l'eccezione grezza invece di `FXServiceError`, e si perde la valuta,
     forse tutto il fetch di ECB. ECB è il fornitore principale dei cambi.
   - Cura: saltare l'osservazione (`ArithmeticError`), come BOE, SNB e FED con X-R50. Un rosso in `test_fx_parse_errors.py`.
-- ✅ **X-R53 · Usare il campo dei periodi fissi (1D, 1W…) che MF porta nel backend** (consegnata il 17/10, 08:40; SHA all'ingresso) — medio, **quando MF manda il
+- ✅ **X-R53 · Usare il campo dei periodi fissi (1D, 1W…) che MF porta nel backend** (chiusa il 17/10: entrata in dev `78708660f`; MF e Y rivedono a posteriori) — medio, **quando MF manda il
   contratto**; X, 17/10 (coordinatore).
   - Fatto: `lib/utils/periodChanges.ts` legge le due rotte di MF; le pagine degli asset e dei cambi non calcolano più le
     Δ (via `DELTA_PERIODS`, `computePeriodDelta` e la seconda copia); `/period-changes` non è una scrittura; riga 🐛
@@ -4765,11 +4765,18 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Cura: un messaggio esplicito col limite, una chiave i18n in 4 lingue, su quei codici. Serve il contratto di Z (la
     forma del `detail` e i parametri del limite) quando Z-25 entra.
 - **X-R59 · La Δ sull'intervallo si calcola ancora nel browser** — basso, regola 10 (una casa sola per la matematica
-  finanziaria); X, 17/10 (trovata dal docs-writer di X-R53). Da assegnare: MF, che possiede la casa.
+  finanziaria); X, 17/10 (trovata dal docs-writer di X-R53). **Passata a MF** (coordinatore, 17/10 08:40).
   - Il cambio sull'intervallo scelto (le card delle due liste; le colonne Δ Abs e Δ % della tabella dei cambi) è
     `computeDerivedPriceState()` (`lib/utils/assetPriceDerived.ts`) e `FxTable.getDelta()` → `displayFxDelta()`
     (`lib/stores/fxStoreRegistry.ts`, anche nella card e nella pagina della coppia): ultimo / primo − 1, in float.
   - X-R53 ha portato nel backend solo le colonne dei periodi fissi (1D…5Y).
+- **X-R60 · Le colonne Δ: tre note della revisione di Y su X-R53** — piccolo, **dopo X-R48**; X, 17/10 (Y, girata dal
+  coordinatore). Prima il punto 1.
+  1. Cambi, una coppia sola (`loadPairPeriodChanges`): nessun indicatore, quindi `data-busy` può dirsi finito mentre la
+     Δ di quella coppia è in volo; e non avanza la versione, quindi una risposta completa più vecchia che arriva dopo
+     riscrive la coppia.
+  2. Il nuovo tentativo dei segnali e il cambio delle impostazioni richiedono anche i periodi, che non ne dipendono.
+  3. Un errore cancella le Δ ancora valide per lo stesso `dateEnd`.
 - **X-R57 · Il commento C-66 di `asset-detail.spec.ts` dà una ragione superata** — minimo; X, 17/10 (Z, dopo Z-3).
   - Verso la riga 8672 di `e2e/assets/asset-detail.spec.ts` il commento dice «by its UTC reckoning…»; dopo Z-3 (dev
     `0f55265a1`) le pagine degli asset leggono il giorno dell'utente (`todayIso()`). Lo stub resta giusto: cambia solo
