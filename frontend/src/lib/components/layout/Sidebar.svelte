@@ -12,6 +12,7 @@
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import ChangelogModal from './ChangelogModal.svelte';
     import ConnectionSecurityIndicator from './ConnectionSecurityIndicator.svelte';
+    import LegalLinks from '$lib/features/legal/LegalLinks.svelte';
 
     // Mobile sidebar state (exported so parent can control it)
     export let isOpen = false;
@@ -289,6 +290,10 @@
             >
                 {APP_VERSION}
             </button>
+            <!-- The compact legal notice of the instance (F09, workstream A) -->
+            <div class="px-2 text-center" data-testid="sidebar-legal-links">
+                <LegalLinks tone="bar" />
+            </div>
         {/if}
     </div>
 </nav>

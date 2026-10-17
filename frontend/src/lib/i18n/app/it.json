@@ -98,5 +98,12 @@
     },
     "cookieWarning": "Il browser usa HTTPS, ma il cookie di sessione non è marcato Secure. Fai mandare X-Forwarded-Proto al reverse proxy (Nginx: proxy_set_header X-Forwarded-Proto $scheme;), oppure riporta SESSION_COOKIE_SECURE ad auto se è never.",
     "learnMore": "Come connettersi in sicurezza"
+  },
+  "legal": {
+    "title": "Note legali",
+    "disclaimer": "LibreFolio ti aiuta a seguire i tuoi investimenti; non dà consigli finanziari, fiscali o legali. I numeri possono contenere errori: verificali prima di agire.",
+    "disclaimerShort": "Non è una consulenza finanziaria.",
+    "terms": "Termini di servizio",
+    "privacy": "Informativa sulla privacy"
   }
 }
