@@ -127,10 +127,13 @@ def _read_only(path: Path) -> sqlite3.Connection:
     a ``mode=ro`` connection creates the ``-wal`` and ``-shm`` files and cannot remove them when it closes, so a check
     of a stopped server's database would leave them behind; this one refuses every write and closes as any reader does.
     Through a ``file:`` URI made by ``Path.as_uri()``, which escapes a space or a ``#`` in the path (``data dir #1``):
-    pasted as it is, a ``#`` would start the URI's fragment.
+    pasted as it is, a ``#`` would start the URI's fragment. ``trusted_schema`` off before anything else (H's review of
+    E-19a), as on every connection to a backup's copy: the database may come from a restore, and no function its schema
+    names runs from a view, a trigger or an index while the audit reads.
     """
     connection = sqlite3.connect(f"{path.resolve().as_uri()}?mode=rw", uri=True)
     try:
+        connection.execute("PRAGMA trusted_schema=OFF")
         connection.execute("PRAGMA query_only = ON")
     except sqlite3.Error:
         connection.close()
