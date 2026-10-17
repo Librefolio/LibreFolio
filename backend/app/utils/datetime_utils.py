@@ -99,6 +99,13 @@ def today_date() -> date:
     return datetime.now(UTC).date()
 
 
+#: The earliest day a replay or a history walks (R13-SEC8, N74): 1 January 1900. A transaction may not be written
+#: before it (N74's write floor), and one stored before it by an older version still counts — its movements are
+#: replayed, each converted at its own date — but no state, history day or per-day rate starts before it. No provider
+#: has history before 1900 (``FX_HISTORY_MIN_FALLBACK``, ``ASSET_HISTORY_MIN_FALLBACK``).
+EARLIEST_RANGE_START = date(1900, 1, 1)
+
+
 def latest_range_end() -> date:
     """The latest day a requested date range may reach: tomorrow, by the server's calendar (R13-SEC7-1).
 
