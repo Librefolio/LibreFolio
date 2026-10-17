@@ -6688,6 +6688,81 @@ non sposti il registro.
 >   Frontend: banner e selettore, i18n nelle 4 lingue. Test: services, api, Vitest.
 > - **La correzione** (A o C) e quella degli asset: un lotto medio.
 
+#### E-19b2.3 — Il codice ✅ (2026-10-17, 20:4x–21:0x; HEAD `2ab9a6859`)
+> I rossi nel commit `0e787dfb4`; il coordinatore ha portato dev `0897502a9` nel ramo: HEAD `2ab9a6859`
+> (`test_portfolio_api.py` fuso da solo). La regola delle coppie col trattino approvata.
+>
+> **Il codice**:
+> - `schemas/portfolio.py`: `IssueCode.NON_ISO_CURRENCY` dopo `QUOTE_IN_MINOR_UNIT`;
+> - `data_quality.py`:
+>   - i kwarg `non_iso_currency_assets` e `report_currency` dopo quello di Z, con la loro docstring;
+>   - la raccolta dei valori prima dei blocchi: i lati delle coppie (`_missing_pair_sides`: il suffisso
+>     `/<valuta del rapporto>`, poi `rpartition`, e nessun lato per una coppia senza `/`), gli asset tenuti (filtrati di
+>     nuovo con `is_canonical_iso_currency`, per prudenza), la valuta del rapporto;
+>   - `MISSING_FX_*` lavorano sulle sole coppie di codici ISO (`fixable_fx_pairs`); `missing_fx_pairs` del DTO resta
+>     la lista grezza;
+>   - una voce per valore dopo il blocco di Z, da `_non_iso_currency_issue`: un costruttore per ramo con la chiave
+>     letterale (lo vuole la scansione delle frasi), il resto in `**common`; un'unità minore (`minor_unit_factor`)
+>     senza codice né candidati;
+> - `portfolio_service.py`: la staticmethod `_non_iso_currency_assets` accanto a quella di Z; nelle due chiamate
+>   `non_iso_currency_assets=…` e `report_currency=base_currency`;
+> - i18n con `dev.py i18n add`, cartella `dataQuality`, 5 chiavi × 4 lingue, nello stile delle voci vicine (una riga con
+>   il trattino lungo). Le chiavi della valuta del rapporto nominano il campo vero della scheda, «Default Currency» /
+>   «Valuta Predefinita» / «Devise par défaut» / «Divisa predeterminada», in Settings › Preferences. Le generali dicono
+>   che le conversioni «possono mancare»: un vecchio tasso salvato con lo stesso codice non ISO convertirebbe ancora;
+> - `api sync` (DQN-04);
+> - docs: `developer/frontend/data-quality-banner.md` (la riga della tabella, la regola, le coppie mancanti, la
+>   riproduzione, i test) e `user/dashboard/index.en.md` (un paragrafo dopo quello dei pence, col rimando a
+>   `db currencies`).
+>
+> **Prove** (corsia 6188, carico sotto 50):
+> - il file puro **109 su 109**; Vitest DQN **8 su 8**;
+> - api `portfolio` **55** (i 2 nuovi compresi); services `roi-fifo-utils` **1 485** (tutto `test_financial/`, i lotti e
+>   il servizio del portafoglio compresi);
+> - statici (`files/tools/e19b2_static.sh s1`): ruff e black puliti (4 file), `i18n check`, Vitest 7 file **239**
+>   (banner, banner dei lotti e helper, ICU delle 4 lingue, porte HTML e colori), svelte-check 0 errori, `mkdocs build`
+>   stretto con 0 avvisi, `check-links` 97, `git diff --check` pulito; porta libera.
+>
+> **In mezzo, la revisione di C-54** (sola lettura, dev `630c478cd`): OK con due note, mandate al coordinatore
+> (`mark_seen` può tornare indietro dopo un downgrade; una pre-release conta come la sua release).
+
+#### E-19b2.2 — I rossi ✅ (2026-10-17, 20:1x–20:5x; `test-author` `d495e334`, HEAD `e84778677`)
+> Le LOW di H sono entrate (commit `e84778677`, dev `0897502a9`). Il coordinatore aggiorna la mia base solo dopo il
+> commit di questi rossi: dev ha toccato `test_portfolio_api.py`.
+>
+> **I rossi**:
+> - `test_data_quality_report.py`: **35 nuovi (34 rossi, 1 guardia), i 74 di prima verdi**.
+>   - `TestNonIsoCurrencyIssue` (19): il membro dell'enum; `978/EUR` con la forma intera della voce e nessun
+>     `MISSING_FX_*`; i tre gruppi FX misti; `eur/EUR` e `EUR-EUR`; le chiavi per tipo di valore (978, EURO, Bolívar,
+>     BTC, `GBp` anche con spazi); l'ordine; un valore sia in una coppia sia su un asset; i soli asset; la valuta del
+>     rapporto (978, Bolívar, `GBp`, un nome lungo, l'asset nella valuta del rapporto); i valori con `/`; il valore
+>     lungo tagliato e la chiave intera; la forma dei lotti; `missing_fx_pairs` grezzo; l'ordine completo delle voci;
+>     la guardia.
+>   - `TestNonIsoCurrencyAssets` (2): `_non_iso_currency_assets`. `TestNonIsoCurrencySentences` (1): le cinque chiavi
+>     scritte come letterali, così le copre il controllo delle frasi.
+> - `test_portfolio_api.py`: **2 nuovi**, solo raccolti (55): un asset e la cassa in `978` con il rapporto in EUR;
+>   la valuta base salvata `978`. Entrambi su tutte e tre le sezioni `data_quality`.
+> - `DataQualityBanner.nonIso.test.ts` (nuovo): **8 rossi**. DQN-01 ×5 (le chiavi nei cataloghi), DQN-02/03 (due voci
+>   disegnate, nessuna CTA), DQN-04 (il client generato accetta il codice: serve `api sync`).
+> - Il `test-author` ha provato un'implementazione minima in una copia in `/tmp`: 35 e 8 su 35 e 8.
+> - Registro: il file puro sta in services `roi-fifo-utils` (`test_financial/` intero), l'API in api `portfolio`; il
+>   Vitest nuovo l'ho registrato in `component-unit`, accanto a `Tooltip.test.ts`.
+> - Verifica mia: puro 34 rossi, tutti nelle classi NonIso, e 75 verdi; API 55 raccolti; Vitest 8 rossi.
+>
+> **I dubbi del `test-author` e le mie decisioni**:
+> 1. **Le coppie con il trattino.** Sei test esistenti passano coppie `"EUR-USD"` (`_make_missing_fx`); con un
+>    `rpartition("/")` letterale diventerebbero lati `""` e `"EUR-USD"`, voci spurie. Nessun produttore scrive quella
+>    forma. **Regola aggiunta al contratto: una coppia senza `/` non si spezza, i suoi lati contano come canonici**,
+>    come oggi. I sei test restano com'erano, nessuna riparazione nei file d'altri.
+> 2. **Le chiavi letterali**: `test_the_scan_reaches_the_builder_s_keys` vuole un `message_i18n_key` letterale in ogni
+>    `DataQualityIssue(...)`. Quindi un costruttore per ramo, con `**common` per il resto.
+> 3. Fissati come scritti: una valuta del rapporto Bolívar va su `nonIsoReportCurrencyUnknown`; `" GBp "` con gli
+>    spazi conta come unità minore (`minor_unit_factor` toglie gli spazi); `XXX` è canonico.
+> 4. `PortfolioReportQuery.target_currency` è una stringa libera: un rapporto chiesto in `978` è accettato oggi. Fuori
+>    da b2; nota.
+> - `test_portfolio_api.py` non passa `black --check` già a HEAD (7 hunk fra 1348 e 1834), nessuno nella sezione
+>   nuova: lasciato com'è.
+
 #### E-19b2.1 — Analisi del rapporto di qualità (2026-10-17, 20:0x–20:2x; sola lettura, HEAD `2fbbf4c4c`)
 > E-19b1 è entrato (dev `1742aaaaa`, CHANGELOG `2fbbf4c4c`); Z-32 (c) è nella base.
 >
