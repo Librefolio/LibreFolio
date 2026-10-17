@@ -249,6 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Very large cash amounts and event values (eleven digits or more before the decimal point) read back exactly, without a stray digit in the sixth decimal place.
 - Scheduled Investment: a schedule must lie between 1900 and 2200, span at most 100 years with at most 1,200 periods; larger ones are refused as invalid instead of tying up the server, and long late-interest histories are computed in one pass.
 - A portfolio, lots, risk or AI Export request with a date range reaching far into the future or the past no longer freezes the server: a range now ends no later than tomorrow and starts no earlier than your first transaction.
+- Scheduled Investment: the first sync of a new asset no longer fails, and an asset's late-interest value is the same in its history, its current price and its settlement.
 
 #### 🔒 Security
 
