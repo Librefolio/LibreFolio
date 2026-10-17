@@ -3050,3 +3050,31 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
 - ✅ **Corsia** (17:47; prodotto tolto `engine.py`, sha `383a938a…` uguale dopo): rosso **1** / 11 (`TestTheLeaderFails`);
   verdi il file 11, `roi-fifo-utils` **1407**, `portfolio-engine` 41, `app-lifecycle` 53 (attese a carico 55–87). ruff,
   black, diff-check, `mkdocs build` stretto, `check-links`. Porta libera.
+
+#### J45d entrato (dev `685d76dab`); MF-A8 — il lato ricevente della base delle chiuse (17/10, 17:5x)
+- Coordinatore: J45d **entrato** (dev `685d76dab`, merge `6a6725ad9`, nessuna riga di CHANGELOG, nessuno slot); il
+  compromesso degli errori transitori resta salvo richiesta di J. Il fast-forward è arrivato con le modifiche di A8 già
+  nell'albero: intatte sopra `685d76dab`.
+- **Revisione di J di MF-A5** (OK sul lato mittente) → **MF-A8**: una riga che riceve unità da un tratto contato le
+  misura dal valore all'arrivo (−tratto) ma la base delle sue vendite è il costo storico. Scelta: **la preferita di J**,
+  Σ(V_arrivo − C_spostato) dei tratti ricevuti nella base — numeratore e base contano le unità ricevute dallo stesso
+  valore (P22, il tratto del ricevente parte da V); l'annualizzazione sul tempo di volo resta anche per «spostato e poi
+  venduto», che una ricaduta perderebbe; su una catena A→B→C la riga di mezzo dà (V₂ − V₁)/V₁. ✅ Codice:
+  `contributions.transfer_tracts_moved_in` (stesso `counted_tract`), `closed_position_base(..., moved_in)` con base
+  **> 0** (prima ≠ 0), `portfolio_service` lo passa. Doc: `net-annualized-return.en.md` (il termine Σ(V_a − C_a), il
+  rovescio nell'esempio). Backlog: MF-A5 chiusa, MF-A8 in corso.
+- In corso: test-author `a8-tests`.
+- ✅ **Test A8** (test-author `a8-tests`): in `test_portfolio_contributions.py` `TestTransferTractsMovedIn`,
+  `TestClosedPositionBaseMovedIn`, `TestMovedInExamples` (J 0,10 contro 0,12; arrivo in perdita 0,10 contro 0,08; catena
+  45/600 contro 45/500) e la guardia di `closed_position_base` senza `moved_in` (copia di HEAD); in `TestClosedPositionBase`
+  (report e autonomo) l'esempio di J e la catena con B attraversato, più la guardia «in transito all'inizio». 11 mutanti
+  presi. Seguito → backlog **MF-A9** (una riga ricevente ancora aperta annualizza sul costo storico: C 5/500 invece di
+  5/645).
+- ✅ **Corsia** (18:11; prodotto tolto `contributions.py` + `portfolio_service.py`, sha `6c86b61b…` uguale dopo):
+  `financial-math -k contributions` rosso **64** / 88; `roi-fifo-utils test_positions_contribution_engine` rosso **4** /
+  80. Verdi: `financial-math` **1386**, `roi-fifo-utils` **1413**, `portfolio-engine` 41. ruff, black, diff-check,
+  `mkdocs build` stretto, `check-links`. Porta libera. Slot chiesto (`files/a8.sh slot`: `api portfolio`).
+- ✅ **Slot** (GO; partito 18:18, HEAD `685d76dab`): esito qui sotto. Coordinatore: la scelta di A8 è giusta; **MF-A9** nella
+  1.3 come prossimo lotto (analisi inviata: solo le righe senza valore iniziale, base `end_cost + Σ(V_a − C_a)` quando la
+  riga non ha uscite nel periodo — esatto —, altrimenti il costo alla fine com'è, limite dichiarato: il trasferimento non
+  porta la quantità). Revisione Z-32 (c) `QUOTE_IN_MINOR_UNIT`: OK, nessun rilievo. **CHECKPOINT READY** inviato, FROZEN.
