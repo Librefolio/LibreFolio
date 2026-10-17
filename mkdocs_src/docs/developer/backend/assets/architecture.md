@@ -19,7 +19,7 @@ responsibility:
 | `split_guard.py` | The `SPLIT`s among the events a wipe would delete that have linked incoming adjustments without a cost, named as the caller may see them (`splits_with_costless_adjustments()`, `adjustments_count()`): the refusal of the currency-change wipe and of the parametric provider change. |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
-| `period_changes.py` | The fixed-period changes of the Assets table: each asset's price on the days the change needs, read in grouped queries and converted at each day's rate ([Fixed-Period Changes](#fixed-period-changes)). |
+| `period_changes.py` | The fixed-period changes of the Assets table, and on request the whole-range change of the Assets cards: each asset's price on the days the change needs, read in grouped queries and converted at each day's rate ([Fixed-Period Changes](#fixed-period-changes)). |
 | `refresh.py` | Provider-driven price refresh and its explicit PREPARE/FETCH/PERSIST phases. |
 | `crud.py` | Asset create, list, patch, delete, and merge operations. |
 | `search.py` | Cross-provider batch search, SSE search, query caching, link-finder fallback, and URL resolution; for each provider that did not answer, the reason the client needs ([Interactive Search Stack](#interactive-search)). |
@@ -329,13 +329,21 @@ the pair through its `requiredFxPairs` banners, and its comparison loader drops 
 change itself is the house's `fixed_period_changes()`
 ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
 
-- **Request**: a list of `{asset_id, as_of, target_currency?}`. The limits (MF-P2b, finding R13-SEC8): at most
-  `PERIOD_CHANGES_MAX_ASSETS` (10 000) items; at most `PERIOD_CHANGES_MAX_AS_OF_DAYS` (5) distinct `as_of` days,
-  since each costs ten grouped queries below; each `as_of` on or after `EARLIEST_RANGE_START` (1 January 1900; up to
-  0005-12-30 the 5Y day fell before year 1, a 500). Past a limit the request is refused (422).
-- **Response**: `items[]`, in request order, of `{asset_id, as_of, currency, periods[], errors[]}`. Each period is
-  `{key, days, change_ratio}`, with `change_ratio = price(as_of) / price(as_of − days) − 1`: a fraction, null when
-  either price is missing or ≤ 0.
+- **Request**: a list of `{asset_id, as_of, target_currency?, range_start?}`. `as_of` and `range_start` are on or
+  after `EARLIEST_RANGE_START` (1 January 1900; up to 0005-12-30 the 5Y day fell before year 1, a 500), and
+  `range_start` is on or before `as_of`: 422 otherwise, from the schema. The route then checks the request with
+  `period_changes_request_refusal()` (`backend/app/schemas/common.py`), before any read (MF-P2b, finding R13-SEC8,
+  aligned with Z-25):
+    - more than `MAX_BULK_ITEMS` (1,000) items get the 422 `{"code": "bulk_too_many_items", "message", "max_items",
+      "items"}` of `POST /assets/prices/query` ([bulk request limits](#bulk-request-limits)); exactly 1,000 pass;
+    - more than `PERIOD_CHANGES_MAX_AS_OF_DAYS` (5) distinct `as_of` days, or as many distinct `range_start` days, get
+      the 422 `{"code": "period_changes_too_many_days", "message", "field", "max_days", "days"}`, `field` naming the
+      one over the limit (`as_of` checked first). Each `as_of` costs ten grouped queries below, each `range_start` one
+      more, so the cost of a request follows its distinct days, not its length.
+- **Response**: `items[]`, in request order, of `{asset_id, as_of, currency, periods[], range_change, errors[]}`. Each
+  period is `{key, days, change_ratio}`, with `change_ratio = price(as_of) / price(as_of − days) − 1`: a fraction, null
+  when either price is missing, the earlier one ≤ 0 or the one on `as_of` negative; a price of 0 on `as_of` (written
+  down to nothing) gives −1, −100 %. `range_change` is null unless the item sends a `range_start` (below).
 - **Price on a day**: the last stored price on or before it, the backward fill of `POST /assets/prices/query`, with
   no [ceiling](#price-query-range-ceiling) on `as_of`. One grouped query runs per valued day, for every asset of
   the request: a `MAX(date) … GROUP BY asset_id` subquery joined back to `PriceHistory`. No series is built per
@@ -345,13 +353,42 @@ change itself is the house's `fixed_period_changes()`
 - **Native**: `currency` is the anchor's currency, null when `as_of` has no price. A day priced in another currency
   is null, with an error.
 
+An item may also send `range_start`, the first day of the range the page shows, for the whole-range Δ of the Assets
+cards (X-R59, decision N80); its limits are in the **Request** bullet above.
+
+- **`range_change`**: `{reference_date, change_abs, change_ratio}`, the house's `range_change()`
+  ([Financial Math Layer](../financial_math.md#fixed-period-changes)). `change_abs = price(as_of) − reference price`,
+  in the result's `currency`; `change_ratio = price(as_of) / reference price − 1`. Both are null when either price is
+  missing, the reference ≤ 0 or the price on `as_of` negative; a price of 0 on `as_of` gives −reference and −1.
+- **Reference**: the price on `range_start`, the last stored price on or before it (one more day in the grouped
+  `MAX(date)` queries above), with `reference_date = range_start`. An asset with no price on or before `range_start`
+  takes its first stored price inside the range, after `range_start` and up to `as_of`, with that price's date: one
+  more grouped query per distinct `(range_start, as_of)` window, for those assets only, a `MIN(date) … GROUP BY
+  asset_id` subquery joined back to `PriceHistory`. Either way it is the first point of the series
+  `POST /assets/prices/query` returns for the range, whose walk starts at the first stored price when there is no seed
+  ([X-R55](#price-query-range-ceiling)). With no price up to `as_of`, every field of `range_change` is null,
+  `reference_date` included.
+- **Valuing the reference**: as any other day. With `target_currency` it is converted at the rate of its
+  `reference_date`, in the same `convert_bulk()` batch, and a missing rate leaves it null, with an error; native, a
+  reference priced in another currency is null, with an error. The anchor is the price on `as_of`, as for the periods.
+
+The change is on this endpoint, not on `POST /assets/prices/query`: the Assets page reads its series through a shared
+cache (`getAssetPriceStore()`), so a change attached to a series response would not be the visible range's. When the
+range ends today the asset detail page shows the live quote, which may not be stored, as its last value: the change to
+that quote comes from `POST /assets/prices/current` with the same `range_start`
+([Current Quotes and Today's OHLC](#current-quotes-range-change)). The web app is to send `range_start` and read
+`range_change`; until then it computes the Δ in the browser (`computeDerivedPriceState()`).
+
 `errors` is deduplicated and capped at ten plus one "… and N more" line. The endpoint reads the stored history
 directly, so a 5Y change exists whatever range the page has loaded.
 
 The Assets list calls the endpoint through `fetchAssetPeriodChanges()` (`frontend/src/lib/utils/periodChanges.ts`):
 one request for every asset of the list, native (no `target_currency`), with `as_of` the end of the selected range.
 Besides its fixed 1D column, the table shows each period whose `days` fit in the range's whole calendar days
-(`visiblePeriodColumns()`).
+(`visiblePeriodColumns()`). The request is not split yet: past 1,000 assets it gets `bulk_too_many_items`, the
+`catch` of `loadPeriodChanges()` (`frontend/src/routes/(app)/assets/+page.svelte`) logs it to the browser console,
+and the Δ columns stay empty. Splitting the request into batches (backlog Z-27, as for the
+[price query](#bulk-request-limits)) is to cover this endpoint too: at most 1,000 items and one `as_of` per request.
 
 ### 💹 Current Quotes and Today's OHLC
 
@@ -359,6 +396,15 @@ Besides its fixed 1D column, the table shows each period whose `days` fit in the
 asset, `_live_quote_item()` reads the core current-price cache, or calls an assigned provider
 through `core.call_provider()`, and checks the quote; the asset falls back to the database when
 the provider fails, is [paused](#provider-pauses) or is absent, or when its quote is refused.
+
+The request is bounded like the other bulk requests (R13-SEC9-1): more than `MAX_BULK_ITEMS`
+(1,000) ids get the 422 `bulk_too_many_items` of [bulk request limits](#bulk-request-limits)
+before any read. A repeated id is fetched once — one provider call, one write-back of today's
+row — and the answer still has one item per requested id, in request order. `_live_quote_item()`
+reads the cache again once it holds the provider slot (the semaphore of five), so the requests
+that waited for the same quote take the one the first of them cached, instead of each calling
+the provider, which would end in a «too many requests» pause for every user. A failure past the
+checks answers 500 with a generic message, the error in the log only (R13-SEC9-3).
 
 That check, `storable_current_value()` in `price_store.py`, is the one check of a live quote: the
 [refresh](#data-flow-sync-pipeline) applies it too, to the value it adds for today (X-R40, W-B62).
@@ -406,11 +452,51 @@ A successful provider quote dated today is written back to today's OHLC row:
 The write-back is best-effort: a commit failure is rolled back and logged without discarding the
 current-price response.
 
+With the optional query parameter `range_start` (`POST /assets/prices/current?range_start=…`), each result also
+carries `range_change`, the `FARangeChange` of the [fixed-period changes](#fixed-period-changes) (X-R59, decision
+N80): the change over the range the asset detail page shows, up to the current price. When that range ends today the
+page shows the live quote as its last value, and a live quote may not be stored (the write-back above keeps only one
+dated today), so the `range_change` of `POST /assets/prices/period-changes`, valued on stored prices, would not match
+it. `live_range_changes()` (`services/assets/period_changes.py`) values it after the quotes are served:
+{: #current-quotes-range-change }
+
+- **Anchor**: the result's own price, live or `db:last_known`, in its `currency`.
+- **Reference**: the rule of the fixed-period changes, with the price's day for `as_of`: the last stored price on or
+  before `range_start`, with `reference_date = range_start`; otherwise the first stored price after `range_start` and
+  up to the price's day, with its own date. Two grouped queries serve the whole request: a `MAX(date)` one on
+  `range_start`, and, for the assets without a price there, a `MIN(date)` one up to the latest price day of the
+  request.
+- **Change**: the house's `range_change()`, so `change_abs = price − reference` and
+  `change_ratio = price / reference − 1`, by the same rule: null when either is missing, the reference ≤ 0 or the
+  price negative, −reference and −1 for a price of 0. A reference stored in another currency
+  than the price is not converted: `reference_date` is set, both changes are null.
+- **In another currency** (`&target_currency=`, Y's D1: the page's converted view): both ends are converted into it,
+  in one `convert_bulk()` batch, the reference at its own `reference_date`'s rate and the price at today's (the UTC
+  date, as the page converts the live quote); an end already in that currency is not converted. `change_abs` is then
+  in `target_currency`, while the quote's `value` and `currency` stay its own. A missing rate on either end leaves
+  `reference_date` set and both changes null, never a difference of two currencies. Without `range_start` the
+  parameter changes nothing; an invalid code is the standard 422 of the parameter.
+- **No change**: a result without a price, or whose price is dated before `range_start`, or with no stored price up to
+  the price's day, gets a `range_change` with every field null. Without `range_start`, `range_change` is null.
+- **A failure** while valuing the changes never costs the quotes: it is logged, and every `range_change` is left with
+  every field null (unavailable, never a guess).
+
+A `range_start` outside 1 January 1900 … tomorrow (`latest_range_end()`) is refused by the parameter itself
+(the standard 422, `loc` `["query", "range_start"]`), before any provider call (R13-SEC9-4); one after the price's day gives an empty `range_change`. The asset detail page is to send
+it with its range's start and read `range_change` for the live quote: it does not yet.
+
 ---
 
 ## 🧪 Provider Probe
 
 `POST /assets/provider/probe` allows **dry-run testing** of a provider configuration without persisting anything.
+Any user may start one, so each user gets at most 30 probes a minute (`PROBES_BY_USER`, a `SlidingWindowLimiter` in
+`api/v1/assets/providers.py`, counted in each process; MF-SI2): past it the route answers 429
+`{"error_code": "PROBE_RATE_LIMITED", "retry_after", "message"}` with `Retry-After`, before the provider is called.
+`LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read once when the
+server starts: `0` turns the limit off, with a warning in the log, and a value that is not a whole number up to
+10 000 is logged as an error and leaves 30. `dev.py server --test` sets it to `0` for every lane: the E2E suites pick
+search results as one user, two probes a pick.
 
 Operations (selectable per request):
 
@@ -612,8 +698,8 @@ cost unknown it stays `MISSING`.
 | `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400) |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
-| `POST /api/v1/assets/prices/period-changes` | POST | Bulk fixed-period changes, 1D … 5Y, of the Assets table (DB-only, backward-fill, optional `target_currency`) |
-| `POST /api/v1/assets/prices/current` | POST | Bulk current quotes with DB fallback and today's OHLC write-back |
+| `POST /api/v1/assets/prices/period-changes` | POST | Bulk fixed-period changes, 1D … 5Y, of the Assets table (DB-only, backward-fill, optional `target_currency`), and the whole-range change with an optional `range_start` |
+| `POST /api/v1/assets/prices/current` | POST | Bulk current quotes with DB fallback and today's OHLC write-back; with an optional `range_start` query parameter, each quote's whole-range change |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 | `GET /api/v1/assets/prices/signals` | GET | Signal catalog: the visible plugins compatible with Asset prices |
 | `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only; a value over 12 digits before the decimal point, 6 decimal places or 15 significant digits is a 400 `EVENT_TOO_MANY_DIGITS`); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |

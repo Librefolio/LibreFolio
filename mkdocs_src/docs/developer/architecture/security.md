@@ -663,7 +663,9 @@ limits) can neither reach the tests nor change their outcome.
   lane's server after the cleanup. `backend/test_scripts/conftest.py` sets it in every pytest process
   that does not have it already, and puts it back before each test that lost it: set once at import, it
   did not survive the modules that configure the lane at collection, and in a combined run the limit was
-  on for every test.
+  on for every test. The same line sets `LIBREFOLIO_PROBE_RATE_LIMIT=0`: the per-user limit of the
+  [provider probe](../backend/assets/architecture.md#provider-probe) is off on the lane's server, whose E2E
+  suites probe many times as one user; its own tests build their limiters in-process.
 
 ### 🧬 Instance Key {: #instance-key }
 

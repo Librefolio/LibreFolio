@@ -42,6 +42,7 @@ The schedule is walked day by day (see [the accrual walk](#accrual-walk)), so it
 | Every period's `start_date` and `end_date` | 1900-01-01 … 2200-12-31 (`SCHEDULE_MIN_DATE`, `SCHEDULE_MAX_DATE`) | `FAInterestRatePeriod.validate_date_bounds` |
 | Span, from the first period's start to the last period's end | at most 36 525 days, 100 years (`SCHEDULE_MAX_SPAN_DAYS`) | `FAScheduledInvestmentSchedule.validate_schedule_continuity` |
 | Number of periods | at most 1 200 (`SCHEDULE_MAX_PERIODS`) | `FAScheduledInvestmentSchedule.validate_schedule_continuity` |
+| Manual events (`asset_events`) | at most 10 000 (`SCHEDULE_MAX_EVENTS`, MF-SI2) | the field's `max_length` |
 | Late interest `grace_period_days` | 0 … 36 525 (`LATE_INTEREST_MAX_GRACE_DAYS`) | `FALateInterestConfig.validate_grace_period` |
 
 The `ValueError` reaches `validate_params()`, which raises `AssetSourceError` with `error_code="INVALID_PARAMS"`. The provider probe (**Test Configuration**, a dry run) reports it on its current-price and history operations; a sync fails the asset before any computation (`refresh.py` validates the parameters first) with *Invalid provider params*. The plugin adds two limits of its own: late interest is valued up to `SCHEDULE_MAX_DATE` at most (see [Late Interest](#late-interest)), and a large result is never cached (see [Caching & Invalidation](#caching)).

@@ -731,3 +731,69 @@ class TestShareMismatch:
 
         assert _classifications(result) == expected
         assert result.share_mismatches == []
+
+
+# =============================================================================
+# MF-SEC8-2b — A PAIR ON date.min: THE IN-TRANSIT WINDOW HAS NO DAY BEFORE IT
+# =============================================================================
+
+
+def _pair_on(departure: str, arrival: str):
+    """1000 EUR by CASH_TRANSFER from broker 10 (id 701, dated ``departure``) to broker 20 (id 702, dated ``arrival``)."""
+    sent = _tx(id=701, broker_id=10, type="CASH_TRANSFER", dt=departure, amount="-1000", related_id=702)
+    received = _tx(id=702, broker_id=20, type="CASH_TRANSFER", dt=arrival, amount="1000", related_id=701)
+    return sent, received
+
+
+class TestInTransitWindowAtDateMin:
+    """MF-SEC8-2b — a linked pair stored on date.min (0001-01-01: an older version or a hand edit).
+
+    The window is [departure, arrival − 1 day]. On HEAD c0b4b6f05 ``_build_in_transit_interval`` subtracts the day
+    before it compares the dates, so a same-day pair on date.min raises OverflowError instead of returning None. Its
+    one caller, ``classify``, skips same-day pairs, so production does not reach it; the method must still keep its
+    own contract. A pair that leaves on date.min and lands later keeps its window, today's.
+    """
+
+    @pytest.mark.parametrize("day", [pytest.param("0001-01-01", id="date_min"), pytest.param("2025-06-10", id="ordinary_day")])
+    def test_same_day_pair_has_no_window(self, day):
+        """Red on HEAD c0b4b6f05 for ``date_min`` (OverflowError); ``ordinary_day`` is the guard, None as today."""
+        sent, received = _pair_on(day, day)
+
+        assert ScopeAwareTransactionClassifier._build_in_transit_interval(sent, received) is None
+
+    @pytest.mark.parametrize(
+        ("departure", "arrival", "last_day_in_transit"),
+        [
+            pytest.param("0001-01-01", "0001-01-02", "0001-01-01", id="from_date_min_to_the_next_day"),
+            pytest.param("0001-01-01", "0001-01-05", "0001-01-04", id="from_date_min_four_days"),
+            pytest.param("2025-06-01", "2025-06-04", "2025-06-03", id="ordinary_days"),
+        ],
+    )
+    def test_different_day_pair_keeps_its_window(self, departure, arrival, last_day_in_transit):
+        """Guard (green on HEAD c0b4b6f05 and after): departure day included, arrival day excluded, even when the
+        departure is date.min."""
+        sent, received = _pair_on(departure, arrival)
+
+        interval = ScopeAwareTransactionClassifier._build_in_transit_interval(sent, received)
+
+        assert interval is not None
+        assert (interval.start_date, interval.end_date) == (date.fromisoformat(departure), date.fromisoformat(last_day_in_transit))
+        assert (interval.departure_leg.id, interval.arrival_leg.id, interval.tx_type) == (701, 702, "cash")
+
+    @pytest.mark.parametrize(
+        ("arrival", "expected_windows"),
+        [
+            pytest.param("0001-01-01", [], id="same_day"),
+            pytest.param("0001-01-03", [(date.min, date(1, 1, 2))], id="two_days_later"),
+        ],
+    )
+    def test_classify_a_pair_leaving_on_date_min_as_today(self, arrival, expected_windows):
+        """Guard (green on HEAD c0b4b6f05 and after): through ``classify``, the production path, a pair leaving on
+        date.min is linked internal and has the window it has today — none on the same day."""
+        sent, received = _pair_on("0001-01-01", arrival)
+        c = ScopeAwareTransactionClassifier(scope_broker_ids={10, 20}, all_transactions=[sent, received], broker_shares={10: Decimal("1"), 20: Decimal("1")})
+
+        result = c.classify()
+
+        assert _classifications(result) == {701: "linked_internal", 702: "linked_internal"}
+        assert [(it.start_date, it.end_date) for it in result.in_transit_intervals] == expected_windows
