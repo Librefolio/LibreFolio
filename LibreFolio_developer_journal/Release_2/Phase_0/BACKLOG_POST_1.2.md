@@ -5376,6 +5376,10 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   Analisi (17/10): **tre** punti, non due — anche `get_balances_at_end_of` (`balances.py`), con l'`as_of` del gap-fix BRIM dalla
   richiesta; cura scelta: un aiuto `shift_date` che satura a `date.min`/`date.max` (non un 422: le richieste di suggerimento sono a
   lotti). Ordine approvato: dopo W-B74. Dettagli: piano 04, «W-B71, W-B72, W-B74 — analisi».
+  ✅ 17/10 (prima di W-B74, ordine cambiato col coordinatore): `shift_date` (`utils/datetime_utils.py`) nei due suggerimenti e nei
+  cinque `± 1 giorno` di `brim_report_sets.py` (date del file caricato: perimetro allargato, approvato), `get_balances_at_end_of` con una
+  query inclusiva (una riga del `9999-12-31` conta); rossi in 5 file, verdi nello slot (`utils datetime` 39, `brim-gap-fix` 106,
+  `brim-report-sets` 274, `api batch-split-promote` 38, `api events-suggest` 11). Dettagli: piano 04, sezione «W-B71 — cura».
 - **W-B72 · Il costo unito di una promozione finisce su entrambe le righe di una coppia di cassa** — basso, numeri; W, 17/10 (H-41,
   docs-writer). `_apply_promote_cost_basis` (`backend/app/services/transactions/batch_creates.py`) scrive il costo sulla gamba di
   quantità positiva, ma su **entrambe** quando nessuna ne ha una (una coppia di cassa: FX_CONVERSION, CASH_TRANSFER), e dopo la pulizia
