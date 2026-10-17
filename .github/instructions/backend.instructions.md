@@ -113,7 +113,7 @@ at the root. The truncation to the database precision reads the models, so it li
 | Uploads and file previews | `backend/app/services/files/` |
 | Email (optional SMTP: transport, hourly budget, templates in 4 languages, config checks) | `backend/app/services/email/` (config in `backend/app/config/email.py`; sliding-window limiter in `backend/app/utils/runtime/rate_window.py`) |
 | API Endpoints | `backend/app/api/v1/*.py` |
-| Config & Data Paths | `backend/app/config/` (base in `__init__.py`, one module per owner section; env vars are read only here; secrets through `env_secret()`, which also reads `NAME_FILE`; every variable documented in `.env.example`, new lines commented) |
+| Config & Data Paths | `backend/app/config/` (base in `__init__.py`, one module per owner section; env vars are read only here; secrets through `env_secret()`, which also reads `NAME_FILE`; every variable documented in `.env.example`, new lines commented; a new security `Settings` field states its `managed` value in `PROFILE_DEFAULTS` in the same lot, or why `managed` keeps the code default (H-39)) |
 | FX Providers | `backend/app/services/fx_providers/` |
 | Asset Providers | `backend/app/services/asset_source_providers/` |
 | Broker Import | `backend/app/services/brim_providers/` |
