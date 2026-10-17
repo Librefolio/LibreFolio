@@ -38,6 +38,19 @@ after»): in test mode, every double is served, configured and validated as toda
 validate; the signal registry, a family without the flag, serves the same codes and classes as in test mode; a class
 without the flag, or with it false, is served by the registry of this file's own in both modes.
 
+X-R44c, a guard (green today and after): only an asset or an FX plugin may be flagged ``test_only``. Their registries
+serve a plugin only through the base doors, which ask ``_withheld``; the other families also serve theirs through doors of
+their own that never ask it (read at 9e8f6e8dc): ``BRIMProviderRegistry``'s ``auto_detect_plugin``,
+``get_compatible_plugins`` and ``list_plugin_info`` walk ``_providers``, ``SignalPluginRegistry.list_definitions()`` and
+``RiskAnalyticRegistry.list_definitions()`` walk ``_plugins``, ``ToolPluginRegistry`` serves its own snapshot
+(``get_snapshot``, ``get_definition``, its own ``get_plugin_instance``). Flagged there — their bases do not inherit the
+mixin that declares the flag, but the base doors read it on any class — a plugin would vanish from the base doors and still
+be served, on a production instance, through those: whoever flags one covers its family's doors first. The rule is read in
+test mode, through the base doors, over every registry of the base the application defines (each family's
+``registry.py`` imported, the subclasses of ``AbstractPluginRegistry`` walked), so a seventh family is checked with no
+edit here; a second guard proves that the check reads the flag and the registry, on the registry of the base of this
+file's own.
+
 The simulation. The runner runs every pytest process with ``LIBREFOLIO_TEST_MODE=1``, and ``is_test_mode()`` reads the
 variable at each call. Each test sets it to ``1`` through ``monkeypatch``, as every run does, with a barrier that
 ``is_test_mode()`` reads it; where it needs a production instance it enters a block (``monkeypatch.context()``) that sets
@@ -57,24 +70,28 @@ is bound to.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterator
+import importlib
+from collections.abc import Awaitable, Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
 import pytest
 from pydantic import ValidationError
 
-from backend.app.config import is_test_mode
+from backend.app.config import PROJECT_ROOT, is_test_mode
 from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderConfigBase, FAProviderProbeRequest
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
 from backend.app.services.assets import core as asset_core
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx_providers.mockfx.plugin import MockFXFailProvider, MockFXProvider
 from backend.app.services.plugin_settings import runtime as settings_runtime
 from backend.app.services.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.tools.registry import ToolPluginRegistry
 
 TEST_MODE_VARIABLE = "LIBREFOLIO_TEST_MODE"
 #: A code no registry knows: what the contract makes a test-only code look like outside test mode.
@@ -505,3 +522,145 @@ def test_guard_a_class_without_the_flag_or_with_it_false_is_served_in_both_modes
         outside = {code: _doors(probe.registry, code) for code in expected}
     assert in_test_mode == expected, f"in test mode the probe registry answers {in_test_mode}, not {expected}"
     assert outside == expected, f"outside test mode the probe registry answers {outside}, not {expected}: a class without the flag, or with it false, is affected"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# X-R44c: a plugin is flagged test_only only where every door withholds it
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: Where each family keeps its registry: ``services/<family>/registry.py`` (developer decision D-P1, ``provider_registry.py``).
+SERVICES_PACKAGE = "backend.app.services"
+SERVICES_DIRECTORY = PROJECT_ROOT / "backend" / "app" / "services"
+REGISTRY_MODULE = "registry"
+#: The registries of the base the application defines today: the walk finds at least these.
+KNOWN_REGISTRIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry, SignalPluginRegistry, RiskAnalyticRegistry, ToolPluginRegistry)
+#: The families whose plugins may be flagged ``test_only``: their registries serve a plugin only through the base doors,
+#: which ask ``_withheld``.
+TEST_ONLY_FAMILIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegistry, FXProviderRegistry)
+#: The doors of the other families that serve a plugin without asking ``_withheld`` (read at 9e8f6e8dc).
+UNGUARDED_DOORS: dict[type[AbstractPluginRegistry], str] = {
+    BRIMProviderRegistry: "auto_detect_plugin, get_compatible_plugins and list_plugin_info walk _providers",
+    SignalPluginRegistry: "list_definitions() walks _plugins",
+    RiskAnalyticRegistry: "list_definitions() walks _plugins",
+    ToolPluginRegistry: "get_snapshot, get_definition and its own get_plugin_instance serve the registry's own snapshot",
+}
+
+
+@dataclass(frozen=True)
+class _Flagged:
+    """A class flagged ``test_only`` as a registry serves it: the registry, the code it is served under, the class."""
+
+    registry: type[AbstractPluginRegistry]
+    code: str
+    plugin: type
+
+
+def _names_its_folder(registry: type[AbstractPluginRegistry]) -> bool:
+    """Whether ``registry`` is a family's: it names the folder its plugins are discovered from. A base names none
+    (``_get_plugin_folder`` raises ``NotImplementedError``), and no door of it can run."""
+    try:
+        registry._get_plugin_folder()
+    except NotImplementedError:
+        return False
+    return True
+
+
+def _first_party_registries() -> list[type[AbstractPluginRegistry]]:
+    """Every registry of the base the application defines: each family's ``registry.py`` imported, then the subclasses
+    of ``AbstractPluginRegistry`` walked to the last, keeping those defined under ``backend.app.services`` that name
+    their plugin folder. Left out: the bases (``AbstractProviderRegistry``) and every registry of test code — this file's
+    own, the labs and fixtures of the other suites a process may hold. A seventh family is found with no edit here."""
+    for module_file in sorted(SERVICES_DIRECTORY.glob(f"*/{REGISTRY_MODULE}.py")):
+        importlib.import_module(f"{SERVICES_PACKAGE}.{module_file.parent.name}.{REGISTRY_MODULE}")
+    walked: set[type[AbstractPluginRegistry]] = set()
+    pending: list[type[AbstractPluginRegistry]] = [AbstractPluginRegistry]
+    while pending:
+        for subclass in pending.pop().__subclasses__():
+            if subclass not in walked:
+                walked.add(subclass)
+                pending.append(subclass)
+    first_party = [registry for registry in walked if registry.__module__.startswith(f"{SERVICES_PACKAGE}.") and _names_its_folder(registry)]
+    return sorted(first_party, key=lambda registry: (registry.__module__, registry.__qualname__))
+
+
+def _served(registry: type[AbstractPluginRegistry]) -> dict[str, type]:
+    """What ``registry`` serves through its own base doors: every code ``list_plugin_codes()`` lists, and the class
+    ``get_plugin`` looks it up as. Barriers: read in test mode, where nothing is withheld; each listed code is a class."""
+    assert is_test_mode() is True, f"barrier: {registry.__name__} read outside test mode, where its base doors withhold every class flagged test_only: the rule would see none"
+    served = {code: registry.get_plugin(code) for code in registry.list_plugin_codes()}
+    unread = {code: plugin for code, plugin in served.items() if not isinstance(plugin, type)}
+    assert not unread, f"barrier: {registry.__name__} lists {sorted(unread)} but get_plugin looks them up as {unread}: the rule would read no class for them"
+    return served
+
+
+def _flagged_test_only(registries: Iterable[type[AbstractPluginRegistry]]) -> list[_Flagged]:
+    """Every class flagged ``test_only`` the registries serve (``_served``), the flag read as ``_withheld`` reads it: an
+    attribute any class may set, true when truthy, false when absent."""
+    return [_Flagged(registry, code, plugin) for registry in registries for code, plugin in _served(registry).items() if getattr(plugin, "test_only", False)]
+
+
+def _breaches(flagged: Iterable[_Flagged], allowed: tuple[type[AbstractPluginRegistry], ...] = TEST_ONLY_FAMILIES) -> list[_Flagged]:
+    """The rule of X-R44c: the flagged classes served by a registry that is not one of ``allowed``."""
+    return [entry for entry in flagged if entry.registry not in allowed]
+
+
+def _render_breach(breach: _Flagged) -> str:
+    """A breach as the guard tells it: the registry, the code, the class, and why the flag cannot stay there."""
+    registry = breach.registry.__name__
+    doors = UNGUARDED_DOORS.get(breach.registry)
+    why = (
+        f"{registry} has doors that do not withhold a test-only plugin — {doors}, never asking _withheld — and would still serve it on a production instance. Cover those doors first"
+        if doors
+        else f"{registry} is a family whose doors were never checked against X-R44: a door of its own may read its storage, or a snapshot, without asking _withheld, and serve it on a production instance. Check every door of the family first"
+    )
+    return f"{registry} serves {breach.code!r} as {breach.plugin.__module__}.{breach.plugin.__qualname__}, flagged test_only = True, but only an asset or an FX plugin may be (X-R44c). {why} (each must ask _withheld, as the base doors do), then add {registry} to TEST_ONLY_FAMILIES."
+
+
+def test_guard_only_asset_and_fx_plugins_are_flagged_test_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guard: green today and after. X-R44c: in test mode, where every plugin is served, no registry of the application
+    but the asset and the FX ones serves a class flagged ``test_only``; every other family has doors that would still
+    serve it on a production instance (``UNGUARDED_DOORS``). A seventh family is checked with no edit here.
+
+    Barriers: the walk finds the six registries known today, and neither a base nor a registry of test code; each of the
+    six serves a class; the flag is read where it lives: ``mockprov``, ``MOCKFX`` and ``MOCKFX_FAIL`` are found flagged
+    (not as the only ones: a new asset or FX double is allowed).
+    """
+    _test_mode(monkeypatch)
+    probe = _probe_registry()
+    registries = _first_party_registries()
+    missing = [registry.__name__ for registry in KNOWN_REGISTRIES if registry not in registries]
+    assert not missing, f"barrier: the walk of the subclasses of AbstractPluginRegistry finds {[registry.__name__ for registry in registries]}, without {missing}: the rule would skip a family"
+    strays = [registry.__name__ for registry in (AbstractProviderRegistry, probe.registry) if registry in registries]
+    assert not strays, f"barrier: the walk takes in {strays}: a base, or a registry of test code, read as a family of the application"
+    empty = [registry.__name__ for registry in KNOWN_REGISTRIES if not _served(registry)]
+    assert not empty, f"barrier: in test mode {empty} serve no class through their doors: the rule would read nothing for their family"
+    flagged = _flagged_test_only(registries)
+    unseen = [double.code for double in DOUBLES if _Flagged(double.registry, double.code, double.plugin) not in flagged]
+    assert not unseen, f"barrier: the rule does not find {unseen} flagged test_only, where the flag lives (it finds {flagged}): it does not read the attribute it guards"
+    breaches = _breaches(flagged)
+    assert breaches == [], "\n".join(_render_breach(breach) for breach in breaches)
+
+
+def test_guard_the_test_only_rule_reports_a_flagged_class_outside_the_asset_and_fx_registries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guard: green today and after. X-R44c: the check of the rule reads the flag and the registry. In a registry of the
+    base of this file's own, neither the asset nor the FX one, it reports the class flagged ``test_only``, naming the
+    registry, the code and the class, and neither the class without the flag nor the one with it false; with that
+    registry counted among the allowed ones, it reports nothing. Without it, the rule could be green by reading nothing.
+
+    Barrier: the check reads the three classes of the registry.
+    """
+    _test_mode(monkeypatch)
+    probe = _probe_registry()
+    served = _served(probe.registry)
+    three = {plugin.plugin_code: plugin for plugin in (probe.without_flag, probe.flag_false, probe.flag_true)}
+    assert served == three, f"barrier: the check reads {served} from the probe registry, not its three classes {three}: a class it leaves unreported would mean nothing"
+    flagged = _flagged_test_only([probe.registry])
+    expected = [_Flagged(probe.registry, probe.flag_true.plugin_code, probe.flag_true)]
+    assert flagged == expected, f"the check finds {flagged} flagged test_only in the probe registry, not {expected}: it does not read the flag as _withheld does"
+    breaches = _breaches(flagged)
+    assert breaches == expected, f"outside the asset and FX registries the check reports {breaches}, not {expected}: a class flagged test_only would pass in a family whose doors do not withhold it"
+    told = _render_breach(breaches[0])
+    unnamed = [name for name in (probe.registry.__name__, repr(probe.flag_true.plugin_code), f"{probe.flag_true.__module__}.{probe.flag_true.__qualname__}") if name not in told]
+    assert not unnamed, f"the breach is told as {told!r}, without {unnamed}: whoever meets it cannot find the plugin"
+    allowed = _breaches(flagged, (*TEST_ONLY_FAMILIES, probe.registry))
+    assert allowed == [], f"with the probe registry among the allowed ones the check still reports {allowed}: it does not read the registry, and would refuse the asset and FX doubles too"
