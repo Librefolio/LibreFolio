@@ -139,6 +139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rewriting your own address with other capitals is not an address change: no device is signed out and the address stays verified.
 - API: `PUT /api/v1/auth/profile` with your own address in other capitals needs no `current_password`.
 - Settings › Profile no longer asks for your password when you only change the capitals of your email address: it is the same address, saved as you typed it.
+- API: `POST /api/v1/assets/prices` names each date it leaves out in `results[].rejected` (date and reason), and `POST /api/v1/fx/currencies/rate` in `rejected` (index, date and reason). When every rate is refused, the 400's `detail` is an object (`code: fx_rates_refused`, the same `message`, `rejected`) instead of a string.
 
 #### 🎨 A new colour palette
 
@@ -319,6 +320,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A number pasted in scientific notation, like `1e-8` copied from a spreadsheet, is now read exactly instead of turning into another number; one that can't be read, or that has an exponent beyond ±100, is shown in red with an explanation. Pasting a very long text into a number field no longer freezes the page.
 - Dividends and other events that a price provider reports with more than 6 decimals are now stored as they are read back, cut to 6 decimals like prices, instead of being read back rounded differently from what was written.
 - Very small prices and costs, such as a crypto token worth a fraction of a cent, are now shown with their significant digits instead of «0.00», and quantities show all 10 decimals they are stored with (in transactions, the average-cost preview, import corrections, the data editor, the lots views, the asset list, cards and detail, the price charts and the dashboard positions; a lot of a few satoshis no longer reads «1e-7» or «0»).
+- The data editors of assets and exchange rates no longer report as saved a value the server refused: a warning names each refused date and why, such as a close outside the day's low–high, and a refused save says what was wrong, such as a date before 1900 or after tomorrow, instead of «Request failed with status code 422».
 
 #### 🔒 Security
 
