@@ -17,6 +17,20 @@ from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.portfolio_service import compute_wac_iterative
 
 
+class UnreadablePoolError(Exception):
+    """An Auto cost that cannot be computed: ``count`` rows of the pool it averages cannot be read (W-B69).
+
+    A stored quantity, amount or cost basis that is no number — text, or a REAL ±inf, which an older version or another
+    tool left — reads None since W-B58 (``db/real_decimal.py``). The average skipped such a row, took its amount for 0 (a
+    free purchase) or its cost for unknown, and the cost written stayed wrong for good. The pool can be another user's
+    broker (a receiving TRANSFER averages its partner's), so only the count is told, never an id.
+    """
+
+    def __init__(self, count: int) -> None:
+        self.count = count
+        super().__init__(f"The Auto cost cannot be computed: {count} transaction(s) of the pool it averages cannot be read")
+
+
 class TransactionAutoCostMixin:
     """The Auto cost basis: the average cost (WAC) written on the rows of a batch that ask for it.
 
@@ -34,8 +48,12 @@ class TransactionAutoCostMixin:
         parsed_creates: list[tuple[int, TXCreateItem]],
         parsed_updates: list[tuple[int, TXUpdateItem]],
         link_uuid_map: dict[str, list[tuple[int, Transaction]]],
+        unreadable: list[tuple[str, int, int]] | None = None,
     ) -> list[WACPreviewResultItem] | None:
         """Compute WAC for items with cost_basis_mode in ('auto', 'auto-detail').
+
+        An item whose pool holds rows that cannot be read gets no cost and no result: it goes to ``unreadable`` as
+        (operation, index, count), for the batch to refuse (W-B69); without that list the ``UnreadablePoolError`` raises.
 
         Called post-flush, after link resolution and promotes: all rows are in the session
         (not committed). The pool to average comes from ``_auto_cost_source``: a receiving
@@ -97,7 +115,13 @@ class TransactionAutoCostMixin:
                 ccy_hint = schema_item.cost_basis_override.code
 
             # Compute WAC (session sees all flushed rows) and write it on the DB row
-            wac_result = await self._auto_cost(db_tx, (source_broker_id, excluded, as_of_date), ccy_hint)
+            try:
+                wac_result = await self._auto_cost(db_tx, (source_broker_id, excluded, as_of_date), ccy_hint)
+            except UnreadablePoolError as exc:
+                if unreadable is None:
+                    raise
+                unreadable.append((operation, idx, exc.count))
+                continue
             self._write_auto_cost(db_tx, wac_result)
 
             # Build response item (reuse WACPreviewResultItem with batch-context fields)
@@ -123,8 +147,16 @@ class TransactionAutoCostMixin:
 
         Writes nothing (``_write_auto_cost`` does). ``delete_by_broker`` calls it too, for a receiving TRANSFER
         leg without a cost basis, before it changes any row.
+
+        Raises:
+            UnreadablePoolError: rows of the pool read None in their quantity, amount or cost basis (W-B69). The average
+                would skip them or count them as free; every caller refuses instead — the batch item, ``delete_by_broker``
+                whole, the lone-legs step for that leg (decision 1).
         """
         source_broker_id, excluded, as_of_date = source
+        unreadable = await self._unreadable_pool_rows(source_broker_id, db_tx.asset_id, as_of_date, excluded)
+        if unreadable:
+            raise UnreadablePoolError(unreadable)
         asset_result = await self.session.execute(select(Asset.currency).where(Asset.id == db_tx.asset_id))
         asset_currency = asset_result.scalar_one_or_none() or "USD"
         return await compute_wac_iterative(
@@ -136,6 +168,23 @@ class TransactionAutoCostMixin:
             excluded_tx_ids=excluded,
             target_currency_override=ccy_hint,
         )
+
+    async def _unreadable_pool_rows(self, broker_id: int, asset_id: int | None, as_of_date: date_type, excluded: list[int]) -> int:
+        """How many rows of the pool ``compute_wac_iterative`` averages — its filters, without ``excluded`` — hold a stored
+        value that is no number (W-B69): a quantity or an amount read None (``amount`` is NOT NULL, and the pool holds no
+        NULL quantity), or a cost basis stored but read None."""
+        stmt = select(Transaction.quantity, Transaction.amount, Transaction.cost_basis_override, Transaction.cost_basis_override.is_(None)).where(
+            Transaction.broker_id == broker_id,
+            Transaction.asset_id == asset_id,
+            Transaction.date <= as_of_date,
+            Transaction.quantity.is_not(None),
+            Transaction.quantity != 0,
+        )
+        if excluded:
+            stmt = stmt.where(Transaction.id.notin_(excluded))
+        rows = (await self.session.execute(stmt)).all()
+        # A cost basis NULL in SQL is a row without one (a BUY); stored but read None, it cannot be read.
+        return sum(1 for quantity, amount, cost, cost_is_null in rows if quantity is None or amount is None or (cost is None and not cost_is_null))
 
     async def _handover_cost(self, db_tx: Transaction) -> WACPreviewResultItem:
         """The Auto cost a giving TRANSFER leg leaves with when it becomes an ADJUSTMENT-out (decision 47).
