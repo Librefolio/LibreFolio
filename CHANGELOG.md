@@ -277,6 +277,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The admin guide says what to do when LibreFolio has replaced a lost instance key: put your copy of `secrets/instance.key` back before anyone enters a plugin secret again.
 - Backups inside Docker are documented: `dev.py backup` works in the image, the archives go to `backups/` and, like `secrets/`, only LibreFolio's user can read them.
+- **A split with a ratio of 0 or below is refused when you save it.** Such a split was saved, and as soon as a transaction was linked to it the Dashboard failed to load. The events editor now names the split at fault; a provider's split with such a ratio is skipped.
 
 ### ⚠️ Breaking changes
 
