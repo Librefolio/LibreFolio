@@ -3845,3 +3845,11 @@ reverses it: the backend sends the lot-derived sections null and flags the block
 average-cost lines and lists each transaction to fix, by broker name, day and a link.
 Filed: revision of [[decisions/fifo-v4-gross-net-status-model]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | A column null in every row is named after its table (T-B7)
+The compact AI Export renderer used to drop a column empty in every row with no trace in the prompt. Since 1.3 it names
+the columns that held an explicit `null` on an `omitted_null_columns=` line after the table (`null` = unavailable),
+keeps `undefined`/`''` columns silent (not applicable), and labels its tables `_v2`; J-54 records that the backend also
+writes `null` for "none".
+Filed: revision of [[decisions/ai-export-versioned-snapshot-boundary]].
+Graph: not updated; graphify is not available in this worktree.

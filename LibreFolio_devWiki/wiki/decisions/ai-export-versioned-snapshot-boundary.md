@@ -3,7 +3,7 @@ title: "Backend-owned versioned AI snapshots with a frontend-owned safe prompt a
 category: decision
 status: resolved
 date: 2026-07-26
-updated: 2026-08-05
+updated: 2026-10-17
 mkdocs: "developer/architecture/patterns/ai_export_snapshot.md"
 tags: [ai-export, backend, frontend, architecture, snapshot, versioning, security, mcp, hard-cutover]
 related:
@@ -68,6 +68,7 @@ LibreFolio exposes a backend-owned AI Export snapshot platform with these invari
 - **Portal and documentation boundary:** the panel is appended to `document.body`, fixed and viewport-positioned above chart controls, while the book link targets the current domain's English manual or the localized shared fallback.
 - **Safe rendering boundary:** snapshot values and user notes are normalized to JSON-safe data, deterministically serialized as YAML, and placed in dynamically sized Markdown fences. Untrusted values are never interpolated as raw instructions.
 - **Empty temporal rows are a presentation-only omission:** the public renderer removes a temporal row only when it contains no observation, economic value, flow, P&L, extrema, reconciliation, economic date, or explicit state. Observed zero remains data, diagnostics report detected/omitted/rendered row counts, and backend buckets and calculations remain intact.
+- **A column `null` in every row is named, never dropped silently (T-B7, 1.3):** a compact table still removes a column that is empty in every row, but names those that held an explicit `null` on an `omitted_null_columns=` line right after the table (after its last row, never between title and header, so every reader of `|…|` blocks sees the same table); `null_columns_declared` counts the names and the preamble labels moved to `compact_pipe_tables_v2` / `generic_pipe_tables_v2`. `null` is the backend's "unavailable" and is named; `undefined` or `''` is a column the renderer has nothing for in that scope ("not applicable") and stays silent; a parent column is never named. A renderer fallback between payload fields must keep an explicit `null` (`firstPresent`, never `??`), or an unavailable value reads as not applicable. Known ambiguity: the backend dumps every `None` as `null`, also where it means "none" (an open lot's `closing_date`, an unbounded output's `minimum`/`maximum`), so those are named too (J-54).
 - **Broker universes use explicit names:** `accessible_broker_count` is the authorization universe, `scoped_broker_count`/`broker_scope` are the effective calculation universe, `position_broker_count` counts Brokers with open positions at snapshot date, and `period_contributor_broker_count` counts period-performance contributors. The Entity Directory uses the effective prepared scope, including a scoped Broker with no current position rows.
 - **Selected-period applicability:** task applicability is evaluated from the task's selected observations. Trailing technical observations may enrich market context, but an empty technical window must not invalidate a historical `drawdown_recovery` request that has two selected observations and a measurable prior maximum.
 - **Transport-only clipboard fallback:** preserve the immediate `ClipboardItem(Promise<Blob>)` route when supported; otherwise prepare the same V2 export once and use `writeText`/`execCommand`. Clipboard capability never permits fallback to legacy builders or prompt logic.
@@ -173,7 +174,8 @@ The completed Phase 0 plan records approval by the project owner and implementat
 | Domain-aware manual link | `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte`, `frontend/src/lib/components/ui/DocsLink.svelte` |
 | Safe serialization | `frontend/src/lib/features/ai-export/serialization/` |
 | Prompt renderer | `frontend/src/lib/features/ai-export/templates/promptRenderer.ts` |
-| Empty temporal-row renderer and diagnostics | `frontend/src/lib/features/ai-export/templates/snapshotDataRenderer.ts` |
+| Empty temporal-row and null-column renderer and diagnostics | `frontend/src/lib/features/ai-export/templates/snapshotDataRenderer.ts` |
+| Null-column declaration tests (T-B7) | `frontend/src/lib/features/ai-export/__tests__/snapshotDataRenderer.test.ts` |
 | Explicit Broker universe fields | `backend/app/services/ai_export/components/portfolio_financial.py`, `backend/app/services/ai_export/runtime_service.py` |
 | Real-prompt evidence probe | `backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py` |
 | Prompt-size warning boundary | `frontend/src/lib/features/ai-export/aiExportOptions.ts`, `frontend/src/lib/features/ai-export/AiExportOptionsPanel.svelte` |
