@@ -1440,7 +1440,8 @@ function technicalPayload(
 // Component versions whose schema-1 payload the compact renderer knows. A version bump that changes
 // only semantics text keeps the payload shape, so that version renders exactly like its v1. The lot
 // and FIFO bumps (B3b) only make amounts nullable, which the generic renderer already prints as `null`; the
-// reconciliation bump (C-53) only changes what `reconciled` means for a rounding-size residual.
+// reconciliation bump (C-53) only changes what `reconciled` means for a rounding-size residual. The drawdown
+// bump (MF-D2) only lets a total loss keep its section with `remaining_to_peak_ratio` null.
 const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new Map([
     ['portfolio.provenance', new Set([1, 2, 3])],
     ['broker.provenance', new Set([1, 2, 3])],
@@ -1457,6 +1458,10 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['broker.reconciliation', new Set([1, 2])],
     ['portfolio.income_timeline', new Set([1, 2])],
     ['broker.cost_efficiency', new Set([1, 2])],
+    ['portfolio.drawdown_summary', new Set([1, 2])],
+    ['broker.drawdown_summary', new Set([1, 2])],
+    ['asset.drawdown_summary', new Set([1, 2])],
+    ['portfolio.asset_drawdown_snapshot', new Set([1, 2])],
 ]);
 const DEFAULT_COMPACT_VERSIONS: ReadonlySet<number> = new Set([1]);
 
