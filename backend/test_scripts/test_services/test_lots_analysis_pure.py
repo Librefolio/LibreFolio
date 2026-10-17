@@ -45,7 +45,7 @@ from backend.app.services.financial_math.average_cost import (
     _ResolvedConversion,
 )
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoLot, FragmentInterval, LotClosure
+from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, average_cost_points, build_broker_wac_history, build_cumulative_wac_history
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs
 from backend.app.services.financial_math.lots.economic_events import build_cost_economic_events, build_engine_transactions, build_income_economic_events
@@ -63,6 +63,7 @@ from backend.app.services.financial_math.lots.histories import (
     lot_history_end_date,
 )
 from backend.app.services.financial_math.lots.prices import opening_reference_price
+from backend.app.services.financial_math.lots.scope_boundary import BoundaryLeg
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, ObservationKind, PriceObservation, build_asset_price_series
 from backend.app.services.lots_analysis_service import LotsAnalysisService, _parse_transfer_pair_id
 
@@ -729,6 +730,8 @@ class TestAverageCostPoints:
 
 
 class TestBuildPerformanceHistory:
+    """No day is valued at cost here (``at_cost_until=None``): the rules of a day with a mark, or without one outside the days at cost; the days at cost are ``TestPerformanceHistoryAtCost``."""
+
     def _call(self, **overrides):
         kwargs = {
             "scope_broker_ids": [1],
@@ -738,6 +741,7 @@ class TestBuildPerformanceHistory:
             "fx_resolver": _resolver("EUR"),
             "context": _perf_context(),
             "quote_base_quantity": 1,
+            "at_cost_until": None,
         }
         kwargs.update(overrides)
         return build_performance_history(**kwargs)
@@ -1501,6 +1505,257 @@ class TestBuildValueAndReturnHistory:
 
 
 # --------------------------------------------------------------------------- #
+# J-33: the performance history values the days at cost
+# --------------------------------------------------------------------------- #
+
+# The quantized values ROI and TWRR come out of ``returns.py`` with (``_PREC_PCT``, six decimals), as strings.
+_ZERO, _TEN, _TWENTY_ONE = "0.000000", "0.100000", "0.210000"
+
+
+class TestPerformanceHistoryAtCost:
+    """J-33: ``build_performance_history`` values the days at cost, as the value and return histories above do (CP-7b).
+
+    ``at_cost_until`` is the last day with no observation on or before it (J-17 decision (a)). Up to it, a day without a
+    mark gets a NAV at cost: the sum, over the in-scope fragments active that day, of ``residual_cost`` (the lot's cost at
+    its opening rate, the fragment's quantity, the lot's original quantity) — no NAV when one of them is SHORT or its cost
+    has no rate. After it, a day without a mark (a mark without a rate) still gets none. A transfer crossing the scope on
+    such a day moves cost, not market value: an incoming edge leg its own cost, an outgoing one
+    (``hands_over_at_own_cost``) the cost of its closures, a replayed pair the cost of the pieces it moves.
+    ``collect_performance_fx_needs`` asks for each LONG lot's currency at its opening date.
+
+    Today the builder takes no ``at_cost_until`` (TypeError) and values only the days with a mark: the flows before the
+    first one land on it, and ``calculate_twrr_period_series`` takes the first NAV as its base, so the jump from cost to
+    the first price is in ROI and not in TWRR; a crossing transfer on a day without a mark voids ROI and TWRR from that
+    day. Each docstring says what today's builder gives for its book, called without the keyword (``_book`` minus
+    ``at_cost_until``). Values are read as the quantized strings the series return; None is no point.
+    """
+
+    # d0 … d10: 4–14 March 2024.
+    _DAYS = _days(date(2024, 3, 4), 11)
+
+    # -- builders ------------------------------------------------------------ #
+
+    @staticmethod
+    def _adjusted_in(tx_id: int, *, day: date, quantity: str = "10", broker_id: int = 1) -> Transaction:
+        """An ADJUSTMENT-in at 100 EUR a unit, as the app stores one: no amount, the cost in its cost basis."""
+        return _tx(tx_id, tx_type=TransactionType.ADJUSTMENT, tx_date=day, quantity=D(quantity), amount=D("0"), currency=None, broker_id=broker_id, cost_basis_override=D("100"), cost_basis_currency="EUR")
+
+    @staticmethod
+    def _long_lot(lot_id: int, *, day: date, quantity: str = "10", currency: str = "EUR", direction: str = "LONG") -> FifoLot:
+        """A lot of ``quantity`` at 100 a unit, opened on ``day`` at broker 1, all still open."""
+        return _lot(lot_id, direction=direction, opening_date=day, original_quantity=D(quantity), opening_unit_price=D("100"), original_cost=D(quantity) * 100, currency=currency, open_quantity=D(quantity))
+
+    @staticmethod
+    def _open_fragment(lot_id: int, *, day: date, quantity: str = "10", direction: str = "LONG") -> FragmentInterval:
+        return _fragment(lot_id, fragment_id=f"frag-{lot_id}", direction=direction, quantity=D(quantity), unit_price=D("100"), start_date=day)
+
+    def _adjusted_book(self, days: list[date], prices: dict[date, Decimal | None], at_cost_until: date | None, *, extra_lots: dict[int, tuple[FifoLot, FragmentInterval]] | None = None) -> dict:
+        """The ADJUSTMENT-in of 10 at 100 on the first day (1 000 in), with ``extra_lots`` held beside it and no flow of theirs."""
+        lots = {1: (self._long_lot(1, day=days[0]), self._open_fragment(1, day=days[0])), **(extra_lots or {})}
+        context = _perf_context(transactions=[self._adjusted_in(1, day=days[0])], lots_by_id={lot_id: lot for lot_id, (lot, _) in lots.items()}, fragments_by_lot={lot_id: [fragment] for lot_id, (_, fragment) in lots.items()})
+        return {"context": context, "history_dates": days, "market_prices": prices, "at_cost_until": at_cost_until}
+
+    @staticmethod
+    def _engine_book(rows: list, days: list[date], prices: dict[date, Decimal | None], at_cost_until: date, *, boundary_legs: dict | None = None) -> dict:
+        """A book whose lots, fragments, closures and events come from the real engine over ``rows`` (brokers 1 and 2)."""
+        result = run_fifo_lot_engine(rows, {1: False, 2: False}, target_currency="EUR")
+        context = PerformanceSourceContext(
+            transactions=rows,
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            fragments_by_lot=group_fragments(result.fragment_intervals),
+            closures_by_lot=group_closures(result.closures),
+            tx_by_id={row.id: row for row in rows},
+            boundary_legs=boundary_legs or {},
+        )
+        return {"context": context, "history_dates": days, "market_prices": prices, "at_cost_until": at_cost_until}
+
+    @staticmethod
+    def _history(book: dict, *, scope_broker_ids: tuple[int, ...] = (1,), fx_resolver: FxRateResolver | None = None) -> list[tuple]:
+        """(date, ROI, TWRR) of each day, the values as the quantized strings the series return, None for no point."""
+        points = build_performance_history(
+            scope_broker_ids=list(scope_broker_ids),
+            history_dates=book["history_dates"],
+            market_prices=book["market_prices"],
+            asset_currency="EUR",
+            fx_resolver=fx_resolver or _resolver("EUR"),
+            context=book["context"],
+            quote_base_quantity=1,
+            at_cost_until=book["at_cost_until"],
+        )
+        return [(point.date, None if point.roi is None else str(point.roi), None if point.twrr is None else str(point.twrr)) for point in points]
+
+    def _unpriced_then_110(self) -> tuple[list[date], dict[date, Decimal | None]]:
+        """d0 … d5: no mark on d0–d3, 110 on d4 and d5."""
+        days = self._DAYS[:6]
+        return days, {day: (D("110") if day >= days[4] else None) for day in days}
+
+    def _flat_then_ten_percent(self) -> list[tuple]:
+        """d0 … d5 after J-33 for the transfer books: at cost until d3, the market 10% above cost from d4."""
+        days = self._DAYS[:6]
+        return [(days[0], _ZERO, None), *[(day, _ZERO, _ZERO) for day in days[1:4]], (days[4], _TEN, _TEN), (days[5], _TEN, _TEN)]
+
+    # -- V1, V2: the days at cost carry NAV ----------------------------------- #
+
+    def _v1_book(self) -> dict:
+        days = self._DAYS
+        prices = dict.fromkeys(days[:5]) | dict.fromkeys(days[5:10], D("110")) | {days[10]: D("121")}
+        return self._adjusted_book(days, prices, days[4])
+
+    def test_v1_the_days_at_cost_put_the_jump_to_the_first_price_in_twrr_as_in_roi(self):
+        """V1: 10 adjusted in at a cost of 1 000 on d0, no mark on d0–d4, 110 on d5–d9 and 121 on d10, at cost until d4. NAV
+        1 000 on d0–d4, 1 100 on d5–d9, 1 210 on d10; the 1 000 flows in on d0. ROI 0 on d0–d4, 10% on d5–d9, 21% on d10;
+        TWRR, based on d0, 0 on d1–d4, 10% on d5–d9, 21% on d10: the jump from cost to the first price is in both.
+
+        Today (read 17/10/2026): no point on d0–d4; the 1 000 lands on d5, the first NAV, so ROI 10% on d5–d9 and 21% on
+        d10, while TWRR, based on d5, has no point on d5, 0 on d6–d9 and 10% on d10.
+        """
+        days = self._DAYS
+
+        assert self._history(self._v1_book()) == [(days[0], _ZERO, None), *[(day, _ZERO, _ZERO) for day in days[1:5]], *[(day, _TEN, _TEN) for day in days[5:10]], (days[10], _TWENTY_ONE, _TWENTY_ONE)]
+
+    def _v2_book(self) -> dict:
+        days = self._DAYS[:5]
+        return self._adjusted_book(days, dict.fromkeys(days), days[-1])
+
+    def test_v2_an_asset_never_priced_has_roi_and_twrr_at_cost_every_day(self):
+        """V2: the same 10 at 1 000 on d0, no mark at all on d0–d4, at cost until d4: NAV 1 000 every day, so ROI 0 every day
+        and TWRR 0 from d1.
+
+        Today (read 17/10/2026): no point at all — no mark, no NAV.
+        """
+        days = self._DAYS[:5]
+
+        assert self._history(self._v2_book()) == [(days[0], _ZERO, None), *[(day, _ZERO, _ZERO) for day in days[1:]]]
+
+    # -- GUARDS: the days at cost that still get no point --------------------- #
+
+    def _short_book(self) -> dict:
+        days = self._DAYS[:5]
+        short = (self._long_lot(2, day=days[2], quantity="5", direction="SHORT"), self._open_fragment(2, day=days[2], quantity="5", direction="SHORT"))
+        return self._adjusted_book(days, dict.fromkeys(days), days[-1], extra_lots={2: short})
+
+    def test_guard_a_day_at_cost_with_a_short_lot_open_gets_no_point(self):
+        """GUARD: beside the 10 at 1 000 of d0, a SHORT lot of 5 open from d2, no mark on d0–d4, at cost until d4. A short is
+        never valued at cost: d2–d4 get no point, as today. d0 and d1, the long alone, are at cost (ROI 0, TWRR 0 from d1):
+        the presence barrier that makes the absence mean something.
+
+        Today (read 17/10/2026): no point at all — no mark. The absence on d2–d4 is today's; the barrier is new.
+        """
+        days = self._DAYS[:5]
+
+        assert self._history(self._short_book()) == [(days[0], _ZERO, None), (days[1], _ZERO, _ZERO), *[(day, None, None) for day in days[2:]]]
+
+    def _cost_without_rate_book(self) -> dict:
+        days = self._DAYS[:5]
+        usd = (self._long_lot(2, day=days[2], quantity="5", currency="USD"), self._open_fragment(2, day=days[2], quantity="5"))
+        return self._adjusted_book(days, dict.fromkeys(days), days[-1], extra_lots={2: usd})
+
+    def test_guard_a_day_at_cost_with_a_lot_whose_cost_has_no_rate_gets_no_point(self):
+        """GUARD: beside the 10 at 1 000 of d0, a USD lot of 5 open from d2 with no USD rate at its opening, no mark on d0–d4,
+        at cost until d4. That lot's cost is unknown in EUR: d2–d4 get no point, as today; d0 and d1 are at cost (the
+        presence barrier).
+
+        Today (read 17/10/2026): no point at all — no mark. The absence on d2–d4 is today's; the barrier is new.
+        """
+        days = self._DAYS[:5]
+
+        assert self._history(self._cost_without_rate_book()) == [(days[0], _ZERO, None), (days[1], _ZERO, _ZERO), *[(day, None, None) for day in days[2:]]]
+
+    def _gap_after_the_cut_book(self) -> dict:
+        days = self._DAYS[:5]
+        prices = {days[0]: None, days[1]: None, days[2]: D("110"), days[3]: None, days[4]: D("110")}
+        return self._adjusted_book(days, prices, days[1])
+
+    def test_guard_a_day_after_at_cost_until_without_a_mark_gets_no_point(self):
+        """GUARD: the 10 at 1 000 of d0, at cost until d1, 110 on d2 and d4, no mark on d3 — after the cut, a mark without a
+        rate. d3 gets no point, as today; d0 and d1 are at cost, d2 and d4 at 110 (ROI 10%, TWRR 10% from d0).
+
+        Today (read 17/10/2026): no point on d0–d1, d3 none either; the 1 000 lands on d2, so ROI 10% on d2 and d4, TWRR
+        none on d2 and 0 on d4.
+        """
+        days = self._DAYS[:5]
+
+        assert self._history(self._gap_after_the_cut_book()) == [(days[0], _ZERO, None), (days[1], _ZERO, _ZERO), (days[2], _TEN, _TEN), (days[3], None, None), (days[4], _TEN, _TEN)]
+
+    # -- V3: a transfer crossing the scope on a day at cost moves its cost ---- #
+
+    def _incoming_edge_leg_book(self) -> dict:
+        days, prices = self._unpriced_then_110()
+        leg = FifoInputTransaction(id=2, broker_id=1, asset_id=7, date=days[1], type="ADJUSTMENT", quantity=D("5"), cost_basis_override=D("100"), cost_basis_currency="EUR")
+        return self._engine_book([self._adjusted_in(1, day=days[0]), leg], days, prices, days[3], boundary_legs={2: BoundaryLeg(2, "IN")})
+
+    def test_v3a_an_incoming_edge_leg_on_a_day_at_cost_brings_in_its_cost(self):
+        """V3a: the 10 at 1 000 of d0; on d1 a J-10 edge leg brings 5 in — the ADJUSTMENT-in copy carrying its cost basis, 100
+        a unit, named IN in ``boundary_legs``; no mark on d0–d3, 110 on d4–d5, at cost until d3. The leg is an inflow of its
+        cost, 500: NAV 1 000 then 1 500 at cost, 1 650 at 110; ROI and TWRR 0 until d3, 10% from d4 — the series goes on.
+
+        Today (read 17/10/2026): no point at all. The leg, on a day without a mark, voids ROI and TWRR from d1; before it no
+        day has a mark.
+        """
+        assert self._history(self._incoming_edge_leg_book()) == self._flat_then_ten_percent()
+
+    def _outgoing_edge_leg_book(self) -> dict:
+        days, prices = self._unpriced_then_110()
+        leg = FifoInputTransaction(id=2, broker_id=1, asset_id=7, date=days[2], type="ADJUSTMENT", quantity=D("-4"), hands_over_at_own_cost=True)
+        return self._engine_book([self._adjusted_in(1, day=days[0]), leg], days, prices, days[3], boundary_legs={2: BoundaryLeg(2, "OUT")})
+
+    def test_v3b_an_outgoing_edge_leg_on_a_day_at_cost_takes_out_the_cost_of_its_pieces(self):
+        """V3b: the 10 at 1 000 of d0; on d2 a J-10 edge leg sends 4 out, handing each piece over at its own FIFO cost
+        (``hands_over_at_own_cost``; the engine closes 4 of lot 1, named OUT in ``boundary_legs``); no mark on d0–d3, 110 on
+        d4–d5, at cost until d3. The leg is an outflow of the cost of its closures, 4 × 100 = 400: NAV 1 000, then 600 at
+        cost, 660 at 110; TWRR flat on d2, (600 + 400 − 1 000) / 1 000 = 0; ROI and TWRR 0 until d3, 10% from d4.
+
+        Today (read 17/10/2026): no point at all. The leg, on a day without a mark, voids ROI and TWRR from d2; before it no
+        day has a mark.
+        """
+        assert self._history(self._outgoing_edge_leg_book()) == self._flat_then_ten_percent()
+
+    def _replayed_transfer_book(self, direction: str) -> dict:
+        """4 units moved on d2 between broker 1 (the scope) and broker 2, both legs that day, the receiving one with its cost."""
+        days, prices = self._unpriced_then_110()
+        source, destination = (2, 1) if direction == "arrives" else (1, 2)
+        rows = [self._adjusted_in(1, day=days[0])]
+        if direction == "arrives":
+            rows.append(self._adjusted_in(2, day=days[0], broker_id=2))
+        out_leg = _tx(3, tx_type=TransactionType.TRANSFER, tx_date=days[2], quantity=D("-4"), amount=D("0"), broker_id=source)
+        in_leg = _tx(4, tx_type=TransactionType.TRANSFER, tx_date=days[2], quantity=D("4"), amount=D("0"), broker_id=destination, cost_basis_override=D("100"), cost_basis_currency="EUR")
+        out_leg.related_transaction_id, in_leg.related_transaction_id = in_leg.id, out_leg.id
+        return self._engine_book([*rows, out_leg, in_leg], days, prices, days[3])
+
+    @pytest.mark.parametrize("direction", ["arrives", "leaves"])
+    def test_v3c_a_replayed_transfer_crossing_the_scope_on_a_day_at_cost_moves_the_cost_of_its_pieces(self, direction):
+        """V3c: the 10 at 1 000 of d0 at broker 1 (the scope); on d2 a pair moves 4 units across the scope, its two legs in
+        the replay (the engine's TRANSFER_DEPART / ARRIVE and its ``lot:{id}/transfer:{pair}/to:{broker}`` pieces); no mark
+        on d0–d3, 110 on d4–d5, at cost until d3. ``arrives``: 4 of a lot of 10 at 1 000 at broker 2 come in, an inflow of
+        their cost, 400 (NAV 1 400 at cost, 1 540 at 110). ``leaves``: 4 of the scope's lot go out, an outflow of 400 (NAV 600
+        at cost, 660 at 110). Either way ROI and TWRR 0 until d3 (TWRR flat on d2), 10% from d4.
+
+        Today (read 17/10/2026): no point at all, both ways. The crossing event on d2, a day without a mark, voids ROI and
+        TWRR from d2; before it no day has a mark.
+        """
+        assert self._history(self._replayed_transfer_book(direction)) == self._flat_then_ten_percent()
+
+    # -- P4: the rates the days at cost need ---------------------------------- #
+
+    @pytest.mark.parametrize(("cut", "expected"), [("d4", [("CHF", date(2024, 3, 6)), ("USD", date(2024, 3, 4))]), (None, [])], ids=["days-at-cost", "no-day-at-cost"])
+    def test_p4_the_days_at_cost_need_each_long_lots_currency_at_its_opening_date(self, cut, expected):
+        """P4: a USD LONG lot opened on d0, a GBP SHORT lot on d1, a CHF LONG lot on d2, report EUR, no transaction. With days
+        at cost (``at_cost_until`` d4) each LONG lot's cost is converted at its opening date: (USD, d0) and (CHF, d2) are
+        asked, never the short's GBP. With no day at cost (None), nothing is asked.
+
+        Today: TypeError on ``at_cost_until``; without it nothing is asked — the no-day-at-cost case's value.
+        """
+        days = self._DAYS
+        resolver = _resolver("EUR")
+        lots = {1: self._long_lot(1, day=days[0], currency="USD"), 2: self._long_lot(2, day=days[1], currency="GBP", direction="SHORT"), 3: self._long_lot(3, day=days[2], currency="CHF")}
+
+        collect_performance_fx_needs(fx_resolver=resolver, analyses=[LotAnalysisType.PERFORMANCE_HISTORY], transactions=[], closures=[], lots_by_id=lots, asset_currency="EUR", at_cost_until=days[4] if cut == "d4" else None)
+
+        assert sorted(resolver._needs) == expected
+
+
+# --------------------------------------------------------------------------- #
 # Small builders
 # --------------------------------------------------------------------------- #
 
@@ -1822,6 +2077,8 @@ class TestHandoverAtCostPerformanceHistory:
     −cost; the handover is its mirror, +4 × 20 = +80 on 3 Oct, converted from cost_basis_currency at the row's date.
     Before CP-16 an ADJUSTMENT with a cost was a flow only when its quantity was positive: the 80 never left, and the
     series read the 4 units as lost.
+
+    No day is valued at cost here (``at_cost_until=None``): the rules of a day with a mark, or without one outside the days at cost; the days at cost are ``TestPerformanceHistoryAtCost``.
     """
 
     _DAYS = _days(date(2018, 10, 1), 5)
@@ -1856,6 +2113,7 @@ class TestHandoverAtCostPerformanceHistory:
             fx_resolver=_resolver("EUR"),
             context=context,
             quote_base_quantity=1,
+            at_cost_until=None,
         )
 
     def test_the_handover_is_an_external_flow_of_its_cost(self, monkeypatch):
@@ -2444,7 +2702,10 @@ class TestTheRatesAClosureNeeds:
 
 
 class TestTheCashFlowOfASale:
-    """``build_performance_history``: a SELL enters the cash flows at its proceeds, converted from its own currency at its date."""
+    """``build_performance_history``: a SELL enters the cash flows at its proceeds, converted from its own currency at its date.
+
+    No day is valued at cost here (``at_cost_until=None``): the rules of a day with a mark, or without one outside the days at cost; the days at cost are ``TestPerformanceHistoryAtCost``.
+    """
 
     _DAYS = _days(date(2025, 6, 1), 3)
 
@@ -2488,6 +2749,7 @@ class TestTheCashFlowOfASale:
             fx_resolver=_resolver("EUR", rates),
             context=context,
             quote_base_quantity=1,
+            at_cost_until=None,
         )
 
         assert len(received) == 1, "precondition: the series is computed once, the purchase being a flow"
