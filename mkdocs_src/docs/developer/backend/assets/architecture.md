@@ -274,6 +274,11 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
 - **Items**: more than `MAX_BULK_ITEMS` (1,000) items get a 422
   `{"code": "bulk_too_many_items", "message", "max_items", "items"}` from the route, before any
   work: no database read. Exactly 1,000 pass.
+- **Writes** (MF-SEC9a): `DELETE /assets/prices` takes at most `MAX_BULK_WRITE_ITEMS` (10,000) date ranges, all
+  assets together, the same 422 with that `max_items`; the deletion runs one `DELETE` per chunk of
+  `OR_TERMS_PER_QUERY` (500) ranges (`utils/sql_chunks.py`), in one transaction: one `DELETE` with an `OR` of every
+  range failed from 1,000 ranges. A failure of `POST`, `DELETE /assets/prices` or `POST /assets/prices/sync` answers
+  500 with a fixed message, the error in the log.
 - **Item-days**: once the prices and the seeds are read, before the events query and the fills,
   `get_prices_bulk()` sums the points each item's backward fill will emit. `_fill_span()` mirrors
   `_build_backward_filled_series()` without building anything: with a seed (a stored one, or a
@@ -490,12 +495,14 @@ it with its range's start and read `range_change` for the live quote: it does no
 ## 🧪 Provider Probe
 
 `POST /assets/provider/probe` allows **dry-run testing** of a provider configuration without persisting anything.
-Any user may start one, so each user gets at most 30 probes a minute (`PROBES_BY_USER`, a `SlidingWindowLimiter` in
+Any user may start one, so each user gets at most 30 probes a minute (a `SlidingWindowLimiter` in
 `api/v1/assets/providers.py`, counted in each process; MF-SI2): past it the route answers 429
 `{"error_code": "PROBE_RATE_LIMITED", "retry_after", "message"}` with `Retry-After`, before the provider is called.
-`LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read once when the
-server starts: `0` turns the limit off, with a warning in the log, and a value that is not a whole number up to
-10 000 is logged as an error and leaves 30. `dev.py server --test` sets it to `0` for every lane: the E2E suites pick
+`LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read at each probe by
+`probe_limiter()`, as the sign-in limit reads its variable: a change applies at the next probe, without a restart.
+`PROBES_BY_LIMIT` holds one limiter per limit the setting has had, so a value it comes back to finds its counts. `0`
+turns the limit off, with a warning in the log, and a value that is not a whole number up to 10 000 is logged as an
+error and leaves 30; each is logged once per value, and once at startup, when the module is imported. `dev.py server --test` sets it to `0` for every lane: the E2E suites pick
 search results as one user, two probes a pick.
 
 Operations (selectable per request):

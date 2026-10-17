@@ -16,12 +16,14 @@ from backend.app.db.precision import storable_fx_rate, usable_fx_rate_bounds
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency
 from backend.app.services.fx.base import RateNotFoundError
+from backend.app.utils.sql_chunks import OR_TERMS_PER_QUERY
 
 logger = get_logger(__name__)
 
 #: How many pairs one rate query asks for (R13-SEC9-2): SQLite refuses an OR of about a thousand terms («Expression tree
-#: is too large»), so a request with more pairs reads them in several queries.
-FX_PAIRS_PER_QUERY = 500
+#: is too large»), so a request with more pairs reads them in several queries. The one chunk size of every OR statement,
+#: ``utils/sql_chunks.OR_TERMS_PER_QUERY`` (MF-SEC9a), under the name the FX queries know it by.
+FX_PAIRS_PER_QUERY = OR_TERMS_PER_QUERY
 
 # ============================================================================
 # CHAIN COMPUTATION

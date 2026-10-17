@@ -15,6 +15,7 @@ from backend.app.db.models import FxRate
 from backend.app.db.precision import fx_rate_limits_text, storable_fx_rate
 from backend.app.logging_config import get_logger
 from backend.app.utils.runtime.cache import clear_cache
+from backend.app.utils.sql_chunks import chunks
 
 logger = get_logger(__name__)
 
@@ -130,18 +131,12 @@ async def upsert_rates_bulk(
 
         normalized_rates.append((rate_date, base, quote, rate_value, source))
 
-    # OPTIMIZATION: Single batch query to check all existing rates
-    conditions = []
-    for rate_date, base, quote, _, _ in normalized_rates:
-        conditions.append(and_(FxRate.date == rate_date, FxRate.base == base, FxRate.quote == quote))
-
-    # Fetch all existing rates in one query
-    stmt = sql_select(FxRate).where(or_(*conditions))
-    result = await session.execute(stmt)
-    existing_rates = result.scalars().all()
-
-    # Build lookup set for existing rates
-    existing_keys = {(rate.date, rate.base, rate.quote) for rate in existing_rates}
+    # The rates already stored, one OR term per rate: in chunks (MF-SEC9a), since SQLite refuses an OR of a thousand
+    conditions = [and_(FxRate.date == rate_date, FxRate.base == base, FxRate.quote == quote) for rate_date, base, quote, _, _ in normalized_rates]
+    existing_keys: set[tuple[date, str, str]] = set()
+    for chunk in chunks(conditions):
+        result = await session.execute(sql_select(FxRate.date, FxRate.base, FxRate.quote).where(or_(*chunk)))
+        existing_keys.update((row.date, row.base, row.quote) for row in result.all())
 
     # OPTIMIZATION: Prepare results tracking (before batch insert)
     results = []
@@ -164,21 +159,18 @@ async def upsert_rates_bulk(
         for rate_date, base, quote, rate_value, source in normalized_rates
     ]
 
-    # Single batch INSERT statement (all rates at once)
-    batch_insert = insert(FxRate).values(values_list)
-
-    # On conflict: update all fields for each row
-    batch_insert = batch_insert.on_conflict_do_update(
-        index_elements=["date", "base", "quote"],
-        set_={
-            "rate": batch_insert.excluded.rate,
-            "source": batch_insert.excluded.source,
-            "fetched_at": func.current_timestamp(),
-        },
-    )
-
-    # Execute single batch statement (replaces N individual executes)
-    await session.execute(batch_insert)
+    # One INSERT … ON CONFLICT per chunk, in the same transaction: six bound values a row, under SQLite's limit
+    for chunk in chunks(values_list):
+        batch_insert = insert(FxRate).values(list(chunk))
+        batch_insert = batch_insert.on_conflict_do_update(
+            index_elements=["date", "base", "quote"],
+            set_={
+                "rate": batch_insert.excluded.rate,
+                "source": batch_insert.excluded.source,
+                "fetched_at": func.current_timestamp(),
+            },
+        )
+        await session.execute(batch_insert)
 
     # Single commit for all upserts
     await session.commit()
@@ -258,34 +250,23 @@ async def delete_rates_bulk(  # noqa: C901 — flat batch delete: normalize, cou
             condition = and_(FxRate.base == base, FxRate.quote == quote, FxRate.date == start_date)
         all_conditions.append(condition)
 
-    # SINGLE QUERY: Fetch all matching rates (id, base, quote, date)
-    stmt = sql_select(FxRate.id, FxRate.base, FxRate.quote, FxRate.date).where(or_(*all_conditions))
-    result = await session.execute(stmt)
-    all_matching_rates = result.all()
+    # The matching rates (id, base, quote, date), in chunks of OR terms (MF-SEC9a): SQLite refuses an OR of a thousand,
+    # and the FX page sends one deletion per run of consecutive days
+    rates_by_pair: dict[tuple[str, str], dict[date, int]] = {}
+    for chunk in chunks(all_conditions):
+        result = await session.execute(sql_select(FxRate.id, FxRate.base, FxRate.quote, FxRate.date).where(or_(*chunk)))
+        for r in result.all():
+            rates_by_pair.setdefault((r.base, r.quote), {})[r.date] = r.id
 
-    # Build lookup: {(base, quote, date): id}
-    rate_lookup = {(r.base, r.quote, r.date): r.id for r in all_matching_rates}
-
-    # Count existing rates per deletion request
+    # Count existing rates per deletion request, among its own pair's rates only
     existing_counts = {}
     ids_to_delete = set()
 
     for idx, (base, quote, start_date, end_date) in enumerate(normalized_deletions):
-        count = 0
-        for (r_base, r_quote, r_date), r_id in rate_lookup.items():
-            if r_base == base and r_quote == quote:
-                if end_date:
-                    # Check if date is in range
-                    if start_date <= r_date <= end_date:
-                        count += 1
-                        ids_to_delete.add(r_id)
-                else:
-                    # Check if date matches exactly
-                    if r_date == start_date:
-                        count += 1
-                        ids_to_delete.add(r_id)
-
-        existing_counts[idx] = count
+        last = end_date or start_date
+        matched = [r_id for r_date, r_id in rates_by_pair.get((base, quote), {}).items() if start_date <= r_date <= last]
+        ids_to_delete.update(matched)
+        existing_counts[idx] = len(matched)
 
     # CHUNKED DELETE: Remove all matched IDs in batches to avoid SQLite limits
     # SQLite has SQLITE_MAX_VARIABLE_NUMBER = 999 by default
@@ -293,16 +274,14 @@ async def delete_rates_bulk(  # noqa: C901 — flat batch delete: normalize, cou
     deleted_count_total = 0
     if ids_to_delete:
         ids_list = list(ids_to_delete)
-        chunk_size = 500  # Safe for SQLite (max 999) and optimal for performance
-
+        batches = 0
         # Process in chunks within same transaction
-        for i in range(0, len(ids_list), chunk_size):
-            chunk = ids_list[i : i + chunk_size]
-            delete_stmt = sql_delete(FxRate).where(FxRate.id.in_(chunk))
-            delete_result = await session.execute(delete_stmt)
+        for chunk in chunks(ids_list):
+            delete_result = await session.execute(sql_delete(FxRate).where(FxRate.id.in_(chunk)))
             deleted_count_total += delete_result.rowcount
+            batches += 1
 
-        logger.info(f"Deleted {deleted_count_total} rate(s) in {(len(ids_list) + chunk_size - 1) // chunk_size} batch(es)")
+        logger.info(f"Deleted {deleted_count_total} rate(s) in {batches} batch(es)")
 
     # Build results per deletion request
     results = []
