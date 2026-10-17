@@ -421,6 +421,23 @@ def _economic_projection(plan: dict) -> dict:
     return {"orders": orders, "costs": solution["costs"], "objectives": solution["objectives"]}
 
 
+def _batch_outcomes(payload: dict, results: dict[str, dict], **items: dict) -> str:
+    """Why a batch's counts are off: each item's ``(status, error)`` by name, details of any item that did not succeed, and the batch metrics.
+
+    Never a plan, which would bury the cause. The details are the item's
+    ``execution_id`` (None if it never reached a worker, otherwise the id the
+    worker logs with a ``PAC planner engine failure``) and its metrics, whose
+    timings and observed memory peak tell a worker that never became ready from
+    one that crashed or ran out of time later. The batch metrics carry
+    ``server_processing_ms``. Read with ``.get`` only, so a missing item or key
+    prints as None instead of raising inside the message.
+    """
+    found = {name: results.get(item.get("correlation_id")) or {} for name, item in items.items()}
+    outcomes = {name: (result.get("status"), result.get("error")) for name, result in found.items()}
+    unsuccessful = {name: {"execution_id": result.get("execution_id"), "metrics": result.get("metrics")} for name, result in found.items() if result.get("status") != "success"}
+    return f"(status, error) by item: {outcomes}; items that did not succeed: {unsuccessful}; batch metrics: {payload.get('metrics')}"
+
+
 @pytest.mark.asyncio
 async def test_pac_compute_plans_the_compact_twin_like_the_explicit_request(test_server):
     """The compact twin (no defaults, no fee schedule) and ``min`` written in full buy the same thing.
@@ -435,7 +452,7 @@ async def test_pac_compute_plans_the_compact_twin_like_the_explicit_request(test
         compact = _item(identity, _buying_request(_compact_request()))
         payload, results = await _compute(client, explicit, compact)
 
-    assert (payload["success_count"], payload["failed_count"]) == (2, 0)
+    assert (payload["success_count"], payload["failed_count"]) == (2, 0), _batch_outcomes(payload, results, explicit=explicit, compact=compact)
     plans = {}
     for name, item in (("explicit", explicit), ("compact", compact)):
         result = results[item["correlation_id"]]
