@@ -172,7 +172,8 @@ def test_truncation_helpers():
     A TypeDecorator over Numeric (C-97a: RealDecimal) is one too: its precision and scale are those of its
     impl_instance, and its truncation also cuts to 15 significant digits (ROUND_DOWN). No model declares one
     before C-97a; after it, Transaction.quantity (22, 10), Transaction.cost_basis_override (24, 12, decision D5)
-    and the five PriceHistory prices (24, 12) do: seven columns.
+    and the five PriceHistory prices (24, 12) do, and since W-B60 Transaction.amount and AssetEvent.value (18, 6):
+    nine columns.
     """
     columns = discover_numeric_columns()
     assert len(columns) > 0, "No numeric columns found"
@@ -254,8 +255,8 @@ def test_the_discovery_sees_a_numeric_through_a_type_decorator():
     """GUARD (green before and after C-97a): a TypeDecorator over Numeric is discovered, with its impl_instance's precision and scale.
 
     Before C-97a no model declares one, so test_truncation_helpers cannot show that the discovery finds it; after
-    C-97a the seven RealDecimal columns are such columns. Without this guard a discovery skipping them again would
-    stay green, checking every numeric column but the seven whose digits C-97a keeps.
+    C-97a and W-B60 the nine RealDecimal columns are such columns. Without this guard a discovery skipping them again
+    would stay green, checking every numeric column but the nine whose digits C-97a and W-B60 keep.
     """
     found = {(info["column_name"], info["decorated"], info["precision"], info["scale"]) for info in discover_numeric_columns(SimpleNamespace(probe=_DiscoveryProbe))}
 

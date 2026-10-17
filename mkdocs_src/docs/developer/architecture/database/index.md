@@ -62,13 +62,15 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
 |---------|------|----------------|-------------------------|
 | `transactions.quantity` | `RealDecimal(22, 10)` | 10 | 15 |
 | `price_history`: `open`, `high`, `low`, `close`, `adjusted_close`; `transactions.cost_basis_override`, a per-unit price | `RealDecimal(24, 12)` | 12 | 12 |
-| `transactions.amount`, `asset_events.value` | `Numeric(18, 6)` | 6 | 15 for the amount, 12 for the event value |
+| `transactions.amount`, `asset_events.value` | `RealDecimal(18, 6)` | 6 | 15 for the amount, 12 for the event value |
 | `fx_rates.rate` | `Numeric(24, 10)` | 10 | 14 |
 | `price_history.volume` | `Numeric(24, 0)` | 0 | 24 |
 
 - **Read.** `Numeric` reads through `'%.<scale>f'`: at scale 6, `0.12345678` reads
   `0.123457` (a quantity, before C-97), and a wider scale shows the double's noise
-  (`65000.123456` at scale 12 reads `65000.123456000001`). `RealDecimal`
+  (`65000.123456` at scale 12 reads `65000.123456000001`), as does scale 6 from about 11
+  digits before the point (`123456789012.345` reads `123456789012.345001`,
+  `-99999999999999.9` reads `-99999999999999.906250`: an amount, before W-B60). `RealDecimal`
   (`backend/app/db/real_decimal.py`) writes the same double and reads back the shortest
   decimal that represents it (its `repr`), at most 15 significant digits
   (`REAL_SIGNIFICANT_DIGITS`), rounded to the scale when it has more decimals and padded to
@@ -82,8 +84,14 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   a release 1.2 database never enforced them, and reading such a quantity as `None` would
   erase a position. Writing a value a double cannot hold, such as `Decimal("1E+400")`,
   raises `ValueError` (*not finite as a double*) in `process_bind_param()`, whoever writes
-  it: no ±inf reaches a `RealDecimal` column any more. The `Numeric` columns have neither
-  guard: `transactions.amount`, `asset_events.value`, `price_history.volume` and
+  it: no ±inf reaches a `RealDecimal` column any more. Amounts and event values have been
+  `RealDecimal(18, 6)` since W-B60, with the same declaration and DDL (`NUMERIC(18, 6)`, no
+  migration): they read back as written, always with 6 decimals as before (`-100` reads
+  `-100.000000`), and these guards cover them. An amount that release 1.2 stored with more
+  than 15 significant digits (10 or more digits before the point, plus decimals; since the
+  C-97 input limits, no new amount has more than 15) now reads rounded at the 15th: at most
+  0.000005 from what 1.2 read with 10 digits before the point, about ten times more for
+  each further one. The `Numeric` columns have neither guard: `price_history.volume` and
   `fx_rates.rate` store a value past a double's range as ±inf without an error, and read a
   stored ±inf back as `Decimal('Infinity')`, not `None`. The FX writers no longer send such a
   rate, and the conversions skip one already stored (X-R38, below).
