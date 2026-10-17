@@ -2512,3 +2512,89 @@ stesso intervallo (API, slot). Frontend: i test di X.
   via, `FxTable`/`FxCard`/`fx/[pair]` + `FxPriceSummary`, la scheda asset e il worker leggono `range_change` di
   period-changes con `range_start` = inizio dell'intervallo; la pagina di dettaglio asset con l'intervallo che finisce oggi
   lo legge da `/prices/current?range_start=…`. Divisione in lotti da 1 000 (Z-27).
+- ✅ **X-R59 committed**: `a8de6b584` + `c0b4b6f05`; l'ingresso aspetta la revisione di X (quella di J su `returns.py` può
+  seguire). Nessuna riga di CHANGELOG (il 🔄 va col lotto frontend di X).
+
+#### MF-SEC8-2b — `date.min − 1 giorno` (17/10, 11:1x)
+Assegnato dal coordinatore (tecnico, senza decisioni). HEAD **`c0b4b6f05`**.
+- **Stato reale**: `classifier.py:217` irraggiungibile in produzione (l'unico chiamante, `:135`, salta le coppie dello
+  stesso giorno: l'arrivo è almeno `date.min + 1`), ma il metodo statico solleva da solo per una coppia su `date.min`;
+  `yield_on_cost.py:631` (provento su `date.min`) e **cinque punti in più dello stesso tipo** in `fifo/engine.py`
+  (`:877` pool di proventi, `:1075-1109` FEE/TAX: `previous_day`, le partecipazioni di D−1, `previous_day − 1`) sollevano
+  `OverflowError`.
+  ⚠️ **Fuori pista**: lo stesso tipo in `transactions/promotion.py:315` e `transactions/event_suggestions.py:63`
+  (`date − tolleranza`): area di W, segnalato al coordinatore, non toccato.
+- ✅ **Codice**: `utils/datetime_utils.py::day_before(day) -> date | None` (None per `date.min`); classificatore:
+  confronto delle date prima di sottrarre; YoC: `_eligible_position_quantity(cutoff=None)` → 0 →
+  `INCOME_WITHOUT_ELIGIBLE_QUANTITY`; FIFO: pool di proventi su `date.min` → nessun lotto idoneo (orfano); FEE/TAX: le
+  regole dello stesso giorno restano, quelle di D−1 non trovano nulla (`_holding_operations(cutoff=None)` → None); via
+  `timedelta` dal motore FIFO. ruff/black puliti.
+- ✅ Suite esistenti col codice: `roi-fifo-utils` **1285** (golden e YoC compresi), `portfolio-engine` 41,
+  `financial-math` 1169, `lots-analysis-pure` 181.
+- ✅ **Test** (test-author `sec82b-tests`, 11:1x–11:2x): **14 rossi** su HEAD `c0b4b6f05` (ogni sito coperto a sé:
+  classificatore, YoC `:631`, motore FIFO `:877/:1075/:1080/:1088/:1095/:1109`), 167/167 sul mio codice.
+  `test_utilities/test_datetime_utils.py` (`day_before`), `test_portfolio_engine/test_scope_classifier.py`
+  (`TestInTransitWindowAtDateMin`), `test_financial/test_fifo_lot_engine.py` (`TestEconomicsOnDateMin`), NUOVO
+  `test_financial/test_yield_on_cost_date_min.py` (puro). Trovato un sito in più: `yield_on_cost.py:174`
+  (`as_of − 364`).
+- ✅ **W-B71 e il merge** (coordinatore, 11:2x): W ha già curato `promotion.py`/`event_suggestions.py` con
+  `shift_date(value, days)` (satura a `date.min`/`date.max`) in `utils/datetime_utils.py`. Lavoro 2b messo da parte
+  (`files/sec82b/wip_before_merge.patch`, sha `f504dac9…`, più il file di test nuovo a parte), albero pulito; merge dev
+  `6eaf0774c` → **`f4a1e374f`** (genitori `c0b4b6f05` + `6eaf0774c`). Rimesso con `--3way`: un conflitto in
+  `test_datetime_utils.py` (i test di `shift_date` di W e quelli di `day_before`, nello stesso punto) → risolto
+  tenendo entrambi; indice ripulito con `git restore --staged`.
+- ✅ **Una casa**: `day_before()` spostata accanto a `shift_date()`, con la docstring sul quando: `shift_date` per il
+  bordo di una finestra (può fermarsi al limite del calendario), `day_before` dove «il giorno prima» deve esistere (le
+  partecipazioni a cui va un provento o un costo) e si legge «niente» quando non c'è. `yield_on_cost.py:174` →
+  `shift_date(as_of_date, -364)` (la finestra dell'anno parte al più presto da `date.min`). Test chiesto al
+  test-author. ruff/black puliti.
+- ✅ **Test, secondo giro** (test-author): `test_trailing_year_starts_on_date_min_at_the_earliest` (puro, con
+  `_load_transaction_context` sostituito); su HEAD `f4a1e374f` **15 rossi**, 183 verdi; sul mio albero **198/198**. La
+  risoluzione del conflitto in `test_datetime_utils.py` verificata.
+- `utils datetime` verde **44/44**. ⚠️ **Fuori pista**: un rosso con il solo `datetime_utils.py` invertito non vale (il
+  motore FIFO non importa più `day_before`: `ImportError` prima di ogni test, infrastruttura); il rosso vero inverte i
+  quattro file di 2b insieme (`files/sec82b.sh red`), dopo che il test-author di 2a ha finito di scrivere in
+  `test_financial/`.
+
+#### MF-SEC8-2a — un avviso per le righe prima del 1900 — analisi (17/10, 11:2x)
+Serve un codice nuovo del banner: tocca le superfici di J (`data_quality.py`, `schemas/portfolio.py`) e il catalogo
+i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
+- **Proposta** (il modello di MF-D4 / `INVALID_SPLIT_RATIO`):
+  - motore: `PortfolioCalculationResult.rows_before_floor` (quante righe dello scope sono datate prima di
+    `EARLIEST_RANGE_START`, e la più vecchia), contato in `calculate()` dalle righe già caricate;
+  - `IssueCode.TRANSACTIONS_BEFORE_FLOOR`, gravità **warning**, `group_key="transactions_before_floor"`,
+    `message_i18n_key="dataQuality.transactionsBeforeFloor"`, params `{count, earliest}`; **nessuna CTA** (non esiste un
+    «apri le transazioni filtrate»: il messaggio dice di correggerne le date);
+  - `build_data_quality_report(rows_before_floor=…)`, i due punti di `portfolio_service` che lo chiamano; la chiave i18n
+    nelle 4 lingue con `dev.py i18n add`; `api sync` (l'enum dell'API); docs `data-quality-banner.md`.
+  - Il banner del frontend è generico: nessun `.svelte`.
+- **Fuori**: l'analisi lotti (i suoi avvisi sono per asset), l'AI Export.
+- **Domande chiuse** (raccomandazione in grassetto): 1 gravità **warning** / info; 2 CTA **nessuna** / `navigate_asset`
+  quando tutte le righe vecchie hanno un asset; 3 i18n: **scrivo io la chiave con `dev.py i18n add`** (come in MF-D4) /
+  il coordinatore.
+- ✅ **Decisioni** (coordinatore, 11:2x): warning, nessuna CTA, la chiave la scrivo io; `data_quality.py` e
+  `schemas/portfolio.py` liberi (J non ci lavora).
+- ✅ **Codice**: `models.py` `RowsBeforeFloor(count, earliest)` + `PortfolioCalculationResult.rows_before_floor`;
+  `engine.py` lo calcola dopo il build (viaggia nella cache blob); `IssueCode.TRANSACTIONS_BEFORE_FLOOR`;
+  `data_quality.py` blocco warning (`message_params` `{count, earliest}`, `group_key`, nessuna CTA); `portfolio_service.py`
+  le due chiamate; chiave `dataQuality.transactionsBeforeFloor` in 4 lingue con `dev.py i18n add` (`i18n check`
+  rigoroso pulito). Docs: `data-quality-banner.md` (riga della tabella, regola, come provocarlo), `financial_math.md`.
+  mkdocs build strict 0, check-links 0. ruff/black puliti, `import backend.app.main` ok.
+- ✅ **Test** (test-author `sec82a-tests`, 11:2x–11:4x): `test_portfolio_engine/test_data_quality_report.py`
+  (`TestTransactionsBeforeFloorIssue`; `TestReportSentences`: un controllo nuovo che ogni `message_i18n_key` del
+  costruttore abbia la frase nelle 4 lingue, e che quella del pavimento nomini `{count}` e `{earliest}`);
+  `test_portfolio_engine/test_engine_replay_floor.py` (`TestRowsBeforeFloorRecord`, `TestTheRowsBeforeTheFloorAreCounted`:
+  0001-01-01 e 1890-01-01 → `(2, 0001-01-01)`, un giorno 1900-01-01 non conta, solo le righe dello scope). Non coperto:
+  il passaggio nel servizio (nessun test economico pilota `get_summary`/`get_report`: lo copre `api portfolio` in uno
+  slot). Il conteggio è su tutto lo scope, qualunque finestra: giusto, la storia parte dal 1900 in ogni caso.
+- ✅ `api sync` exit 0 (l'enum `IssueCode`).
+
+#### MF-SEC8-2a + 2b — prove nella corsia (17/10, 11:4x–12:0x)
+- ✅ **Rossi 2b** (`files/sec82b.sh red`, i 4 file di prodotto di 2b invertiti insieme, sha `c6d9163e…` uguale dopo):
+  `utils datetime` **5 failed**; `roi-fifo-utils` **10 failed** (classificatore 1, FIFO 7, YoC 2); `financial-math` 1176
+  verdi. Totale 15, come il test-author.
+- ✅ **Rossi 2a** (`files/sec82a.sh red`, modelli/motore/costruttore/enum/servizio + le 4 fonti i18n invertiti, sha
+  `980af70d…` uguale dopo): `roi-fifo-utils` **16 failed**, esattamente l'elenco del test-author.
+- ✅ **Verdi** (insieme): `utils datetime` 44, `roi-fifo-utils` **1345**, `portfolio-engine` 41, `financial-math` 1176,
+  `lots-analysis-pure` 181, `portfolio-allocation-source` 98, `utils gate-i18n-catalog` 176; `check-orphans` 0;
+  `git diff --check` pulito; porta 6190 libera.
