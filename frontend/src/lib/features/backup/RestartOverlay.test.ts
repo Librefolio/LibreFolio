@@ -230,3 +230,94 @@ describe('RestartOverlay — a failure shows on the same screen, with the reason
         expect(onBack).toHaveBeenCalledTimes(1);
     });
 });
+
+// =====================================================================================================================
+// B-16 — a server that never stops: the overlay says so, and offers the way back (written red first)
+// =====================================================================================================================
+
+/*
+ * The contract (B-16 brief §2): a prop `notStopping` (default false), published on the root as `data-not-stopping`
+ * (`true`/`false`). In the waiting branch, with it: `restart-not-stopped`, built exactly like `restart-slow` — the same
+ * warning roles, the same icon —, worded by `backup.restore.restart.notStopped`; and `restart-back`, as in the failed
+ * branch, calling `onBack()`. Nothing else changes: without it neither element, and `slow` alone as before.
+ *
+ * The roles are read the one way a jsdom test can: as the three role tokens the brief names, and as the same class list
+ * and the same lucide glyph as `restart-slow`'s — never to find an element.
+ *
+ * Red today: the overlay takes no such prop: no `data-not-stopping`, no hint, no way back while waiting.
+ */
+
+/** The overlay with these props; `onBack` is a spy. */
+function mountWith(props: {outcome: RestartOutcome; slow?: boolean; notStopping?: boolean; status?: RestoreStatus | null}) {
+    const onBack = vi.fn();
+    const view = render(overlayComponent(), {props: {slow: false, status: null, onBack, ...props}});
+    return {...view, onBack};
+}
+
+/** The lucide glyph a hint draws, by lucide's name for it: `triangle-alert` for the svg's `lucide-triangle-alert`. */
+function glyphOf(element: HTMLElement): string {
+    const token = Array.from(element.querySelector('svg')?.classList ?? []).find((name) => name.startsWith('lucide-') && name !== 'lucide-icon');
+    return token ? token.slice('lucide-'.length) : '(no lucide glyph)';
+}
+
+/** The warning roles of the hints (the brief's three). */
+const WARNING_ROLES = ['border-lf-warning-line', 'bg-lf-warning-soft', 'text-lf-warning-on-soft'];
+
+describe('B-16 — RestartOverlay: a server that never stops', () => {
+    it('notStopping: data-not-stopping true, still waiting; restart-not-stopped worded by backup.restore.restart.notStopped, built like restart-slow (the warning roles, the same glyph)', () => {
+        const slow = mountWith({outcome: 'waiting', slow: true});
+        const slowHint = screen.getByTestId('restart-slow');
+        const slowLook = {className: slowHint.className, glyph: glyphOf(slowHint)};
+        slow.unmount();
+        i18n.asked.length = 0;
+
+        mountWith({outcome: 'waiting', notStopping: true});
+
+        expect(overlay()).toHaveAttribute('data-not-stopping', 'true');
+        expect(overlay(), 'still waiting for the server').toHaveAttribute('data-outcome', 'waiting');
+        expect(i18n.asked, 'the title and the waiting text stay').toEqual(expect.arrayContaining(['backup.restore.restart.waitingTitle', 'backup.restore.restart.waiting']));
+        const hint = screen.getByTestId('restart-not-stopped');
+        expect(hint).toHaveTextContent(/^\s*backup\.restore\.restart\.notStopped\s*$/);
+        expect(hint).toHaveClass(...WARNING_ROLES);
+        expect({className: hint.className, glyph: glyphOf(hint)}, 'built exactly like restart-slow').toEqual(slowLook);
+        expect(screen.queryByTestId('restart-slow'), 'not slow: the server was never seen down').toBeNull();
+    });
+
+    it('notStopping: restart-back, as in the failed branch, worded by backup.restore.restart.back, calls onBack() once', async () => {
+        const {onBack} = mountWith({outcome: 'waiting', notStopping: true});
+
+        const back = screen.getByTestId('restart-back');
+        expect(back).toHaveTextContent(/^\s*backup\.restore\.restart\.back\s*$/);
+        await fireEvent.click(back);
+
+        expect(onBack).toHaveBeenCalledTimes(1);
+    });
+
+    it('without notStopping: data-not-stopping false, and neither restart-not-stopped nor restart-back while waiting', () => {
+        mountWith({outcome: 'waiting'});
+
+        expect(overlay(), 'precondition: waiting').toHaveAttribute('data-outcome', 'waiting');
+        expect(overlay()).toHaveAttribute('data-not-stopping', 'false');
+        expect(screen.queryByTestId('restart-not-stopped')).toBeNull();
+        expect(screen.queryByTestId('restart-back')).toBeNull();
+    });
+
+    it('slow alone, as before: restart-slow, data-not-stopping false, neither restart-not-stopped nor restart-back', () => {
+        mountWith({outcome: 'waiting', slow: true});
+
+        expect(screen.getByTestId('restart-slow')).toBeInTheDocument();
+        expect(overlay()).toHaveAttribute('data-slow', 'true');
+        expect(overlay()).toHaveAttribute('data-not-stopping', 'false');
+        expect(screen.queryByTestId('restart-not-stopped')).toBeNull();
+        expect(screen.queryByTestId('restart-back')).toBeNull();
+    });
+
+    it('a failure with notStopping: the root says it, the failed branch stays as before — one restart-back, no restart-not-stopped', () => {
+        mountWith({outcome: 'rolled_back', status: rolledBack('swap_failed'), notStopping: true});
+
+        expect(overlay()).toHaveAttribute('data-not-stopping', 'true');
+        expect(screen.getByTestId('restart-detail')).toBeInTheDocument();
+        expect(screen.getAllByTestId('restart-back'), 'one way back').toHaveLength(1);
+        expect(screen.queryByTestId('restart-not-stopped'), 'the hint belongs to the waiting branch').toBeNull();
+    });
+});

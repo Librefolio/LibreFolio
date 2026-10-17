@@ -470,6 +470,11 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   developer, 16/10. Un solo lotto di documentazione del coordinatore, quando i lotti cloud di H, A, B, E e Z sono entrati.
   Struttura, regola provvisoria per i figli e requisiti (link vecchi funzionanti, controllo delle variabili,
   `.env.example` diviso): piano generale della 1.3, §6, «Manuale admin: la struttura finale».
+- **C-100 · Regola di review: un campo di sicurezza nuovo dichiara il suo valore managed** — minimo, regola; E e
+  coordinatore, 17/10 (revisione di H-37, R13-SEC7). Un campo `Settings` di sicurezza nuovo dichiara il suo valore in
+  `PROFILE_DEFAULTS["managed"]` nello stesso lotto, e chi rivede lo controlla; il test (a) di `MANAGED_DEFAULTS` non lo
+  vede se lista e test cambiano insieme. La riga gemella sta in `backend.instructions.md` (H-39), che aggiunge anche
+  l'avviso quando la protezione dei frame è spenta in managed.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -3683,6 +3688,15 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Deve fallire chiuso: rifiutare l'avvio, oppure un default sicuro dichiarato per ogni campo. Oggi il profilo
     `managed` ha una sola voce, `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`: 500.
   - Prima i rossi; E rivede. Si fa dopo H-36.
+  - Cura fatta il 17/10 (lotto «H-37», piano H §14). La scelta è il fallimento chiuso alla chiamata, senza rifiuto
+    all'avvio, come per H-27.
+    - Sotto ogni profilo tranne `selfhosted`, una variabile che il profilo non elenca solleva `ProfileDefaultError`.
+    - Le rotte di B danno 503 e `upload_limit_mb` null.
+    - La guardia (h) controlla anche la direzione nuova, con il suo autotest.
+  - Resta a E da decidere: `PROFILE_DEFAULTS` (i campi di `Settings`) ha la stessa forma. Senza la voce managed di
+    `LIBREFOLIO_FRAME_PROTECTION` si torna in silenzio a spento, e oggi lo ferma solo il test (a).
+
+  Dettagli: piano H, §14, lotto «H-37».
 - **H-38 · Tailscale Serve davanti al container, e Docker Desktop: cosa mettere in `FORWARDED_ALLOW_IPS`** — basso,
   documentazione; H (dal docs-writer di H-36), 17/10.
   - Tailscale Serve sull'host inoltra a `127.0.0.1:6040`. Con Docker su Linux il container vede probabilmente il gateway
@@ -5051,6 +5065,29 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   Bulk si chiede di scartare modifiche che non ci sono. Precedente a C-97b (la guardia chiude con «Annulla»). Da verificare con un
   rosso, poi l'«Applica» riporta il segno della convenzione del Bulk (grandezza). Dettagli: piano 04, sezione «C-97b — i decimali in
   input: la cura».
+- **W-B66 · Il campo decimale: un esponente incollato cambia il numero, un incolla enorme blocca la scheda** — basso, numeri e
+  disponibilità; E, 17/10 (R13-SEC5, revisione di C-97b, sotto la soglia). Tre note: (1) `filterDecimalInput`
+  (`frontend/src/lib/utils/core/parseDecimalInput.ts`) toglie ciò che non è cifra, punto, virgola o il meno iniziale, quindi un
+  `1e-8` incollato diventa `18`, visibile ma senza un avviso (precedente al lotto); (2) un incolla enorme blocca la scheda di chi
+  incolla: `ExactDecimalInput` confronta coi limiti `min`/`max` con `10n ** places` (le cifre decimali incollate), e la cella del Bulk
+  passa il testo da `formatDecimalForDisplay`, la cui regex `^-?\d*\.?\d*$` torna indietro in modo quadratico su un testo lungo che
+  non combacia (solo il proprio browser); (3) il toast di «+ New event» mostra 2 decimali (`parseFloat`, `formatFixed`): va con
+  C-97c. Cura: (1) un esponente incollato letto esatto o rifiutato col messaggio; (2) un tetto alla lunghezza del testo prima del
+  confronto e una regex lineare; (3) in C-97c. Dettagli: piano 08 di E, «R13-SEC5».
+- **W-B67 · Il costo Auto può finire sulla riga sbagliata** — medio, numeri; J, 17/10 (analisi di V-4, via il coordinatore). Prima
+  del rilascio. `_find_created_tx_for_wac` (`backend/app/services/transactions/auto_cost.py:158-183`) trova la riga creata di un
+  elemento senza `link_uuid` cercando l'ultima con lo stesso broker, asset, data e tipo (`order_by(id.desc()).limit(1)`): con due
+  ADJUSTMENT Auto non collegati nello stesso giorno in un batch, il primo non riceve mai il costo e si salva senza (come Auto salta il
+  controllo del costo), il secondo lo riceve due volte; e un Auto seguito da un Manuale con la stessa chiave sovrascrive il costo
+  Manuale con la media. Cura: la riga di ogni elemento dalla mappa che la creazione già conosce (indice → riga), senza la ricerca per
+  campi; rossi prima. Dopo W-B60. Dettagli: piano 04, sezione «W-B67» (quando parte).
+- **W-B68 · I valori degli eventi dei provider non sono troncati alla colonna** — basso, numeri; W, 17/10 (W-B60, docs-writer). I
+  prezzi dei provider si salvano troncati a ciò che la colonna tiene (`storable_value`, `truncate_priceHistory`), i valori degli eventi
+  dei provider no: `_storable_events` (`backend/app/services/assets/event_store.py`) ne controlla solo la grandezza. Con la lettura di
+  `RealDecimal(18, 6)` (W-B60) un valore con più di 6 decimali si rilegge arrotondato, e un pareggio arrotonda in modo diverso da prima
+  (`784.0774475`: prima `…447`, ora `…448`, 0,000001); un valore di 10 o più cifre intere può superare le 15 significative. Cura:
+  `storable_value(value, AssetEvent, "value")` anche per gli eventi dei provider, come i prezzi (letto = scritto). Dettagli: piano 04,
+  sezione «W-B60».
 - **W-B60 · Gli importi tornano col rumore del double (C-97)** — minimo, numeri; W, 17/10 (W-B58, N63). `Transaction.amount` e
   `AssetEvent.value` sono `Numeric(18, 6)`, che SQLAlchemy rilegge col formato `'%.6f'`: da 11 cifre intere il rumore del double
   compare nei decimali (`123456789012.345` torna `123456789012.345001`; con le 15 cifre intere di N63 `99999999999999.9` torna
@@ -5065,12 +5102,17 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
 - **W-B62 · `/prices/current` risponde per intero un prezzo enorme del provider** — basso, disponibilità; W, 17/10 (R13-SEC2, nota
   6). Il serializzatore `format(v, "f")` (`backend/app/schemas/common.py:47`) scrive per intero un `1E+50000000`: ~50 MB per
   risposta, che la cache di 2 minuti riserve. Dopo W-B58 il valore non si salva più, ma la risposta lo porta ancora. Cura: la
-  quotazione non memorizzabile risponde come non disponibile, o il serializzatore rifiuta un esponente oltre una soglia. Dettagli:
-  piano 04, sezione «W-B58 e W-B59».
+  quotazione non memorizzabile risponde come non disponibile, o il serializzatore rifiuta un esponente oltre una soglia. Analisi
+  (17/10): anche la cache di 2 minuti e il delta del refresh la portano; proposta al confine del provider, mai nel serializzatore.
+  **Passata a X** (coordinatore, 17/10 03:4x), con la sua X-R40; i rossi scritti da W gli vanno consegnati. Dettagli: piano 04,
+  sezioni «W-B58 e W-B59» e «W-B62 e W-B63».
 - **W-B63 · Un inf già salvato in una colonna `Numeric` rompe le risposte** — basso, dati; W, 17/10 (W-B58). Importo, valore di
   evento, volume e cambio si rileggono `Decimal('Infinity')` (formato `'%.Nf'`), che il JSON scrive `Infinity`. Solo dati scritti
-  prima di W-B58 o a mano. Importo e valore dell'evento li chiude W-B60; volume e cambio restano. Dettagli: piano 04, sezione
-  «W-B58 e W-B59».
+  prima di W-B58 o a mano. Importo e valore dell'evento li chiude W-B60 (letti `None`, mai più scritti); volume e cambio restano.
+  E dopo W-B60 la query degli eventi (`query_events_bulk`) fallisce ancora su un valore `None` (`Currency(amount=None)`): una riga
+  così va saltata, con un avviso. Analisi (17/10): una correzione post-migrazione che annulla o cancella gli inf ricavabili e
+  riporta quelli dell'utente, più due guardie puntuali; decisione D-W63-1. Dettagli: piano 04, sezioni «W-B58 e W-B59», «W-B60» e
+  «W-B62 e W-B63».
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
@@ -5723,11 +5765,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Era: con `subprocess.run` il server moriva di SIGKILL 0,25 s dopo il Ctrl+C, a metà del suo spegnimento (provato
   il 17/10 con un finto server: uscita a 0,29 s, server ucciso), e un SIGTERM a `dev.py` lasciava il server orfano.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-10».
-- **Z-11 · Lock dei job tra processi (flock) per più worker** — basso; coordinatore, 15/10 (D-Z3-3). Con `--workers`
-  i job girano solo nel worker leader: un altro worker che riceve `wake-sync` risponde `not_leader`, e la spinta del
-  ritorno aspetta il giro del leader, entro 60 s. Cura: un lock su file nella cartella dei dati, preso da chiunque
-  esegua i job, con lo stato riletto dentro il lock. Dettagli:
-  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z3 — scheduler».
+- ✅ **Z-11 · Lock dei job tra processi (flock) per più worker** — basso; coordinatore, 15/10 (D-Z3-3). **Chiusa il
+  17/10 col lotto Z-11** (il commit è del coordinatore; decisione notturna N71, da rivedere col developer).
+  - Dove c'è `fcntl`, ogni giro prende `<data_dir>/.scheduler.lock` (`scheduler/run_lock.py`) prima di leggere lo
+    stato, e qualunque worker esegue i job, uno alla volta. Chi aspetta rilegge lo stato e trova i job `not_due`.
+  - `wake-sync` funziona su ogni worker, e il ritorno parte subito nel worker che l'ha visto.
+  - Senza `fcntl` (Windows) resta il leader, con `not_leader`.
+  Era: con `--workers` i job giravano solo nel worker leader; un altro worker che riceveva `wake-sync` rispondeva
+  `not_leader`, e la spinta del ritorno aspettava il giro del leader, entro 60 s. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra processi:
+  analisi».
 - ✅ **Z-12 · `admin/filesystem`: il commento di `scheduler_state.json`** — minimo, doc; docs-writer di Z, 16/10
   (Z7c-2). **Chiusa il 16/10 col lotto Z-12** (il commit è del coordinatore): nelle quattro lingue, a mano e senza
   stamp, il commento dice l'ultima esecuzione e il nuovo tentativo previsto («Scheduled syncs: last run, pending
@@ -5822,6 +5869,19 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   passaggio sempre 1). Era: la faccia si iscriveva a `instanceBlockState` all'import, e a ogni aggiornamento a caldo
   del file la copia vecchia restava iscritta. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-22».
+- **Z-23 · Un aiuto comune per i lock su file (`flock`)** — basso, dopo la 1.3; Z, 17/10 (Z-11, N-Z11-4). Il modello
+  «`LOCK_EX|LOCK_NB`, `O_NOFOLLOW`, `0o600`, ripiego per processo senza `fcntl`» è ora in cinque posti:
+  `instance_backup/jobs.py` (`_RunLock`), `instance_backup/apply.py`, `db/post_migration`, `brim_provider.py` e
+  `scheduler/run_lock.py`. Un modulo comune li unirebbe; tocca file di più sessioni (fra cui B per il backup).
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra
+  processi: analisi».
+- **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — minimo, facoltativo; Z, 17/10
+  (Z-11, segnalato da test-author). `validate_test_data_dir` (`backend/app/config/__init__.py`, file di H) elenca i
+  percorsi gestiti che una cartella di test non può condividere con la produzione: c'è `scheduler_state.json`, non
+  il nuovo `.scheduler.lock`. Rischio basso: un symlink al suo posto è già rifiutato (`O_NOFOLLOW`), e un hardlink al
+  lock di produzione farebbe solo aspettare a turno i giri dei due server, senza toccare dati. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra processi:
+  analisi».
 
 ## B · Backup e Docker (fase 01)
 
@@ -5941,13 +6001,21 @@ sulla base `23f6578f3`.
   (`proxy_too_large`, «A proxy in front of LibreFolio refused an archive this large: ask whoever runs it, or restore
   from the command line»), con la chiave nelle quattro lingue e un caso in `restoreFlow.test.ts`. La guida
   (`backup_restore.en.md`, «What Settings › Backup Says») descrive già il caso. Dettagli: piano 07, §13, «B5b».
-- **B-16 · Un server che dopo «Restore and restart» non si ferma lascia l'overlay in attesa senza fine** — piccolo; B,
+- ✅ **B-16 · Un server che dopo «Restore and restart» non si ferma lascia l'overlay in attesa senza fine** — piccolo; B,
   16/10 (docs-writer, B5b). Se la richiesta di riavvio è accettata ma il server non scende (segnale perso, un processo
   che non esce), la sonda lo vede sempre su, lo stato resta `pending`, e la pagina continua a dire «LibreFolio is
   restarting» senza il suggerimento «has not come back yet», che parte solo col server giù. La guida lo spiega (riga
   di risoluzione dei problemi: riavvialo a mano). Proposta: server su e stato `pending` oltre `slowAfterMs` → un
   messaggio suo nell'overlay («LibreFolio did not stop: restart it yourself»), deciso con il coordinatore (cambia un
   caso fissato di `restoreFlow.test.ts`). Dettagli: piano 07, §13, «B5b».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 06:35), con la strada (B) decisa dal coordinatore. Col server mai sceso e il
+  ripristino ancora in attesa un minuto dopo la richiesta (`slowAfterMs`, contato dalla risposta che accetta il
+  riavvio, dopo una lettura dell'esito), l'overlay dice «LibreFolio has not stopped. If it does not restart by itself,
+  restart it yourself: the restore is applied at that start.» (`restart-not-stopped`) e offre **Back to Backup**. Le
+  sonde continuano finché non lo si preme, e un arresto tardivo procede come prima. Il controller ha il flag
+  `notStopping`, che si azzera dove si azzera `slow` e col server visto giù. Ruoli e pulsante sono quelli che
+  esistevano già. La guida aggiorna la riga dei problemi.
 - ✅ **B-17 · «Cancel the restore» della scheda non toglie la copia di un ripristino confermato dalla CLI** — minimo; B,
   16/10 (docs-writer, B5b). **Fatto il 16/10 in B5c** (checkpoint delle 18:22): `DELETE /backup/restore/pending` chiama
   `cancel_restore(drop_copy=True)` come la CLI, e la copia si toglie dentro il lock del ripristino; la scheda non chiama
@@ -5989,9 +6057,9 @@ sulla base `23f6578f3`.
   H-27 nel ramo di B. Il test di guardia H-17 mette `123`, un intero: resta compatibile. Dettagli: piano 07, «B4
   committato; validazione combinata…».
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): le due rotte prendono anche `ProfileDefaultError`: l'upload
-  risponde 503 `backup_upload_unavailable`, lo stato 200 con `upload_limit_mb: null`. 8 casi in
-  `test_backup_restore.py`, rossi e poi verdi nello slot delle 04:44.
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): le due rotte prendono anche
+  `ProfileDefaultError`: l'upload risponde 503 `backup_upload_unavailable`, lo stato 200 con `upload_limit_mb: null`.
+  8 casi in `test_backup_restore.py`, rossi e poi verdi nello slot delle 04:44.
 - ✅ **B-22 · `totals.py` ripete la regola degli importi «testo decimale semplice» di J** — minimo; J tramite il
   coordinatore, 17/10 (J-27). J-27 è già nella base di B: `7336722ad`, entrato con `e221a0544`.
   `ledger_totals._as_amount` (la casa) rifiuta ogni testo che non sia decimale semplice prima di `Decimal()`, con la
@@ -6002,8 +6070,8 @@ sulla base `23f6578f3`.
   diventano «rifiutato da J»; il fixture `j_reads` resta la difesa contro l'espansione nel test. Nel lotto B4b, dopo
   l'ingresso di B4. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): via `_plain` e `_PLAIN_AMOUNT` da `totals.py`: decide
-  `ControlTotals.from_json` di J. Il test capovolto è
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): via `_plain` e `_PLAIN_AMOUNT` da
+  `totals.py`: decide `ControlTotals.from_json` di J. Il test capovolto è
   `test_what_is_not_plain_text_in_lines_of_objects_is_refused_by_j_and_absent`.
 - ✅ **B-23 · Dopo un crash restano file in chiaro, e nessuno li toglie all'avvio** — piccolo; E (R13-SEC4, piano 08 in
   dev `110125350`), 17/10, più il punto (c) di B. Oggi la pulizia gira solo quando parte un nuovo controllo
@@ -6020,16 +6088,16 @@ sulla base `23f6578f3`.
   Tocca la lista condivisa `STARTUP_STEPS` (`app_lifespan.py`, e i passi in `overview.md`): un passo nuovo dopo
   `restore-commit`, o dentro il suo. Lotto B4b. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): il passo `backup-leftovers` (N66) e il modulo
-  `instance_backup/leftovers.py`. La revisione delle 03:58 aggiunge `archive.zip.part`, i link su due livelli e
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): il passo `backup-leftovers` (N66) e il
+  modulo `instance_backup/leftovers.py`. La revisione delle 03:58 aggiunge `archive.zip.part`, i link su due livelli e
   `checks_interrupted`; `get_job()` toglie anche i file di lavoro. 44 casi in `test_backup_leftovers.py`.
 - ✅ **B-24 · Il messaggio di `backup decrypt` non dice che lo zip apre anche le chiavi salvate** — minimo; E (R13-SEC4),
   17/10. Oggi dice: «It holds every user's data in clear». Uno zip decifrato di un backup che portava la chiave
   d'istanza contiene anche quella chiave, che apre ogni chiave dei fornitori salvata. Da aggiungere al messaggio e alla
   guida (`admin/backup_restore.en.md`, sezione `backup decrypt`). Lotto B4b.
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): dopo `decrypt` c'è la riga 🔑 quando il manifesto annuncia la
-  chiave.
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): dopo `decrypt` c'è la riga 🔑 quando il
+  manifesto annuncia la chiave.
 - ✅ **B-25 · `--password-stdin` su un terminale mostra la password; i campi della creazione hanno `autocomplete="off"`** —
   minimo; E (R13-SEC4), 17/10. `--password-stdin` legge con `sys.stdin.readline()` (`scripts/backup_cli.py:100`) anche
   quando lo standard input è un terminale, e lì la password si vede mentre la si scrive: con `isatty()` va letta con
@@ -6037,15 +6105,15 @@ sulla base `23f6578f3`.
   backup sicuro passano a `autocomplete="new-password"`: i gestori delle password ignorano spesso `off` e proporrebbero
   quella dell'account. Lotto B4b.
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): `--password-stdin` a un terminale prende la strada di
-  `getpass` (due volte per `create`), e i due campi del backup sicuro sono `new-password`.
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): `--password-stdin` a un terminale prende
+  la strada di `getpass` (due volte per `create`), e i due campi del backup sicuro sono `new-password`.
 - ✅ **B-26 · Un file della chiave oltre 4096 byte si esporta, poi ogni ripristino lo rifiuta** — minimo; E (R13-SEC4),
   17/10. La creazione legge `secrets/instance.key` con `read_secret_file` (fino a 64 KiB); la lettura dall'archivio si
   ferma a `INSTANCE_KEY_MAX_BYTES` (4096, `archive.py`). Va rifiutato già all'esportazione: chiave non inclusa e avviso
   `instance_key_unusable`, come per le altre chiavi inutilizzabili. Lotto B4b.
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): `exportable_instance_key()` e `generated_key_unusable()` usano
-  il limite di 4096 byte in UTF-8 (`INSTANCE_KEY_MAX_BYTES`).
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): `exportable_instance_key()` e
+  `generated_key_unusable()` usano il limite di 4096 byte in UTF-8 (`INSTANCE_KEY_MAX_BYTES`).
 - ✅ **B-27 · Dopo un ripristino riuscito la scheda Backup non dice nulla** — piccolo; G (G-20) tramite il coordinatore,
   17/10, decisione notturna N67 (la rivede il developer). Dopo un ripristino `committed` la pagina va al login senza
   dire niente (FBKP-107), e al rientro la scheda tace: `restore-last-result` c'è solo per `rolled_back`
@@ -6069,9 +6137,9 @@ sulla base `23f6578f3`.
   Direzione: un limite di tempo sulle scritture della copia (`set_progress_handler` di sqlite3, o un sottoprocesso con
   un tempo massimo), più `PRAGMA trusted_schema=OFF` sulle connessioni della copia. Dopo B4. Dettagli: piano 07, «B-27».
 
-  ✅ **Fatto il 17/10** (checkpoint delle 05:50), con la strada (B) decisa dal coordinatore. Subito dopo lo
-  spacchettamento, il controllo legge `sqlite_master` in sola lettura e classifica ogni oggetto dal suo testo SQL. Un
-  trigger, una vista o una tabella virtuale, che LibreFolio non crea mai, fanno rifiutare l'archivio con
+  ✅ **Fatto il 17/10** (checkpoint delle 05:50, commit `9403ecda0`), con la strada (B) decisa dal coordinatore. Subito
+  dopo lo spacchettamento, il controllo legge `sqlite_master` in sola lettura e classifica ogni oggetto dal suo testo
+  SQL. Un trigger, una vista o una tabella virtuale, che LibreFolio non crea mai, fanno rifiutare l'archivio con
   `database_foreign_objects` prima di ogni altro accesso; uno schema che SQLite non legge dà `database_damaged`. In
   più `trusted_schema=OFF` sulle cinque connessioni di B alla copia. L'`alembic upgrade` girava già in un processo a
   sé, col suo tempo massimo.
@@ -6082,11 +6150,12 @@ sulla base `23f6578f3`.
   totali `unreadable`. Correzione: leggere `current` dentro un `try` che risponde `unreadable`, con un WARNING come per
   i totali registrati. Dettagli: piano 07, «B-29».
 
-  ✅ **Fatto il 17/10** (checkpoint delle 06:10): `current` si legge dentro un `try`; un documento che J rifiuta dà
-  `unreadable` col WARNING «The control totals of the copy cannot be read: they are not compared», mai un controllo
-  fallito. Test: 5 casi in `test_backup_totals.py`, più uno di staging (un registro con una quantità esatta 1e70).
-  Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J legge accanto a
-  una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince `absent`.
+  ✅ **Fatto il 17/10** (checkpoint delle 06:10, commit `c96861834`): `current` si legge dentro un `try`; un documento
+  che J rifiuta dà `unreadable` col WARNING «The control totals of the copy cannot be read: they are not compared»,
+  mai un controllo fallito. Test: 5 casi in `test_backup_totals.py`, più uno di staging (un registro con una quantità
+  esatta 1e70). Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J
+  legge accanto a una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince
+  `absent`.
 
 ## E · Email (fase 01)
 
@@ -6535,3 +6604,8 @@ punto di partenza, l'audit dello stesso giorno:
   schemi non importano servizi per scelta: oggi è un controllo dichiarato, non una seconda implementazione. Da
   decidere se resta così (riga nella pagina dev) o se la formula scende in un modulo che entrambi possono leggere.
   Dettagli: piano MF, sezione «MF-D resto».
+- **MF-SI1 · La storia della Scheduled Investment da «min» solleva** — basso, preesistente; test-author di MF, 17/10
+  (R13-SEC7-2). `get_history_value(start_date="min")` confronta il letterale `"min"` con le date
+  (`start_date < min(cached.keys())`) e filtra gli eventi con `start_date` invece di `effective_start`: solleva
+  `CALCULATION_ERROR`, su HEAD come dopo SEC7-2. La via del refresh può passare `"min"`. Cura: `effective_start` in quei
+  due punti, rossi prima. Dettagli: piano MF, sezione «R13-SEC7-2».

@@ -1459,8 +1459,9 @@ Every `RestoreStatus` carries `upload_limit_mb`, the largest archive `PUT /backu
 the answer, in megabytes: `0` for no limit, `null` when the limit cannot be read (the upload then answers `503`
 `backup_upload_unavailable`, and an error naming the variable is logged). It cannot be read when
 `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not a whole number (`BackupConfigError`), or when `ENVIRONMENT_PROFILE_DEFAULTS`
-gives the active profile a value of the wrong type for it (`ProfileDefaultError`, [Settings](settings.md); B-21):
-`_upload_limit()` and `_readable_limit_mb()` in `restore.py` treat the two alike, so the status still answers `200`.
+gives the active profile no value for it (any profile but `selfhosted`, H-37) or a value of the wrong type
+(`ProfileDefaultError`, [Settings](settings.md); B-21): `_upload_limit()` and `_readable_limit_mb()` in `restore.py`
+treat the two alike, so the status still answers `200`.
 
 On the server, `./dev.py backup restore ARCHIVE` confirms as `cli`, once the word `restore` is typed at a terminal or
 with `--yes`, and `./dev.py backup pending [--cancel]` shows the restore, or drops it with its copy. The command prints
