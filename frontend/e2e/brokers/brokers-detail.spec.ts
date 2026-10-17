@@ -10,6 +10,7 @@ import path from 'path';
 import {fileURLToPath} from 'url';
 import {appears} from '../fixtures/probe';
 import {lotIsOpenish, type LotOpenish} from '../../src/lib/features/brokers/lots/lotsAnalysisHelpers';
+import {resolveUiLocale} from '../../src/lib/stores/app/uiLocaleRule';
 
 /**
  * Ensure at least one broker exists for the test user.
@@ -1875,15 +1876,15 @@ test.describe('Broker detail — the quota badge in the UI language', () => {
  * broker goes first — `force` takes its transactions — then the asset with its closes.
  *
  * Expectations.
- * - The day: `formatDay` in the interface locale, computed by this browser's own Intl (`dayAsThePanelWritesIt`), never
- *   written down.
+ * - The day: `formatDay` in the interface locale the app's own rule chooses (`resolveUiLocale`, imported from
+ *   `uiLocaleRule.ts`), written by this browser's Intl (`dayAsThePanelWritesIt`) and never written down here.
  * - No bare broker id: the row's text, its day taken out, read as numbers — a group separator joins the digits, so
  *   `1,234` reads `1234` — and none is the broker's id. The catalogue printed «(broker {broker_id})» until J-12.
  * - The missing sections are unmounted, so they are counted: zero, behind two barriers — the WAC chart, drawn in the
  *   same branch of the panel, and the control, where the same broker and asset drew all three.
- * - The WAC chart out of its «no data» state: its chart container goes `invisible` exactly when the chart shows «no
- *   data» (`showChart`), a text that is translated and has no handle. A visible canvas with a real bitmap
- *   (`expectChartCanvas`) and a finished render (`data-chart-ready`) are its drawn state.
+ * - The WAC chart out of its «no data» state: the chart publishes it on its root, `data-state="drawn"` exactly when it
+ *   draws (`showChart`: no «no data» overlay) and `"empty"` otherwise; a finished render (`data-chart-ready`) then says
+ *   the drawing is complete.
  * - The banner is drawn from the same answer, in the same update, as the notice: once the notice row is on screen its
  *   presence is settled, and reading it is not a probe. With this data it should be absent; present, it is opened
  *   first, since its groups are rendered only open.
@@ -2031,23 +2032,28 @@ async function openOwnedLotsPanel(page: Page, position: ShortPosition): Promise<
 }
 
 /**
- * A calendar day as the lots panel writes it: `formatDay` — `toLocaleDateString(uiLocale(), {year: 'numeric', month:
- * 'short', day: 'numeric'})` on the local calendar — computed by this browser's own Intl and never written down.
+ * A calendar day as the lots panel writes it, `formatDay` (`$lib/utils/core/formatAxisDate`): the day read on the local
+ * calendar, then `toLocaleDateString(uiLocale(), {year: 'numeric', month: 'short', day: 'numeric'})` — never written
+ * down here.
  *
- * The locale is the interface locale (M-18, `resolveUiLocale` in `src/lib/stores/app/uiLocale.ts`): the browser's tag
- * when it speaks the interface language and names a region, else `en-GB` for English and the bare language for the
- * others. Restated here because that module reaches `$app/environment` through `./language`, which a spec cannot
- * resolve — as fixtures/dates.ts restates `dateOnly`. The interface language is `<html lang>`, kept by the root layout.
+ * The locale is the one the app itself would choose. The rule is the app's own, `resolveUiLocale`
+ * (`src/lib/stores/app/uiLocaleRule.ts`, M-18), imported as `lotIsOpenish` is: a module that imports nothing, so
+ * Playwright loads it (`uiLocale.test.ts` holds it to that). It gets what the app gives it — the interface language,
+ * which the root layout keeps on `<html lang>`, and the browser's primary tag, `navigator.language` — both read in one
+ * `page.evaluate`. The rule runs here, in Node; the day is then written in the page, by the browser's own Intl, the one
+ * that writes the panel's figures.
  */
 async function dayAsThePanelWritesIt(page: Page, iso: string): Promise<string> {
-    return page.evaluate((day) => {
-        const [year, month, date] = day.split('-').map(Number);
-        const language = document.documentElement.lang.trim().toLowerCase();
-        const tag = Intl.getCanonicalLocales(navigator.language.trim())[0];
-        const browser = new Intl.Locale(tag);
-        const locale = browser.language === language && browser.region ? tag : language === 'en' ? 'en-GB' : language;
-        return new Date(year, month - 1, date).toLocaleDateString(locale, {year: 'numeric', month: 'short', day: 'numeric'});
-    }, iso);
+    const {language, browserTag} = await page.evaluate(() => ({language: document.documentElement.lang, browserTag: navigator.language}));
+    const locale = resolveUiLocale(language, browserTag);
+    test.info().annotations.push({type: 'J-12 locale', description: `UI language ${language}, browser ${browserTag} → ${locale}`});
+    return page.evaluate(
+        ({day, uiLocale}) => {
+            const [year, month, date] = day.split('-').map(Number);
+            return new Date(year, month - 1, date).toLocaleDateString(uiLocale, {year: 'numeric', month: 'short', day: 'numeric'});
+        },
+        {day: iso, uiLocale: locale},
+    );
 }
 
 /** The numbers written in `text`, as bare digits: a group separator inside one is dropped, so `1,234` reads `1234`. */
@@ -2171,7 +2177,7 @@ test.describe('Broker detail — a FAILED lots analysis names the transaction to
         expect(numbersIn(rowText.replace(dayText, ' ')), `the row writes no bare broker id (${position.broker.id}), it names the broker — «${rowText.trim()}»`).not.toContain(String(position.broker.id));
 
         // 2. The average-cost lines only: the WAC chart drawn, and none of the three lot sections the control showed.
-        await expectChartCanvas(page, 'lot-wac-price-chart', 10_000);
+        await expect(page.getByTestId('lot-wac-price-chart'), 'the WAC chart draws its average-cost lines, not its «no data» state').toHaveAttribute('data-state', 'drawn', {timeout: 10_000});
         await expect(page.getByTestId('lot-wac-price-chart').locator('[data-chart-ready]'), 'the WAC chart finished drawing its average-cost lines').toHaveAttribute('data-chart-ready', 'true', {timeout: 10_000});
         for (const section of ['lot-gantt-chart', 'unified-lots-table', 'lot-comparison-chart']) {
             await expect(page.getByTestId(section), `${section} is not rendered for a FAILED analysis`).toHaveCount(0);
