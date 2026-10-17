@@ -4162,3 +4162,105 @@ corsia.
   (`bulk_too_many_items`, `bulk_too_many_days`). L'uso reale (2,7 milioni) passa senza toccare il web app; 1 000 voci
   di cambi su 100 anni (36,5 milioni) no. Il lotto nel web app resta un seguito, se un portafoglio vero arriva vicino
   al budget.
+
+> **Via** (coordinatore, 17/10 ~08:30): «X-R55 entered: dev `ab7711f04`, CHANGELOG 🔒 `eed325d99`. Your HEAD is ff'd
+> to `eed325d99`. Z-25: option C (`max_length` 1,000 items + a budget of 5 M item-days per request, with codes
+> `bulk_too_many_items` / `bulk_too_many_days`), as night decision N77, for review. Add a docstring/doc line on what
+> the web app does if an instance goes over 1,000 assets (an explicit error, not a silent half page) and log the web
+> app's batching as a follow-up for Y/X. Reds first; X reviews.»
+
+**Fatti trovati dopo il via** (17/10 ~08:33):
+- «All» nella lista asset parte da `2000-01-01` (`resolveDateSentinel`), poi si stringe al primo dato. 300 asset fanno
+  circa 2,9 milioni di voci-giorno.
+- **Contare i giorni chiesti non basta, per gli asset.** Un segnale a storia intera porta il riscaldamento fino a
+  `date.min`, e il riempimento emette dal primo prezzo salvato fino alla fine, anche se l'intervallo visibile è di un
+  giorno. Un budget sui giorni visibili si aggira; uno su 100 anni per voce boccia viste legittime (300 asset con il
+  drawdown sarebbero 11 milioni). Il conto onesto è lo span che il riempimento emetterà davvero, che si conosce solo
+  dopo la lettura del DB.
+- Non c'è un gestore globale che trasformi un'eccezione di dominio in un 422.
+- **Il web app, su un errore di `prices/query`, oggi tace.** La lista asset lo scrive nella console, toglie il
+  caricamento e mostra le carte senza prezzi, con quelli in cache (`assets/+page.svelte`, il `catch` di
+  `fetchAllPriceData`). È proprio la «mezza pagina silenziosa»: domandato al coordinatore.
+
+**Contratto** (N77):
+- In `utils/date_range_limits.py`:
+  - `MAX_BULK_ITEMS = 1_000` e `MAX_BULK_ITEM_DAYS = 5_000_000`;
+  - `BulkTooManyDaysError(item_days, max_item_days)`, un'eccezione di dominio.
+- **Voci.** Ognuno dei due endpoint, prima di qualunque lavoro: più di 1 000 voci danno 422, con `detail` =
+  `{"code": "bulk_too_many_items", "message", "max_items": 1000, "items": n}`.
+- **Giorni, asset.** `get_prices_bulk`, dopo la lettura del DB e dei semi e prima del ciclo del riempimento, somma per
+  ogni voce lo span che il riempimento emetterà: da `max(inizio del caricamento, primo prezzo o seme)` alla fine
+  tagliata, confronti compresi, 0 senza dati. Oltre il budget solleva `BulkTooManyDaysError`, e `prices.py` lo
+  traduce in 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
+  - Rischio e AI Export lo chiamano dall'interno: senza traduzione darebbe un 500, comunque un rifiuto. Lo lascio come
+    residuo per Y e J.
+- **Giorni, cambi.** Il gestore conta le voci giornaliere e quelle dei segnali che sta per costruire. Appena il totale
+  supera il budget, risponde 422 con lo stesso `detail`; `item_days` è il conto a quel punto, «almeno».
+
+> **Decisione** (coordinatore, 17/10 ~08:36): «Z-25: **(b)** for you: document honestly that today it's silent (the
+> `fetchAllPriceData` catch). **The explicit error goes to X**, which is already in `assets/+page.svelte`/
+> `fx/+page.svelte` with X-R53: two writers on those files aren't allowed. I'll tell X now. The design with
+> `BulkTooManyDaysError` counted after the read: OK. For the risk/AI Export residual (500 instead of a coded refusal)
+> I'll give J a line.»
+
+**Passi.**
+1. ✅ 17/10 08:35–~09:09 — Rossi di test-author, su HEAD `eed325d99`; nessun codice di prodotto toccato.
+   - Nuovo `backend/test_scripts/test_services/test_bulk_limits.py` (17 casi, PURE: SQLite privato sotto
+     `tmp_path`, o una sessione finta che conta le istruzioni; il gestore dei cambi chiamato direttamente).
+   - API: BL-API-01 in `test_assets_prices.py`; BL-API-02/03 in `test_fx_api.py`.
+   - Runner: l'azione `range-ceiling` ora lancia i due file (nessuna azione nuova: test-author non poteva
+     verificarla). Ho corretto io la dicitura «tomorrow (UTC)»: dall'allineamento a J il tetto segue il calendario
+     del server.
+   - Rossi per la ragione giusta: `services range-ceiling` 35 passati (33 di X-R55, più BL-I04 e BL-A02, verdi per
+     costruzione) e 15 falliti, tutti suoi; `api assets-price` 20 + 1 rosso; `api fx` 23 + 2 rossi.
+     `fx-conversion` 44, `asset-source` 61, `api fx-signals` 8 verdi.
+   - BL-API-03 non manda i 7,3 milioni di voci-giorno a un backend che non legge il budget: fallisce subito.
+2. ✅ 17/10 08:36–08:45 — Bozza fuori dal repo (`files/z25-draft/apply_z25.py`), provata su una copia:
+   applicazione, compilazione, black pulito, inverso esatto.
+   - `date_range_limits.py`: le costanti, `BulkTooManyDaysError`, i due `detail` dei 422.
+   - `price_query.py`: `_fill_span` (conta senza costruire), e il conto dopo la lettura di prezzi e semi, prima di
+     eventi e riempimenti.
+   - `prices.py`: il controllo delle voci e la traduzione dell'errore. La docstring dice, onestamente, che oggi la
+     lista asset tace (decisione b).
+   - `currencies.py`: il controllo delle voci, il budget, la docstring.
+   - Le costanti sono importate per nome dove vengono lette, così i test le abbassano lì: lo stesso seam di J.
+   - Backlog: Z-27, il seguito del web app per Y e X.
+
+   > **⚠️ Fuori pista** (~09:10): test-author ha notato che la bozza contava «prima di ogni blocco»: una richiesta
+   > rifiutata avrebbe costruito prima ~4,97 milioni di voci (secondi, ~2 GB), e la docstring diceva il contrario.
+   > Rifatto il ciclo dei cambi in due tempi: prima ogni blocco di giorni (giornaliero e segnale) è pianificato e
+   > contato, `day_blocks`; il 422 parte alla fine della conversione che passa il budget; solo poi i blocchi sono
+   > espansi, nello stesso ordine di prima. Riprovata sulla copia (compilazione, black, inverso esatto).
+3. ✅ 17/10 ~09:12 — Applicata al repo (13 sostituzioni). `ruff` ha trovato un I001 in `prices.py`: l'import nuovo
+   stava sopra i due di `services.signals`. Ho spostato l'ancora nella bozza (dopo `SignalPluginRegistry`),
+   annullato e riapplicato: `ruff` e `black --check` puliti su prodotto, test e runner. Impronta in
+   `files/z25-draft/z25_applied.md5`. Diff: 4 file, +122 −42.
+4. ✅ 17/10 09:13–09:44 — Controlli leggeri, corsia 6186, uno alla volta col cancello del carico (< 50):
+   `files/z25_light.sh green`, log in `files/logs/z_z25_green_*.log`.
+   - `services range-ceiling` 50 (33 di X-R55 + 17 di Z-25: i 15 rossi ora verdi), `fx-conversion` 44,
+     `asset-source` 61, `asset-signals` 30, `risk-all` 902, `schemas openapi-client-text` 78.
+   - `api assets-price` 21 (20 + BL-API-01), `api fx` 25 (23 + BL-API-02/03), `api fx-signals` 8. BL-API-03: 7,3
+     milioni di voci-giorno rifiutate in 0,01 s, a 5 004 062. Porta 6186 libera alla fine.
+   - `services ai-export`: 864 passati, nessun fallimento, poi il tempo massimo del runner (600 s; con X-R55 1 064 in
+     341 s). Il carico è salito a 63 durante il giro, e il test in corso, `TestFreshImportCompatibility`, lancia un
+     processo Python nuovo per caso (`-B`, con e senza `-O`): CPU, non prezzi. I componenti che chiamano
+     `get_prices_bulk()` erano già passati. Rilancio dietro un cancello più stretto (< 30): `files/z25_aiexport.sh`.
+   - 09:47–09:55, rilancio (carico 19 alla partenza): `services ai-export` 1 064 passati in 452 s, rc 0. Porta 6186
+     libera.
+
+   > **⚠️ Fuori pista**: il primo giro di `ai-export` è scaduto per il carico, non per un rosso (vedi sopra).
+5. ✅ 17/10 ~09:25–09:34 — Documentazione (docs-writer, solo inglese, nessuno stamp: pagine developer senza
+   traduzioni), con ogni affermazione verificata sul codice (file:riga nella sua risposta).
+   - `developer/backend/assets/architecture.md`, «📊 Data Flow: Price Query», dopo il paragrafo di X-R55: i due
+     tetti, `_fill_span()`, il conto che segue il riempimento, l'àncora nuova `#bulk-request-limits`; e la nota
+     onesta sul web app (decisione b), più precisa della bozza: la cache dei prezzi è condivisa col dettaglio, quindi
+     restano senza prezzo solo gli asset chiesti; l'errore va alla console, e con segnali del backend la finestra
+     delle impostazioni del grafico mostra il suo avviso generico.
+   - `developer/backend/fx/architecture.md`, «🔄 Conversion Logic», dopo `#convert-range-ceiling`: i due tetti, il
+     ciclo in due tempi (pianificare e contare, poi espandere), àncora `#convert-request-limits`.
+   - Una frase dice che rischio e AI Export, che chiamano `get_prices_bulk()` direttamente, ricevono
+     `BulkTooManyDaysError` così com'è: il residuo che il coordinatore dà a J, che dovrà aggiornarla.
+   - 09:44–09:46: `mkdocs build` stretto rc 0, nessun avviso (carico 41); `check-links` 97 validi
+     (`files/z25_build.sh`).
+6. ✅ 17/10 ~09:50 — Backlog, nella mia sezione: Z-25 chiusa (✅, commit del coordinatore), con i due residui; Z-27
+   aggiunta (il seguito del web app per Y e X).
