@@ -260,11 +260,13 @@ This ensures resilience to individual provider outages and supports currency pai
   MMK → KHR `1E-13` is stored as KHR/MMK `1E+13`, accepted. A rate that is not finite, whose inverse
   overflows (`1 / 1E-1000000`) or underflows to 0 (`1 / 1E+1000027`), or that `storable_fx_rate()`
   refuses is a `ValueError` naming the pair in stored order, the date and the limits
-  (`fx_rate_refusal()`): *The rate of KHR/MMK on
-  2024-01-02 cannot be stored: an exchange rate keeps at most 14 digits before the decimal point
-  and 10 decimal places, and must stay above 0 once cut to them*. Nothing of the call is written;
-  before, `1E+400` was stored as a REAL inf, and its inverse and `1E-11` as values that read back
-  0. A valid rate is still written as normalized, not truncated.
+  (`fx_rate_refusal()`): *The rate of KHR/MMK on 2024-01-02 cannot be stored: an exchange rate
+  keeps at most 14 digits before the decimal point and 10 decimal places, stays below
+  100000000000000 (as the database stores it), and must stay above 0 once cut to them* (the
+  bound below `1E+14` since X-R51, so that a rate of 14 digits the double rule refuses is told
+  why). Nothing of the call is written; before, `1E+400` was stored as a REAL inf, and its
+  inverse and `1E-11` as values that read back 0. A valid rate is still written as normalized,
+  not truncated.
 - **The manual-rate endpoint.** `POST /api/v1/fx/currencies/rate` (`upsert_rates_endpoint()`,
   `backend/app/api/v1/fx/currencies.py`) handles its items one by one: a refused item becomes
   `Rate N: Validation error: …` in `errors` (N, the item's 0-based index) while the others are
