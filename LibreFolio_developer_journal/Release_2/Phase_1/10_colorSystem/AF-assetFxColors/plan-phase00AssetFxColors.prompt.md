@@ -863,6 +863,71 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        >
        > **⚠️ Fuori pista — AF-13 di nuovo:** macOS ha toccato `frontend/src/.DS_Store` alle 23:52:26, e `asset-list` ha
        > rifatto la build all'avvio.
+17. ✅ (17/10, 00:14–03:29) **`lib/theme/drawnColors.ts` sui ruoli**, fuori area (`lib/theme`, dichiarato), richiesta del
+    coordinatore dopo l'ingresso `9d3607eb6`. Sono i 32 letterali slate (17 distinti) del rapporto di L
+    (`L-designerLab/audit-colori-fuori-metrica.md`, riga 2): il tema scuro del foglio di cheetah-grid in
+    `FilePreviewModal` (26), i due bordi del foglio in chiaro, la riga indicata, i segnaposto di `LazyImage` (2),
+    l'iniziale degli avatar di `FilesTable`.
+    1. ✅ (00:14–00:20) **Analisi.** Tutti disegnati fuori dal CSS (canvas e SVG in data URL), quindi ogni ruolo si legge a
+       runtime con `chartRoles(dark, scope)` di `roleColors.ts` (DV). L'API di allora leggeva 7 ruoli: la mappa 1:1 ne
+       chiedeva altri, e un tema mezzo ruoli e mezzo slate sullo stesso canvas è il caso del G3. **Decisione del
+       coordinatore:** in fila dopo B4, tutto in un colpo; DV aggiunge 8 ruoli (`--lf-surface-field`,
+       `--lf-surface-hover`, `--lf-selected`, `--lf-checked`, `--lf-focus`, `--lf-action`, `--lf-on-action`,
+       `--lf-mark-bg`); `--lf-warning`, `--lf-text-muted`, `--lf-border-subtle`, `--lf-border-input` e
+       `--lf-surface-neutral` arrivano già con B4.
+       > **Scelte provvisorie** (approvate, punto 35 della raccolta per la designer): la riga indicata su `mark`
+       > (risultato evidenziato, Q7; distinta dalla selezione); l'iniziale dell'avatar con `readableText(disco)` (l'uso
+       > che `roleColors` documenta: su un disco chiaro diventa scura); in chiaro resta il tema `MATERIAL_DESIGN` della
+       > libreria, coi soli due bordi sui ruoli.
+    2. ✅ (00:20–00:46) **Le bozze, su copie** (cartella della sessione `files/drawn/`), verificate in una sandbox in
+       `/tmp` col `roleColors.ts` di B4 letto dal ref di DV più gli 8 ruoli simulati: `tsc` verde, le tre bozze Svelte
+       compilate senza avvisi, il test d'unità di test-author 13/13 con 13 mutazioni tutte prese.
+       > **⚠️ Fuori pista — `oklab()` dal canvas** (segnalato da test-author, verificato in Chromium 149): il `fillStyle`
+       > di un canvas restituisce `color-mix(in oklab, …)` come `oklab(… / 0.12)`, non come `rgba()`, contro il commento
+       > di `roleColors`; `parseRgba` non lo legge, e la selezione del foglio sarebbe rimasta traslucida. cheetah-grid non
+       > pulisce la cella prima di riempirla (`_drawCell`), quindi un fondo traslucido si somma ai pixel di prima: la
+       > selezione va composta sul campo e resa opaca. **Decisione del coordinatore: opzione 1**, la correzione è in
+       > `roleColors.resolve()` (DV, col commit dei ruoli): sempre sRGB, `#rrggbb` o `rgba()`. Il mio ripiego locale su
+       > un canvas 1×1 è stato tolto dalle bozze. Due sonde in Chromium lanciate col carico a 53 e 64, sopra la soglia.
+    3. ✅ (01:53–01:56) **Applicazione** su `323c61b73` (B4 e gli 8 ruoli entrati; i quattro file uguali alle copie
+       delle bozze):
+       > **Note implementazione:**
+       > - `drawnColors.ts`: costruttori da un `ChartRoles`, senza letterali (19 righe di letture letterali
+       >   `roles.color('--lf-…')`, come vuole il gate dei lettori): `buildDarkSpreadsheetTheme(roles)`,
+       >   `spreadsheetLightBorders(roles)`, `spreadsheetTargetRowBg(roles)`, `imagePlaceholderColors(roles)`,
+       >   `fileAvatarInitialColor(roles, disco)`. La mappa del tema scuro: celle `field`, intestazioni `panel` con testo
+       >   `secondary`, testo `primary`, cella attiva `hover` col bordo `focus`, selezione `selected` composta sul campo
+       >   (opaca), linee `border-subtle`, bordo delle intestazioni e dei controlli vuoti `border-input`, freccia
+       >   d'ordinamento `muted`, controlli spuntati `checked`, bottone `action` con `on-action`, messaggi `info`,
+       >   `danger`, `warning` (il riquadro prende lo stato, il segno il fondo della cella). Segnaposto: fondo `neutral`,
+       >   figura `muted`.
+       > - `FilePreviewModal`: `chartRoles(isDarkTheme(), host)` sull'elemento della griglia, quando la griglia si
+       >   costruisce (come prima, il tema si sceglie all'apertura).
+       > - `LazyImage`: i colori del segnaposto sono uno stato, letti sul contenitore (`bind:this`, unica aggiunta al
+       >   markup) mentre il segnaposto si vede, e di nuovo al cambio di tema o a una modifica del Designer Lab; gli
+       >   osservatori si staccano quando l'immagine arriva.
+       > - `FilesTable`: l'iniziale con `readableText` quando l'avatar si costruisce.
+       > - `roleColors.test.ts` (di DV): `PENDING_READERS` svuotato, gli 8 ruoli ora letti; `_frontend_utility.py`: il
+       >   nuovo `drawnColors.test.ts` nella lista di `core-unit`.
+    4. ✅ (01:54–01:56) **Prove leggere** (`nice -n 19`, carico 42–46): Prettier verde sui 6 file del frontend;
+       `theme-roles.mjs --check` pulito; il compilatore di Svelte sui tre componenti, 0 avvisi prima e dopo;
+       `py_compile` del runner; Vitest **8 file, 286/286** (`drawnColors`, `roleColors` e `roleColors.dom`, i tre gate
+       dei colori, `FilePreviewModal.test`, `FilesTable.test`); `git diff --check` pulito.
+    5. ✅ (17/10, 03:06–03:29) **Slot F** nella 6157 su `c37c55649` (codice `cfa78f210`, docs `fd6e7b3d9`, base merge
+       con la punta `2818924b7`: X O-8, H-27, E-11; il runner si è unito da solo con quello della 1.3, la riga di
+       `drawnColors.test.ts` c'è). Nessun passo nuovo dopo le 03:40. Script `/tmp/libreFolio_af_slotF.sh`, log in
+       `/tmp/libreFolio_af_slotF/`.
+       > | Passo | Esito |
+       > |---|---|
+       > | `api sync`, `front build --debug` | rc 0 |
+       > | `front check` | 0 errori, 0 avvisi |
+       > | `front-utility component-unit` | 166 file, 4.418/4.418 |
+       > | E2E `front-utility files` (2 worker) | 29/29 |
+       > | `front-transaction tx-import-report-set` (1 worker) | 32/32; gli altri 32 sono i test dell'altro progetto (desktop o mobile), saltati per contratto |
+       > | `front-asset asset-list` (1 worker) | 30/30 |
+       > | `front-utility image-crop` (2 worker) | 42/42 |
+       >
+       > Nessuna build in più (AF-13 non si è ripetuto); porta libera alla fine; HEAD `c37c55649`, albero pulito.
 
 ## 12. Dove guardarlo (per il developer)
 

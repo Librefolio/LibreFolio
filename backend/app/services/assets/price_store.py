@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import functools
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
+import structlog
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,37 +15,127 @@ from backend.app.db.models import (
     Asset,
     PriceHistory,
 )
-from backend.app.db.precision import decimal_limit_issue, get_model_column_precision, truncate_priceHistory
+from backend.app.db.precision import decimal_limit_issue, get_model_column_precision, integer_digits_issue, max_integer_digits, storable_price, storable_value, truncate_priceHistory
 from backend.app.db.real_decimal import REAL_SIGNIFICANT_DIGITS
 from backend.app.schemas import (
     FAAssetDelete,
     FABulkDeleteResponse,
     FAPriceDeleteResult,
+    FAPricePoint,
     FAUpsert,
 )
+from backend.app.schemas.prices import FACurrentValue
 from backend.app.utils.datetime_utils import utcnow
 
-#: The prices a user types (C-97): over the column's limit they are refused, never truncated. Volume is a count.
+logger = structlog.get_logger(__name__)
+
+#: The prices a user types (C-97): over the column's limit they are refused, never truncated. Volume is a count: only
+#: its size is limited (W-B58), its decimals are read back rounded, as always.
 _PRICE_LIMIT_FIELDS = ("open", "high", "low", "close")
+_SENTINEL = Decimal("-1")
+
+
+def _price_limit_issue(price: FAPricePoint, name: str) -> Optional[tuple[str, int]]:
+    """What keeps the typed ``name`` of ``price`` out of its column (``decimal_limit_issue``; a volume, its size only)."""
+    value = getattr(price, name)
+    if value is None:
+        return None
+    if name == "volume":
+        return integer_digits_issue(value, PriceHistory, name)
+    return decimal_limit_issue(value, PriceHistory, name)
 
 
 def _reject_prices_over_the_limit(data: List[FAUpsert]) -> None:
     """Refuse a manual upsert holding a price over its column's limit, before anything is written (C-97, issue #43).
 
-    A price keeps 12 decimal places and 15 significant digits (``db/precision.decimal_limit_issue``): a typed price
-    over either is refused, naming the asset, the maxima and the dates, never truncated in silence. The ``-1``
-    sentinel of open, high and low has neither. A provider's prices are not checked here: their long floats are
-    truncated (``truncate_priceHistory``).
+    A price keeps 12 digits before the decimal point, 12 decimal places and 15 significant digits
+    (``db/precision.decimal_limit_issue``; the digits before the point since W-B58); a volume, 24 digits before the
+    point: a typed value over any of them is refused, naming the asset, the maxima and the dates, never truncated in
+    silence. The ``-1`` sentinel has none of them. A provider's prices are not checked here: their long floats are
+    truncated (``truncate_priceHistory``), and a date with a value no column can keep is skipped
+    (``_unstorable_provider_point``).
 
     Raises:
         ValueError: the router turns it into HTTP 400, as it does a currency mismatch.
     """
     for item in data:
-        offending = [f"{price.date.isoformat()} ({name})" for price in item.prices for name in _PRICE_LIMIT_FIELDS if getattr(price, name) is not None and decimal_limit_issue(getattr(price, name), PriceHistory, name) is not None]
+        offending = [f"{price.date.isoformat()} ({name})" for price in item.prices for name in (*_PRICE_LIMIT_FIELDS, "volume") if _price_limit_issue(price, name) is not None]
         if offending:
             _precision, scale = get_model_column_precision(PriceHistory, "close")
             shown = ", ".join(offending[:10]) + (f" (+{len(offending) - 10} more)" if len(offending) > 10 else "")
-            raise ValueError(f"Too many digits in the prices of asset {item.asset_id}: at most {scale} decimal places and {REAL_SIGNIFICANT_DIGITS} significant digits; {len(offending)} value(s): {shown}")
+            raise ValueError(
+                f"Too many digits in the prices of asset {item.asset_id}: at most {max_integer_digits(PriceHistory, 'close')} digits before the decimal point, {scale} decimal places and {REAL_SIGNIFICANT_DIGITS} significant digits "
+                f"(a volume, {max_integer_digits(PriceHistory, 'volume')} digits before the decimal point); {len(offending)} value(s): {shown}"
+            )
+
+
+def _unstorable_provider_point(price: FAPricePoint) -> Optional[str]:
+    """Why a provider's price point cannot be stored, as ``name=value``, or None (W-B58).
+
+    A price that is not finite, has more digits before the decimal point than its column, or turns into 0 when truncated
+    (``storable_price``); a volume past its column's digits (``integer_digits_issue``). The ``-1`` sentinel is no value.
+    """
+    for name in _PRICE_LIMIT_FIELDS:
+        value = getattr(price, name)
+        if value is None or (name != "close" and value == _SENTINEL):
+            continue
+        if storable_price(value, name) is None:
+            return f"{name}={value}"
+    volume = price.volume
+    if volume is not None and volume != _SENTINEL and integer_digits_issue(volume, PriceHistory, "volume") is not None:
+        return f"volume={volume}"
+    return None
+
+
+def _kept_price(value: Optional[Decimal], name: str) -> Optional[Decimal]:
+    """A merged open, high or low as its column keeps it, or None. The incoming values are checked before; a stored one
+    written by an older release may be past the column's digits, and truncating it raised in the middle of the slices
+    (W-B58): it is dropped instead."""
+    return storable_value(value, PriceHistory, name) if value is not None else None
+
+
+def _kept_volume(value: Optional[Decimal]) -> Optional[Decimal]:
+    """A merged volume, or None for one its column cannot keep (a stored value of an older release, W-B58)."""
+    return value if value is None or integer_digits_issue(value, PriceHistory, "volume") is None else None
+
+
+@functools.lru_cache(maxsize=1024)
+def _report_unstorable_quote(asset_id: int, provider_code: str, value: str) -> None:
+    """Log a live quote no price column can keep once per process for each asset, provider and value (X-R40): it is asked
+    for again at every poll (the scheduler every 10 minutes, each open asset page every 30 seconds), and the same refusal
+    said each time is noise. Bounded, so that a provider answering a new absurd value at every poll cannot grow it."""
+    logger.warning("Live quote refused: no price column can keep it, the last stored price stands", asset_id=asset_id, provider=provider_code, value=value)
+
+
+def _quote_text(value: object) -> str:
+    """A quote as the log shows it, at most about 40 characters: written out, ``1E+50000000`` is 50 MB of digits."""
+    text = str(value)
+    return text if len(text) <= 40 else f"{text[:24]}… ({len(text)} characters)"
+
+
+def storable_current_value(current: Optional[FACurrentValue], asset_id: int, provider_code: str) -> Optional[FACurrentValue]:
+    """A provider's live quote as the price columns keep it, or None when they cannot (X-R40, W-B62).
+
+    ``storable_price`` decides (W-B58): a value that is not finite, has more than 12 digits before the decimal point, or
+    is above 0 and truncates to 0 (``1E-13``) is refused — never served, never cached, never written: the current price
+    falls back to the last stored one, as after a provider failure — and logged once (``_report_unstorable_quote``). A
+    value the truncation leaves as it is comes back as it came, its form included (``101.5`` stays ``101.5``); one it
+    changes comes back truncated, as the history and today's row keep it (``65432.1234567890999`` → ``65432.123456789``).
+    Never raises: a value that is no number at all, from a plugin that skips the schema, is refused too.
+    """
+    if current is None:
+        return None
+    raw = current.value
+    try:
+        value = raw if isinstance(raw, Decimal) else Decimal(str(raw))
+        stored = storable_price(value)
+    except (ArithmeticError, TypeError, ValueError):
+        value = stored = None
+    if stored is None:
+        _report_unstorable_quote(asset_id, provider_code, _quote_text(raw))
+        return None
+    served = value if stored == value else stored
+    return current if served is raw else current.model_copy(update={"value": served})
 
 
 PRICE_UPSERT_CHUNK_SIZE = 1000
@@ -153,6 +245,19 @@ class PriceStoreOperations:
             rejected_dates: list[str] = []
             upserted_count = 0
 
+            # W-B58: a provider's value no column can keep loses its date, here, before any slice is written: a value
+            # that failed in the truncation of a later slice left the earlier ones committed. A manual upsert never
+            # gets here with one (``_reject_prices_over_the_limit`` refused it).
+            unstorable_dates: list[str] = []
+            if source_plugin_key != "MANUAL":
+                for date_key, price in list(valid_inputs.items()):
+                    reason = _unstorable_provider_point(price)
+                    if reason is not None:
+                        del valid_inputs[date_key]
+                        unstorable_dates.append(f"{date_key.isoformat()} ({reason})")
+                if unstorable_dates:
+                    logger.warning("Provider prices skipped: no price column can keep them", asset_id=asset_id, source=source_plugin_key, dates=unstorable_dates[:5], count=len(unstorable_dates))
+
             # SQLite has a single writer per database file, and a transaction holds
             # that writer from its first write until COMMIT. A full-history sync is
             # ~45k daily points, which in one transaction kept the lock for ~10s —
@@ -202,11 +307,11 @@ class PriceStoreOperations:
                     price_obj = PriceHistory(
                         asset_id=asset_id,
                         date=price.date,
-                        open=(truncate_priceHistory(merged_open, "open") if merged_open is not None else None),
-                        high=(truncate_priceHistory(merged_high, "high") if merged_high is not None else None),
-                        low=(truncate_priceHistory(merged_low, "low") if merged_low is not None else None),
+                        open=_kept_price(merged_open, "open"),
+                        high=_kept_price(merged_high, "high"),
+                        low=_kept_price(merged_low, "low"),
                         close=truncate_priceHistory(price.close, "close"),
-                        volume=merged_volume,
+                        volume=_kept_volume(merged_volume),
                         currency=price.currency or default_currency,
                         source_plugin_key=source_plugin_key,
                         # Every write stamps fetched_at, manual ones included, because it
@@ -265,6 +370,8 @@ class PriceStoreOperations:
             msg = f"Upserted {upserted_count} prices"
             if rejected_dates:
                 msg += f"; rejected {len(rejected_dates)} date(s) with impossible OHLC (close outside [low, high]): " + ", ".join(rejected_dates[:5]) + (f" (+ {len(rejected_dates) - 5} more)" if len(rejected_dates) > 5 else "")
+            if unstorable_dates:
+                msg += f"; rejected {len(unstorable_dates)} date(s) with a value no price column can keep: " + ", ".join(unstorable_dates[:5]) + (f" (+ {len(unstorable_dates) - 5} more)" if len(unstorable_dates) > 5 else "")
 
             results.append(
                 {

@@ -37,8 +37,7 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {themed} from '$lib/theme/themePair';
-    import {ALLOCATION_CHART_COLORS, CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
+    import {ALLOCATION_CHART_COLORS, chartNeutrals} from '$lib/theme/chartTheme';
     import {categoryColor} from '$lib/theme/chartCategories';
     import {familyShade, shadePoles} from '$lib/theme/chartShades';
     import {chartRoles} from '$lib/theme/roleColors';
@@ -192,6 +191,7 @@
         }
 
         const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, chartContainer);
         const tr = $t;
         // GR4: a subtype is a shade of its family's colour, toward white in the light theme and toward the card the
         // chart sits on in the dark one.
@@ -345,7 +345,7 @@
         const legendBelow = legendPosition === 'bottom' || isNarrow;
 
         // Legend — always scrollable to avoid 4+ unwrapped rows
-        const legendBaseTextStyle: any = {color: themed(CHART_NEUTRALS.dashboard.text, isDark), fontSize: 11};
+        const legendBaseTextStyle: any = {color: neutrals.dashboard.text, fontSize: 11};
         const legendTextStyle = mode === 'type' ? {...legendBaseTextStyle, rich: richStyles} : legendBaseTextStyle;
 
         const legendTypeExtras =
@@ -376,9 +376,9 @@
                   left: 'center',
                   width: '95%',
                   textStyle: legendTextStyle,
-                  pageTextStyle: {color: themed(CHART_NEUTRALS.dashboard.text, isDark), fontSize: 10},
-                  pageIconColor: themed(CHART_NEUTRALS.dashboard.text, isDark),
-                  pageIconInactiveColor: themed(CHART_NEUTRALS.legendPageIconInactive, isDark),
+                  pageTextStyle: {color: neutrals.dashboard.text, fontSize: 10},
+                  pageIconColor: neutrals.dashboard.text,
+                  pageIconInactiveColor: neutrals.legendPageIconInactive,
                   pageButtonGap: 4,
               }
             : {
@@ -389,9 +389,9 @@
                   top: 20,
                   bottom: 20,
                   textStyle: legendTextStyle,
-                  pageTextStyle: {color: themed(CHART_NEUTRALS.dashboard.text, isDark)},
-                  pageIconColor: themed(CHART_NEUTRALS.dashboard.text, isDark),
-                  pageIconInactiveColor: themed(CHART_NEUTRALS.legendPageIconInactive, isDark),
+                  pageTextStyle: {color: neutrals.dashboard.text},
+                  pageIconColor: neutrals.dashboard.text,
+                  pageIconInactiveColor: neutrals.legendPageIconInactive,
               };
 
         const pieCenter = legendBelow ? ['50%', '40%'] : ['35%', '50%'];
@@ -490,9 +490,9 @@
                 trigger: 'item',
                 formatter: tooltipFormatter,
                 position: tooltipPositionAboveFinger,
-                backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
-                borderColor: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
-                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
+                backgroundColor: neutrals.tooltip.box.background,
+                borderColor: neutrals.tooltip.box.border,
+                textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
             },
             legend: legendConfig,
             series: rings
@@ -506,7 +506,7 @@
                           padAngle: 1,
                           itemStyle: {
                               borderRadius: 4,
-                              borderColor: themed(ALLOCATION_CHART_COLORS.sliceBorder, isDark),
+                              borderColor: neutrals.allocation.sliceBorder,
                               borderWidth: 2,
                           },
                           label: labelConfig,
@@ -539,7 +539,7 @@
             const span = end - start;
             const innerEnd = `${start + span * 0.67}%`;
             const outerStart = `${start + span * 0.8}%`;
-            const border = {borderRadius: 4, borderColor: themed(ALLOCATION_CHART_COLORS.sliceBorder, isDark), borderWidth: 2};
+            const border = {borderRadius: 4, borderColor: neutrals.allocation.sliceBorder, borderWidth: 2};
             const shared = {type: 'pie' as const, center: pieCenter, avoidLabelOverlap: true, padAngle: 0, itemStyle: border, labelLayout: {hideOverlap: true}};
             const captionConfig = {
                 show: true,
@@ -547,7 +547,7 @@
                 formatter: (params: any) => `${params.data?.caption ?? params.name}\n${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}`,
                 fontSize: 11,
                 lineHeight: 14,
-                color: themed(ALLOCATION_CHART_COLORS.caption, isDark),
+                color: neutrals.allocation.caption,
             };
             return [
                 // Family icons only where they fit: a 0.01% "Liquidity" arc would otherwise

@@ -4422,3 +4422,287 @@ prossimo checkpoint.
   > carico 45–50: è lentezza, non un fallimento. Prima del taglio 858 verdi, 0 rossi. Rilanciati i tre file rimasti
   > (`structural_invariants`, `telemetry`, `temporal`): 283 verdi in 7 min 19 s. Ogni test dell'AI Export è passato
   > almeno una volta.
+- CP-10b committato (`3aa2e412e`, le 6 rinomine registrate; `169d1d465` diario) ed entrato: dev `b36e3873f`. HEAD
+  portato avanti in avanti veloce, albero pulito. Via del coordinatore a CP-10c (17/10 ~01:33).
+
+#### CP-10c — `signals/service.py` diviso per tema (17/10, dalle 01:33; base `b36e3873f`)
+
+- ✅ **Passo 1 — il codice (2026-10-17)**.
+  > **Note implementazione**:
+  > - Generatore AST `files/j/cp10c/split.py`, stesso metodo di CP-9a:
+  >   - i metodi diventano funzioni di modulo; `self.registry` → `registry`, `self.annotation_service` →
+  >     `annotation_service`, con la dipendenza come primo parametro;
+  >   - `self._x(`, `cls._x(` e `SignalService._x(` → la funzione nuova;
+  >   - ogni modulo nuovo riceve tutto il blocco d'import; `ruff --fix` toglie quelli inutili (175) e black formatta.
+  >   - Il generatore si ferma se un metodo non è mappato o se resta un accesso `self.`/`cls.`.
+  > - **Risultato**: `service.py` passa da 1 315 a 93 righe: `SignalService` con `__init__`, `prepare_plan` (delega a
+  >   `prepare_signal_plan(self.registry, …)`), `execute` e `compute`. `execute` chiama
+  >   `asyncio.to_thread(execute_signal_plan, self.annotation_service, plan, …)` solo con argomenti posizionali, così il
+  >   test che avvolge `to_thread` resta com'è. `__all__ = ["SignalService"]`: nessuna riesportazione.
+  > - **Moduli nuovi**:
+  >   - `planning.py` (332): `SignalRequestValidationError`, `PlannedSignal`, `SignalExecutionPlan`,
+  >     `prepare_signal_plan`, `validate_annotation_output_sources`, `signal_dedup_key`, `preflight_failure`;
+  >   - `execution.py` (~710): `SignalPreparedSeriesBundle`, `execute_signal_plan`, `prepared_signal_inputs`,
+  >     `prepared_price_points`, `risk_result_metadata`, `risk_quality_warnings`, `execute_planned_signal`,
+  >     `runtime_failure`;
+  >   - `validation.py` (~160): i tre errori di output, `exception_details`, `normalize_computation`, le tre
+  >     riscritture della disponibilità, `sanitize_output`, `validate_plugin_output`.
+  > - **`annotations.py`** riceve `annotation_sources` e `attach_annotations(annotation_service, …)`, più un suo logger.
+  >   Il suo `__all__` scende in fondo al file e li elenca.
+  > - **Grafo d'import aciclico**: `validation` ← `planning` ← `execution` ← `service`; `annotations` ← `planning`,
+  >   `execution`, `service`. Annotazioni e validazione non importano nessuno dei due.
+  > - **Due scelte di posto**:
+  >   - `validate_annotation_output_sources` resta in `planning.py`: solleva l'errore di richiesta, e in
+  >     `annotations.py` chiuderebbe un ciclo planning↔annotations;
+  >   - `exception_details` va in `validation.py`, lo strato comune più basso di piano ed esecuzione.
+  > - **Nomi**: `_dedup_key` → `signal_dedup_key`, perché `prepare_signal_plan` ha una variabile locale `dedup_key`. Gli
+  >   altri nomi non oscurano nessuna variabile locale.
+  > - **Importatori dell'app** (solo righe d'import):
+  >   - `api/v1/signals.py`, `api/v1/assets/prices.py`: l'errore di richiesta da `planning`;
+  >   - `api/v1/fx/currencies.py`, `ai_export/components/technical_shared.py`: piano ed errore di richiesta da
+  >     `planning`;
+  >   - `assets/price_query.py`: il pacchetto di serie da `execution`;
+  >   - la docstring di `signals/base.py` (`validate_output`) punta a `signals.validation.validate_plugin_output`.
+  > - **`.github`**:
+  >   - la riga «Runtime» di `backend-signals.instructions.md` dà la mappa dei moduli;
+  >   - `frontend-signals.instructions.md:48-50` punta a `planning.py`/`execution.py`, e al contratto in
+  >     `signals/base.py`;
+  >   - skill `signal-plugin` `:75`.
+  >   - L'`applyTo` `services/signals/**` copre già i moduli nuovi.
+  > - **devWiki**:
+  >   - righe «Source files» in `domains/signals.md` (una riga per modulo),
+  >     `decisions/signal-backend-plugin-architecture.md` e `decisions/drawdown-full-history-warmup.md` («Plan
+  >     aggregation» → `planning.py`);
+  >   - voce in `log.md`;
+  >   - `check_source_paths.py` resta a 7, tutti preesistenti.
+  > - **Controlli**: ruff (tutte le regole) e black puliti sugli 11 file dell'app. Tutti e cinque gli importatori e tutti
+  >   e cinque i moduli si importano. `SignalService` espone solo `prepare_plan`, `execute` e `compute`.
+  >
+  > **⚠️ Fuori pista**: questo passo l'avevo scritto in inglese, con l'etichetta «Implementation notes»; riscritto in
+  > italiano come il resto del piano.
+- ✅ **Passo 2 — test e doc (2026-10-17, 01:41–01:52)**, test-author e docs-writer in parallelo, senza eseguire nulla.
+  > **Note implementazione**:
+  > - **Test** (test-author): quattro file; valori e asserzioni identici, stesso numero di `assert` per file (216, 4,
+  >   244, 91).
+  >   - `test_signal_service.py`:
+  >     - l'errore di richiesta viene da `planning`;
+  >     - il caso dell'orchestrazione che fallisce mette la patch su `execution.execute_planned_signal`, dove il codice
+  >       legge il nome, con `raising=True`;
+  >     - `normalize_computation` viene da `validation`;
+  >     - la barriera «nessuna libreria di indicatori né I/O di dominio» ora controlla tutti e cinque i moduli
+  >       dell'orchestrazione (`service`, `planning`, `execution`, `validation`, `annotations`), parametrizzata: +4
+  >       casi.
+  >   - `test_signal_request_validation_api.py`: l'errore da `planning`.
+  >   - `test_risk_signal_plugins.py`: il pacchetto di serie da `execution`.
+  >   - `test_ai_export_components_portfolio_broker_integration.py`: `SignalExecutionContext` dalla sua casa,
+  >     `schemas.signals`; prima passava dal modulo del servizio per caso.
+  >   - grep: nessun nome privato vecchio e nessun import da `signals.service` che non sia `SignalService`. ruff e
+  >     black puliti.
+  > - **Doc** (docs-writer): `signal_plugin_guide.md`, la tabella dei componenti. Una riga per modulo (`service.py`
+  >   facciata, `planning.py`, `execution.py`, `validation.py`); la riga di `annotations.py` dice anche l'attacco ai
+  >   risultati. Poi, su mia richiesta, le righe mancanti di `signals/series.py` e `signals/risk_adapters.py`. Pagina
+  >   solo inglese: niente debito di traduzione.
+  > - La riga «Runtime» delle istruzioni dei segnali, scritta da me in CP-10b, diceva `series.py` «(quote days,
+  >   prepared series)»: il modulo prepara l'input (giorni di quotazione, copertura, disponibilità, taglio visibile),
+  >   mentre le serie preparate del rischio passano da `execution.py`. Corretta (segnalazione del docs-writer).
+  > - Due imprecisioni preesistenti della stessa pagina, non legate al taglio, vanno nell'indice come **J-38**:
+  >   - il diagramma di sequenza mette il taglio al visibile dopo le annotazioni;
+  >   - la sezione del piano non dice che un lotto incoerente ferma tutto il lotto.
+- ◐ **Passo 3 — cancelli**, `files/j/cp10c/runs.sh green` (corsia 6185, uno alla volta, carico < 50):
+  - le 10 azioni `signal-*` e `asset-signals`, poi `risk-all`, che contiene `test_risk_signal_plugins.py`;
+  - `ai-export` in tre parti, una partizione esatta per stare nei 600 s del runner;
+  - `gate-plugin-layout`, `check-orphans`;
+  - `db populate`, poi `api` `signal-catalogs`, `signal-request-validation`, `signal-preview` e `asset-signals`;
+  - `api sync` (`openapi.json` deve restare identico), `mkdocs build` e `check-links`.
+  - Fuori, perché il taglio non li tocca: `financial-math` e `schemas signals`.
+  > **Note implementazione** (17/10, 01:50–02:18):
+  > - verdi: `signal-registry` 66, `signal-runtime` 6, `signal-contracts` 10, `signal-service` **69** (65 + i 4 casi
+  >   nuovi della barriera), `signal-annotations` 25, `signal-plugins-core` 46, `signal-plugins-close-only` 62,
+  >   `signal-plugins-ohlc` 75, `signal-plugins-volume` 40, `signal-plugin-matrix` 91, `asset-signals` 30;
+  > - `risk-all` 903;
+  > - AI Export: 345 + 428 + 283 = **1 056**, cioè tutti, e la partizione è esatta; la parte C, quella lenta, in
+  >   6 min 3 s;
+  > - `gate-plugin-layout` 33, `check-orphans`, `db populate`, `api signal-catalogs` 5.
+  >
+  > **⚠️ Fuori pista**: `api signal-catalogs` è partito sotto la soglia del carico, poi il carico è salito a 115–156
+  > (gallerie e E2E di altre sessioni). Ha ricostruito il frontend di debug, vecchio dopo l'aggiornamento della base.
+  > - Il coordinatore (02:12): ogni `api`/E2E avvia un server e vuole uno slot; «finisci questo».
+  > - Fermato lo script dopo il passo, mentre aspettava il carico: nessun test in corso, porta 6185 libera.
+  > - Restano nello **slot 1 dopo A, dopo il fermo della galleria (~03:30) e dopo Y**: `api signal-request-validation`,
+  >   `signal-preview`, `asset-signals`, più la sonda MF-E1.
+  > - Senza slot, a carico < 50: `api sync`, `mkdocs build`, `check-links`.
+  > - **Controlli leggeri (02:30–02:35)**, `ONLY="api-sync mkdocs" runs.sh light`: `api sync` esito 0, `openapi.json`
+  >   identico; `mkdocs build` rigoroso («Documentation built in 165.80 seconds», nessun avviso che lo fermi);
+  >   `check-links` 97 collegamenti validi; porta 6185 libera.
+  >
+  > **⚠️ Fuori pista**: le righe `exit` di mkdocs nello script nuovo non erano affidabili.
+  > - `echo "… $(date) exit $?"`: la sostituzione `$(date)` aggiorna `$?` prima che venga espanso, quindi la riga dice
+  >   l'esito di `date`. Provato con `false; echo "$(date +%S) exit $?"`, che stampa `exit 0`.
+  > - Gli esiti veri li ho letti nei log: tutti e due verdi.
+  > - Corretto `runs.sh` (`rc=$?` subito dopo il comando).
+  > - Lo script di CP-10b non aveva il difetto: la sua funzione `step` cattura `rc` subito.
+
+#### CP-14 — U10, T-D9, P-10 (analisi, 17/10 ~02:00, sola lettura, mentre giravano i cancelli di CP-10c)
+
+- **U10-I1, la casa** (`financial_math/interest.py`, D-8). `scheduled_investment/plugin.py:74-186` contiene
+  `calculate_day_count_fraction`, i suoi tre aiuti (ACT/N, ACT/ACT, 30/360) e `calculate_simple_interest`.
+  - Sono primitive generiche. `_compute_maturation_dates` resta nel plugin: legge `MaturationFrequency` del dominio.
+  - Lettori: il plugin, `test_day_count_conventions.py` (37 riferimenti), `test_synthetic_yield.py` (19),
+    `test_synthetic_yield_integration.py` (23), `test_asset_source.py` (2), `populate_mock_data.py` (1).
+  - Doc: `financial-theory/fundamentals/day-count` in 4 lingue (cita la funzione) e
+    `developer/backend/assets/provider_scheduled_investment.md`.
+  - D-J12: il file del plugin è mio per il lotto, con X informato.
+- **Tre reperti numerici**, verificati coi valori calcolati dalle funzioni vere (in memoria, niente DB):
+  1. **ACT/ACT in forma chiusa perde un giorno a ogni cambio d'anno.** `_calculate_act_act` chiude ogni anno al 31/12
+     (`date(current_year, 12, 31)`) invece che al 1/1 dell'anno dopo.
+     - Valori: 1/7/2025 → 30/6/2026 dà 363/365 = 0,99452 (corretto 364/365 = 0,99726); 1/1/2023 → 1/1/2026 dà
+       2,99453 (corretto 3,0).
+     - **Tre test lo fissano**, tutti in `test_day_count_conventions.py`:
+       - `test_cross_year_non_leap_to_leap`: 30/365 + 31/366, cioè 61 giorni dove sono 62;
+       - `test_cross_year_leap_to_non_leap`: 30/366 + 31/365;
+       - `test_multi_year_range` (ACT/ACT): 364/365 + 365/366 + 365/365, «Based on manual calculation».
+       (Correzione delle 02:40: prima avevo scritto due.)
+     - Chi lo legge: solo la formula chiusa della mora SIMPLE (`_compute_late_interest_value`, `:581`, `:613`, `:624`),
+       quando grazia o mora attraversano un 31/12.
+     - Le altre quattro chiamate (`:322`, `:483`, `:567`, `:599`) fanno passi di un giorno, e un passo di un giorno che
+       passa l'anno chiude giusto.
+     - Nessun test del provider usa ACT/ACT (`test_synthetic_yield*.py`, `test_asset_source.py`, `populate_mock_data`):
+       cambiano solo i 3 valori attesi di quei test.
+     - Cura: segmenti [max(inizio, 1/1 Y), min(fine, 1/1 Y+1)), giorni / giorni dell'anno Y (ISDA). Rosso prima;
+       valori che cambiano: la mora SIMPLE in ACT/ACT oltre un capodanno, +1 giorno per ogni capodanno.
+  2. **30/360 sommato giorno per giorno non è il 30/360 del periodo.** 15/1 → 31/3 dà 75 giorni contro 76: la regola
+     US del 31 (D2 = 31 resta 31 se D1 < 30).
+     - Il cammino accumula zero il 31 e recupera il giorno dopo: è uno scarto di un giorno, solo nei 31 del mese.
+     - Minimo: lo propongo come nota, non come cura.
+  3. **COMPOUND: la base esclude le rettifiche manuali.** Il cammino programmato compone su `principal +
+     total_interest`, senza `event_adjustment`, mentre la mora COMPOUND compone sul valore intero.
+     - La docstring del modulo dice I = V_{t-1}·r·Δt.
+     - Dopo un INTEREST manuale (cedola registrata) o una PRICE_ADJUSTMENT, la base non scende né sale.
+     - Esempio: 1 000 al 10 % composto, cedola manuale dopo un anno → l'anno dopo matura ~116 invece di ~105.
+     - **Domanda per il developer**: una cedola manuale o una rettifica cambiano la base su cui maturano gli interessi
+       composti? La cedola automatica azzera tutti e due, quindi lì non c'è differenza.
+- **U10-I2, un solo cammino.** `_generate_schedule_values` (`:236-403`) e `_compute_value_at` (`:406-529`) ripetono
+  lo stesso cammino giorno per giorno: interesse del giorno, eventi manuali, valore prima dell'azzeramento, cedola
+  automatica. Il codice stesso lo dice: «TODO(P2-refactor): duplicate day-walk, share walker».
+  - Proposta: un generatore di stati del giorno usato da tutti e due, a numeri identici.
+  - La mora (`:532-635`) usa le primitive della casa e un passo composto comune.
+- **T-D9** (D-9: la soglia della casa, «—»).
+  - `MeasureSignal.ts` annualizza con qualunque `days > 0`, in due copie (`getMeasurement`, `getMeasurementForSignal`),
+    e dà 0 con `days ≤ 0`.
+  - La casa non annualizza sotto i 30 giorni (`returns.py:101`, `_MIN_ANNUALIZATION_DAYS`).
+  - Cura: un aiuto solo, `null` → «—» sotto la soglia.
+  - Nota: `deltaPct` vale 0 quando il valore iniziale è 0; sarebbe «—» anche lui.
+  - Dipende dal lotto B dei colori (D-J11).
+- **P-10** (decisione 27, A). Si rifiuta di cambiare il tipo di uno SPLIT che ha rettifiche senza costo legate, con un
+  messaggio tradotto (4 cataloghi).
+  - Dove: `services/assets/event_store.py` di X (`_apply_manual_event_edits`, `:414`).
+  - Lo scrivo io col diff a X (punto 27, come D-J17).
+  - Il test di oggi che lo fissa: `test_portfolio_wac.py:521-588`.
+  - Il controllo va fra quelli di `_apply_manual_event_edits` che girano prima della prima scrittura: una modifica
+    con `rows[id].type == SPLIT` e un tipo nuovo diverso, con almeno una riga legata (`transactions.asset_event_id`)
+    senza `cost_basis_override` → errore tradotto, niente scritto.
+  - La cancellazione è già sicura: `asset_event_id` → `asset_events.id` è `ondelete=RESTRICT` (`models.py:956-962`),
+    quindi uno SPLIT ancora legato non si cancella.
+  - V-4: E2 di `data-quality-real.spec.ts` va ricostruito.
+- **I rossi di V-3** (D-J4) li ha scritti il test-author di W, e io li ho rivisti (§10, 10:30–10:45). Ci sono già:
+  l'unità `services orphan-transfer-numbers` («Lots and Dashboard once a broker deletion leaves the other half of a
+  TRANSFER: the orphan against an ADJUSTMENT-in control»). W-B6 è ✅, con la decisione 47 in corso. **Escono da
+  CP-14.**
+- **Proposta di lotti**:
+  - **CP-14a**: I1 spostamento puro + I2 cammino unico, a numeri identici; più P-10.
+  - **CP-14b**: il reperto 1 (ACT/ACT), col rosso e i valori dichiarati.
+  - **T-D9** quando il lotto B dei colori è entrato.
+  - Il reperto 3 aspetta il developer; il 2 resta una nota.
+
+#### Sonda reale MF-E1 (richiesta del coordinatore 17/10 ~02:05; slot 1 dopo il fermo della galleria e dopo Y)
+
+- **Richiesta** (testuale): «the real AI Export smoke probe on dev `f32a04f46`, for MF-E1. `portfolio.fifo_summary` and
+  `broker.fifo_summary` go to v3 (T-B8 …), with the compact entries `[1, 2, 3]` in `snapshotDataRenderer.ts`. Two cases
+  are enough, Data mode: one portfolio and one broker with FIFO, on your private copy (as J-26). Check the version, the
+  compact rendering (not the YAML fallback) and the UI/probe equivalence.»
+- **Cosa cambia in MF-E1** (diff `b36e3873f..f32a04f46`, letto):
+  - `summarize_fifo_asset_rows` somma valore aperto e P&L non realizzato sugli stessi lotti, `valued_open_rows`;
+  - `lot_residual_cost_basis` chiama `financial_math.lots.summary.residual_cost`;
+  - le due versioni passano a 3 nel catalogo e negli `ComponentSpec`;
+  - la mappa compatta è `[1, 2, 3]`.
+  - Sui dati reali (solo EUR, nessun lotto senza costo) i numeri non devono cambiare: la differenza nasce solo con un
+    valore noto e un P&L ignoto. Il controllo è di forma: la versione, il rendering compatto, l'equivalenza.
+- **Albero della sonda** `/tmp/librefolio-mfe1-probe` (`files/j/mfe1/tree.sh`):
+  - `git archive f32a04f46` di `backend`, `frontend`, `scripts`, `dev.py` e dei file di pipenv/pytest; `node_modules`
+    è un collegamento al worktree (nessuna dipendenza cambiata da `b36e3873f`);
+  - i file generati, ignorati da git (client dell'API, contratti dei Tool, catalogo i18n), li rigenera l'albero col suo
+    codice: `api sync` e `i18n_catalog.py build`.
+  - Diverso da J-26: lì il frontend era il mio, per misurare solo il backend. Qui serve il renderer di `f32a04f46`,
+    perché la mappa compatta sta nel frontend.
+  - Pronto alle 02:36: catalogo con le due voci v3, renderer con `[1, 2, 3]`, 1 046 file Python.
+- **Casi** (`files/j/mfe1/probe.sh`), utente `alfy`, 1Y, `standard`, Data:
+  - `portfolio.fifo`, `all`;
+  - `broker.fifo` sul broker con più vendite. Il nome lo legge una variabile dalla copia e non va su file.
+- **Comando**: `ai_export_real_prompt_probe.py --source-db /tmp/librefolio-r2-j-realdata/sqlite/app.db --port 6195
+  --output-dir files/j/mfe1/run --keep-canonical --normalize-copy-credentials`, password solo nella variabile
+  d'ambiente.
+- **Controlli**:
+  - `component_version` 3 per i due `fifo_summary`, e intestazioni del prompt in v3;
+  - nessun «PAYLOAD YAML FALLBACK»;
+  - `renderer_equivalence` vera e 0 violazioni;
+  - scansione dei segreti pulita;
+  - l'hash della copia di lavoro registrato prima e dopo.
+  - Riferimento in v2: i 7 canonici di J-26 (`files/j/j26/current/…`), dove `fifo_summary` sta nelle sezioni 8 e 9.
+
+- **⚠️ Fuori pista (02:39)**: il caricamento a vuoto del ponte nell'albero (stdin chiuso, niente porta) falliva in 3 s
+  con `TSConfckParseError`: `frontend/tsconfig.json` estende `./.svelte-kit/tsconfig.json`, che un `git archive` non
+  ha. In J-26 il frontend era il mio worktree, che ce l'aveva.
+  - Rimedio: `svelte-kit sync` dentro l'albero (binario bloccato da `node_modules/.bin`, scrive solo `.svelte-kit/`
+    lì), aggiunto a `tree.sh`.
+  - Il nuovo caricamento a vuoto aspetta un carico < 50 (gallerie a 160).
+- **CP-14 al coordinatore (02:43)**, `needs_input`:
+  - la domanda per il developer sulla base del composto (regola della notte: scritta qui, mandata, e si va avanti);
+  - il reperto ACT/ACT;
+  - la proposta CP-14a/CP-14b;
+  - lo stato del lotto B dei colori per T-D9;
+  - il via a CP-14a dopo l'ingresso di CP-10c.
+- **Coordinatore (02:44)**:
+  - via a **CP-14a** dopo l'ingresso di CP-10c (P-10 col diff a X da rivedere);
+  - poi **CP-14b**: ACT/ACT, rosso prima, valori dichiarati, una riga 🐛;
+  - la base del COMPOUND va al developer, la registra lui; **fino ad allora non la tocco**;
+  - T-D9: chiede ai colori se il lotto B è entrato e me lo dice;
+  - slot 1 dopo il fermo, come previsto.
+- **T-D9 libera** (coordinatore 02:46): il lotto B dei colori (R) è entrato il 14/10. L'ultimo commit dei colori su
+  `MeasureSignal.ts` è `75c45d923`, e non hanno lotti aperti sul file.
+  - **Analisi (sola lettura)**: le due copie stanno tutte e due in `MeasureSignal.ts` (`getMeasurement`,
+    `getMeasurementForSignal`); nel backend non ce n'è.
+  - La regola della casa (`returns.py::cumulative_to_annualized`) dà `None` in tre casi: giorni < 30 (`days <= 0`
+    compreso), un rendimento ≤ −100 %, un risultato non finito.
+  - La misura oggi dà invece 0 per `days ≤ 0` e annualizza da 1 giorno.
+  - Due test fissano lo zero contro il loro stesso nome:
+    - «reports no annual rate for a zero-length span» si aspetta `annualizedPct: 0`;
+    - «reports no percentage when the span opens at zero» si aspetta `deltaPct: 0` e `annualizedPct: 0`.
+  - `MeasurementResult.annualizedPct` è `number`, mentre la riga del pannello accetta già `null` e mostra «—»
+    (`MeasurePanel.svelte:410`). `deltaPct` invece no: la cella `:399` e l'etichetta compatta `:316`.
+  - **Cura**:
+    - un aiuto `annualizedPercent(deltaPct, days)` dentro `MeasureSignal.ts`, il file dell'eccezione dichiarata (regola
+      C della barriera), con la soglia di 30 giorni come la casa;
+    - un test di parità che legge `_MIN_ANNUALIZATION_DAYS` da `returns.py`.
+    - **Proposta al coordinatore**: anche `deltaPct` = null quando il punto d'inizio vale 0 (sconosciuto, non zero),
+      col pannello che mostra «—».
+  - **Doc**: `user/assets/detail/measures` e `user/fx/detail/measures` (riga Δ%/yr, 4 lingue). Riga 🐛 nel
+    CHANGELOG.
+  - Le E2E toccano solo la presenza delle colonne (`asset-detail.spec.ts:6682`), non i valori.
+  - **Posto**: CP-14b, insieme ad ACT/ACT. Tutte e due cambiano valori visibili, col rosso prima e i valori
+    dichiarati; CP-14a resta a numeri identici più P-10.
+- **Decisione notturna N65** (coordinatore, ~02:50): sì, `deltaPct` null («—») quando l'inizio vale 0. Uno 0 % dove
+  il valore vero è sconosciuto è un numero sbagliato, e il nome stesso del test dice già «no percentage».
+  - CP-14b = ACT/ACT + T-D9: approvato.
+- **Preparazione di CP-14a** (sola lettura, nella sessione): la casa può importare `DayCountConvention` da
+  `schemas/assets/scheduled_investment.py`, come altri moduli della casa importano già `schemas.portfolio`,
+  `schemas.common` e `schemas.wac`. Le regole del layer vietano solo servizi d'orchestrazione, API, AI Export, rischio,
+  PAC e segnali.
+- ✅ **Albero MF-E1 pronto (02:47)**: `svelte-kit sync` nell'albero esce con 0. Caricamento a vuoto del ponte: esito 0
+  in 4 s, nessun errore, quindi il grafo del renderer di `f32a04f46` si carica. La sonda aspetta lo slot 1.
+- **Checkpoint CP-10c consegnato (17/10 02:51)**, su richiesta del coordinatore («hand off now, marking as not run the
+  3 api»).
+  - **Non girati**: `api signal-request-validation`, `signal-preview` e `asset-signals`. Girano nello slot 1, dopo il
+    fermo della galleria, **sulla revisione combinata, prima dell'ingresso**, insieme alla sonda MF-E1.
+  - Il coordinatore committa e aggiorna la base; poi via a CP-14a.
+  - Fino alla conferma dell'aggiornamento non tocco il diario (piano, indice, `log.md`). Le note di CP-14a vanno
+    intanto in `files/j/cp14a/`.

@@ -94,14 +94,46 @@ registry category, its verdict passed back; none for a frontend category or
 nothing to skip. Pure: ``_parallel_for_scope`` and both consolidated pre-passes are
 recorders; ``run_category_setup``, ``plan``, ``run_groups`` and ``subprocess.run``
 fail the test if reached.
+
+The H-26 regressions pin how test names given to an action registered without them
+are refused. Every registry category's parser takes positional ``test_names``, and
+``run_test_from_registry`` hands them only to an action registered ``test_names=True``;
+the others dropped them and ran whole: ``services all test_foo`` ran every ``services``
+unit, ``external all yfinance`` every provider, ``db populate --force --clean extra``
+repopulated the lane in silence. ``_cli._refused_test_names(args)`` is the rule, pure:
+None without test names (``test_names`` absent, None or ``[]``), for a category or an
+action ``TEST_REGISTRY`` does not hold (the suites and ``check-orphans`` declare
+neither attribute; argparse answers for those) and for an action whose entry takes
+names; otherwise the refusal, which names the category and every name given, then says
+"name the action" for ``all``, or names the action and says "takes no test names".
+``dev.py test``'s ``_dispatch_test_command`` and the standalone ``main()`` ask it first,
+``--list`` included, before ``tee_output``, ``_activate_log_dir``, ``_timed_run`` and
+``_snapshot_log_dir_db``: a refusal goes through ``print_error`` and the entry returns
+2, which ``dev.py`` and ``python -m scripts.test_runner`` exit with. Pure: the
+arguments come from the real parsers; every seam an entry reaches before or instead of
+a run, ``subprocess.run`` and ``Popen`` included, fails the test if reached; ``dev`` is
+imported by its one case only, with the working directory and ``sys.path`` put back.
+
+The H-30 regressions pin that a body that raises still leaves the lane's database
+snapshotted next to the logs. With ``--log-file``, the standalone ``main()`` called
+``_snapshot_log_dir_db()`` after ``_timed_run``, outside any ``finally``: a body that
+raised skipped it, and the run that crashed, the one whose database is evidence, left
+none. ``_dispatch_test_command`` (``dev.py test``) has the ``finally`` in both branches.
+Both entries, with ``--log-file`` or without, call ``_snapshot_log_dir_db`` once, after
+the body, inside the log's tee when there is one, and let the body's exception through.
+Pure: H-26's ``entry_steps`` (every seam closed, the entry's steps recorded), a
+``tee_output`` that only records, and a body answering 0 or raising ``H30BodyCrash``.
 """
 
 from __future__ import annotations
 
+import argparse
 import ast
 import contextlib
+import importlib
 import re
 import sqlite3
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -1772,6 +1804,549 @@ class TestApplyParallelLeavesOneActionToTheSerialPass:
         assert result == (True, True), f"nothing failed: the serial pass goes on (got {result!r})"
         assert consolidation_passes.backend == [set()], f"the consolidated backend pre-pass is still asked, with nothing to skip (asked with: {consolidation_passes.backend})"
         assert _common._SKIP_ACTIONS == set(), f"nothing was covered: the serial pass has nothing to skip (skips: {_common._SKIP_ACTIONS})"
+
+
+# ── H-26: test names given to an action that takes none are refused, before anything runs ─────────────────────────────
+# ``_cli._refused_test_names`` is looked up at call time: while it is missing, its own cases fail on the named
+# "H-26: _refused_test_names is missing" barrier and leave the cases above alone. A case driving an entry
+# (``_dispatch_test_command`` for ``dev.py test``, the standalone ``main()``, ``dev.main()``) first closes every seam
+# the entry reaches before, or instead of, the body of a run (``refusal_seams``). Today's code hands the names on to the
+# whole category: each refused invocation fails on the first seam it reaches ("H-26: _cli._activate_log_dir ran for
+# test names …"), before a log is archived, a campaign recorded or a category run. An invocation the rule lets through
+# reaches the entry's body, a recorder answering 0 (``entry_steps``): those cases are green before and after.
+
+#: Two test names, so that "every name given" has more than one to find.
+H26_NAMES = ("h26_name_a", "h26_name_b")
+#: What the refusal of an ``all`` says: test names belong to one of the category's actions.
+H26_NAME_THE_ACTION = "name the action"
+#: What the refusal of any other action registered without test names says.
+H26_TAKES_NO_NAMES = "takes no test names"
+#: Every action of the live catalogue as ``(category, action)``, read once, when this module is collected.
+H26_CATALOGUE = [pytest.param(category, action, id=f"{category}-{action}") for category, actions in TEST_REGISTRY.items() for action in actions if action != "_meta"]
+#: A Vitest unit registered without test names (``_frontend_portfolio.populate_registry``).
+H26_VITEST = ("front-portfolio", "risk-unit")
+#: The sub-commands of ``dev.py test`` that are no registry category: their parsers declare neither ``action`` nor ``test_names``.
+H26_NOT_CATEGORIES = ["all", "all-backend", "all-frontend", "check-orphans", "coverage", "coverage-report"]
+#: A category of these tests only, injected with ``monkeypatch.setitem``, and its one action other than ``all``.
+H26_FAKE_CATEGORY = "h26-fake-category"
+H26_FAKE_ACTION = "h26-one"
+#: Test names given to an action registered without them, as ``(words after "dev.py test", category, action, names)``.
+#: The parsers read a name after a flag (``--list``, ``--clean``) as a test name all the same.
+H26_REFUSED = [
+    pytest.param(("services", "all", *H26_NAMES), "services", "all", H26_NAMES, id="services-all"),
+    pytest.param(("services", "all", "--list", "h26_name"), "services", "all", ("h26_name",), id="services-all-list"),
+    pytest.param(("db", "populate", "--force", "--clean", "h26_name"), "db", "populate", ("h26_name",), id="db-populate"),
+    pytest.param(("external", "all", "yfinance"), "external", "all", ("yfinance",), id="external-all-provider-code"),
+    pytest.param((*H26_VITEST, "h26_name"), *H26_VITEST, ("h26_name",), id="vitest-unit"),
+]
+#: Invocations the rule lets through, as ``(words, category, action, names, other attributes the parser sets)``: names
+#: to an action that takes them, ``all`` without names, and provider codes, which ``--exclude-providers`` takes.
+H26_LET_THROUGH = [
+    pytest.param(("services", SERVICES_PURE_ACTION, "test_x"), "services", SERVICES_PURE_ACTION, ("test_x",), {}, id="names-to-an-action-taking-them"),
+    pytest.param(("services", "all"), "services", "all", (), {}, id="all-without-names"),
+    pytest.param(("external", "all", "--exclude-providers", "yfinance", "broker_coinbase"), "external", "all", (), {"exclude_providers": ["yfinance", "broker_coinbase"]}, id="exclude-providers-takes-the-codes"),
+]
+#: The seams either entry reaches before, or instead of, the body of a run, as ``(module, name)``, each looked up there
+#: when called. ``_common.subprocess`` is the ``subprocess`` module itself: behind every seam, no process may start.
+H26_SEAMS = (
+    (_common, "tee_output"),
+    (runner_cli, "_activate_log_dir"),
+    (runner_cli, "_timed_run"),
+    (runner_cli, "_snapshot_log_dir_db"),
+    (runner_cli, "_dispatch_test_command_body"),
+    (runner_cli, "_main_body"),
+    (runner_cli, "_configure_runtime"),
+    (runner_cli, "run_test_from_registry"),
+    (runner_cli, "dispatch_to_category"),
+    (_common.subprocess, "run"),
+    (_common.subprocess, "Popen"),
+)
+#: Why a seam fails a refused invocation that reaches it.
+H26_REFUSAL_FIRST = "ran for test names the action does not take: the refusal must come first, before any side effect (the real seams tee the log, archive .testLog, record the campaign and run the whole category)"
+#: Why a seam fails an invocation the rule lets through that reaches it.
+H26_PAST_THE_STEPS = "was reached by an invocation the rule lets through: only the entry's recorded steps and its recorded body may run here"
+
+
+def _refused_test_names():
+    """``_cli._refused_test_names``, looked up at call time, or the H-26 barrier while it is missing."""
+    refused = getattr(runner_cli, "_refused_test_names", None)
+    if refused is None:
+        pytest.fail("H-26: _refused_test_names is missing")
+    return refused
+
+
+def _takes_test_names(category: str, action: str) -> bool:
+    """Whether the catalogue's entry for ``category action`` takes test names, read as ``run_test_from_registry`` reads it."""
+    return bool(TEST_REGISTRY[category][action].get("test_names", False))
+
+
+def _by_value(args) -> dict:
+    """``args``' attributes by value: a list is copied, so a change made to it in place shows too."""
+    return {key: list(value) if isinstance(value, list) else value for key, value in vars(args).items()}
+
+
+def _assert_refusal(text, category: str, action: str, names, where: str) -> None:
+    """``text`` refuses ``names`` for ``category action``: substrings only, never the sentence.
+
+    Always the category and every name given; for ``all`` "name the action", for any other action the action itself and
+    "takes no test names".
+    """
+    shown = " ".join([category, action, *names])
+    assert isinstance(text, str) and text.strip(), f"H-26: {category} {action} takes no test names, so {shown} must be refused: {where} carries no refusal (got {text!r})"
+    expected = [category, *names, H26_NAME_THE_ACTION] if action == "all" else [category, action, *names, H26_TAKES_NO_NAMES]
+    missing = [part for part in expected if part not in text]
+    assert not missing, f"H-26: the refusal of {shown} in {where} must carry {missing} (got {text!r})"
+
+
+def _assert_no_refusal(text: str) -> None:
+    """Nothing in ``text`` reads as a refusal: neither of its phrases."""
+    assert H26_TAKES_NO_NAMES not in text and H26_NAME_THE_ACTION not in text, f"an invocation the rule lets through is not refused (printed: {text!r})"
+
+
+def _dev_test_args(*words: str) -> argparse.Namespace:
+    """``dev.py test <words…>`` read by the real ``test`` parser, built and normalised as ``dev.py`` does: nothing runs."""
+    parser = argparse.ArgumentParser(prog="dev.py")
+    runner_cli.register_subparser(parser.add_subparsers(dest="command"))
+    return parser.parse_args(runner_cli.normalize_coverage_argv(["test", *words], only_command="test"))
+
+
+def _runner_args(*words: str) -> argparse.Namespace:
+    """``python -m scripts.test_runner <words…>`` read by the real ``create_parser()``, as ``main()`` reads it: nothing runs."""
+    return runner_cli.create_parser().parse_args(runner_cli.normalize_coverage_argv(list(words)))
+
+
+def _assert_parsed(args, category: str, action: str, names, extra=None) -> None:
+    """Precondition: the parser read ``category action`` with exactly ``names`` as test names, and ``extra``'s attributes."""
+    parsed = (args.category, getattr(args, "action", None), getattr(args, "test_names", None))
+    assert parsed == (category, action, list(names)), f"precondition: the parser must read {category} {action} with the test names {list(names)} (got {parsed})"
+    for attribute, value in (extra or {}).items():
+        assert getattr(args, attribute, None) == value, f"precondition: the parser must set {attribute}={value!r} (got {getattr(args, attribute, None)!r})"
+
+
+def _h26_unreachable(what: str, why: str = H26_REFUSAL_FIRST):
+    """A stand-in for ``what`` that fails the test, saying ``why``, the moment anything calls it."""
+
+    def fail_if_reached(*call_args, **_kwargs):
+        pytest.fail(f"H-26: {what} {why} (called with {call_args!r})")
+
+    return fail_if_reached
+
+
+def _close_seams(monkeypatch, why: str) -> None:
+    """Every ``H26_SEAMS`` seam replaced, where it is looked up, by a stand-in failing the test ``why`` when reached."""
+    for module, name in H26_SEAMS:
+        monkeypatch.setattr(module, name, _h26_unreachable(f"{module.__name__.rpartition('.')[2]}.{name}", why))
+
+
+def _steps_of(body: str) -> list[str]:
+    """What an entry does for an invocation the rule lets through, in today's order, ``body`` being its own body."""
+    return ["_activate_log_dir", "_timed_run", body, "_snapshot_log_dir_db"]
+
+
+def _run_runner_main(monkeypatch, *words: str):
+    """``python -m scripts.test_runner <words…>`` through the real ``main()``, which builds its parser and reads ``sys.argv``."""
+    monkeypatch.setattr(sys, "argv", ["scripts.test_runner", *words])
+    monkeypatch.delenv("_ARGCOMPLETE", raising=False)  # without it, main()'s argcomplete.autocomplete(parser) returns at once
+    return runner_cli.main()
+
+
+def _register_fake_category(monkeypatch, *, takes_names: bool) -> None:
+    """``H26_FAKE_CATEGORY``, with ``all`` and ``H26_FAKE_ACTION`` both registered ``test_names=takes_names``.
+
+    Built with the real ``make_category``/``add_test`` and injected with ``monkeypatch.setitem``; its actions fail the
+    test if anything runs one: the rule reads the catalogue, it never runs an action.
+    """
+    category = _common.make_category("H-26 fake category", "A category of this test only")
+    for action in ("all", H26_FAKE_ACTION):
+        run = _h26_unreachable(f"{H26_FAKE_CATEGORY} {action}", "ran: the rule reads the catalogue, it never runs an action")
+        _common.add_test(category, action, run, test_names=takes_names, name=f"H-26 {action}", desc="An action of the fake category")
+    monkeypatch.setitem(TEST_REGISTRY, H26_FAKE_CATEGORY, category)
+
+
+@pytest.fixture
+def refusal_seams(monkeypatch):
+    """Every seam either entry reaches before, or instead of, the body of a run, failing the test the moment it is called.
+
+    ``tee_output`` writes ``--log-file``; ``_activate_log_dir`` archives the previous ``.testLog`` (``--log-dir`` defaults
+    to it, so on every invocation); ``_timed_run`` writes the campaign record; ``_snapshot_log_dir_db`` copies the lane's
+    database next to the logs; the two bodies, the lane, the registry and the category dispatch run the tests, and
+    ``subprocess`` would spawn them. A refused invocation reaches none of them: today's code reaches the first one and
+    fails there, never on a real run.
+    """
+    _close_seams(monkeypatch, H26_REFUSAL_FIRST)
+
+
+@pytest.fixture
+def entry_steps(monkeypatch):
+    """For an invocation the rule lets through: the entry's own steps record, in order, and its body answers 0.
+
+    ``_activate_log_dir`` and ``_snapshot_log_dir_db`` only record; ``_timed_run`` records and calls the body it is
+    given; each body (``_dispatch_test_command_body(args)``, ``_main_body(parser, args)``) records itself and its
+    ``args`` and answers 0. Every other seam fails the test if reached: the body is a recorder, nothing behind it runs.
+    """
+    _close_seams(monkeypatch, H26_PAST_THE_STEPS)
+    steps = SimpleNamespace(events=[], bodies=[])
+
+    def activate_log_dir(args):
+        steps.events.append("_activate_log_dir")
+
+    def timed_run(args, body):
+        steps.events.append("_timed_run")
+        return body()
+
+    def snapshot_log_dir_db():
+        steps.events.append("_snapshot_log_dir_db")
+
+    def dispatch_test_command_body(args):
+        steps.events.append("_dispatch_test_command_body")
+        steps.bodies.append(args)
+        return 0
+
+    def main_body(parser, args):
+        steps.events.append("_main_body")
+        steps.bodies.append(args)
+        return 0
+
+    recorders = {
+        "_activate_log_dir": activate_log_dir,
+        "_timed_run": timed_run,
+        "_snapshot_log_dir_db": snapshot_log_dir_db,
+        "_dispatch_test_command_body": dispatch_test_command_body,
+        "_main_body": main_body,
+    }
+    for name, recorder in recorders.items():
+        monkeypatch.setattr(runner_cli, name, recorder)
+    return steps
+
+
+@pytest.fixture
+def dev_module(monkeypatch):
+    """``dev.py`` imported as a module, as ``test_runtime_isolation.py`` drives it, with what importing it changes put back.
+
+    Importing ``dev`` moves the working directory to the project root and prepends to ``sys.path``, and its ``main()``
+    prepends again on every call (``mkdocs_src/aphra-pipeline``, ``frontend/scripts``): ``monkeypatch.chdir`` and a copy
+    of ``sys.path`` put both back after the case. Before ``args.func(args)``, ``main()`` only imports the modules that
+    register its sub-parsers, registers them (reading files, writing none) and parses ``sys.argv``. ``HAS_ARGCOMPLETE``
+    is off, as in ``test_runtime_isolation.py``.
+    """
+    monkeypatch.chdir(Path.cwd())
+    monkeypatch.setattr(sys, "path", [*sys.path])
+    dev = importlib.import_module("dev")
+    monkeypatch.setattr(dev, "HAS_ARGCOMPLETE", False)
+    return dev
+
+
+class TestRefusedTestNames:
+    """Contract point 1: ``_cli._refused_test_names(args)``, pure: the refusal, or None.
+
+    None without test names (``test_names`` absent, None or ``[]``), for a category or an action ``TEST_REGISTRY`` does
+    not hold (argparse answers for those), and for an action whose entry takes test names. For any test name given to an
+    action registered without them, the refusal: it names the category and every name, then says "name the action" for
+    ``all``, or names the action and says "takes no test names" for any other.
+    """
+
+    @pytest.mark.parametrize(("category", "action"), H26_CATALOGUE)
+    def test_test_names_are_refused_exactly_where_the_catalogue_takes_none(self, capsys, category, action):
+        refused = _refused_test_names()
+        args = _prepass_args(category, action, H26_NAMES)
+        before = _by_value(args)
+
+        message = refused(args)
+
+        if _takes_test_names(category, action):
+            assert message is None, f"H-26: {category} {action} takes test names: {list(H26_NAMES)} must reach it, not be refused (got {message!r})"
+        else:
+            _assert_refusal(message, category, action, H26_NAMES, "the rule's answer")
+        assert _by_value(args) == before, f"the rule is pure: it reads the arguments and changes none of them (before: {before}, after: {_by_value(args)})"
+        captured = capsys.readouterr()
+        assert captured.out + captured.err == "", "the rule is pure: the entries print the refusal, the rule prints nothing"
+
+    def test_the_catalogue_holds_actions_on_both_sides_of_the_rule(self):
+        """Precondition of the case above, green before and after: no count, named actions on each side of the rule.
+
+        ``all`` and other actions registered without test names, so both refusals are exercised, and an action taking
+        them, so test names that must go through are exercised too.
+        """
+        for category, action in [("services", "all"), ("db", "populate"), H26_VITEST]:
+            assert action in TEST_REGISTRY.get(category, {}), f"precondition: {category} {action} is an action of the catalogue"
+            assert not _takes_test_names(category, action), f"precondition: {category} {action} is registered without test names; anchor the rule on another action that is"
+        assert _takes_test_names("services", SERVICES_PURE_ACTION), f"precondition: services {SERVICES_PURE_ACTION} takes test names; anchor the rule on another action that does"
+
+    @pytest.mark.parametrize("test_names", H25_NO_TEST_NAMES)
+    @pytest.mark.parametrize(
+        ("category", "action"),
+        [
+            pytest.param("services", "all", id="services-all"),
+            pytest.param("db", "populate", id="db-populate"),
+            pytest.param(*H26_VITEST, id="vitest-unit"),
+            pytest.param("services", SERVICES_PURE_ACTION, id="action-taking-names"),
+        ],
+    )
+    def test_without_test_names_nothing_is_refused(self, category, action, test_names):
+        refused = _refused_test_names()
+
+        assert refused(_prepass_args(category, action, test_names)) is None
+
+    @pytest.mark.parametrize("command", H26_NOT_CATEGORIES)
+    def test_a_sub_command_declaring_neither_attribute_is_never_refused(self, command):
+        """``all``, ``all-backend``, ``all-frontend``, ``check-orphans`` and the coverage commands take no positional names: argparse refuses extras there."""
+        refused = _refused_test_names()
+        assert command not in TEST_REGISTRY, f"precondition: {command} is a sub-command of dev.py test, not a registry category"
+
+        assert refused(_prepass_args(command)) is None
+
+    @pytest.mark.parametrize(
+        ("category", "action"),
+        [
+            pytest.param("h26-no-such-category", "all", id="unknown-category"),
+            pytest.param("services", "h26-no-such-action", id="unknown-action"),
+            pytest.param("services", None, id="action-none"),
+            pytest.param("all-backend", NO_ACTION_ATTRIBUTE, id="suite-without-an-action"),
+        ],
+    )
+    def test_test_names_outside_the_catalogue_are_not_the_rules_to_refuse(self, category, action):
+        """The rule judges the catalogue's actions only: a category or an action it does not hold is argparse's to answer."""
+        refused = _refused_test_names()
+        assert category not in TEST_REGISTRY or action not in TEST_REGISTRY[category], f"precondition: {category} {action} must be outside the catalogue"
+
+        assert refused(_prepass_args(category, action, H26_NAMES)) is None
+
+    def test_the_catalogue_is_read_when_asked(self, monkeypatch):
+        """One definition, read from ``TEST_REGISTRY`` when the rule is asked: a category registered after import counts too."""
+        refused = _refused_test_names()
+        _register_fake_category(monkeypatch, takes_names=False)
+
+        for action in ("all", H26_FAKE_ACTION):
+            _assert_refusal(refused(_prepass_args(H26_FAKE_CATEGORY, action, H26_NAMES)), H26_FAKE_CATEGORY, action, H26_NAMES, "the rule's answer")
+
+        _register_fake_category(monkeypatch, takes_names=True)
+
+        for action in ("all", H26_FAKE_ACTION):
+            message = refused(_prepass_args(H26_FAKE_CATEGORY, action, H26_NAMES))
+            assert message is None, f"{H26_FAKE_CATEGORY} {action} now takes test names: the rule answered from a copy of the catalogue, it must read TEST_REGISTRY when asked (got {message!r})"
+
+
+class TestDispatchTestCommandRefusesBeforeAnySideEffect:
+    """Contract point 2, ``dev.py test``: ``_dispatch_test_command`` asks the rule first and returns 2 on a refusal.
+
+    The arguments come from the real ``test`` parser, built and normalised as ``dev.py`` does. ``refusal_seams`` fails a
+    refused case on the first seam it reaches: today's code reaches ``_activate_log_dir`` (``tee_output`` with
+    ``--log-file``) and fails there, before anything runs. An invocation the rule lets through runs today's steps, in
+    today's order, up to its body.
+    """
+
+    @pytest.mark.usefixtures("refusal_seams")
+    @pytest.mark.parametrize(("words", "category", "action", "names"), H26_REFUSED)
+    def test_test_names_the_action_takes_none_of_are_refused_with_exit_code_2(self, capsys, words, category, action, names):
+        args = _dev_test_args(*words)
+        _assert_parsed(args, category, action, names)
+
+        rc = runner_cli._dispatch_test_command(args)
+
+        assert rc == 2, f"H-26: dev.py test {' '.join(words)} must be refused with exit code 2 (got {rc!r})"
+        _assert_refusal(capsys.readouterr().out, category, action, names, "stdout")
+
+    @pytest.mark.usefixtures("refusal_seams")
+    def test_a_refusal_writes_neither_the_log_file_nor_the_log_dir(self, tmp_path, capsys):
+        log_file, log_dir = tmp_path / "run.log", tmp_path / "logs"
+        args = _dev_test_args("--log-file", str(log_file), "--log-dir", str(log_dir), "services", "all", *H26_NAMES)
+        _assert_parsed(args, "services", "all", H26_NAMES, {"log_file": str(log_file), "log_dir": str(log_dir)})
+
+        rc = runner_cli._dispatch_test_command(args)
+
+        assert rc == 2, f"H-26: a refusal with --log-file and --log-dir must still exit 2 (got {rc!r})"
+        _assert_refusal(capsys.readouterr().out, "services", "all", H26_NAMES, "stdout")
+        assert not log_file.exists() and not log_dir.exists(), f"a refused invocation writes no log (found under {tmp_path}: {sorted(path.name for path in tmp_path.iterdir())})"
+
+    @pytest.mark.parametrize(("words", "category", "action", "names", "extra"), H26_LET_THROUGH)
+    def test_an_invocation_the_rule_lets_through_reaches_the_body(self, capsys, entry_steps, words, category, action, names, extra):
+        """Guard, green before and after: names to an action taking them, ``all`` without names, provider codes after a flag."""
+        args = _dev_test_args(*words)
+        _assert_parsed(args, category, action, names, extra)
+
+        rc = runner_cli._dispatch_test_command(args)
+
+        assert rc == 0, f"the body answered 0, and so must dev.py test {' '.join(words)} (got {rc!r})"
+        assert entry_steps.events == _steps_of("_dispatch_test_command_body"), f"dev.py test {' '.join(words)} runs today's steps, in today's order (ran: {entry_steps.events})"
+        assert len(entry_steps.bodies) == 1 and entry_steps.bodies[0] is args, f"the body runs once, with the args the entry was given (bodies: {entry_steps.bodies})"
+        _assert_no_refusal(capsys.readouterr().out)
+
+
+class TestMainRefusesBeforeAnySideEffect:
+    """Contract point 2, ``python -m scripts.test_runner``: ``main()`` asks the rule right after parsing and returns 2.
+
+    Its own parser puts the categories at the top level, so the words are those after ``dev.py test``; ``__main__`` exits
+    with what ``main()`` returns. The cases mirror ``TestDispatchTestCommandRefusesBeforeAnySideEffect``'s, with
+    ``_main_body`` as the body.
+    """
+
+    @pytest.mark.usefixtures("refusal_seams")
+    @pytest.mark.parametrize(("words", "category", "action", "names"), H26_REFUSED)
+    def test_test_names_the_action_takes_none_of_are_refused_with_exit_code_2(self, monkeypatch, capsys, words, category, action, names):
+        _assert_parsed(_runner_args(*words), category, action, names)
+
+        rc = _run_runner_main(monkeypatch, *words)
+
+        assert rc == 2, f"H-26: python -m scripts.test_runner {' '.join(words)} must be refused with exit code 2 (got {rc!r})"
+        _assert_refusal(capsys.readouterr().out, category, action, names, "stdout")
+
+    @pytest.mark.usefixtures("refusal_seams")
+    def test_a_refusal_writes_neither_the_log_file_nor_the_log_dir(self, monkeypatch, tmp_path, capsys):
+        log_file, log_dir = tmp_path / "run.log", tmp_path / "logs"
+        words = ("--log-file", str(log_file), "--log-dir", str(log_dir), "services", "all", "--list", "h26_name")
+        _assert_parsed(_runner_args(*words), "services", "all", ("h26_name",), {"log_file": str(log_file), "log_dir": str(log_dir), "list_tests": True})
+
+        rc = _run_runner_main(monkeypatch, *words)
+
+        assert rc == 2, f"H-26: a refusal with --log-file, --log-dir and --list must still exit 2 (got {rc!r})"
+        _assert_refusal(capsys.readouterr().out, "services", "all", ("h26_name",), "stdout")
+        assert not log_file.exists() and not log_dir.exists(), f"a refused invocation writes no log (found under {tmp_path}: {sorted(path.name for path in tmp_path.iterdir())})"
+
+    @pytest.mark.parametrize(("words", "category", "action", "names", "extra"), H26_LET_THROUGH)
+    def test_an_invocation_the_rule_lets_through_reaches_the_body(self, monkeypatch, capsys, entry_steps, words, category, action, names, extra):
+        """Guard, green before and after: names to an action taking them, ``all`` without names, provider codes after a flag."""
+        rc = _run_runner_main(monkeypatch, *words)
+
+        assert rc == 0, f"the body answered 0, and so must python -m scripts.test_runner {' '.join(words)} (got {rc!r})"
+        assert entry_steps.events == _steps_of("_main_body"), f"python -m scripts.test_runner {' '.join(words)} runs today's steps, in today's order (ran: {entry_steps.events})"
+        assert len(entry_steps.bodies) == 1, f"the body runs once (bodies: {entry_steps.bodies})"
+        _assert_parsed(entry_steps.bodies[0], category, action, names, extra)
+        _assert_no_refusal(capsys.readouterr().out)
+
+
+class TestDevPyExitsWithTheRefusal:
+    """Contract point 2, end to end: ``dev.py``'s ``main()`` returns ``args.func(args) or 0``, and ``sys.exit`` exits with it.
+
+    ``args.func`` is the real ``_dispatch_test_command``, bound when ``main()`` registers the ``test`` parser; every seam
+    behind it is closed by ``refusal_seams``.
+    """
+
+    @pytest.mark.usefixtures("refusal_seams")
+    def test_dev_py_test_services_all_with_test_names_returns_2(self, monkeypatch, capsys, dev_module):
+        monkeypatch.setattr(sys, "argv", ["dev.py", "test", "services", "all", *H26_NAMES])
+
+        rc = dev_module.main()
+
+        assert rc == 2, f"H-26: dev.py test services all {' '.join(H26_NAMES)} must exit 2: dev.py's main() returns what the test entry returns (got {rc!r})"
+        _assert_refusal(capsys.readouterr().out, "services", "all", H26_NAMES, "stdout")
+
+
+# ── H-30: with --log-file too, a body that raises still leaves the lane's database next to the logs ───────────────────
+# ``main()`` (``python -m scripts.test_runner``) took the snapshot of the lane's database (``_snapshot_log_dir_db``)
+# in a ``finally`` only without ``--log-file``: with it, the call came after ``_timed_run``, so a body that raised
+# skipped it, and the run that crashed, the one whose database is evidence, left none. ``_dispatch_test_command``
+# (``dev.py test``) has the ``finally`` in both branches. Every case drives a real entry with H-26's ``entry_steps``
+# (every seam closed, the entry's steps recorded), ``tee_output`` recorded instead of teeing, and a body that answers
+# 0 or raises ``H30BodyCrash``. Today's code fails one case, the body raising through ``main()`` with ``--log-file``
+# ("H-30: … the lane's database must still be snapshotted …"); the others are guards, green before and after.
+
+#: The action every case runs: this file's own, given no test names, so the H-26 rule lets it through to the body.
+H30_ACTION = ("utils", H25_UTILS_ACTION)
+#: What the recorded ``tee_output`` adds to the steps: entering the block it wraps, and exiting it, raising or not.
+H30_TEE_ENTERED = "tee_output entered"
+H30_TEE_EXITED = "tee_output exited"
+#: Both entries, as ``(the function the words go through, its body, the command it serves)``.
+H30_ENTRIES = [
+    pytest.param("main", "_main_body", "python -m scripts.test_runner", id="main"),
+    pytest.param("_dispatch_test_command", "_dispatch_test_command_body", "dev.py test", id="dev-py-test"),
+]
+
+
+class H30BodyCrash(RuntimeError):
+    """What a crashing body raises: a class of its own, so that ``pytest.raises`` catches this crash and no other."""
+
+
+def _h30_args(entry: str, *words: str) -> argparse.Namespace:
+    """``words`` read by ``entry``'s parser, nothing run: ``create_parser()`` for ``main``, ``dev.py``'s ``test`` parser otherwise."""
+    return _runner_args(*words) if entry == "main" else _dev_test_args(*words)
+
+
+def _h30_run(monkeypatch, entry: str, *words: str):
+    """``words`` through the real ``entry``: ``main()`` reads them from ``sys.argv``, ``_dispatch_test_command`` gets them parsed."""
+    if entry == "main":
+        return _run_runner_main(monkeypatch, *words)
+    return runner_cli._dispatch_test_command(_dev_test_args(*words))
+
+
+def _teed(steps: list[str]) -> list[str]:
+    """``steps`` as an entry runs them with ``--log-file``: inside the log's tee, entered first and exited last."""
+    return [H30_TEE_ENTERED, *steps, H30_TEE_EXITED]
+
+
+def _crash_the_body(monkeypatch, steps, body: str) -> None:
+    """``body`` replaced, where the entry looks it up, by a stand-in that records itself in ``steps.events`` and raises."""
+
+    def crash(*_call_args):
+        steps.events.append(body)
+        raise H30BodyCrash(f"H-30: {body} crashed, as a category that raises would")
+
+    monkeypatch.setattr(runner_cli, body, crash)
+
+
+@pytest.fixture
+def teed_entry_steps(monkeypatch, entry_steps):
+    """``entry_steps``, with ``_common.tee_output`` recorded in the same ``events``: entered, then exited.
+
+    The stand-in tees nothing and writes no file. Like the real one, it exits whether the block returns or raises, and
+    it lets the exception through. Both entries look it up on ``_common`` when ``--log-file`` is given; without it, it is
+    never entered.
+    """
+
+    @contextlib.contextmanager
+    def tee_output(log_path):
+        entry_steps.events.append(H30_TEE_ENTERED)
+        try:
+            yield log_path
+        finally:
+            entry_steps.events.append(H30_TEE_EXITED)
+
+    monkeypatch.setattr(_common, "tee_output", tee_output)
+    return entry_steps
+
+
+@pytest.mark.parametrize(("entry", "body", "command"), H30_ENTRIES)
+class TestTheLaneDatabaseIsSnapshottedWhateverTheBodyDoes:
+    """Contract: an entry snapshots the lane's database once, after its body, whether the body answers or raises.
+
+    With ``--log-file`` it does so inside the log's tee, as ``_dispatch_test_command`` does, so the snapshot's line lands
+    in the log; the body's exception goes through the entry unchanged. Every case runs through both entries: ``main()``,
+    the H-30 defect, and ``_dispatch_test_command``, which has the ``finally`` in both branches already.
+    """
+
+    def test_with_a_log_file_a_body_that_raises_still_leaves_the_database_snapshotted(self, monkeypatch, tmp_path, teed_entry_steps, entry, body, command):
+        log_file = tmp_path / "run.log"
+        words = ("--log-file", str(log_file), *H30_ACTION)
+        _assert_parsed(_h30_args(entry, *words), *H30_ACTION, (), {"log_file": str(log_file)})
+        _crash_the_body(monkeypatch, teed_entry_steps, body)
+
+        with pytest.raises(H30BodyCrash):
+            _h30_run(monkeypatch, entry, *words)
+
+        events = teed_entry_steps.events
+        shown = f"{command} {' '.join(words)}"
+        assert events.count("_snapshot_log_dir_db") == 1, f"H-30: {shown}: the body raised, and the lane's database must still be snapshotted next to the logs, once: the run that crashed is the one whose database is evidence (ran: {events})"
+        assert events == _teed(_steps_of(body)), f"H-30: {shown}: the snapshot comes after the body and before the log's tee exits, the other steps in today's order (ran: {events})"
+
+    def test_with_a_log_file_a_body_answering_0_runs_todays_steps(self, monkeypatch, tmp_path, teed_entry_steps, entry, body, command):
+        """Guard, green before and after: the body answers 0, and the snapshot follows it, once, inside the log's tee."""
+        log_file = tmp_path / "run.log"
+        words = ("--log-file", str(log_file), *H30_ACTION)
+        _assert_parsed(_h30_args(entry, *words), *H30_ACTION, (), {"log_file": str(log_file)})
+
+        rc = _h30_run(monkeypatch, entry, *words)
+
+        assert rc == 0, f"the body answered 0, and so must {command} {' '.join(words)} (got {rc!r})"
+        assert teed_entry_steps.events == _teed(_steps_of(body)), f"{command} {' '.join(words)} runs today's steps, in today's order, inside the log's tee (ran: {teed_entry_steps.events})"
+
+    def test_without_a_log_file_a_body_that_raises_still_leaves_the_database_snapshotted(self, monkeypatch, teed_entry_steps, entry, body, command):
+        """Guard, green before and after: without ``--log-file``, both entries already snapshot in a ``finally``."""
+        _assert_parsed(_h30_args(entry, *H30_ACTION), *H30_ACTION, (), {"log_file": None})
+        _crash_the_body(monkeypatch, teed_entry_steps, body)
+
+        with pytest.raises(H30BodyCrash):
+            _h30_run(monkeypatch, entry, *H30_ACTION)
+
+        assert teed_entry_steps.events == _steps_of(body), f"{command} {' '.join(H30_ACTION)}: the body raised, and the lane's database is still snapshotted, once, after the body, with no log tee entered (ran: {teed_entry_steps.events})"
 
 
 if __name__ == "__main__":

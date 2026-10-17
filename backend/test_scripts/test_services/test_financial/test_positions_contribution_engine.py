@@ -66,6 +66,23 @@ TestInvariant — the rows add up to the engine: Σ rows' ``period_unrealized_de
 other scenario (the transfers move result between rows, not out of them). Not on ``missing-fx``: the engine counts a
 holding it cannot value at zero against its cost, the rows leave it out, and both sums are 0 by coincidence.
 
+MF-P4b — TestComponentPercents: each component of a row's period P&L also as a fraction of the row's |start_value|
+(``period_unrealized_delta_percent``, ``period_realized_gain_loss_percent``, ``period_income_percent``,
+``period_fees_taxes_percent``), to 4 decimals like ``period_pnl_percent``, the costs positive like
+``period_fees_taxes``; None without a start value or without the component. One ledger (period 05-09 → 05-30, every
+amount EUR): DEPOSIT 1000, BUY 10 X for 1000, close 100 on ``date_from``; inside the period SELL 5 for 550 (realized
+550 − 5 × 100 = 50), a DIVIDEND of 12.34 and a FEE of 2.57 both on X, close 107.458 on ``date_to`` (end 5 × 107.458 =
+537.29 against a cost of 500: unrealized 37.29). Red on HEAD (the four fields do not exist: AttributeError), green
+after:
+
+- held at the start (BUY on 05-02, start 1000): 37.29 / 1000 = 0.03729 → 0.0373, 50 / 1000 → 0.0500,
+  12.34 / 1000 = 0.01234 → 0.0123, 2.57 / 1000 = 0.00257 → 0.0026 (positive); the row's return, 97.06 / 1000 →
+  0.0971, is unchanged;
+- opened inside the period (the same ledger with the BUY on 05-12, start 0): every component present, every fraction
+  None (no base), like ``period_pnl_percent``;
+- income only (a DIVIDEND of 12.34 and a FEE of 2.57 on an asset Z the broker never traded: a row with start 0 and no
+  position): every fraction None.
+
 Isolation: every test owns its user, brokers and assets (unique names) and writes only through a session that is
 rolled back: nothing is committed. EUR amounts are read in EUR (``target_currency_override`` / the report's
 ``target_currency``); the EUR/USD rates of TestOldForeignQuoteAtEnd are flushed with the rest and rolled back, and the
@@ -171,6 +188,15 @@ OR_TO = date(2025, 8, 29)
 MF_OPEN = date(2025, 9, 1)
 MF_FROM = date(2025, 9, 10)
 MF_TO = date(2025, 9, 30)
+
+# component-percents (MF-P4b)
+CP_OPEN = date(2025, 5, 2)
+CP_FROM = date(2025, 5, 9)
+CP_LATE_BUY = date(2025, 5, 12)  # inside the period: the position opened in it
+CP_SELL = date(2025, 5, 16)
+CP_DIVIDEND = date(2025, 5, 20)
+CP_FEE = date(2025, 5, 21)
+CP_TO = date(2025, 5, 30)
 
 
 # =============================================================================
@@ -427,6 +453,52 @@ async def _missing_fx(session: AsyncSession, keep_alive: list[object]) -> _Scena
     return _Scenario(book=book, date_from=MF_FROM, date_to=MF_TO, engine=None)
 
 
+async def _components_ledger(session: AsyncSession, keep_alive: list[object], label: str, buy_day: date) -> _Book:
+    """DEPOSIT 1000 on CP_OPEN, BUY 10 X for 1000 on ``buy_day``; inside the period SELL 5 for 550, a DIVIDEND of 12.34
+    and a FEE of 2.57 both attributed to X; X closes 100 on CP_FROM and 107.458 on CP_TO."""
+    book = await _book(session, keep_alive, label, ("A",), {"X": EUR})
+    await _persist(
+        session,
+        keep_alive,
+        _cash(book, "A", TransactionType.DEPOSIT, CP_OPEN, "1000"),
+        _trade(book, "A", "X", TransactionType.BUY, buy_day, "10", "-1000"),
+        _close(book, "X", CP_FROM, "100"),
+        # Average cost 100 a unit: realized 550 − 500 = 50.
+        _trade(book, "A", "X", TransactionType.SELL, CP_SELL, "-5", "550"),
+        _trade(book, "A", "X", TransactionType.DIVIDEND, CP_DIVIDEND, "0", "12.34"),
+        _trade(book, "A", "X", TransactionType.FEE, CP_FEE, "0", "-2.57"),
+        _close(book, "X", CP_TO, "107.458"),
+    )
+    return book
+
+
+async def _components_held_at_start(session: AsyncSession, keep_alive: list[object]) -> _Scenario:
+    book = await _components_ledger(session, keep_alive, "p4held", CP_OPEN)
+    # Start 10 × 100 = 1000 against 1000; end 5 × 107.458 = 537.29 against 500; NAV 1000 → 537.29 + cash
+    # (550 + 12.34 − 2.57 = 559.77) = 1097.06, no external flow: P&L 97.06 = 37.29 + 50 + 12.34 − 2.57.
+    return _Scenario(book=book, date_from=CP_FROM, date_to=CP_TO, engine=_EngineFigures("1000", "537.29", "0", "37.29", "97.06"))
+
+
+async def _components_opened_in_period(session: AsyncSession, keep_alive: list[object]) -> _Scenario:
+    book = await _components_ledger(session, keep_alive, "p4opened", CP_LATE_BUY)
+    # Start: cash 1000, nothing held; end as above: NAV 1000 → 1097.06, no external flow inside the period.
+    return _Scenario(book=book, date_from=CP_FROM, date_to=CP_TO, engine=_EngineFigures("0", "537.29", "0", "37.29", "97.06"))
+
+
+async def _components_income_only(session: AsyncSession, keep_alive: list[object]) -> _Scenario:
+    book = await _book(session, keep_alive, "p4income", ("A",), {"Z": EUR})
+    await _persist(
+        session,
+        keep_alive,
+        _cash(book, "A", TransactionType.DEPOSIT, CP_OPEN, "1000"),
+        # On Z, never bought, sold, adjusted or transferred: the row has no position.
+        _trade(book, "A", "Z", TransactionType.DIVIDEND, CP_DIVIDEND, "0", "12.34"),
+        _trade(book, "A", "Z", TransactionType.FEE, CP_FEE, "0", "-2.57"),
+    )
+    # Nothing held at either boundary; NAV 1000 → 1009.77.
+    return _Scenario(book=book, date_from=CP_FROM, date_to=CP_TO, engine=_EngineFigures("0", "0", "0", "0", "9.77"))
+
+
 ScenarioBuilder = Callable[[AsyncSession, list[object]], Awaitable[_Scenario]]
 
 # Every scenario whose rows the engine can value: the invariant is meaningful on each.
@@ -548,6 +620,35 @@ def _no_figure(contribution: PositionsContribution, book: _Book, broker: str, as
     row = _rows(contribution, book).get((broker, asset))
     if row is not None:
         assert (row.period_unrealized_delta or ZERO, row.period_pnl or ZERO) == (ZERO, ZERO), f"row ({broker}, {asset}): {_view(row)}"
+
+
+def _components(row: AssetPeriodContribution) -> dict[str, Decimal | None]:
+    """A row's start value and the four components of its period P&L (MF-P4b's precondition)."""
+    return {
+        "start_value": row.start_value,
+        "period_unrealized_delta": row.period_unrealized_delta,
+        "period_realized_gain_loss": row.period_realized_gain_loss,
+        "period_income": row.period_income,
+        "period_fees_taxes": row.period_fees_taxes,
+    }
+
+
+def _component_percents(row: AssetPeriodContribution) -> dict[str, Decimal | None]:
+    """The four components as fractions of |start_value| (MF-P4b); plain attribute reads, so HEAD fails naming the field."""
+    return {
+        "period_unrealized_delta_percent": row.period_unrealized_delta_percent,
+        "period_realized_gain_loss_percent": row.period_realized_gain_loss_percent,
+        "period_income_percent": row.period_income_percent,
+        "period_fees_taxes_percent": row.period_fees_taxes_percent,
+    }
+
+
+_NO_COMPONENT_PERCENTS: dict[str, Decimal | None] = {
+    "period_unrealized_delta_percent": None,
+    "period_realized_gain_loss_percent": None,
+    "period_income_percent": None,
+    "period_fees_taxes_percent": None,
+}
 
 
 # =============================================================================
@@ -834,3 +935,82 @@ class TestInvariant:
         gap = rows_pnl + other - summary.period_pnl.amount
         assert abs(gap) <= CONVERSION_DUST * hidden_rows, f"rows {rows_pnl} + other {other} = {rows_pnl + other}, period P&L {summary.period_pnl.amount}"
         print_success(f"rows {rows_pnl} + other {other} = {summary.period_pnl.amount}")
+
+
+# =============================================================================
+# MF-P4b — each component of the period P&L on the row's start value (red on HEAD: the fields do not exist)
+# =============================================================================
+
+
+class TestComponentPercents:
+    """The Performance tooltip's percentages: each component / |start_value|, to 4 decimals like ``period_pnl_percent``,
+    the costs positive; None without a start value or without the component."""
+
+    @pytest.mark.asyncio
+    async def test_each_component_is_a_fraction_of_the_start_value(self, session, keep_alive, path):
+        """Start 1000: unrealized 37.29 → 0.03729 → 0.0373 (up), realized 50 → 0.0500, income 12.34 → 0.01234 → 0.0123
+        (down), fees 2.57 → 0.00257 → 0.0026 (up, positive). Each rounded on its own: they add up to 0.0970 against the
+        row's 97.06 / 1000 → 0.0971."""
+        print_section(f"MF-P4b component percents, held at the start ({path})")
+        scenario = await _components_held_at_start(session, keep_alive)
+
+        contribution, _summary = await _read(session, scenario, path)
+        row = _row(contribution, scenario.book, "A", "X")
+
+        assert _components(row) == {
+            "start_value": Decimal("1000"),
+            "period_unrealized_delta": Decimal("37.29"),
+            "period_realized_gain_loss": Decimal("50"),
+            "period_income": Decimal("12.34"),
+            "period_fees_taxes": Decimal("2.57"),
+        }, "precondition: every component present on a start of 1000"
+        assert (row.period_pnl, row.period_pnl_percent) == (Decimal("97.06"), Decimal("0.0971")), "precondition: the row's own return"
+        assert _component_percents(row) == {
+            "period_unrealized_delta_percent": Decimal("0.0373"),
+            "period_realized_gain_loss_percent": Decimal("0.0500"),
+            "period_income_percent": Decimal("0.0123"),
+            "period_fees_taxes_percent": Decimal("0.0026"),
+        }
+        print_success("0.0373 + 0.0500 + 0.0123 − 0.0026 on a start of 1000")
+
+    @pytest.mark.asyncio
+    async def test_a_position_opened_in_the_period_has_no_fraction(self, session, keep_alive, path):
+        """The same ledger with the BUY inside the period: start 0, every component present, every fraction None (no
+        base), like ``period_pnl_percent``."""
+        print_section(f"MF-P4b component percents, opened in the period ({path})")
+        scenario = await _components_opened_in_period(session, keep_alive)
+
+        contribution, _summary = await _read(session, scenario, path)
+        row = _row(contribution, scenario.book, "A", "X")
+
+        assert _components(row) == {
+            "start_value": ZERO,
+            "period_unrealized_delta": Decimal("37.29"),
+            "period_realized_gain_loss": Decimal("50"),
+            "period_income": Decimal("12.34"),
+            "period_fees_taxes": Decimal("2.57"),
+        }, "precondition: every component present, nothing held at the start"
+        assert row.period_pnl_percent is None, "precondition: no return on a start of 0"
+        assert _component_percents(row) == _NO_COMPONENT_PERCENTS
+        print_success("start 0, no fraction")
+
+    @pytest.mark.asyncio
+    async def test_an_income_only_row_has_no_fraction(self, session, keep_alive, path):
+        """A DIVIDEND of 12.34 and a FEE of 2.57 on an asset never traded: a row with start 0 and no position, every
+        fraction None."""
+        print_section(f"MF-P4b component percents, income-only row ({path})")
+        scenario = await _components_income_only(session, keep_alive)
+
+        contribution, _summary = await _read(session, scenario, path)
+        row = _row(contribution, scenario.book, "A", "Z")
+
+        assert _components(row) == {
+            "start_value": ZERO,
+            "period_unrealized_delta": None,
+            "period_realized_gain_loss": None,
+            "period_income": Decimal("12.34"),
+            "period_fees_taxes": Decimal("2.57"),
+        }, "precondition: the income-only row"
+        assert (row.end_value, row.period_pnl, row.is_fully_sold) == (ZERO, Decimal("9.77"), True), "precondition: no position"
+        assert _component_percents(row) == _NO_COMPONENT_PERCENTS
+        print_success("income only, no fraction")

@@ -5,6 +5,12 @@
  * fetch + merge + return flow of the three loaders, and the two single-day
  * lookups. zodiosApi is mocked so no real network calls are made.
  *
+ * The last block (Z-14): the registry listens to the portfolio bus from its
+ * import, and a price catch-up (`notifyPricesCaughtUp()`, `{kind: 'prices'}`)
+ * makes every cached pair stale — for the three loaders and for
+ * `lookupFxRate`, never for `lookupFxRateSync`. It is driven through the real
+ * bus, never through a helper exported for the test (N58).
+ *
  * One behaviour the suite deliberately pins rather than asserts as correct,
  * flagged in the coverage report:
  *   - `loadFxRatesAndSignalsBulk` re-throws where the two `ensureFxRangeLoaded*`
@@ -20,6 +26,7 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {zodiosApi} from '$lib/api';
+import {notifyPortfolioMutation, notifyPricesCaughtUp, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
 import {
     apiResultToFxDataPoint,
     apiResultsToCanonicalFxDataPoints,
@@ -1010,10 +1017,203 @@ describe('lookupFxRate', () => {
 });
 
 // =============================================================================
-//  Deliberately left uncovered — three arms that cannot be reached
+//  A price catch-up makes every cached pair stale (Z-14)
 //
-//  fxStoreRegistry.ts:296  `if (points.length > 0)`   (false arm)
-//  fxStoreRegistry.ts:399  `if (points.length > 0)`   (false arm)
+//  The answers fill backward the days without a rate, so a loaded range holds a
+//  point for every day and was never asked again in the session — not even
+//  after the server caught up on rates. The registry listens to the portfolio
+//  bus from its import (`registerPortfolioMutationListener('fxStoreRegistry',
+//  …)`): on `{kind: 'prices'}` — `notifyPricesCaughtUp()` — it marks every
+//  pair's store stale. The three loaders then ask a range loaded before again,
+//  each for the whole of it in one interval although every day has a point,
+//  and `lookupFxRate` takes a stale point for a miss: one request for its day,
+//  then that day is fresh. `lookupFxRateSync` stays a pure cache read.
+//  `{kind: 'mutation'}` — the live poll's `POST /assets/prices/current`, a
+//  commit — and `{kind: 'refresh'}` («Aggiorna») change nothing.
+//
+//  With backend signals `loadFxRatesAndSignalsBulk` asks the full range every
+//  time already: only its path without signals is under test here.
+//
+//  Isolation: the `beforeEach` at the top removes every registered pair, and a
+//  store's stale state goes with it. Red first: until the listener exists the
+//  signal reaches nobody, and the range comes from the cache again.
+// =============================================================================
+
+describe('fxStoreRegistry after a price catch-up (Z-14)', () => {
+    const START = '2026-01-01';
+    const END = '2026-01-05';
+    const DAYS = ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'] as const;
+
+    /** One result per day for `base`→`quote` at `rate`, with the codes the bulk loaders file it by: every day answered, as the backward fill does. */
+    function ratesAt(base: string, quote: string, rate: string, days: readonly string[] = DAYS) {
+        return days.map((date) => ({from_amount: {code: base, amount: '1'}, to_amount: {code: quote, amount: rate}, conversion_date: date, rate, backward_fill_info: null}));
+    }
+
+    function converted(...results: Array<ReturnType<typeof ratesAt>[number]>) {
+        return {success_count: results.length, results} as any;
+    }
+
+    /** A range of `slug` loaded the way a page leaves it: a point for every day, the range marked fetched. */
+    function loaded(slug: string, rate = 1.1): void {
+        const store = getFxStore(slug);
+        store.merge(DAYS.map((date) => ({date, rate, backwardFillInfo: null})));
+        store.markFetched(START, END);
+    }
+
+    it('ensureFxRangeLoaded asks a range loaded before the catch-up again — one interval, the whole range, though every day has a point — then serves it from the cache', async () => {
+        mockConvert.mockResolvedValueOnce(converted(...ratesAt('EUR', 'USD', '1.10')));
+        await ensureFxRangeLoaded('EUR-USD', START, END);
+        await ensureFxRangeLoaded('EUR-USD', START, END);
+        expect(mockConvert, 'premise: a loaded range is served from the cache').toHaveBeenCalledOnce();
+        expect(getFxStore('EUR-USD').size, 'premise: the store holds a point for every day').toBe(DAYS.length);
+
+        notifyPricesCaughtUp();
+        expect(mockConvert, 'the mark must not ask anything by itself').toHaveBeenCalledOnce();
+
+        mockConvert.mockResolvedValueOnce(converted(...ratesAt('EUR', 'USD', '1.20')));
+        const fresh = await ensureFxRangeLoaded('EUR-USD', START, END);
+
+        expect(mockConvert, 'after a price catch-up the FX range loaded before came from the cache again: its backward-filled days hide the rates the server caught up on (Z-14)').toHaveBeenCalledTimes(2);
+        const requests = mockConvert.mock.calls[1][0] as any[];
+        expect(
+            requests.map((request) => request.date_range),
+            'one interval, the whole range: the points of the stale range do not make holes of their own',
+        ).toEqual([{start: START, end: END}]);
+        expect(requests[0]).toMatchObject({from_amount: {code: 'EUR', amount: '1'}, to: 'USD'});
+        expect(
+            fresh.map((point) => point.rate),
+            'the fresh rates replace the stale ones',
+        ).toEqual([1.2, 1.2, 1.2, 1.2, 1.2]);
+
+        await ensureFxRangeLoaded('EUR-USD', START, END);
+        expect(mockConvert, 'the fresh answer marks the range fetched: one catch-up, one question').toHaveBeenCalledTimes(2);
+    });
+
+    it('ensureFxRangeLoadedBulk asks every pair loaded before the catch-up again, in one POST, each for its whole range — then nothing', async () => {
+        const requests = [
+            {slug: 'EUR-USD', start: START, end: END},
+            {slug: 'GBP-USD', start: START, end: END},
+        ];
+        mockConvert.mockResolvedValueOnce(converted(...ratesAt('EUR', 'USD', '1.10'), ...ratesAt('GBP', 'USD', '1.30')));
+        await ensureFxRangeLoadedBulk(requests);
+        await ensureFxRangeLoadedBulk(requests);
+        expect(mockConvert, 'premise: two loaded ranges are served from the cache').toHaveBeenCalledOnce();
+
+        notifyPricesCaughtUp();
+        mockConvert.mockResolvedValueOnce(converted(...ratesAt('EUR', 'USD', '1.20'), ...ratesAt('GBP', 'USD', '1.40')));
+        const fresh = await ensureFxRangeLoadedBulk(requests);
+
+        expect(mockConvert, 'after a price catch-up the bulk loader served the pairs loaded before from the cache again (Z-14)').toHaveBeenCalledTimes(2);
+        expect(
+            (mockConvert.mock.calls[1][0] as any[]).map((request) => [request.from_amount.code, request.to, request.date_range]),
+            'one POST, one interval per pair, each its whole range',
+        ).toEqual([
+            ['EUR', 'USD', {start: START, end: END}],
+            ['GBP', 'USD', {start: START, end: END}],
+        ]);
+        expect(fresh.get('EUR-USD')?.map((point) => point.rate)).toEqual([1.2, 1.2, 1.2, 1.2, 1.2]);
+        expect(fresh.get('GBP-USD')?.map((point) => point.rate)).toEqual([1.4, 1.4, 1.4, 1.4, 1.4]);
+
+        await ensureFxRangeLoadedBulk(requests);
+        expect(mockConvert, 'the fresh answer marks both ranges fetched').toHaveBeenCalledTimes(2);
+    });
+
+    it('loadFxRatesAndSignalsBulk without signals asks a range loaded before the catch-up again — then nothing', async () => {
+        const card = {slug: 'EUR-USD', start: START, end: END, displayedInverted: false, signals: []};
+        mockConvert.mockResolvedValueOnce(converted(...ratesAt('EUR', 'USD', '1.10')));
+        await loadFxRatesAndSignalsBulk([card]);
+        await loadFxRatesAndSignalsBulk([card]);
+        expect(mockConvert, 'premise: without signals a loaded range is served from the cache').toHaveBeenCalledOnce();
+
+        notifyPricesCaughtUp();
+        mockConvert.mockResolvedValueOnce(converted(...ratesAt('EUR', 'USD', '1.20')));
+        const fresh = await loadFxRatesAndSignalsBulk([card]);
+
+        expect(mockConvert, 'after a price catch-up the FX cards’ loader served the range loaded before from the cache again (Z-14)').toHaveBeenCalledTimes(2);
+        expect(
+            (mockConvert.mock.calls[1][0] as any[]).map((request) => request.date_range),
+            'one interval, the whole range',
+        ).toEqual([{start: START, end: END}]);
+        expect(fresh.dataBySlug.get('EUR-USD')?.map((point) => point.rate)).toEqual([1.2, 1.2, 1.2, 1.2, 1.2]);
+
+        await loadFxRatesAndSignalsBulk([card]);
+        expect(mockConvert, 'the fresh answer marks the range fetched').toHaveBeenCalledTimes(2);
+    });
+
+    it('lookupFxRate takes a point the catch-up made stale for a miss: it asks that day once, answers the fresh point the way round it was asked, and asks nothing the next time', async () => {
+        const store = getFxStore('EUR-USD');
+        store.merge([
+            {date: '2026-01-02', rate: 1.25, backwardFillInfo: {actualRateDate: '2026-01-01', daysBack: 1}},
+            {date: '2026-01-03', rate: 1.25, backwardFillInfo: {actualRateDate: '2026-01-01', daysBack: 2}},
+        ]);
+        store.markFetched('2026-01-02', '2026-01-03');
+        expect((await lookupFxRate('USD', 'EUR', '2026-01-02'))?.rate, 'premise: before any catch-up a cached point answers, inverted').toBe(0.8);
+        expect(mockConvert, 'premise: … without a request').not.toHaveBeenCalled();
+
+        notifyPricesCaughtUp();
+        mockConvert.mockResolvedValueOnce({success_count: 1, results: [{conversion_date: '2026-01-02', rate: '1.6', backward_fill_info: null}]} as any);
+        const fresh = await lookupFxRate('USD', 'EUR', '2026-01-02');
+
+        expect(mockConvert, 'after a price catch-up the lookup answered from a stale point: a transaction modal compares an exchange with the market rate of before the catch-up (Z-14)').toHaveBeenCalledOnce();
+        expect((mockConvert.mock.calls[0][0] as any[])[0], 'one canonical day').toMatchObject({from_amount: {code: 'EUR', amount: '1'}, to: 'USD', date_range: {start: '2026-01-02', end: '2026-01-02'}});
+        expect(fresh?.date).toBe('2026-01-02');
+        expect(fresh?.rate, 'the fresh rate, inverted for USD→EUR as before').toBeCloseTo(1 / 1.6, 12);
+        expect(fresh?.backwardFillInfo, 'the fresh point, not the stale one').toBeNull();
+        expect(store.get('2026-01-02')?.rate, 'stored the canonical way round').toBe(1.6);
+
+        expect((await lookupFxRate('EUR', 'USD', '2026-01-02'))?.rate).toBe(1.6);
+        expect(mockConvert, 'the day was marked fetched: its next lookup asks nothing').toHaveBeenCalledOnce();
+
+        mockConvert.mockResolvedValueOnce({success_count: 1, results: [{conversion_date: '2026-01-03', rate: '1.6', backward_fill_info: null}]} as any);
+        expect((await lookupFxRate('EUR', 'USD', '2026-01-03'))?.rate, 'another stale day of the pair').toBe(1.6);
+        expect(mockConvert, 'a lookup makes its own day fresh, not the whole pair: the other stale day is still a miss').toHaveBeenCalledTimes(2);
+    });
+
+    it('lookupFxRateSync stays a pure cache read: a stale point is still returned, and nothing is asked', async () => {
+        const point = {date: '2026-01-02', rate: 1.25, backwardFillInfo: null};
+        getFxStore('EUR-USD').merge([point]);
+        getFxStore('EUR-USD').markFetched('2026-01-02', '2026-01-02');
+
+        notifyPricesCaughtUp();
+
+        expect(lookupFxRateSync('EUR', 'USD', '2026-01-02'), 'the sync read of a stale point').toEqual(point);
+        expect(lookupFxRateSync('USD', 'EUR', '2026-01-02')?.rate).toBe(0.8);
+        expect(mockConvert, 'a sync read never asks').not.toHaveBeenCalled();
+
+        // The control: the point read above was a stale one — a range load of its day asks again.
+        mockConvert.mockResolvedValueOnce(converted(...ratesAt('EUR', 'USD', '1.60', ['2026-01-02'])));
+        await ensureFxRangeLoaded('EUR-USD', '2026-01-02', '2026-01-02');
+        expect(mockConvert, 'the control: the catch-up did not make the point stale, so the sync read above proves nothing (Z-14)').toHaveBeenCalledOnce();
+    });
+
+    it('changes nothing on a portfolio mutation or «Aggiorna»: the loaders and the lookup answer from the cache until a price catch-up', async () => {
+        loaded('EUR-USD');
+        const range = {slug: 'EUR-USD', start: START, end: END};
+
+        // The live poll's write (every 30 s on an asset page that reaches today), a commit, and «Aggiorna».
+        notifyPortfolioMutation('POST', '/api/v1/assets/prices/current', {results: [], success_count: 0, errors: []});
+        notifyPortfolioMutation('POST', '/api/v1/transactions/commit');
+        requestPortfolioRefresh();
+
+        await ensureFxRangeLoaded('EUR-USD', START, END);
+        await ensureFxRangeLoadedBulk([range]);
+        await loadFxRatesAndSignalsBulk([{...range, displayedInverted: false, signals: []}]);
+        expect((await lookupFxRate('EUR', 'USD', '2026-01-03'))?.rate).toBe(1.1);
+        expect(mockConvert, 'a portfolio mutation or «Aggiorna» made the FX cache stale: the live poll alone would ask every chart again every 30 s').not.toHaveBeenCalled();
+
+        // The control, in the same store: the catch-up does reach it, so the silence above is the listener's choice.
+        notifyPricesCaughtUp();
+        mockConvert.mockResolvedValueOnce(converted(...ratesAt('EUR', 'USD', '1.20')));
+        await ensureFxRangeLoaded('EUR-USD', START, END);
+        expect(mockConvert, 'the control: a price catch-up did not make the range stale either, so the silence above proves nothing (Z-14)').toHaveBeenCalledOnce();
+    });
+});
+
+// =============================================================================
+//  Deliberately left uncovered — two arms that cannot be reached
+//
+//  ensureFxRangeLoadedBulk    `if (points.length > 0)`   (false arm)
+//  loadFxRatesAndSignalsBulk  `if (points.length > 0)`   (false arm)
 //      `pointsBySlug` only gains a key through
 //      `if (!pointsBySlug.has(slug)) pointsBySlug.set(slug, [])`, which is
 //      immediately followed by `.push(point)`. No key can ever hold an empty

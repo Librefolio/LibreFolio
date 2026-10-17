@@ -43,7 +43,7 @@ provider_router = APIRouter(prefix="/provider", tags=["FA Provider"])
 
 @provider_router.get("", response_model=List[FAProviderInfo])
 async def list_providers(
-    providers: Optional[str] = Query(None, description="Comma-separated provider codes to filter (default: all)"),
+    providers: Optional[str] = Query(None, description="Comma-separated provider codes to filter (default: every registered provider but the test-only ones)"),
     _current_user: User = Depends(get_current_user),
 ):
     """List all available asset pricing providers.
@@ -100,7 +100,7 @@ async def list_providers(
 @provider_router.get("/search", response_model=FAProviderSearchResponse)
 async def search_assets_via_providers(
     q: str = Query(..., min_length=1, description="Search query"),
-    providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: all)"),
+    providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: every registered provider but the test-only ones)"),
     hints: Optional[List[str]] = Query(None, description="Extra search terms (ISIN + candidate names) used only by the link-finder fallback to disambiguate when on-site search finds nothing"),
     current_user: User = Depends(get_current_user),
 ):
@@ -160,7 +160,7 @@ async def search_assets_via_providers(
 @provider_router.get("/search/stream")
 async def search_assets_stream(  # pragma: no cover
     q: str = Query(..., min_length=1, description="Search query"),
-    providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: all)"),
+    providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: every registered provider but the test-only ones)"),
     hints: Optional[List[str]] = Query(None, description="Extra search terms (ISIN + candidate names) used only by the link-finder fallback to disambiguate when on-site search finds nothing"),
     current_user: User = Depends(get_current_user),
 ):

@@ -5,18 +5,41 @@ the next start of the server."""
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
+
+from backend.app.schemas.auth import PasswordRuleRead
 
 # One-line docstrings without backticks on purpose: the API client generator pastes a model's docstring unescaped into
 # the TypeScript client wherever the model types a field, and a text over several lines with backticks breaks it at
 # import (E2b; guard `schemas openapi-client-text`, E-5). The detail lives in the comment above each model.
 
 
-# The job's fields: done_bytes of total_bytes measure the bytes read so far; total_bytes is 0 until the database is
-# copied. warnings are stable codes: database_integrity (the database failed its integrity check),
-# foreign_key_violations, files_skipped (files that changed or vanished during the backup, left out). error_code:
-# backup_no_space, backup_failed (the server log has the cause) or backup_interrupted (the server stopped during the
-# backup).
+# The password of a secure backup (decisions 38, 39, P12): the rules of GET /backup/instance/options; the archive is
+# then an .lfbk envelope that only this password opens, and it carries the instance key when LibreFolio generated it.
+# Never stored, logged or sent back. No body, or a null password: a plain .zip, as before.
+class InstanceBackupRequest(BaseModel):
+    """What to back up: with a password, a secure backup."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    password: SecretStr | None = Field(default=None, max_length=1024)
+
+
+# The rules a secure backup's password must meet: those of the accounts (GET /system/instance), with a longer minimum.
+class InstanceBackupOptions(BaseModel):
+    """What the Backup tab needs to offer a secure backup."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    password_rules: list[PasswordRuleRead]
+
+
+# The job's fields: done_bytes of total_bytes measure the bytes read so far (while encrypting, of the archive);
+# total_bytes is 0 until the database is copied. warnings are stable codes: database_integrity (the database failed
+# its integrity check), foreign_key_violations, files_skipped (files that changed or vanished during the backup, left
+# out), instance_key_unusable (a secure backup left out the instance key, which cannot be used). encrypted: a secure
+# backup, an .lfbk envelope. error_code: backup_no_space, backup_failed (the server log has the cause) or
+# backup_interrupted (the server stopped during the backup).
 class InstanceBackupJob(BaseModel):
     """A backup of the whole instance, built in the background: poll it until its status is done or failed."""
 
@@ -24,17 +47,19 @@ class InstanceBackupJob(BaseModel):
 
     job_id: str
     status: Literal["running", "done", "failed"]
-    phase: Literal["preparing", "database", "files", "finalizing"] | None = None
+    phase: Literal["preparing", "database", "files", "finalizing", "encrypting"] | None = None
     done_bytes: int = Field(ge=0)
     total_bytes: int = Field(ge=0)
     created_at: datetime
     finished_at: datetime | None = None
     file_name: str | None = None
     file_size: int | None = Field(default=None, ge=0)
-    warnings: list[Literal["database_integrity", "foreign_key_violations", "files_skipped"]] = []
+    warnings: list[Literal["database_integrity", "foreign_key_violations", "files_skipped", "instance_key_unusable"]] = []
     error_code: Literal["backup_no_space", "backup_failed", "backup_interrupted"] | None = None
+    encrypted: bool
 
 
+# kind: envelope for a secure backup (.lfbk), whose check needs its password; zip otherwise.
 class RestoreUpload(BaseModel):
     """An archive received for a restore: kept for its check (POST /backup/restore/stage), then removed; a newer upload replaces it."""
 
@@ -42,14 +67,18 @@ class RestoreUpload(BaseModel):
 
     upload_id: str
     size: int = Field(ge=0)
+    kind: Literal["zip", "envelope"]
 
 
+# password: the password of a secure backup (an envelope), ignored for a zip. Checked at once: a wrong one keeps the
+# upload, for another try. Never stored, logged or sent back.
 class RestoreStageRequest(BaseModel):
-    """Which uploaded archive to check."""
+    """Which uploaded archive to check, and the password of a secure one."""
 
     model_config = ConfigDict(extra="forbid")
 
     upload_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    password: SecretStr | None = Field(default=None, max_length=1024)
 
 
 # kind cash: the balance of a broker in a currency; kind quantity: the quantity of an asset at a broker. before is
@@ -115,13 +144,26 @@ RestoreErrorCode = Literal[
     "post_migration_failed",
     "restore_interrupted",
     "restore_folder_unusable",
+    "password_required",
+    "envelope_damaged",
 ]
+
+
+class RestoreSecretCounts(BaseModel):
+    """Saved plugin secrets, by scope: the instance's settings and the users' own."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    system: int = Field(ge=0)
+    user: int = Field(ge=0)
 
 
 # action is same (the backup is at this LibreFolio's revision) or upgrade (its database was brought to it, on the copy,
 # by migrations). administrators: after the restore one signs in with one of them, with the password of then. warnings
 # let the restore go on: rows_changed, foreign_key_violations, foreign_key_violations_added. blockers forbid it:
-# no_administrator. The copy is kept until expires_at.
+# no_administrator. The copy is kept until expires_at. encrypted: a secure backup. secrets_rekeyed: the plugin secrets
+# re-encrypted with this instance's key (a secure backup carries its own); secrets_unreadable: those that stay
+# unreadable, to enter again after the restore (another instance's, without its key).
 class RestoreStageReport(BaseModel):
     """What a restore of the checked archive would do: what the confirmation shows."""
 
@@ -143,6 +185,9 @@ class RestoreStageReport(BaseModel):
     files_size: int = Field(ge=0)
     database_size: int = Field(ge=0)
     instance_key_included: bool
+    encrypted: bool
+    secrets_rekeyed: int = Field(ge=0)
+    secrets_unreadable: RestoreSecretCounts
     administrators: list[str]
     warnings: list[Literal["rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable"]]
     blockers: list[Literal["no_administrator"]]
@@ -161,7 +206,7 @@ class RestoreStage(BaseModel):
 
     stage_id: str
     status: Literal["running", "done", "failed"]
-    phase: Literal["checking", "unpacking", "upgrading", "verifying"] | None = None
+    phase: Literal["decrypting", "checking", "unpacking", "upgrading", "verifying"] | None = None
     done_bytes: int = Field(ge=0)
     total_bytes: int = Field(ge=0)
     created_at: datetime

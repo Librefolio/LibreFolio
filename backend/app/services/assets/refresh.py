@@ -38,7 +38,7 @@ from backend.app.services.assets.base import (
     AssetSourceProvider,
 )
 from backend.app.services.assets.event_store import EventStoreOperations
-from backend.app.services.assets.price_store import PriceStoreOperations
+from backend.app.services.assets.price_store import PriceStoreOperations, _unstorable_provider_point, storable_current_value
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -310,10 +310,13 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                     try:
                         cached_current, current_ok = core._asset_current_cache.get(cache_key)
                         if current_ok and cached_current:
-                            current_data = cached_current
+                            current_data = storable_current_value(cached_current, asset_id, provider_code)
                             logger.debug(f"Current cache HIT for asset {asset_id}")
                         else:
-                            current_data = await core.call_provider(prov, lambda: prov.get_current_value(identifier, identifier_type, provider_params), timeout=15.0, scope=cooldown_scope)
+                            fetched_current = await core.call_provider(prov, lambda: prov.get_current_value(identifier, identifier_type, provider_params), timeout=15.0, scope=cooldown_scope)
+                            # As the price columns keep it: a current value they cannot keep is neither cached nor added
+                            # as today's price, and the current-price path serves the cached one as stored (X-R40, W-B62)
+                            current_data = storable_current_value(fetched_current, asset_id, provider_code)
                             if current_data:
                                 core._asset_current_cache.set(cache_key, current_data)
 
@@ -545,10 +548,13 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
         async with AsyncSession(engine, expire_on_commit=False) as persist_session:
             # Count actual changes BEFORE upserting (compare with DB)
             if price_items:
+                # Only the dates the upsert keeps are counted and announced: a value no column keeps loses its date in
+                # the upsert (W-B58), so that date is neither a change nor in ``changed_points`` (W-B62)
+                kept_items = [p for p in price_items if _unstorable_provider_point(p) is None]
                 try:
-                    new_count, changed_count, changed_items_delta = await _count_actual_price_changes(persist_session, asset_id, price_items)
+                    new_count, changed_count, changed_items_delta = await _count_actual_price_changes(persist_session, asset_id, kept_items)
                 except Exception:
-                    new_count, changed_count, changed_items_delta = fetched_count, 0, list(price_items)  # Fallback
+                    new_count, changed_count, changed_items_delta = len(kept_items), 0, list(kept_items)  # Fallback
 
                 try:
                     # Pass the real provider_code so upserted rows are correctly

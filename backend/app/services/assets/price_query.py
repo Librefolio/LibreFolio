@@ -19,6 +19,7 @@ from backend.app.db.models import (
     AssetProviderAssignment,
     PriceHistory,
 )
+from backend.app.db.precision import storable_price
 from backend.app.schemas import (
     FAPricePoint,
     SignalCadence,
@@ -35,25 +36,101 @@ from backend.app.schemas.common import (
     DateRangeModel,
     FxBackwardFillInfo,
 )
-from backend.app.schemas.prices import AssetBackwardFillInfo, FAPriceQueryResult
+from backend.app.schemas.prices import AssetBackwardFillInfo, FACurrentPriceItem, FACurrentValue, FAPriceQueryResult
 from backend.app.schemas.provider import (
     FAVolumeKind,
 )
 from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceProvider
 from backend.app.services.assets.market_calendar import ensure_market_holidays
+from backend.app.services.assets.price_store import storable_current_value
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.series_preparation import mark_market_closed_carries, prepare_asset_series_set
-from backend.app.services.signals.service import (
-    SignalPreparedSeriesBundle,
-    SignalService,
-)
+from backend.app.services.signals.execution import SignalPreparedSeriesBundle
+from backend.app.services.signals.service import SignalService
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
 
 RISK_WARMUP_DAY_MULTIPLIER = 2
+
+#: Rows read per page, after the latest one, while looking for the last close that reads a number (W-B62).
+_FALLBACK_PAGE = 32
+
+
+async def _last_readable_price(session: AsyncSession, asset_id: int) -> Optional[PriceHistory]:
+    """The asset's most recent price row whose close reads a number, or None (W-B62).
+
+    ``RealDecimal`` reads ``None`` for a close the file holds as ±inf, or as no number at all, written by an older release
+    or by another tool (W-B58); ``Decimal(str(None))`` raised, and the gather failed the whole bulk call. Such a row is
+    passed over. The latest row is read alone, then older ones a page at a time: the first one almost always reads.
+    """
+    stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_id).order_by(PriceHistory.date.desc())
+    offset, page = 0, 1
+    while True:
+        rows = (await session.execute(stmt.offset(offset).limit(page))).scalars().all()
+        for row in rows:
+            if row.close is not None:
+                return row
+        if len(rows) < page:
+            return None
+        offset += page
+        page = _FALLBACK_PAGE
+
+
+def _quote_item(asset_id: int, quote: FACurrentValue, source: str) -> FACurrentPriceItem:
+    """The item of a live quote."""
+    return FACurrentPriceItem(asset_id=asset_id, value=quote.value, currency=quote.currency, as_of_date=quote.as_of_date, source=source)
+
+
+async def _live_quote_item(asset_id: int, assignment: AssetProviderAssignment, semaphore: asyncio.Semaphore) -> tuple[Optional[FACurrentPriceItem], Optional[AssetRateLimitedError]]:
+    """The asset's live quote from its provider as an item, and the «too many requests» refusal met, if any.
+
+    ``(None, None)`` without a configured provider, after a failure, or for a quote no price column keeps: the caller
+    then falls back to the last stored price. The quote is served as the price columns keep it
+    (``storable_current_value``: truncated like the history, or refused and logged once; X-R40, W-B62), and a quote is
+    cached only once its item is built: the current-value cache (2 minutes, shared with the refresh) never holds one
+    that cannot be served.
+    """
+    provider = await core.configured_provider(assignment.provider_code)
+    if not provider:
+        return None, None
+    params = core._parse_provider_params(assignment.provider_params)
+    mapped_id_type = AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type)
+    source = f"provider:{assignment.provider_code}"
+
+    # Check core cache first (TTL 2min), under the key a refresh uses too: with the provider's parameters
+    # and settings (core.asset_cache_key), so that assets with other parameters never share a value (X-R28)
+    cache_key = core.asset_cache_key(assignment.provider_code, assignment.identifier, assignment.identifier_type, params, core.settings_cache_part(provider))
+    cached_cv, cache_ok = core._asset_current_cache.get(cache_key)
+    if cache_ok:
+        logger.debug(f"Current-price cache HIT for asset {asset_id}")
+        # Only a quote that passed is ever cached; checked again all the same, it costs nothing
+        quote = storable_current_value(cached_cv, asset_id, assignment.provider_code)
+        return (_quote_item(asset_id, quote, source) if quote is not None else None), None
+
+    try:
+        # Capture variables for lambda (avoid late-binding)
+        _id = assignment.identifier
+        _id_type = mapped_id_type
+        _params = params
+        async with semaphore:
+            fetched = await core.call_provider(provider, lambda: provider.get_current_value(_id, _id_type, _params), timeout=10.0, scope=core.cooldown_scope_for(provider, _id, _id_type, _params))
+        quote = storable_current_value(fetched, asset_id, assignment.provider_code)
+        if quote is None:
+            return None, None
+        item = _quote_item(asset_id, quote, source)
+        core._asset_current_cache.set(cache_key, quote)
+        return item, None
+    except AssetRateLimitedError as refused:
+        # Paused after «too many requests»: no call was made, or the provider refused this one. The
+        # last stored price stands, and the item says why and for how long (decision 34, D-Z7-2).
+        logger.debug("Provider paused, falling back to DB", asset_id=asset_id, retry_after=refused.retry_after)
+        return None, refused
+    except Exception as prov_err:
+        logger.debug("Provider current-price failed, falling back to DB", asset_id=asset_id, error=str(prov_err))
+        return None, None
 
 
 class PriceQueryOperations:
@@ -708,8 +785,9 @@ class PriceQueryOperations:
         Fetch current/live prices for multiple assets.
 
         For each asset:
-        1. If a provider is assigned → call provider.get_current_value() (parallel, semaphore-limited)
-        2. Fallback → read latest PriceHistory row from DB
+        1. If a provider is assigned → call provider.get_current_value() (parallel, semaphore-limited), served as the
+           price columns keep it: a quote they cannot keep is neither served nor cached (X-R40, W-B62)
+        2. Fallback → the latest PriceHistory row whose close reads a number (W-B62)
 
         **Side effect (F.2 + F.3)**: for every successful provider fetch whose
         ``as_of_date`` is today, the OHLC row for today is either created
@@ -728,8 +806,6 @@ class PriceQueryOperations:
         Returns:
             List of FACurrentPriceItem (one per requested asset_id, preserving order)
         """
-        from backend.app.schemas.prices import FACurrentPriceItem  # noqa: PLC0415 — avoid circular import
-
         if not asset_ids:
             return []
 
@@ -755,58 +831,15 @@ class PriceQueryOperations:
 
             # --- Try provider ---
             if assignment:
-                provider = await core.configured_provider(assignment.provider_code)
-                if provider:
-                    params = core._parse_provider_params(assignment.provider_params)
-                    mapped_id_type = AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type)
-
-                    # Check core cache first (TTL 2min), under the key a refresh uses too: with the provider's parameters
-                    # and settings (core.asset_cache_key), so that assets with other parameters never share a value (X-R28)
-                    cache_key = core.asset_cache_key(assignment.provider_code, assignment.identifier, assignment.identifier_type, params, core.settings_cache_part(provider))
-                    cached_cv, cache_ok = core._asset_current_cache.get(cache_key)
-                    if cache_ok:
-                        logger.debug(f"Current-price cache HIT for asset {asset_id}")
-                        return FACurrentPriceItem(
-                            asset_id=asset_id,
-                            value=cached_cv.value,
-                            currency=cached_cv.currency,
-                            as_of_date=cached_cv.as_of_date,
-                            source=f"provider:{assignment.provider_code}",
-                        )
-
-                    try:
-                        # Capture variables for lambda (avoid late-binding)
-                        _id = assignment.identifier
-                        _id_type = mapped_id_type
-                        _params = params
-                        async with sem:
-                            cv = await core.call_provider(provider, lambda: provider.get_current_value(_id, _id_type, _params), timeout=10.0, scope=core.cooldown_scope_for(provider, _id, _id_type, _params))
-                        core._asset_current_cache.set(cache_key, cv)
-                        return FACurrentPriceItem(
-                            asset_id=asset_id,
-                            value=cv.value,
-                            currency=cv.currency,
-                            as_of_date=cv.as_of_date,
-                            source=f"provider:{assignment.provider_code}",
-                        )
-                    except AssetRateLimitedError as refused:
-                        # Paused after «too many requests»: no call was made, or the provider refused this one. The
-                        # last stored price stands, and the item says why and for how long (decision 34, D-Z7-2).
-                        refusal = refused
-                        logger.debug("Provider paused, falling back to DB", asset_id=asset_id, retry_after=refused.retry_after)
-                    except Exception as prov_err:
-                        logger.debug(
-                            "Provider current-price failed, falling back to DB",
-                            asset_id=asset_id,
-                            error=str(prov_err),
-                        )
+                item, refusal = await _live_quote_item(asset_id, assignment, sem)
+                if item is not None:
+                    return item
 
             refusal_fields = {"error_code": refusal.error_code, "retry_after": refusal.retry_after} if refusal is not None else {}
 
             # --- Fallback: last known price from DB ---
-            last_stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_id).order_by(PriceHistory.date.desc()).limit(1)
-            last_res = await session.execute(last_stmt)
-            last_price = last_res.scalar_one_or_none()
+            # The latest close that reads a number: one the file holds as ±inf reads None, and is passed over (W-B62)
+            last_price = await _last_readable_price(session, asset_id)
 
             if last_price:
                 return FACurrentPriceItem(
@@ -858,7 +891,11 @@ class PriceQueryOperations:
             )
 
             for item in items_to_persist:
-                new_close = Decimal(str(item.value))
+                # Truncated like the history (W-B58): 12 decimal places, 15 significant digits. A quote no price column
+                # can keep never gets here: it is neither served nor cached (``storable_current_value``; X-R40, W-B62).
+                new_close = storable_price(Decimal(str(item.value)))
+                if new_close is None:
+                    continue
                 existing = existing_by_asset.get(item.asset_id)
                 if existing is None:
                     # F.2 bootstrap — open=high=low=close=new, volume=None

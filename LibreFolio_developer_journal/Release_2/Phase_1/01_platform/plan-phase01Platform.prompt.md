@@ -4407,3 +4407,671 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
    - **Prova reale, categoria intera** (`--workers 2 … schemas all`): exit 0, «Parallel pass — 12 isolation-safe
      unit(s) across 2 worker(s)», **166 + 1667 passed**, verde in 31,6 s.
    - **Doc**: `mkdocs build` exit 0; `check-links` 97; porta libera.
+
+### Lotto «H-26: un'azione registrata senza nomi di test li rifiuta» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (00:20): «refuse», exit 2 con «name the action» quando dopo `all` seguono dei nomi. Alla mia
+> domanda di perimetro (00:24) ha risposto: **una regola sola per tutte le 36 azioni**, rifiuto prima di ogni effetto
+> collaterale, `--list` compreso. Base `9839ea00b`, cioè dev dopo H-25, fast-forward del coordinatore, verificata
+> pulita.
+
+1. ✅ **Analisi** (00:20–00:30, sola lettura).
+   - Ogni sottoparser di categoria ha il posizionale `test_names` (`nargs="*"`, in `create_subparser_from_registry`).
+     Le suite (`all`, `all-backend`, `all-frontend`) non l'hanno, e lì argparse rifiuta già i nomi con exit 2.
+   - `run_test_from_registry` inoltra i nomi solo alle azioni registrate con `test_names=True`; alle altre li perde in
+     silenzio, e l'azione gira intera.
+   - Il registro vivo ha **36** azioni senza nomi: le 16 `all`, `db create`, `db populate` e 18 unità Vitest (10 in
+     `front-portfolio`).
+   - Verificato col parser vero (`files/h26_parse.py`):
+     - `services all test_foo` esegue tutto `services`;
+     - `external all yfinance` esegue tutti i provider: sembra un filtro e non lo è;
+     - `db populate --force --clean extra` ripopola senza dire niente;
+     - `front-portfolio risk-unit nome` esegue tutta l'unità.
+   - Effetti collaterali prima del corpo, in entrambi gli ingressi: `_dispatch_test_command` (`dev.py test`) e
+     `main()` (`python -m scripts.test_runner`).
+     - `_common.tee_output` apre `--log-file`.
+     - `_activate_log_dir` archivia il `.testLog` precedente in `00_archive/`.
+     - `_timed_run` scrive il record della campagna.
+     - `_snapshot_log_dir_db` copia il DB nella cartella dei log.
+     - Il rifiuto va prima di tutti.
+   - Codice di uscita: `dev.py` fa `sys.exit(main())` con `args.func(args) or 0`, e `__main__` fa `sys.exit(main())`.
+     Quindi un `return 2` dei due ingressi arriva alla shell come exit 2.
+   - Doc: nessuna frase di H-25 parla dei nomi persi. Un solo comando documentato passa token dopo un'azione senza
+     nomi: `external all --exclude-providers yfinance broker_coinbase` (`external.md:54`). È un falso positivo: col
+     parser vero i due token vanno a `--exclude-providers` e `test_names=[]`.
+   - **Cura**: `_refused_test_names(args) -> str | None` in `_cli.py`. Una sola regola: nomi dati a un'azione del
+     registro con `test_names` falso.
+     - Il messaggio per `all` dice «name the action» e mostra l'esempio; quello per le altre azioni dice «takes no test
+       names: it runs whole».
+     - La chiamata sta in cima a `_dispatch_test_command` e `main()`: `print_error`, poi `return 2`.
+     - `run_test_from_registry` non cambia: nessun chiamante interno passa nomi a queste azioni.
+2. ✅ **Rossi, doc e cura a secco** (00:35–00:45, in parallelo).
+   - ✅ **Rossi** (test-author, solo `test_test_runner_cli.py`, +447 righe, 3 import): 533 casi in 4 classi.
+     - `TestRefusedTestNames`, 514 casi: uno per ogni azione del catalogo vivo, con id `categoria-azione`, più
+       questi:
+       - l'ancora (`services all`, `db populate`, `front-portfolio risk-unit` senza nomi, `services client-address` con
+         i nomi), senza contare le 36;
+       - nessun nome (attributo assente, `None`, `[]`);
+       - i 6 sottocomandi che non sono categorie;
+       - 4 casi fuori dal catalogo;
+       - purezza: la regola non stampa e non tocca `args`;
+       - il catalogo letto al momento della chiamata, con una categoria finta registrata dopo l'import.
+     - `TestDispatchTestCommandRefusesBeforeAnySideEffect` (9) e `TestMainRefusesBeforeAnySideEffect` (9): `args` dal
+       parser vero, 5 invocazioni rifiutate, un caso `--log-file`/`--log-dir` (nessun file scritto) e 3 guardie (nomi a
+       un'azione che li prende, `all` senza nomi, `--exclude-providers yfinance broker_coinbase`).
+     - `TestDevPyExitsWithTheRefusal` (1): `dev.main()` restituisce 2.
+     - Le prove rifiutate chiudono tutte le 11 cuciture (`tee_output`, `_activate_log_dir`, `_timed_run`,
+       `_snapshot_log_dir_db`, i due corpi, `_configure_runtime`, `run_test_from_registry`, `dispatch_to_category`,
+       `subprocess.run` e `subprocess.Popen`) con sostituti che falliscono se chiamati: nessun rosso arriva mai a una
+       corsa vera.
+     > **⚠️ Fuori pista** (dal test-author): `_cli` prende `print_error` da `_common`, non da `cli_base`; stampa allo
+     > stesso modo su stdout. A parte, non corretto: nel ramo `--log-file` di `main()`, `_snapshot_log_dir_db()` non ha
+     > `try/finally`, a differenza di `_dispatch_test_command`.
+   - ✅ **Doc** (docs-writer):
+     - `index.md`, «Running Tests»: i nomi vanno solo alle azioni che li prendono (`--help` le marca `[TEST_NAME]`);
+       `all`, `db create`/`populate` e la maggior parte delle unità Vitest li rifiutano, exit 2, anche con `--list`.
+     - `runner_architecture.md`, passo 2 di «Adding a Test Action»: un'azione con `test_names=False` li rifiuta.
+     - `runner_architecture.md` ~554: «`--test-names`» non era un flag, ed è stato tolto; ora «Neither `all` nor
+       `all-frontend` takes test names».
+     - La voce `--workers`: «pytest `-k`, which only a named action takes».
+     > **⚠️ Fuori pista** (dal docs-writer): non tutte le unità Vitest rifiutano i nomi. Le tre di `front-utility`
+     > (`core-unit`, `component-unit`, `onboarding-component-unit`) li passano a Vitest `-t`. Le 18 che ho contato
+     > erano già solo quelle senza nomi; la mia consegna al docs-writer diceva «the Vitest unit actions», ed era
+     > imprecisa. La doc dice «most».
+   - ✅ **Cura a secco** (`files/h26/apply_cure.py`, +26 righe): `_refused_test_names()` prima di
+     `_dispatch_test_command()`, più 4 righe in cima a `_dispatch_test_command()` e a `main()`. ruff e black puliti, con
+     il percorso vero via stdin.
+3. ✅ **Rosso → cura → verde → prova reale** (00:46–00:58, a carico < 50; `files/runs/h26-lib.sh`, log in
+   `files/runs/h26/`).
+   - **Rosso** (`utils test-runner-cli`): **526 failed / 145 passed**, la ripartizione prevista.
+     - 513 su «H-26: _refused_test_names is missing»;
+     - 13 sulla prima cucitura raggiunta: 11 `_activate_log_dir` e 2 `tee_output`, i due casi `--log-file`.
+     - Nessun rosso fuori dalle classi H-26; i 138 casi di prima e le 7 guardie sono verdi.
+   - **Cura** applicata, uguale byte per byte alla prova a secco (`cmp`).
+   - **Verde**: `utils test-runner-cli` **671/671** in 5,3 s. Il rosso aveva impiegato 92 s, quasi tutti per il
+     resoconto dei fallimenti.
+   - **Prova reale** (`files/runs/h26-refuse.sh`): exit **2** e il messaggio giusto per `services all h26_probe`,
+     `services all --list h26_probe`, `db populate --force --clean h26_extra`, `external all yfinance`,
+     `front-portfolio risk-unit h26_probe` e `python -m scripts.test_runner services all h26_probe`. **Nulla
+     cambiato**: l'archivio di `.testLog` (818 voci), `.run_cache.json`, `.campaign.json` e il DB della corsia (inode,
+     mtime, dimensione).
+   - Doc: nella riga `--workers` di `index.md` (la mia frase di H-25) la stessa precisazione del docs-writer, «pytest
+     `-k`, which only a named action takes».
+
+### Residuo di H-24 (`_tool_contract_sources()` e il `.DS_Store` nelle cartelle Python) e H-28 (2026-10-17, notte) — ✅ provato
+
+> Chiesto dal coordinatore dopo H-25, con il vincolo: ignorare le voci nascoste nella mtime di una cartella senza perdere
+> la rilevazione di un file tolto.
+
+- `_tool_contract_sources()` (`cli_base.py` ~580) mette fra gli ingressi della build le 3 cartelle (`schemas`,
+  `services/tools`, `tool_plugins`) e le loro sottocartelle, 8 in tutto, per la loro mtime. Serve ad accorgersi di un
+  `.py` tolto, rinominato o entrato con una mtime vecchia.
+- Verificato su questa macchina (`files/h26/mtime-demo`, poi cancellato):
+  - creare `.DS_Store` fa salire la mtime della cartella; riscriverlo sul posto no;
+  - creare `__pycache__` la fa salire: anche questo oggi fa ricostruire (in quelle cartelle ce ne sono 6);
+  - togliere un `.py` la fa salire.
+- **Conclusione: un filtro non può bastare.** Guardando solo le mtime, un `.DS_Store` e un file tolto sono lo stesso
+  evento. Serve un ricordo dell'ultima build.
+- **Proposta A**, inviata al coordinatore (00:45): un'impronta dell'elenco degli ingressi.
+  - `tool_contract_fingerprint()` in `cli_base` è lo sha256 dei percorsi relativi: i `.py` senza parti nascoste né
+    `__pycache__`, più i file fissi.
+  - `cmd_fe_build` (`dev.py`) calcola l'impronta prima di `api sync` e la scrive in
+    `frontend/build/.tool-contract-inputs` solo se la build riesce, accanto a `.build-debug`.
+  - `check_frontend_needs_build`:
+    - un file più nuovo della build → stale;
+    - un'impronta diversa dal marker → stale;
+    - senza marker vale la regola di oggi, con le mtime delle cartelle.
+  - I tre percorsi di build passano da `cmd_fe_build`: `dev.py`, il runner (`_frontend_common.py:92`, `build_func`) e
+    Docker (`_docker_ensure_frontend_built`).
+- **Alternativa B, scartata**: un euristico («una cartella più nuova non conta se un suo file nascosto è nuovo almeno
+  quanto lei»). Perde la rimozione appena il `.DS_Store` viene toccato dopo.
+- **Reperto a parte (basso, `static_site.py`, file mio)**: `frontend_catchall` serve qualunque file della radice di
+  `frontend/build/`, dotfile compresi. `GET /.build-debug` e `GET /.build-version` rispondono, anche dall'immagine.
+  Proposto come H-27, oppure in coda al lotto.
+- ✅ **Decisione** del coordinatore (00:50): disegno A approvato, OK da writer su `dev.py` (`cmd_fe_build` e
+  l'import) e su `scripts/cli_base.py`. Il reperto dei dotfile entra **in coda a questo lotto, come H-28**. H-27 è
+  un'altra voce: `profile_default` non controlla il tipo (da E, R13-SEC3). È registrata nel backlog e si fa dopo il
+  lotto.
+- ✅ **Cura a secco** (`files/h24r/apply_cure.py`, 107 righe cambiate su tre file).
+  - `cli_base.py`:
+    - `_TOOL_CONTRACT_FOLDERS`, `TOOL_CONTRACT_INPUTS_MARKER` e la versione dell'elenco;
+    - `_tool_contract_sources()`: stesso nome, ma ora dà solo file che esistono, senza parti nascoste né
+      `__pycache__`;
+    - `_tool_contract_folders()`, usata solo come ripiego;
+    - `tool_contract_fingerprint()` e `record_tool_contract_inputs()`, che scrive con `contextlib.suppress(OSError)`;
+    - `_tool_contracts_changed()` al posto del ciclo dentro `check_frontend_needs_build()`.
+  - `dev.py`: i due nomi nell'import da `cli_base`. In `cmd_fe_build`, `tool_inputs` si calcola prima di
+    `cmd_api_sync` e `record_tool_contract_inputs(PROJECT_ROOT, tool_inputs)` si chiama solo se la build riesce.
+  - `static_site.py`: `_hidden_in_build(target)` sulle parti del percorso risolto dentro la build, quindi
+    `/assets/../favicon.png` resta servito; più una frase nella docstring del modulo.
+    > **⚠️ Fuori pista** (01:00): `_hidden_in_build` risolve una seconda volta la cartella della build. Se la cartella
+    > viene sostituita fra le due risoluzioni, `relative_to` alzerebbe un errore, cioè un 500. Ora quel caso conta
+    > come nascosto e va al fallback (`not target.is_relative_to(build) or …`). Il percorso `/mkdocs` ha la stessa
+    > forma, ma il sito costruito non contiene dotfile (0): resta fuori da H-28, lo segnalo nell'handoff.
+  - Le mtime delle cartelle restano solo come ripiego, quando il marker manca.
+  - ruff con i percorsi veri via stdin: invariato (`dev.py` ha 10 reperti, gli stessi di prima). black: nessun
+    pezzo sulle righe nuove; `cli_base.py` passa da 15 a 14 pezzi, perché il vecchio generatore su più righe era uno
+    di quelli.
+- ✅ **Rossi** (secondo test-author, file diversi da H-26): 77 test, 67 rossi e 10 verdi previsti.
+  - `test_runtime_isolation.py`, 59 test:
+    - `TestToolContractListing` (19): l'elenco degli ingressi, l'impronta, il marker e la sua scrittura;
+    - `TestToolContractInputsRecorded` (33): i casi da a) a j) del brief, più il cambio vero in mezzo al rumore, il
+      marker vuoto e un checkout sotto una cartella nascosta;
+    - `TestToolContractInputsWithoutARecord` (7): la regola vecchia come ripiego, verdi prima e dopo.
+  - `test_test_server_preparation.py`, 8 test, «Contract 8»:
+    - `dev` usa le stesse funzioni di `cli_base`;
+    - l'impronta si prende prima di `cmd_api_sync` e si registra dopo la build npm;
+    - con 4 passi falliti non si registra niente, e nemmeno con un tool mancante.
+    - Ogni passo è sostituito dopo la barriera, e le due funzioni vere di `cli_base` sono vietate: niente scrive nella
+      vera `frontend/build/`.
+  - `test_static_route_confinement.py`, 10 test: 5 file nascosti, `/assets/../.build-debug`, il caso senza
+    `200.html`, più 3 guardie (`robots.txt`, un font, `fonts/v1.2/x.woff2`).
+  > **⚠️ Fuori pista** (dal test-author): il mio brief diceva «la cartella lasciata a adesso», ma `BUILD_MTIME` è
+  > 1 800 000 000, cioè gennaio 2027, quindi «adesso» è più vecchio della build finta. I test usano date esplicite
+  > (`NEWER_MTIME` e `OLDER_MTIME`) e non dipendono dall'orologio.
+- ✅ **Rosso → cura → verdi → prova reale** (01:02–01:32, ogni passo a carico < 50; `files/runs/h24r-red.sh`,
+  `h26-green.sh`, `h24r-slot.sh`, log in `files/runs/h26/`).
+  - **Rosso**:
+    - `utils runtime-isolation` **52/239**: 48 su `tool_contract_fingerprint` mancante, 1 su `_tool_contract_folders`, 1
+      sul marker, 2 sull'elenco di oggi, che conta le cartelle e i `.py` nascosti;
+    - `utils test-server-preparation` **8/83**, tutti sulla barriera;
+    - `utils static-route-confinement` **7/29**: il contenuto del file nascosto torna indietro.
+    - Nessun rosso fuori dalle classi nuove.
+  - **Cura** applicata, uguale byte per byte alla prova a secco (`cmp`, 3 file, +84/−19).
+    - Sonda sul vero albero: 69 ingressi, 8 cartelle, nessun nascosto.
+    - Un percorso radice che non esiste dà un elenco vuoto, senza errori.
+  - **Verdi**:
+
+    | Selettore | Risultato |
+    |---|---|
+    | `utils test-runner-cli` | 671/671 |
+    | `utils runtime-isolation` | 291/291 |
+    | `utils test-server-preparation` | 91/91 |
+    | `utils static-route-confinement` | 36/36 |
+    | `utils check-frontend-build` | 14 |
+    | `utils dev-cli-docker` | 96 |
+    | `services static-cache-policy` | 26 |
+    | `services security-headers` | 15 |
+    | `services managed-headers` | 169 |
+    | `services app-lifecycle` | 51 |
+    | `check-orphans` | verde |
+    | `utils nosniff-content-types` | 28/30, poi 30/30 dopo la riparazione |
+
+  > **⚠️ Fuori pista**: `utils nosniff-content-types` ha dato 2 rossi. Verdetto (`test-triage`): **assunzione**. Il
+  > campionatore del test sceglie un file per estensione nella vera `frontend/build` e aveva preso `.build-debug` per i
+  > file senza estensione; H-28 ora lo rifiuta di proposito. Il `.json` passava solo perché il file più piccolo non era
+  > `.cache_manifest.json`. Riparazione (test-author, +9/−2): il campione salta i file nascosti fuori da `_app/`, che
+  > il mount serve senza filtro. **30/30** sulla build ricostruita, che contiene tutti e tre i file nascosti.
+  - **Prova reale, slot 2 del coordinatore** (01:18–01:28, porta 6181):
+    - `api http-compression` **10/10**. Il runner ha ricostruito il frontend con il vero `cmd_fe_build` («Frontend
+      sources changed, rebuilding…», build debug come prima) e ha scritto `.tool-contract-inputs`, uguale all'impronta.
+    - Sul vero albero:
+
+      | Situazione | Regola nuova | Regola vecchia |
+      |---|---|---|
+      | subito dopo la build | fresca | fresca |
+      | `.DS_Store` creato in `backend/app/schemas` | fresca | stale |
+      | `.DS_Store` tolto | fresca | stale |
+      | un `.py` aggiunto con data più vecchia della build | stale (solo l'elenco lo vede) | — |
+      | quel file tolto | fresca | stale |
+
+    - Il server della corsia (`dev.py server --test`), avviato dopo, non ha ricostruito niente.
+    - `GET /.build-debug`, `/.tool-contract-inputs`, `/fonts/noto-color-emoji/.cache_manifest.json` e
+      `/assets/../.build-debug` (con `--path-as-is`) danno 200 `text/html` con la pagina della SPA (`200.html`,
+      confronto sha256). `/robots.txt` e `/manifest.json` danno il file, con `text/plain` e `application/json`.
+    - Server fermato con il gruppo di processi; la porta 6181 ha 0 processi in ascolto.
+  - **Statici**:
+    - ruff e black sui 5 file di test: 0 → 0, come a HEAD;
+    - produzione: `_cli.py` e `static_site.py` puliti; `cli_base.py` ruff pulito, black da 15 a 14 pezzi, e nessuno
+      sulle righe nuove; `dev.py` ha gli stessi 10 reperti ruff e gli stessi 41 pezzi black di prima.
+- ✅ **Doc** (docs-writer, 01:33–01:40; pagine per sviluppatori senza traduzioni):
+  - `test-walkthrough/front-overview.md`, il punto «Builds the frontend, when needed»: gli ingressi dei codec dei Tool
+    si confrontano con l'impronta che l'ultima build riuscita ha registrato. Contano un file aggiunto, tolto o
+    rinominato, anche con una data vecchia; non contano `.DS_Store`, i file nascosti e `__pycache__/`. Senza la
+    registrazione valgono le date delle cartelle.
+  - `architecture/overview.md`, «Server Startup»: il catch-all serve il file nominato dopo aver risolto i `..`; un
+    percorso fuori dalla build o con un nome nascosto riceve `200.html`.
+  - `architecture/security.md`: nel riassunto del test `nosniff-content-types`, i file nascosti fuori da `_app/` non
+    vengono campionati.
+  - `dev_workflow.en.md:132`: la ragione «missing or outdated» comprende ora un ingresso aggiunto, tolto o
+    rinominato.
+  - Il docs-writer segnala due imprecisioni di quella pagina che c'erano già prima del lotto: il catalogo i18n
+    mancante come motivo, e l'etichetta «built for another version». Restano come sono.
+  - **Prove**: `dev.py mkdocs build` exit 0 in 112 s (l'unica riga «Warning» è l'avviso del team di Material);
+    `check-links` exit 0, **97** link validi; `git diff --check` pulito.
+- **Residui per il backlog**:
+  - **H-29**: il mount di `/_app` e `/mkdocs` servono ancora i file nascosti. Nell'immagine non ce ne sono, ma su un
+    Mac di sviluppo un `.DS_Store` del Finder dentro `frontend/build/_app/` sarebbe servito.
+  - **H-30**: nel ramo `--log-file` di `main()` (`python -m scripts.test_runner`), `_snapshot_log_dir_db()` non ha il
+    `try/finally` che ha `_dispatch_test_command`. Lo ha notato il test-author di H-26.
+  - Dai test-author: le descrizioni del catalogo dei tre selettori (`_backend_utils.py`) non nominano i contratti
+    nuovi. Non le tocco, perché le descrizioni del catalogo non sono mie.
+
+### Revisioni della notte (2026-10-17) — su richiesta del coordinatore, sola lettura
+
+- **B4** (worktree `e-alfy-miniature-telegram`, non committato, letto con `git --no-optional-locks`), alle 00:55:
+  **OK sul codice, con 3 correzioni di doc.**
+  - `get_instance_backup_options` in `ALLOWED_WHEN_BLOCKED` rispetta le regole.
+    - Rientra nella decisione 12 (il backup completo di un amministratore).
+    - È una GET `require_admin` che non avvia niente e dà solo le regole della password.
+    - Sta in lista per funzione e il test la fissa.
+    - Il match regge con `NoInputEchoRoute`: la classe avvolge solo `get_route_handler`, quindi `scope["endpoint"]`
+      resta la funzione originale.
+  - `secure.py` legge solo con `instance_key_status()` e `read_secret_file`, e non crea mai la chiave.
+    - «Never raises» è vero: `read_secret_file` trasforma in `SecretFileError` ogni errore di lettura.
+    - Il testo esportato è quello da cui l'istanza deriva le sue chiavi: anche `_read_generated_key` passa da
+      `read_secret_file`.
+  - Da correggere:
+    - `backup/instance.py:15` dice «The four routes» (sono cinque);
+    - in `developer/architecture/security.md:751` alla tabella dell'allowlist manca la rotta delle opzioni;
+    - in `admin/hosting_providers.en.md:313` le rotte che chiama la card di blocco non nominano
+      `GET /backup/instance/options`.
+    - Nessuna delle due pagine ha traduzioni.
+  - Facoltativa: la docstring di `derive_key_from`. Anche un archivio protetto lascia fuori una chiave data
+    dall'ambiente.
+
+### Lotto «H-27: `profile_default` controlla il tipo del valore del profilo» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (01:50): «Next is H-27», dopo il commit del lotto H-26/H-24r/H-28 (`b34f5e990` …
+> `063d2aa42`, entrato in dev `40a76bf1a`; più la riga del CHANGELOG per H-28 in `5beecac3d`). Base: fast-forward del
+> coordinatore a `5beecac3d`, verificato pulito. Origine: E, R13-SEC3; il testo originale non è nel repo, solo le due
+> voci del backlog che ne derivano (H-27, X-R36).
+
+1. ✅ **Analisi** (01:50–02:00, sola lettura).
+   - `profile_default(name, fallback)` (`config/__init__.py` ~576) restituisce `cast(T, values[name])`: nessun
+     controllo. L'unico lettore è `backup_max_upload_mb()` (`config/backup.py:78`, di B), con ripiego `0` = nessun
+     limite.
+   - I suoi due chiamanti (`api/v1/backup/restore.py`) catturano solo `BackupConfigError`:
+     - `_upload_limit()` calcola `limit_mb * _MEGABYTE if limit_mb else None`, quindi con `None` nel profilo non
+       applica **nessun limite**: è il «fail-open» di E;
+     - `_readable_limit_mb()` lo mostrerebbe come limite illeggibile.
+   - **Cosa è già coperto quando girano i test**, per la voce di oggi:
+     - `test_managed_lists_the_decided_variables_with_their_types` (`services profile-defaults`) confronta
+       `ENVIRONMENT_PROFILE_DEFAULTS["managed"]` con la tabella decisa, valore e tipo esatto: una voce tolta o `None`
+       fa diventare rosso il test;
+     - le prove API di B (`test_backup_restore.py:535`, `test_backup_restore_apply.py:1162`) fissano «managed-unset →
+       500» attraverso l'endpoint.
+   - **Cosa non è coperto**:
+     - (1) quando l'app gira, niente impedisce a un valore del tipo sbagliato di passare;
+     - (2) per un lettore futuro, nessun test confronta il tipo del ripiego con quello della voce. La tabella decisa
+       del test fissa il valore che il lavoro dichiara, non il tipo che il lettore si aspetta: una voce `None` scritta
+       in entrambe le tabelle passerebbe.
+   - **Cura proposta**, solo file miei:
+     - `profile_default` controlla il tipo esatto: `type(value) is type(fallback)`, così `True` non vale come `int` e
+       `60` non vale come `60.0`, come già la regola stretta di `PROFILE_DEFAULTS`. Un tipo diverso alza
+       `ProfileDefaultError(TypeError)`, con un messaggio che nomina variabile, profilo, i due tipi e la tabella; il
+       lettore non lo legge mai. Il valore è una costante del codice, mai un segreto: si può citare.
+     - Un test statico generico: ogni chiamata `profile_default(NOME, <letterale>)` delle sezioni di `config/` ha un
+       ripiego dello stesso tipo esatto della voce di ogni profilo che elenca `NOME`.
+     - Più i casi a runtime: `None`, `"500"`, `500.0` e `True` per un ripiego `int`, eccetera; il valore giusto torna
+       così com'è; il self-hosted non cambia; più il caso di E, il lettore vero di B con `None` nel profilo, che alza
+       invece di dare «nessun limite».
+   - **Scelta, documentata**: nessun controllo all'avvio. La proposta del backlog diceva «un errore chiaro
+     all'avvio», ma il tipo atteso lo conosce solo il lettore, e i lettori girano quando servono (B ha scelto un 503
+     al momento dell'uso per i suoi errori dell'operatore). La tabella è codice: il test statico la ferma prima del
+     rilascio, e a runtime il lettore si ferma invece di ripiegare.
+     - Con la cura, un valore sbagliato fa rispondere 500 alle due rotte di B, non 503. Se B vuole il suo 503, gli
+       basta catturare `ProfileDefaultError` in `_upload_limit()` e in `_readable_limit_mb()`: lo segnalo, il file è
+       suo.
+   - `PROFILE_DEFAULTS` (i campi di `Settings`): la convalida stretta del test (d) già controlla ogni valore contro il
+     tipo del suo campo. A runtime niente, perché `get_settings()` ricostruisce `Settings` a ogni chiamata. Resta
+     così: E ha segnalato `profile_default`.
+   - Doc: `developer/architecture/settings.md` ~58 («`profile_default()` converts nothing (a `cast`)») e l'elenco
+     delle guardie lì vicino. Nessuna traduzione.
+   - Selettori: `services profile-defaults` e `services config-env-example`; `api backup-restore` e
+     `api backup-restore-apply` solo se la build della corsia è fresca, altrimenti in uno slot.
+2. ✅ **Rossi, doc e cura a secco** (02:00–02:08, in parallelo).
+   - **Rossi** (test-author, solo `test_profile_defaults.py`): da 52 a 88 casi; previsti 11 rossi e 77 verdi.
+     - `test_profile_default_error_is_a_type_error`;
+     - (g) 9 tipi sbagliati: `None`, `"500"`, `500.0`, `True` per un ripiego `int`; `1` e `None` per `bool`; `60`
+       per `float`; `None` e `0` per `str`. Ognuno deve alzare l'errore, con un messaggio che nomina variabile,
+       profilo, i due tipi e la tabella;
+     - (g) 18 casi self-hosted o con profilo non impostato, che restituiscono il ripiego stesso;
+     - 4 casi del tipo giusto, che restituiscono la voce;
+     - il caso di E con il lettore vero `backup_max_upload_mb()` e `None` nel profilo, più la sua guardia (500, un
+       `int`);
+     - (h) la guardia statica `type_mismatches()` e il suo autotest. Il test-author ha aggiunto anche il controllo
+       che ogni voce sia letta da una chiamata trovata.
+     - I tre test vecchi con ripiego `object()` per una variabile elencata ora usano `type(expected)()`.
+     > **⚠️ Fuori pista** (dal test-author): `None` passa se anche il ripiego è `None`, perché il controllo è sul
+     > tipo esatto. Il lettore di oggi usa `0`; la docstring del test lo dice. Inoltre la descrizione del catalogo di
+     > `services profile-defaults` nomina solo H-17: non è mia, non la tocco.
+   - **Doc** (docs-writer): `developer/architecture/settings.md`, al posto della frase sul `cast`, il controllo
+     (tipo esatto, `ProfileDefaultError`, il lettore si ferma; nessun controllo all'avvio, e perché). Nell'elenco
+     delle guardie i due controlli nuovi; nell'istruzione per aggiungere una variabile, «un ripiego letterale del tipo
+     della variabile».
+   - **Cura a secco** (`files/h27/apply_cure.py`): `ProfileDefaultError(TypeError)` e il controllo in
+     `profile_default`; ruff e black puliti.
+3. ✅ **Rosso → cura → verdi** (02:08–02:09; il resto è fermo per il congelamento della galleria, carico 160).
+   - **Rosso**: `services profile-defaults` **11 failed / 77 passed**, la previsione. 9 casi restituiscono il valore
+     sbagliato, il lettore restituisce `None` (il fail-open di E), e `ProfileDefaultError` manca.
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi** (gli ultimi due a carico tornato sotto 50, alle 02:28):
+
+     | Selettore | Risultato |
+     |---|---|
+     | `services profile-defaults` | 88/88 |
+     | `services config-env-example` | 38/38 |
+     | `services config-misc` | 12/12 |
+     | `services config-package` | 843/843 |
+
+   - **Statici** (02:32–02:39, `files/runs/h27-finish.sh`): ruff e black 0 → 0 su `config/__init__.py`,
+     `instance_block.py` e `test_profile_defaults.py`; `mkdocs build` exit 0, senza avvisi oltre al banner del team di
+     Material; `check-links` **97**; `git diff --check` pulito.
+   - Non eseguiti, per scelta: `api backup-restore` e `api backup-restore-apply`. Farebbero ricostruire il frontend
+     della corsia, stantio dopo il fast-forward, e sono vietati fino alle 03:30. Il lettore vero è coperto dentro il
+     processo.
+
+### Mini-lotto «La docstring di `instance_block.py`: `POST /email/verification/resend`» (2026-10-17, notte) — ✅ provato
+
+> Da E, via coordinatore (02:06): E-11 si appoggia a `POST /email/verification/resend`, che EVA-017 fissa fuori da
+> `ALLOWED_WHEN_BLOCKED`, ma la docstring (:21-25) non lo nomina fra le rotte pubbliche che, a istanza bloccata,
+> rispondono 401.
+
+- ✅ Verificato: `resend_email_verification` (`email.py:190`) non ha dipendenze di sessione, quindi è pubblico e
+  fuori dalla lista. `security.md` non elenca queste rotte per nome; `developer/backend/email.md:935` dice già che
+  `/verification/resend` non vuole sessione. `EVA-017` non è ancora in questo albero (ramo di E).
+- ✅ Docstring: «the email verification ``POST /email/verification/confirm`` and its new link
+  ``POST /email/verification/resend``», con il resto del paragrafo riavvolto a 120 colonne. Uguale alla prova a
+  secco; ruff e black puliti. L'insieme delle righe lunghe è invariato.
+- ✅ Controllo d'import (02:32): il modulo si importa, `ALLOWED_WHEN_BLOCKED` ha 23 voci, `resend` è nella docstring.
+  `api instance-block` non l'ho eseguito: è un passo pesante, vietato fino alle 03:30, e per una docstring non serve.
+
+### Lotto «H-29 e H-30: i dotfile di `/_app` e `/mkdocs`; la fotografia del DB anche quando il corpo fallisce» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (02:45): «Next: H-29 and H-30 (small), then the reviews of A8a and Z-20». H-27 è entrato
+> (`51dd43926` … `c1c7cea39`, dev `bfdc1f72c`); base fast-forward a `bfdc1f72c`, verificata pulita. **H-31** (E-11,
+> `blocked` in `/system/instance`): il coordinatore (02:50) dice di non farlo ora, perché E risolve E-11 nei suoi file
+> (un 401 `INVALID_CREDENTIALS` sulla sola `resend`); resta nel backlog come voce bassa e facoltativa.
+
+1. ✅ **Analisi** (02:45–02:55, sola lettura).
+   - **H-29**:
+     - `install_static_site()` monta `/_app` con `ImmutableStaticFiles(directory=FRONTEND_BUILD_DIR / "_app")`. Starlette
+       (`StaticFiles.get_response`) serve qualunque file che trova, nomi nascosti compresi;
+     - `mkdocs_static()` serve il file che `confined_path` trova sotto `SITE_DIR`, senza filtro.
+     - **Cura**: in `ImmutableStaticFiles` un `get_response` che, per un percorso con una parte nascosta (già
+       normalizzato da `get_path`, quindi senza `..`), alza il 404 di Starlette, come per un file che manca. In
+       `mkdocs_static()` lo stesso controllo dopo `confined_path`, con il 404 della documentazione.
+     - Il controllo si generalizza in `_hidden_below(root, target)`. `_hidden_in_build()` resta, perché doc e test lo
+       citano.
+     - Test: il mount di `/_app` fissa la sua cartella quando gira `install_static_site()`, quindi
+       `test_static_route_confinement.py` non lo copre. I casi nuovi usano un'app fresca su una build finta, come fa
+       già `test_nosniff_content_types.py` (~318).
+     - Il campionatore del test nosniff toglie l'eccezione `_app/` della riparazione di H-28: nessun file nascosto
+       è servito, in nessuno dei due alberi.
+   - **H-30**: nel ramo `--log-file` di `main()` va lo stesso `try/finally` di `_dispatch_test_command`, intorno a
+     `_timed_run(...)`. Il test riusa la fixture `entry_steps` di H-26 con un corpo che alza.
+2. ✅ **Rossi, doc e cure a secco** (02:55–03:00, in parallelo).
+   - **Rossi H-29** (test-author, `test_static_route_confinement.py` e `test_nosniff_content_types.py`):
+     - 15 casi nuovi:
+       - `/mkdocs`: 5 nascosti, `.DS_Store`, `assets/.hidden.css`, `.hidden-dir/page.html`, `.hidden-dir/` e
+         `assets/../.DS_Store`, più 3 guardie;
+       - `/_app`, su un'app fresca con `install_static_site()` sopra una build finta: 4 nascosti più 3 guardie.
+     - Il rifiuto si confronta con la risposta a un file mancante sulla stessa rotta: stato, tipo e corpo uguali,
+       nessun testo scritto nel test.
+     - Nel test nosniff via `APP_MOUNT_FOLDER`: nessun file nascosto si campiona, in nessuno dei due alberi.
+   - **Rossi H-30** (test-author, `test_test_runner_cli.py`): 6 casi, cioè `main()` e `dev.py test`, ciascuno con
+     `--log-file` e corpo che alza, `--log-file` e corpo che restituisce 0, senza `--log-file` e corpo che alza.
+     Rosso solo il primo su `main()`. La traccia chiede la fotografia **dentro** il `with` di `tee_output`, come in
+     `_dispatch_test_command`.
+   - **Doc** (docs-writer):
+     - `architecture/overview.md:94`: `/_app` e `/mkdocs` rifiutano anche loro un nome nascosto, ciascuno con il suo
+       404. La prima stesura diceva che anche il mount usa `_hidden_below()`; corretta, perché il mount guarda da sé
+       le parti del percorso che Starlette gli passa.
+     - `architecture/security.md:1579`, il riassunto del test nosniff: nessun file nascosto si campiona.
+     - **In più, dal coordinatore (02:58, da E, E-11)**: `security.md:801`, la riga «Public routes outside the list»
+       nomina ora `POST /email/verification/confirm` e `POST /email/verification/resend`, con i link alle ancore di
+       `backend/email.md`, senza codici d'errore.
+       - E-11 (`bca4bd6d3`) non è nella mia base, ma non tocca `security.md`.
+   - **Cure a secco** (`files/h29/apply_cure.py`):
+     - `static_site.py`: `_hidden_below(root, target)`, usata da `_hidden_in_build()` e da `mkdocs_static()`; più
+       `ImmutableStaticFiles.get_response()` con il 404 di Starlette e la docstring del modulo;
+     - `_cli.py`: il `try/finally` dentro il `with`.
+3. ✅ **Rossi → cure → verdi** (03:00–03:08, ogni passo a carico < 50; `files/runs/h29-*.sh`, log in
+   `files/runs/h29/`).
+   - **Rossi**:
+     - `utils test-runner-cli` **1 failed / 676 passed**: la fotografia non viene presa, `assert 0 == 1`;
+     - `utils static-route-confinement` **9 failed / 42 passed**: ogni file nascosto torna indietro con 200;
+     - `utils nosniff-content-types` 30/30, verde prima e dopo.
+   - **Cure** applicate, uguali byte per byte alle prove a secco.
+   - **Verdi**:
+
+     | Selettore | Risultato |
+     |---|---|
+     | `utils static-route-confinement` | 51/51 |
+     | `utils nosniff-content-types` | 30/30 |
+     | `utils test-runner-cli` | 677/677 |
+     | `services static-cache-policy` | 26 |
+     | `services security-headers` | 15 |
+     | `services app-lifecycle` | 51 |
+
+   - **Statici**: ruff e black 0 → 0 sui 5 file Python; `mkdocs build` exit 0, senza avvisi oltre al banner;
+     `check-links` 97; `git diff --check` pulito.
+   - Non eseguita: la prova con un server vero e i `curl`, come per H-28. Avviare il server della corsia farebbe
+     ricostruire il frontend, stantio dopo il fast-forward: un passo pesante. Le prove ASGI usano già il mount vero
+     di Starlette e le rotte vere, su un'app fresca.
+- **Backlog**:
+  - nuova **H-31** (bassa, facoltativa): `blocked` nel pubblico `/system/instance`;
+  - nuova **H-32** (bassa, da A, A-35): i `float` dei corpi accettano `1E+400`.
+  - nuova **H-33** (bassa, da E, R13-SEC4): un gestore di `ResponseValidationError` che registra senza il valore.
+
+### Lotto «H-32: i `float` delle richieste e i valori infiniti» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (03:11): «H-32 now, analysis first (inventory … and the proposal: `allow_inf_nan=False` in the
+> base or field by field), then reds». Da A (A-35): un `float` semplice nel corpo accetta `1E+400` e risponde 200; se
+> una rotta lo restituisce, il renderer di Starlette (`allow_nan=False`) fallisce con un 500. Base `8ef48dedb`. H-33
+> aspetta l'ingresso di A7b-2, perché tocca `main.py` accanto alla riga di A.
+
+1. ✅ **Analisi** (03:15–03:35, sola lettura; script in `files/h32/`).
+   - **Inventario sull'app vera** (`routes_inventory.py`, con `iter_route_contexts`, come `test_instance_block.py`):
+     177 rotte API, 67 con un corpo. I `float` raggiungibili da una richiesta (corpi, modelli annidati, parametri di
+     query e di percorso) sono **6**:
+     - 5 campi dei segnali (`SignalLineCrossoverRequest.epsilon` e `relative_epsilon`,
+       `SignalThresholdCrossingRequest.epsilon`, `relative_epsilon` e `threshold`;
+       `POST /assets/prices/query` e `POST /fx/currencies/convert`): hanno già `AllowInfNan(False)`, e rifiutano
+       `inf`, `nan` e `1E+400`;
+     - `PluginSettingWriteItem.value` (`str | int | float | bool | None`, `PATCH /settings/plugins/bulk`, di X): lo
+       schema accetta `inf` e `nan`, ma il servizio li rifiuta prima di salvare (`fields.validate_value`:
+       `math.isfinite` → `SettingValueError`).
+     - Nessun parametro `float` di query o di percorso. `Decimal` rifiuta `inf` e `nan` di default.
+     - Gli altri 11 campi `float` degli schemi (17 in tutto, `h32_inventory.py`) servono solo alle risposte o ai
+       modelli interni.
+   - **Il 500 di A, verificato**: con FastAPI 0.141.1 una rotta **con** `response_model` risponde **200 `{"x": null}`**
+     sia a `1E+400` sia a `NaN`, perché la serializzazione passa dal JSON di pydantic, che scrive `null`. Il 500 resta
+     solo per una rotta senza `response_model` che restituisce valori grezzi. Il rischio vero di un `float` infinito
+     in ingresso è quindi silenzioso: un valore salvato e usato che poi si legge `null`.
+   - **Conclusione**: oggi nessun `float` di una richiesta arriva a essere salvato o restituito. Il buco è uno solo, ed
+     è nello schema di X, coperto dal servizio.
+   - **Reperto per X**, fuori da H-32: un intero di 401 cifre in `value` arriva a `math.isfinite()`, che alza
+     `OverflowError`. Il percorso di scrittura (`service.py:255`) cattura solo `SettingValueError`, quindi
+     `PATCH /settings/plugins/bulk` risponde 500. Solo per un admin; basso.
+   - **Proposta**:
+     - (a) **Niente `allow_inf_nan=False` nella base.** `StrictModel` sta sotto centinaia di modelli, quasi tutti di
+       risposta o interni (AI Export, rischio): un `NaN` calcolato oggi diventerebbe un'eccezione dentro i servizi.
+       Molti rischi, nessun guadagno sulle richieste.
+     - (b) **Campo per campo**, più una **guardia generica** (mia): un test che percorre tutte le rotte con
+       `iter_route_contexts` e chiede che ogni `float` raggiungibile da una richiesta rifiuti `inf` e `nan` già nello
+       schema. Un `float` nuovo senza protezione diventa rosso al momento del test, e il messaggio nomina rotta,
+       modello e campo.
+     - (c) Per `PluginSettingWriteItem.value`: `AllowInfNan(False)` sul ramo `float` di `PluginSettingPlainValue`,
+       una riga nel file di X. Oppure la guardia lo tiene in un elenco di eccezioni motivate («controllato da
+       `validate_value`»). Consiglio la riga.
+   - Chiesti al coordinatore: chi scrive la riga di X; l'OK da writer per registrare il file nuovo della guardia
+     (`services request-float-inputs`, pure, in `_backend_services.py`).
+   - **Decisioni** del coordinatore (03:22): (a) no; (b) e (c) sì.
+     - La riga di X la scrivo io e X la rivede al checkpoint.
+     - Ho l'OK da writer su `_backend_services.py` per `request-float-inputs`, in aggiunta: anche A8a potrebbe
+       registrare qualcosa nel runner stanotte.
+     - L'`OverflowError` passa a X come X-R43.
+   - **Intermezzo, revisione di Z-20** (03:25, in sola lettura, `e-alfy-potential-sniffle` `3235837ad`): **OK**, le
+     quattro condizioni dell'opzione A sono rispettate e fissate dai test. Il controllo positivo del gate
+     (`verificationApi.ts → instanceBlock.svelte.ts`) regge anche dopo E-11, che è in dev ma non nella base di Z.
+     Nota facoltativa: con HMR, in sviluppo, si accumula un listener a ogni ricaricamento (`import.meta.hot?.dispose`).
+2. ✅ **Guardia, doc e prove a secco** (03:25–04:05).
+   - **Guardia** (test-author, file nuovo `backend/test_scripts/test_services/test_request_float_inputs.py`, 33 test):
+     - `collect_request_floats()` percorre tutte le rotte con `iter_route_contexts` e il dependant effettivo: corpi,
+       modelli annidati, parametri di query, percorso, header e cookie, alias PEP 695 compresi. Giudica ogni `float`
+       con un `TypeAdapter` su tutta l'annotazione, con i metadati del campo e la `allow_inf_nan` del modello.
+       Quello che non sa leggere è un «problema», mai saltato.
+     - **Barriere**: almeno 150 contesti sotto `/api/v1` e almeno 60 con un corpo; i cinque campi dei segnali
+       trovati; nessun problema.
+     - **La regola**: un caso per foglia trovata, più un elenco fisso delle sei di oggi come pavimento.
+     - **Autotest** su un'app sonda con router inclusi e annidati: 17 casi parametrizzati, più quelli che non sono
+       foglie e il caso dataclass.
+     - **4 casi end-to-end** in processo.
+     - Previsto oggi: 32 verdi e 1 rosso (`PluginSettingWriteItem.value`).
+   - **Doc** (docs-writer): `architecture/security.md:714–745`, nuova sottosezione «🔢 Numbers in Requests
+     {: #request-numbers }»: la regola, il perché, perché non nella base, la guardia, le sei di oggi. I segnali usano
+     `FiniteFloat` di pydantic. Ha due link interni verificati.
+   - **Registrazione** (OK da writer, in aggiunta): `services_request_float_inputs()` e
+     `add_test(cat, "request-float-inputs", …, isolation="pure")` accanto a `profile-defaults`. Applicata prima del
+     rosso, uguale alla prova a secco.
+   - **Prove a secco**: la riga di X e la registrazione, ruff e black 0 → 0. Impronta OpenAPI prima della cura:
+     `b91bc138f73c0ee0`.
+   > **⚠️ Fuori pista**, due reperti accanto a H-32:
+   > - **Un 500 al posto del 422** (verificato in processo): con il gestore standard dei 422 di FastAPI, un valore
+   >   non finito su un campo già finito (`FiniteFloat`, `AllowInfNan(False)`) dà **500**, perché l'errore ripete
+   >   l'`input` (`inf`) e il renderer di Starlette lo rifiuta. Oggi tocca le rotte dei segnali
+   >   (`POST /assets/prices/query` e `POST /fx/currencies/convert`, dopo l'autenticazione). Il gestore globale di A
+   >   (A7b-2), che toglie l'`input`, lo cura. La rotta dei plugin usa `_NoInputEchoRoute` (`plugin_settings.py:57`):
+   >   dopo la riga di X, un valore infinito lì riceve un 422 leggibile.
+   > - **JSON libero nelle richieste**: i campi `Any` o `JsonValue` raggiungibili accettano `Infinity` al loro
+   >   interno:
+   >   - `FAProviderAssignmentItem.provider_params` e `FAProviderProbeRequest.provider_params` (`dict[str, Any]`, di
+   >     X: `POST /assets/provider` e `/assets/provider/probe`);
+   >   - `RiskAnalyticRequest.parameters` (`JsonValue`, `POST /risk/query`, nessun validatore);
+   >   - `ToolComputeItem.parameters` sta in un modello con `allow_inf_nan=False`, da verificare;
+   >   - `SignalRequest.params` è già protetto (`ensure_json_safe`).
+   >   Sono fuori dalla regola sui `float`: li segnalo al coordinatore per i proprietari.
+3. ✅ **Rosso → cura → verdi → prova reale in processo** (04:05–04:16, ogni passo a carico < 50;
+   `files/runs/h32-green.sh`, log in `files/runs/h32/`).
+   - **Rosso**: `services request-float-inputs` **1 failed / 32 passed**: «PluginSettingWriteItem.value (str | int |
+     float | bool | None) lets inf, -inf, nan, 1E+400 through; reached by PATCH /api/v1/settings/plugins/bulk».
+     `check-orphans` verde, con il file nuovo registrato.
+   - **Cura** applicata, uguale alla prova a secco: `PluginSettingPlainValue = str | int | Annotated[float,
+     AllowInfNan(False)] | bool` (file di X; X la rivede).
+   - **Verdi**:
+
+     | Selettore | Risultato |
+     |---|---|
+     | `services request-float-inputs` | 33/33 |
+     | `services plugin-settings-contract` | 194 |
+     | `services plugin-settings-crypto` | 30 |
+     | `services plugin-settings-runtime` | 120 |
+     | `services plugin-settings-service` | 96 |
+     | `services plugin-settings-guards` | 25 |
+
+   - **OpenAPI invariato**: `b91bc138f73c0ee0`, 823 531 byte, prima e dopo. Niente `api sync`.
+   - **Prova sulla rotta vera, in processo** (`files/h32/real_route_probe.py`): `PATCH /api/v1/settings/plugins/bulk`
+     sull'app vera, con autenticazione e sessione sostituite. La validazione fallisce prima dell'endpoint, quindi
+     nessun DB. `Infinity`, `-Infinity`, `NaN` e `1E+400` → **422**, senza `input` ripetuto (`_NoInputEchoRoute`),
+     tipi `bool_type`, `finite_number` e `string_type`, cioè i rami dell'unione.
+   - **Statici**: ruff e black 0 → 0 su `plugin_settings.py` e `_backend_services.py`, e 0 sul file nuovo;
+     `mkdocs build` exit 0; `check-links` 97; `git diff --check` pulito.
+   - Non eseguito: `api plugin-settings`. È un passo pesante: farebbe ricostruire il frontend della corsia, e c'è il
+     blocco della galleria fino alle 04:45. Va nel cancello del coordinatore.
+- **Backlog**: **H-34** (bassa), il JSON libero delle richieste accetta `Infinity` al suo interno. I proprietari sono X
+  (`provider_params` ×2) e J (`RiskAnalyticRequest.parameters`); `ToolComputeItem.parameters` è da verificare.
+
+### Lotto «H-33: una risposta che rompe il suo modello finisce nel log senza il suo contenuto» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (04:17): A7b-2 è in dev, quindi H-33 può partire. H-32 è entrato (dev `ec6aa2007`; la riga
+> di X l'ha rivista il coordinatore). Base: fast-forward a `ec6aa2007`, verificata pulita. Disegno e OK da writer su
+> `_backend_services.py` per `response-validation` (04:25). Origine: E, R13-SEC4.
+
+1. ✅ **Analisi** (04:17–04:25, sola lettura).
+   - FastAPI 0.141.1 registra di suo i gestori di `HTTPException`, `RequestValidationError` e WebSocket, non quello di
+     `ResponseValidationError`. `ValidationException.__str__` scrive ogni errore con il suo `input`, e l'eccezione
+     porta anche `body`.
+   - Così, quando un endpoint restituisce ciò che il suo `response_model` rifiuta, `ServerErrorMiddleware` risponde
+     500 «Internal Server Error» in testo semplice, e uvicorn scrive nel log un traceback che contiene la risposta:
+     i dati dell'utente che l'ha chiesta.
+   - A7b-2 ha messo il gestore dei 422 in `backend/app/api/validation_errors.py` (file di A), con una riga in
+     `main.py`.
+   - **Cura**:
+     - `backend/app/api/response_validation.py`, nuovo e mio: `install_response_validation_handler(app)`, più una
+       riga in `main.py` subito dopo quella di A, con l'import in ordine alfabetico;
+     - il gestore registra in un solo evento di log il metodo, la rotta (il percorso modello) e l'endpoint, e per ogni
+       errore solo `type` e `loc`. Mai l'`input`, né il `msg` (un validatore può costruirlo con il valore), né il
+       traceback (il suo messaggio è `str(exc)`);
+     - risponde lo stesso 500 di oggi.
+     - ~~In più, la risposta ora attraversa i middleware dell'utente: il 500 riceve anche gli header di sicurezza e
+       il CORS, che il 500 di `ServerErrorMiddleware` non aveva.~~
+       > **⚠️ Fuori pista**, corretto dal docs-writer: era sbagliato. `SecurityHeadersMiddleware` risponde già il 500
+       > di un'eccezione con gli header di sicurezza (il suo `except Exception:`), e poi la rialza; uvicorn la scrive
+       > nel log. Cambia questo: l'eccezione si ferma al gestore, quindi niente traceback nel log, e il 500 diventa la
+       > risposta del gestore, che attraversa anche gzip e CORS.
+       > Inoltre il gestore usa di proposito `logger.error` e non `logger.exception`, contro la convenzione TRY400 di
+       > `lint_gates.md`, perché il traceback riporterebbe `str(exc)` con gli `input`. Un commento nel codice lo
+       > dice.
+   - Doc: `architecture/security.md` «📜 Request Logs», più la frase di `architecture/overview.md:94` sui passi di
+     `main.py`.
+2. ✅ **Rossi, doc, cura a secco e registrazione** (04:25–04:40).
+   - **Rossi** (test-author, file nuovo `backend/test_scripts/test_services/test_response_validation.py`, 10 casi):
+     - il gestore installato una sola volta e senza toccare gli altri, e quello dell'app vera è lo stesso;
+     - il gestore dei 422 di A ancora al suo posto;
+     - 2 corpi rotti (un testo dove serve un numero; un numero mancante, il caso peggiore, perché l'`input` è
+       l'oggetto intero): 500 in testo semplice, un solo evento di log con il logger del modulo, nessun marcatore né
+       negli eventi né nei record di `caplog`, e l'eccezione non esce dall'app;
+     - la rotta di un router incluso registrata con il percorso modello completo;
+     - una risposta valida resta com'è;
+     - il controllo senza gestore: il marcatore sta in `str(exc)`, cioè in quello che uvicorn avrebbe scritto;
+     - una premessa: solo l'eccezione nomina per intero la rotta inclusa.
+   > **⚠️ Fuori pista** (dal test-author, letto nel codice di FastAPI 0.141.1):
+   > - `scope["route"]` è l'`APIRoute` del router, **senza** il prefisso di `include_router`: la prima cura avrebbe
+   >   scritto `/auth/login` invece di `/api/v1/auth/login`. Il percorso modello completo sta nel pubblico
+   >   `exc.endpoint_path` («GET /api/v1/…»): ora si usa quello, tolto il metodo;
+   > - `endpoint_function` è una stringa e può valere `None`: il nome ora viene da `scope["endpoint"].__name__`;
+   > - fuori perimetro: un endpoint generatore con elementi tipizzati (streaming di FastAPI) fallisce la convalida
+   >   dopo l'inizio della risposta, e Starlette alza un `RuntimeError` concatenato, con `str(exc)` nel traceback.
+   >   LibreFolio oggi non ne ha.
+   - **Doc** (docs-writer):
+     - `architecture/security.md:1732–1742`, un paragrafo in «📜 Request Logs»;
+     - una frase alla fine della sezione di A sui 422, con il rimando;
+     - `architecture/overview.md:94`, la chiamata nuova di `main.py`.
+     - Ha corretto la mia analisi sugli header (sopra) e segnalato la trappola TRY400.
+   - **Registrazione** (OK da writer): `services_response_validation()` e `add_test(cat, "response-validation", …,
+     isolation="pure")` accanto a `request-float-inputs`.
+   - **Cura a secco**: il modulo e la riga di `main.py`. Con l'input da stdin, ruff segnava I001 sull'import nuovo
+     perché il modulo non esisteva ancora; a cura applicata, l'ordine è quello giusto.
+3. ✅ **Rosso → cura → verdi** (04:42–04:45, ogni passo a carico < 50; `files/runs/h33-*.sh`, log in `files/runs/h33/`).
+   - **Rosso**: `services response-validation` **6 failed / 4 passed**, tutti e 6 sulla barriera «response_validation.py
+     is missing». `check-orphans` verde.
+   - **Cura** applicata, uguale alla prova a secco.
+   - **Verdi**:
+
+     | Selettore | Risultato |
+     |---|---|
+     | `services response-validation` | 10/10 |
+     | `services app-lifecycle` | 51 |
+     | `services security-headers` | 15 |
+     | `services request-float-inputs` | 33 |
+     | `utils static-route-confinement` | 51 |
+
+   - **Statici**: ruff e black 0 su `main.py`, sul modulo, su `_backend_services.py` e sul test; `mkdocs build` exit 0;
+     `check-links` 97; `git diff --check` pulito.
+   - Non eseguito: `api validation-errors` di A, un passo pesante che va nel cancello. Il gestore dei 422 è ancora al suo
+     posto: lo controlla il caso 3.
+
+### Wiki-file delle scoperte della notte (2026-10-17, mattina presto) — ✅ fatto
+
+> Chiesto dal coordinatore (04:46), dopo l'ingresso di H-33 (dev `5bba93280`, base fast-forward verificata pulita):
+> un `wiki-file` delle scoperte della piattaforma, ognuna con il suo perché, con `check_source_paths.py` verde.
+
+- Sei pagine nuove in `LibreFolio_devWiki/wiki/`, in inglese, verificate sul codice a `5bba93280`:
+  - `problems/frontend-build-looked-stale-for-files-it-never-bundles` (H-24 e il residuo: l'elenco registrato al
+    posto delle date delle cartelle, con la tabella della prova reale);
+  - `problems/static-site-served-hidden-build-files` (H-28 e H-29);
+  - `decisions/test-runner-refuses-test-names-it-cannot-apply` (H-26, più la nota su H-30);
+  - `decisions/request-floats-refuse-inf-and-nan` (H-32: inventario, opzioni, decisione, H-34 e X-R43);
+  - `problems/response-validation-error-wrote-the-response-to-the-log` (H-33);
+  - `concepts/fastapi-0141-routing-and-validation-gotchas`: i cinque comportamenti di FastAPI 0.141 misurati in
+    processo, che stanno dietro H-32 e H-33.
+- `index.md`: righe in testa a Decisions, Concepts e Problems, più una riga del registro cronologico per il 17/10.
+  `log.md`: una voce `file`.
+- `check_source_paths.py`: **7 percorsi inesistenti (12 occorrenze) su 4149**, gli stessi 7/12 di prima (su 4114),
+  tutti preesistenti; nessuno in queste pagine.
+- **Grafo**: non aggiornato. graphify non è disponibile in questo worktree, e il passo 6 della skill punta al
+  checkout principale, che non leggo; la voce del log lo dice.
+- Due correzioni prima di consegnare: la rotta dei plugin usa il `NoInputEchoRoute` comune di `api/no_echo.py`
+  (portato da B4), non una copia sua; una frase poco chiara nella pagina dei file nascosti, riscritta.
