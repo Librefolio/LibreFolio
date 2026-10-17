@@ -301,9 +301,22 @@ async def remove_providers_bulk(
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
-    """Bulk remove provider assignments (PRIMARY bulk endpoint)."""
+    """Bulk remove provider assignments (PRIMARY bulk endpoint).
+
+    Removing an assignment deletes the events its provider generated. Refused, nothing removed: 409
+    ``detail = {"error_code", "message", "params"}`` with ``PROVIDER_REMOVAL_LINKED_TRANSACTIONS`` (X-R62) when a
+    transaction is linked to one of those events; ``params`` holds ``asset_id``, ``item_index`` and ``events``
+    (``event_id``, ``date``, ``type``, ``transaction_ids`` — only those the caller can see — and
+    ``hidden_transactions_count``). ``PROVIDER_REMOVAL_CONFLICT`` when the delete still broke a reference (a link made
+    meanwhile); its ``params`` is empty.
+    """
     try:
-        return await AssetSourceManager.bulk_remove_providers(asset_ids, session)
+        return await AssetSourceManager.bulk_remove_providers(asset_ids, session, current_user_id=_current_user.id)
+    except AssetSourceError as e:
+        if e.error_code in ("PROVIDER_REMOVAL_LINKED_TRANSACTIONS", "PROVIDER_REMOVAL_CONFLICT"):
+            raise HTTPException(status_code=409, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
+        logger.exception(f"Error in bulk remove providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Error in bulk remove providers: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
