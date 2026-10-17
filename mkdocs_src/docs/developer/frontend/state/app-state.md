@@ -244,8 +244,8 @@ on the anonymous pages of a link, which handle the `401` themselves
 - **The backup card** (decision 12). When the answer's `backup_available` is `true`, and only then, a
   second `<section>` under the alert, named by its `<h2>` (`aria-labelledby`, text
   `instance.block.backupTitle`), holds `BackupDownloadCard` (`lib/features/backup/`), the same card as
-  **Settings › Backup**: start a backup of the whole instance, follow it, download the archive, delete
-  it. The server decides who gets it (the administrators, today: see
+  **Settings › Administration › Backup**: start a backup of the whole instance, follow it, download
+  the archive, delete it. The server decides who gets it (the administrators, today: see
   [Instance Block](../../architecture/security.md#instance-block)); the page never guesses it from the
   role, so a `false`, a missing field, a pending or a failed request mean no card, for an
   administrator too. The section stays outside the `role="alert"` one, so a screen reader announces
