@@ -77,7 +77,8 @@ como un evento de interés: el valor vuelve a empezar desde $V_0$, y $I$ y las s
 
 - **Antes del primer periodo**, el valor es el Valor inicial.
 - **Después del último periodo**, se mantiene en su importe final, a menos que el interés de demora esté activado. Con
-  **Generar cupón** en el último periodo y sin interés de demora, un evento de liquidación al vencimiento cierra el activo en ese importe.
+  **Generar cupón** en el último periodo y sin interés de demora, el último cupón se paga en la fecha de fin y un
+  evento de liquidación al vencimiento cierra el activo en el valor que queda tras él: el Valor inicial.
 - **El gráfico** obtiene un punto en cada fecha de **Frecuencia**: elige **Diaria** para una línea suave.
 
 ??? example "🧮 Un préstamo de 10.000 € al 5 %, con un cupón cada mes"
