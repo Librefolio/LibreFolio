@@ -319,23 +319,31 @@
                 },
             };
 
-            // An edit replaces the pair's routes in one request (X-R75): the server keeps exactly the routes posted, in
+            // An edit replaces the pair's own routes in one request (X-R75): the server keeps exactly the routes posted, in
             // one transaction, so a refused or lost save leaves the pair as it was. With no route selected, mainItems is
             // the MANUAL item, and the pair becomes manual. Deleting the routes first, as before, lost them whenever the
             // POST that followed failed, and a whole-pair delete never brings the MANUAL route back.
-            const items = [...mainItems, ...intermediateItems];
-            const createResult = await trySave(() => (editing ? zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(items, {queries: {replace: true}}) : zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(items)), {toast: false, fallback: get(_)('fx.addPair.createFailed')});
-            if (!sameSession()) return;
-            if (createResult.status === 'error') {
-                // A 409 is the concurrent-write conflict, and it is the one case
-                // where the backend's own sentence must not reach the screen:
-                // `extractErrorMessage` returns `detail` verbatim, and for a long
-                // time that meant the user read a driver traceback with the INSERT
-                // statement and its bound parameters in it. The conflict is also
-                // the only failure here the user can do something about, so it is
-                // the one that deserves a translated sentence telling them to.
-                reportConfigurationError(createResult.status_code === 409 ? get(_)('fx.addPair.createConflict') : createResult.message);
-                return;
+            // Its intermediate pairs go first, in a plain request (X-R79): `replace` applies to every pair a request
+            // names, so a leg another tab configured meanwhile lost its other routes. The plain upsert keeps them; it
+            // still rewrites the leg's priority 1, as a creation does. Legs refused: nothing is written. Legs written and
+            // the pair refused: the pair is as it was, and the legs stay, configured. A creation stays one request.
+            const requests = editing
+                ? [...(intermediateItems.length > 0 ? [() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(intermediateItems)] : []), () => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(mainItems, {queries: {replace: true}})]
+                : [() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems])];
+            for (const request of requests) {
+                const createResult = await trySave(request, {toast: false, fallback: get(_)('fx.addPair.createFailed')});
+                if (!sameSession()) return;
+                if (createResult.status === 'error') {
+                    // A 409 is the concurrent-write conflict, and it is the one case
+                    // where the backend's own sentence must not reach the screen:
+                    // `extractErrorMessage` returns `detail` verbatim, and for a long
+                    // time that meant the user read a driver traceback with the INSERT
+                    // statement and its bound parameters in it. The conflict is also
+                    // the only failure here the user can do something about, so it is
+                    // the one that deserves a translated sentence telling them to.
+                    reportConfigurationError(createResult.status_code === 409 ? get(_)('fx.addPair.createConflict') : createResult.message);
+                    return;
+                }
             }
 
             void finishFxPairCreation(context);

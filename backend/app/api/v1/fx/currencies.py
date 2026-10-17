@@ -481,7 +481,9 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
             conversion = conversion.model_copy(update={"date_range": DateRangeModel(start=visible_start, end=requested_end)})
         served_ranges[conv_idx] = conversion.date_range
         if in_range:
-            day_blocks.append(("daily", conv_idx, conversion, conversion.from_amount, visible_start, requested_end))
+            # X-R41: a zero amount is converted as one unit, as the signals are: the result keeps the unit's rate, and 0
+            daily_amount = conversion.from_amount if conversion.from_amount.amount != 0 else Currency(code=conversion.from_amount.code, amount=Decimal("1"))
+            day_blocks.append(("daily", conv_idx, conversion, daily_amount, visible_start, requested_end))
             item_days += (requested_end - visible_start).days + 1
 
         if conversion.signals:
@@ -578,7 +580,13 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
             continue
 
         rate = None
-        if from_cur != to_cur:
+        if conversion.from_amount.amount == 0:
+            # X-R41: converted as one unit (the daily blocks above), so no 0/0: the rate is that unit's value, the
+            # result is zero
+            if from_cur != to_cur:
+                rate = converted_currency.amount
+            converted_currency = Currency(code=converted_currency.code, amount=Decimal("0"))
+        elif from_cur != to_cur:
             rate = converted_currency.amount / conversion.from_amount.amount
         results.append(
             FXConversionResult(

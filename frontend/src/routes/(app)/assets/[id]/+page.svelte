@@ -2648,7 +2648,8 @@
                                 savedPanelStates = null;
                             }
                         }}
-                        title={$t('common.closeEditor')}>✕</button
+                        title={$t('common.closeEditor')}
+                        data-testid="asset-detail-editor-close">✕</button
                     >
                 </div>
                 <p class="px-4 pt-2 text-xs text-lf-warning-on-soft/70">

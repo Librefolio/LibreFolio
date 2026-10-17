@@ -40,7 +40,7 @@ import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Tuple
 
@@ -2162,6 +2162,31 @@ def _description_key(description: Optional[str]) -> str:
 # as a plain DEPOSIT or WITHDRAWAL and must still be recognised.
 _MERGED_LEG_TYPES = (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION)
 
+# The widest gap two quantities of one holding may have (the fixed tolerance before W-B51): the rule below is never looser.
+QUANTITY_MATCH_BOUND = Decimal("0.0001")
+
+
+def _decimal_places(value: Decimal) -> int:
+    """The decimals ``value`` states, trailing zeros not counted: a stored ``0.000153000`` (a column pads its reads) states 6."""
+    exponent = value.normalize().as_tuple().exponent
+    return max(0, -exponent) if isinstance(exponent, int) else 0
+
+
+def _same_quantity(stored: Optional[Decimal], incoming: Decimal) -> bool:
+    """Whether a stored quantity and a report's are the same holding (W-B51, decision D-W51-1).
+
+    Equal once both are rounded half-up to the decimals of the less precise one, and never further apart than
+    ``QUANTITY_MATCH_BOUND``: a report that rounds (``0.00015``) still matches the value stored from another
+    (``0.000153``), while two recurring crypto buys of one day (``0.00015123``, ``0.00015098``) stay two rows; ``10`` and
+    ``10.4`` stay apart as before. A stored quantity that reads back unreadable (``None``, W-B74) matches nothing.
+    """
+    if stored is None or not stored.is_finite() or not incoming.is_finite():
+        return False
+    if abs(stored - incoming) > QUANTITY_MATCH_BOUND:
+        return False
+    unit = Decimal(1).scaleb(-min(_decimal_places(stored), _decimal_places(incoming)))
+    return stored.quantize(unit, rounding=ROUND_HALF_UP) == incoming.quantize(unit, rounding=ROUND_HALF_UP)
+
 
 async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per-tx match evaluation from loop
     transactions: List[TXCreateItem],
@@ -2177,7 +2202,7 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
     - Same type; a DEPOSIT or WITHDRAWAL also looks at the legs of CASH_TRANSFER and
       FX_CONVERSION pairs, where a promote stored the same movement
     - Same date
-    - Same quantity (within tolerance for decimals)
+    - Same quantity, at the precision of the less precise of the two (``_same_quantity``, W-B51)
     - Same cash amount and currency (if present)
     - Same asset_id (only if asset was auto-resolved with 1 candidate)
 
@@ -2203,8 +2228,7 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
     tx_possible_duplicates = []
     tx_likely_duplicates = []
 
-    # Tolerance for decimal comparison
-    QUANTITY_TOLERANCE = Decimal("0.0001")
+    # Tolerance for the cash comparison (a currency's cents); quantities go through _same_quantity (W-B51)
     AMOUNT_TOLERANCE = Decimal("0.01")
 
     # Build fake_id -> real_asset_id mapping from asset_mappings
@@ -2252,9 +2276,7 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
 
         matches = []
         for existing in existing_txs:
-            # Check quantity match (with tolerance)
-            qty_match = abs(existing.quantity - tx.quantity) <= QUANTITY_TOLERANCE
-            if not qty_match:
+            if not _same_quantity(existing.quantity, tx.quantity):
                 continue
 
             # Check cash match (if applicable)

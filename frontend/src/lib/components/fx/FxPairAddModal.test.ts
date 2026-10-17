@@ -12,7 +12,9 @@
  * Edit mode (the pair page's provider editor) writes the pair's whole new
  * configuration in one POST that replaces its routes, `{queries: {replace: true}}`,
  * and deletes nothing first (X-R75); with no route left it posts the MANUAL route.
- * Creation's POST adds a pair and asks no replace.
+ * Creation's POST adds a pair and asks no replace. The intermediate pairs a chain
+ * asks for are not the edited pair's to replace (X-R79): an edit with legs to
+ * create posts them first, alone and without replace, then the pair alone with it.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
@@ -199,8 +201,9 @@ function replaceQuery(config: unknown): unknown {
 
 /**
  * Every routes POST, as what it carried and whether it replaces the pair's routes (X-R75): edit mode writes the
- * whole new configuration in one POST with `{queries: {replace: true}}`; creation adds a pair, so its POST asks no
- * `replace` at all (no second argument, or one without it). Deep equality on `body` stays an allowlist.
+ * whole new configuration in one POST with `{queries: {replace: true}}`, after a POST of the chain's legs that asks
+ * none when it has some to create (X-R79); creation adds a pair, so its POST asks no `replace` at all (no second
+ * argument, or one without it). Deep equality on `body` stays an allowlist.
  */
 function posts() {
     return createRoutes.mock.calls.map(([body, config]) => ({body, replace: replaceQuery(config)}));
@@ -825,5 +828,179 @@ describe('FxPairAddModal — the provider editor replaces the pair’s routes in
         // A provider creation syncs in the background: let it finish inside this test.
         if (kind === 'a provider route') await waitFor(() => expect(onsynced).toHaveBeenCalledTimes(1));
         else expect(syncRates).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * X-R79. The backend applies `replace` to every pair a request names (`create_routes_bulk`), and X-R75's one edit POST
+ * also carried the chain's intermediate pairs when «Also create intermediate pairs» is ticked: a leg another tab had
+ * configured meanwhile kept only the route posted for it. The editor now posts the legs it has to create first, alone
+ * and as a plain upsert (no `replace`), and only once they are answered the pair alone, replacing its routes; a refused
+ * POST of the legs ends the save there, with nothing replaced and the error on the open editor. The upsert still writes
+ * priority 1 of such a leg (the backend upserts by pair and priority): what X-R79 keeps is the leg's other routes.
+ * With no leg to create the edit stays X-R75's one replacing POST: box unticked (X-R75's first test), no chain route
+ * («editing a provider does not start creation-time sync…», X-R75's MANUAL test), every leg configured already (below).
+ * Creation is unchanged: one POST, the pair and its legs together, asking no replace (below).
+ */
+describe('FxPairAddModal — the editor posts the intermediate pairs first, without replace, then the pair alone with it (X-R79)', () => {
+    /** What the replacing POST carries: EUR-GBP keeps its stored DIRECT route and gains CHAIN, in priority order. */
+    const EDITED = [
+        {base: 'EUR', quote: 'GBP', chain_steps: DIRECT, priority: 1},
+        {base: 'EUR', quote: 'GBP', chain_steps: CHAIN, priority: 2},
+    ];
+    /** CHAIN's legs as the box creates a pair not configured yet: its one step, at priority 1, wire fields only. */
+    const LEG_EUR_USD = {base: 'EUR', quote: 'USD', chain_steps: [CHAIN[0]!], priority: 1};
+    const LEG_GBP_USD = {base: 'GBP', quote: 'USD', chain_steps: [CHAIN[1]!], priority: 1};
+    const BOTH_LEGS = [LEG_EUR_USD, LEG_GBP_USD];
+
+    /** The two POSTs of an edit that creates `legs`: the legs alone, a plain upsert, then the pair alone, replacing its routes. */
+    function legsThenPair(legs: unknown[]) {
+        return [
+            {body: legs, replace: undefined},
+            {body: EDITED, replace: true},
+        ];
+    }
+
+    /** Tick «Also create intermediate pairs», which the modal shows once a chain route is selected. */
+    async function tickIntermediates() {
+        const box = await screen.findByTestId('fx-add-pair-intermediates');
+        await fireEvent.click(box);
+        expect(box).toBeChecked();
+    }
+
+    /** The provider editor on EUR-GBP (stored: DIRECT), with CHAIN added through the picker and the box ticked. */
+    async function editAddingChainWithLegs() {
+        const view = await editStored(DIRECT);
+        await pickRoute('chain');
+        await waitFor(() => expect(selectedRouteKeys()).toEqual([DIRECT_KEY, CHAIN_KEY]));
+        await tickIntermediates();
+        return view;
+    }
+
+    /**
+     * A refusal reported as X-R75 reports it: on the editor, still open and saveable again on the user's draft. A 409
+     * never shows the backend's own text; `conflictSentence` also asks for the catalogue's sentence in its place.
+     */
+    async function expectErrorOnOpenEditor(status: number, detail: string, {conflictSentence}: {conflictSentence: boolean}) {
+        const banner = await screen.findByTestId('info-banner-error');
+        if (status === 409) {
+            expect(banner, 'a conflict never shows the backend’s own text').not.toHaveTextContent(detail);
+            if (conflictSentence) {
+                const conflict = get(_)('fx.addPair.createConflict');
+                expect(conflict, 'the catalogue has a sentence for the conflict').not.toBe('fx.addPair.createConflict');
+                expect(banner).toHaveTextContent(conflict);
+            }
+        } else {
+            expect(banner).toHaveTextContent(detail);
+        }
+        expect(screen.getByTestId('fx-add-pair-modal')).toBeVisible();
+        await waitFor(() => expect(screen.getByTestId('fx-add-pair-save')).toBeEnabled());
+        expect(selectedRouteKeys(), 'the draft is kept').toEqual([DIRECT_KEY, CHAIN_KEY]);
+    }
+
+    /** What a refused save leaves: nothing deleted, no completion, no sync, no feedback but the editor's own banner. */
+    function expectNothingFinished({oncreated, onsynced, onclose}: Pick<ReturnType<typeof mount>, 'oncreated' | 'onsynced' | 'onclose'>) {
+        expect(deleteRoutes).not.toHaveBeenCalled();
+        expect(oncreated).not.toHaveBeenCalled();
+        expect(onclose).not.toHaveBeenCalled();
+        expect(onsynced).not.toHaveBeenCalled();
+        expect(syncRates).not.toHaveBeenCalled();
+        const detachedReports = vi.mocked(notify).mock.calls.filter(([event]) => event.name === 'fx.pair.configuration-failed');
+        expect(detachedReports, 'the open form reports the error itself, not a detached notification').toEqual([]);
+        expect(feedback.notices).toEqual([]);
+    }
+
+    it.each([
+        ['both legs (EUR-USD, GBP-USD)', ['EUR-GBP'], BOTH_LEGS],
+        ['the one leg not configured yet (GBP-USD)', ['EUR-GBP', 'EUR-USD'], [LEG_GBP_USD]],
+    ])('posts %s first, alone and without replace, then, once answered, the pair alone, replacing its routes', async (_what, configured, legs) => {
+        // The pair under edit is configured by definition, and never one of its own legs.
+        vi.mocked(getConfiguredPairSlugs).mockReturnValue(new Set(configured));
+        const legsPosted = deferred<CreationResponse>();
+        // Only the first POST is held; the one that follows it is answered at once.
+        createRoutes.mockReturnValueOnce(legsPosted.promise);
+        const {oncreated, onsynced} = await editAddingChainWithLegs();
+        try {
+            await save();
+            await waitFor(() => expect(createRoutes).toHaveBeenCalledTimes(1));
+            expect(posts(), 'first the legs alone, a plain upsert: `replace` would drop the routes another tab gave them').toEqual([{body: legs, replace: undefined}]);
+            expect(screen.getByTestId('fx-add-pair-modal')).toBeVisible();
+            expect(oncreated).not.toHaveBeenCalled();
+
+            legsPosted.resolve(creationResponse(legs));
+            await closed();
+            expect(posts(), 'then, once the legs are answered, the pair alone, replacing its routes').toEqual(legsThenPair(legs));
+            expect(deleteRoutes).not.toHaveBeenCalled();
+            expect(oncreated).toHaveBeenCalledExactlyOnceWith({base: 'EUR', quote: 'GBP', slug: 'EUR-GBP', hasRealProvider: true, autoSyncStarted: false});
+            expect(
+                vi.mocked(notify).mock.calls.filter(([event]) => event.name === 'fx.pair.updated'),
+                'one save, one update',
+            ).toHaveLength(1);
+            expect(syncRates).not.toHaveBeenCalled();
+            expect(onsynced).not.toHaveBeenCalled();
+            expect(feedback.notices).toEqual([]);
+        } finally {
+            legsPosted.resolve(creationResponse(legs));
+            await legsPosted.promise;
+        }
+    });
+
+    it.each([503, 409])('a refused POST of the legs (HTTP %s) ends the save there: no replacing POST, the error on the open editor, the draft as it was', async (status) => {
+        const detail = status === 409 ? 'owned-legs-conflict-detail' : 'owned-legs-refused';
+        // Only the first POST is refused: a replacing POST sent after it would be answered, and close the editor.
+        createRoutes.mockRejectedValueOnce({response: {status, data: {detail}}});
+        const view = await editAddingChainWithLegs();
+        await save();
+
+        // The refused legs saved nothing, so the catalogue's conflict sentence holds here, as in X-R75.
+        await expectErrorOnOpenEditor(status, detail, {conflictSentence: true});
+        expect(screen.getByTestId('fx-add-pair-intermediates'), 'the box stays ticked: a retry asks for the legs again').toBeChecked();
+        // The save is over (saveable again): what it posted is all it posts.
+        expect(posts(), 'the legs alone; nothing replaced after their refusal').toEqual([{body: BOTH_LEGS, replace: undefined}]);
+        expectNothingFinished(view);
+    });
+
+    it.each([503, 409])('the legs answered, a refused replacing POST of the pair (HTTP %s) leaves its error on the open editor', async (status) => {
+        const detail = status === 409 ? 'owned-pair-conflict-detail' : 'owned-pair-refused';
+        // The first POST (the legs) is answered, the second (the pair, replacing its routes) refused.
+        createRoutes.mockImplementationOnce(async (items) => creationResponse(items));
+        createRoutes.mockRejectedValueOnce({response: {status, data: {detail}}});
+        const view = await editAddingChainWithLegs();
+        await save();
+
+        // The refusal comes from the second POST: wait for both; a timeout's diff shows what was posted instead.
+        await waitFor(() => expect(posts()).toEqual(legsThenPair(BOTH_LEGS)));
+        // A conflict's sentence is not pinned here: the catalogue's says nothing was saved, and the legs were.
+        await expectErrorOnOpenEditor(status, detail, {conflictSentence: false});
+        expect(posts(), 'nothing is posted after the refusal').toEqual(legsThenPair(BOTH_LEGS));
+        expectNothingFinished(view);
+    });
+
+    // Guard, green before and after the cure: no leg left to create, so the edit is X-R75's one replacing POST.
+    it('with the box ticked but every leg configured already, the edit stays one POST that replaces the pair alone', async () => {
+        vi.mocked(getConfiguredPairSlugs).mockReturnValue(new Set(['EUR-GBP', 'EUR-USD', 'GBP-USD']));
+        const {oncreated, onsynced} = await editAddingChainWithLegs();
+        await save();
+        await closed();
+        expect(posts()).toEqual([{body: EDITED, replace: true}]);
+        expect(deleteRoutes).not.toHaveBeenCalled();
+        expect(oncreated).toHaveBeenCalledExactlyOnceWith({base: 'EUR', quote: 'GBP', slug: 'EUR-GBP', hasRealProvider: true, autoSyncStarted: false});
+        expect(syncRates).not.toHaveBeenCalled();
+        expect(onsynced).not.toHaveBeenCalled();
+    });
+
+    // Guard, green before and after the cure. «closes after chain creation…» pins this body, but not its `replace`.
+    it('creation with the box ticked stays one POST, the pair and its legs together, that asks no replace', async () => {
+        syncRates.mockResolvedValue(syncResponse('EUR-GBP', 'EUR-USD', 'GBP-USD'));
+        const {oncreated, onsynced} = mount();
+        await pickRoute('chain');
+        await tickIntermediates();
+        await save();
+        await closed();
+        expect(posts()).toEqual([{body: [{base: 'EUR', quote: 'GBP', chain_steps: CHAIN, priority: 1}, ...BOTH_LEGS], replace: undefined}]);
+        expect(deleteRoutes).not.toHaveBeenCalled();
+        expect(oncreated).toHaveBeenCalledTimes(1);
+        // A provider creation syncs the pair and its legs in the background: let it finish inside this test.
+        await waitFor(() => expect(onsynced).toHaveBeenCalledTimes(1));
     });
 });

@@ -53,6 +53,19 @@ expect None (``DUST_SET_ASIDE_BY_MF_A7`` keeps HEAD's D1), their window unchange
 - ``TestTheDustIsAParameterOfTheOldestOpenLot`` — red on HEAD by absence (TypeError, no ``dust``): ``dust=0`` is HEAD's
   rule on every stream above and on the corpus, a larger dust sets more aside, the default is the platform threshold.
 
+MF-A10 gives ``quantity_moves(transactions, split_linked_ids, share=Decimal("1"))`` the owner's share of the broker
+(``native_cash.effective_share``): every quantity is scaled by it, as the engine scales its own (``daily_state``:
+``tx.quantity * ctxn.share``), so the dust threshold the windows apply is the one the rows apply to the engine's
+quantity. Before it (HEAD ab74aafbf) the moves carried the raw quantity: on a broker owned at s < 1 a residual in
+(dust, dust / s] was dust for the row and an open lot for the window.
+
+- ``TestQuantityMovesAtTheOwnersShare`` — red on HEAD by absence (TypeError, no ``share``): the share scales every
+  quantity and keeps dates, order and split flags; J's case — BUY 10 (2015), SELL 9.999988, BUY 5 (2024): 0.000012
+  left, 0.000006 at half — dates from the 2024 BUY at half and from 2015 at the whole broker; BUY 10, SELL 9.999988
+  closes on the sale at half and never at the whole broker; the default share is the whole broker on the corpus; a
+  split at half still rescales and keeps the dates; a share of 0 moves nothing, as the engine's; ``exits_in`` counts
+  the same at any positive share.
+
 Pure: no database, no server, no network.
 """
 
@@ -602,3 +615,129 @@ class TestTheDustIsAParameterOfTheOldestOpenLot:
         assert QUANTITY_DUST_THRESHOLD == Decimal("0.00001")
 
         assert _oldest(txns) == _oldest_with(txns, QUANTITY_DUST_THRESHOLD)
+
+
+# =============================================================================
+# MF-A10: the quantities at the owner's share of the broker
+# =============================================================================
+
+WHOLE = Decimal("1")
+HALF = Decimal("0.5")
+J_BUY = date(2015, 3, 2)
+J_SALE = date(2015, 9, 1)
+J_REBUY = date(2024, 4, 2)
+
+# J's case: BUY 10 (2015), SELL 9.999988 (2015) — 0.000012 left of the 2015 lot, 0.000006 at half — then BUY 5 (2024).
+J_RESIDUAL_THEN_BUY = [_tx(J_BUY, 1, "10"), _tx(J_SALE, 2, "-9.999988"), _tx(J_REBUY, 3, "5")]
+# The same sale with nothing bought after it: closed at dust over the share, not at dust.
+J_SOLD_DOWN = J_RESIDUAL_THEN_BUY[:2]
+
+
+def _at_share(txns: list[_Tx], share: Decimal, split_ids: tuple[int, ...] = ()) -> list:
+    return _holding_window().quantity_moves(txns, set(split_ids), share=share)
+
+
+class TestQuantityMovesAtTheOwnersShare:
+    def test_the_share_scales_every_quantity_and_keeps_the_rest(self):
+        """At half: each quantity halved — a None as 0 — with the replay order (date, then id, None as 0) and the split
+        flags of the whole broker's moves."""
+        txns = [_tx(D2, 5, "-3"), _tx(D1, 9, "10"), _tx(D1, None, "4"), _tx(D3, 7, "10"), _tx(D4, 8, None)]
+
+        whole = _holding_window().quantity_moves(txns, {7})
+        half = _at_share(txns, HALF, split_ids=(7,))
+
+        assert [(move.date, move.order, move.quantity, move.split) for move in half] == [
+            (D1, 0, Decimal("2"), False),
+            (D1, 9, Decimal("5"), False),
+            (D2, 5, Decimal("-1.5"), False),
+            (D3, 7, Decimal("5"), True),
+            (D4, 8, Decimal("0"), False),
+        ]
+        assert [(move.date, move.order, move.split) for move in half] == [(move.date, move.order, move.split) for move in whole]
+        assert [move.quantity for move in half] == [move.quantity * HALF for move in whole]
+
+    def test_a_residual_dust_at_the_share_is_set_aside(self):
+        """J's case: 0.000012 left of the 2015 lot is more than dust, 0.000006 — the owner's half of it — is not. At half
+        the oldest lot past the threshold is the 2024 BUY's, as the row reads the engine's 0.000006 as not held; at the
+        whole broker it is still the 2015 lot. HEAD's callers passed the raw quantity: 2015 at any share."""
+        raw_residual = Decimal("10") - Decimal("9.999988")
+        assert QUANTITY_DUST_THRESHOLD < raw_residual <= QUANTITY_DUST_THRESHOLD / HALF, "precondition: the residual is in (dust, dust / share]"
+        module = _holding_window()
+
+        assert module.oldest_open_lot_date(_at_share(J_RESIDUAL_THEN_BUY, HALF)) == J_REBUY, f"HEAD gave {J_BUY}"
+        assert module.oldest_open_lot_date(_at_share(J_RESIDUAL_THEN_BUY, WHOLE)) == J_BUY
+        assert _oldest(J_RESIDUAL_THEN_BUY) == J_BUY
+
+    def test_a_position_closed_at_dust_over_the_share_closes_on_the_sale(self):
+        """BUY 10, SELL 9.999988: at half 5 fall to 0.000006, dust — closed on the sale, nothing open. At the whole broker
+        0.000012 stays, more than dust: never closed, the 2015 lot open. HEAD's callers: (J_BUY, None) at any share."""
+        module = _holding_window()
+        half = _at_share(J_SOLD_DOWN, HALF)
+
+        assert module.closed_position_window(half) == (J_BUY, J_SALE), f"HEAD gave {(J_BUY, None)}"
+        assert module.oldest_open_lot_date(half) is None, f"HEAD gave {J_BUY}"
+        assert module.closed_position_window(_at_share(J_SOLD_DOWN, WHOLE)) == _window(J_SOLD_DOWN) == (J_BUY, None)
+        assert module.oldest_open_lot_date(_at_share(J_SOLD_DOWN, WHOLE)) == J_BUY
+
+    @pytest.mark.parametrize("txns, expected_oldest, expected_window", list(SPLIT_FREE_CORPUS.values()), ids=list(SPLIT_FREE_CORPUS))
+    def test_the_default_share_is_the_whole_broker(self, txns, expected_oldest, expected_window):
+        """No ``share`` given: the whole broker, the moves HEAD gave — on the corpus, its dates and windows unchanged."""
+        module = _holding_window()
+        default = module.quantity_moves(txns, set())
+
+        assert module.quantity_moves(txns, set(), share=WHOLE) == default
+        assert (module.oldest_open_lot_date(default), module.closed_position_window(default)) == (expected_oldest, expected_window)
+
+    def test_a_forward_split_at_the_share_keeps_the_buy_date(self):
+        """TestSplitRescalesTheOpenLots' forward split at half: BUY 5 (D1), split +5 (D2) doubles the D1 lot to 10, SELL
+        7.5 (D3) leaves 2.5 of it — D1, as at the whole broker. A split and a full sale still close on the sale."""
+        module = _holding_window()
+
+        assert module.oldest_open_lot_date(_at_share([_tx(D1, 1, "10"), _tx(D2, 2, "10"), _tx(D3, 3, "-15")], HALF, split_ids=(2,))) == D1
+        assert module.closed_position_window(_at_share([_tx(D1, 1, "10"), _tx(D2, 2, "10"), _tx(D3, 3, "-20")], HALF, split_ids=(2,))) == (D1, D3)
+
+    @pytest.mark.parametrize(
+        "sold, expected",
+        [
+            # 2.495 of the D1 lot of 2.5: 0.005 of it left, more than dust.
+            pytest.param("-4.99", D1, id="sell-less-than-the-first-lot"),
+            # The whole D1 lot of 2.5: the D2 lot is next.
+            pytest.param("-5", D2, id="sell-the-first-lot-exactly"),
+            pytest.param("-10", None, id="sell-everything"),
+        ],
+    )
+    def test_a_reverse_split_at_the_share_halves_the_lots_and_keeps_their_dates(self, sold, expected):
+        """TestSplitRescalesTheOpenLots' reverse split at half: BUY 5 (D1), BUY 5 (D2), split −5 (D3) → lots of 2.5 and
+        2.5, the factor (10 − 5) / 10 the same as at the whole broker; a SELL on D4, at half too, proves it."""
+        txns = [_tx(D1, 1, "10"), _tx(D2, 2, "10"), _tx(D3, 3, "-10"), _tx(D4, 4, sold)]
+
+        assert _holding_window().oldest_open_lot_date(_at_share(txns, HALF, split_ids=(3,))) == expected
+        assert _oldest(txns, split_ids=(3,)) == expected, "the same lots as at the whole broker"
+
+    def test_a_zero_share_moves_nothing(self):
+        """An owner's 0 % share: every quantity 0, so no lot is open, the position never opens nor closes and no unit
+        leaves it — as the engine, where a 0 % share moves nothing (``daily_state``: ``tx_qty == 0``)."""
+        module = _holding_window()
+        txns = J_RESIDUAL_THEN_BUY + [_tx(J_REBUY, 4, "-2")]
+
+        moves = _at_share(txns, Decimal("0"))
+
+        assert [move.quantity for move in moves] == [Decimal("0")] * len(txns)
+        assert module.oldest_open_lot_date(moves) is None
+        assert module.closed_position_window(moves) == (None, None)
+        assert module.exits_in(moves, None, J_REBUY) == 0
+
+    @pytest.mark.parametrize("share", ["1", "0.5", "0.333333", "0.000001"])
+    def test_exits_in_counts_the_same_at_any_positive_share(self, share):
+        """An exit is an outgoing move whatever its size: TestExitsIn's streams count the same at any positive share."""
+        module = _holding_window()
+        cases = [
+            (TestExitsIn.ONE_EXIT_A_DAY, D2, D4, ()),
+            (TestExitsIn.ONE_EXIT_A_DAY, None, D5, ()),
+            ([_tx(D1, 1, "10"), _tx(D2, 2, "-3"), _tx(D2, 3, "-3"), _tx(D2, 4, "-4")], D1, D2, ()),
+            ([_tx(D1, 1, "20"), _tx(D2, 2, "-5"), _tx(D3, 3, "-10"), _tx(D4, 4, "-5")], D1, D4, (3,)),
+        ]
+
+        counts = [module.exits_in(_at_share(txns, Decimal(share), split_ids), date_from, end) for txns, date_from, end, split_ids in cases]
+
+        assert counts == [_exits(txns, date_from, end, split_ids) for txns, date_from, end, split_ids in cases] == [2, 4, 3, 2]

@@ -15,7 +15,8 @@ import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
-import {uniqueToken} from '../fixtures/unique';
+import {deleteOwned, jsonFrom, type Owned} from './asset-events-owned';
+import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {t} from '../fixtures/i18n-data';
 import {daysAgoIso, localIso} from '../fixtures/dates';
 import {describeShown, isStoredPoint, overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
@@ -89,12 +90,36 @@ async function goToMockedAssets(page: Page, assets: SyntheticAsset[]) {
     await expect(page.getByTestId('assets-page')).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
 }
 
-async function openSingleDelete(page: Page, assetId: number) {
+/** The test ids ConfirmModal carries on the header of the list's two delete confirmations (X-R20). */
+type DeleteConfirmId = 'asset-delete-confirm' | 'asset-bulk-delete-confirm';
+
+/**
+ * One of the list's two delete confirmations: the dialog its header belongs to. ConfirmModal is generic — every
+ * confirmation on the page has the same `confirm-modal-*` buttons — so a button is this confirmation's only when it is
+ * found inside it (X-R20).
+ */
+function deleteConfirm(page: Page, testId: DeleteConfirmId): Locator {
+    return page.getByRole('dialog').filter({has: page.getByTestId(testId)});
+}
+
+/**
+ * Opens a row's single delete from the list view's row actions. Ends on the single delete's own confirmation on screen,
+ * and returns it: whether it asks (`confirm-modal-confirm`) or shows a refusal is the caller's to assert (X-R18).
+ */
+async function openSingleDelete(page: Page, assetId: number): Promise<Locator> {
     await page.getByTestId('view-mode-list').click();
     await waitForSettled(page.getByTestId('assets-page'), 20_000);
     await page.getByTestId(`row-actions-${assetId}`).click();
     await page.getByTestId('context-menu-action-delete').click();
-    await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible();
+    await expect(page.getByTestId('asset-delete-confirm'), 'the single delete opens its own confirmation').toBeVisible();
+    return deleteConfirm(page, 'asset-delete-confirm');
+}
+
+/** Opens the bulk delete of the selected rows from the selection toolbar. Ends on its own confirmation on screen, and returns it. */
+async function openBulkDelete(page: Page): Promise<Locator> {
+    await page.getByTestId('toolbar-action-delete').click();
+    await expect(page.getByTestId('asset-bulk-delete-confirm'), 'the bulk delete opens its own confirmation').toBeVisible();
+    return deleteConfirm(page, 'asset-bulk-delete-confirm');
 }
 
 test.describe('Asset List Page', () => {
@@ -587,14 +612,16 @@ test.describe('Asset List Page', () => {
             const toolbar = page.getByTestId('selection-toolbar');
             await expect(toolbar).toHaveAttribute('data-selected-count', '2');
 
-            await page.getByTestId('toolbar-action-delete').click();
-            await expect(page.getByTestId('confirm-modal-message')).toBeVisible();
-            await page.getByTestId('confirm-modal-confirm').click();
+            // The bulk delete's own confirmation (X-R20): its buttons are looked up inside it, never page-wide.
+            const dialog = await openBulkDelete(page);
+            await expect(dialog.getByTestId('confirm-modal-message')).toBeVisible();
+            await dialog.getByTestId('confirm-modal-confirm').click();
 
             // The dialog switches to results mode (a Close button) once the delete
             // has run — that transition is the signal the API call completed.
-            await expect(page.getByTestId('confirm-modal-close')).toBeVisible({timeout: 15_000});
-            await page.getByTestId('confirm-modal-close').click();
+            await expect(dialog.getByTestId('confirm-modal-close')).toBeVisible({timeout: 15_000});
+            await dialog.getByTestId('confirm-modal-close').click();
+            await expect(page.getByTestId('asset-bulk-delete-confirm'), 'Close closes the bulk confirmation').toHaveCount(0);
 
             // Both owned rows are gone from the still-filtered table.
             for (const id of ids) {
@@ -630,13 +657,16 @@ test.describe('Asset List Page', () => {
             });
         });
 
-        await openSingleDelete(page, asset.id);
-        await page.getByTestId('confirm-modal-confirm').click();
+        const dialog = await openSingleDelete(page, asset.id);
+        // The list row counts no transaction (tx_count 0), so the dialog asks first (X-R18); the backend still decides,
+        // and its refusal lands in the same dialog.
+        await expect(dialog.getByTestId('confirm-modal-confirm')).toBeVisible();
+        await dialog.getByTestId('confirm-modal-confirm').click();
 
-        const link = page.getByTestId('asset-delete-transactions-link');
+        const link = dialog.getByTestId('asset-delete-transactions-link');
         await expect(link).toBeVisible();
         await expect(link).toHaveAttribute('href', `/transactions?asset_id=${asset.id}`);
-        await expect(page.getByTestId('asset-delete-transactions-link-detail')).toContainText('(17)');
+        await expect(dialog.getByTestId('asset-delete-transactions-link-detail')).toContainText('(17)');
         // The link's own label must be the real transactions.title catalogue entry —
         // never the missing `nav.transactions` key, and never a raw key at all
         // (svelte-i18n renders a missing key as the literal key string, so this
@@ -644,7 +674,7 @@ test.describe('Asset List Page', () => {
         await expect(link).toHaveText(t('en', 'transactions.title'));
         await expect(link).not.toContainText('nav.transactions');
         await expect(link).not.toContainText('transactions.title');
-        await expect(page.getByTestId('confirm-modal-close')).toBeVisible();
+        await expect(dialog.getByTestId('confirm-modal-close')).toBeVisible();
     });
 
     test('successful single delete closes its confirmation', async ({page}) => {
@@ -670,10 +700,12 @@ test.describe('Asset List Page', () => {
             });
         });
 
-        await openSingleDelete(page, asset.id);
-        await page.getByTestId('confirm-modal-confirm').click();
+        const dialog = await openSingleDelete(page, asset.id);
+        await expect(dialog.getByTestId('confirm-modal-confirm')).toBeVisible();
+        await dialog.getByTestId('confirm-modal-confirm').click();
 
-        await expect(page.getByTestId('confirm-modal-confirm')).toHaveCount(0);
+        // Closed: the confirmation itself is gone — not only its Delete, which its results mode lacks too.
+        await expect(page.getByTestId('asset-delete-confirm')).toHaveCount(0);
         await expect(page.getByTestId(`dt-row-checkbox-${asset.id}`)).toHaveCount(0);
     });
 
@@ -708,20 +740,20 @@ test.describe('Asset List Page', () => {
             await page.getByTestId(`dt-row-checkbox-${asset.id}`).click();
         }
         await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', String(assets.length));
-        await page.getByTestId('toolbar-action-delete').click();
-        await page.getByTestId('confirm-modal-confirm').click();
+        const dialog = await openBulkDelete(page);
+        await dialog.getByTestId('confirm-modal-confirm').click();
 
         for (const {asset, count} of blocked) {
             const testId = `asset-bulk-delete-transactions-${asset.id}`;
-            const link = page.getByTestId(testId);
+            const link = dialog.getByTestId(testId);
             await expect(link).toHaveAttribute('href', `/transactions?asset_id=${asset.id}`);
-            await expect(page.getByTestId(`${testId}-detail`)).toContainText(`(${count})`);
+            await expect(dialog.getByTestId(`${testId}-detail`)).toContainText(`(${count})`);
             // Same catalogue-key contract as the single-delete case, checked once
             // per row so a per-asset action never falls back to a raw key either.
             await expect(link).toHaveText(t('en', 'transactions.title'));
             await expect(link).not.toContainText('transactions.title');
         }
-        await expect(page.getByTestId('confirm-modal-close')).toBeVisible();
+        await expect(dialog.getByTestId('confirm-modal-close')).toBeVisible();
     });
 
     test('bulk delete failure without HAS_TRANSACTIONS omits the transaction link and count', async ({page}) => {
@@ -756,14 +788,14 @@ test.describe('Asset List Page', () => {
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
         await page.getByTestId(`dt-row-checkbox-${asset.id}`).click();
         await expect(page.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '1');
-        await page.getByTestId('toolbar-action-delete').click();
-        await page.getByTestId('confirm-modal-confirm').click();
+        const dialog = await openBulkDelete(page);
+        await dialog.getByTestId('confirm-modal-confirm').click();
 
-        await expect(page.getByTestId('confirm-modal-close')).toBeVisible();
-        await expect(page.getByTestId(`asset-bulk-delete-transactions-${asset.id}`)).toHaveCount(0);
+        await expect(dialog.getByTestId('confirm-modal-close')).toBeVisible();
+        await expect(dialog.getByTestId(`asset-bulk-delete-transactions-${asset.id}`)).toHaveCount(0);
         // The raw backend message is shown as-is (no synthesized count suffix).
-        await expect(page.getByText('Deletion refused by a non-transaction constraint')).toBeVisible();
-        await expect(page.getByText('Deletion refused by a non-transaction constraint (', {exact: false})).toHaveCount(0);
+        await expect(dialog.getByText('Deletion refused by a non-transaction constraint')).toBeVisible();
+        await expect(dialog.getByText('Deletion refused by a non-transaction constraint (', {exact: false})).toHaveCount(0);
     });
 
     // ========================================================================
@@ -1937,5 +1969,157 @@ test.describe('Assets list — a bulk price request refused as too large says so
             await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
             if (assetId != null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
         }
+    });
+});
+
+// ============================================================================
+// A delete that transactions block opens already blocked (workstream X, lot X-R18)
+// ============================================================================
+
+/** The delete of assets, single or bulk — `DELETE /api/v1/assets?asset_ids=…` — whatever its query. */
+function isAssetDelete(request: Request): boolean {
+    return request.method() === 'DELETE' && new URL(request.url()).pathname === '/api/v1/assets';
+}
+
+/**
+ * Every asset delete the page sends from now on, by URL. Only the page's own requests: what the test sends through
+ * `page.request` — its setup, its cleanup — never reaches this listener.
+ */
+function recordAssetDeletes(page: Page): string[] {
+    const sent: string[] = [];
+    page.on('request', (request) => {
+        if (isAssetDelete(request)) sent.push(request.url());
+    });
+    return sent;
+}
+
+/**
+ * A broker of this test's own and, on it, one BUY of `assetId`: the asset's only transaction. The broker is recorded in
+ * `owned` before its result is checked, so `deleteOwned` takes it — and, with `force`, the BUY — whatever fails after.
+ * The broker may overdraw, so the BUY needs no deposit before it.
+ */
+async function buyOnOwnBroker(page: Page, owned: Owned, assetId: number): Promise<void> {
+    const brokerName = `E2E DeleteBlocked broker ${uniqueSuffix()}`;
+    const brokers = await jsonFrom<{results: Array<{broker_id?: number | null; name: string; success: boolean}>}>(await page.request.post('/api/v1/brokers', {data: [{name: brokerName, allow_cash_overdraft: true}]}), 'create the owned broker');
+    const broker = brokers.results.find((item) => item.name === brokerName);
+    if (typeof broker?.broker_id === 'number') owned.brokerIds.push(broker.broker_id);
+    if (!broker?.success || typeof broker.broker_id !== 'number') throw new Error(`the owned broker ${brokerName} was not created: ${JSON.stringify(brokers)}`);
+    const committed = await jsonFrom<{committed: boolean}>(
+        await page.request.post('/api/v1/transactions/commit', {
+            data: {creates: [{broker_id: broker.broker_id, asset_id: assetId, type: 'BUY', date: daysAgoIso(20), quantity: '2', cash: {code: 'EUR', amount: '-20'}, description: `${brokerName} BUY`}]},
+        }),
+        'commit the BUY of the owned asset',
+    );
+    expect(committed.committed, `the BUY of asset ${assetId} is committed: ${JSON.stringify(committed)}`).toBe(true);
+}
+
+/** The asset as the list loads it — `GET /assets/query`, the page's own source — with the `tx_count` its delete opens on. */
+async function listedAsset(page: Page, assetId: number, search: string): Promise<{id: number; tx_count?: number}> {
+    const rows = await jsonFrom<Array<{id: number; tx_count?: number}>>(await page.request.get(`/api/v1/assets/query?search=${encodeURIComponent(search)}`), `list the assets named after ${search}`);
+    const row = rows.find((item) => item.id === assetId);
+    if (!row) throw new Error(`asset ${assetId} is not among the assets named after ${search}: ${JSON.stringify(rows)}`);
+    return row;
+}
+
+/** Opens an asset's single delete from its card, through the card's bin (X-R20). Ends on that confirmation on screen, and returns it. */
+async function openCardDelete(page: Page, assetId: number): Promise<Locator> {
+    const bin = page.getByTestId(`asset-card-${assetId}`).getByTestId('asset-card-delete-btn');
+    await expect(bin, `the bin on the card of asset ${assetId}`).toBeVisible({timeout: 10_000});
+    await bin.click();
+    await expect(page.getByTestId('asset-delete-confirm'), 'the single delete opens its own confirmation').toBeVisible();
+    return deleteConfirm(page, 'asset-delete-confirm');
+}
+
+/** A range in the past, as in X-R53: the list polls no live price over it, so no provider is asked and nothing is written. */
+function pastRange(): {start: string; end: string} {
+    return {start: daysAgoIso(70), end: daysAgoIso(10)};
+}
+
+/**
+ * A delete the backend would refuse opens already refused (X-R18). The backend refuses to delete an asset that any
+ * transaction uses, on any broker, and the list row already counts them: its `tx_count`. Above 0, the single delete opens
+ * straight on the outcome that refusal would give — the blocked row with its link to the asset's transactions
+ * (`asset-delete-transactions-link`), and a Close — with no Delete to press (`confirm-modal-confirm`) and no request
+ * sent. At 0 it opens the usual confirmation and the backend still decides: the two single-delete tests of «Asset List
+ * Page» take that path to both of its outcomes, a refusal and a delete.
+ *
+ * Each test owns its data, created through the API: an asset and, for the blocked case, a broker of the test's own with
+ * one BUY of it — the asset's one transaction — read back through `GET /assets/query`, the endpoint the list loads, as
+ * the premise. Both ways into the delete are taken: the card's bin hands the page the card's own fields, the list row its
+ * table row, and neither carries `tx_count`. The asset delete is watched with `page.on('request')` from before the page
+ * loads. Afterwards `deleteOwned` removes the broker first (`force` takes the BUY), then the asset.
+ *
+ * Red today: the dialog opens on its confirmation, with Delete, and the link comes only once the backend has refused —
+ * and, until X-R20, neither the card's bin nor the dialog has a test id to be found by.
+ */
+test.describe('Assets list — a delete that transactions block opens already blocked (X-R18)', () => {
+    // A ceiling, never a delay: the data is created through the API, then the list loads its waves and settles, narrowed
+    // to the test's own asset.
+    test.describe.configure({timeout: 60_000});
+
+    /** What the running test created; deleted after it, whatever its outcome. */
+    let owned: Owned = {assetIds: [], brokerIds: []};
+
+    test.beforeEach(async ({page}) => {
+        owned = {assetIds: [], brokerIds: []};
+        await login(page, TEST_USER);
+    });
+
+    test.afterEach(async ({page}) => {
+        await deleteOwned(page, owned);
+    });
+
+    for (const entry of ['card', 'list row'] as const) {
+        test(`an asset with a transaction: its delete from its ${entry} opens on the blocked row and its transactions link — no Delete, no request`, async ({page}) => {
+            const token = uniqueToken(6);
+            const assetId = await createOwnAsset(page, `E2E DeleteBlocked ${token}`);
+            owned.assetIds.push(assetId);
+            await buyOnOwnBroker(page, owned, assetId);
+            expect((await listedAsset(page, assetId, token)).tx_count, 'premise: the list row counts the one transaction of the asset').toBe(1);
+
+            // Watched from before the page loads: no asset delete may leave it.
+            const deletes = recordAssetDeletes(page);
+            await openOwnCards(page, pastRange(), token);
+            const dialog = entry === 'card' ? await openCardDelete(page, assetId) : await openSingleDelete(page, assetId);
+
+            // Its header is on screen, and ConfirmModal draws its footer with it: no Delete to press…
+            await expect(dialog.getByTestId('confirm-modal-confirm'), 'a delete the backend would refuse offers no Delete').toHaveCount(0);
+            // …but the blocked row, with its link filtered on this asset and the count of the list row…
+            const link = dialog.getByTestId('asset-delete-transactions-link');
+            await expect(link, 'the link to the asset’s transactions is there as the dialog opens, with no Delete pressed').toBeVisible();
+            await expect(link).toHaveAttribute('href', `/transactions?asset_id=${assetId}`);
+            await expect(dialog.getByTestId('asset-delete-transactions-link-detail'), 'the count of the list row: one transaction').toContainText('(1)');
+            // …and a Close.
+            await expect(dialog.getByTestId('confirm-modal-close')).toBeVisible();
+            expect(deletes, 'opening the dialog sends no DELETE /api/v1/assets').toEqual([]);
+
+            // Closed from there: the asset is still listed, and still nothing was sent.
+            await dialog.getByTestId('confirm-modal-close').click();
+            await expect(page.getByTestId('asset-delete-confirm')).toHaveCount(0);
+            const listed = entry === 'card' ? page.getByTestId(`asset-card-${assetId}`) : page.locator(`tbody tr[data-row-id="${assetId}"]`);
+            await expect(listed, 'the asset is still listed').toBeVisible();
+            expect(deletes, 'closing it sends none either').toEqual([]);
+        });
+    }
+
+    test('guard: an asset with no transaction opens the usual confirmation from its card — Delete offered, nothing sent by opening', async ({page}) => {
+        const token = uniqueToken(6);
+        const assetId = await createOwnAsset(page, `E2E DeleteFree ${token}`);
+        owned.assetIds.push(assetId);
+        expect((await listedAsset(page, assetId, token)).tx_count, 'premise: the list row counts no transaction').toBe(0);
+
+        const deletes = recordAssetDeletes(page);
+        await openOwnCards(page, pastRange(), token);
+        const dialog = await openCardDelete(page, assetId);
+
+        await expect(dialog.getByTestId('confirm-modal-confirm'), 'no transaction: the usual Delete, for the backend to decide on').toBeVisible();
+        await expect(dialog.getByTestId('confirm-modal-message')).toBeVisible();
+        await expect(dialog.getByTestId('asset-delete-transactions-link'), 'and no blocked row').toHaveCount(0);
+        expect(deletes, 'opening the dialog sends nothing: only Delete asks the backend').toEqual([]);
+
+        await dialog.getByTestId('confirm-modal-cancel').click();
+        await expect(page.getByTestId('asset-delete-confirm')).toHaveCount(0);
+        await expect(page.getByTestId(`asset-card-${assetId}`), 'the asset is still listed').toBeVisible();
+        expect(deletes, 'cancelling sends none either').toEqual([]);
     });
 });

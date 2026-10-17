@@ -532,14 +532,14 @@ async def delete_own_account(
     Cannot be undone.
 
     Constraints:
-    - Cannot delete if you are the last active administrator (an inactive one cannot log in)
+    - Cannot delete if you are the last active administrator (an inactive one cannot log in): 400 ``LAST_ADMIN``
     - Session is invalidated after deletion
     """
     # The last active administrator stays: inactive admins cannot log in to administer the instance
     if current_user.is_superuser:
         other_active_admins = await user_service.count_active_superusers(session, excluding_user_id=current_user.id)
         if other_active_admins == 0:
-            raise HTTPException(status_code=400, detail="Cannot delete account: you are the only administrator")
+            raise HTTPException(status_code=400, detail={"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"})
 
     # A failed deletion rolls the session back and expires every object in it, current_user included: read it first
     user_id, username = current_user.id, current_user.username
