@@ -42,6 +42,15 @@ def utils_datetime(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Datetime utils tests", verbose=verbose)
 
 
+def utils_pydantic_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shared pydantic-error helpers of the batch and BRIM parses (W-B77, W-B70)."""
+    print_section("Utils: Pydantic Errors")
+    print_info("Testing: backend/app/utils/pydantic_errors.py; its two call sites (transaction_batch_stages.py, brim_provider.py) read with ast")
+    print_info("Tests: PLAIN_PARAM_TYPES, loc_to_field, error_params (field and packed sub-errors), no copy left at the call sites")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_pydantic_errors.py", test_names)
+    return run_command(cmd, "Pydantic errors tests", verbose=verbose)
+
+
 def utils_day_count(verbose: bool = False, test_names: list = None) -> bool:
     """Test day count conventions."""
     print_section("Utils: Day Count Conventions")
@@ -533,6 +542,16 @@ Tests for utility modules and helper functions:
         isolation="pure",
     )
     add_test(cat, "datetime", utils_datetime, name="Datetime Utils", desc="Timezone-aware datetime helpers")
+    add_test(
+        cat,
+        "pydantic-errors",
+        utils_pydantic_errors,
+        name="Pydantic Errors",
+        desc="W-B77/W-B70: backend/app/utils/pydantic_errors.py, one copy for the batch and BRIM parses: PLAIN_PARAM_TYPES exactly str/int/float/bool/None; loc_to_field (indices skipped, a leading resolved_fields dropped, None when empty); error_params (a copy of a plain ctx, loc never read so a field error keeps it, None for a ctx missing, empty or not plain, a packed sub-error alike); the two call sites keep no copy and import it",
+        # PURE: functions over values, pydantic models of the test's own, two app sources read with ast. No DB, no
+        # server, no network, no writes.
+        isolation="pure",
+    )
     add_test(cat, "day-count", utils_day_count, name="Day Count Conventions", desc="ACT/365, ACT/360, ACT/ACT, 30/360")
     add_test(cat, "geo-utils", utils_geo_utils, name="Geographic Utils", desc="ISO-3166-A3 normalization, weights")
     add_test(cat, "version", utils_version, name="Version Utils", desc="get_git_version: LF_APP_VERSION when set, else git describe in a checkout, else VERSION, else unknown; get_version_info")
