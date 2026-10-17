@@ -1050,7 +1050,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 24 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose thirteen messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all four subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 27 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose thirteen messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all four subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -1073,6 +1073,7 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `platform.frame_protection` | `LIBREFOLIO_FRAME_PROTECTION` is off with `LIBREFOLIO_PROFILE=managed`, whose entry in `PROFILE_DEFAULTS` turns it on ([Frame Protection and the Report-Only Policy](#managed-headers)): a value set in the environment or in `.env`, or the entry lost from the table. `instance.checks.frameProtection.offManaged`, summary `LIBREFOLIO_FRAME_PROTECTION is off in the managed profile: any site can show LibreFolio in a frame; the managed profile turns it on` | `warning` |
 | `platform.csp_report_only` | `LIBREFOLIO_CSP_REPORT_ONLY` is off with `LIBREFOLIO_PROFILE=managed`, the same way: `instance.checks.cspReportOnly.offManaged`, summary `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on`. Only an `info`: the policy reports, and never blocks | `info` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
+| `platform.test_mode` | `LIBREFOLIO_TEST_MODE` is on (`is_test_mode()`: `1`, `true` or `yes`, in any case) outside a test lane, with `LIBREFOLIO_TEST_LANE_ID` unset, empty or blank (`owning_test_lane_id()`): `instance.checks.testMode.outsideTestLane`, `detail` `{"data_dir": …}`, the test data directory in use (`str(get_data_dir())`), summary `TEST_MODE_OUTSIDE_LANE_SUMMARY`, `LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory <data_dir> and .env is not read; unset it on a production instance`. The same in every profile (below) | `error`; with `LIBREFOLIO_PROFILE=managed`, `log_configuration_audit()` stops the startup first |
 | `backup.panel_token` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, or its `_FILE`, is set but cannot be used: `backup.checks.panelToken.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `backup.upload_limit` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, or the profile's entry for it, cannot be used: `backup.checks.uploadLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `backup.restore_limit` | `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` cannot be used, or, while it is unset outside `selfhosted`, the upload limit it follows: `backup.checks.restoreLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
@@ -1088,6 +1089,36 @@ profile (`instance.checks.frameProtection.on`, `instance.checks.cspReportOnly.on
 nothing would show. No value is refused at run time: a provider may turn a switch off on purpose, frame protection for
 a hosting panel that shows the app in a frame ([Hosting for Others](../../admin/hosting_providers.md#managed-profile)),
 and the checks only show it, in the startup log and in [the checks on demand](#security-checks-endpoint).
+
+The check of test mode (lot H-46), `check_test_mode()`, the last of the platform's in `CONFIG_CHECKS`, gives the same
+result in every profile. It is `ok` while test mode is off (`instance.checks.testMode.off`), and while it is on in a
+test lane (`instance.checks.testMode.testLane`): a process that owns a `LIBREFOLIO_TEST_LANE_ID` that is not blank
+(`owning_test_lane_id()` in `backend/app/config/platform.py`). `configure_test_runtime()` in `scripts/cli_base.py` sets
+it, with `ensure_test_lane_id()`, for the test runner (`dev.py test`, its shared backend and its in-process pytest), for
+`dev.py server --test` and for the gallery's servers; `configure_server_runtime()` (`dev.py server`) sets
+`LIBREFOLIO_TEST_MODE=0` and removes it. The lane id is no barrier against an attacker, since whoever writes the
+environment is the operator: it tells a configuration mistake from a test lane.
+
+Where it matters: `dev.py server` always turns test mode off, but a server started without it, with `uvicorn`
+directly or from a service unit, takes `LIBREFOLIO_TEST_MODE` from its environment as it is. In test mode the
+test-only providers, `mockprov` and the two of `mockfx` (`MOCKFX`, `MOCKFX_FAIL`), are served, since
+`provider_registry` withholds a `test_only` plugin only while test mode is off (X-R44); `get_data_dir()` moves to the
+test data directory, `LIBREFOLIO_TEST_DATA_DIR` or `backend/data/test/`, where what is entered meanwhile is saved; and
+`Settings` reads no `.env` (`settings_customise_sources`). Test mode on the production data directory itself never
+starts: `get_test_data_dir()` runs `validate_test_data_dir()`, which rejects a test directory that overlaps or holds
+the production data. The image as shipped is not expected to reach the checks either. It starts `uvicorn` directly
+(the `CMD` of the `Dockerfile`), but `backend/data/` is not in the image and `entrypoint.sh` hands only
+`LIBREFOLIO_DATA_DIR` to the user the server runs as, which therefore cannot create the default test data directory;
+and `configure_logging()` creates `<data directory>/logs` while `backend.app.main` is imported, so the import stops on
+a `PermissionError` before any check. That is read from the `Dockerfile`, `entrypoint.sh` and `logging_config.py`,
+and reproduced outside a container with a folder the server cannot write; it is not yet tried in a container. In the
+managed profile the start stops on the error (`ManagedTestModeError`, below); in the
+self-hosted profile it goes on, with the error in the log and in [the checks on demand](#security-checks-endpoint).
+The profile that counts is the one in the process environment, where a container's `environment:` or `env_file:` puts
+it: in test mode `Settings` reads no `.env`. Its tests are section (h) of `./dev.py test services config-audit`
+(`backend/test_scripts/test_services/test_config_audit.py`): the three states, with the true and false spellings of
+the variable and a blank lane id; the same result in every profile; the startup log record; the managed stop with its
+exact message, the JWT stop staying first.
 
 Workstream A's check, `ok` as `auth.checks.loginLimit.ok` while the limit is on, is `check_login_limit()` in
 `backend/app/services/accounts/checks.py`, in the tuple `ACCOUNTS_CONFIG_CHECKS`, which `config_audit.py` unpacks into
@@ -1109,19 +1140,23 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
    the import of `auth_service.py` has already failed on it. With `LIBREFOLIO_PROFILE=managed`, a
    configured secret shorter than `JWT_SECRET_MIN_LENGTH` raises `WeakSecretError`; in the
    self-hosted profile it stays the `warning` of the table above.
-2. `instance_blocked()` and `instance_deletion_date()` (`backend/app/config/platform.py`): a value
+2. Test mode on outside a test lane, the `error` of `platform.test_mode`: with `LIBREFOLIO_PROFILE=managed`, it
+   raises `ManagedTestModeError` (a `RuntimeError`), whose message names the test data directory in use:
+   `In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): test-only providers would be served and the data kept in the test data directory <path>; unset LIBREFOLIO_TEST_MODE`.
+   In the self-hosted profile it stays the `error` of the table above, and the start goes on.
+3. `instance_blocked()` and `instance_deletion_date()` (`backend/app/config/platform.py`): a value
    they cannot read raises `ValueError`. On a blocked instance, a warning
    `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): …`, with `deletion_date`, goes to
    the log: see [Instance Block](#instance-block).
-3. `admin_bootstrap_config()` (`backend/app/config/accounts.py`): an unusable `LIBREFOLIO_ADMIN_*`
+4. `admin_bootstrap_config()` (`backend/app/config/accounts.py`): an unusable `LIBREFOLIO_ADMIN_*`
    value raises `AdminBootstrapConfigError`, which names the variable and never the token, and an
    unreadable `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` raises `SecretFileError`, on an instance with
    accounts too: see [The Initial Administrator](access_control.md#initial-admin).
-4. `login_limit_enabled()` (the same module): a `LIBREFOLIO_LOGIN_LIMIT` other than `on` or `off` raises
+5. `login_limit_enabled()` (the same module): a `LIBREFOLIO_LOGIN_LIMIT` other than `on` or `off` raises
    `ValueError`, which names the variable and the value: see [Failed Sign-in Limit](#login-limit).
-5. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
+6. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
    `InstanceKeyError`. The administrator chose that source, so the server does not start without it.
-6. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
+7. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
    and `detail` as fields. A generated key file gone bad or out of reach is logged as an error, and the
    start goes on.
 
@@ -2385,22 +2420,29 @@ an `info` (H-39).
 
 | Switch | Header | Value | Sent on |
 |--------|--------|-------|---------|
-| `LIBREFOLIO_FRAME_PROTECTION` | `X-Frame-Options` | `SAMEORIGIN` | Every HTTP response |
-| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `PAGE_POLICY`: `frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'` | HTML responses, whatever the path: the web app's pages, the documentation, Swagger UI and ReDoc |
-| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `frame-ancestors 'self'`, that directive only | Every other response |
-| `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below | The HTML pages of the web app |
+| `LIBREFOLIO_FRAME_PROTECTION` | `X-Frame-Options` | `SAMEORIGIN` | Every HTTP response, a `304` included |
+| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `PAGE_POLICY`: `frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'` | Documents, whatever the path (H-45): HTML (the web app's pages, the documentation, Swagger UI and ReDoc), XHTML, SVG and XML, any type ending with `+xml` included; never a `304` |
+| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `frame-ancestors 'self'`, that directive only | Every other response but a `304` |
+| `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below | The HTML pages of the web app (`text/html` exactly); never a `304` |
 
-- **Frame protection** (`FRAME_HEADERS`, or `PAGE_FRAME_HEADERS` on an HTML response) is enforced: only the app's own
+- **Frame protection** (`FRAME_HEADERS`, or `PAGE_FRAME_HEADERS` on a document) is enforced: only the app's own
   pages may frame it, so a hosting panel or a dashboard on another origin that shows the app in a frame is refused by
   the browser. Its two headers go where `ALWAYS_HEADERS` go: API answers, the web app, the documentation, the files,
-  the CORS preflights (the `cors` entry is inside this one) and the middleware's own 500. `X-Frame-Options` is the
-  same on all of them; the `Content-Security-Policy` follows the response's type, which `_is_html()` reads at
-  `http.response.start`. A `Content-Type` that starts with `text/html`, in any case and with any parameters
-  (`; charset=utf-8`), gets `PAGE_FRAME_HEADERS`, whose policy is `PAGE_POLICY`, whatever the path: the web app's
-  pages, the client-side routes the SPA catch-all answers and the HTML files of the build, the documentation under
-  `/mkdocs`, Swagger UI and ReDoc, and the HTML 404 the catch-all answers for an unknown API path. Every other
-  response keeps `frame-ancestors 'self'` alone, the CORS preflights and the 500 included, which are plain text.
-  `_is_web_app_page()`, below, applies the same `_is_html()`, then the path.
+  the CORS preflights (the `cors` entry is inside this one) and the middleware's own 500; a `304` gets only
+  `X-Frame-Options` (below). `X-Frame-Options` is the same on all of them; the `Content-Security-Policy` follows
+  the response's type, read at `http.response.start`. `_media_type()` takes the first `content-type` header, the part
+  before `;`, stripped and in lower case (`""` when there is none), so case and parameters (`; charset=utf-8`) do not
+  count. `_is_document()` (H-45) holds when that type is in `DOCUMENT_MEDIA_TYPES` (`text/html`,
+  `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml`) or ends with `DOCUMENT_MEDIA_TYPE_SUFFIX`
+  (`+xml`: `application/atom+xml`, `application/rss+xml`, …). A document gets `PAGE_FRAME_HEADERS`, whose policy is
+  `PAGE_POLICY`, whatever the path: the web app's pages, the client-side routes the SPA catch-all answers and the HTML
+  files of the build, the documentation under `/mkdocs` and its sitemap, Swagger UI and ReDoc, the HTML 404 the
+  catch-all answers for an unknown API path, and an SVG or an XML document wherever it comes from. Every other
+  response keeps `frame-ancestors 'self'` alone: a PDF, JSON and any `+json` type (`application/problem+json`), plain
+  text, an image other than SVG, a script, a style sheet, a response without `Content-Type` such as a `204`, and the
+  CORS preflights and the 500, which are plain text. `_is_html()`, an exact match on `text/html` since H-45 (H-42's
+  prefix test also took an invented `text/htmlx`, harmlessly), serves only the report-only policy:
+  `_is_web_app_page()`, below, applies it, then the path.
 - **Three more directives on documents** (H-42). `PAGE_POLICY` adds to `frame-ancestors 'self'` three directives that
   touch no script, so they can be enforced today while `script-src` stays report-only: `object-src 'none'`, no plugin
   content (`<object>`, `<embed>`); `base-uri 'self'`, no injected `<base>` sending the page's relative URLs to another
@@ -2411,25 +2453,52 @@ an `info` (H-39).
   switch of their own: with `LIBREFOLIO_FRAME_PROTECTION` off, the self-hosted default, nothing changes; an install
   that turns it on gets the three with `frame-ancestors`. A route's own `Content-Security-Policy` is still kept
   alone, on an HTML page too: such a page carries only what its route's policy says.
-- **Why HTML only.** The three mean something only for a document. And Chromium shows an inline PDF with a viewer it
-  treats as a plugin, so `object-src 'none'` on the PDF's own answer could stop it showing the file. That comes from
-  documentation and reports, and no test here can verify it: headless Chromium has no PDF viewer. The app's preview
-  draws a PDF with EmbedPDF, its PDFium engine compiled to WebAssembly, without that viewer; the preview's fallback,
-  an `<iframe>` on the file's own URL, loads a PDF answer, which keeps `frame-ancestors 'self'` alone:
+- **Why documents only.** The three mean something only for a document, a response the browser renders as a page:
+  HTML and, since H-45, the other markup it renders, XHTML, SVG and XML. And Chromium shows an inline PDF with a
+  viewer it treats as a plugin, so `object-src 'none'` on the PDF's own answer could stop it showing the file. That
+  comes from documentation and reports, and no test here can verify it: headless Chromium has no PDF viewer. The app's
+  preview draws a PDF with EmbedPDF, its PDFium engine compiled to WebAssembly, without that viewer; the preview's
+  fallback, an `<iframe>` on the file's own URL, loads a PDF answer, which keeps `frame-ancestors 'self'` alone:
   `/api/v1/uploads/file/{id}`, or `/api/v1/brokers/import/files/{id}/download?download=false` for a broker's file.
-  Not covered: `application/xhtml+xml` and `image/svg+xml`, documents too, get `frame-ancestors 'self'` alone.
+  What LibreFolio serves of the new types today: no SVG, neither in the web app's build nor in the built documentation
+  nor in the plugins' static folders, and no XML but the documentation's sitemap, `sitemap.xml`, which holds no
+  `<object>`, `<embed>`, `<base>` or form, and its gzip copy `sitemap.xml.gz`, which `FileResponse` sends with the
+  same type (to `mimetypes`, `.gz` is an encoding). A user's SVG or XML never comes inline as a document: an upload
+  goes out as an attachment (`/api/v1/uploads/file/{id}`), its text preview as `text/plain`, and its image preview
+  (`img_preview`) refuses an SVG, since the preview resizes with Pillow, which cannot open one, and answers `500`; a
+  broker's file is shown inline only for `INLINE_SAFE_MEDIA_TYPES` (`backend/app/api/v1/brokers.py`), which has no
+  SVG or XML. The plugin-asset route (`/api/v1/uploads/plugin/…`) would serve a plugin's own SVG inline, and it would
+  get the policy. H-45 is thus defence in depth, with no visible change today.
+- **No policy on a `304`** (H-45). A `304` gets neither `Content-Security-Policy` nor
+  `Content-Security-Policy-Report-Only` from the middleware, whatever its headers, with a `Content-Type` or without
+  one: its status picks `self.not_modified_headers`, which is `self.headers` without `content-security-policy`.
+  `X-Frame-Options` (when frame protection is on), `X-Content-Type-Options` and `Referrer-Policy` go on it as on any
+  other response, and a header the route set on its `304`, a policy included, is kept: the middleware only adds what
+  is missing. Why: a browser that revalidates a response it cached freshens it with the header fields of the `304`
+  (RFC 9111 §4.3.4), and Starlette's `304`, the `NotModifiedResponse` of `StaticFiles`, keeps only `Cache-Control`,
+  `Content-Location`, `Date`, `ETag`, `Expires` and `Vary`. With no `Content-Type`, it used to get
+  `frame-ancestors 'self'` alone, which would replace the `PAGE_POLICY` of the cached document. Checked in Chromium 149
+  with a probe outside the app, a server of Python's standard library: a page served `200` with `PAGE_POLICY`, then
+  revalidated with a `304` carrying `frame-ancestors 'self'` alone, no longer refused an injected `<base>`; with no
+  policy on the `304`, or with `PAGE_POLICY` on it, the page still refused it. Today only `StaticFiles` answers `304`,
+  in the `/_app` mount (`ImmutableStaticFiles`), which holds no document; `/`, the web app's pages and `/mkdocs` go
+  through `FileResponse`, which in Starlette 1.6 never answers `304`: it reads neither `If-None-Match` nor
+  `If-Modified-Since`. The guard is thus latent: it would matter for an SVG under `/_app`, and for every page if an
+  upgrade of Starlette gave `FileResponse` conditional answers.
 - **The report-only policy blocks nothing**: the browser lists each violation in its developer console. There is no
   report endpoint: the policy has no `report-uri` or `report-to`, and no `Report-To` or `Reporting-Endpoints` header
   is sent.
 - **Where the report-only policy goes.** `_is_web_app_page()` decides at `http.response.start`, from the response's
-  `Content-Type` and `scope["path"]`: the type must start with `text/html`, and the path must be outside `/mkdocs`
-  (bare or `/mkdocs/…`) and `/api` (bare or `/api/…`). The middleware is outside GZip, so a compressed page still says
+  `Content-Type` and `scope["path"]`: the media type `_media_type()` reads must be exactly `text/html` (`_is_html()`),
+  and the path must be outside `/mkdocs` (bare or `/mkdocs/…`) and `/api` (bare or `/api/…`); a `304` never gets the
+  policy, whatever its type and path (above). The middleware is outside GZip, so a compressed page still says
   `text/html`. The policy thus reaches `/`, the client-side routes the SPA catch-all answers and the HTML files of the
   build (`200.html`, `offline.html`). Left out on purpose: the documentation, a separate site that this policy does not
   describe; Swagger UI and ReDoc (`/api/v1/docs`, `/api/v1/redoc`), which load their scripts from a CDN, so a
   `default-src 'self'` report there would be pure noise; the HTML 404 that the catch-all answers for an unknown API
-  path; and every response that is not HTML: JavaScript, JSON, text files, and the CORS preflights and the 500, which
-  are plain text.
+  path; every other document, an SVG or an XHTML page even on a web-app path, which gets `PAGE_POLICY` and no
+  report-only header; and every response that is not a document: JavaScript, JSON, text files, and the CORS
+  preflights and the 500, which are plain text.
 - **Read once.** `SecurityHeadersMiddleware.__init__` reads both switches from `get_settings()`, so they are read when
   the middleware is built, never per request. Starlette builds the middleware stack lazily, at the app's first ASGI
   call: for the real app, the lifespan startup. Changing a switch takes a restart, and the tests build a fresh app for
@@ -2463,15 +2532,21 @@ Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_ser
 `nosniff` and `Referrer-Policy` exactly once on every kind of response, a route's own kept, the 500 with its exception
 still re-raised), `./dev.py test services managed-headers` (`backend/test_scripts/test_services/test_managed_headers.py`,
 on fresh apps holding the stack's `security_headers`, `gzip` and `cors`, Swagger UI and ReDoc, and a fake static site:
-frame protection once on every response when on and on none when off, `false` over `managed` included, its policy
-exactly `PAGE_POLICY` on the HTML (the web app's pages, compressed too, the documentation, Swagger UI, ReDoc, the HTML
-404 of an unknown API path) and `frame-ancestors 'self'` on the rest; around the middleware alone, the type deciding
-whatever the path, `text/html` in four spellings of case and parameters against an inline PDF, an image, a script, a
-style sheet, JSON and a 204 without `Content-Type`; `PAGE_POLICY` pinned by value; the report-only policy on the web
-app's HTML only, compressed too, never on the documentation, the API's JSON or HTML, a JavaScript chunk, a text file, a
-CORS preflight or a 500; the policy read directive by directive, each directive once, with no report endpoint; a
-route's own header kept alone and the others added, its own `Content-Security-Policy` on an HTML page never replaced by
-`PAGE_POLICY`; the switches read when the middleware is built, never per request)
+frame protection once on every response when on, a `304` aside, and on none when off, `false` over `managed` included,
+its policy exactly `PAGE_POLICY` on the HTML (the web app's pages, compressed too, the documentation, Swagger UI,
+ReDoc, the HTML 404 of an unknown API path) and `frame-ancestors 'self'` on the rest; around the middleware alone, the
+type deciding whatever the path, `text/html` in four spellings of case and parameters against an inline PDF, an
+image, a script, a style sheet, JSON and a 204 without `Content-Type`; `PAGE_POLICY`, `DOCUMENT_MEDIA_TYPES` and
+`DOCUMENT_MEDIA_TYPE_SUFFIX` pinned by value; one case per document type (H-45), XHTML, SVG with a `charset` and in
+mixed case, `application/xml`, `text/xml`, `application/atom+xml` and `application/rss+xml`, against the types that
+are not documents, PDF, JSON, `application/problem+json`, `text/plain`, PNG and an invented `text/htmlx`; an SVG and
+an XHTML on a web-app path, with `PAGE_POLICY` and no report-only header; a `304` in every mode, without
+`Content-Type` and with `text/html`, carrying neither policy, and a route's own policy on its `304` kept; a real `304`
+of `StaticFiles` under `/_app`, an SVG whose `200` carries `PAGE_POLICY` and whose `304` no policy; the report-only
+policy on the web app's HTML only, compressed too, never on the documentation, the API's JSON or HTML, a JavaScript
+chunk, a text file, a CORS preflight or a 500; the policy read directive by directive, each directive once, with no
+report endpoint; a route's own header kept alone and the others added, its own `Content-Security-Policy` on an HTML
+page never replaced by `PAGE_POLICY`; the switches read when the middleware is built, never per request)
 and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
 the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
 `mime.types` file; no hidden file of either tree is sampled, since no route serves one,

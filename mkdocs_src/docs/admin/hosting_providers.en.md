@@ -47,6 +47,7 @@ Today the profile changes eleven things:
 | --- | --- | --- |
 | `GET /api/v1/system/instance` answers | `{"profile": "selfhosted"}` | `{"profile": "managed"}` |
 | A `JWT_SECRET` shorter than 32 characters | A warning in the startup log | The server does not start |
+| `LIBREFOLIO_TEST_MODE` on, outside LibreFolio's own test runs | An error in the startup log | The server does not start |
 | A plugin setting set by an environment variable | Shown read-only in **Settings › Plugins**, *Set by the server*, and listed by `GET /api/v1/settings/plugins` | Not shown in **Settings › Plugins** nor listed, and a save to it is refused as if it did not exist |
 | Invitations to donate: the **Buy Me a Coffee** link in the page header, on the sign-in pages, in the **Help & Support** menu and in Settings › About, and the donation popup after a sign-in | Shown | None: Settings › About keeps its share buttons |
 | The check for a newer LibreFolio release: at an administrator's sign-in, and **Check for updates** in the changelog | On | Off: you update the instance |
@@ -67,6 +68,12 @@ Today the profile changes eleven things:
   those three rows take away.
 - Plugin settings and their variables: see «Plugin Settings» in
   [Environment Variables](configuration.md).
+- **Test mode** (`LIBREFOLIO_TEST_MODE`) is for LibreFolio's own test runs, which turn it on and off by themselves. A
+  server started without `./dev.py` takes it from its environment, your panel's included: it would serve data
+  providers that exist only for the tests, and keep the instance's data in a test folder instead of its data
+  directory. So a managed instance does not start with it, and says why:
+  `In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): …; unset LIBREFOLIO_TEST_MODE`.
+  Remove the variable, then start again. See «Startup Checks» in [Configuration](configuration.md).
 - Like the upload limit, the last three rows are defaults, each set on its own by its variables, in
   either profile: `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS` and `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS`
   for the idle risk workers, then `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` (see
@@ -77,7 +84,8 @@ Today the profile changes eleven things:
   log says so at every start, a warning for frame protection and an `info` for the policy, and so do
   the security checks: see «Startup Checks» in [Configuration](configuration.md).
 - **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
-  `Content-Security-Policy: frame-ancestors 'self'` to every response: a browser then shows
+  `Content-Security-Policy: frame-ancestors 'self'` to every response (to a `304 Not Modified`
+  only the first, so the browser keeps the policy of its cached copy): a browser then shows
   LibreFolio in a frame only inside LibreFolio's own pages, whose policy also carries
   `object-src 'none'; base-uri 'self'; form-action 'self'`, three directives that block nothing
   LibreFolio uses (see «Main Options» in [Environment Variables](configuration.md)). If your hosting

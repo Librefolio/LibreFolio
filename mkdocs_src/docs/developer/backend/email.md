@@ -1257,7 +1257,9 @@ Where they are hosted, in workstream A's files:
   `email.links` of `GET /system/instance` is true, shows `ForgotPasswordEmailForm` in place of its warning
   (`forgot-email-unavailable`); on a self-hosted instance the box of server commands stays below it, in a panel
   closed by default (the developer's decision P1, 16/10), and on a managed one `forgot-ask-admin` takes its place
-  (F05; [ForgotPasswordCard](../frontend/components/features/auth.md#forgotpasswordcard)).
+  (F05; [ForgotPasswordCard](../frontend/components/features/auth.md#forgotpasswordcard)). When the request fails
+  before any answer (`instanceConfig.failed`, never `loaded`), `email.links` is unknown: the card shows only
+  `forgot-ask-admin`, the advice that holds in both profiles (FPM-08, workstream A).
 - **The email change notice**: `update_profile` (`PUT /api/v1/auth/profile`) queues
   [`email_changed_work()`](#flow-email-changed) after a change of address.
 
