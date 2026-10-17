@@ -13,7 +13,7 @@ not a counter, which the next change still raises by one
 
 ### 🔄 How it Works
 
-1. **Login**: The user sends their `username` (or e-mail) and `password` to the `/api/v1/auth/login` endpoint.
+1. **Login**: The user sends their `username` (or e-mail) and `password` to the `/api/v1/auth/login` endpoint. An identifier holding `@` names the account with that email address, in any A–Z case, and only when no account has it, the account with exactly that username; one without `@` is a username only, compared exactly (`user_service.get_user_by_username_or_email()`, lot A-21a: see [Which Account an Identifier Names](security.md#sign-in-identifier)).
 2. **Token Creation**:
     - The server verifies the credentials (using `bcrypt` hashing).
     - If valid, it signs a JWT with `JWT_SECRET` (HS256) carrying the user ID (`sub`), the account's session version (`sv`), the issue time (`iat`) and the expiry (`exp`): `create_jwt_token()` in `backend/app/services/accounts/auth_service.py`.

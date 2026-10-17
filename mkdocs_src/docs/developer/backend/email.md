@@ -503,7 +503,10 @@ judged as written, nothing is resolved: a tailnet name such as `relay.tailnet.ts
 The `detail` travels to the admin interface as the parameters of a translated message, so it never names the host,
 the user or the sender. The English `summary` is for the log only, and the plain-text warning's summary does name
 the host. [`GET /api/v1/email/status`](#api-status) never returns a `summary`. The keys are written whole, like the
-platform's; their messages are in the `email` i18n source of the frontend ([The Email Tab](#email-tab)).
+platform's; their messages are in the `email` i18n source of the frontend ([The Email Tab](#email-tab)). The «Security»
+tab of Settings › Administration lists the three checks too, from `GET /api/v1/security/checks`, with the platform's,
+and links a finding of theirs to the Email tab
+([SecurityTab](../frontend/components/features/settings.md#securitytab)).
 
 `EMAIL_CONFIG_CHECKS = (check_smtp_configuration, check_smtp_encryption, check_email_links)` closes the platform's
 `CONFIG_CHECKS` (`*EMAIL_CONFIG_CHECKS` at the end of the tuple in `backend/app/services/platform/config_audit.py`),
@@ -987,7 +990,7 @@ wrong credentials leave an event; the answer says the others. The email itself l
   nothing is counted or sent; the button stays enabled, and a click after the unblock works.
 - **In workstream A's components**: `RegisterCard` returns to the sign-in with `email.verification.registered` when
   the answer says `verification_required`; `describeRegistrationError()` turns 409
-  `EMAIL_VERIFICATION_UNAVAILABLE` into `email.verification.signUpUnavailable`. The Admin tab
+  `EMAIL_VERIFICATION_UNAVAILABLE` into `email.verification.signUpUnavailable`. The Global Settings tab
   (`GlobalSettingsTab.svelte`) disables the switch while its saved value is off and `email.links` of
   `GET /system/instance` is false, with the hint `email.verification.settingNeedsEmail` (once saved on, it can go
   off and on again until the next save), and shows a 409 `EMAIL_VERIFICATION_UNAVAILABLE` as
@@ -1166,8 +1169,8 @@ an `EmailInstanceConfig` (`backend/app/schemas/email.py`) with two booleans. `ge
 
 In the frontend, `email.links` decides three things: whether the share dialogs offer «Send by email»
 (`sendByEmailVisible()`), whether the sign-in's **Forgot Password?** card shows the «forgot password» form
-([Links by Email in the Interface](#link-actions)), and whether the Admin tab lets the switch of email verification
-turn on ([In the Frontend](#verification-frontend)).
+([Links by Email in the Interface](#link-actions)), and whether the Global Settings tab lets the switch of email
+verification turn on ([In the Frontend](#verification-frontend)).
 
 ---
 
@@ -1227,11 +1230,13 @@ The emails' own texts stay in the backend catalogue ([The Catalogue](#catalogue)
 registers the tab:
 
 ```ts
-{id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 130, component: EmailSettingsTab, visible: (ctx) => ctx.isSuperuser},
+{id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 130, component: EmailSettingsTab, visible: (ctx) => ctx.isSuperuser, group: 'administration'},
 ```
 
-Order 130 puts it after Admin (100), so in the right-hand group on a wide screen, and `visible` keeps it for
-administrators: a regular user never sees it in the bar, and a `?tab=email` they open is ignored.
+`group` puts it in the «Administration» group, on the right of the bar on a wide screen: the tab is in the group's
+second bar, where order 130 puts it after Global Settings (100), Users (110) and Backup (120), and `?tab=email` opens it
+inside the group. `visible` keeps it for administrators: a regular user never sees it, and a `?tab=email` they open is
+ignored.
 
 ---
 
@@ -1400,15 +1405,15 @@ too. A new limit of this kind uses it too, instead of a counter of its own.
 | `./dev.py test front-utility email-send-link` | `frontend/e2e/settings/email-send-link.spec.ts` (ESL-E-01…05) | In the browser: «Send by email» in the invitation and reset dialogs, with `email.links` true in `GET /system/instance` and `POST /email/links` simulated; no `language` by default, `language: it` chosen in the invitation's selector (ESL-E-05), the answered language in `data-language`; absent without `email.links` |
 | `./dev.py test front-utility forgot-password-email` | `frontend/e2e/auth-forgot-password-email.spec.ts` (FPE-E-01…03) | In the browser, signed out: the sign-in's **Forgot Password?** card with and without `email.links`, the form against a simulated `POST /email/password-reset` |
 | `./dev.py test front-utility email-tab` | `frontend/e2e/settings/email-tab.spec.ts` | In the browser: an administrator's tab on the real backend in the `off` state, hidden from a member; the test email against a simulated API (200, 502, 429) |
-| `./dev.py test front-utility email-verification` | `frontend/e2e/auth-email-verification.spec.ts` (EVE-E-01…05) | In the browser, signed out on simulated answers: a sign-up that must wait goes back to the sign-in with a line of its own and signs nobody in; `EMAIL_VERIFICATION_UNAVAILABLE` keeps the register card with words of its own; `EMAIL_NOT_VERIFIED` draws the verification notice instead of the error box, and «send the link again» goes with the typed credentials. As an administrator, with `GET /system/instance` simulated: the switch of Settings › Admin off while `email.links` is false, usable when it is true; nothing saved |
+| `./dev.py test front-utility email-verification` | `frontend/e2e/auth-email-verification.spec.ts` (EVE-E-01…05) | In the browser, signed out on simulated answers: a sign-up that must wait goes back to the sign-in with a line of its own and signs nobody in; `EMAIL_VERIFICATION_UNAVAILABLE` keeps the register card with words of its own; `EMAIL_NOT_VERIFIED` draws the verification notice instead of the error box, and «send the link again» goes with the typed credentials. As an administrator, with `GET /system/instance` simulated: the switch of Settings › Administration › Global Settings off while `email.links` is false, usable when it is true; nothing saved |
 
 The backend files are under `backend/test_scripts/`. All thirteen backend entries are `pure` in the runner catalogue:
 no lane database, no server. The two E2 files build their database as a private SQLite file under `tmp_path`, and
 `api email` mounts the real auth and email routers under the API prefix in an app of its own: its accounts sign in
 through `POST /auth/login`, over `httpx.ASGITransport`. `api email-verification-hooks` does the same with the auth,
 users, settings and email routers, on a private SQLite file. The Settings tab registry's own test
-(`settingsTabs.test.ts`) pins the Email tab: administrators only, no props, after Admin. The gallery has a
-`settings/email` shot, with the state answered `ready` by the test.
+(`settingsTabs.test.ts`) pins the Email tab: administrators only, no props, in the «Administration» group after
+Backup. The gallery has a `settings/email` shot, with the state answered `ready` by the test.
 
 - **No inherited configuration.** Every module, the rate window's included, starts with an autouse fixture that
   removes every `LIBREFOLIO_SMTP_*` variable; each test then sets only what it needs with `monkeypatch`, and

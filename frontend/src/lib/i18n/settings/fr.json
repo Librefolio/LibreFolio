@@ -3,7 +3,6 @@
     "profile": "Profil",
     "preferences": "Préférences",
     "about": "À propos",
-    "admin": "Administration",
     "profileInfo": "Informations du Profil",
     "profileDescription": "Gérez les détails de votre compte",
     "enableEditing": "Activer la modification",
@@ -378,6 +377,24 @@
         "OWNER": "Propriétaire",
         "EDITOR": "Éditeur",
         "VIEWER": "Lecteur"
+      }
+    },
+    "administration": "Administration",
+    "tooManyPasswordAttempts": "Trop de mots de passe erronés : patientez quelques minutes et réessayez.",
+    "securityTab": {
+      "title": "Contrôles de sécurité",
+      "description": "La configuration de cette instance, vérifiée à l'ouverture des Paramètres : ce qui demande votre attention vient en premier. « Vérifier à nouveau » la relit.",
+      "allClear": "Rien ne demande votre attention.",
+      "passed": "{count, plural, one {# contrôle réussi} other {# contrôles réussis}}",
+      "loadError": "Les contrôles de sécurité n'ont pas pu être chargés.",
+      "retry": "Réessayer",
+      "refresh": "Vérifier à nouveau",
+      "openEmail": "Ouvrir l'onglet E-mail",
+      "openPlugins": "Ouvrir les réglages des plugins",
+      "severity": {
+        "error": "Erreur",
+        "warning": "Avertissement",
+        "info": "Information"
       }
     }
   }

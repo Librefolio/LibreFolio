@@ -103,6 +103,12 @@ DEFAULT_ADMIN_USERNAME = "admin"
 #: The username rules of registration (``AuthRegisterRequest``).
 ADMIN_USERNAME_MIN_LENGTH = 3
 ADMIN_USERNAME_MAX_LENGTH = 50
+#: The character no new username may hold (A-21a): the sign-in reads an identifier holding it as an email address first
+#: (``user_service.get_user_by_username_or_email``). Registration, a change of username, ``./dev.py user create`` and
+#: ``LIBREFOLIO_ADMIN_USERNAME`` refuse it; a username from before A-21a keeps it, and its account signs in by address.
+USERNAME_RESERVED_CHARACTER = "@"
+#: Why a new username holding it is refused, as the server says it (over HTTP with ``error_code`` ``USERNAME_INVALID``).
+USERNAME_RESERVED_MESSAGE = "A username cannot contain @: the sign-in reads it as an email address"
 #: The setup link opens the administrator account: a shorter token is refused, so a guessable value never does.
 ADMIN_BOOTSTRAP_TOKEN_MIN_LENGTH = 32
 #: The longest token the link's requests accept (``TokenInspectRequest``, ``AdminSetupRequest``).
@@ -159,9 +165,10 @@ def admin_bootstrap_config() -> AdminBootstrapConfig | None:
     ``LIBREFOLIO_ADMIN_USERNAME`` defaults to ``admin``; ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`` (or its ``_FILE``) is the
     setup link's token, given by a hosting panel. A blank value counts as unset; spaces around the email and the
     username are ignored. A value that cannot be used raises ``AdminBootstrapConfigError``: a token or a username
-    without the email, an email that is not an address, a username outside 3 to 50 characters, a token of another
-    character than the unreserved ones of a URL, shorter than 32 or longer than 200 characters. A ``_FILE`` that cannot
-    give its secret raises ``SecretFileError``. The startup audit calls it, so such a value stops the server.
+    without the email, an email that is not an address, a username outside 3 to 50 characters or holding an ``@``
+    (A-21a), a token of another character than the unreserved ones of a URL, shorter than 32 or longer than 200
+    characters. A ``_FILE`` that cannot give its secret raises ``SecretFileError``. The startup audit calls it, so such
+    a value stops the server.
     """
     email = _blank_to_none(ADMIN_EMAIL_VARIABLE)
     username = _blank_to_none(ADMIN_USERNAME_VARIABLE)
@@ -190,5 +197,11 @@ def admin_bootstrap_config() -> AdminBootstrapConfig | None:
             ADMIN_USERNAME_VARIABLE,
             "ADMIN_USERNAME_INVALID",
             f"expected {ADMIN_USERNAME_MIN_LENGTH} to {ADMIN_USERNAME_MAX_LENGTH} characters, as a username chosen at registration",
+        )
+    if USERNAME_RESERVED_CHARACTER in name:
+        raise AdminBootstrapConfigError(
+            ADMIN_USERNAME_VARIABLE,
+            "ADMIN_USERNAME_INVALID",
+            f"expected a username without {USERNAME_RESERVED_CHARACTER}, as registration asks: the sign-in reads a name with one as an email address, and the administrator signs in with {ADMIN_EMAIL_VARIABLE} anyway",
         )
     return AdminBootstrapConfig(email=address, username=name, token=token)

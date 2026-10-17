@@ -3,7 +3,6 @@
     "profile": "Perfil",
     "preferences": "Preferencias",
     "about": "Acerca de",
-    "admin": "Administración",
     "profileInfo": "Información del Perfil",
     "profileDescription": "Gestiona los detalles de tu cuenta",
     "enableEditing": "Habilitar edición",
@@ -378,6 +377,24 @@
         "OWNER": "Propietario",
         "EDITOR": "Editor",
         "VIEWER": "Lector"
+      }
+    },
+    "administration": "Administración",
+    "tooManyPasswordAttempts": "Demasiadas contraseñas incorrectas: espera unos minutos y vuelve a intentarlo.",
+    "securityTab": {
+      "title": "Comprobaciones de seguridad",
+      "description": "La configuración de esta instancia, comprobada al abrir los Ajustes: primero lo que requiere tu atención. «Comprobar de nuevo» la vuelve a leer.",
+      "allClear": "Nada requiere tu atención.",
+      "passed": "{count, plural, one {# comprobación superada} other {# comprobaciones superadas}}",
+      "loadError": "No se han podido cargar las comprobaciones de seguridad.",
+      "retry": "Reintentar",
+      "refresh": "Comprobar de nuevo",
+      "openEmail": "Abrir la pestaña Correo",
+      "openPlugins": "Abrir los ajustes de los plugins",
+      "severity": {
+        "error": "Error",
+        "warning": "Advertencia",
+        "info": "Información"
       }
     }
   }
