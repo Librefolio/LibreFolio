@@ -101,6 +101,7 @@
         "off": "La limite des connexions échouées est désactivée (LIBREFOLIO_LOGIN_LIMIT=off) : les mots de passe peuvent être essayés sans pause. Réactivez-la, sauf s'il s'agit d'une instance de test.",
         "invalid": "LIBREFOLIO_LOGIN_LIMIT vaut « {value} », ni on ni off : le serveur ne démarre pas avec cette valeur."
       }
-    }
+    },
+    "askAdminToResetPassword": "Demandez à votre administrateur un lien de réinitialisation du mot de passe : il peut en créer un pour votre compte."
   }
 }

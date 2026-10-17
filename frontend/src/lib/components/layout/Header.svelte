@@ -9,6 +9,7 @@
     import {getDocumentScrollY} from '$lib/utils/layout/headerScroll';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {connectionSecurity} from '$lib/stores/app/connectionSecurityStore';
+    import {donationsVisible} from '$lib/features/support/donations.svelte';
 
     type ScrollState = 'visible' | 'hidden' | 'pinned';
 
@@ -252,17 +253,20 @@
         <div class="hidden lg:block"></div>
 
         <div class="flex items-center space-x-2">
-            <a
-                href="https://www.buymeacoffee.com/librefolio"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-lf-hover transition-colors text-lf-donate focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
-                data-testid="header-donate-link"
-                title={$_('help.buyMeACoffee')}
-            >
-                <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
-                <Coffee size={20} class="flex-shrink-0" />
-            </a>
+            <!-- F05 (workstream A): only once the server said self-hosted -->
+            {#if donationsVisible()}
+                <a
+                    href="https://www.buymeacoffee.com/librefolio"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-lf-hover transition-colors text-lf-donate focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
+                    data-testid="header-donate-link"
+                    title={$_('help.buyMeACoffee')}
+                >
+                    <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
+                    <Coffee size={20} class="flex-shrink-0" />
+                </a>
+            {/if}
             <PrivacyToggle />
             <ThemeToggle />
             <LanguageSelector onOpenChange={handleLanguageOpenChange} />

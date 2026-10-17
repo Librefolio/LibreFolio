@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
-import {beforeAll, describe, expect, it, vi, type Mock} from 'vitest';
+import {beforeAll, beforeEach, describe, expect, it, vi, type Mock} from 'vitest';
 import {fireEvent, render, screen, setupI18n} from '$test/component';
+import {instanceConfig, type InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import SupportActions from './SupportActions.svelte';
 import {BUY_ME_A_COFFEE_URL, SOCIAL_SHARE_CONFIG, SOCIAL_SHARE_ORDER, type SocialPlatform} from './supportLinks';
 
 type CoffeeHandler = () => void;
 type ShareHandler = (platform: SocialPlatform) => void;
+
+/** A self-hosted instance's answer to `GET /system/instance`: the only answer that shows the coffee (F05, lot A9). */
+const SELFHOSTED: InstanceConfig = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}};
 
 function mount(
     props: Partial<{
@@ -26,6 +30,15 @@ function mount(
 
 beforeAll(async () => {
     await setupI18n();
+});
+
+// F05 (lot A9): the coffee is drawn only once the server has answered self-hosted. These cases pin the component as a
+// self-hosted instance draws it — before the answer and on a managed instance it is SupportActions.managed.test.ts —,
+// so each starts from that answer: the real store, answered through its own `load`, with no request and no module mock.
+beforeEach(async () => {
+    await instanceConfig.load({force: true, fetchConfig: () => Promise.resolve(SELFHOSTED)});
+    expect(instanceConfig.loaded, 'precondition: the instance configuration has loaded').toBe(true);
+    expect(instanceConfig.config.profile, 'precondition: a self-hosted instance').toBe('selfhosted');
 });
 
 describe('SupportActions — support links', () => {

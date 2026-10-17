@@ -101,6 +101,7 @@
         "off": "The limit on failed sign-ins is off (LIBREFOLIO_LOGIN_LIMIT=off): passwords can be tried without pause. Turn it back on unless this is a test instance.",
         "invalid": "LIBREFOLIO_LOGIN_LIMIT is set to «{value}», which is neither on nor off: the server will not start with it."
       }
-    }
+    },
+    "askAdminToResetPassword": "Ask your administrator for a password-reset link: they can create one for your account."
   }
 }
