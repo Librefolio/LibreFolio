@@ -18,7 +18,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from backend.app.config.accounts import USERNAME_LENGTH_MESSAGE, USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, USERNAME_RESERVED_CHARACTER, USERNAME_RESERVED_MESSAGE
 from backend.app.db.models import AccountTokenPurpose, Broker, BrokerUserAccess, Transaction, User, UserRole, UserSettings
 from backend.app.db.session import begin_writes
-from backend.app.services.accounts import token_service
+from backend.app.services.accounts import token_service, whats_new_service
 from backend.app.services.accounts.auth_service import hash_password
 from backend.app.services.brim import brim_provider
 from backend.app.services.brokers.broker_service import BrokerService
@@ -311,6 +311,8 @@ async def create_user(
         hashed_password=await asyncio.to_thread(hash_password, password),
         is_active=is_active,
         is_superuser=is_superuser,
+        # A new account has seen every release up to the running one (C-54): no «What's new» for it
+        last_seen_version=whats_new_service.current_release(),
     )
 
     session.add(user)

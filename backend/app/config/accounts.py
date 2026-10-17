@@ -17,6 +17,14 @@ def donation_popup_disabled() -> bool:
     return os.environ.get("LIBREFOLIO_DISABLE_DONATION_POPUP", "").lower() in ("1", "true", "yes")
 
 
+def whats_new_disabled() -> bool:
+    """``LIBREFOLIO_DISABLE_WHATS_NEW``: ``1``, ``true`` or ``yes``, in any case, turns the «What's new» modal off (C-54).
+
+    Hidden, as the donation popup's (D-A7): ``dev.py server --test`` sets it on every test lane.
+    """
+    return os.environ.get("LIBREFOLIO_DISABLE_WHATS_NEW", "").lower() in ("1", "true", "yes")
+
+
 REGISTRATION_MODES: tuple[str, ...] = ("open", "invite", "disabled")
 
 
