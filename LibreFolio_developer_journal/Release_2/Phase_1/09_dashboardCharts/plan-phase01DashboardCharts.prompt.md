@@ -6193,3 +6193,29 @@ lotto restano una riga (i parametri della prima) più i chip. Perché non righe 
 4. ✅ 17/10 — **E2E** (`files/scripts/j53_e2e.sh`, corsia 6189, 16:53–17:08, prima spec dopo il carico a 5 minuti sotto
    50): `front-portfolio data-quality-real` 3/3, `data-quality-legacy` 1/1, `front-broker detail` 40/40. Porta libera.
 5. ⏳ CHECKPOINT READY al coordinatore, con la riga 🐛 del CHANGELOG; la riga J-53 del backlog la chiude lui.
+> **J-53 entrato** (17/10, 17:11): dev `fb6d58d17` (`c37c2bb1e`); CHANGELOG 🐛 e la riga J-53 chiusa in `38be2102b`. J
+> rilegge `lots_analysis_service.md` dopo, su richiesta del coordinatore.
+
+## Y-33 · `asset-detail.spec.ts`: la navigazione a freddo sotto carico (17/10)
+
+Voce mia (slot E2E di X-R59); review di X. Base `38be2102b`.
+- **Il difetto**: `goToSeededAssetDetail()` (`frontend/e2e/assets/asset-detail.spec.ts:107-114`, 28 chiamate) clicca la card
+  di Apple e dà 10 s alla radice `asset-detail-page`. Al picco di carico dopo la build un contesto nuovo importa a freddo il
+  bundle della pagina: «edit button opens asset modal» (`:240`) è caduto ancora sulla lista; da solo, verde in 4,1 s.
+- **La cura (forma decisa)**: dopo il clic, prima l'URL (`toHaveURL(/\/assets\/\d+(?:\?|$)/)`, tetto 30 s, messaggio che
+  dice «il clic sulla card porta alla pagina dell'asset»), poi la radice a 10 s come oggi. Nessun nuovo clic: un clic
+  perso deve fallire, e sul messaggio dell'URL.
+- **Passi**: 1. `test-author` scrive la riparazione (nessuna run); 2. prove leggere (`tsc` delle E2E, Prettier); 3. slot:
+   `front-asset asset-detail`; 4. CHECKPOINT READY, review di X.
+
+**Avanzamento.**
+1. ✅ 17/10 — **Riparazione** (`test-author` `b9253145`, due giri): `goToSeededAssetDetail()` divide l'attesa (URL 30 s, poi
+   la radice 10 s, ognuna col suo messaggio; paragrafo Y-33 nel docblock: in SvelteKit l'URL cambia dopo l'import del chunk
+   della rotta, `client.js:1568`, `:1685-1686`, `:1739`); lo stesso passaggio in riga del test della cache degli eventi
+   (`:8570-8577`, l'URL del suo asset); il commento di `:332` («~40 s») riscritto senza totali. +14/−3.
+   > **Note implementazione**: `tsc -p tsconfig.e2e.json` e Prettier puliti; `git diff --check` pulito.
+   > **⚠️ Fuori pista**: il timeout di default dei test (30 s, `playwright.config.ts:113`) fa da tetto anche all'attesa
+   > dell'URL nei test che non lo alzano; lasciato così (il guasto visto era l'attesa di 10 s), detto a X per la review.
+2. ✅ 17/10 — **E2E** (`files/scripts/y33_e2e.sh`, slot del coordinatore dalle 17:32, dopo B; partita alle 17:33 col carico
+   a 5 minuti sotto 50): `front-asset asset-detail` **39/39** in 3,5 min, fine alle 17:42. Porta 6189 libera.
+3. ⏳ CHECKPOINT READY al coordinatore (la spec e il giornale); review di X. Y-33 ✅ nel backlog.
