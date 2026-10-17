@@ -69,6 +69,15 @@ The backend builds one request-scoped `BuildContext`. Shared DB reports, prices,
 rates, FIFO results, signal results, and component envelopes are memoized so
 overlapping datasets do not repeat work.
 
+Before anything is built, `prepare_request()` bounds the requested period
+(R13-SEC7-1): it ends no later than `latest_range_end()` (tomorrow,
+`utils/datetime_utils.py`) and starts at most 100 calendar years before that end,
+never after it. Components walk the period day by day, and an unbounded one held
+the instance. The scope, every component, the bucket plan and the response meta
+(`exported_period`, `snapshot_as_of`, the FX `history_coverage.requested_period`)
+all read the bounded period; a request inside the bounds is unchanged, and no
+component contract changes.
+
 The profile/assembler runtime that preceded the component runtime during
 development was removed before release. The first released snapshot schema is V1
 (`AI_EXPORT_SCHEMA_VERSION = 1`), so there is no older schema to accept or migrate.

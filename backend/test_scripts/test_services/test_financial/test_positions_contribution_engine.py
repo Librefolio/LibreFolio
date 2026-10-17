@@ -138,6 +138,7 @@ from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import AssetPeriodContribution, PortfolioReportQuery, PortfolioSummary, PositionsContribution
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.portfolio_service import PortfolioService
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 from backend.test_scripts.test_utils import print_section, print_success
 
 EUR = "EUR"
@@ -654,6 +655,15 @@ _NO_COMPONENT_PERCENTS: dict[str, Decimal | None] = {
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the old-foreign-quote scenario lives in 2047, after tomorrow, so the range bound is lifted for the
+    whole module, before any fixture builds data (see ``lift_range_bound``)."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")

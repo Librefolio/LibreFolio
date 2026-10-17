@@ -78,6 +78,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -115,6 +116,9 @@ BASE_DATE = date(1991, 4, 8)
 # A provider code, as a refresh tags its rows (``_persist_refresh_item``). Only a provenance tag here:
 # nothing is fetched.
 PROVIDER = "yfinance"
+
+# The caller ``POST /assets/events`` is called with, directly: the route reads only its id, these requests never reach the P-10 filter, and 0 is no user's id.
+_CALLER = SimpleNamespace(id=0)
 
 
 def _day(offset: int) -> date:
@@ -548,13 +552,13 @@ async def test_the_events_endpoint_answers_400_event_too_many_digits(owned):
     """Red. Before: 200, the dividend stored. With the service refusing but no entry in ``_REFUSAL_STATUS``: 500.
 
     Contract: 400, ``detail.error_code`` EVENT_TOO_MANY_DIGITS, nothing written. The route function is
-    called as FastAPI calls it, minus HTTP: its dependencies given directly.
+    called as FastAPI calls it, minus HTTP: its dependencies given directly, the caller ``_CALLER``.
     """
     item = _event_item(owned.asset_id, [_event(0, "DIVIDEND", "0.1234567")])
     answer: HTTPException | None = None
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         try:
-            await events_api.upsert_events_bulk([item], session=session, _current_user=None)
+            await events_api.upsert_events_bulk([item], session=session, _current_user=_CALLER)
         except HTTPException as refusal:
             answer = refusal
     if answer is None:
@@ -973,13 +977,13 @@ async def test_the_events_endpoint_answers_400_for_an_event_beyond_12_integer_di
     """Red today: 200, the dividend of 1E+13 EUR stored.
 
     Contract (R13-SEC2): 400, ``detail.error_code`` EVENT_TOO_MANY_DIGITS, ``detail.params.max_integer_digits`` 12,
-    nothing written. The route function is called as FastAPI calls it, minus HTTP.
+    nothing written. The route function is called as FastAPI calls it, minus HTTP, the caller ``_CALLER``.
     """
     item = _event_item(owned.asset_id, [_event(0, "DIVIDEND", "1E+13")])
     answer: HTTPException | None = None
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         try:
-            await events_api.upsert_events_bulk([item], session=session, _current_user=None)
+            await events_api.upsert_events_bulk([item], session=session, _current_user=_CALLER)
         except HTTPException as refusal:
             answer = refusal
     if answer is None:
