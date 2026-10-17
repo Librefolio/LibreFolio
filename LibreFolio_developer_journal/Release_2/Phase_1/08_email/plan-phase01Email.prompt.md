@@ -6688,6 +6688,44 @@ non sposti il registro.
 >   Frontend: banner e selettore, i18n nelle 4 lingue. Test: services, api, Vitest.
 > - **La correzione** (A o C) e quella degli asset: un lotto medio.
 
+#### E-19b2.3 — Il codice ✅ (2026-10-17, 20:4x–21:0x; HEAD `2ab9a6859`)
+> I rossi nel commit `0e787dfb4`; il coordinatore ha portato dev `0897502a9` nel ramo: HEAD `2ab9a6859`
+> (`test_portfolio_api.py` fuso da solo). La regola delle coppie col trattino approvata.
+>
+> **Il codice**:
+> - `schemas/portfolio.py`: `IssueCode.NON_ISO_CURRENCY` dopo `QUOTE_IN_MINOR_UNIT`;
+> - `data_quality.py`:
+>   - i kwarg `non_iso_currency_assets` e `report_currency` dopo quello di Z, con la loro docstring;
+>   - la raccolta dei valori prima dei blocchi: i lati delle coppie (`_missing_pair_sides`: il suffisso
+>     `/<valuta del rapporto>`, poi `rpartition`, e nessun lato per una coppia senza `/`), gli asset tenuti (filtrati di
+>     nuovo con `is_canonical_iso_currency`, per prudenza), la valuta del rapporto;
+>   - `MISSING_FX_*` lavorano sulle sole coppie di codici ISO (`fixable_fx_pairs`); `missing_fx_pairs` del DTO resta
+>     la lista grezza;
+>   - una voce per valore dopo il blocco di Z, da `_non_iso_currency_issue`: un costruttore per ramo con la chiave
+>     letterale (lo vuole la scansione delle frasi), il resto in `**common`; un'unità minore (`minor_unit_factor`)
+>     senza codice né candidati;
+> - `portfolio_service.py`: la staticmethod `_non_iso_currency_assets` accanto a quella di Z; nelle due chiamate
+>   `non_iso_currency_assets=…` e `report_currency=base_currency`;
+> - i18n con `dev.py i18n add`, cartella `dataQuality`, 5 chiavi × 4 lingue, nello stile delle voci vicine (una riga con
+>   il trattino lungo). Le chiavi della valuta del rapporto nominano il campo vero della scheda, «Default Currency» /
+>   «Valuta Predefinita» / «Devise par défaut» / «Divisa predeterminada», in Settings › Preferences. Le generali dicono
+>   che le conversioni «possono mancare»: un vecchio tasso salvato con lo stesso codice non ISO convertirebbe ancora;
+> - `api sync` (DQN-04);
+> - docs: `developer/frontend/data-quality-banner.md` (la riga della tabella, la regola, le coppie mancanti, la
+>   riproduzione, i test) e `user/dashboard/index.en.md` (un paragrafo dopo quello dei pence, col rimando a
+>   `db currencies`).
+>
+> **Prove** (corsia 6188, carico sotto 50):
+> - il file puro **109 su 109**; Vitest DQN **8 su 8**;
+> - api `portfolio` **55** (i 2 nuovi compresi); services `roi-fifo-utils` **1 485** (tutto `test_financial/`, i lotti e
+>   il servizio del portafoglio compresi);
+> - statici (`files/tools/e19b2_static.sh s1`): ruff e black puliti (4 file), `i18n check`, Vitest 7 file **239**
+>   (banner, banner dei lotti e helper, ICU delle 4 lingue, porte HTML e colori), svelte-check 0 errori, `mkdocs build`
+>   stretto con 0 avvisi, `check-links` 97, `git diff --check` pulito; porta libera.
+>
+> **In mezzo, la revisione di C-54** (sola lettura, dev `630c478cd`): OK con due note, mandate al coordinatore
+> (`mark_seen` può tornare indietro dopo un downgrade; una pre-release conta come la sua release).
+
 #### E-19b2.2 — I rossi ✅ (2026-10-17, 20:1x–20:5x; `test-author` `d495e334`, HEAD `e84778677`)
 > Le LOW di H sono entrate (commit `e84778677`, dev `0897502a9`). Il coordinatore aggiorna la mia base solo dopo il
 > commit di questi rossi: dev ha toccato `test_portfolio_api.py`.
