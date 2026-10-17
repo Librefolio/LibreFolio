@@ -71,7 +71,8 @@
     },
     "notFound": "Asset n. {id} non trovato",
     "loadFailed": "Impossibile caricare i dati dell'asset",
-    "pricesLoadFailed": "Impossibile caricare i prezzi"
+    "pricesLoadFailed": "Impossibile caricare i prezzi",
+    "manualChip": "Manuale"
   },
   "assets": {
     "create": "Nuovo asset",
@@ -99,15 +100,16 @@
     },
     "delete": {
       "confirmQuestion": "Eliminare \"{name}\"?",
-      "confirmWarning": "Assegnazioni provider e storico prezzi verranno rimossi. ⚠️",
+      "confirmWarning": "Assegnazioni provider, storico prezzi ed eventi (dividendi, split…) verranno rimossi. ⚠️",
       "toastOk": "{name} eliminato",
       "toastFailed": "Impossibile eliminare {name}",
       "hasTransactions": "Impossibile eliminare \"{name}\": ha transazioni esistenti",
       "bulkOk": "{n} asset eliminati",
       "bulkPartial": "{failed} asset non eliminabili (hanno transazioni)",
-      "bulkConfirmMessage": "Eliminare {n} asset? Le assegnazioni dei provider e lo storico prezzi verranno rimossi.",
+      "bulkConfirmMessage": "Eliminare {n, plural, one {# asset} other {# asset}}? Le assegnazioni dei provider, lo storico prezzi e gli eventi (dividendi, split…) verranno rimossi.",
       "resultDeleted": "eliminato",
-      "resultHasTransactions": "ha transazioni esistenti"
+      "resultHasTransactions": "ha transazioni esistenti",
+      "itemsLabel": "{count, plural, one {# asset} other {# asset}}"
     },
     "merge": {
       "title": "Unisci asset",
@@ -345,7 +347,8 @@
         "github": "Apre una issue pubblica su GitHub con i dettagli di questa ricerca: rileggila prima di inviarla"
       },
       "reportCopied": "Dettagli della ricerca copiati: incollali nella pagina di supporto.",
-      "reportCopyFailed": "Impossibile copiare i dettagli della ricerca: descrivi la tua ricerca nella pagina di supporto."
+      "reportCopyFailed": "Impossibile copiare i dettagli della ricerca: descrivi la tua ricerca nella pagina di supporto.",
+      "failed": "La ricerca non è riuscita. Riprova."
     },
     "comparison": {
       "title": "Confronto Dati Provider",
