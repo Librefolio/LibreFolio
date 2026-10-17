@@ -310,10 +310,11 @@
     }
 
     function compactDelta(result: MeasurementResult): {
-        value: number;
+        value: number | null;
         label: string;
     } {
-        return measurementUnit === 'percentage-points' ? {value: result.deltaAbs, label: fmtDelta(result.deltaAbs)} : {value: result.deltaPct, label: fmtPct(result.deltaPct)};
+        if (measurementUnit === 'percentage-points') return {value: result.deltaAbs, label: fmtDelta(result.deltaAbs)};
+        return {value: result.deltaPct, label: result.deltaPct !== null ? fmtPct(result.deltaPct) : '—'};
     }
 
     function toggleExpand(id: string) {
@@ -333,13 +334,15 @@
         valueStart: number;
         valueEnd: number;
         deltaAbs: number;
-        deltaPct: number;
+        deltaPct: number | null;
         annualizedPct: number | null;
         days: number;
         isGhost?: boolean;
     }
 
-    function colorClass(v: number): string {
+    /** Gain/loss colour of a signed figure; neutral for «—», since `null >= 0` is true in JS. */
+    function colorClass(v: number | null): string {
+        if (v === null) return 'text-lf-muted';
         return v >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss;
     }
 
@@ -396,8 +399,8 @@
             id: 'deltaPct',
             header: () => $t('measure.table.deltaPct'),
             type: 'number',
-            cell: (r) => wrapGhost(`<span class="font-mono ${colorClass(r.deltaPct)}">${fmtPct(r.deltaPct)}</span>`, r.isGhost),
-            getValue: (r) => r.deltaPct,
+            cell: (r) => (r.deltaPct !== null ? wrapGhost(`<span class="font-mono ${colorClass(r.deltaPct)}">${fmtPct(r.deltaPct)}</span>`, r.isGhost) : {type: 'html', html: '<span class="text-lf-muted">—</span>'}),
+            getValue: (r) => r.deltaPct ?? 0,
             sortable: true,
             filterable: true,
             width: 80,
@@ -562,7 +565,7 @@
                                 📏 {measure.params.startDate} → {measure.params.endDate}
                                 {#if result}
                                     {@const delta = compactDelta(result)}
-                                    <span class={delta.value >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}>
+                                    <span class={colorClass(delta.value)}>
                                         {delta.label}
                                     </span>
                                     <span class="text-lf-muted">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
@@ -575,7 +578,7 @@
                             {#if result}
                                 {@const delta = compactDelta(result)}
                                 <div class="flex items-center gap-2 shrink-0 {isExpanded ? '' : 'hidden'}">
-                                    <span class="text-xs font-mono shrink-0 {delta.value >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
+                                    <span class="text-xs font-mono shrink-0 {colorClass(delta.value)}">
                                         {delta.label}
                                     </span>
                                     <span class="text-xs font-mono text-lf-muted shrink-0">· {result.days}d</span>

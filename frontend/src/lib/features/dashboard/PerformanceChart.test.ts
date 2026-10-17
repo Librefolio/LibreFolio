@@ -185,6 +185,25 @@ type ChartProps = ComponentProps<typeof PerformanceChart>;
 const decimal = (value: number) => value.toFixed(2);
 
 /**
+ * `period_pnl_percent` as the backend sends it: `period_pnl / |start_value|`, four decimals. The fixture positions
+ * below carry it; at the one decimal the chart prints, it reads as the chart's own division of the net by the start
+ * value did, so the cases that read a net's return hold whichever of the two the chart takes. The P4 describe at the
+ * end of the file pins which.
+ */
+const periodReturn = (net: number, start: number) => (net / Math.abs(start)).toFixed(4);
+
+/**
+ * The four component fractions as the backend sends them (MF-P4b): `period_unrealized_delta_percent`,
+ * `period_realized_gain_loss_percent`, `period_income_percent` and `period_fees_taxes_percent`, each the component over
+ * `|start_value|`, rounded to four decimals as `period_pnl_percent` is, the costs one positive like `period_fees_taxes`.
+ * Checked by hand on both fixture positions: no rounding boundary lies between a fraction and the chart's own division of
+ * its component by the start value, so at the one decimal the tooltip prints both read EUR +28.6%, +18.3%, +7.4% and, the
+ * costs shown negative, −1.1%; CHF −19.0%, then 0.0% three times. The cases that read a component's return therefore hold
+ * whichever of the two the chart takes; the P4 describe at the end of the file pins which.
+ */
+const componentReturn = (component: number, start: number) => periodReturn(component, start);
+
+/**
  * One EUR position whose four components add up to its net, plus one other period effect, so the
  * chart draws both row kinds (and the section row between them).
  *
@@ -207,6 +226,11 @@ const EUR_ASSET = {
     period_income: decimal(EUR_POSITION.income),
     period_fees_taxes: decimal(EUR_POSITION.feesTaxes),
     period_pnl: decimal(EUR_POSITION.net),
+    period_pnl_percent: periodReturn(EUR_POSITION.net, EUR_POSITION.start),
+    period_unrealized_delta_percent: componentReturn(EUR_POSITION.unrealized, EUR_POSITION.start),
+    period_realized_gain_loss_percent: componentReturn(EUR_POSITION.realized, EUR_POSITION.start),
+    period_income_percent: componentReturn(EUR_POSITION.income, EUR_POSITION.start),
+    period_fees_taxes_percent: componentReturn(EUR_POSITION.feesTaxes, EUR_POSITION.start),
     start_value: decimal(EUR_POSITION.start),
     end_value: decimal(EUR_POSITION.end),
     is_fully_sold: false,
@@ -232,6 +256,11 @@ const CHF_ASSET = {
     period_income: decimal(0),
     period_fees_taxes: decimal(0),
     period_pnl: decimal(CHF_POSITION.net),
+    period_pnl_percent: periodReturn(CHF_POSITION.net, CHF_POSITION.start),
+    period_unrealized_delta_percent: componentReturn(CHF_POSITION.net, CHF_POSITION.start),
+    period_realized_gain_loss_percent: componentReturn(0, CHF_POSITION.start),
+    period_income_percent: componentReturn(0, CHF_POSITION.start),
+    period_fees_taxes_percent: componentReturn(0, CHF_POSITION.start),
     start_value: decimal(CHF_POSITION.start),
     end_value: decimal(CHF_POSITION.end),
     is_fully_sold: false,
@@ -965,5 +994,197 @@ describe('PerformanceChart figures in the interface language (M-18)', () => {
         const beforeEnglish = chart.setOptionCalls.length;
         await switchLanguage('en');
         expect(figuresOf(await fullOptionAfter(chart, beforeEnglish)), 'it → en in place — today’s text again').toEqual(ENGLISH);
+    });
+});
+
+// =============================================================================
+// R17 / W8 / P4 — the returns are the backend's: period_pnl_percent, then the component fractions (MF-P4b)
+// =============================================================================
+
+/**
+ * R17 / W8 / P4: the return printed beside a position's net P&L is `period_pnl_percent`, the backend's (MF-P).
+ *
+ * `AssetPeriodContribution.period_pnl_percent` is `period_pnl / |start_value|`, four decimals, null when the
+ * position had no value at the start. The chart writes it ×100 in two places: after the net label drawn at the
+ * end of the row (`net-labels`), and after the amount of the tooltip's Period P&L row. It divides nothing itself:
+ * a null or absent return prints no return at all, not the division the chart used to make.
+ *
+ * Fixture: one position opening at 1 000 with a net of 50 — the chart's own division would print +5.0% — and a
+ * `period_pnl_percent` of 0.07, so the printed return names its source. Its four components (40, 0, 13, −3) add
+ * up to the net, and none of their returns reads 5.0% or 7.0%. Only the net is the subject of these cases: the probe
+ * sends no component fraction, and they read no component row. The component rows (MF-P4b) have the nested describe
+ * at the end, on a probe of their own.
+ *
+ * Read: the net label through the series' own `renderItem`, and the tooltip row whose amount is the net — found by
+ * that amount, never by its translated caption. The literals are en-US, the interface locale each case checks.
+ */
+describe('PerformanceChart net return from period_pnl_percent (R17 / W8 / P4)', () => {
+    const NET = 50;
+    const RETURN_PROBE = {
+        asset_id: 4303,
+        asset_name: 'Return Probe Equity',
+        asset_type: 'STOCK',
+        broker_id: 7,
+        broker_name: 'Probe Broker',
+        period_unrealized_delta: '40',
+        period_realized_gain_loss: '0',
+        period_income: '13',
+        period_fees_taxes: '3',
+        period_pnl: '50',
+        start_value: '1000',
+        end_value: '1050',
+        is_fully_sold: false,
+    };
+
+    /** The probe with `period_pnl_percent` given — a string or null — or absent (`undefined`: the key left out). */
+    function probeProps(periodPnlPercent: string | null | undefined): ChartProps {
+        const position = periodPnlPercent === undefined ? RETURN_PROBE : {...RETURN_PROBE, period_pnl_percent: periodPnlPercent};
+        return {positions: [position], otherEffects: [], displayCurrency: 'EUR'};
+    }
+
+    /** The value cell of the tooltip's Period P&L row: the one row whose amount is the net. */
+    function periodPnlCell(option: FullOption): string {
+        const template = document.createElement('template');
+        template.innerHTML = tooltipOf(option, RETURN_PROBE.asset_name);
+        const amount = `+${plainAmount(NET)}${EUR_TAIL}`;
+        const cells = [...template.content.querySelectorAll('b')].map((cell) => (cell.textContent ?? '').trim()).filter((text) => text.startsWith(amount));
+        if (cells.length !== 1) throw new Error(`expected one tooltip row valued "${amount}", found ${cells.length}`);
+        return cells[0];
+    }
+
+    /** The return a text ends with — what `(±x.x%)` holds — or null when it ends with none. */
+    const trailingReturn = (text: string): string | null => /\(([^()]*%)\)$/.exec(text)?.[1] ?? null;
+
+    beforeEach(() => {
+        expect(isPrivacyEnabled(), 'control: privacy is off').toBe(false);
+        expect(uiLocale(), 'control: the interface locale the literals are written in').toBe('en-US');
+    });
+
+    it('prints period_pnl_percent beside the net, on its label and in its tooltip row — not period_pnl / start_value', async () => {
+        const option = latestFullOption(await mountChart(probeProps('0.07')));
+
+        expect({label: netLabelOf(option, RETURN_PROBE.asset_name), tooltip: trailingReturn(periodPnlCell(option))}).toEqual({label: '+€50 (+7.0%)', tooltip: '+7.0%'});
+    });
+
+    it.each(['null', 'absent'] as const)('prints no return beside the net when period_pnl_percent is %s, though start_value would give one', async (how) => {
+        const option = latestFullOption(await mountChart(probeProps(how === 'null' ? null : undefined)));
+        // Everything the Period P&L row prints after the net's signed amount. `periodPnlCell` found the row by this very
+        // amount, built the same way, so the cell starts with it.
+        const netAmount = `+${plainAmount(NET)}${EUR_TAIL}`;
+        const tooltipAfterAmount = periodPnlCell(option).slice(netAmount.length).trim();
+
+        // The label and the row are drawn with their amount (the label exactly, the row found by it), and nothing follows it
+        // in either: no return, and no stand-in for one, such as `(—)` or `(0.0%)`.
+        expect({label: netLabelOf(option, RETURN_PROBE.asset_name), tooltipAfterAmount}).toEqual({label: '+€50', tooltipAfterAmount: ''});
+    });
+
+    /**
+     * MF-P4b: each of the tooltip's four component rows prints the backend's own fraction beside its amount.
+     *
+     * `period_unrealized_delta_percent`, `period_realized_gain_loss_percent`, `period_income_percent` and
+     * `period_fees_taxes_percent` are each the component over `|start_value|`, rounded to four decimals as
+     * `period_pnl_percent` is, and null when the start value is null or 0 or when the component is null. Their sum may
+     * differ from `period_pnl_percent` in the last digit, so no return is rebuilt from the others. The costs fraction is
+     * positive, like `period_fees_taxes`, and the costs row shows it negative, as it shows the costs money. The chart
+     * writes each fraction ×100 at one decimal and divides nothing itself: a null or absent fraction leaves its row with
+     * the amount alone, not with the division the chart used to make.
+     *
+     * Fixture: one position opening at 1 000 — components 20, −7 (a realized loss), 5 and costs of 2, net 16 — whose
+     * fractions are set apart from the chart's own division of each amount: 0.03 reads +3.0% where the division reads
+     * +2.0%, −0.011 reads −1.1% for −0.7%, 0.009 reads +0.9% for +0.5%, and the costs' 0.004 reads −0.4% for −0.2%. The
+     * loss is there to show that only the costs fraction is negated. The net row is not read here: the cases above pin it.
+     *
+     * Read: what each component row prints after its amount — the row found by that amount, never by its translated
+     * caption. The whole rest of the value cell is read, so a `(—)` or a `(0.0%)` where no return belongs fails too.
+     */
+    describe('component returns from their own fractions (MF-P4b)', () => {
+        /** The four components as the tooltip shows them: the costs negative, though `period_fees_taxes` is sent positive. */
+        const SHOWN = {unrealized: 20, realized: -7, income: 5, costs: -2};
+        type Component = keyof typeof SHOWN;
+        const START = 1000;
+        const COMPONENT_NET = SHOWN.unrealized + SHOWN.realized + SHOWN.income + SHOWN.costs;
+
+        const COMPONENT_PROBE = {
+            asset_id: 4304,
+            asset_name: 'Component Return Probe',
+            asset_type: 'STOCK',
+            broker_id: 7,
+            broker_name: 'Probe Broker',
+            period_unrealized_delta: decimal(SHOWN.unrealized),
+            period_realized_gain_loss: decimal(SHOWN.realized),
+            period_income: decimal(SHOWN.income),
+            period_fees_taxes: decimal(-SHOWN.costs),
+            period_pnl: decimal(COMPONENT_NET),
+            period_pnl_percent: periodReturn(COMPONENT_NET, START),
+            start_value: decimal(START),
+            end_value: decimal(START + COMPONENT_NET),
+            is_fully_sold: false,
+        };
+
+        /** The fractions the backend sends for the probe, four decimals, each set apart from the division (see above). */
+        const FRACTIONS = {
+            period_unrealized_delta_percent: '0.0300',
+            period_realized_gain_loss_percent: '-0.0110',
+            period_income_percent: '0.0090',
+            period_fees_taxes_percent: '0.0040',
+        };
+        type Fraction = keyof typeof FRACTIONS;
+
+        /** What the backend sends on a position whose start value is 0. */
+        const NO_FRACTIONS: Record<Fraction, null> = {
+            period_unrealized_delta_percent: null,
+            period_realized_gain_loss_percent: null,
+            period_income_percent: null,
+            period_fees_taxes_percent: null,
+        };
+
+        /** The probe with `fields` laid over it: a field given a string or null is sent so, a fraction left out is absent. */
+        function componentProbeProps(fields: Partial<Record<Fraction | 'period_pnl_percent' | 'start_value', string | null>>): ChartProps {
+            const position = {...COMPONENT_PROBE, ...fields};
+            return {positions: [position], otherEffects: [], displayCurrency: 'EUR'};
+        }
+
+        /**
+         * What each component row prints after its amount, trimmed: `(±x.x%)`, or '' when it prints nothing more. A row is
+         * the one value cell of the tooltip that starts with its signed amount. No amount of the probe is zero, so each
+         * carries a sign, and no other cell starts with one of them: the net is +16, the start and end values are unsigned.
+         */
+        function componentSuffixes(option: FullOption): Record<Component, string> {
+            const template = document.createElement('template');
+            template.innerHTML = tooltipOf(option, COMPONENT_PROBE.asset_name);
+            const cells = [...template.content.querySelectorAll('b')].map((cell) => (cell.textContent ?? '').trim());
+            const suffix = (value: number): string => {
+                const amount = `${value > 0 ? '+' : '-'}${plainAmount(value)}${EUR_TAIL}`;
+                const rows = cells.filter((text) => text.startsWith(amount));
+                if (rows.length !== 1) throw new Error(`expected one tooltip row valued "${amount}", found ${rows.length}`);
+                return rows[0].slice(amount.length).trim();
+            };
+            return {unrealized: suffix(SHOWN.unrealized), realized: suffix(SHOWN.realized), income: suffix(SHOWN.income), costs: suffix(SHOWN.costs)};
+        }
+
+        it("prints each component's own fraction beside its amount, the costs one negated — not the component / start_value division", async () => {
+            const expected = {unrealized: '(+3.0%)', realized: '(-1.1%)', income: '(+0.9%)', costs: '(-0.4%)'};
+            // Precondition: the chart's own division would print another return on every row, so each expectation names its source.
+            for (const key of Object.keys(SHOWN) as Component[]) expect(`(${returnPct(SHOWN[key], START)})`, `${key}, divided`).not.toBe(expected[key]);
+            const option = latestFullOption(await mountChart(componentProbeProps(FRACTIONS)));
+
+            expect(componentSuffixes(option)).toEqual(expected);
+        });
+
+        it.each(['null', 'absent'] as const)('prints a component row with its amount and no return when its fraction is %s, though start_value would give one — the rows beside it print theirs', async (how) => {
+            // Realized, printed with its own sign, and costs, the one fraction the chart negates, lose theirs; unrealized and income keep theirs.
+            const missing = how === 'null' ? {period_realized_gain_loss_percent: null, period_fees_taxes_percent: null} : {};
+            const option = latestFullOption(await mountChart(componentProbeProps({period_unrealized_delta_percent: FRACTIONS.period_unrealized_delta_percent, period_income_percent: FRACTIONS.period_income_percent, ...missing})));
+
+            expect(componentSuffixes(option)).toEqual({unrealized: '(+3.0%)', realized: '', income: '(+0.9%)', costs: ''});
+        });
+
+        it('control, green before and after: with start_value 0 and every fraction null, each component row prints its amount and no return', async () => {
+            // Not a red. Today the chart prints no return on a start value that is not above 0, and the backend then sends
+            // every fraction null: this pins that reading the fractions leaves those rows bare.
+            const option = latestFullOption(await mountChart(componentProbeProps({start_value: '0', period_pnl_percent: null, ...NO_FRACTIONS})));
+
+            expect(componentSuffixes(option)).toEqual({unrealized: '', realized: '', income: '', costs: ''});
+        });
     });
 });

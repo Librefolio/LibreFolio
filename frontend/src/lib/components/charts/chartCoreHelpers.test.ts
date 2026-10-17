@@ -4577,6 +4577,52 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(aggregateMetric(values, 'weekly', [weekBucket], week).values).toEqual([5]);
             });
 
+            it("aggregateMetric keeps the last value a weekly bucket holds when the line stops mid-week, drawn on the bucket's own date — not a gap", () => {
+                // Why (Y-2): a broker line that leaves the scope on Wednesday: values Mon–Wed, null Thu–Fri.
+                // aggregateLineSeries dates the week on its last point with a value (Wed), the bucket stands on
+                // the last day the history holds (Fri), and the lookup by bucket.date found nothing: a gap, where
+                // the ladder's ladderLast keeps 30. The point stays on Friday, with every other series of the entry.
+                const result = aggregateMetric([10, 20, 30, null, null], 'weekly', [weekBucket], week);
+
+                expect(result.values).toEqual([30]);
+                expect(result.points).toEqual([{name: '2026-01-09', value: ['2026-01-09', 30], bucketStart: '2026-01-05', bucketEnd: '2026-01-11', resolution: 'weekly'}]);
+            });
+
+            it('aggregateMetric leaves a week where the line has no value a gap — the last value of the week it left is never carried into the next', () => {
+                // Why (Y-2): the other half. The value is the last one inside the SAME calendar week (bucketEnd),
+                // so a week where the line has none stays a real gap: the 30 of the week it left is never carried
+                // into the next one, as a lookup of the last value on or before bucket.date would do.
+                const nextWeek = ['2026-01-12', '2026-01-13', '2026-01-14', '2026-01-15', '2026-01-16'];
+                const nextWeekBucket: BucketInfo = {date: '2026-01-16', bucketStart: '2026-01-12', bucketEnd: '2026-01-18', resolution: 'weekly'};
+                const result = aggregateMetric([10, 20, 30, null, null, ...nextWeek.map(() => null)], 'weekly', [weekBucket, nextWeekBucket], [...week, ...nextWeek]);
+
+                expect(result.values).toEqual([30, null]);
+                expect(result.points.map((point) => point.value)).toEqual([
+                    ['2026-01-09', 30],
+                    ['2026-01-16', null],
+                ]);
+            });
+
+            it("aggregateMetric keeps the last value a monthly bucket holds when the line stops before the history's last day of the month", () => {
+                // Why (Y-2): the same lookup serves the months. The bucket is the product's: buildResolutionData
+                // builds it with growthChartData's buildBucketInfos (the one imported at the top is the lot chart's).
+                // The history stops on the 28th, so the point stands on 01-28 and the month ends on 01-31 — neither
+                // is the 20th, the line's last value.
+                const days = isoDays('2026-01-01', 28); // Thu 01-01 … Wed 01-28: January, still running
+                const reachesThe28th = days.map((_, index) => 100 + index);
+                const leavesOnThe20th = days.map((_, index) => (index < 20 ? 100 + index : null));
+                const {buckets} = buildResolutionData(growthInputs(days), 'monthly');
+                // The precondition the case is about: one month, standing on a day after the line's last value.
+                expect(buckets).toEqual([{date: '2026-01-28', bucketStart: '2026-01-01', bucketEnd: '2026-01-31', resolution: 'monthly'}]);
+                // Positive control: a line that reaches the 28th reads it, so the bucket itself is sound.
+                expect(aggregateMetric(reachesThe28th, 'monthly', buckets, days).values).toEqual([127]);
+
+                const result = aggregateMetric(leavesOnThe20th, 'monthly', buckets, days);
+
+                expect(result.values).toEqual([119]); // 01-20's value
+                expect(result.points).toEqual([{name: '2026-01-28', value: ['2026-01-28', 119], bucketStart: '2026-01-01', bucketEnd: '2026-01-31', resolution: 'monthly'}]);
+            });
+
             it('wires each of the six sparse $derived alignments in GrowthChart.svelte to its own prop and Currency field, through the one alignFlowToDates', () => {
                 // Why (re-pin, FE6a): the six identical "absent date -> 0" bodies became one export,
                 // alignFlowToDates, run for real above. What stayed in the component is the wiring —

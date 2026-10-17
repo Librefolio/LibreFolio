@@ -136,6 +136,7 @@ RestoreErrorCode = Literal[
     "no_space",
     "stage_failed",
     "database_damaged",
+    "database_foreign_objects",
     "manifest_mismatch",
     "head_unknown",
     "revision_missing",

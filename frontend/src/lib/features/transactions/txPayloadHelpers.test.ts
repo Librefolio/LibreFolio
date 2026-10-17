@@ -112,6 +112,36 @@ describe('applySign', () => {
     });
 });
 
+/**
+ * C-97b — the magnitude the bulk editor shows for a row whose type carries a negative sign.
+ *
+ * TransactionBulkModal's `fieldsFromTx` turns a negative-rule quantity or cash into a magnitude with
+ * `String(Math.abs(Number(x)))`, and Number writes a satoshi `-0.00000001` as `1e-8` — in the cell
+ * and in the payload. The lot proposed a new `absDecimal(value)` helper; this module already has
+ * one that does exactly that without Number: `applySign(value, 'positive')` hands back the magnitude
+ * with its digits as written (and `exactDecimalSign` classifies the sign, if the condition needs it).
+ * The pins are on THAT helper, so the cure reuses it instead of adding a duplicate.
+ *
+ * Guard: green today. The helper is right; what is wrong is the bulk modal not calling it, and
+ * `fieldsFromTx` is private to TransactionBulkModal.svelte, out of reach of this unit test.
+ */
+describe('applySign(…, positive) — the magnitude of a negative-rule row in the bulk editor (C-97b)', () => {
+    it.each([
+        ['-0.00000001', '0.00000001'],
+        ['-123.4500', '123.4500'],
+        ['0.1234567891', '0.1234567891'],
+        ['-0', '0'],
+        ['0', '0'],
+        ['12', '12'],
+        ['-1234567.123', '1234567.123'],
+    ])('%j reads %j: the digits as written, never exponent notation', (value, expected) => {
+        const magnitude = applySign(value, 'positive');
+
+        expect(magnitude, `the magnitude of ${value}`).toBe(expected);
+        expect(magnitude, 'no exponent notation, which Number writes below 1e-6').not.toMatch(/e/i);
+    });
+});
+
 describe('exactDecimalSign', () => {
     it.each(['1', '+1', '0001.230000', '.000001', '999999999999.123456'])('classifies %j as positive', (value) => {
         expect(exactDecimalSign(value)).toBe(1);
