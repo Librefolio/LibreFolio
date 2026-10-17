@@ -446,4 +446,18 @@ Sono tutti locali: la push la fa il developer.
 | 354 | 17/10 18:36 | X-R66 probe rate limit i18n (A) | `e50c23919` |
 | 355 | 17/10 18:36 | docs(changelog,journal): X-R66 probe limit | `c5b9cca75` |
 | 356 | 17/10 18:46 | MF-A9 open received rows | `130002b5c` |
+| 357 | 17/10 19:00 | X-R46 data editors name refused values | `2c43ac451` |
+| 358 | 17/10 19:15 | H-43 phase 1: managed test lane, CSP collector | `d3212e9f2` |
+| 359 | 17/10 19:15 | H-43 runner tests (follow-up) | `a6adb0066` |
+| 360 | 17/10 19:16 | MF-A7 dust residual not an open lot | `09d29671d` |
+| 361 | 17/10 19:17 | W-B70 field error params, merge limit (+ W-B77, W-B73) | `41335f1e1` |
+| 362 | 17/10 19:30 | J-21 signal gaps, J-16, docs batch J-18/J-23/J-38 | `78e2171ee` |
+| 363 | 17/10 19:32 | docs(skills): wiki-file example matches RealDecimal | `67c9e27cd` |
+| 364 | 17/10 19:41 | Y-24 bounded lazy report retries | `ad5104c4f` |
+| 365 | 17/10 19:45 | C-97c-4 weak-currency FX rate digits (X) | `e414edf0b` |
+| 366 | 17/10 19:46 | MF-J45c L2 report sharing guard | `ab74aafbf` |
+| 367 | 17/10 19:54 | E-19b1 non-ISO currency suggestions, restore warning | `1742aaaaa` |
+| 368 | 17/10 19:56 | A-11/A-16/A-40/A-26 accounts fixes | `250031cd1` |
+| 369 | 17/10 19:58 | A journal: A-54..A-58 filed | `fe42c9a2f` |
+| 370 | 17/10 20:00 | W-B48 testid selectors, W-B51 BRIM quantity duplicates | `4bc6b2ab1` |
 | — | 17/10 00:05–00:45 | Colori: AF file, media e menu `9d3607eb6`; T `CompactCashCell` `b58108665` | — |
