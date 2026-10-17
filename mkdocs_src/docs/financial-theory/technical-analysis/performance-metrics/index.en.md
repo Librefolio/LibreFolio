@@ -25,7 +25,7 @@ Aggregate, WAC-based accounting for the whole portfolio (or any broker/asset sco
 
 | Metric / Concept | Description |
 |------------------|-------------|
-| **[Portfolio Engine Overview](portfolio-engine/index.md)** | Complete mathematical model: unified price resolver, WAC, aggregation, 3-pool model, contribution, pre-frame/frame architecture. |
+| **[Portfolio Engine Overview](portfolio-engine/index.md)** | Complete mathematical model: unified price resolver, WAC, aggregation, 3-pool model, contribution, one daily replay. |
 | **[Price Resolution](portfolio-engine/price-resolution.md)** | Unified resolver tiers: MARKET → TRADE_AVG → CARRIED → MISSING, with native marks and per-date FX. |
 | **[Net Asset Value (NAV)](portfolio-engine/nav.md)** | Total market valuation of the portfolio (assets + cash + in-transit), using the unified resolver. |
 | **[Book Value](portfolio-engine/book-value.md)** | Historical accounting cost of open positions (WAC × qty) plus cash. Difference from NAV = unrealized P&L. |

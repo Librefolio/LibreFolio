@@ -63,7 +63,7 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
 | `transactions.quantity` | `RealDecimal(22, 10)` | 10 | 15 |
 | `price_history`: `open`, `high`, `low`, `close`, `adjusted_close`; `transactions.cost_basis_override`, a per-unit price | `RealDecimal(24, 12)` | 12 | 12 |
 | `transactions.amount`, `asset_events.value` | `RealDecimal(18, 6)` | 6 | 15 for the amount, 12 for the event value |
-| `fx_rates.rate` | `Numeric(24, 10)` | 10 | not checked |
+| `fx_rates.rate` | `Numeric(24, 10)` | 10 | 14 |
 | `price_history.volume` | `Numeric(24, 0)` | 0 | 24 |
 
 - **Read.** `Numeric` reads through `'%.<scale>f'`: at scale 6, `0.12345678` reads
@@ -93,7 +93,8 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   0.000005 from what 1.2 read with 10 digits before the point, about ten times more for
   each further one. The `Numeric` columns have neither guard: `price_history.volume` and
   `fx_rates.rate` store a value past a double's range as ±inf without an error, and read a
-  stored ±inf back as `Decimal('Infinity')`, not `None`.
+  stored ±inf back as `Decimal('Infinity')`, not `None`. The FX writers no longer send such a
+  rate, and the conversions skip one already stored (X-R38, below).
 - **Input limits.** A value sent in — a transaction's quantity, cash amount or per-unit
   cost basis (manual, or the one a promotion resolves), a manual price or event value —
   over its column's decimal places, over 15 significant digits, or over its column's
@@ -122,6 +123,21 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   plugin rounds a value it computes, never one it reads from the file, with
   `round_computed_value()` (see
   [Decimal places](../patterns/brim_plugin_guide.md#decimal-places)).
+- **Exchange rates.** `fx_rates.rate` keeps 10 decimal places and 14 digits before the point
+  (X-R38, the FX side of W-B58). `storable_fx_rate()` gives a rate as the column keeps it
+  (`truncate_fx_rate()`, rounded down), or `None` when it is not finite, has more than 14 digits
+  before the point, or is 0 once truncated (below `1E-10`): a rate is never 0, since its inverse
+  and the conversions divide by it. It also refuses a rate whose double, once truncated, reaches
+  `1E+14` (X-R50): `99999999999999.995` has 14 digits before the point, but SQLite would store it
+  as `1E+14`, which the reads skip. It counts the digits as `decimal_limit_issue()` does, so
+  `1E+1000000` and `1E-2000000` are refused, never an overflow or a zero; decimals are never
+  refused. A manual rate (`POST /api/v1/fx/currencies/rate`) is checked as it will be stored, its
+  pair in alphabetical order and the rate inverted when needed, and refused naming its pair, date
+  and the limits; a provider's rate is skipped, with one warning per pair; the conversions read
+  only the rates from `1E-10` up to below `1E+14` (`usable_fx_rate_bounds()`), so an infinite, 0
+  or 20-digit rate an older release stored is a missing rate. See
+  [FX Configuration & Routing](../../backend/fx/configuration.md#chain-dates-writes-and-counters)
+  and [FX Architecture](../../backend/fx/architecture.md#convert-bulk-window).
 - **Never `SUM` in SQL.** A `SUM` adds the stored doubles, not the decimals. Sum the values
   read back in Python, with `financial_math` (`position_quantities()`, `native_balances()`),
   as the [balance queries](../../backend/transactions/service.md#balance-queries) do.

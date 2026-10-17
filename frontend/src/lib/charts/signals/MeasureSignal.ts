@@ -16,6 +16,12 @@ import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {ChartSignal, type SignalParamDescriptor, type SignalStyle} from './ChartSignal';
 import {SIGNAL_COLORS} from '$lib/theme/chartTheme';
 
+/**
+ * The shortest span the ruler annualises, in days: the floor of the backend home (`_MIN_ANNUALIZATION_DAYS` in
+ * backend/app/services/financial_math/returns.py, held to it by a parity test). Shorter spans show «—» for Δ%/yr.
+ */
+export const MIN_ANNUALIZATION_DAYS = 30;
+
 /** Computed measurement values between two points */
 export interface MeasurementResult {
     startDate: string;
@@ -23,9 +29,29 @@ export interface MeasurementResult {
     startValue: number;
     endValue: number;
     deltaAbs: number;
-    deltaPct: number;
+    /** null when the span opens at zero: the move is unknown, not 0 % */
+    deltaPct: number | null;
     days: number;
-    annualizedPct: number;
+    /** null under MIN_ANNUALIZATION_DAYS, without a Δ%, for a line that changes sign, or when not finite */
+    annualizedPct: number | null;
+}
+
+/** The change in %, or null when the span opens at zero: the move is then unknown, not 0 %. */
+function changePct(startValue: number, endValue: number): number | null {
+    return startValue !== 0 ? ((endValue - startValue) / startValue) * 100 : null;
+}
+
+/**
+ * The change compounded to a year, (1 + Δ%/100)^(365/days) − 1, in %. null under the floor, without a Δ%, for a line
+ * that changes sign (a negative growth factor has no compounded rate) and when the result is not finite. A fall to
+ * exactly zero keeps its −100 %/yr.
+ */
+function annualizedChangePct(deltaPct: number | null, days: number): number | null {
+    if (deltaPct === null || days < MIN_ANNUALIZATION_DAYS) return null;
+    const growth = 1 + deltaPct / 100;
+    if (growth < 0) return null;
+    const annualized = (Math.pow(growth, 365 / days) - 1) * 100;
+    return Number.isFinite(annualized) ? annualized : null;
 }
 
 export class MeasureSignal extends ChartSignal {
@@ -102,10 +128,9 @@ export class MeasureSignal extends ChartSignal {
         if (!start || !end || start.missing || end.missing) return null;
 
         const deltaAbs = end.value - start.value;
-        const deltaPct = start.value !== 0 ? (deltaAbs / start.value) * 100 : 0;
+        const deltaPct = changePct(start.value, end.value);
         const days = ChartSignal.daysBetween(startDate, endDate);
-        // Annualized: (1 + deltaPct/100)^(365/days) - 1, as %
-        const annualizedPct = days > 0 ? (Math.pow(1 + deltaPct / 100, 365 / days) - 1) * 100 : 0;
+        const annualizedPct = annualizedChangePct(deltaPct, days);
 
         return {
             startDate,
@@ -123,7 +148,7 @@ export class MeasureSignal extends ChartSignal {
      * Get measurement for a specific signal's data at the measure's date range.
      * Used by MeasurePanel's summary table to show values for all visible signals.
      */
-    getMeasurementForSignal(signalData: LineDataPoint[]): {startValue: number; endValue: number; deltaAbs: number; deltaPct: number; annualizedPct: number} | null {
+    getMeasurementForSignal(signalData: LineDataPoint[]): {startValue: number; endValue: number; deltaAbs: number; deltaPct: number | null; annualizedPct: number | null} | null {
         const startDate = String(this.params.startDate || '');
         const endDate = String(this.params.endDate || '');
         if (!startDate || !endDate) return null;
@@ -133,9 +158,8 @@ export class MeasureSignal extends ChartSignal {
         if (!start || !end || start.missing || end.missing) return null;
 
         const deltaAbs = end.value - start.value;
-        const deltaPct = start.value !== 0 ? (deltaAbs / start.value) * 100 : 0;
-        const days = ChartSignal.daysBetween(startDate, endDate);
-        const annualizedPct = days > 0 ? (Math.pow(1 + deltaPct / 100, 365 / days) - 1) * 100 : 0;
+        const deltaPct = changePct(start.value, end.value);
+        const annualizedPct = annualizedChangePct(deltaPct, ChartSignal.daysBetween(startDate, endDate));
         return {startValue: start.value, endValue: end.value, deltaAbs, deltaPct, annualizedPct};
     }
 }

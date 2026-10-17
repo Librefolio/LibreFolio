@@ -887,7 +887,7 @@ def _signed_income_tx(tx_id: int, day: str, tx_type: str, amount: str, *, asset_
 class TestFlowsPortedFromTheEngine:
     """The engine accumulator tests that F-2 retired from the builder, asked of the module: same histories, same numbers.
 
-    A builder frame ``[frame_start, date_to]`` is the flows window ``(frame_start - 1 day, date_to]``.
+    A builder run ``[date_from, date_to]`` is the flows window ``(date_from - 1 day, date_to]``.
     """
 
     @pytest.mark.asyncio
@@ -955,7 +955,7 @@ class TestFlowsPortedFromTheEngine:
 
     @pytest.mark.asyncio
     async def test_signed_income_correction_before_the_window_is_not_a_flow_of_it(self, forbidden_fx):
-        """Port of ``test_signed_income.py`` ``test_negative_correction_before_frame_start_carries_into_frame`` (frame 2025-01-05..06)."""
+        """Port of ``test_signed_income.py`` ``test_negative_correction_before_date_from_carries_into_the_first_state`` (states 2025-01-05..06)."""
         print_section("9 — port: correction before the window")
         cash = await _eur_native_cash([_signed_income_tx(1, "2025-01-01", "DEPOSIT", "1000"), _signed_income_tx(2, "2025-01-02", "DIVIDEND", "-30")])
 

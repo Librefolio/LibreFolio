@@ -784,12 +784,14 @@ async def test_guard_a_provider_close_of_12_integer_digits_is_stored_truncated(o
 
 @dataclass
 class _Assigned:
-    """The PEPE asset assigned, for one test, to a provider double of the test's own: its code, the assignment's id, and
-    the current value the double answers (a ``float`` is built without validation, as a plugin that skips the schema)."""
+    """The PEPE asset assigned, for one test, to a provider double of the test's own: its code, the assignment's id, the
+    current value the double answers (a ``float`` is built without validation, as a plugin that skips the schema), and how
+    many times it was asked for it."""
 
     code: str
     assignment_id: int
     quote: object = Decimal("1")
+    current_calls: int = 0
 
 
 class _QuoteDouble(AssetSourceProvider):
@@ -820,6 +822,7 @@ class _QuoteDouble(AssetSourceProvider):
         """Any params will do."""
 
     async def get_current_value(self, identifier, identifier_type, provider_params=None) -> FACurrentValue:
+        self.assigned.current_calls += 1
         quote = self.assigned.quote
         if isinstance(quote, float):
             return FACurrentValue.model_construct(value=quote, currency="EUR", as_of_date=date.today(), source=self.provider_code)
@@ -881,20 +884,21 @@ async def _current_price(asset_id: int, story: str):
 @pytest.mark.parametrize("existing", [pytest.param(False, id="no-row-today"), pytest.param(True, id="a-row-today")])
 @pytest.mark.parametrize("quote", [pytest.param(Decimal("1E+400"), id="1E+400"), pytest.param(Decimal("1E+60"), id="1E+60")])
 async def test_an_unstorable_current_quote_is_not_persisted(owned, assigned, quote, existing):
-    """Red today: the path writes ``Decimal(str(value))`` as it comes — 1E+400 as a REAL inf, 1E+60 as a REAL 1e60 —
-    creating today's row with it or overwriting its high and close; every later read of that row raises.
+    """Red before W-B58: the path wrote ``Decimal(str(value))`` as it came — 1E+400 as a REAL inf, 1E+60 as a REAL 1e60 —
+    creating today's row with it or overwriting its high and close; every later read of that row raised.
 
     Contract (R13-SEC2): not persisted — today's row neither created nor changed (open, high, low, close, volume as the
-    file holds them) — and nothing raises.
+    file holds them) — and nothing raises. The barrier is the provider's call, not the item's source: after W-B62 an
+    unstorable quote is no longer served, and the item falls back to the database.
     """
     if existing:
         await _seed_todays_price(owned.asset_id)
     before = await _todays_row(owned.asset_id)
     assigned.quote = quote
 
-    item = await _current_price(owned.asset_id, f"a current quote of {quote} EUR")
+    await _current_price(owned.asset_id, f"a current quote of {quote} EUR")
 
-    assert item.source == f"provider:{assigned.code}", f"barrier: the item did not come from the provider double ({item!r}), so nothing proves the quote reached the persist"
+    assert assigned.current_calls >= 1, f"barrier: the provider double was never asked for the current value ({assigned.current_calls} calls), so nothing proves the quote reached the path"
     after = await _todays_row(owned.asset_id)
     assert after == before, f"R13-SEC2: a current quote of {quote} EUR changed today's row (open, high, low, close, volume): before {before}, after {after}"
 

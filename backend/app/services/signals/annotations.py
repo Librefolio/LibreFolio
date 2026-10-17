@@ -1,4 +1,4 @@
-"""Library-independent technical annotation primitives."""
+"""Library-independent technical annotation primitives, and their attachment to the signal results of a batch."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Mapping, Optional, Sequence
 
+from backend.app.logging_config import get_logger
 from backend.app.schemas.signals import (
     SignalAnnotation,
     SignalAnnotationDirection,
@@ -23,13 +24,17 @@ from backend.app.schemas.signals import (
     SignalOutputValueSource,
     SignalPricePoint,
     SignalPriceValueSource,
+    SignalResult,
     SignalSeries,
+    SignalStatus,
     SignalThresholdCrossingRequest,
     SignalThresholdDirection,
     SignalValueSource,
     SignalWarning,
     SignalWarningCode,
 )
+
+logger = get_logger(__name__)
 
 
 class SignalAnnotationSourceUnavailable(ValueError):
@@ -434,8 +439,104 @@ class SignalAnnotationService:
         return True
 
 
+def attach_annotations(
+    annotation_service: SignalAnnotationService,
+    result_by_instance: dict[str, SignalResult],
+    requests: tuple[SignalAnnotationRequest, ...],
+    price_points: list[SignalPricePoint],
+    extended_series_by_instance: dict[
+        str,
+        tuple[SignalSeries, ...],
+    ],
+    context: SignalExecutionContext,
+) -> None:
+    try:
+        batch = annotation_service.compute(
+            requests,
+            price_points,
+            extended_series_by_instance,
+            context,
+        )
+    except Exception as exc:
+        logger.exception(
+            "Signal annotation batch failed",
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        batch_annotations: dict[
+            str,
+            tuple[SignalAnnotation, ...],
+        ] = {}
+        warning_lists: dict[str, list[SignalWarning]] = {}
+        for request in requests:
+            warning_lists.setdefault(
+                request.attach_to_instance_id,
+                [],
+            ).append(
+                SignalWarning(
+                    code=SignalWarningCode.ANNOTATION_UNAVAILABLE,
+                    message=f"Annotation '{request.key}' is unavailable",
+                    details={
+                        "annotation_key": request.key,
+                        "reason": str(exc),
+                    },
+                )
+            )
+        batch_warnings = {target: tuple(items) for target, items in warning_lists.items()}
+    else:
+        batch_annotations = batch.annotations_by_target
+        batch_warnings = batch.warnings_by_target
+
+    targets = set(batch_annotations) | set(batch_warnings)
+    for target in targets:
+        result = result_by_instance[target]
+        annotations = list(batch_annotations.get(target, ()))
+        warnings = list(batch_warnings.get(target, ()))
+        if annotations and result.status not in {
+            SignalStatus.OK,
+            SignalStatus.PARTIAL,
+        }:
+            for annotation_key in sorted({item.key for item in annotations}):
+                warnings.append(
+                    SignalWarning(
+                        code=SignalWarningCode.ANNOTATION_UNAVAILABLE,
+                        message=f"Annotation '{annotation_key}' could not be attached",
+                        details={
+                            "annotation_key": annotation_key,
+                            "reason": f"target status is {result.status.value}",
+                        },
+                    )
+                )
+            annotations = []
+
+        data = result.model_dump(mode="python")
+        merged_annotations = [
+            *[item.model_dump(mode="python") for item in result.annotations],
+            *[item.model_dump(mode="python") for item in annotations],
+        ]
+        data["annotations"] = sorted(
+            merged_annotations,
+            key=lambda item: item["date"],
+        )
+        data["warnings"] = [
+            *[item.model_dump(mode="python") for item in result.warnings],
+            *[item.model_dump(mode="python") for item in warnings],
+        ]
+        result_by_instance[target] = SignalResult.model_validate(data)
+
+
+def annotation_sources(
+    request: SignalLineCrossoverRequest | SignalThresholdCrossingRequest,
+) -> tuple[SignalValueSource, ...]:
+    if isinstance(request, SignalLineCrossoverRequest):
+        return (request.left, request.right)
+    return (request.source,)
+
+
 __all__ = [
     "SignalAnnotationBatch",
     "SignalAnnotationService",
     "SignalAnnotationSourceUnavailable",
+    "annotation_sources",
+    "attach_annotations",
 ]

@@ -77,11 +77,12 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | A position's period contribution (Performance table): the transfer split between brokers, return on the start value, annualized window, closed positions | `services/financial_math/portfolio/contributions.py` |
 | FIFO lots and realized gains | `services/financial_math/fifo/` |
 | Lots analysis: lot summary and histories, economic events, average cost lines | `services/financial_math/lots/` |
-| Simple ROI, TWRR, MWRR (and the Dashboard's MWRR rule for card and line), annualization, a period's start (rebasing), net holding return, G/L ratio (of a holding or a group), a change as a fraction of its base, the timing effect, realized gain, price return, the gain that recovers a drawdown | `services/financial_math/returns.py` |
+| Simple ROI, TWRR, MWRR (and the Dashboard's MWRR rule for card and line), annualization, a period's start (rebasing), net holding return, G/L ratio (of a holding or a group), a change as a fraction of its base, the timing effect, realized gain, price return (also as a float for a return series), the observed annualization factor of a return series, the gain that recovers a drawdown | `services/financial_math/returns.py` |
 | Holding value from quantity and price | `services/financial_math/valuation.py` |
+| Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360) and simple interest | `services/financial_math/interest.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
-| Stock splits linked to the ledger: their rows and the usable ratio | `services/financial_math/splits.py` |
+| Stock splits linked to the ledger: their rows, the usable ratio, and the incoming adjustments without a cost a SPLIT may not lose by a retype | `services/financial_math/splits.py` |
 | Weights and concentration: a share of a total, allocation slices, gross weights, largest weight and Herfindahl index | `services/financial_math/weights.py` |
 | Holding window of a position: oldest lot still open, a closed position's flight time | `services/financial_math/holding_window.py` |
 | FX conversion | `services/fx/conversion.py` (`convert_bulk`) |

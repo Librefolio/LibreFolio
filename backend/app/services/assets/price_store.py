@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 from decimal import Decimal
 from typing import List, Optional
 
@@ -23,6 +24,7 @@ from backend.app.schemas import (
     FAPricePoint,
     FAUpsert,
 )
+from backend.app.schemas.prices import FACurrentValue
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -95,6 +97,52 @@ def _kept_price(value: Optional[Decimal], name: str) -> Optional[Decimal]:
 def _kept_volume(value: Optional[Decimal]) -> Optional[Decimal]:
     """A merged volume, or None for one its column cannot keep (a stored value of an older release, W-B58)."""
     return value if value is None or integer_digits_issue(value, PriceHistory, "volume") is None else None
+
+
+@functools.lru_cache(maxsize=1024)
+def _report_unstorable_quote(asset_id: int, provider_code: str, value: str) -> None:
+    """Log a live quote no price column can keep once per process for each asset, provider and value (X-R40): it is asked
+    for again at every poll (the scheduler every 10 minutes, each open asset page every 30 seconds), and the same refusal
+    said each time is noise. Bounded, so that a provider answering a new absurd value at every poll cannot grow it."""
+    logger.warning("Live quote refused: no price column can keep it, the last stored price stands", asset_id=asset_id, provider=provider_code, value=value)
+
+
+def _quote_text(value: object) -> str:
+    """A quote as the log shows it, at most about 40 characters: written out, ``1E+50000000`` is 50 MB of digits."""
+    text = str(value)
+    return text if len(text) <= 40 else f"{text[:24]}… ({len(text)} characters)"
+
+
+def storable_current_value(current: Optional[FACurrentValue], asset_id: int, provider_code: str) -> Optional[FACurrentValue]:
+    """A provider's live quote as the price columns keep it, or None when they cannot (X-R40, W-B62).
+
+    ``storable_price`` decides (W-B58): a value that is not finite, has more than 12 digits before the decimal point, or
+    is not 0 and truncates to 0 (``1E-13``) is refused — never served, never cached, never written: the current price
+    falls back to the last stored one, as after a provider failure — and logged once (``_report_unstorable_quote``). A
+    value the truncation leaves as it is comes back as it came, its form included (``101.5`` stays ``101.5``); one it
+    changes comes back truncated, as the history and today's row keep it (``65432.1234567890999`` → ``65432.123456789``).
+    Never raises: a value that is no number at all, from a plugin that skips the schema, is refused too.
+    """
+    if current is None:
+        return None
+    raw = current.value
+    try:
+        value = raw if isinstance(raw, Decimal) else Decimal(str(raw))
+        stored = storable_price(value)
+    except (ArithmeticError, TypeError, ValueError):
+        value = stored = None
+    if stored is None:
+        _report_unstorable_quote(asset_id, provider_code, _quote_text(raw))
+        return None
+    served = value if stored == value else stored
+    return current if served is raw else current.model_copy(update={"value": served})
+
+
+def unstorable_quote_reason(value: object) -> str:
+    """Why a provider's current value was refused, for a refresh result (X-R51): the value, shortened, and the limits of
+    a price column, read from the model."""
+    _precision, scale = get_model_column_precision(PriceHistory, "close")
+    return f"Current price {_quote_text(value)} not saved: a price keeps at most {max_integer_digits(PriceHistory, 'close')} digits before the decimal point, and is never 0 once cut to {scale} decimal places"
 
 
 PRICE_UPSERT_CHUNK_SIZE = 1000

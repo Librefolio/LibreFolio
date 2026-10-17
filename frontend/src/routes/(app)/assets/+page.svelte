@@ -1590,10 +1590,11 @@
                             event.stopPropagation();
                             labPanel?.reload();
                         }}
-                        disabled={!labPanel}
+                        disabled={!labPanel || pageBusy.busy}
+                        data-busy={pageBusy.busy ? 'true' : 'false'}
                         data-testid="risk-reload-button"
                     >
-                        <RefreshCw size={14} />
+                        <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
                         {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
                     </button>
                 </Tooltip>
@@ -1910,7 +1911,7 @@
     sourceAsset={mergingAsset ? {id: mergingAsset.id, display_name: mergingAsset.display_name} : null}
     onmerged={async () => {
         if (mergingAsset) invalidateAfterMutation(mergingAsset.id);
-        await loadAssets();
+        await pageBusy.track('assets-reload', () => loadAssets());
     }}
     onclose={() => {
         mergeModalOpen = false;

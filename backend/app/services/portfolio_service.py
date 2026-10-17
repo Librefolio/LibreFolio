@@ -34,6 +34,7 @@ from backend.app.db.models import (
     Transaction,
     TransactionType,
 )
+from backend.app.db.precision import round_computed_value
 from backend.app.schemas.common import Currency, FxBackwardFillInfo
 from backend.app.schemas.portfolio import (
     AcquisitionFundingPoint,
@@ -218,8 +219,11 @@ async def compute_wac_iterative(
             wac_missing_pairs=[WACMissingPairInfo(pair=item.pair, dates=list(item.dates)) for item in average_cost.missing if item.leg == "report"],
         )
 
+    # The average stays exact in the house; here it leaves the calculation to become an input — a preview the user
+    # freezes into a manual cost, an auto cost written on the row — so it is rounded to what that column keeps
+    # (C-97 decision D6, MF-W56): a periodic quotient would otherwise be refused (D2) or stored past the limit.
     result = WACPreviewResultItem(
-        wac=Currency(code=target_currency, amount=average_cost.unit_cost_report),
+        wac=Currency(code=target_currency, amount=round_computed_value(average_cost.unit_cost_report, Transaction, "cost_basis_override")),
         wac_qualifying_txs=_wac_qualifying_txs(average_cost.steps, target_currency),
         wac_missing_pairs=[],
     )
@@ -1652,6 +1656,11 @@ class PortfolioService:
                     period_fees_taxes=fees if fees else None,
                     period_pnl=period_pnl,
                     period_pnl_percent=period_pnl_pct,
+                    # Each component on the same base as the row's return (P4, the Performance tooltip).
+                    period_unrealized_delta_percent=period_return_on_start(unrealized_delta, start_value),
+                    period_realized_gain_loss_percent=period_return_on_start(realized if realized else None, start_value),
+                    period_income_percent=period_return_on_start(income if income else None, start_value),
+                    period_fees_taxes_percent=period_return_on_start(fees if fees else None, start_value),
                     annualized_return=period_annualized,
                     start_value=start_value,
                     end_value=end_value,

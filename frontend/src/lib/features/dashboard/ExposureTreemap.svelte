@@ -25,7 +25,8 @@
     import {ensurePluginIconsLoaded, getBrokerIconUrl} from '$lib/utils/broker/brokerHelpers';
     import {attachTreemapZoomGuard, resetTreemapView, panTreemapBy, type TreemapZoomGuardHandle} from '$lib/components/charts/echartsTreemapZoomGuard';
     import {truncateName} from '$lib/utils/text';
-    import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {safeCurrency, safeDecimal, safeNumber, safeString} from '$lib/types';
+    import type {PortfolioSummary} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
@@ -45,13 +46,17 @@
         gain_loss_percent?: string | (string | null)[] | null;
     }
 
+    /** One group's unrealized G/L as the backend gives it (`summary.holding_groups`, W8): asset_type null is the whole broker. */
+    type HoldingGroup = NonNullable<PortfolioSummary['holding_groups']>[number];
+
     interface Props {
         holdings: Holding[];
+        holdingGroups?: HoldingGroup[];
         displayCurrency?: string;
         onAnalyze?: (assetId: number) => void;
     }
 
-    let {holdings = [], displayCurrency = 'EUR', onAnalyze}: Props = $props();
+    let {holdings = [], holdingGroups = [], displayCurrency = 'EUR', onAnalyze}: Props = $props();
 
     let chartWrapper: HTMLDivElement | undefined = $state(undefined);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
@@ -350,7 +355,6 @@
                 iconRichKey: string | null;
                 value: number;
                 weight: number;
-                gl: number;
                 types: Map<
                     string,
                     {
@@ -360,7 +364,6 @@
                         assets: any[];
                         value: number;
                         weight: number;
-                        gl: number;
                     }
                 >;
             }
@@ -385,7 +388,6 @@
                     iconRichKey: brokerIconUrl ? `broker_${sanitizeRichKeySegment(bid ?? bName)}` : null,
                     value: 0,
                     weight: 0,
-                    gl: 0,
                     types: new Map(),
                 });
             }
@@ -400,7 +402,6 @@
                     assets: [],
                     value: 0,
                     weight: 0,
-                    gl: 0,
                 });
             }
             const typeNode = brokerNode.types.get(aType)!;
@@ -409,19 +410,13 @@
             const gl = safeDecimal(h.gain_loss);
             const weight = safeDecimal(h.nav_weight_percent);
 
-            // Roll up sums for the type/broker group tooltips below — value and
-            // weight (both already NAV-normalized percentages/amounts) and gl
-            // (absolute P&L) are additive; glPct is NOT additive and gets
-            // recomputed from the aggregated value/gl once the group is built.
+            // Roll up the tiles' value and weight for the type/broker group tooltips below. A group's G/L and
+            // G/L % are the backend's (`holdingGroups`, W8): only it knows which holdings count.
             typeNode.value += val;
             brokerNode.value += val;
             if (weight != null) {
                 typeNode.weight += weight;
                 brokerNode.weight += weight;
-            }
-            if (gl != null) {
-                typeNode.gl += gl;
-                brokerNode.gl += gl;
             }
 
             typeNode.assets.push({
@@ -443,18 +438,19 @@
             });
         }
 
-        /** glPct is a ratio (gl / cost_basis), not additive across positions — recompute
-         *  it from the aggregated value/gl (cost_basis = value - gl) instead of leaving it
-         *  undefined (which previously rendered as "NaN" in the type/broker tooltip). */
-        function aggregateGlPct(value: number, gl: number): number | null {
-            const costBasis = value - gl;
-            return costBasis !== 0 ? gl / costBasis : null;
+        // A group the backend did not send has no G/L: no figure, never a sum made up here.
+        const groupKey = (brokerId: number, assetType: string | null) => JSON.stringify([brokerId, assetType]);
+        const groups = new Map(holdingGroups.map((group) => [groupKey(group.broker_id, safeString(group.asset_type)), group]));
+        function groupGainLoss(brokerId: number | null, assetType: string | null): {gl: number | null; glPct: number | null} {
+            const group = brokerId == null ? undefined : groups.get(groupKey(brokerId, assetType));
+            return {gl: safeDecimal(safeCurrency(group?.gain_loss)?.amount), glPct: safeDecimal(group?.gain_loss_percent)};
         }
 
         const tree: any[] = [];
         for (const brokerNode of brokerMap.values()) {
             const children: any[] = [];
-            for (const typeNode of brokerNode.types.values()) {
+            for (const [assetType, typeNode] of brokerNode.types) {
+                const typeGroup = groupGainLoss(brokerNode.brokerId, assetType);
                 children.push({
                     name: typeNode.name,
                     children: typeNode.assets,
@@ -467,11 +463,12 @@
                         iconRichKey: typeNode.iconRichKey,
                         value: typeNode.value,
                         weight: typeNode.weight,
-                        gl: typeNode.gl,
-                        glPct: aggregateGlPct(typeNode.value, typeNode.gl),
+                        gl: typeGroup.gl,
+                        glPct: typeGroup.glPct,
                     },
                 });
             }
+            const brokerGroup = groupGainLoss(brokerNode.brokerId, null);
             tree.push({
                 name: brokerNode.name,
                 children,
@@ -483,8 +480,8 @@
                     iconRichKey: brokerNode.iconRichKey,
                     value: brokerNode.value,
                     weight: brokerNode.weight,
-                    gl: brokerNode.gl,
-                    glPct: aggregateGlPct(brokerNode.value, brokerNode.gl),
+                    gl: brokerGroup.gl,
+                    glPct: brokerGroup.glPct,
                 },
             });
         }
@@ -594,6 +591,9 @@
                         if (meta.gl != null) {
                             const glColor = meta.gl >= 0 ? themed(CHART_GAIN_LOSS.portfolio.gain, isDark) : themed(CHART_GAIN_LOSS.portfolio.loss, isDark);
                             html += buildTooltipRow($_('dashboard.unrealizedPnl'), `<span style="color:${glColor}">${escapeHtml(formatCurrencyAmountPlain(meta.gl, displayCurrency, {showSign: true}))}</span>`);
+                        } else if (meta.level !== 'asset') {
+                            // A group the backend sent no figure for (W8): it says so, rather than leaving the row out.
+                            html += buildTooltipRow($_('dashboard.unrealizedPnl'), '—');
                         }
                         if (meta.glPct != null) {
                             html += buildTooltipRow('', formatPercent(meta.glPct, {scale: 100, signed: false}));
