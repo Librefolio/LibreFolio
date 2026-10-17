@@ -245,6 +245,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Measure tool: the yearly rate (Δ%/yr) appears from 30 days, as in the rest of the app (`—` below); a measure that starts from 0 shows `—` instead of 0 % for Δ% and Δ%/yr, and a line that ends on the other side of zero has no yearly rate.
 - Growth chart: in the weekly and monthly views, a broker line that stops in the middle of a week or month keeps its last value for that period instead of leaving a gap.
 - **A restore whose restart never happens says so** — if LibreFolio does not stop after **Restore and restart**, the page no longer waits forever: after a minute it says to restart LibreFolio yourself, and offers **Back to Backup**, where the waiting restore can be restarted or cancelled.
+- Very large cash amounts and event values (eleven digits or more before the decimal point) read back exactly, without a stray digit in the sixth decimal place.
 
 #### 🔒 Security
 
