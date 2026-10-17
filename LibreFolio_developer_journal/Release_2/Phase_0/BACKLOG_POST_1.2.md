@@ -6641,3 +6641,8 @@ punto di partenza, l'audit dello stesso giorno:
   (`start_date < min(cached.keys())`) e filtra gli eventi con `start_date` invece di `effective_start`: solleva
   `CALCULATION_ERROR`, su HEAD come dopo SEC7-2. La via del refresh può passare `"min"`. Cura: `effective_start` in quei
   due punti, rossi prima. Dettagli: piano MF, sezione «R13-SEC7-2».
+- **MF-SI2 · Scheduled Investment: un tetto agli `asset_events` e un limite per utente alla sonda** — basso,
+  sicurezza sotto soglia; E, 17/10 (revisione di R13-SEC7-2). Gli eventi manuali di un piano non hanno un numero
+  massimo (costo lineare, solo il corpo della richiesta li limita), e `POST /assets/provider/probe` non ha un limite
+  per utente. Proposta: un tetto agli eventi (p. es. 10 000) nello schema, e il limite della sonda dove vivono gli altri
+  limiti delle richieste. Dettagli: piano MF, sezione «SEC7-2 entrato; MF-SI1».

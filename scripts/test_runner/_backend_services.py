@@ -418,6 +418,22 @@ def services_scheduled_investment_cost_bounds(verbose: bool = False, test_names:
     return run_command(cmd, "Scheduled investment cost bounds tests", verbose=verbose)
 
 
+def services_scheduled_investment_min_start(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-SI1: the Scheduled Investment history from "min"."""
+    print_section('Services: Scheduled Investment History From "min" (MF-SI1)')
+    print_info('Testing: scheduled_investment/plugin.py get_history_value(start_date="min"), explicit-start parity')
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_min_start.py", test_names)
+    return run_command(cmd, "Scheduled investment min start tests", verbose=verbose)
+
+
+def services_scheduled_investment_late_alignment(verbose: bool = False, test_names: list = None) -> bool:
+    """J's note on R13-SEC7-2: one late value per day, whoever reads it."""
+    print_section("Services: Scheduled Investment Late Alignment")
+    print_info("Testing: scheduled_investment/plugin.py COMPOUND late interest: current value = history close = settlement = closed form, by str")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_late_alignment.py", test_names)
+    return run_command(cmd, "Scheduled investment late alignment tests", verbose=verbose)
+
+
 def services_synthetic_yield_integration(verbose: bool = False, test_names: list = None) -> bool:
     """Test E2E synthetic yield integration scenarios."""
     print_section("Services: Synthetic Yield Integration E2E")
@@ -1740,7 +1756,11 @@ Note: No backend server required.
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
-    add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in one pass, linear day counts, cache cap, horizon")
+    add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in closed form per date, bounded day counts, cache cap, horizon")
+    # Pure: no lane DB, no server, no network; each test deletes its own process-local _CACHE entry before and after.
+    add_test(cat, "scheduled-investment-min-start", services_scheduled_investment_min_start, name="Scheduled Investment Min Start", desc='MF-SI1: history from "min" = from the earliest value or manual event, as the explicit-start call', isolation="pure")
+    # Pure: the plugin's date_type is swapped in-process for one with-block; each test deletes its own _CACHE entry.
+    add_test(cat, "scheduled-investment-late-alignment", services_scheduled_investment_late_alignment, name="Scheduled Investment Late Alignment", desc="COMPOUND late interest: current value = history close = settlement = closed form, by str", isolation="pure")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(
         cat,
