@@ -5265,7 +5265,9 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `translate-validate` (16/10): da 882 a 891 errori strutturali, tutti in `fifo-lot-analysis`: 24 righe nuove e 15
   sparite. Sono l'ammonimento nuovo, che sposta il tipo dei seguenti, e il link nuovo ad `adjustment`. La pagina aveva
   già debito (J-25, J-29, J-32): tradurla in un giro solo. Dettagli: piano J, §10 «CP-7b — codice».
-- **J-37 · Il testo del catalogo di `lots-analysis-pure` non dice più cosa prova l'unità** — minimo, test; J, 16/10
+- ✅ **J-37 · Il testo del catalogo di `lots-analysis-pure` non dice più cosa prova l'unità** — minimo, test; J, 16/10
+  ✅ 17/10, dentro il checkpoint di CP-14a (commit a parte): `print_info`, `desc` e commento d'isolamento di
+  `lots-analysis-pure`, più la stringa di `risk-oracle` (`signal_helpers.py` → `signals/risk_adapters.py`).
   (test-author di CP-7b).
   - Dove: `scripts/test_runner/_backend_services.py`, unità `lots-analysis-pure`. Tre testi descrivono ancora i test di
     prima: `print_info` (~:893), `desc` (~:1894) e il commento di `isolation="pure"` (~:1897-1898), che parla solo dei
@@ -5312,6 +5314,59 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - La sezione del piano non dice che un lotto incoerente solleva `SignalRequestValidationError` e ferma tutto il lotto,
     a differenza dei fallimenti preliminari, che restano per istanza.
   - Preesistenti, non legati al taglio. Dettagli: piano J, §10 «CP-10c».
+- **J-39 · Investimento programmato: l'ultima cedola contata due volte, e la mora che parte dal valore prima della
+  cedola** — medio, numeri; J, 17/10 (docs-writer di CP-14a, verificata da J in memoria). Preesistente: viene da
+  I-bis #26, che emette alle date di maturazione il valore prima dell'azzeramento della cedola, giusto per il grafico.
+  Lo stesso valore finisce però in due consumatori che vogliono quello dopo:
+  - **Liquidazione**: `_generate_schedule_values` mette in `MATURITY_SETTLEMENT` `values[last_end]`, il valore prima
+    della cedola. Un titolo da 10 000 al 5 % con cedola annuale a scadenza e senza mora dà INTEREST 498,63 **e**
+    MATURITY_SETTLEMENT 10 498,63: 10 997,26 incassati, e l'ultima cedola è contata due volte. La liquidazione giusta
+    è il valore dopo la cedola, qui 10 000.
+  - **Mora**: `_compute_late_interest_value` riceve `cached[maturity]`, ancora il valore prima della cedola. Con mora
+    SIMPLE al 10 %, il giorno dopo la scadenza dà 10 501,37 invece di 10 002,74: la cedola è pagata e insieme ancora
+    dovuta.
+  - Da decidere (developer, perché è modellazione): se c'è mora, la cedola di scadenza è pagata (base = capitale) o
+    no (niente evento INTEREST a scadenza, base con la cedola)? Oggi il codice fa tutte e due le cose.
+  - **Dopo la scadenza, con la mora** (verificato da J nel codice il 17/10, ~04:05):
+    - la liquidazione della mora nasce solo in `get_history_value`, all'ultima data di maturazione della mora ≤ la
+      `end_date` della richiesta: si sposta con la finestra. `get_current_value` intanto continua a maturare senza
+      fine;
+    - le cedole della mora (`li.generate_interest`) valgono ciascuna `value − principal`, senza azzeramento dopo:
+      ogni pagamento riconta tutti quelli prima.
+    - Senza mora le due strade concordano (tutte e due leggono la liquidazione): la cura di CP-14b le corregge
+      insieme.
+  - La rete dorata di CP-14a (`accrual_golden.json`, casi s2 e s4) fissa i valori di oggi: la cura li cambia,
+    dichiarati, col rosso prima.
+  - **Decisione del coordinatore (17/10, notte)**:
+    - la liquidazione senza mora va in **CP-14b**, coi valori dichiarati, il rosso prima e una riga 🐛;
+    - la parte della mora aspetta il developer (la domanda è nella lista del mattino);
+    - `get_current_value` contro `get_history_value` dopo la scadenza si verifica nell'analisi di CP-14b.
+  - Dettagli: piano J, §10 «CP-14a».
+- **J-40 · Lo svuotamento dei dati di mercato toglie gli SPLIT e lascia rettifiche senza costo (il buco di P-10 dal
+  lato asset)** — medio, numeri, da decidere; test-author di J (CP-14a, V-4), 17/10, letto nel codice. Area di X.
+  - `POST /assets/{id}/market-data/wipe` (`market_data.py:46-71`) è il flusso del cambio di valuta
+    (`AssetCurrencyChangeModal.svelte:103-109`), ma si può chiamare anche da solo.
+  - Stacca ogni transazione dagli eventi dell'asset e li cancella tutti, SPLIT compresi (`currency_change.py:131-137`).
+  - Una rettifica +q legata a uno SPLIT e salvata senza costo (Auto) diventa un'acquisizione di costo sconosciuto,
+    cioè `MISSING_COST_BASIS`: lo stesso esito che P-10 rifiuta.
+  - Il pannello di conferma mostra solo il numero delle transazioni legate.
+  - **Deciso dal coordinatore (17/10, notte): un rifiuto come P-10** (lo svuotamento risponde 409 coi dettagli),
+    coerente con la decisione 27 A. **→ X** (anche il parente minore).
+  - Parente minore: il cambio dei parametri di un investimento programmato stacca e cancella gli eventi del provider
+    (`provider_management.py:212-221`). Conta solo se l'utente ha scritto uno SPLIT negli eventi del calendario.
+- **J-41 · Il costo Auto può finire sulla riga sbagliata** — medio, numeri; test-author di J, 17/10, letto nel codice,
+  **da provare con un rosso**. Area di W.
+  - Senza legame, `_find_created_tx_for_wac` (`auto_cost.py:158-183`) prende la riga più recente con stesso broker,
+    asset, data e tipo.
+  - Due rettifiche Auto dello stesso asset, nello stesso giorno, sullo stesso broker e nello stesso lotto: la prima non
+    riceve mai un costo. Essendo Auto salta il controllo del costo (`batch_costs.py:154-155`), e resta senza.
+  - Varianti: una riga Auto seguita da una Manuale con la stessa chiave sovrascrive il costo Manuale; dal modale bulk
+    (`{amount: "0"}`, `TransactionBulkModal.svelte:1099`) la riga mancata resta a 0 in silenzio.
+  - **→ W** (coordinatore, 17/10).
+- **J-42 · Il rapporto di uno SPLIT non è mai validato** — basso, numeri; test-author di J, 17/10, letto nel codice.
+  Area di X. Un rapporto 0 o negativo si salva (P-10 lascia passare la modifica, il tipo non cambia). Quando una
+  transazione lo lega, il motore solleva `ValueError` (`engine.py:226-227`) e il rapporto della Dashboard risponde
+  500. `is_valid_split_ratio` della casa (`splits.py`) esiste già. **→ X** (coordinatore, 17/10).
 
 ## Z · Sospensione e risveglio (fase 01)
 
