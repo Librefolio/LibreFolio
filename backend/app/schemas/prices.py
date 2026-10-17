@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import (
     ConfigDict,
@@ -178,12 +178,23 @@ class FAUpsert(StrictModel):
     prices: List[FAPricePoint] = Field(..., min_length=1, description="List of price points")
 
 
+class FAPriceRejection(StrictModel):
+    """A date a price upsert left out, and why (X-R46): the data editor names it instead of counting it as saved."""
+
+    date: date_type = Field(..., description="The date left out")
+    reason: Literal["ohlc_inconsistent", "date_out_of_range", "value_not_storable"] = Field(
+        ...,
+        description="ohlc_inconsistent: the close lies outside [low, high]; date_out_of_range: a provider's date outside 1900-01-01 to tomorrow; value_not_storable: a provider's value no price column can keep",
+    )
+
+
 class FAUpsertResult(StrictModel):
     """Result of price upsert for single asset."""
 
     asset_id: int
     count: int
     message: str
+    rejected: List[FAPriceRejection] = Field(default_factory=list, description="The dates left out, in date order, each with its reason (X-R46); `count` does not include them")
 
 
 class FABulkUpsertResponse(BaseBulkResponse[FAUpsertResult]):

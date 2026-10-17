@@ -6,7 +6,8 @@ without live server/network dependency.
 
 X-R38 (the FX side of W-B58): POST /fx/currencies/rate and a rate no column can keep, served in process
 (``httpx.ASGITransport``) on the lane's test database: see its block at the end. X-R50 (E's review R13-SEC5 on X-R38): a
-rate whose double is 1E+14 and an inverse that underflows to 0, in the same block.
+rate whose double is 1E+14 and an inverse that underflows to 0, in the same block. X-R46: the same endpoint names the rates
+it refused, machine-readable (``rejected``; a 400 whose detail is an object): its block follows X-R38's.
 """
 
 import json
@@ -20,6 +21,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI, HTTPException
+from pydantic import ValidationError
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,11 +37,15 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.api.v1.fx import currencies as fx_currencies_api
 from backend.app.api.v1.fx import providers as fx_providers_api
 from backend.app.db.models import FxConversionRoute, FxRate
+from backend.app.db.precision import storable_fx_rate
 from backend.app.db.session import get_async_engine
+from backend.app.schemas import fx as fx_schemas
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.fx import FXConversionRouteItem, FXConversionRouteReadItem, FXDeleteItem, FXUpsertItem
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest, FXSyncPairResult, SyncDateRangeModel, SyncStatus
 from backend.app.services.fx import catalog as fx_catalog
+from backend.app.services.fx import storage as fx_storage
+from backend.app.services.fx.storage import fx_rate_refusal, normalize_storable_rate
 from backend.test_scripts.test_utils import print_section, print_success
 
 
@@ -817,3 +823,321 @@ async def test_xr38_guard_upsert_rates_endpoint_stores_rates_at_the_limits():
     assert response.status_code == 200 and response.json()["errors"] == [], f"{story} answered {response.status_code} {response.text[:300]}"
     stored = await _xr38_stored()
     assert stored == {XR38_DAYS[0]: Decimal("99999999999999"), XR38_DAYS[1]: Decimal("1E-10"), XR38_DAYS[2]: Decimal("1E+13")}, f"{story} stored {stored}"
+
+
+# ============================================================================
+# X-R46: POST /fx/currencies/rate names the rates it refused, machine-readable
+# ============================================================================
+#
+# The defect, on HEAD 1c1456713: the endpoint tells a refused rate only as an English string of ``errors`` («Rate
+# {idx}: …») and, when it refuses every rate, as the string ``detail`` of its 400 («All rates failed: …»). The FX data
+# editor cannot tell which rows the server refused: it counts every row it sent as saved.
+#
+# Contract (X-R46): ``schemas.fx.FXRateRejection`` {``index``: the item's position in the request, ``date``: the item's
+# date, ``reason``: ``same_currency`` | ``rate_not_storable`` | ``invalid_rate`` | ``internal_error``};
+# ``FXBulkUpsertResponse.rejected``, ``[]`` by default, one entry per refused item, in request order: base == quote →
+# ``same_currency``; a rate no column can keep → ``rate_not_storable``; any other ``ValueError`` → ``invalid_rate``; any
+# other exception → ``internal_error``. A rate no column can keep is ``services.fx.storage.FXRateNotStorableError``, a
+# ``ValueError`` with its text unchanged (decided 17/10): the endpoint raises it where its own ``normalize_storable_rate``
+# answers None, ``upsert_rates_bulk`` at its X-R38 check (``storable_fx_rate``: more than 14 digits before the decimal
+# point, 0 at 10 decimal places); the endpoint reads the class, never the text. The strings of ``errors`` stay as they
+# are. Every item refused: still 400, its ``detail`` the object ``{"code": "fx_rates_refused", "message": the same «All
+# rates failed: …» text, "rejected": the rejections, as JSON}``.
+#
+# The handler is called directly, ``upsert_rates_bulk`` patched where it reads it (``_xr46_store``): nothing reaches a
+# database. The rate ``normalize_storable_rate`` refuses is a real one, not a patch: USD → EUR (or MMK → KHR)
+# 1E-1000000, whose inverse, the rate the endpoint would store, overflows; each case checks it first, as a barrier. The
+# store's own refusal is the patched store raising ``FXRateNotStorableError``. Three cases read the answer on the wire
+# instead (``_xr38_post``), on X-R38's KHR/MMK window and its fixture, one of them the real store refusing KHR → MMK
+# 1E-11. ``FXRateRejection`` and ``FXRateNotStorableError`` are read inside the cases (from ``schemas.fx`` and
+# ``services.fx.storage``): before X-R46 they do not exist, and the cases fail on what the endpoint answered, or on the
+# missing class, instead of breaking the module's import.
+
+XR46_DAY = date(2024, 3, 4)
+XR46_FX_REASONS = ("same_currency", "rate_not_storable", "invalid_rate", "internal_error")
+XR46_UNSTORABLE = "1E-1000000"  # typed USD → EUR or MMK → KHR: the inverse the endpoint stores, 1E+1000000, overflows
+XR46_STORE_REFUSAL = "X-R46: the store refuses this rate"
+XR46_SECRET = "X-R46 internal detail: fx_rates_shadow is locked"
+
+
+def _xr46_item(offset: int, base: str, quote: str, rate: str) -> FXUpsertItem:
+    """One rate of the request: ``base`` → ``quote`` at ``rate``, on ``XR46_DAY`` plus ``offset`` days."""
+    return FXUpsertItem(**{"date": XR46_DAY + timedelta(days=offset)}, base=base, quote=quote, rate=Decimal(rate), source="MANUAL")
+
+
+def _xr46_store(monkeypatch: pytest.MonkeyPatch, refusals: dict[date, Exception] | None = None) -> AsyncMock:
+    """``upsert_rates_bulk`` where the endpoint reads it, on no database: every rate handed to it is «inserted», but a
+    rate dated as a key of ``refusals`` raises that exception. The mock keeps what reached it (``_xr46_handed``)."""
+    refusals = refusals or {}
+
+    async def _upsert(_session, rates):
+        for rate_date, *_rest in rates:
+            if rate_date in refusals:
+                raise refusals[rate_date]
+        return [(True, "inserted") for _rate in rates]
+
+    store = AsyncMock(side_effect=_upsert)
+    monkeypatch.setattr(fx_currencies_api, "upsert_rates_bulk", store)
+    return store
+
+
+def _xr46_handed(store: AsyncMock) -> list[date]:
+    """The dates of the rates handed to the store, in order, a rate it refused included."""
+    return [rate[0] for call in store.await_args_list for rate in call.args[1]]
+
+
+async def _xr46_upsert(items: list[FXUpsertItem]):
+    """``POST /fx/currencies/rate`` of ``items``: the handler called directly, its session and its user stubbed."""
+    return await fx_currencies_api.upsert_rates_endpoint(items, session=AsyncMock(), _current_user=Mock())
+
+
+def _xr46_kept(response) -> list[tuple[str, str, date]]:
+    """The pair and the date of each result of the answer, in order."""
+    return [(result.base, result.quote, result.date) for result in response.results]
+
+
+def _xr46_rejected(response) -> list:
+    """The ``rejected`` of a 200 as the wire carries it (by alias, the dates ISO); an answer without it fails the test,
+    naming what it holds instead."""
+    wire = response.model_dump(mode="json", by_alias=True)
+    if "rejected" not in wire:
+        pytest.fail(f"X-R46: the answer has no 'rejected', its refusals are only the English strings of 'errors': {wire}")
+    return wire["rejected"]
+
+
+def _xr46_unstorable_barrier(base: str, quote: str) -> None:
+    """Barrier: ``normalize_storable_rate`` refuses ``base`` → ``quote`` at ``XR46_UNSTORABLE`` (its inverse overflows)."""
+    assert normalize_storable_rate(base, quote, Decimal(XR46_UNSTORABLE)) is None, f"barrier: normalize_storable_rate keeps {base} → {quote} {XR46_UNSTORABLE}; the case needs a rate it refuses"
+
+
+def _xr46_not_storable(message: str) -> ValueError:
+    """``FXRateNotStorableError(message)``, the class read from ``services.fx.storage`` when the case runs: before X-R46
+    it does not exist, and the case fails naming it instead of breaking the module's import."""
+    error_class = getattr(fx_storage, "FXRateNotStorableError", None)
+    if error_class is None:
+        pytest.fail("X-R46: backend.app.services.fx.storage has no FXRateNotStorableError")
+    assert issubclass(error_class, ValueError), f"X-R46: FXRateNotStorableError must be a ValueError, the endpoint's 'except ValueError' catching it: {error_class.__mro__}"
+    return error_class(message)
+
+
+@pytest.mark.asyncio
+async def test_xr46_upsert_rates_endpoint_lists_a_rate_no_column_can_keep_in_rejected(monkeypatch):
+    """X-R46: EUR → GBP 0.85, then USD → EUR 1E-1000000, which ``normalize_storable_rate`` refuses.
+
+    Red on HEAD 1c1456713: ``FXBulkUpsertResponse`` has no ``rejected``; the refused rate is told only in ``errors``
+    («Rate 1: Validation error: The rate of EUR/USD on … cannot be stored: …»), so the FX editor counts it as saved.
+    Contract: 200; the first rate alone in ``results`` and handed to the store; ``rejected`` ``[{"index": 1, "date": its
+    date, "reason": "rate_not_storable"}]`` -- the index is the item's position in the request, not among the refusals;
+    ``errors`` the same one string as before.
+    """
+    _xr46_unstorable_barrier("USD", "EUR")
+    store = _xr46_store(monkeypatch)
+    kept, refused = _xr46_item(0, "EUR", "GBP", "0.85"), _xr46_item(1, "USD", "EUR", XR46_UNSTORABLE)
+
+    response = await _xr46_upsert([kept, refused])
+
+    assert _xr46_kept(response) == [("EUR", "GBP", kept.rate_date)], response.results
+    assert response.errors == [f"Rate 1: Validation error: {fx_rate_refusal('USD', 'EUR', refused.rate_date)}"], response.errors
+    assert _xr46_handed(store) == [kept.rate_date], "barrier: the refused rate reached the store"
+    assert _xr46_rejected(response) == [{"index": 1, "date": refused.rate_date.isoformat(), "reason": "rate_not_storable"}]
+
+
+@pytest.mark.asyncio
+async def test_xr46_upsert_rates_endpoint_lists_a_same_currency_pair_in_rejected(monkeypatch):
+    """X-R46: EUR → GBP 0.85, then EUR → EUR 1.
+
+    Red on HEAD 1c1456713: no ``rejected``; the refusal is only «Rate 1: Base and quote must be different (got EUR)».
+    Contract: 200; the first rate alone in ``results`` and handed to the store; ``rejected`` ``[{"index": 1, "date": its
+    date, "reason": "same_currency"}]``; ``errors`` the same one string as before.
+    """
+    store = _xr46_store(monkeypatch)
+    kept, refused = _xr46_item(0, "EUR", "GBP", "0.85"), _xr46_item(1, "EUR", "EUR", "1")
+
+    response = await _xr46_upsert([kept, refused])
+
+    assert _xr46_kept(response) == [("EUR", "GBP", kept.rate_date)], response.results
+    assert response.errors == ["Rate 1: Base and quote must be different (got EUR)"], response.errors
+    assert _xr46_handed(store) == [kept.rate_date], "barrier: the refused rate reached the store"
+    assert _xr46_rejected(response) == [{"index": 1, "date": refused.rate_date.isoformat(), "reason": "same_currency"}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("refusal", "reason", "error"),
+    [
+        pytest.param(lambda: ValueError(XR46_STORE_REFUSAL), "invalid_rate", f"Rate 1: Validation error: {XR46_STORE_REFUSAL}", id="ValueError-invalid_rate"),
+        pytest.param(lambda: _xr46_not_storable(XR46_STORE_REFUSAL), "rate_not_storable", f"Rate 1: Validation error: {XR46_STORE_REFUSAL}", id="FXRateNotStorableError-rate_not_storable"),
+        pytest.param(lambda: RuntimeError(XR46_SECRET), "internal_error", "Rate 1: Failed: internal error", id="RuntimeError-internal_error"),
+    ],
+)
+async def test_xr46_upsert_rates_endpoint_lists_a_rate_the_store_refuses_in_rejected(monkeypatch, refusal, reason, error):
+    """X-R46: EUR → GBP 0.85, then EUR → JPY 160, on which ``upsert_rates_bulk`` raises what ``refusal`` builds, when the
+    case runs.
+
+    Red on HEAD 1c1456713: no ``rejected``; the refusal is only the string of ``errors``. The ``FXRateNotStorableError``
+    case fails before the call: ``services.fx.storage`` has no such class.
+    Contract: 200; the first rate alone in ``results``, both handed to the store; ``rejected`` ``[{"index": 1, "date": its
+    date, "reason": reason}]``: ``FXRateNotStorableError`` (a ``ValueError``, the store's X-R38 refusal, decided 17/10)
+    is ``rate_not_storable``, any other ``ValueError`` ``invalid_rate``, any other exception ``internal_error``. The
+    first two carry the same text: the class decides the reason, never the text. ``errors`` the same one string as
+    before, and the exception's own text of an internal error nowhere in the answer (MF-SEC9a).
+    """
+    kept, refused = _xr46_item(0, "EUR", "GBP", "0.85"), _xr46_item(1, "EUR", "JPY", "160")
+    store = _xr46_store(monkeypatch, {refused.rate_date: refusal()})
+
+    response = await _xr46_upsert([kept, refused])
+
+    assert _xr46_kept(response) == [("EUR", "GBP", kept.rate_date)], response.results
+    assert response.errors == [error], response.errors
+    assert _xr46_handed(store) == [kept.rate_date, refused.rate_date], "barrier: both rates should reach the store, the second refused there"
+    assert XR46_SECRET not in response.model_dump_json(), "MF-SEC9a: the answer echoes the internal error"
+    assert _xr46_rejected(response) == [{"index": 1, "date": refused.rate_date.isoformat(), "reason": reason}]
+
+
+@pytest.mark.asyncio
+async def test_xr46_upsert_rates_endpoint_answers_400_with_an_object_naming_every_refused_rate(monkeypatch):
+    """X-R46: four rates, each refused for its own reason, their dates going backwards: EUR → JPY 160, on which the
+    store raises a ``RuntimeError``; EUR → EUR 1; EUR → GBP 0.85, on which the store raises a ``ValueError``; USD → EUR
+    1E-1000000, which ``normalize_storable_rate`` refuses.
+
+    Red on HEAD 1c1456713: 400 with a string ``detail``, «All rates failed: Rate 0: …; Rate 1: …; …»: the editor can show
+    it whole, never say which row was refused and why.
+    Contract: 400; ``detail`` exactly ``{"code", "message", "rejected"}``: ``code`` ``fx_rates_refused``; ``message`` the
+    same «All rates failed: …» text, the four strings of ``errors`` joined by «; »; ``rejected`` the four as JSON, in
+    request order (neither by date nor by reason), each with its index, date and reason. The detail is JSON as it
+    stands (the renderer of the 400 answers 500 to a date or a model) and never holds the internal error's text
+    (MF-SEC9a).
+    """
+    _xr46_unstorable_barrier("USD", "EUR")
+    items = [_xr46_item(3, "EUR", "JPY", "160"), _xr46_item(2, "EUR", "EUR", "1"), _xr46_item(1, "EUR", "GBP", "0.85"), _xr46_item(0, "USD", "EUR", XR46_UNSTORABLE)]
+    _xr46_store(monkeypatch, {items[0].rate_date: RuntimeError(XR46_SECRET), items[2].rate_date: ValueError(XR46_STORE_REFUSAL)})
+    errors = [
+        "Rate 0: Failed: internal error",
+        "Rate 1: Base and quote must be different (got EUR)",
+        f"Rate 2: Validation error: {XR46_STORE_REFUSAL}",
+        f"Rate 3: Validation error: {fx_rate_refusal('USD', 'EUR', items[3].rate_date)}",
+    ]
+    reasons = ["internal_error", "same_currency", "invalid_rate", "rate_not_storable"]
+
+    with pytest.raises(HTTPException) as exc:
+        await _xr46_upsert(items)
+
+    detail = exc.value.detail
+    assert exc.value.status_code == 400, f"{exc.value.status_code}: {detail!r}"
+    assert isinstance(detail, dict), f"X-R46: the 400's detail is a {type(detail).__name__}, not the object {{code, message, rejected}}: {detail!r}"
+    try:
+        written = json.loads(json.dumps(detail, allow_nan=False))
+    except (TypeError, ValueError) as error:
+        pytest.fail(f"X-R46: the 400's detail is not JSON as it stands ({error}): the server would answer 500 rendering it: {detail!r}")
+    assert written == detail, f"the 400's detail changes once written as JSON: {detail!r}"
+    assert set(detail) == {"code", "message", "rejected"}, detail
+    assert detail["code"] == "fx_rates_refused", detail
+    assert detail["message"] == f"All rates failed: {'; '.join(errors)}", detail["message"]
+    assert detail["rejected"] == [{"index": index, "date": item.rate_date.isoformat(), "reason": reason} for index, (item, reason) in enumerate(zip(items, reasons, strict=True))], detail["rejected"]
+    assert XR46_SECRET not in json.dumps(detail), "MF-SEC9a: the 400 echoes the internal error"
+
+
+@pytest.mark.asyncio
+async def test_xr46_guard_upsert_rates_endpoint_answers_an_empty_rejected_when_every_rate_is_kept(monkeypatch):
+    """X-R46 guard of the cure: EUR → GBP 0.85 and USD → EUR 0.8 (stored EUR/USD 1.25), both kept.
+
+    Red on HEAD 1c1456713 only because ``rejected`` does not exist; green once it does.
+    Contract: 200; two results, both handed to the store, no error; ``rejected`` ``[]``.
+    """
+    store = _xr46_store(monkeypatch)
+    items = [_xr46_item(0, "EUR", "GBP", "0.85"), _xr46_item(1, "USD", "EUR", "0.8")]
+
+    response = await _xr46_upsert(items)
+
+    assert (response.success_count, response.errors) == (2, []), response
+    assert _xr46_handed(store) == [item.rate_date for item in items]
+    assert _xr46_rejected(response) == []
+
+
+def test_xr46_fx_rate_rejection_holds_one_of_four_reasons_and_the_answer_defaults_to_none():
+    """X-R46, the schemas alone: ``FXRateRejection`` holds an index, a date and one of the four reasons, and refuses any
+    other reason; an ``FXBulkUpsertResponse`` built without ``rejected`` answers ``[]``.
+
+    Red on HEAD 1c1456713: ``schemas.fx`` has no ``FXRateRejection``.
+    """
+    rejection = getattr(fx_schemas, "FXRateRejection", None)
+    assert rejection is not None, "X-R46: backend.app.schemas.fx has no FXRateRejection"
+    for reason in XR46_FX_REASONS:
+        assert rejection(index=2, date=XR46_DAY, reason=reason).model_dump(mode="json", by_alias=True) == {"index": 2, "date": XR46_DAY.isoformat(), "reason": reason}
+    with pytest.raises(ValidationError):
+        rejection(index=2, date=XR46_DAY, reason="not_a_reason")
+    assert fx_schemas.FXBulkUpsertResponse(results=[], success_count=0).model_dump(mode="json", by_alias=True).get("rejected") == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+async def test_xr46_wire_200_of_upsert_rates_carries_rejected():
+    """X-R46 on the wire, on the lane's test database: KHR → MMK "1.5", then MMK → KHR "1E-1000000" (KHR/MMK
+    1E+1000000 once inverted, which ``normalize_storable_rate`` refuses), as the FX editor posts them.
+
+    Red on HEAD 1c1456713: the JSON of the 200 has no ``rejected``.
+    Contract: 200; 1.5 stored alone; the body's ``errors`` one string, «Rate 1: …», and its ``rejected`` ``[{"index": 1,
+    "date": "1986-03-04", "reason": "rate_not_storable"}]``.
+    """
+    _xr46_unstorable_barrier("MMK", "KHR")
+    story = f'POST /fx/currencies/rate of KHR → MMK "1.5" on {XR38_DAYS[0]} and MMK → KHR "{XR46_UNSTORABLE}" on {XR38_DAYS[1]}'
+
+    response = await _xr38_post([_xr38_item(XR38_DAYS[0], "KHR", "MMK", '"1.5"'), _xr38_item(XR38_DAYS[1], "MMK", "KHR", f'"{XR46_UNSTORABLE}"')], story)
+
+    assert response.status_code == 200, f"{story} answered {response.status_code} {response.text[:300]}"
+    stored = await _xr38_stored()
+    assert stored == {XR38_DAYS[0]: Decimal("1.5")}, f"barrier: {story} stored {stored}, expected 1.5 alone"
+    body = response.json()
+    assert len(body["errors"]) == 1 and body["errors"][0].startswith("Rate 1:"), body["errors"]
+    assert body.get("rejected") == [{"index": 1, "date": XR38_DAYS[1].isoformat(), "reason": "rate_not_storable"}], f"X-R46: {story}: the 200 does not say which rate it refused: {body}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+async def test_xr46_wire_200_of_upsert_rates_lists_a_rate_0_at_10_decimal_places_as_rate_not_storable():
+    """X-R46 on the wire, on the lane's test database: KHR → MMK "1.5", then KHR → MMK "1E-11", which the endpoint's own
+    ``normalize_storable_rate`` keeps and the real ``upsert_rates_bulk`` refuses at its X-R38 check (0 once cut to the
+    10 decimal places of ``fx_rates.rate``): the commonest refusal of the FX editor, made by the store, not the endpoint.
+
+    Red on HEAD 1c1456713: the JSON of the 200 has no ``rejected``; the store's refusal is a plain ``ValueError``,
+    which the contract read literally would call ``invalid_rate``.
+    Contract (decided 17/10): the store raises ``FXRateNotStorableError``, its text unchanged, and the endpoint reads it
+    as ``rate_not_storable``. 200; 1.5 stored alone; ``errors`` exactly as before, «Rate 1: Validation error: » and
+    ``fx_rate_refusal``'s text for KHR/MMK on 1986-03-04; ``rejected`` ``[{"index": 1, "date": "1986-03-04", "reason":
+    "rate_not_storable"}]``. The answer is what is pinned, not how the endpoint learns the reason.
+    """
+    rate = Decimal("1E-11")
+    assert normalize_storable_rate("KHR", "MMK", rate) is not None and storable_fx_rate(rate) is None, f"barrier: KHR → MMK {rate} should pass the endpoint's normalize_storable_rate and be refused by storable_fx_rate, in the store"
+    story = f'POST /fx/currencies/rate of KHR → MMK "1.5" on {XR38_DAYS[0]} and KHR → MMK "1E-11" on {XR38_DAYS[1]}'
+
+    response = await _xr38_post([_xr38_item(XR38_DAYS[0], "KHR", "MMK", '"1.5"'), _xr38_item(XR38_DAYS[1], "KHR", "MMK", '"1E-11"')], story)
+
+    assert response.status_code == 200, f"{story} answered {response.status_code} {response.text[:300]}"
+    stored = await _xr38_stored()
+    assert stored == {XR38_DAYS[0]: Decimal("1.5")}, f"barrier: {story} stored {stored}, expected 1.5 alone"
+    body = response.json()
+    assert body["errors"] == [f"Rate 1: Validation error: {fx_rate_refusal('KHR', 'MMK', XR38_DAYS[1])}"], body["errors"]
+    assert body.get("rejected") == [{"index": 1, "date": XR38_DAYS[1].isoformat(), "reason": "rate_not_storable"}], f"X-R46: {story}: the 200 does not list the store's X-R38 refusal as rate_not_storable: {body}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+async def test_xr46_wire_400_of_upsert_rates_carries_an_object_detail():
+    """X-R46 on the wire, on the lane's test database: MMK → KHR "1E-1000000" alone, refused.
+
+    Red on HEAD 1c1456713: 400 with ``{"detail": "All rates failed: Rate 0: …"}``, a string.
+    Contract: 400; nothing stored; ``detail`` ``{"code": "fx_rates_refused", "message": "All rates failed: Rate 0: …",
+    "rejected": [{"index": 0, "date": "1986-03-03", "reason": "rate_not_storable"}]}``.
+    """
+    _xr46_unstorable_barrier("MMK", "KHR")
+    story = f'POST /fx/currencies/rate of MMK → KHR "{XR46_UNSTORABLE}" on {XR38_DAYS[0]}'
+
+    response = await _xr38_post([_xr38_item(XR38_DAYS[0], "MMK", "KHR", f'"{XR46_UNSTORABLE}"')], story)
+
+    assert response.status_code == 400, f"{story} answered {response.status_code} {response.text[:300]}"
+    stored = await _xr38_stored()
+    assert not stored, f"barrier: {story} was refused, yet rows were written: {stored}"
+    detail = response.json().get("detail")
+    assert isinstance(detail, dict), f"X-R46: {story}: the 400's detail is a {type(detail).__name__}, not the object {{code, message, rejected}}: {detail!r}"
+    assert (detail.get("code"), detail.get("rejected")) == ("fx_rates_refused", [{"index": 0, "date": XR38_DAYS[0].isoformat(), "reason": "rate_not_storable"}]), detail
+    assert str(detail.get("message")).startswith("All rates failed: Rate 0:"), detail

@@ -100,6 +100,7 @@
     "savedCount": "{n, plural, one {# enregistré} other {# enregistrés}}",
     "deletedCount": "{n, plural, one {# supprimé} other {# supprimés}}",
     "skippedCount": "{n, plural, one {# ignoré (invalide)} other {# ignorés (invalides)}}",
-    "saveFailed": "Échec de l’enregistrement des taux FX : {error}"
+    "saveFailed": "Échec de l’enregistrement des taux FX : {error}",
+    "refusedCount": "{n, plural, one {# refusé} other {# refusés}}"
   }
 }

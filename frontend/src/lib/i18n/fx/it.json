@@ -100,6 +100,7 @@
     "savedCount": "{n, plural, one {# salvato} other {# salvati}}",
     "deletedCount": "{n, plural, one {# eliminato} other {# eliminati}}",
     "skippedCount": "{n, plural, one {# ignorato (non valido)} other {# ignorati (non validi)}}",
-    "saveFailed": "Salvataggio dei tassi FX non riuscito: {error}"
+    "saveFailed": "Salvataggio dei tassi FX non riuscito: {error}",
+    "refusedCount": "{n, plural, one {# rifiutato} other {# rifiutati}}"
   }
 }
