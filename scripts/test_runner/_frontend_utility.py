@@ -69,6 +69,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/transactions/import/importCompare.test.ts",
             "src/lib/features/transactions/resolveValidationMessage.test.ts",
             "src/lib/features/transactions/resolveValidationMessage.decimals.test.ts",
+            "src/lib/features/transactions/txDisplayHelpers.test.ts",
             "src/lib/features/transactions/commitRefusal.test.ts",
             "src/lib/features/transactions/resolveBrimNotice.test.ts",
             "src/lib/features/transactions/events/eventTypes.test.ts",
