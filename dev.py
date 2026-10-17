@@ -331,6 +331,9 @@ def cmd_server(args):
         # later attempts. Off on every lane (configure_test_runtime has dropped any LIBREFOLIO_* of .env and the shell);
         # its own tests turn it on in-process.
         env["LIBREFOLIO_LOGIN_LIMIT"] = "off"
+        # MF-SI2: the E2E suites pick search results as one user, two provider probes a pick: the per-user probe limit
+        # would refuse them in a parallel run. Off on every lane; its own tests build limiters in-process.
+        env["LIBREFOLIO_PROBE_RATE_LIMIT"] = "0"
     else:
         env["LIBREFOLIO_TEST_MODE"] = "0"
     if debug_mode:

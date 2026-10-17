@@ -92,6 +92,7 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_risk_eligibility.py",
     "backend/test_scripts/test_services/test_risk_exclusion_reasons.py",
     "backend/test_scripts/test_services/test_risk_price_day_budget.py",
+    "backend/test_scripts/test_services/test_risk_replay_range_bounds.py",
 )
 
 PAC_PLANNER_CORE_TEST_PATHS = (
@@ -1003,6 +1004,36 @@ def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Lone transfer legs tests", verbose=verbose)
 
 
+def services_probe_rate_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the per-user limit of POST /assets/provider/probe (MF-SI2)."""
+    print_section("Services: Probe Rate Limit")
+    print_info("Testing: config/plugins.py (probe_rate_limit), api/v1/assets/providers.py (probe_limiter, PROBES_BY_USER, probe_provider_config), dev.py (cmd_server lane env)")
+    print_info("Tests: 30 probes per 60 s per user; past it 429 PROBE_RATE_LIMITED, retry_after = Retry-After = ceil(wait) >= 1, manager not called, refusal not counted; per user; free again after the window; LIBREFOLIO_PROBE_RATE_LIMIT (30, 0 off, unusable → 30), the lanes off")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_probe_rate_limit.py", test_names)
+    return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
+
+
+def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC9-1/-3/-4 + Y's D1: POST /assets/prices/current (no lane DB, no server, no network)."""
+    print_section("Services: Current Prices Bulk (R13-SEC9, Y's D1)")
+    print_info("Testing: api/v1/assets/prices.py (get_current_prices_bulk, query_prices_bulk), services/assets/price_query.py (_live_quote_item, get_current_prices_bulk)")
+    print_info(
+        "Tests: a repeated id fetched and written back once; one cache key waiting for the slot, one provider call; 1 001 ids refused before any read; range_start/target_currency refused by their parameters; the range change once per distinct id, its target handed through; a 500 never echoes its error"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_prices_bulk.py", test_names)
+    return run_command(cmd, "Current prices bulk tests", verbose=verbose)
+
+
+def services_fx_pairs_per_query(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC9-2: rate queries read 1 000+ pairs in chunks SQLite can parse (private in-memory DB)."""
+    print_section("Services: FX Pairs per Query (R13-SEC9-2)")
+    print_info("Testing: services/fx/conversion.py (convert_bulk), services/fx/period_changes.py (_first_rate_days_inside)")
+    print_info("Tests: 1 000 and 1 035 distinct pairs answered without «Expression tree is too large»; a barrier proves one OR of that many is refused")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_pairs_per_query.py", test_names)
+    return run_command(cmd, "FX pairs per query tests", verbose=verbose)
+
+
 def services_auto_cost_unreadable_pool(verbose: bool = False, test_names: list = None) -> bool:
     """Test W-B69: an Auto cost is never computed over a pool holding a row it cannot read."""
     print_section("Services: Auto Cost over an Unreadable Pool (W-B69)")
@@ -1096,6 +1127,15 @@ def services_provider_wipe_split_guard(verbose: bool = False, test_names: list =
     print_info("Tests: a plan's new params or leaving it refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409), only the caller's adjustments named, nothing written; else the save is as before")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_wipe_split_guard.py", test_names)
     return run_command(cmd, "Provider wipe split guard tests", verbose=verbose)
+
+
+def services_provider_removal_link_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R62: removing a provider refuses while a transaction is linked to an event it generated."""
+    print_section("Services: Provider Removal Link Guard")
+    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/api/v1/assets/providers.py")
+    print_info("Tests: a removal refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (HTTP 409) while a generated event has a linked transaction, only the caller's transactions named, nothing written; a link the check missed is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_removal_link_guard.py", test_names)
+    return run_command(cmd, "Provider removal link guard tests", verbose=verbose)
 
 
 def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
@@ -2310,6 +2350,38 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "probe-rate-limit",
+        services_probe_rate_limit,
+        name="Probe Rate Limit",
+        desc="POST /assets/provider/probe: PROBES_BY_USER is probe_limiter() at import, a SlidingWindowLimiter of 30 per 60 s by default; the first hits per user reach AssetSourceManager.probe_provider_config with the request, its operations and the user id; past the limit 429 PROBE_RATE_LIMITED with an int retry_after >= 1 (the wait rounded up) equal to Retry-After and a message, the manager not called and the refusal not counted; another user is not limited; past the window the user probes again. LIBREFOLIO_PROBE_RATE_LIMIT: probe_rate_limit() reads it at each call, unset/blank 30, stripped ASCII whole number 0..10000, anything else a ValueError naming the variable and the value; probe_limiter() is n per 60 s, None for 0 with one warning, 30 with one error for an unusable value (never off by mistake); with the limit off 40 probes of one user all reach the manager; the route applies the configured limit (2: the third is 429; unusable: 30); ./dev.py server --test hands the server LIBREFOLIO_PROBE_RATE_LIMIT=0, a start without --test does not",
+        # PURE: no DB, no server, no network. The route coroutine is called directly; PROBES_BY_USER is replaced by a
+        # private SlidingWindowLimiter on a fake clock and the manager's probe by a recording stub, both with monkeypatch,
+        # so the lane's real limiter is never consumed. The lane switch runs dev.cmd_server in-process with every launch
+        # stubbed (test_dev_designer_lab_banner.start_server): nothing starts.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "current-prices-bulk",
+        services_current_prices_bulk,
+        name="Current Prices Bulk (R13-SEC9)",
+        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (1900…tomorrow) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error",
+        # PURE: the service on a private in-memory SQLite (create_all), the provider a double behind core.configured_provider,
+        # a private current-value cache, the route called directly or through a fresh in-process app (httpx.ASGITransport),
+        # its service and live_range_changes replaced by recorders, all by monkeypatch.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "fx-pairs-per-query",
+        services_fx_pairs_per_query,
+        name="FX Pairs per Query (R13-SEC9-2)",
+        desc="convert_bulk and _first_rate_days_inside with 1 000 / 1 035 distinct pairs: every conversion answered, no OperationalError; barrier: one OR of that many is refused by SQLite",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "portfolio-allocation-source",
         services_portfolio_allocation_source,
         name="Portfolio Allocation Source",
@@ -2404,6 +2476,15 @@ Note: No backend server required.
         desc="X-R49: POST /assets/provider refused before any write of the request with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) when an item would wipe the events a parametric provider generated (new params of the plan, or leaving it for another provider) while a SPLIT among them has linked incoming ADJUSTMENTs without a purchase cost; details name the item (asset_id, item_index) and each such SPLIT with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the items before the refused one are not written either. With a cost (0 included), a manual SPLIT, the same params, an online provider's params change or a new assignment the save is as before",
         # WRITE-SCOPED, the category default: four assets, three assignments, two users and two brokers under a unique
         # marker; each test restores the assignments by id and wipes by asset and broker id.
+    )
+    add_test(
+        cat,
+        "provider-removal-link-guard",
+        services_provider_removal_link_guard,
+        name="Provider Removal Link Guard",
+        desc="X-R62: DELETE /assets/provider refused before any write with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (409) while an event the removed assignment generated (deleted with it, CASCADE) has a linked transaction (RESTRICT); details name the asset (asset_id, item_index: its first position) and each such event (event_id, date, type) with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the assets before the blocked one are not removed either. A link the check missed is rolled back and answered PROVIDER_REMOVAL_CONFLICT (409, empty params, no SQL text). No linked transaction, a manual event, an asset without an assignment or an empty request: as before",
+        # WRITE-SCOPED, the category default: three inactive assets (no lane scheduler refreshes them), two users and two
+        # brokers under a unique marker, dated 1984; each test writes its own assignments and wipes by asset and broker id.
     )
     add_test(
         cat,
@@ -2639,7 +2720,7 @@ Note: No backend server required.
         "backup-staging",
         services_backup_staging,
         name="Instance Backup Staging",
-        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy; B-35 (m): stage_archive(max_unpacked=) checks an archive at or under the cap on its declared total, refuses one above it unpacked_too_large before the free space and before a byte is written (no data/, progress never past checking), a secure archive decrypted first, None unchanged",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy; B-35 (m): stage_archive(max_unpacked=) checks an archive at or under the cap on its declared total, refuses one above it unpacked_too_large before the free space and before a byte is written (no data/, progress never past checking), a secure archive decrypted first, None unchanged; B-37 (l): the post-migration fixes' connection to the copy recorded too, trusted_schema=OFF first like every other",
         # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
         # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
         # directory of the test configured (which must stay absent). No lane DB, no server, no network.

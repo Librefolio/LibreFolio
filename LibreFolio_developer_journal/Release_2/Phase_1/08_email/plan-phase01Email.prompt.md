@@ -6100,6 +6100,252 @@ non sposti il registro.
 >
 > **Non eseguito**: nessun E2E (solo tipi, configurazione e un `false` che prende lo stesso ramo di `undefined`).
 
+### SEC8-1b — La revisione della cura di J (2026-10-17, 13:5x; sola lettura, ramo di J `949825b8b`)
+> **Esito: OK, nessun reperto.** È il residuo del mio SEC8-1, cioè il replay del rischio su un intervallo senza
+> limite.
+> - **`bounded_range()`** (`risk/scope.py`):
+>   - la fine è al più `latest_range_end()`, domani;
+>   - l'inizio è almeno `range_span_floor(fine)`, 100 anni prima, limitato a `date.min`: un intervallo che arriva
+>     all'anno 1 non va in overflow;
+>   - un inizio dopo la fine si sposta sulla fine;
+>   - `end=None` vale «un solo giorno» (la docstring di `DateRangeModel`), quindi `end or start` è la lettura giusta;
+>   - un intervallo già nei limiti torna identico.
+> - **Applicato prima di tutto in `RiskService.execute`** (`model_copy` della richiesta), e di nuovo in cima al
+>   replay: fatti, copertura, suggerimento e preparazione. È una difesa in profondità.
+>   - Ogni strada passa da `execute`: la rotta `/risk` e il contesto drawdown dell'export AI (`drawdown_context.py:350`).
+>   - Nessun plugin legge il `replay_range` grezzo per camminare. Lo stress usa la finestra preparata.
+> - **Note** (info):
+>   1. Nei limiti, la preparazione del rischio paga il budget per giorno di Z-25 (`BulkTooManyDaysError` diventa un
+>      `resource_limit_error`): il livello di SEC9-2 vale anche qui, e Z-27 lo copre.
+>   2. Cosmetica: il `requested_range` dei risultati (`results.py:289`) ora riporta l'intervallo limitato, mentre
+>      l'output dello stress riporta il `replay_range` grezzo (`plugin.py:637`). Due convenzioni in una risposta; si
+>      vede solo con richieste fuori dai limiti, che la UI non manda.
+
+### E-18 — Codici di valuta stretti sulle scritture (MF-SEC9b; decisione del coordinatore delle 13:33)
+> **La decisione** (coordinatore, 13:33): non si possono misurare le installazioni 1.2 degli altri, quindi il piano
+> deve reggere qualunque cosa sia salvata.
+> - **Stretto solo sulle scritture**, gli schemi di richiesta: transazioni, asset, tassi e rotte FX, eventi,
+>   l'ingresso BRIM.
+>   - La regola: tre lettere ASCII e `alpha_3` esistente, maiuscole e minuscole libere, formato sul filo invariato,
+>     messaggio troncato.
+>   - **`XXX` e `XTS` restano ammessi**: i test usano `XTS`.
+> - **Le letture restano tolleranti**: export AI, PAC e riepiloghi dei broker leggono i valori salvati senza la regola
+>   stretta, così nessuna installazione comincia a rispondere 500.
+> - **Un avviso di qualità dei dati** per i codici non ISO salvati è una voce piccola a parte. La SQL di misura va
+>   nella lista dello sviluppatore, per la sua copia di riferimento.
+> - **Il codice dopo l'ingresso di X-R59/SEC9-1 di MF**: `schemas/common.py` è aperto sul suo ramo. Fino ad allora,
+>   i rossi, **solo in file di test nuovi**.
+
+#### E-18.0 — Il disegno, per i rossi ✅ (2026-10-17, 13:4x–13:5x; sola lettura)
+> **Nessun tipo nuovo per il modello `Currency`.** Una sottoclasse stretta (`CurrencyInput`) romperebbe ogni
+> `TXCreateItem(cash=Currency(...))` interno: plugin BRIM, gap-fix, promozione. Pydantic non accetta un'istanza della
+> classe madre in un campo tipizzato con la figlia.
+>
+> **Il contratto**:
+> - In `schemas/common.py`, `iso_currency_code(value) -> str`:
+>   - un non-`str` è rifiutato;
+>   - `code = value.strip().upper()`, poi tre caratteri, `isascii()`, `isalpha()` e
+>     `pycountry.currencies.get(alpha_3=code)`;
+>   - restituisce `code`;
+>   - il `ValueError` nomina la regola e mostra al più 16 caratteri dell'input.
+> - Accanto, `IsoCurrencyCode = Annotated[str, BeforeValidator(iso_currency_code)]`.
+> - **Invariati e tolleranti**: `Currency.validate_code`, `CurrencyCode` e il modello `Currency`.
+>
+> **Le scritture strette** (campi `str`: il validatore passa a `iso_currency_code`; campi `Currency`: un
+> after-validator controlla `.code`):
+> 1. `TXCreateItem` (`cash`, `cost_basis_override`): copre API, BRIM (`brim_provider.py:558`) e gap-fix;
+> 2. `TXUpdateItem` (`cash`, `cost_basis_override`);
+> 3. `TXPromoteResolvedFields.cost_basis_override` (`transactions/batch.py`) e
+>    `TXTransferPromoteRequest.cost_basis_override` (`transactions/promotion.py`);
+> 4. `FAAssetCreateItem.currency` e `FAAssetPatchItem.currency`. Quest'ultimo lo costruiscono anche Borsa Italiana
+>    e justETF, con codici ISO (`dati.valuta or "EUR"`);
+> 5. `FAEventUpsertPoint.value.code`, la sottoclasse solo di richiesta; `event_store._as_upsert_points` la rivalida.
+>    `FAAssetEventPoint`, costruito dai provider, resta tollerante;
+> 6. `FXUpsertItem` (`base`, `quote`);
+> 7. `FXConversionRouteItem` (`base`, `quote` e ogni `chain_steps[*]`). È un controllo sull'item, perché
+>    `FXRouteStep` resta tollerante: la lista `GET /fx/providers/routes` lo ricostruisce dal JSON salvato
+>    (`fx/providers.py:156`);
+> 8. BRIM: `broker_investimental._extract_currency_from_account` passa alla regola stretta e dà `None` per `[978]`,
+>    `[YEN]` e `[EURO]`.
+>
+> **Le guardie tolleranti**, verdi oggi e dopo:
+> - `Currency` e `CurrencyCode`;
+> - `TXReadItem` con un codice salvato `978`;
+> - `FXRouteStep` da JSON salvato;
+> - `FXDeleteItem` e `FXDeleteRouteItem`: le righe estranee devono restare cancellabili;
+> - `FAAssetEventPoint`, `BRIMTruthCash` (gap-fix e report set lo costruiscono dalla cassa salvata) e `FAPricePoint`
+>   (usato in entrata e in uscita);
+> - i filtri e le richieste di lettura (`TXQueryParams`, `FAAinfoFiltersRequest`, `FAEventQueryItem`,
+>   `FXPeriodChangesRequest`, `FXConversionRequest`);
+> - il `default_currency` delle impostazioni, stretto già oggi.
+>
+> **Da sapere per il codice**: un gap-fix su un broker con cassa salvata non ISO proporrebbe una transazione che la
+> regola rifiuta. Va gestito senza 500, saltando quella valuta con un avviso.
+>
+> **I rossi**: dal `test-author`, in un solo file nuovo, `backend/test_scripts/test_schemas/test_currency_write_strict.py`
+> (puro: niente DB, server o rete).
+> - La registrazione nel runner (`scripts/test_runner/_backend_schemas.py`, condiviso) è rimandata al codice.
+
+#### E-18.1 — I rossi ✅ (2026-10-17, 13:5x–14:1x; `test-author` `07ae2645`, solo il file nuovo)
+> **Il file**: `backend/test_scripts/test_schemas/test_currency_write_strict.py`, da CWS-001 a CWS-025.
+> - Puro, collezione pulita.
+> - Ogni test di una scrittura convalida prima lo stesso payload con `"EUR"` (il controllo positivo): un rosso può
+>   fallire solo perché la forma larga è accettata.
+> - `iso_currency_code` e `IsoCurrencyCode` sono cercati dentro ogni test (`getattr`), quindi oggi ogni rosso fallisce
+>   da solo e la collezione regge.
+>
+> **⚠️ Fuori pista, trovato dal `test-author`**: `FXConversionRouteReadItem` è una **sottoclasse** di
+> `FXConversionRouteItem`, e la lista `GET /fx/providers/routes` la costruisce dalle righe salvate
+> (`fx/providers.py:152-158`).
+> - Un validatore stretto sulla classe di richiesta sarebbe ereditato, e la lista darebbe 500 su una rotta salvata
+>   `978`.
+> - Verificato da me: è l'unica sottoclasse di lettura dei modelli stretti.
+> - Aggiunta la guardia **CWS-025**: base, quote o passo intermedio `978` restano validi, costruiti come fa la lista.
+> - **Per il codice**: il controllo stretto delle rotte non deve passare per ereditarietà. Una classe base comune, con
+>   la regola stretta solo nella richiesta.
+>
+> **Le altre scelte del `test-author`** (accettate):
+> - `FXRouteStep` vuole anche `provider`, quindi la guardia passa `MOCKFX`;
+> - i due campi degli asset controllano la lunghezza prima del validatore: `" eur "` è già rifiutato oggi, e la
+>   guardia in minuscolo usa `"eur"`;
+> - con base e quote valide, un passo `978` può stare solo nel mezzo della catena: provato in catene di due e tre
+>   passi.
+>
+> **Prove** (14:1x, pytest diretto sul solo file, carico sotto 50):
+> - **236 falliti, 628 passati, 0 errori.**
+> - Con `--tb=line` (`files/logs/e18_reds_line.log`), 236 righe di fallimento, tutte con `red until E-18`.
+> - Per funzione: CWS-010 (le scritture) 162, la funzione 32 (accetta 9, rifiuta 19, non stringa 2, messaggio 1,
+>   più 1), il tipo 31, BRIM 11.
+> - Le guardie sono verdi oggi: le letture tolleranti (CWS-013, 015, da 020 a 025), i campi di tre caratteri (CWS-012)
+>   e le accettazioni (CWS-011).
+> - `ruff` e `black` puliti.
+>
+> **Non ancora**: la registrazione nel runner. Lo snippet del `test-author` è pronto
+> (`schemas currency-write-strict`, `isolation="pure"`) e va con il codice. Il file non registrato non gira in nessun
+> run del runner, quindi i suoi 236 rossi non toccano i cancelli.
+
+### SEC9-1 — La revisione della cura di MF (2026-10-17, 13:4x; sola lettura, ramo di MF `ad399d383`)
+> **Esito: OK, nessun reperto.** Ogni punto della mia cura c'è.
+> - **`/prices/current`**:
+>   - il limite di 1 000 viene prima di ogni lettura (`prices.py:213`);
+>   - un fetch e una scrittura F.2/F.3 per id distinto (`dict.fromkeys`), e la risposta torna nell'ordine della
+>     richiesta, coi duplicati;
+>   - la cache è riletta **dentro** il semaforo e scritta prima di rilasciarlo: N attese sulla stessa chiave fanno una
+>     sola chiamata, quindi niente raffreddamento per tutti;
+>   - `range_change` è calcolato una volta per id distinto;
+>   - `range_start` va dal 1900 a `latest_range_end()`, come `AfterValidator` sul parametro: è un 422 standard, e
+>     viene controllato prima del limite.
+> - **I 500** non ripetono più `str(e)` (`/query` e `/current`); il log tiene l'errore.
+> - **FX a blocchi di 500** (`convert_bulk`, `_first_rate_days_inside`):
+>   - una condizione per coppia distinta, quindi ogni coppia viene da un solo blocco, già in ordine di data (`bisect`
+>     corretto);
+>   - circa 500 OR, ben sotto la profondità 1 000 di SQLite, con circa 11 parametri per coppia;
+>   - un test barriera prova che questo SQLite rifiutava davvero l'OR singolo.
+> - **D1** (`target_currency`): al più due conversioni per id distinto. Legge in modo tollerante (`validate_code`),
+>   coerente con la decisione MF-SEC9b sulle letture.
+> - **I test** coprono ogni punto (`test_current_prices_bulk.py`, `test_fx_pairs_per_query.py`).
+>
+> **Note**, nessuna bloccante:
+> 1. **LOW, funzionale, la stessa classe di OR**:
+>    - `fx/storage.py:139` (upsert) e `:262` (delete) fanno un termine OR per voce, e `POST`/`DELETE
+>      /fx/currencies/rate` non hanno un limite di voci;
+>    - l'import CSV della pagina FX (`FxDataImportModal`, poi `FxDataEditorSection`, che salva tutte le righe in una
+>      richiesta) con circa 990 righe (circa 4 anni di tassi giornalieri) dà «Expression tree is too large», cioè un
+>      500, e il salvataggio dell'import fallisce;
+>    - stessa forma in `price_store.py:461` (cancellazione in blocco dei prezzi, meno probabile: l'editor raggruppa le
+>      date in intervalli) e in `fx/sync.py:234`;
+>    - la cura: blocchi come `FX_PAIRS_PER_QUERY`, più un limite sulle rotte.
+> 2. **Info, SI2**:
+>    - `PROBES_BY_USER` è costruito una volta all'import, dall'ambiente del processo. Nei processi pytest niente lo
+>      mette a `0`, e il drop di E-15 vale alla raccolta;
+>    - oggi nessun test in-process chiama la rotta di sonda (`test_request_float_inputs.py` ha una sua app di prova),
+>      quindi nessuna esposizione;
+>    - un futuro test in-process dividerebbe un solo budget di 30 al minuto per id utente, per processo, nei run
+>      combinati;
+>    - la cura a basso costo: leggere l'impostazione a ogni chiamata, come `login_limit_enabled()`.
+> 3. **Info, preesistente**: il caso peggiore per richiesta è ora di 1 000 id distinti. Con un provider lento (timeout
+>    10 s, 5 alla volta) una richiesta può durare circa 33 minuti di chiamate in uscita, e il semaforo per richiesta si
+>    moltiplica con le richieste parallele. Un limite globale per provider lo chiuderebbe.
+
+### MF-SEC9b — `Currency.validate_code` accetta nomi e numeri: analisi (2026-10-17, 13:2x–13:5x; sola lettura)
+> **Il compito del coordinatore** (13:22), dal backlog di MF, che è occupato con SEC9-1/D1: dove si usa, a che cosa
+> normalizza oggi, se dati salvati o client dipendono dalla forma larga, il rischio, una regola stretta e l'impatto di
+> migrazione. Niente codice: `schemas/common.py` e le rotte dei prezzi sono aperti sul ramo di MF.
+>
+> **Oggi** (`schemas/common.py:97-118` e `:189-212`, dev `289fe26e8`): `strip().upper()`, poi
+> `pycountry.currencies.lookup(code)`, che accetta `alpha_3`, numerico e nome, senza maiuscole.
+> - **Ma restituisce l'input normalizzato, non `alpha_3`**, e quello si salva. Misurato in processo
+>   (`files/sec9b/probe.py`):
+>   - `EURO` dà `"EURO"`, `978` dà `"978"`, `us dollar` dà `"US DOLLAR"`, `999` dà `"999"` (cioè XXX);
+>   - cinque nomi ISO sono di tre lettere e passano come falsi codici: `Lek`, `Yen`, `Som`, `Won` e `Sol` danno
+>     `LEK`, `YEN`, `SOM`, `WON`, `SOL`;
+>   - `Bolívar Soberano` è ambiguo (VED e VES);
+>   - `XXX` («nessuna valuta») e `XTS` («prova») passano;
+>   - `GBp` (i pence di Yahoo) dà `GBP`; `BTC`, `GBX` e l'omoglifo cirillico sono rifiutati.
+> - La cache è `lru_cache(maxsize=256)` sull'input già normalizzato: limitata, nessun DoS.
+>
+> **Dove passa**:
+> - **Scritture**, per tutte basta `get_current_user`:
+>   - le transazioni: `cash` e `cost_basis_override` sono `Currency`, il cui `code` **non ha limite di lunghezza**.
+>     Qualunque forma arriva in `transactions.currency` (`batch_edits.py:265`), fino ai 65 caratteri del nome di XXX;
+>   - gli asset (creazione e modifica, `min_length=3, max_length=3`): passano solo le forme di tre caratteri, i 178
+>     numerici e i cinque nomi;
+>   - i tassi FX manuali (`POST /fx/currencies/rate`), le rotte e le conversioni: tre caratteri;
+>   - eventi, prezzi dei provider (`FACurrentValue`, i dividendi Yahoo con `CurrencyAmount` = `Currency`) e BRIM
+>     (`broker_investimental` legge il codice fra `[ ]`).
+> - **Letture**: `CurrencyCode` e `Currency` validano anche i modelli che leggono dati salvati (export AI, PAC
+>   allocator, gli oggetti `Currency` dei riepiloghi dei broker).
+> - **Già stretti**: `settings._check_currency` (`[A-Z]{3}` più `get(alpha_3=)`, il `default_currency` globale) e il
+>   resolver FX (`utils/fx/currency.py:184-191`, il cui commento nomina proprio questa trappola).
+> - **Il DB non fa da cancello**: i validatori di `db/models.py:48-60` (7 modelli) girano solo con `model_validate`.
+>   Misurato: `Asset(currency="NOT A CODE")` è accettato all'`__init__`. Nessun `CHECK` nelle migrazioni.
+>
+> **Chi dipende dalla forma larga: nessuno trovato.**
+> - Il frontend manda solo `alpha_3` presi dalle liste del server.
+> - I test: nessuno manda un nome o un numero (controllo positivo: lo stesso pattern trova 5 301 `eur`/`usd`).
+> - I plugin BRIM non hanno mappe di nomi; i provider danno codici ISO (`GBp` resta `GBP` col disegno di
+>   `quote_base_quantity`).
+> - I dati salvati di una 1.2 non si possono dire puliti senza misurarli: un report di broker con un nome o un numero
+>   sarebbe stato salvato così.
+>
+> **Il rischio**: integrità e disponibilità, non riservatezza né authz. **LOW per la sicurezza**, ma la cura è a basso
+> costo.
+> - Un codice estraneo divide i saldi per valuta (`978` accanto a `EUR`), non ha tassi (conversioni mancanti) e fa
+>   lanciare `RangeError` a quattro viste che usano `Intl` in stile valuta (`riskAnalysisHelpers.ts:168`,
+>   `planner/format.ts:38`, `lotComparisonChartHelpers.ts:230`, `snapshotDataRenderer.ts:226`). Il formattatore comune
+>   non lo fa.
+> - Tocca altri utenti attraverso la valuta di un asset condiviso. Ma ogni utente può già mettere una valuta valida e
+>   sbagliata su un asset condiviso: il danno marginale è «fallisce» invece di «è sbagliato».
+> - I tassi manuali su coppie come `978/840` non toccano le coppie vere.
+>
+> **La regola stretta proposta**, una sola, quella di `settings` più lo `strip`:
+> - `code = v.strip().upper()`, poi `len(code) == 3`, ASCII, solo lettere, e `pycountry.currencies.get(alpha_3=code)`;
+> - restituisce `code`, quindi il formato sul filo non cambia;
+> - `settings._check_currency` e il resolver FX la chiamano;
+> - il messaggio d'errore tronca l'input (oggi lo ripete senza limite);
+> - le maiuscole e minuscole restano libere (`eur`, `GBp`);
+> - sotto-decisione facoltativa: rifiutare anche `XXX` e `XTS`, che sono voci ISO ma non valute.
+>
+> **L'impatto di migrazione e l'ordine**:
+> 1. **Misurare**: `files/sec9b/non_iso_currencies.sql`, sola lettura, 10 colonne di 7 tabelle; vuoto vuol dire
+>    niente da migrare.
+>    - Provato sul DB di test della mia corsia (`immutable=1`): 0 righe.
+>    - Il controllo positivo prende `978`, `YEN` e `US DOLLAR` e lascia `EUR`.
+>    - Da eseguire sulla copia di riferimento (skill `real-data-copy`): decisione del coordinatore.
+> 2. **Se ci sono righe**: una migrazione Alembic di dati nella stessa release, **prima** della regola stretta.
+>    Altrimenti le letture valide (export AI, PAC, riepiloghi dei broker) cominciano a dare 500 a chi ha quelle righe.
+>    - Le colonne senza chiave (transazioni, asset, eventi, prezzi, `base_currency`) prendono
+>      `lookup(v).alpha_3`, salvo l'ambiguo.
+>    - Le coppie FX non ISO possono scontrarsi con quelle canoniche sulle chiavi uniche: un rapporto all'admin, non
+>      una riscrittura.
+> 3. Più un avviso di qualità dei dati per ciò che resta.
+> 4. **Poi la regola stretta.** Se la misura è vuota, va da sola.
+>
+> **Note**:
+> - La docstring di `db/models.py:11` promette una validazione che sui modelli `table=True` non avviene.
+> - I dividendi Yahoo in `GBp`: non ho seguito se gli eventi applicano `quote_base_quantity`. Proprietario Z o i
+>   provider; fuori da questo lotto.
+
 ### A-42/A-43 — La revisione preparata (2026-10-17, 12:2x; sola lettura, A sta scrivendo il codice)
 > **Il compito del coordinatore**: guardare ora A-42/A-43, cioè le mie note 1, 2 e 6 di R13-SEC4, così la revisione è
 > pronta al checkpoint di A. Niente codice.
@@ -6158,3 +6404,49 @@ non sposti il registro.
 >   `admin/cli_tools.en.md`.
 > - **Dalla parte di E**: nessun cambio. Da verificare solo che il riarmo non mandi un'email con un link poi annullato
 >   da un rollback, cioè l'invio dopo il commit.
+>
+> **L'esito** (13:1x–13:3x, sul codice entrato: dev `7156a24af`, backend e test `59161e5e2`, UI `8f8116fce`, docs
+> `145adbf27`; letto dagli oggetti git, il mio HEAD era ancora `fc979d0b4`): **OK, nessun reperto.** Ogni punto della
+> lista regge.
+> - **A-42, il rilascio**:
+>   - in `issue_setup_link` e in `_keep_pending_admin` il ricontrollo `is_pending_admin` sta dopo l'`UPDATE` di
+>     `revoke_tokens`, nella stessa transazione;
+>   - `is_pending_admin` è un `select(User.id)` col filtro in SQL, quindi fresco sotto il lock, mai l'oggetto ORM;
+>   - `revoke_tokens` ha un commento che vieta la scorciatoia;
+>   - se il ricontrollo dice no: rollback, `None` o `IGNORED`. `deliver_setup_link` agisce solo su `CREATED` con un
+>     token generato, quindi niente log né email del link (il mio punto 4).
+> - **A-42, il consumo**: `_setup_spent_before` esclude il token appena consumato (`id != spent_id`) e conta solo
+>   `consumed_at` (ritirati o usati), mai i soli revocati: un annullamento seguito da un nuovo `setup-link` funziona
+>   (BOOT :2604). Il rifiuto fa rollback prima di bcrypt, risponde `TOKEN_INVALID` come un link non valido, e l'avviso
+>   nel log non ha il token.
+> - **A-43**:
+>   - l'annullamento si decide dalla richiesta più `is_pending_admin` (`cancel`), non dalla transizione;
+>   - l'admin in attesa ha i link revocati e resta in attesa; ogni altro account ritira i link mai usati;
+>   - API (`update_user_status`) e CLI (`set_user_active`) passano dallo stesso `_end_setup_links`, con «in attesa»
+>     letto prima di ogni cambio;
+>   - la retrocessione è rifiutata con 409 `PENDING_SETUP` nell'API, anche insieme a `is_active: false` (tutto o
+>     niente), e in `user demote`;
+>   - la parte di E in `update_user_status` (la revoca dei link di verifica) non cambia di comportamento.
+> - **La protezione**:
+>   - `cancel` passa da `_protected` (409 `ACCOUNT_PROTECTED`, prima di ogni altra risposta), e così la cancellazione
+>     diretta dell'admin in attesa;
+>   - la CLI non guarda la protezione (il potere dell'operatore), e il bottone della UI è disattivato con il motivo;
+>   - **ma** `account_protection()` è ancora il gancio di A7 che risponde sempre `None`, managed compreso: il 409 è
+>     cablato e testato col gancio sostituito (UADM-078/079), e diventa vivo quando il gancio avrà la sua regola.
+> - **La cancellazione diretta** dell'admin in attesa: al riavvio il bootstrap trova altri account e ignora le
+>   `LIBREFOLIO_ADMIN_*`, quindi l'account non ritorna. È davvero l'annullamento definitivo.
+> - **I test** coprono la lista: UADM-072…079, SETUP-017/018, BOOT :2476–2604 (rilascio, `setup-link`, riarmo, link
+>   rimasto, revocati che non contano).
+> - **UI e docs**: l'azione «Cancel setup link» con conferma manda `{is_active: false}`; la cancellazione è ammessa per
+>   l'admin in attesa (`deleteReason`); niente `{@html}`. I docs (`users`, `cli_tools`, `configuration`, `security`)
+>   sono esatti.
+>
+> **Nota** (info, la stessa classe di A-42): l'annullamento e la cancellazione decidono da letture fatte prima del lock.
+> - Se l'admin in attesa finisce il setup nei millisecondi fra la lettura del PATCH e la sua prima scrittura,
+>   l'annullamento non fa nulla. Il 200 mostra l'oggetto ORM vecchio (`is_active: false`, con `pending_setup: false`
+>   fresco), e senza commit non c'è il `refresh`.
+> - La cancellazione toglierebbe l'admin appena attivato senza `DEMOTE_FIRST`: innocuo, perché chi chiede è un admin
+>   attivo e lo voleva togliere.
+> - Il caso che conta è un link finito nelle mani sbagliate, usato proprio mentre l'admin lo annulla. L'admin vedrebbe
+>   «inattivo» fino al ricaricamento; chi ha il link non può scegliere quel millisecondo.
+> - La cura, se la si vuole: rileggere l'account dopo la prima scrittura (un `refresh` sotto il lock) e decidere da lì.

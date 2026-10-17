@@ -6,6 +6,9 @@
  * and each change is a fraction written as a decimal string, `null` when a price or a rate is missing. The tables show
  * percentages: this module turns each change into one and keeps no copy of the periods nor of the maths (X-R53).
  *
+ * Several requests can be in flight at once (a range change, a refresh, one pair after its sync):
+ * `PeriodChangesLedger` says which answer the list keeps, and whether one still to be kept is on its way (X-R60).
+ *
  * @module utils/periodChanges
  */
 import {zodiosApi} from '$lib/api';
@@ -123,4 +126,98 @@ export async function fetchFxPeriodChanges(pairs: ReadonlyArray<{base: string; q
         periods: periodsOf(items),
         deltasByPair: new Map(items.map((item) => [`${item.base}/${item.quote}`, {direct: deltasOf(item.periods, (period) => period.change_ratio), inverse: deltasOf(item.periods, (period) => period.inverse_change_ratio)}])),
     };
+}
+
+/**
+ * One request for the Δ columns, as the ledger tracks it: `full` asks every key of the list (a range change, a
+ * refresh), otherwise some keys only (a pair after its own sync); `asOf` is the day it asked up to.
+ */
+export interface PeriodChangesTicket {
+    readonly id: number;
+    readonly asOf: string;
+    readonly full: boolean;
+}
+
+/**
+ * Which answer of the Δ columns a list keeps while several are in flight (X-R60).
+ *
+ * - A full request replaces every one before it: an older full answer that lands late is not kept.
+ * - A request for some keys, made after a full one, is fresher for its keys than that full answer, whichever lands
+ *   first; a full request made after it makes it moot.
+ * - `busy` is true while a request whose answer would still be kept is in flight, one-key requests included, so the
+ *   list's `data-busy` never reads final before its Δ.
+ * - A failed full request keeps the values computed up to the same day and drops the others: they belong to another
+ *   range.
+ *
+ * Plain state, no reactivity: the page copies `busy` into its own `$state` after `begin` and after `end`.
+ */
+export class PeriodChangesLedger<K> {
+    #lastId = 0;
+    #latestFull = 0;
+    readonly #inFlight = new Set<PeriodChangesTicket>();
+    /** The request whose answer each shown key holds: its id and the day it asked up to. */
+    readonly #writers = new Map<K, {id: number; asOf: string}>();
+
+    /** A new request up to `asOf`: for every key when `full`, else for some. */
+    begin(asOf: string, full: boolean): PeriodChangesTicket {
+        const ticket: PeriodChangesTicket = {id: ++this.#lastId, asOf, full};
+        if (full) this.#latestFull = ticket.id;
+        this.#inFlight.add(ticket);
+        return ticket;
+    }
+
+    /** The request is over, answered or not: call it in a `finally`. */
+    end(ticket: PeriodChangesTicket): void {
+        this.#inFlight.delete(ticket);
+    }
+
+    /** Whether a request whose answer would still be kept is in flight. */
+    get busy(): boolean {
+        for (const ticket of this.#inFlight) if (this.#kept(ticket)) return true;
+        return false;
+    }
+
+    /**
+     * The values to show once `ticket` answered `answer`, from those shown now; `null` when the answer is not kept.
+     * A full answer replaces every key but those a later one-key answer wrote (a key it lacks goes); a one-key answer
+     * sets its keys, unless a later one already did. `shown` is not changed.
+     */
+    settle<V>(ticket: PeriodChangesTicket, shown: ReadonlyMap<K, V>, answer: ReadonlyMap<K, V>): Map<K, V> | null {
+        if (!this.#kept(ticket)) return null;
+        const next = ticket.full ? this.#writtenAfter(ticket, shown) : new Map(shown);
+        for (const [key, value] of answer) {
+            if ((this.#writers.get(key)?.id ?? 0) > ticket.id) continue;
+            next.set(key, value);
+            this.#writers.set(key, {id: ticket.id, asOf: ticket.asOf});
+        }
+        this.#forgetAllBut(next);
+        return next;
+    }
+
+    /**
+     * The values to show once the full request `ticket` failed: those computed up to the same day stay, the others
+     * go; `null` when nothing is to change — a one-key request, or a full one another has replaced.
+     */
+    fail<V>(ticket: PeriodChangesTicket, shown: ReadonlyMap<K, V>): Map<K, V> | null {
+        if (!ticket.full || !this.#kept(ticket)) return null;
+        const next = new Map<K, V>();
+        for (const [key, value] of shown) if (this.#writers.get(key)?.asOf === ticket.asOf) next.set(key, value);
+        this.#forgetAllBut(next);
+        return next;
+    }
+
+    #kept(ticket: PeriodChangesTicket): boolean {
+        return ticket.full ? ticket.id === this.#latestFull : ticket.id > this.#latestFull;
+    }
+
+    /** The shown keys a request made after `ticket` wrote. */
+    #writtenAfter<V>(ticket: PeriodChangesTicket, shown: ReadonlyMap<K, V>): Map<K, V> {
+        const kept = new Map<K, V>();
+        for (const [key, value] of shown) if ((this.#writers.get(key)?.id ?? 0) > ticket.id) kept.set(key, value);
+        return kept;
+    }
+
+    #forgetAllBut(kept: ReadonlyMap<K, unknown>): void {
+        for (const key of [...this.#writers.keys()]) if (!kept.has(key)) this.#writers.delete(key);
+    }
 }

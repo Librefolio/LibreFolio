@@ -1,5 +1,6 @@
 """Strict schema tests for canonical risk series and metadata."""
 
+import ast
 import json
 import re
 from datetime import UTC, date, datetime
@@ -80,6 +81,7 @@ from backend.app.schemas.risk_scenarios import (
     RiskScenarioLocalizedText,
     RiskScenarioMissingHistoryPolicy,
 )
+from backend.app.services.financial_math import returns as financial_math_returns
 from scripts.i18n_catalog import load_catalog
 
 
@@ -275,6 +277,91 @@ def test_risk_result_metadata_enforces_observed_annualization_and_mode():
             algorithm_version="risk-test@1.0.0",
             computed_at=datetime(2026, 1, 5),
         )
+
+
+# =============================================================================
+# MF-D3 (rule 10): the two annualization checks read the house formula
+# =============================================================================
+#
+# ``PreparedAssetSeriesSet.validate_alignment`` and ``RiskResultMetadata.validate_context`` check a contract's
+# ``annualization_factor`` against ``financial_math.returns.observations_per_year`` — imported by the schema, a pure
+# function of the layer — instead of writing ``n_observations * 365 / calendar_days`` a second and third time. Equal
+# values cannot tell a call from a copy, so the guard replaces the name the validators read with a stub answering a
+# different factor: the contract carrying the true factor must then be REFUSED, the one carrying the stub's ACCEPTED.
+# Red on HEAD (f252acb4a): ``schemas/risk.py`` has no such name, so ``monkeypatch.setattr`` (raising=True) fails.
+
+_GUARD_N_OBSERVATIONS = 3
+_GUARD_CALENDAR_DAYS = 7
+# 3 × 365 / 7 = 156.428…; the stub's answer is any other positive factor.
+_GUARD_TRUE_FACTOR = _GUARD_N_OBSERVATIONS * 365 / _GUARD_CALENDAR_DAYS
+_GUARD_STUB_FACTOR = 42.0
+
+
+def _guard_prepared_series_set(annualization_factor: float) -> PreparedAssetSeriesSet:
+    baseline = date(2026, 1, 1)
+    return_dates = [date(2026, 1, 2), date(2026, 1, 5), date(2026, 1, 8)]
+    return PreparedAssetSeriesSet(
+        requested_range=DateRangeModel(start=return_dates[0], end=return_dates[-1]),
+        baseline_date=baseline,
+        effective_range=DateRangeModel(start=return_dates[0], end=return_dates[-1]),
+        target_currency="EUR",
+        joint_valuation_dates=[baseline, *return_dates],
+        joint_return_dates=return_dates,
+        n_observations=_GUARD_N_OBSERVATIONS,
+        calendar_days=_GUARD_CALENDAR_DAYS,
+        annualization_factor=annualization_factor,
+        fx_fingerprint="0" * 64,
+    )
+
+
+def _guard_result_metadata(annualization_factor: float) -> RiskResultMetadata:
+    return RiskResultMetadata(
+        analyzed_range=DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 8)),
+        n_observations=_GUARD_N_OBSERVATIONS,
+        calendar_days=_GUARD_CALENDAR_DAYS,
+        annualization_factor=annualization_factor,
+        coverage=1.0,
+        currency="EUR",
+        return_basis=RiskReturnBasis.PRICE_ONLY,
+        algorithm_version="risk-test@1.0.0",
+        computed_at=datetime(2026, 1, 9, tzinfo=UTC),
+    )
+
+
+_GUARDED_CONTRACTS = [
+    pytest.param(_guard_prepared_series_set, id="prepared-series-set"),
+    pytest.param(_guard_result_metadata, id="risk-result-metadata"),
+]
+
+
+@pytest.mark.parametrize("build", _GUARDED_CONTRACTS)
+def test_the_annualization_check_reads_the_house_formula(monkeypatch, build):
+    # Presence barrier: unpatched, the contract takes the true factor and refuses the stub's, so what flips both below is
+    # the replacement and nothing else.
+    assert build(_GUARD_TRUE_FACTOR).annualization_factor == _GUARD_TRUE_FACTOR
+    with pytest.raises(ValidationError, match="annualization_factor"):
+        build(_GUARD_STUB_FACTOR)
+
+    calls: list[tuple[int, int]] = []
+
+    def stub(n_observations: int, calendar_days: int) -> float:
+        calls.append((n_observations, calendar_days))
+        return _GUARD_STUB_FACTOR
+
+    monkeypatch.setattr(risk_schemas, "observations_per_year", stub)
+
+    with pytest.raises(ValidationError, match="annualization_factor"):
+        build(_GUARD_TRUE_FACTOR)
+    assert build(_GUARD_STUB_FACTOR).annualization_factor == _GUARD_STUB_FACTOR
+    # Asked about the contract's own span, by both constructions.
+    assert len(calls) == 2
+    assert set(calls) == {(_GUARD_N_OBSERVATIONS, _GUARD_CALENDAR_DAYS)}
+
+
+def test_the_name_the_validators_read_is_the_house_function():
+    # The patch above proves the validators read ``observations_per_year`` from the schema module; this proves that
+    # name is the layer's own object, not a copy defined in the schema that a later edit could make drift.
+    assert risk_schemas.observations_per_year is financial_math_returns.observations_per_year
 
 
 def test_historical_replay_audit_is_strict_and_serializable():
@@ -1801,8 +1888,9 @@ def test_resource_limit_remedies_agree_between_backend_and_frontend():
     """Every remedy the backend can name is one the frontend words, and the reverse.
 
     D379 splits one contract across the two stacks: the backend names the cure of a size
-    limit in ``details.remedy`` (``_REMEDY_BY_METRIC``), and the frontend words the remedies
-    it knows (``RESOURCE_LIMIT_DISPLAY_CODES``), keeping the generic sentence for any other.
+    limit in ``details.remedy`` (``REMEDY_BY_METRIC`` in ``risk/base.py``, written by
+    ``resource_limit_error``), and the frontend words the remedies it knows
+    (``RESOURCE_LIMIT_DISPLAY_CODES``), keeping the generic sentence for any other.
     Each half is pinned by its own tests, and nothing else compares them. So a remedy the
     backend starts emitting that the frontend does not know renders "This calculation is
     too large to run." — no crash, no log, the cure dropped in silence: the failure the
@@ -1811,11 +1899,62 @@ def test_resource_limit_remedies_agree_between_backend_and_frontend():
     """
     # Imported here, not at the top: this file's top-level imports stay schema-only, and a
     # renamed table fails this test alone rather than the collection of the whole file.
-    from backend.app.services.risk_plugins.simulation.plugin import _REMEDY_BY_METRIC  # noqa: PLC0415
+    from backend.app.services.risk.base import REMEDY_BY_METRIC  # noqa: PLC0415
 
-    emitted = set(_REMEDY_BY_METRIC.values())
+    emitted = set(REMEDY_BY_METRIC.values())
     worded = set(_resource_limit_display_codes())
     assert emitted == worded, f"details.remedy and RESOURCE_LIMIT_DISPLAY_CODES disagree: emitted-but-unworded={sorted(emitted - worded)} (shown as the generic resource_limit sentence), worded-but-never-emitted={sorted(worded - emitted)} (a sentence no refusal reaches)"
+
+
+#: Where the backend's risk code lives, scanned whole, and the one module allowed to write a remedy (D379).
+_RISK_PACKAGES = ("backend/app/services/risk", "backend/app/services/risk_plugins")
+_REMEDY_HOME = "backend/app/services/risk/base.py"
+
+
+def _remedy_writes(source: str, filename: str) -> list[int]:
+    """The lines of ``source`` that write a remedy by hand: a ``"remedy"`` string constant, or a ``remedy=`` keyword.
+
+    Read from the syntax tree, never from the text: a docstring or a comment that speaks of a remedy writes none, and a
+    variable named ``remedy`` holds no key — the key is the constant.
+    """
+    lines = []
+    for node in ast.walk(ast.parse(source, filename=filename)):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value == "remedy":
+            lines.append(node.lineno)
+        elif isinstance(node, ast.keyword) and node.arg == "remedy":
+            lines.append(node.lineno)
+    return sorted(lines)
+
+
+def test_the_backend_writes_a_remedy_only_through_resource_limit_error():
+    """A remedy is written in one place, ``resource_limit_error`` in ``risk/base.py``, from the table the guard above
+    reads (``REMEDY_BY_METRIC``). J-50 wrote ``"remedy": "period_or_assets"`` as a literal in ``risk/scope.py``, outside
+    the table, so the table-based guard never saw it emitted: dev went red on 17/10 only because the frontend already
+    worded that remedy (worded-but-never-emitted) — a literal the frontend did not word would have stayed green, and its
+    cure would have reached the user as the generic sentence. This test makes any hand-written remedy under
+    ``services/risk/`` and ``services/risk_plugins/`` a red that names its ``path:line``, whatever the table holds.
+    """
+    root = Path(__file__).resolve().parents[3]
+    modules = sorted(path for package in _RISK_PACKAGES for path in (root / package).rglob("*.py"))
+    assert modules, f"no module found under {_RISK_PACKAGES}: the scan would pass on nothing"
+    home = root / _REMEDY_HOME
+    assert home in modules, f"{_REMEDY_HOME} not found: has resource_limit_error moved?"
+    # Presence barrier: the scan sees the one write that must exist, so a scan blind to every write cannot pass.
+    assert _remedy_writes(home.read_text(encoding="utf-8"), str(home)), f"{_REMEDY_HOME} writes no remedy: has resource_limit_error moved?"
+
+    hand_written = [f"{path.relative_to(root)}:{line}" for path in modules if path != home for line in _remedy_writes(path.read_text(encoding="utf-8"), str(path))]
+
+    assert not hand_written, f"a remedy written by hand, not through resource_limit_error ({_REMEDY_HOME}): {hand_written}"
+
+
+def test_the_remedy_detector_names_every_hand_written_remedy():
+    """``_remedy_writes`` names a dict key, a subscript and a keyword — the three ways a literal remedy is written — and
+    neither a docstring nor a variable named ``remedy``. The scan above passes by finding nothing, so a detector blind to
+    all three would pass too: this is the one place it is proved to see them.
+    """
+    source = '"""A docstring that speaks of a remedy is prose."""\ndetails = {"remedy": "x"}\ndetails["remedy"] = "x"\nother = dict(remedy="x")\nremedy = "x"\n'
+
+    assert _remedy_writes(source, "fake.py") == [2, 3, 4]
 
 
 @pytest.mark.parametrize(

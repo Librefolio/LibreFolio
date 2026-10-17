@@ -64,6 +64,8 @@ class TransactionBatchContext:
     # The type, quantity and cash of each preloaded row before the batch touched it (``rule_values``, decision P6).
     stored_rule_values: dict[int, tuple] = field(default_factory=dict)
     earliest_date_by_broker: dict[int, date] = field(default_factory=dict)
+    # Every row ``apply_creates`` flushed, by create index: the row of a create, read by the Auto cost (W-B67).
+    created_by_index: dict[int, Transaction] = field(default_factory=dict)
     link_uuid_map: dict[str, list[tuple[int, Transaction]]] = field(default_factory=lambda: defaultdict(list))
     consumed_link_uuids: set[str] = field(default_factory=set)
     # The giving legs of the TRANSFER pairs this batch splits, by split index: priced in the WAC stage (decision 47).

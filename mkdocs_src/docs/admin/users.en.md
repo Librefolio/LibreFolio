@@ -68,6 +68,7 @@ your account. Manage it from:* with a link to **Profile**, the tab where you cha
 |---|---|---|
 | **Deactivate** | The account can no longer sign in, and is signed out of every device. Its brokers and transactions stay, and its place is freed. Shown for an active account | ✅ |
 | **Reactivate** | The account can sign in again, with its data as it was; its old sessions do not come back. It takes a place again, so it needs a free one. Shown for a deactivated account, but not for the initial administrator [waiting for its setup link](#pending-setup) | — |
+| **Cancel setup link** | The setup link of the initial administrator [waiting for its setup](#pending-setup) stops working, the one already handed over included; the account keeps waiting for a new link. Shown for that account only, in the place of **Reactivate**: see [Cancel Its Setup Link](#cancel-setup) | ✅ |
 | **Make administrator** | The account manages the instance too: settings, users and invitations | ✅ |
 | **Remove administrator** | The account stays, as a regular user, and is signed out of every device | ✅ |
 | **Password-reset link** | A link to choose a new password: see [Password-Reset Links](#reset-links) | Its own dialog |
@@ -81,11 +82,12 @@ LibreFolio turns off the actions it knows the server would refuse, and says why 
 
 | The panel says | Off | What you can do |
 |---|---|---|
-| *This account is protected: nobody can deactivate, demote or delete it.* | **Deactivate**, **Remove administrator**, **Delete** | Nothing, from this tab |
+| *This account is protected: nobody can deactivate, demote or delete it.* | **Deactivate**, **Remove administrator**, **Delete**, **Cancel setup link** | Nothing, from this tab |
 | *It is the only active administrator: it cannot be deactivated or demoted.* | **Deactivate**, **Remove administrator** | Make another account an administrator first |
 | *The instance is full: free a place to reactivate it.* | **Reactivate** | Deactivate or delete another account, or revoke an invitation; the command line's `user activate` goes past the limit |
 | *An administrator must be demoted before it can be deleted.* | **Delete** | **Remove administrator** first, then **Delete** |
-| *This administrator account activates through its setup link. If the link is lost, run `dev.py user setup-link` on the server, or ask your hosting provider.* | No **Reactivate** | Have its setup link used, or give a new one: see [Waiting for Its Setup Link](#pending-setup) |
+| *It waits for its setup: it keeps its role until then.* | **Remove administrator**, for the initial administrator [waiting for its setup link](#pending-setup) | [Cancel its setup link](#cancel-setup), or **Delete** it: it needs no **Remove administrator** first |
+| *This administrator account activates through its setup link. If the link is lost, run `dev.py user setup-link` on the server, or ask your hosting provider.* | No **Reactivate**: **Cancel setup link** in its place | Have its setup link used, or give a new one: see [Waiting for Its Setup Link](#pending-setup) |
 
 - 👑 The instance always keeps an active administrator. Your own row has no actions, so to step
   down: make another account an administrator, then ask them to remove your rights.
@@ -119,19 +121,24 @@ account waits, not yet active, until someone opens its setup link and chooses th
 it up another way (below): see
 [The Initial Administrator](hosting_providers.md#initial-admin). Until then:
 
-- its row shows **Waiting for setup** instead of **Deactivated**, even once its link has expired;
+- its row shows **Waiting for setup** instead of **Deactivated**, even once its link has expired or
+  been [cancelled](#cancel-setup);
 - it takes a place, as an active account does;
 - its panel has no **Reactivate**: nobody knows its password, and activating it would also stop its
-  setup link from working. Under the buttons, the panel says instead: *This administrator account
-  activates through its setup link. If the link is lost, run `dev.py user setup-link` on the
-  server, or ask your hosting provider.*;
-- the other actions are those of any deactivated account. **Remove administrator**, for example,
-  leaves it waiting for its setup, as a regular account.
+  setup link from working. **Cancel setup link** takes its place ([below](#cancel-setup)). Under
+  the buttons, the panel says: *This administrator account activates through its setup link. If
+  the link is lost, run `dev.py user setup-link` on the server, or ask your hosting provider.*;
+- **Remove administrator** is off, with the reason *It waits for its setup: it keeps its role until
+  then.* To stop the link handed over, cancel it; to stop the account altogether, delete it;
+- **Delete** needs no **Remove administrator** first, unlike for any other administrator;
+- the other actions are those of any deactivated account.
 
-The server refuses to activate it too: `PATCH /api/v1/users/{id}` with `is_active: true` answers
-`409`, with the code `PENDING_SETUP`, and changes nothing. If a **Reactivate** reaches the server
-anyway, for example from a list loaded before, the tab says why instead of a generic error.
-`GET /api/v1/users` marks the account with `pending_setup: true`.
+The server refuses to activate it, or to remove its administrator rights: `PATCH /api/v1/users/{id}`
+with `is_active: true`, or with `is_superuser: false`, answers `409`, with the code `PENDING_SETUP`,
+and changes nothing. If such a change reaches the server anyway, for example from a list loaded
+before, the tab says why instead of a generic error: *This administrator waits for its setup: it can
+be neither reactivated nor demoted here.* `GET /api/v1/users` marks the account with
+`pending_setup: true`.
 
 This version has no button for a new setup link: on the server, `user setup-link` prints one (see
 «A New Setup Link for the Initial Administrator» in [Command-Line Tools](cli_tools.md)), and on an
@@ -152,7 +159,42 @@ From then on, every setup link it had stops working: the setup page says *This l
 withdrawn.*, and `user setup-link` finds no administrator waiting. The tab shows it as any other
 account: **Deactivated** while it is not active, with **Reactivate**, and `GET /api/v1/users` marks
 it `pending_setup: false`. Like any deactivated account it then takes no place, so **Reactivate**
-needs a free one. A reset link nobody uses, or **Remove administrator**, leaves it waiting.
+needs a free one. A reset link nobody uses leaves it waiting, and so does
+[cancelling its setup link](#cancel-setup).
+
+### 🚫 Cancel Its Setup Link {: #cancel-setup }
+
+Cancel the setup link of the initial administrator when it went to the wrong person, or when someone
+else may have seen it, in a forwarded email or in the server's log for example:
+
+1. Open the row of the account **Waiting for setup** and click **Cancel setup link**.
+2. The dialog asks *Cancel the setup link of {username}?* and explains: *The link already handed
+   over stops working. The account keeps waiting for its setup: a new link comes from «dev.py user
+   setup-link» on the server, or from your hosting provider.*
+3. Click **Cancel the link**. A message confirms: *The setup link of {username} no longer works.*
+
+What happens:
+
+- 🔗 every setup link of the account stops working, the one handed over included: whoever opens it
+  gets *This link has been withdrawn.*, and cannot set the account up;
+- ⏳ the account still waits: its row still shows **Waiting for setup**, it keeps its place, and it
+  still cannot be reactivated here;
+- 🔁 to let the administrator in, give a new link: on the server, `user setup-link` prints one (see
+  «A New Setup Link for the Initial Administrator» in [Command-Line Tools](cli_tools.md)); on an
+  instance a hosting provider runs, ask the provider for a new one
+  ([A New Link](hosting_providers.md#initial-admin-new-link)). Restarting the server with the same
+  `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives no new link, since the instance has already seen that
+  token: each start logs a warning that the setup link was withdrawn, and asks to run
+  `dev.py user setup-link`, or to set a new token.
+
+On the server, `user deactivate` on this account cancels its link the same way. A
+**Protected** account cannot have its link cancelled from this tab: **Cancel setup link** is off,
+with the reason of a protected account ([When an Action Is Off](#action-off)).
+
+To remove the account instead, click **Delete** ([Delete an Account](#delete)), with no
+**Remove administrator** first. The account goes with its setup links, its place is freed, and
+nobody waits for a setup any more: `user setup-link` finds nobody, and the `LIBREFOLIO_ADMIN_*`
+variables create nothing at the next starts, since the instance has accounts.
 
 ### 🔤 Usernames with an @ {: #usernames-with-at }
 
@@ -297,7 +339,8 @@ Without email, the button is not there: copy the link as before. The rules and t
 ## 🗑️ Delete an Account {: #delete }
 
 Open the account's row and click **Delete**; for an administrator, click **Remove administrator**
-first. The deletion follows the same rule as deleting one's own account
+first, unless it is the initial administrator [waiting for its setup link](#cancel-setup), which you
+delete directly. The deletion follows the same rule as deleting one's own account
 ([Profile](../user/settings/profile.md)):
 
 1. For an active account, the dialog first offers **Deactivate** instead: it keeps every broker and

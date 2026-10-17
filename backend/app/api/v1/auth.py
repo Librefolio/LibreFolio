@@ -553,8 +553,8 @@ async def setup_admin(
     Spend the setup link of the initial administrator (F02): choose the password, activate the account, sign in.
 
     The password rules come first (400 ``PASSWORD_TOO_WEAK``). A link that is not a live setup link (used, expired,
-    revoked, unknown, of another purpose, or of an account already active, whose setup links are then retired) answers
-    400 ``TOKEN_INVALID``. On success the answer and the session cookie are the login's.
+    revoked, unknown, of another purpose, of an account already active, or of an account set up before through another
+    of its setup links — whose setup links are then retired, A-32 and A-42) answers 400 ``TOKEN_INVALID``. On success the answer and the session cookie are the login's.
     """
     _refuse_weak_password(request.new_password)
     user = await bootstrap_admin_service.complete_admin_setup(session, request.token, request.new_password)

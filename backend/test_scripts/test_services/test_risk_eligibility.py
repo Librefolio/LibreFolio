@@ -1030,7 +1030,8 @@ async def test_a_replay_from_a_prehistoric_date_is_refused_naming_every_late_sta
     assert details["excluded_asset_ids"] == scope
     assert (details.get("suggested_range"), details.get("suggested_range_recovers")) == ({"start": proposed[0].isoformat(), "end": proposed[1].isoformat()}, scope)
     # Verified before it is offered: one reading of the window, a second of the proposal.
-    assert [call["window"] for call in loader_calls] == [(PREHISTORIC_START, CRISIS_END), proposed]
+    # SEC8-1b: the window is read bounded, 100 years back from its end; before, the requested 1019-01-01.
+    assert [call["window"] for call in loader_calls] == [(date(1911, 4, 29), CRISIS_END), proposed]
     assert loader_calls[1]["asset_ids"] == set(scope)
 
     # D372: each of them with its reason, the same for all three.

@@ -167,7 +167,10 @@ its conversions in batches under both (Z-27,
 
 Portfolio reports call `convert_bulk()` with thousands of items: the engine preloads a rate for every
 non-reporting currency and every day of the range. So the function reads only the rows the batch can
-use, in one query for all pairs:
+use, in one query for up to `FX_PAIRS_PER_QUERY` (500) pairs — more pairs take several queries
+(R13-SEC9-2: SQLite refuses an `OR` of about a thousand terms, «Expression tree is too large», and a
+request of some 990 pairs answered 500; `_first_rate_days_inside()` of the fixed-period changes reads
+in the same chunks):
 
 - for each pair it tracks the earliest (`min_date`) and latest (`max_date`) requested dates;
 - it loads the rows from the **backward-fill anchor** — the last rate on or before `min_date`, a
@@ -200,28 +203,66 @@ linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
 `backend/app/services/fx/period_changes.py` values the days. The change itself is the house's
 `fixed_period_changes()` ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
 
-- **Request**: a list of `{base, quote, as_of}`. `base` and `quote` must differ, or the request is refused (422).
-  The limits (MF-P2b, finding R13-SEC8): at most `PERIOD_CHANGES_MAX_PAIRS` (1 000) pairs, at most
-  `PERIOD_CHANGES_MAX_AS_OF_DAYS` (5) distinct `as_of` days, and each `as_of` on or after `EARLIEST_RANGE_START`
-  (1 January 1900; up to 0005-12-30 the 5Y day fell before year 1, a 500): 422 otherwise.
+- **Request**: a list of `{base, quote, as_of, range_start?}`. From the schema, 422 when `base` and `quote` are the
+  same, when `as_of` or `range_start` falls before `EARLIEST_RANGE_START` (1 January 1900; up to 0005-12-30 the 5Y
+  day fell before year 1, a 500), or when `range_start` is after `as_of`. The route then checks the request with
+  `period_changes_request_refusal()` (`backend/app/schemas/common.py`), before any conversion (MF-P2b, finding
+  R13-SEC8, aligned with Z-25):
+    - more than `MAX_BULK_ITEMS` (1,000) pairs get the 422 `{"code": "bulk_too_many_items", "message", "max_items",
+      "items"}` of `POST /api/v1/fx/currencies/convert` ([request limits](#convert-request-limits)); exactly 1,000
+      pass;
+    - more than `PERIOD_CHANGES_MAX_AS_OF_DAYS` (5) distinct `as_of` days, or as many distinct `range_start` days, get
+      the 422 `{"code": "period_changes_too_many_days", "message", "field", "max_days", "days"}`, `field` naming the
+      one over the limit (`as_of` checked first).
 - **Rate on a day**: the conversion of 1 `base` into `quote` on that day by `convert_bulk()`, with its unlimited
   backward fill. It is the rate `POST /api/v1/fx/currencies/convert` returns for that day, up to that endpoint's
   [ceiling](#convert-range-ceiling): `as_of` has none. One `convert_bulk()` batch serves every pair and day of the
   request.
-- **Response**: `items[]`, in request order, of `{base, quote, as_of, periods[], errors[]}`. Each period is
-  `{key, days, change_ratio, inverse_change_ratio}`.
+- **Response**: `items[]`, in request order, of `{base, quote, as_of, periods[], range_change, errors[]}`. Each period
+  is `{key, days, change_ratio, inverse_change_ratio}`. `range_change` is null unless the item sends a `range_start`
+  (below).
 - **`change_ratio`**: `rate(as_of) / rate(as_of − days) − 1`, the pair as asked (quote per base).
 - **`inverse_change_ratio`**: `rate(as_of − days) / rate(as_of) − 1`, the change of the inverted pair (base per
   quote).
 
-Both are fractions, null when either rate is missing. A day without a rate adds *No B/Q rate on or before D* to
+Both are fractions, null when either rate is missing. A rate is never 0 here: the API keeps rates > 0, and
+`convert_bulk()` skips a stored rate below its [usable bound](#convert-bulk-window) (X-R38), so the house's −100 %
+for a value written down to 0 never reaches an FX pair. A day without a rate adds *No B/Q rate on or before D* to
 `errors`.
+
+An item may also send `range_start`, the first day of the range the page shows, for the whole-range Δ Abs and Δ % of
+the FX pages (X-R59, decision N80); its limits are in the **Request** bullet above.
+
+- **`range_change`**: `{reference_date, change_abs, change_ratio, inverse_change_abs, inverse_change_ratio}`, the
+  house's `range_change()` ([Financial Math Layer](../financial_math.md#fixed-period-changes)), with `reference` the
+  reference rate: `change_abs = rate(as_of) − reference` and `change_ratio = rate(as_of) / reference − 1`, the pair as
+  asked (quote per base); `inverse_change_abs = 1 / rate(as_of) − 1 / reference` and
+  `inverse_change_ratio = reference / rate(as_of) − 1`, the inverted pair (base per quote). All four are null when
+  either rate is missing.
+- **Reference**: the rate on `range_start`, one more item per request in the same `convert_bulk()` batch, with its
+  unlimited backward fill, and `reference_date = range_start`. A pair with no rate on or before `range_start` takes its
+  first stored rate inside the range, after `range_start` and up to `as_of`, converted on its own day, with that day
+  as `reference_date`. Its day comes from one query per distinct `(range_start, as_of)` window, for those pairs only:
+  `MIN(FxRate.date) … GROUP BY base, quote` over the pairs as `fx_rates` stores them (alphabetical order), within the
+  [usable bounds](#convert-bulk-window) of X-R38; a second `convert_bulk()` batch then reads those days' rates. Either
+  way it is the first point of the series `POST /api/v1/fx/currencies/convert` returns for the range, which drops the
+  days without a rate. A pair with no rate up to `as_of` gets a `range_change` with every field null,
+  `reference_date` included; a missing reference adds nothing to `errors`. The anchor is the rate on `as_of`, as for
+  the periods.
+
+The change is on this endpoint, not on `POST /api/v1/fx/currencies/convert`: the FX store composes a pair's series
+from the gaps it loads separately (`ensureFxRangeLoaded()`), so a change attached to a series response would not be
+the visible range's. The web app is to send `range_start` and read `range_change`; until then it computes the Δ in the
+browser (`displayFxDelta()`).
 
 The FX list calls the endpoint through `fetchFxPeriodChanges()` (`frontend/src/lib/utils/periodChanges.ts`): one
 request for every configured pair, with `as_of` the end of the selected range, and one for a single pair when that pair
 reloads on its own (its **Reload**, or after its **Sync**: `fetchPairData()`). A pair shown swapped (⇄) reads
 `inverse_change_ratio`, the others `change_ratio`. Besides its fixed 1D column, the table shows each period whose
-`days` fit in the range's whole calendar days (`visiblePeriodColumns()`).
+`days` fit in the range's whole calendar days (`visiblePeriodColumns()`). The request is not split yet: past 1,000
+configured pairs it gets `bulk_too_many_items`, the `catch` of the page's loader logs it to the browser console, and
+the Δ columns stay empty. Splitting the request into batches (backlog Z-27, as for the
+[conversions](#convert-request-limits)) is to cover this endpoint too: at most 1,000 pairs and one `as_of` per request.
 
 ## 🧹 Rate writes clear the portfolio caches {: #portfolio-cache-invalidation }
 
