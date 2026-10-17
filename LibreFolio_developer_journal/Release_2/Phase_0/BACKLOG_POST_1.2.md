@@ -7457,8 +7457,12 @@ da Y il 15/10.
   - Rimedio possibile: una serie del prezzo senza lotti sull'intervallo calcolato, un campo nuovo della risposta (e il
     suo contratto nell'AI Export, se serve); il pannello la userebbe solo con `FAILED`, o sempre al posto dell'unione.
   - Dettagli: piano di Y, «J-12, la metà del pannello».
-- **Y-31 · E2E di J-12: la regola della lingua dell'interfaccia (M-18) ricopiata in una spec, e due stati non
-  pubblicati** — basso, test; Y, 17/10 (test-author di J-12).
+- ✅ **Y-31 · E2E di J-12: la regola della lingua dell'interfaccia (M-18) ricopiata in una spec, e due stati non
+  pubblicati** — basso, test; Y, 17/10 (test-author di J-12). ✅ 17/10, versione minima (coordinatore, 13:21 e 13:36):
+  `resolveUiLocale` in `stores/app/uiLocaleRule.ts`, senza import, riesportato da `uiLocale.ts`; la spec lo importa invece
+  di ricopiarlo (`uiLocale.test.ts` controlla che il modulo non importi nulla); `LotWacPriceChart` pubblica
+  `data-state="drawn" | "empty"` e J12-1 lo legge. Commit al checkpoint. **Resta, da girare a W** (la pagina delle
+  transazioni è sua): il segno durevole della riga di `?highlight=`.
   - `brokers-detail.spec.ts::dayAsThePanelWritesIt` ricopia `resolveUiLocale`, perché Playwright non può importare
     `uiLocale.ts`; anche `fixtures/dates.ts` ricopia `dateOnly`. Se M-18 cambia, J12-1 diventa rosso per un motivo che
     non c'entra. Rimedio: una fixture condivisa della lingua dell'interfaccia.
