@@ -20,6 +20,8 @@ import {TimeSeriesStore} from './core/TimeSeriesStore';
 import {registerPortfolioMutationListener} from './portfolio/portfolioMutation';
 import type {ChainStep} from '$lib/utils/currency/currencyGraph';
 import {zodiosApi} from '$lib/api';
+import {BULK_SIGNAL_MARGIN_DAYS, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
+import {todayIso} from '$lib/utils/dateOnly';
 import {schemas} from '$lib/api/generated';
 import {z} from 'zod';
 
@@ -381,7 +383,8 @@ export interface FxRatesAndSignalsBulkResult {
 }
 
 /**
- * Load every FX pair requiring rates and/or signals through exactly one bulk POST.
+ * Load every FX pair requiring rates and/or signals through one bulk POST, split into batches when the pairs would
+ * pass the backend's caps (lot Z-27, `lib/api/bulkBatches.ts`); what answered is applied once every batch settled.
  * Rates stay in canonical stores; signal results preserve each card's displayed orientation.
  */
 export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkRequest[]): Promise<FxRatesAndSignalsBulkResult> {
@@ -413,7 +416,7 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
     const signalsBySlug = new Map<string, Array<z.output<typeof schemas.SignalResult>>>();
 
     if (entries.length > 0) {
-        const convertRequests = entries.map((entry) => {
+        const toConvertRequest = (entry: RequestEntry) => {
             const {base, quote} = parsePairSlug(entry.slug);
             const from = entry.displayedInverted ? quote : base;
             const to = entry.displayedInverted ? base : quote;
@@ -423,14 +426,22 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
                 date_range: {start: entry.start, end: entry.end},
                 signals: entry.signals,
             };
-        });
+        };
 
-        try {
-            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(convertRequests);
-            const results = (response as any)?.results ?? [];
-            const pointsBySlug = new Map<string, FxDataPoint[]>();
+        // An entry with signals builds its daily items and its signal items, warm-up included.
+        const today = todayIso();
+        const outcome = await sendBulkBatches(
+            entries,
+            (entry) => {
+                const days = bulkRangeDays(entry.start, entry.end, today);
+                return entry.signals.length > 0 ? 2 * days + BULK_SIGNAL_MARGIN_DAYS : days;
+            },
+            (batch) => zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(batch.map(toConvertRequest)),
+        );
 
-            for (const result of results) {
+        const pointsBySlug = new Map<string, FxDataPoint[]>();
+        for (const {answer} of outcome.answers) {
+            for (const result of (answer as any)?.results ?? []) {
                 const fromCode = result.from_amount?.code;
                 const toCode = result.to_amount?.code;
                 if (!fromCode || !toCode) continue;
@@ -440,25 +451,32 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
                 if (!pointsBySlug.has(slug)) pointsBySlug.set(slug, []);
                 pointsBySlug.get(slug)!.push(point);
             }
+        }
 
-            for (const [slug, points] of pointsBySlug) {
-                if (points.length > 0) getFxStore(slug).merge(points);
-            }
+        for (const [slug, points] of pointsBySlug) {
+            if (points.length > 0) getFxStore(slug).merge(points);
+        }
 
-            const groupedSignals = (response as any)?.signal_results ?? [];
-            for (const group of groupedSignals) {
-                const entry = entries[group.request_index];
+        // A request_index is local to the request that carried it: it points into that batch's entries.
+        for (const {batch, answer} of outcome.answers) {
+            for (const group of (answer as any)?.signal_results ?? []) {
+                const entry = batch.items[group.request_index];
                 if (!entry) continue;
                 const parsedSignals = Array.isArray(group.signals) ? group.signals.map((signal: unknown) => schemas.SignalResult.parse(signal)) : [];
                 signalsBySlug.set(entry.slug, parsedSignals);
             }
+        }
 
-            for (const entry of entries) {
+        for (const {batch} of outcome.answers) {
+            for (const entry of batch.items) {
                 getFxStore(entry.slug).markFetched(entry.start, entry.end);
             }
-        } catch (error: any) {
+        }
+
+        if (outcome.failed) {
+            const error = outcome.error as any;
             if (error?.response?.status === 404) {
-                for (const entry of entries) {
+                for (const entry of outcome.failedBatch?.items ?? []) {
                     getFxStore(entry.slug).markFetched(entry.start, entry.end);
                 }
             }
