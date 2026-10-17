@@ -31,6 +31,7 @@ pipenv run ./dev.py server --force
 - 🧮 More workers serve more requests at once: use them on any machine with more than one CPU. `auto` starts $\max(1,\ 2\,(n-1))$ workers on $n$ CPUs.
 - ⏳ The server first builds the web interface and this documentation when they are missing or out of date, so the first start takes a few minutes. If the interface does not build, the server does not start.
 - 🔑 A restart signs everybody out, unless `JWT_SECRET` is set in `.env` (see [Configuration](configuration.md)).
+- ⏹️ Ctrl+C stops the server cleanly: `dev.py` gives it up to the [shutdown budget](configuration.md#shutdown) plus 2 seconds to stop (10 seconds by default), then ends it; a second Ctrl+C ends it at once. A SIGTERM sent to `dev.py` alone, by a process supervisor for example, gets the same wait: `dev.py` passes it on to the server.
 
 ??? note "⚙️ Other server options — rarely needed"
 
