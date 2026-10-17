@@ -5366,6 +5366,94 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-18 — `restore --instance-key-file`: i segreti di un archivio in chiaro con la chiave vecchia (2026-10-17, 10:29-10:51) — ✅ 🧊 FROZEN (checkpoint delle 10:51)
+
+> **B-32 entrato** (coordinatore, 10:29): dev `7af21a5c1` (commit `ca1343d6d`), CHANGELOG 🐛 `d11ac04d3`. HEAD portata
+> in avanti a **`d11ac04d3`**, pulita. Via a B-18 con D1 e D2 come decisi; solo run leggeri, revisione di H al
+> checkpoint.
+>
+> **Stato reale** (lettura, 09:45-10:35):
+>
+> - `staging._stage` ricifra i segreti dei plugin soltanto con la chiave che un archivio sicuro porta:
+>   `archive_key = … if INSTANCE_KEY_ENTRY in entries else None` → `_plugin_secrets` → `_archive_subkey` →
+>   `rekey_plugin_secrets(conn, old, current)`.
+> - `rekey_plugin_secrets` lascia stare le righe già sotto la chiave di questa istanza (contate `already_current`, non
+>   illeggibili). Ricifra quelle sotto la chiave vecchia e conta illeggibili le altre.
+> - Se la chiave di questa istanza non si può usare (`settings_subkey` solleva `InstanceKeyError`), la verifica non
+>   ricifra nulla e conta tutto illeggibile (test B4 «without a usable key of its own»).
+>   `instance_key_status().problem` lo dice senza sollevare e senza creare il file.
+> - La docstring di `derive_key_from` (H) descrive già questa strada: la copia dell'amministratore di
+>   `secrets/instance.key`, letta con `read_secret_file()`, o il vecchio `LIBREFOLIO_INSTANCE_KEY`.
+> - I test di ricifratura di B4 stanno in `test_backup_secure.py` (`services backup-secure`), non in
+>   `test_backup_staging.py`.
+> - La doc (`backup_restore.en.md` l.36) dà una sola strada: rimettere la chiave vecchia al posto di quella nuova. Non
+>   va bene per un'installazione che tiene la sua chiave, come un'istanza ospitata o una con segreti suoi.
+>
+> **Contratto congelato** (`b18-contract.md` nella cartella della sessione, 10:36):
+>
+> 1. `stage_archive(..., instance_key=None)` controlla la chiave per prima, prima del lock e di ogni cartella:
+>    `derive_key_from` → `StagingError("instance_key_invalid")`, senza mai il testo della chiave. In `_stage` vince
+>    la chiave dell'archivio; altrimenti si usa quella data. Le rotte API non cambiano, il report nemmeno (nessun
+>    OpenAPI).
+> 2. CLI `restore --instance-key-file FILE`, anche con `--dry-run`:
+>    - letto con `read_secret_file` da root, prima del cambio di utente e prima della password;
+>    - errori ❌ `instance_key_unreadable` e `instance_key_invalid`, uscita 1;
+>    - la riga «Instance key: not included; given with --instance-key-file».
+>    - **D1**: vince la chiave dell'archivio, con la riga ℹ️.
+>    - **D2**: la riga ⚠️ se la chiave data non ricifra nulla. Se invece è la chiave di questa istanza a non funzionare,
+>      un'altra ⚠️ che lo dice (raffinamento mio: la riga D2 accuserebbe la chiave sbagliata).
+> 3. Doc: `cli_tools.en.md` e `backup_restore.en.md`. Proposta di CHANGELOG ✨.
+>
+> - **Rossi in scrittura** (10:37):
+>   - TA-S: `test_backup_secure.py`, k1-k6;
+>   - TA-E: `test_backup_cli_restore.py` (h), con c8 accanto al finto root di B-19 se conviene;
+>   - docs-writer: le due pagine.
+> - **Codice pronto** (10:40) in `b18-wip/apply_b18.py`: 17 operazioni in 2 file.
+>   - `staging.py`: `instance_key`, `_refuse_unusable_instance_key` prima della cartella e del lock, e
+>     `archive_key = … else instance_key`.
+>   - `backup_cli.py`:
+>     - `_restore_keys`: prima il file della chiave, poi la password. Tiene `cmd_restore` sotto C901;
+>     - `_instance_key_from_file`;
+>     - `_print_given_key` per D1, D2 e l'eccezione;
+>     - l'opzione, una riga d'uso, un esempio.
+>   Ruff e black puliti sulla copia emessa, dopo aver rimesso la firma di `stage_archive` su una riga sola, come vuole
+>   black.
+> - ✅ **Rossi dei servizi scritti** (TA-S, 10:44): sezione (i) di `test_backup_secure.py`, 6 funzioni e 9 casi (7
+>   rossi, 2 guardie). k3 prova `""` e 31 caratteri, con e senza un `.restore` lasciato da una verifica precedente.
+>   `new_parameter` ha un argomento `by` facoltativo, che nomina B-18 nel messaggio.
+> - **⚠️ Fuori pista — `TypeError` (10:45)**, da TA-S: il contratto §1 mandava anche un `TypeError` (una chiave che non
+>   è un testo) su `instance_key_invalid`, con la frase «too short», che lì sarebbe falsa. La CLI passa sempre un testo:
+>   il contratto ora lascia il `TypeError` di `derive_key_from`, come fa la patch. Il controllo usa `is not None`, mai
+>   la verità del valore: `""` è rifiutato.
+> - ✅ **Doc scritta** (docs-writer, 10:50):
+>   - `cli_tools.en.md`: l.393, 441, 448 e 475; la nuova sottosezione «🗝️ The Instance Key of Another Installation»
+>     (`#backup-restore-instance-key`, l.546-561); debito di traduzione, niente stamp;
+>   - `backup_restore.en.md`: l.36, e i passi 1, 3 e 4 di «From a Hosted Instance to Your Server».
+>   Rivista contro la patch: le righe esatte, i messaggi di `read_secret_file` (il limite di 65536 byte), il percorso
+>   dei dati dell'immagine.
+>   Lasciato fuori dal docs-writer, da decidere: una clausola in `configuration.en.md` («Saved Secrets and the Instance
+>   Key», pagina tradotta).
+> - ✅ **Rossi della CLI scritti** (TA-E, 10:42): sezione (h) di `test_backup_cli_restore.py`, 8 funzioni e 10 casi.
+>   - c8, il caso da root, sta in (h) e importa il finto root di B-19 da `test_backup_cli_secure.py`;
+>   - l'archivio con i segreti viene dagli helper di `test_backup_secure.py`;
+>   - c3 vuole il file della chiave letto prima della password, come fa la patch.
+> - ✅ **Rossi** (corsia 6187, 10:43-10:44, carico 36):
+>   - `services backup-secure`: **7 falliti** e 70 passati; il motivo è il parametro mancante (`new_parameter`);
+>   - `utils backup-cli-restore`: **10 falliti** e 92 passati; argparse rifiuta l'opzione.
+> - ✅ **Codice applicato** (10:44:11): 17 operazioni in 2 file; ruff (con C901) e black puliti sui file veri.
+> - ✅ **Verdi** (10:44-10:47): `services backup-secure` 77, `utils backup-cli-restore` 102,
+>   `utils backup-cli-secure` 66, `utils backup-cli` 102, `services backup-staging` 161; porta 6187 libera.
+>   `dev.py backup restore --help` mostra l'opzione.
+> - ✅ **Doc** (10:47-10:49): `mkdocs build` strict pulito (80 s), `check-links` pulito, `utils gate-docs-links` 63.
+> - ✅ **Controlli statici** (10:49): ruff e black su tutti i 6 file Python cambiati; `git diff --check` pulito.
+> - Non eseguiti:
+>   - `api backup-restore`: nessuno slot chiesto. L'API non passa nessuna chiave, e `instance_key=None` è la strada di
+>     prima: la coprono `services backup-staging` (161) e `services backup-secure` (77);
+>   - `api sync`: il report non cambia, quindi l'OpenAPI nemmeno.
+> - Proposta di CHANGELOG ✨ (docs-writer): «**The old instance key at a restore** — `./dev.py backup restore ARCHIVE
+>   --instance-key-file FILE` takes the instance key of the installation that made a clear backup…».
+> - **Backlog**: B-18 ✅.
+
 ### B-32 — dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile (2026-10-17, 09:25-10:29) — ✅ 🧊 FROZEN (checkpoint delle 10:29)
 
 > **B-19 entrato** (coordinatore, 09:25): dev `e96158e9b`, CHANGELOG 🐛 `67dd18676`; HEAD portata in avanti a

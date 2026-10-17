@@ -13,6 +13,9 @@ Usage:
     ./dev.py backup inspect ARCHIVE            Check an archive and show what it holds
     ./dev.py backup restore ARCHIVE --dry-run  Check an archive for a restore, on a copy: the instance stays as it is
     ./dev.py backup restore ARCHIVE [--yes]    The same check, then the restore at the next start of the server
+    ./dev.py backup restore ARCHIVE --instance-key-file FILE
+                                               The same, with the instance key of the installation the archive
+                                               came from: its saved provider keys are re-encrypted
     ./dev.py backup decrypt ARCHIVE -o ZIP     The archive inside a secure backup, as a plain .zip
     ./dev.py backup pending [--cancel]         The restore waiting for the next start, or the last one; --cancel drops it
     ./dev.py backup --test-db create           Use the test data directory
@@ -550,12 +553,14 @@ def _print_totals(report) -> None:
         print("⚠️  Ledger totals: could not be read on the copy")
 
 
-def _print_key_and_secrets(report) -> None:
+def _print_key_and_secrets(report, instance_key_given: bool = False) -> None:
     """The instance key of the archive, and what becomes of the saved provider keys (lot B4): re-encrypted with this
-    instance's key, or to enter again."""
+    instance's key, or to enter again. ``instance_key_given``: ``--instance-key-file`` was given (B-18)."""
     if report.encrypted:
         print("   Secure backup: decrypted with its password")
-    print(f"   Instance key: {'included' if report.instance_key_included else 'not included'}")
+    given = "; given with --instance-key-file" if instance_key_given and not report.instance_key_included else ""
+    print(f"   Instance key: {'included' if report.instance_key_included else 'not included'}{given}")
+    _print_given_key(report, instance_key_given)
     if report.secrets_rekeyed:
         print(f"   Saved provider keys: {report.secrets_rekeyed} re-encrypted with this instance's key")
     unreadable = report.secrets_unreadable.system + report.secrets_unreadable.user
@@ -563,7 +568,27 @@ def _print_key_and_secrets(report) -> None:
         print(f"⚠️  {unreadable} saved provider key{'s' if unreadable != 1 else ''} cannot be read with this instance's key: enter {'them' if unreadable != 1 else 'it'} again after the restore")
 
 
-def _print_stage_report(report) -> None:
+def _print_given_key(report, instance_key_given: bool) -> None:
+    """What became of ``--instance-key-file`` (B-18): not used when the archive carries its own key (decision D1); said
+    when it re-encrypted none of the saved provider keys, and why (decision D2)."""
+    if not instance_key_given:
+        return
+    if report.instance_key_included:
+        print("ℹ️  The archive carries its own instance key: --instance-key-file is not used")
+        return
+    if report.secrets_rekeyed or not report.secrets_unreadable.system + report.secrets_unreadable.user:
+        return
+    from backend.app.services.platform.instance_key import instance_key_status  # noqa: PLC0415
+
+    # This instance's own key unusable re-encrypts nothing, whatever the key given: then it is not the given key's fault.
+    problem = instance_key_status().problem
+    if problem is not None:
+        print(f"⚠️  This instance's own key cannot be used, so nothing was re-encrypted with the key given: {_safe(problem)}")
+        return
+    print("⚠️  The key given with --instance-key-file reads none of the saved provider keys: it is not the key of the instance this backup came from")
+
+
+def _print_stage_report(report, *, instance_key_given: bool = False) -> None:
     backup = report.backup
     print(f"📦 Made by LibreFolio {_safe(backup.app_version)} ({backup.origin}) on {backup.created_at:%Y-%m-%d %H:%M:%S} UTC")
     if report.action == "same":
@@ -581,7 +606,7 @@ def _print_stage_report(report) -> None:
         print(f"   Changed by the upgrade: {', '.join(changed[:10])}{' …' if len(changed) > 10 else ''}")
     print(f"   Files: {report.files}, {_human(report.files_size)}")
     _print_totals(report)
-    _print_key_and_secrets(report)
+    _print_key_and_secrets(report, instance_key_given)
     if report.administrators:
         print(f"   Administrators: {', '.join(_safe(name) for name in report.administrators)}")
         print("   After a restore you sign in with one of them, with the password of then; every session open now ends.")
@@ -675,9 +700,9 @@ def _restore_already_active(data_dir: Path) -> bool:
     return True
 
 
-def _check_on_a_copy(path: Path, data_dir: Path, key=None):
+def _check_on_a_copy(path: Path, data_dir: Path, key=None, instance_key: str | None = None):
     """Check the archive on a copy, printing its phases: the report, or ``None`` when it was refused (said why).
-    ``key``: the key of a secure backup."""
+    ``key``: the key of a secure backup; ``instance_key``: the one ``--instance-key-file`` gave (B-18)."""
     from backend.app.services.platform.instance_backup.paths import BackupPathError, stages_dir  # noqa: PLC0415
     from backend.app.services.platform.instance_backup.staging import StagingBusyError, StagingError, stage_archive  # noqa: PLC0415
 
@@ -690,7 +715,7 @@ def _check_on_a_copy(path: Path, data_dir: Path, key=None):
 
     print(f"🔎 Checking {path} on a copy, in {stages_dir(data_dir)}")
     try:
-        return stage_archive(path, data_dir, progress=progress, key=key)
+        return stage_archive(path, data_dir, progress=progress, key=key, instance_key=instance_key)
     except StagingBusyError:
         print("❌ Another archive is being checked (from the web interface or another command): try again when it ends")
     except StagingError as exc:
@@ -703,27 +728,24 @@ def _check_on_a_copy(path: Path, data_dir: Path, key=None):
 def cmd_restore(args) -> int:
     """Check an archive for a restore on a copy and say what a restore would do; without ``--dry-run``, then confirm the
     restore, which the next start of the server applies."""
-    from backend.app.services.platform.instance_backup.envelope import is_envelope  # noqa: PLC0415
     from backend.app.services.platform.instance_backup.staging import remove_stage  # noqa: PLC0415
 
     path = Path(args.archive).expanduser()
     if not path.is_file():
         print(f"❌ No file at {path}")
         return 1
-    key = None
-    if is_envelope(path):
-        key = _unlock(args, path)
-        if key is None:
-            return 1
+    ready, key, instance_key = _restore_keys(args, path)
+    if not ready:
+        return 1
     data_dir = _data_dir_for(args, need_database=False)
     if data_dir is None or (not args.dry_run and _restore_already_active(data_dir)):
         return 1
-    report = _check_on_a_copy(path, data_dir, key)
+    report = _check_on_a_copy(path, data_dir, key, instance_key)
     if report is None:
         return 1
     keep = False
     try:
-        _print_stage_report(report)
+        _print_stage_report(report, instance_key_given=instance_key is not None)
         if not report.restorable:
             return 1
         if args.dry_run:
@@ -734,6 +756,38 @@ def cmd_restore(args) -> int:
     finally:
         if not keep:
             remove_stage(data_dir, report.stage_id)
+
+
+def _restore_keys(args, path: Path) -> tuple[bool, object, str | None]:
+    """What ``restore`` reads before any switch of user, in this order: ``--instance-key-file`` (B-18), then the key of a
+    secure backup (its password). ``(ready, key, instance_key)``; not ready after saying why one is missing."""
+    from backend.app.services.platform.instance_backup.envelope import is_envelope  # noqa: PLC0415
+
+    found, instance_key = _instance_key_from_file(args)
+    if not found:
+        return False, None, None
+    key = None
+    if is_envelope(path):
+        key = _unlock(args, path)
+        if key is None:
+            return False, None, None
+    return True, key, instance_key
+
+
+def _instance_key_from_file(args) -> tuple[bool, str | None]:
+    """``restore --instance-key-file``: the instance key of the installation the archive came from (B-18), read before any
+    switch of user, as ``--password-file`` is: a key only root can read (a Docker secret) works. ``(True, None)``
+    without the option; ``(False, None)`` after saying why it cannot be read. The key itself is never printed."""
+    key_file = getattr(args, "instance_key_file", None)
+    if not key_file:
+        return True, None
+    from backend.app.config import SecretFileError, read_secret_file  # noqa: PLC0415 — keep dev.py's start light
+
+    try:
+        return True, read_secret_file(_requested(key_file), "instance key file")
+    except SecretFileError as exc:
+        print(f"❌ {exc} (instance_key_unreadable)")
+        return False, None
 
 
 def _print_restore_state(state) -> None:
@@ -910,6 +964,9 @@ Examples:
   ./dev.py backup restore /mnt/nas/librefolio-backup-20261015-101500.zip
                                                The same check, then, once you type "restore", the
                                                restore at the next start of the server
+  ./dev.py backup restore /mnt/nas/librefolio-backup-20261015-101500.zip --instance-key-file /mnt/nas/instance.key
+                                               The same, the saved provider keys of an archive without
+                                               its instance key re-encrypted from the old one
   ./dev.py backup decrypt backup.lfbk -o backup.zip
                                                The archive inside a secure backup, as a plain .zip
   ./dev.py backup pending --cancel             Drop the restore waiting for the next start
@@ -939,6 +996,11 @@ A relative path starts from the project root, like every path given to dev.py. A
     restore.add_argument("archive", help="The backup archive (.zip, or .lfbk for a secure backup)")
     restore.add_argument("--dry-run", action="store_true", help="Unpack the archive into a copy, upgrade and check it, report, then remove the copy; the instance is left as it is")
     restore.add_argument("--yes", "-y", action="store_true", help='Confirm the restore without typing "restore" (needed without a terminal)')
+    restore.add_argument(
+        "--instance-key-file",
+        metavar="FILE",
+        help="The instance key of the installation the archive came from (a copy of its secrets/instance.key, or its LIBREFOLIO_INSTANCE_KEY in a file): the saved provider keys of an archive that does not carry its key are re-encrypted from it. Read before any switch of user: a Docker secret works",
+    )
     _password_options(restore)
     restore.set_defaults(backup_func=cmd_restore)
 
