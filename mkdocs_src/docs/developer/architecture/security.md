@@ -2062,7 +2062,8 @@ for anything else, and never raises:
 An instance key that cannot be used makes every check `False`, with one warning per process (*Address
 probe: the instance key cannot be used, every probe answers no match*); the
 [configuration checks](#configuration-checks) give the reason at startup. Issuing has no such fallback:
-`POST /users/address-probe` then fails with `500`.
+`POST /users/address-probe` then answers `503` `INSTANCE_KEY_UNAVAILABLE`, with no nonce, and logs one
+warning per refused call, *Address probe: the instance key cannot be used, no nonce issued*, with `admin_id` (H-19).
 
 `GET /auth/address-probe` reads `nonce` from the query string, `""` when it is absent, with no length
 constraint, so no value gets a `422`: an empty, malformed, oversized, non-canonical, forged, expired or
@@ -2116,8 +2117,11 @@ Tests: `./dev.py test services address-probe`
 every altered, malformed, oversized, non-canonical or foreign nonce refused, `hmac.compare_digest`, never
 raises) and `./dev.py test api address-probe` (`backend/test_scripts/test_api/test_address_probe_api.py`:
 `401`, `403` and `200` for the nonce; the exact `{match}` with both headers; a `GET` from another origin
-through the `CORSMiddleware` of the lane's server; cookies ignored; another instance, in process). No test
-sends a preflight: its refusal is the middleware's.
+through the `CORSMiddleware` of the lane's server; cookies ignored; another instance, in process; an unusable
+instance key, in process too, with the probe module's `derive_key` replaced by one that raises
+`InstanceKeyError`: `503` `INSTANCE_KEY_UNAVAILABLE` for the nonce, its warning logged exactly once and nothing
+at error level, while the public check still answers `{"match": false}`, even for a nonce this instance
+issued). No test sends a preflight: its refusal is the middleware's.
 
 ## 🧼 Output Escaping
 
