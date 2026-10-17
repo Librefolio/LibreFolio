@@ -397,6 +397,8 @@ A lot's reference price is the denominator of its Open Return, `relative_return 
 | `CARRIED`: a quote or a trade mark of an earlier day | `mark.unit_price`, `"fallback"` | `REFERENCE_PRICE_FALLBACK` |
 | `MISSING`: no observation on or before that day | `reference_unit_price=None`, `"unavailable"` (the lookup returns `None`) | `REFERENCE_PRICE_UNAVAILABLE` |
 
+The lots banner groups the issues of one code into a single message, with a chip for each lot, so the two messages (`dataQuality.referencePriceFallback`, `dataQuality.referencePriceUnavailable`) say how the reference is chosen and never a price: one price could not stand for every lot of the group (J-36). The `reference_price` param of `REFERENCE_PRICE_FALLBACK` stays in `message_params`, unread by the texts.
+
 An `ADJUSTMENT` is never an observation (developer decision P2): a lot opened by an opening position, a succession or a transfer from an untracked broker is compared with the market — the last quote, or a `BUY` / `SELL` more recent than it — and with its own cost basis only when the asset has no observation on or before its opening day.
 
 `opening_reference_price(lot, price_series, quote_base_quantity)` (`financial_math/lots/prices.py`) gives the lot summary, the return history and `collect_fx_needs()` the reference as `(price, currency, date, source)`:
