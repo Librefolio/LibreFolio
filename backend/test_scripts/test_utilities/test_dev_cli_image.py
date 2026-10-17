@@ -123,7 +123,10 @@ The contract:
   and exit 0 (**IMG-030**); below the limit there is no warning (**IMG-030b**); ``user
   activate`` of an inactive account at the limit warns, "reactivates the account", and
   reactivates it (**IMG-030c**); below the limit it is silent (**IMG-030d**), and ``user
-  deactivate`` never warns, not even at the limit (**IMG-030e**);
+  deactivate`` never warns, not even at the limit (**IMG-030e**); the initial administrator
+  waiting for its setup (F02) already holds its place — ``registration_service.user_usage``
+  counts it —, so ``user activate`` of it takes none: at the limit it is silent, and activates
+  it (**IMG-030f**, lot A-40);
 * **IMG-025**: ``dev.py --help`` lists ``backup`` among the commands it registered (its
   epilog names it in prose too, which does not count); **IMG-025b**: ``dev.py backup
   --help`` exits 0 with the usage of the group;
@@ -1394,6 +1397,24 @@ WARNING_MARK = "⚠️"
 #: The command line's one warning at the limit, whatever the command: the action is a phrase (review of A5a).
 LIMIT_WARNING = WARNING_MARK + "  The instance is at its limit (LIBREFOLIO_MAX_USERS: {used} of {max_users} places taken): the command line {action} anyway"
 LIMIT_ACTIONS = ("creates the account", "creates the invitation", "reactivates the account")
+#: What the tree's own registration_service counts, on the database its environment points at: the places taken, the
+#: limit, and the ids of the accounts waiting for their setup (F02). Printed as JSON on the last line.
+USAGE_PROBE = """\
+import asyncio, json
+from sqlalchemy.ext.asyncio import AsyncSession
+from backend.app.db.session import get_async_engine
+from backend.app.services.accounts import registration_service
+
+async def main():
+    engine = get_async_engine()
+    async with AsyncSession(engine) as session:
+        usage = await registration_service.user_usage(session)
+        waiting = sorted(await registration_service.pending_admin_ids(session))
+    await engine.dispose()
+    print(json.dumps({"used": usage.used, "max_users": usage.max_users, "waiting_admins": waiting}))
+
+asyncio.run(main())
+"""
 #: Not an http(s) address, each in its own way: the accessor refuses both.
 INVALID_PUBLIC_URLS = [
     pytest.param("invite", "ftp://example.com", INVITE_PAGE, id="invite, ftp://example.com"),
@@ -1553,6 +1574,35 @@ def admin_and_member(image: ImageTree, database: Database, *, member_active: boo
         assert_succeeds(run_dev(image, "user", "deactivate", member, env=database.env))
     assert account(database.path, member) == {"is_superuser": False, "is_active": member_active}, f"premise: {member} is an ordinary account, active={member_active}"
     return admin, member
+
+
+def waiting_initial_admin(image: ImageTree, database: Database) -> tuple[str, int]:
+    """The initial administrator waiting for its setup (F02), alone in ``database``: an administrator created by the
+    command line while no limit is set, then left by SQL as the bootstrap leaves it — inactive, with one live
+    ``admin_setup`` link, unused. Its username and id."""
+    name = unique_username()
+    assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env=database.env))
+    user_id = user_id_of(database.path, name)
+    issued = datetime.now(UTC).replace(tzinfo=None)
+    expires = issued + DEFAULT_TTL[AccountTokenPurpose.ADMIN_SETUP]
+    with closing(sqlite3.connect(database.path)) as conn:
+        with conn:
+            conn.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
+            conn.execute(
+                "INSERT INTO account_tokens (purpose, token_hash, user_id, grants_admin, created_at, expires_at) VALUES (?, ?, ?, 0, ?, ?)",
+                (AccountTokenPurpose.ADMIN_SETUP.value, hash_token(uuid.uuid4().hex), user_id, issued.isoformat(" ", "microseconds"), expires.isoformat(" ", "microseconds")),
+            )
+    assert usernames(database.path) == [name] and account(database.path, name) == {"is_superuser": True, "is_active": False}, f"premise: {name}, an inactive administrator, is the only account: {usernames(database.path)}, {account(database.path, name)}"
+    return name, user_id
+
+
+def places_taken(image: ImageTree, env: dict[str, str]) -> dict[str, object]:
+    """``USAGE_PROBE`` run in the tree with ``env``: what its registration_service counts, as a dict."""
+    probe = run_python(image, "-c", USAGE_PROBE, env=env)
+    assert_succeeds(probe)
+    lines = probe.output.strip().splitlines()
+    assert lines, f"the usage probe printed nothing: {probe}"
+    return json.loads(lines[-1])
 
 
 class TestInvitationFromTheCommandLine:
@@ -1804,6 +1854,26 @@ class TestUserLimitFromTheCommandLine:
         assert silent(run), f"a deactivation frees a place: it never warns: {run}"
         assert account(fresh_db.path, member) == {"is_superuser": False, "is_active": False}, f"the account must be deactivated: {account(fresh_db.path, member)}"
         print_success("deactivated, no warning")
+
+    def test_activate_of_the_admin_waiting_for_its_setup_at_the_limit_is_silent(self, image, fresh_db):
+        """IMG-030f — NEW, red until A-40 (today the limit line is printed, "reactivates the account": the check before a
+        reactivation spares only an account waiting for its email verification): LIBREFOLIO_MAX_USERS=1 on a database
+        whose only account is the initial administrator waiting for its setup (F02) — 1 of 1 places taken, by that
+        account alone, which registration_service.user_usage already counts. ``user activate`` of it takes no new place:
+        ✅, exit 0, the account an active administrator, and no warning line at all. IMG-030c is the other side: an
+        ordinary deactivated account at the limit still warns."""
+        print_section("IMG-030f: user activate of the administrator waiting for its setup, at the limit, in the image")
+        admin, admin_id = waiting_initial_admin(image, fresh_db)
+        limited = {**fresh_db.env, MAX_USERS_VARIABLE: "1"}
+        counted = places_taken(image, limited)
+        assert counted == {"used": 1, "max_users": 1, "waiting_admins": [admin_id]}, f"premise: 1 of 1 places taken, by the waiting administrator #{admin_id} alone: {counted}"
+
+        run = run_dev(image, "user", "activate", admin, env=limited)
+
+        assert_succeeds(run)
+        assert SUCCEEDED in run.output and account(fresh_db.path, admin) == ADMIN_ACCOUNT, f"the waiting administrator must be activated: {account(fresh_db.path, admin)}; {run}"
+        assert silent(run), f"red until A-40: the administrator waiting for its setup already holds its place (1 of 1, counted by registration_service.user_usage), so activating it takes none: nothing to warn about: {run}"
+        print_success("activated, no warning")
 
 
 # ---------------------------------------------------------------------------

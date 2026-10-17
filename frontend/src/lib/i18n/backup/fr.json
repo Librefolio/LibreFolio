@@ -145,7 +145,8 @@
           "foreign_key_violations_added": "La mise à jour a ajouté des références cassées à la copie.",
           "control_totals_changed": "Les totaux du registre diffèrent de ceux enregistrés dans la sauvegarde (listés ci-dessus).",
           "control_totals_unreadable": "Les totaux du registre n'ont pas pu être lus sur la copie.",
-          "unknown": "Un élément de l'archive mérite un coup d'œil : le journal du serveur donne les détails."
+          "unknown": "Un élément de l'archive mérite un coup d'œil : le journal du serveur donne les détails.",
+          "non_iso_currencies": "Certains codes de devise de la sauvegarde ne sont pas des codes ISO (noms ou numéros enregistrés par une version précédente) : la modification de ces lignes est refusée tant que le code n'est pas corrigé."
         },
         "expires": "La copie vérifiée est conservée jusqu'au {date}.",
         "drop": "Abandonner cette archive"

@@ -74,6 +74,14 @@ def schemas_currency_suggestion(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Currency suggestion tests", verbose=verbose)
 
 
+def schemas_currency_candidates(verbose: bool = False, test_names: list = None) -> bool:
+    """E-19b1: the ISO codes a stored currency value may stand for, the public base of the suggestion."""
+    print_section("Schemas: Currency Candidates (E-19b1)")
+    print_info("Testing: backend/app/schemas/common.py (iso_currency_candidates, suggested_iso_currency)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_currency_candidates.py", test_names)
+    return run_command(cmd, "Currency candidates tests", verbose=verbose)
+
+
 def schemas_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Test transaction Pydantic schemas."""
     print_section("Schemas: Transactions (TXCreateItem, TXReadItem, etc.)")
@@ -247,6 +255,15 @@ Tests for Pydantic/SQLModel schema validation:
         name="Currency Suggestion",
         desc="E-19a: the ISO code a stored currency value stands for (none when ambiguous or a subunit), the 422 naming it, base_currency strict",
         # PURE: schemas and plain functions over pycountry's data; no row, no server, no network, no file.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "currency-candidates",
+        schemas_currency_candidates,
+        name="Currency Candidates",
+        desc="E-19b1: the ISO codes a stored currency value may stand for (VED and VES for Bolívar Soberano), the base of the suggestion",
+        # PURE: plain functions over pycountry's data; no row, no server, no network, no file.
         isolation="pure",
     )
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")

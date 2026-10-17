@@ -133,3 +133,40 @@ export function getCurrencyInfo(code: string): CurrencyInfo {
 export function isCurrenciesLoaded(): boolean {
     return loaded;
 }
+
+// ============================================================================
+// SUGGESTION FOR A STORED VALUE THAT IS NO ISO CODE (E-19b1)
+// ============================================================================
+
+/** What a stored currency value stands for: GET /utilities/currencies/suggest. */
+export interface CurrencySuggestion {
+    /** The value is stored as an ISO 4217 alphabetic code (upper case, nothing around it). */
+    canonical: boolean;
+    /** The one ISO 4217 code the value stands for, or null: none, or more than one. */
+    suggestion: string | null;
+    /** The ISO 4217 codes the value may stand for, sorted. */
+    candidates: string[];
+}
+
+/** One request per value: the answer, or the request still in flight. A failure is not kept. */
+const suggestionCache = new Map<string, Promise<CurrencySuggestion>>();
+
+/**
+ * What a stored currency value that is not in the list stands for, such as the `978` or `EURO` an earlier version
+ * saved as written (E-19b1): the picker shows it beside the value. Asked once per value; a failed request answers
+ * "no suggestion" ({canonical: false, suggestion: null, candidates: []}) without throwing, and a later call asks again.
+ */
+export function suggestCurrency(value: string): Promise<CurrencySuggestion> {
+    const cached = suggestionCache.get(value);
+    if (cached) return cached;
+    const request: Promise<CurrencySuggestion> = zodiosApi
+        .suggest_currency_api_v1_utilities_currencies_suggest_get({queries: {value}})
+        .then((answer) => ({canonical: answer.canonical, suggestion: answer.suggestion ?? null, candidates: [...(answer.candidates ?? [])]}))
+        .catch((e: unknown) => {
+            console.error('Failed to suggest a currency code:', e);
+            suggestionCache.delete(value);
+            return {canonical: false, suggestion: null, candidates: []};
+        });
+    suggestionCache.set(value, request);
+    return request;
+}

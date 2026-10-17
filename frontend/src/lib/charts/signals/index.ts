@@ -61,7 +61,7 @@ export {MeasureSignal, type MeasurementResult} from './MeasureSignal';
 export {getLocalSignalDefinitions, getRegisteredSignalTypes, createSignal, createSignalConfig, signalFromConfig, type SignalTypeInfo} from './registry';
 export {mapBackendSignalDefinition, mergeSignalDefinitions, signalCodeToType} from './catalogMapper';
 export {mapSignalParamsSchema, UnsupportedSignalSchemaError} from './schemaMapper';
-export {renderBackendSignalResult, type BackendSignalRendererOptions, type BackendSignalRenderOutcome} from './backendRenderer';
+export {renderBackendSignalResult, renderedSignalPointCount, type BackendSignalRendererOptions, type BackendSignalRenderOutcome} from './backendRenderer';
 export {buildBackendSignalRequestPlan, type BackendSignalRequestPlan} from './requestBuilder';
 export {mapSignalInstanceResults, SignalResultState, type SignalInstanceResult, type SignalInstanceStatus} from './resultMapper';
 export {getBackendSignalProblem, getSignalProblem, getSignalProblemSeverity, type SignalProblem, type SignalProblemCode, type SignalProblemSeverity} from './signalProblem';

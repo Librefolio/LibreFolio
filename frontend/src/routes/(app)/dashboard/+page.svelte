@@ -51,6 +51,7 @@
     } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
     import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {createLazyReportRetry} from '$lib/stores/portfolio/lazyReportRetry.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {readDashboardView, writeDashboardView} from '$lib/features/dashboard/dashboardViewStore';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
@@ -288,8 +289,14 @@
     /** FxPairAddModal state for CTA-driven pair creation */
     let showFxPairAddModal = $state(false);
     let pageAlive = true;
+    // Y-24: a failed candles or contribution request is asked again at most three times, 2, 4 and 8 s later, then not
+    // until the scope changes or the user's Refresh (`handleSync`); before, it was asked again at once, without end.
+    const candlesRetry = createLazyReportRetry();
+    const contributionRetry = createLazyReportRetry();
     onDestroy(() => {
         pageAlive = false;
+        candlesRetry.dispose();
+        contributionRetry.dispose();
     });
     let fxPairCreateSlug = $state('');
 
@@ -628,6 +635,11 @@
         await loadAll(true, true);
     }
 
+    /** The scope of a lazy report section: brokers, period and currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
+    function reportScope(): string {
+        return `${activeBrokerIds?.join(',')}|${dateRangeCtl.start}|${dateRangeCtl.end}|${targetCurrency}`;
+    }
+
     /**
      * The contribution of the scope on screen: asked by PositionsPanel when its Performance view has
      * none, and by `loadAll` when the cached one is stale — then in background, with the cached rows
@@ -635,13 +647,12 @@
      * (after a price catch-up, Z-18), `contributionInBackground` instead, which the root's `aria-busy` does not read.
      */
     async function loadContribution({background = false}: {background?: boolean} = {}) {
-        if (!canAsk || contributionLoading || contributionRefreshing || contributionInBackground) return;
+        const askedScope = reportScope();
+        if (!canAsk || contributionLoading || contributionRefreshing || contributionInBackground || !contributionRetry.canAsk(askedScope)) return;
         const requested = targetCurrency;
         const brokerIds = activeBrokerIds;
         const start = dateRangeCtl.start || undefined;
         const end = dateRangeCtl.end || undefined;
-        const scope = () => `${activeBrokerIds?.join(',')}|${dateRangeCtl.start}|${dateRangeCtl.end}|${targetCurrency}`;
-        const askedScope = scope();
         const cached = peekReport(brokerIds, start, end, requested, true, false, false, false);
         if (cached && !cached.stale) {
             setContribution(cached.report);
@@ -653,12 +664,15 @@
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
             const report = await fetchReport(brokerIds, start, end, requested, false, true, false, false, false);
-            if (!pageAlive || scope() !== askedScope) return;
+            if (!pageAlive || reportScope() !== askedScope) return;
+            // The outcome is recorded before the flags fall back in `finally`: the effect they wake reads it (Y-24).
             if (report) {
+                contributionRetry.succeeded(askedScope);
                 setContribution(report);
                 appliedCurrency = requested;
-            } else if (!cached) {
-                setContribution(null);
+            } else {
+                contributionRetry.failed(askedScope);
+                if (!cached) setContribution(null);
             }
         } finally {
             contributionLoading = false;
@@ -672,15 +686,21 @@
      *  policy per plan §4.1: "expensive OHLC work stays off ordinary reports").
      *  The guard's reads run synchronously inside GrowthChart's effect, so they are its
      *  dependencies: `canAsk` turning true is what makes a saved Candles view on a fresh
-     *  page ask again once the brokers are known (Y-16). Keep them before the first await. */
+     *  page ask again once the brokers are known (Y-16), and `candlesRetry.canAsk` is what
+     *  asks again 2, 4 and 8 s after a failure (Y-24). Keep them before the first await. */
     async function loadPnlCandles() {
-        if (!canAsk || pnlCandles || pnlCandlesLoading) return;
+        const askedScope = reportScope();
+        if (!canAsk || pnlCandles || pnlCandlesLoading || !candlesRetry.canAsk(askedScope)) return;
         pnlCandlesLoading = true;
         const requested = targetCurrency;
         try {
             // includeHistory/includeAllocationHistory/includeContribution/includeBreakdown=false:
             // only pnl_candles is read below.
             const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, false, false, false, false, false, {includePnlCandles: true});
+            // An answer of another scope is not this one's: the scope on screen asks for its own.
+            if (!pageAlive || reportScope() !== askedScope) return;
+            if (report) candlesRetry.succeeded(askedScope);
+            else candlesRetry.failed(askedScope);
             pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
         } finally {
             pnlCandlesLoading = false;
@@ -713,6 +733,9 @@
     /** «Aggiorna» (E4): report, contribution, risk and lots are all asked again; what is on screen stays meanwhile. */
     async function handleSync() {
         syncLoading = true;
+        // The user's Refresh: the lazy sections may be asked again whatever failed before (Y-24).
+        candlesRetry.reset();
+        contributionRetry.reset();
         requestPortfolioRefresh();
         refreshVersion += 1;
         try {
