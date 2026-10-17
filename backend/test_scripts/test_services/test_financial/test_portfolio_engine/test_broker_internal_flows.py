@@ -303,8 +303,9 @@ def _classify(txs, scope, *, shares=None, external_paired=None):
     return classifier.classify(external_paired=external_paired)
 
 
-def _overrides(classification, *, date_to, price_map=None, fx_rate_map=None, frame_start=None) -> dict:
-    """Builder kwargs for a classified scenario; every asset is a EUR "Stock" with no classification."""
+def _overrides(classification, *, date_to, price_map=None, fx_rate_map=None, date_from=D0) -> dict:
+    """Builder kwargs for a classified scenario; every asset is a EUR "Stock" with no classification.
+    A ``date_from`` after the first transaction emits the states from it on (J1: one replay from the first movement)."""
     price_map = price_map or {}
     asset_ids = {ctxn.tx.asset_id for ctxn in classification.classified if ctxn.tx.asset_id is not None} | set(price_map)
     return {
@@ -316,9 +317,8 @@ def _overrides(classification, *, date_to, price_map=None, fx_rate_map=None, fra
         "asset_currencies": dict.fromkeys(asset_ids, "EUR"),
         "asset_types": dict.fromkeys(asset_ids, "Stock"),
         "asset_classifications": dict.fromkeys(asset_ids),
-        "date_from": D0,
+        "date_from": date_from,
         "date_to": date_to,
-        "frame_start": frame_start,
     }
 
 
@@ -511,17 +511,17 @@ def _case_08_shares(share_a: str, share_b: str):
     return classification, _overrides(classification, date_to=D2)
 
 
-def _case_09_preframe(frame_start: date | None = D10):
+def _case_09_before_date_from(date_from: date = D10):
     out_leg, in_leg = _transfer_pair(3, 4, sender=A, receiver=B, out_dt=D1, in_dt=D3, qty="10")
     classification = _classify([*_setup_t(), out_leg, in_leg], {A, B})
     prices = {ASSET: [(D0, Decimal("10"), "EUR"), (D1, Decimal("11"), "EUR"), (D2, Decimal("12"), "EUR"), (D3, Decimal("13"), "EUR"), (D10, Decimal("14"), "EUR")]}
-    return classification, _overrides(classification, date_to=D10, price_map=prices, frame_start=frame_start)
+    return classification, _overrides(classification, date_to=D10, price_map=prices, date_from=date_from)
 
 
-def _case_10_transit_straddles_frame_start():
+def _case_10_transit_straddles_date_from():
     out_leg, in_leg = _transfer_pair(3, 4, sender=A, receiver=B, out_dt=D1, in_dt=D5, qty="10")
     classification = _classify([*_setup_t(), out_leg, in_leg], {A, B})
-    return classification, _overrides(classification, date_to=D5, price_map=_setup_t_prices(), frame_start=D3)
+    return classification, _overrides(classification, date_to=D5, price_map=_setup_t_prices(), date_from=D3)
 
 
 def _case_11_chain():
@@ -1002,38 +1002,39 @@ class TestSecuritiesPairsBetweenBrokers:
 
 
 # =============================================================================
-# D1 — PRE-FRAME AND FRAME START
+# D1 — BEFORE date_from AND ACROSS IT
 # =============================================================================
 
 
-class TestPreFrameAndFrameStart:
-    """Step 3b runs in the pre-frame accounting as well as in the frame."""
+class TestBeforeDateFromAndAcrossIt:
+    """Step 3b runs on the days replayed before date_from as on the emitted ones (J1: one replay, the same rules
+    every day; before J1 those days ran in a separate pre-frame)."""
 
-    def test_case_09_transfer_entirely_before_frame_start(self):
-        """Case 9: 10 units in transit A -> B from d1 to d3, all before frame_start d10
+    def test_case_09_transfer_entirely_before_date_from(self):
+        """Case 9: 10 units in transit A -> B from d1 to d3, all before date_from d10
         (closes 10, 11, 12, 13 on d0..d3, then 14 on d10). X = MV(10, d3) = 130 must be
-        booked by the pre-frame accounting. First emitted state d10: C_A -30, P_A +30,
-        C_B 130, P_B +10; the full computation (no frame) gives the same d10 lines.
+        booked on the replayed days. First emitted state d10: C_A -30, P_A +30,
+        C_B 130, P_B +10; the run from d0 gives the same d10 lines.
         Today d10: P_A -100, P_B +140."""
-        classification, framed_overrides = _case_09_preframe()
+        classification, windowed_overrides = _case_09_before_date_from()
         assert _intervals(classification) == [(D1, D2, "asset", Decimal("1"))]
 
-        framed = _build(**framed_overrides)
-        _, full_overrides = _case_09_preframe(frame_start=None)
+        windowed = _build(**windowed_overrides)
+        _, full_overrides = _case_09_before_date_from(date_from=D0)
         full = _build(**full_overrides)
 
-        assert [s.date for s in framed.daily_states] == [D10]
-        problems = _line_problems(framed, {D10: {A: ("-30", "30"), B: ("130", "10")}}) + _aggregate_problems(framed, {D10: ("100", "40")})
+        assert [s.date for s in windowed.daily_states] == [D10]
+        problems = _line_problems(windowed, {D10: {A: ("-30", "30"), B: ("130", "10")}}) + _aggregate_problems(windowed, {D10: ("100", "40")})
         assert not problems, "\n".join(problems)
-        assert _broker_line(framed, D10) == _broker_line(full, D10), "framed d10 broker lines differ from the full computation's"
-        _assert_invariant_every_day(framed.daily_states)
+        assert _broker_line(windowed, D10) == _broker_line(full, D10), "the d10 broker lines from date_from=d10 differ from the run from d0's"
+        _assert_invariant_every_day(windowed.daily_states)
         _assert_invariant_every_day(full.daily_states)
 
-    def test_case_10_transit_straddles_frame_start(self):
-        """Case 10: 10 units leave A on d1 (pre-frame) and reach B on d5; frame_start d3.
+    def test_case_10_transit_straddles_date_from(self):
+        """Case 10: 10 units leave A on d1 (before date_from) and reach B on d5; date_from d3.
         The value in transit stays with A on d3-d4 (+30, +40, no capital moves); on d5
         X = MV(10, d5) = 150. Today d5: P_A -100, P_B +150."""
-        classification, overrides = _case_10_transit_straddles_frame_start()
+        classification, overrides = _case_10_transit_straddles_date_from()
         assert _intervals(classification) == [(D1, D4, "asset", Decimal("1"))]
 
         result = _build(**overrides)
@@ -1302,8 +1303,8 @@ _GUARD_CASES = [
     pytest.param(functools.partial(_case_08_shares, "0.5", "0.5"), id="case08_shares_a50_b50"),
     pytest.param(functools.partial(_case_08_shares, "0.5", "1"), id="case08_shares_a50_b100"),
     pytest.param(functools.partial(_case_08_shares, "1", "0.5"), id="case08_shares_a100_b50"),
-    pytest.param(_case_09_preframe, id="case09_preframe"),
-    pytest.param(_case_10_transit_straddles_frame_start, id="case10_transit_straddles_frame_start"),
+    pytest.param(_case_09_before_date_from, id="case09_before_date_from"),
+    pytest.param(_case_10_transit_straddles_date_from, id="case10_transit_straddles_date_from"),
     pytest.param(_case_11_chain, id="case11_chain"),
     pytest.param(_case_12_round_trip, id="case12_round_trip"),
     pytest.param(_case_14a_fee_and_transfer, id="case14a_fee_and_transfer"),

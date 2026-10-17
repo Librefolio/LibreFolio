@@ -10791,8 +10791,8 @@
             "Liquidity": "12057.176000000",
             "STOCK": "781.20000000"
           },
-          "cash_from_contributed_capital": "12047.586000000",
-          "cash_from_generated_returns": "9.590000000",
+          "cash_from_contributed_capital": "12020.610000000",
+          "cash_from_generated_returns": "36.566000000",
           "cash_value": "12057.176000000",
           "cumulative_external_cash_flow": "14000.00000000",
           "date": "2091-01-08",
@@ -10879,8 +10879,8 @@
             "Liquidity": "11757.176000000",
             "STOCK": "781.20000000"
           },
-          "cash_from_contributed_capital": "11747.586000000",
-          "cash_from_generated_returns": "9.590000000",
+          "cash_from_contributed_capital": "11720.610000000",
+          "cash_from_generated_returns": "36.566000000",
           "cash_value": "11757.176000000",
           "cumulative_external_cash_flow": "13700.00000000",
           "date": "2091-01-09",
