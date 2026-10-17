@@ -532,13 +532,19 @@ async def delete_own_account(
     Cannot be undone.
 
     Constraints:
-    - Cannot delete if you are the last active administrator (an inactive one cannot log in): 400 ``LAST_ADMIN``
+    - Cannot delete if you are the last active administrator (an inactive one cannot log in): 400 ``LAST_ADMIN``,
+      decided under SQLite's write lock (A-52); an account deleted meanwhile answers 404 (A-54)
     - Session is invalidated after deletion
     """
+    # Decided under SQLite's write lock, from the account as it is then (A-52): of the last two active administrators
+    # deleting their own accounts at once, the second sees the first gone
+    if not await user_service.refreshed_under_lock(session, current_user):
+        raise HTTPException(status_code=404, detail="User not found")
     # The last active administrator stays: inactive admins cannot log in to administer the instance
     if current_user.is_superuser:
         other_active_admins = await user_service.count_active_superusers(session, excluding_user_id=current_user.id)
         if other_active_admins == 0:
+            await session.rollback()
             raise HTTPException(status_code=400, detail={"error_code": "LAST_ADMIN", "message": "Cannot delete account: you are the last active administrator"})
 
     # A failed deletion rolls the session back and expires every object in it, current_user included: read it first
