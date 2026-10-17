@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 import structlog
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,11 +12,13 @@ from backend.app.db.models import (
     Asset,
     AssetEvent,
     AssetProviderAssignment,
+    BrokerUserAccess,
     PriceHistory,
     Transaction,
 )
 from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetSourceError
+from backend.app.services.financial_math.splits import costless_incoming_split_adjustments
 
 logger = structlog.get_logger(__name__)
 
@@ -27,6 +31,8 @@ class CurrencyChangeOperations:
         asset_id: int,
         session: AsyncSession,
         dry_run: bool = False,
+        *,
+        current_user_id: Optional[int] = None,
     ) -> dict:
         """Wipe **all** market data for an asset before a currency change.
 
@@ -61,7 +67,10 @@ class CurrencyChangeOperations:
             session: active DB session (committed on success).
             dry_run: when ``True``, run only the counts and skip the
                 destructive SQL. Useful for the pre-confirm summary panel
-                on the frontend.
+                on the frontend. A dry run never refuses.
+            current_user_id: the user the request answers (the route passes
+                the caller): a refusal names only the transactions that user
+                can see; without one it names none (X-R47b).
 
         Returns:
             Dict with keys ``prices``, ``events_manual``, ``events_provider``,
@@ -69,7 +78,11 @@ class CurrencyChangeOperations:
             ``dry_run``.
 
         Raises:
-            AssetSourceError: if ``asset_id`` does not exist.
+            AssetSourceError: if ``asset_id`` does not exist
+                (``ASSET_NOT_FOUND``); ``MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST``
+                when a SPLIT of the asset has incoming adjustments without a
+                purchase cost (see ``_reject_wipe_of_costless_split_adjustments``):
+                nothing is written.
         """
         asset = (await session.execute(select(Asset).where(Asset.id == asset_id))).scalar_one_or_none()
         if not asset:
@@ -123,6 +136,8 @@ class CurrencyChangeOperations:
         if dry_run:
             return summary
 
+        await CurrencyChangeOperations._reject_wipe_of_costless_split_adjustments(session, asset_id, current_user_id)
+
         # The provider whose cached answers step 4 drops, as plain values: the commit below expires the row's attributes.
         assignment = (await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id))).scalar_one_or_none()
         cached_by = (assignment.provider_code, assignment.identifier, assignment.identifier_type, assignment.provider_params) if assignment else None
@@ -160,3 +175,39 @@ class CurrencyChangeOperations:
         )
 
         return summary
+
+    @staticmethod
+    async def _reject_wipe_of_costless_split_adjustments(session: AsyncSession, asset_id: int, current_user_id: Optional[int]) -> None:
+        """X-R48: refuse the wipe while a SPLIT of the asset has incoming adjustments without a purchase cost.
+
+        The wipe deletes every event of the asset. Linked to a SPLIT, an incoming ADJUSTMENT without a cost only
+        rescales the position; with the SPLIT gone it would be an acquisition of unknown cost (MISSING_COST_BASIS) — the
+        rule of P-10, which refuses a retype of such a SPLIT (``financial_math.splits.costless_incoming_split_adjustments``
+        finds them, the SPLITs among the given events). An asset is global, so the refusal shows only the transactions
+        ``current_user_id`` can see (a ``BrokerUserAccess`` row for their broker) and counts the others; without a caller
+        it names none (R13-SEC7, X-R47b).
+
+        Raises:
+            AssetSourceError(code="MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST"): ``details["splits"]``, one per such
+                SPLIT by date then id: ``event_id``, ``date``, ``transaction_ids`` (those the caller can see, sorted) and
+                ``hidden_transactions_count``. The message gives the totals only.
+        """
+        event_rows = (await session.execute(select(AssetEvent.id, AssetEvent.date).where(AssetEvent.asset_id == asset_id))).all()
+        costless = await costless_incoming_split_adjustments(session, [int(event_id) for event_id, _ in event_rows])
+        if not costless:
+            return
+        dates = {int(event_id): event_date for event_id, event_date in event_rows}
+        every_id = sorted({transaction_id for ids in costless.values() for transaction_id in ids})
+        visible: set[int] = set()
+        if current_user_id is not None:
+            visible_stmt = select(Transaction.id).join(BrokerUserAccess, Transaction.broker_id == BrokerUserAccess.broker_id).where(Transaction.id.in_(every_id), BrokerUserAccess.user_id == current_user_id)
+            visible = {int(row[0]) for row in (await session.execute(visible_stmt)).all()}
+        splits = []
+        for event_id in sorted(costless, key=lambda key: (dates[key], key)):
+            shown = [transaction_id for transaction_id in costless[event_id] if transaction_id in visible]
+            splits.append({"event_id": event_id, "date": dates[event_id].isoformat(), "transaction_ids": shown, "hidden_transactions_count": len(costless[event_id]) - len(shown)})
+        raise AssetSourceError(
+            f"MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST: {len(splits)} split(s) of this asset have {len(every_id)} linked adjustment(s) without a purchase cost; give them a cost before deleting the asset's events",
+            "MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST",
+            {"splits": splits},
+        )

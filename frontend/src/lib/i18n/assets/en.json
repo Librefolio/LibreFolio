@@ -56,7 +56,8 @@
       "progressWipe": "Wiping {prices} prices + {events} events and disconnecting {linkedTx} transactions…",
       "wipeSuccess": "Wiped {prices} prices, {events} events; disconnected {linkedTx} transactions",
       "bodyIntro": "Changing the currency requires wiping all stored market data (see the summary below). LibreFolio will then attempt to re-sync prices and events from the provider in the new currency.",
-      "bodyCaveat": "Any transactions that were linked to the deleted events will be disconnected — you are responsible for reattaching them to the newly-synced events if needed."
+      "bodyCaveat": "Any transactions that were linked to the deleted events will be disconnected — you are responsible for reattaching them to the newly-synced events if needed.",
+      "splitAdjustmentsWithoutCost": "The currency was not changed: the split of {date} has {n, plural, one {# linked adjustment} other {# linked adjustments}} without a purchase cost{hidden, plural, =0 {} one { (# of them at a broker you cannot see)} other { (# of them at brokers you cannot see)}}{more, plural, =0 {} one {, and # more split has some too} other {, and # more splits have some too}}. Changing the currency deletes the splits, and those units would count as bought at an unknown price: give the adjustments a purchase cost first."
     },
     "pricesInCurrency": "Prices in {currency}",
     "eventsInCurrency": "Events in {currency}",

@@ -168,6 +168,9 @@ On the asset's [detail page](detail/index.md), click **Edit** (✏️), change w
 A new **Currency** for an asset that already has prices means deleting its stored prices and
 events: on saving, a dialog lists what goes (transactions stay) and offers a backup. After
 **Delete & Change Currency**, prices are downloaded again from the provider, if there is one.
+While a split of the asset has linked adjustments without a purchase cost, the change is refused
+and nothing is deleted: the message names the split by its date — give those adjustments a
+[purchase cost](../transactions/form.md) first.
 
 ## 🏷️ Edit identifiers {: #one-instrument-several-codes }
 
