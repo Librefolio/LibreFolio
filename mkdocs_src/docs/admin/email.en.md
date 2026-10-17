@@ -375,7 +375,8 @@ Otherwise the page shows that command, open, under the warning *Email recovery i
 this instance. Reset your password from the server terminal, or ask your administrator for a
 password-reset link.* In the [managed profile](hosting_providers.md#managed-profile), the page shows
 neither the command nor that warning: in their place, *Ask your administrator for a password-reset
-link: they can create one for your account.* An administrator creates that link in
+link: they can create one for your account.* When the page cannot read the instance's configuration
+from the server, it shows only that advice, in either profile. An administrator creates that link in
 **Settings › Administration › Users**, even without email
 ([Password-Reset Links](users.md#reset-links)).
 
