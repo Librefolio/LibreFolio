@@ -7185,6 +7185,15 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - Nessun cambio a runtime, `tsc` senza i due errori, Prettier pulito.
   - Restano 3 TS2769 di C-66 (`c18517e31`): l'allargamento di E-2 contro `isStoredPoint`, di un ramo attivo.
   - Commit al checkpoint di E-17. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-17».
+- **E-18 · Codici di valuta stretti sulle scritture (MF-SEC9b)** — piccolo; coordinatore, 17/10 (analisi di E, 13:2x).
+  - `Currency.validate_code` accetta nomi e numeri (`EURO`, `978`, `US DOLLAR`) e li salva così, senza
+    canonicalizzarli; nelle transazioni senza limite di lunghezza.
+  - Decisione: stretto solo sugli schemi di richiesta (tre lettere ASCII e `alpha_3` esistente; `XXX`/`XTS` ammessi);
+    le letture restano tolleranti.
+  - Il codice dopo l'ingresso di X-R59/SEC9-1 di MF; prima i rossi, in un file nuovo.
+  - A parte: un avviso di qualità dei dati per i codici non ISO salvati, e la SQL di misura nella lista dello
+    sviluppatore.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «MF-SEC9b» ed «E-18».
 
 ## Y · Cruscotto e grafici (fase 01)
 
