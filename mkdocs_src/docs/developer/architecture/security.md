@@ -1073,7 +1073,7 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `platform.frame_protection` | `LIBREFOLIO_FRAME_PROTECTION` is off with `LIBREFOLIO_PROFILE=managed`, whose entry in `PROFILE_DEFAULTS` turns it on ([Frame Protection and the Report-Only Policy](#managed-headers)): a value set in the environment or in `.env`, or the entry lost from the table. `instance.checks.frameProtection.offManaged`, summary `LIBREFOLIO_FRAME_PROTECTION is off in the managed profile: any site can show LibreFolio in a frame; the managed profile turns it on` | `warning` |
 | `platform.csp_report_only` | `LIBREFOLIO_CSP_REPORT_ONLY` is off with `LIBREFOLIO_PROFILE=managed`, the same way: `instance.checks.cspReportOnly.offManaged`, summary `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on`. Only an `info`: the policy reports, and never blocks | `info` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
-| `platform.test_mode` | `LIBREFOLIO_TEST_MODE` is on (`is_test_mode()`: `1`, `true` or `yes`, in any case) outside a test lane, with `LIBREFOLIO_TEST_LANE_ID` unset, empty or blank (`owning_test_lane_id()`): `instance.checks.testMode.outsideTestLane`, `detail` `{"data_dir": …}`, the test data directory in use (`str(get_data_dir())`), summary `TEST_MODE_OUTSIDE_LANE_SUMMARY`, `LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory <data_dir> and .env is not read; unset it on a production instance`. The same in every profile (below) | `error`; with `LIBREFOLIO_PROFILE=managed`, `log_configuration_audit()` stops the startup first |
+| `platform.test_mode` | `LIBREFOLIO_TEST_MODE` is on (`is_test_mode()`: `1`, `true` or `yes`, in any case) outside a test lane, with `LIBREFOLIO_TEST_LANE_ID` unset, or not 16 to 128 characters once stripped (`owning_test_lane_id()`, H-49): `instance.checks.testMode.outsideTestLane`, `detail` `{"data_dir": …}`, the test data directory in use (`str(get_data_dir())`), summary `TEST_MODE_OUTSIDE_LANE_SUMMARY`, `LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory <data_dir> and .env is not read; unset it on a production instance`. The same in every profile (below) | `error`; with `LIBREFOLIO_PROFILE=managed`, `log_configuration_audit()` stops the startup first |
 | `backup.panel_token` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, or its `_FILE`, is set but cannot be used: `backup.checks.panelToken.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `backup.upload_limit` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, or the profile's entry for it, cannot be used: `backup.checks.uploadLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `backup.restore_limit` | `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` cannot be used, or, while it is unset outside `selfhosted`, the upload limit it follows: `backup.checks.restoreLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
@@ -1092,10 +1092,12 @@ and the checks only show it, in the startup log and in [the checks on demand](#s
 
 The check of test mode (lot H-46), `check_test_mode()`, the last of the platform's in `CONFIG_CHECKS`, gives the same
 result in every profile. It is `ok` while test mode is off (`instance.checks.testMode.off`), and while it is on in a
-test lane (`instance.checks.testMode.testLane`): a process that owns a `LIBREFOLIO_TEST_LANE_ID` that is not blank
-(`owning_test_lane_id()` in `backend/app/config/platform.py`). `configure_test_runtime()` in `scripts/cli_base.py` sets
-it, with `ensure_test_lane_id()`, for the test runner (`dev.py test`, its shared backend and its in-process pytest), for
-`dev.py server --test` and for the gallery's servers; `configure_server_runtime()` (`dev.py server`) sets
+test lane (`instance.checks.testMode.testLane`): a process that owns a `LIBREFOLIO_TEST_LANE_ID` the readiness probe
+accepts, 16 to 128 characters once stripped (`owning_test_lane_id()`, `TEST_LANE_ID_MIN_LENGTH` and
+`TEST_LANE_ID_MAX_LENGTH` in `backend/app/config/platform.py`, lot H-49; `GET /system/test-lane-health` declares its
+token with the same two constants). `configure_test_runtime()` in `scripts/cli_base.py` sets it, with
+`ensure_test_lane_id()`, 32 characters, for the test runner (`dev.py test`, its shared backend and its in-process
+pytest), for `dev.py server --test` and for the gallery's servers; `configure_server_runtime()` (`dev.py server`) sets
 `LIBREFOLIO_TEST_MODE=0` and removes it. The lane id is no barrier against an attacker, since whoever writes the
 environment is the operator: it tells a configuration mistake from a test lane.
 
@@ -1115,9 +1117,9 @@ and reproduced outside a container with a folder the server cannot write; it is 
 managed profile the start stops on the error (`ManagedTestModeError`, below); in the
 self-hosted profile it goes on, with the error in the log and in [the checks on demand](#security-checks-endpoint).
 The profile that counts is the one in the process environment, where a container's `environment:` or `env_file:` puts
-it: in test mode `Settings` reads no `.env`. Its tests are section (h) of `./dev.py test services config-audit`
+it: in test mode `Settings` reads no `.env`. Its tests are sections (h) and (i), lot H-49, of `./dev.py test services config-audit`
 (`backend/test_scripts/test_services/test_config_audit.py`): the three states, with the true and false spellings of
-the variable and a blank lane id; the same result in every profile; the startup log record; the managed stop with its
+the variable, a blank lane id and lane ids around the probe's two bounds; the same result in every profile; the startup log record; the managed stop with its
 exact message, the JWT stop staying first.
 
 Workstream A's check, `ok` as `auth.checks.loginLimit.ok` while the limit is on, is `check_login_limit()` in
@@ -1142,7 +1144,7 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
    self-hosted profile it stays the `warning` of the table above.
 2. Test mode on outside a test lane, the `error` of `platform.test_mode`: with `LIBREFOLIO_PROFILE=managed`, it
    raises `ManagedTestModeError` (a `RuntimeError`), whose message names the test data directory in use:
-   `In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): test-only providers would be served and the data kept in the test data directory <path>; unset LIBREFOLIO_TEST_MODE`.
+   `In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters): test-only providers would be served and the data kept in the test data directory <path>; unset LIBREFOLIO_TEST_MODE`.
    In the self-hosted profile it stays the `error` of the table above, and the start goes on.
 3. `instance_blocked()` and `instance_deletion_date()` (`backend/app/config/platform.py`): a value
    they cannot read raises `ValueError`. On a blocked instance, a warning
