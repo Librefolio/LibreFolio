@@ -1068,7 +1068,7 @@ def populate_registry(registry: dict) -> None:
         "email-send-link",
         front_email_send_link,
         name="Send Link by Email E2E",
-        desc="«Send by email» in Settings › Users (workstream E, lot E4b): the invitation and reset dialogs on the lane's backend, GET /system/instance answered with the real response and email.links true or false, POST /email/links on a simulated server: offered only with links, an invitation prefilled with its address posting {purpose, token, to}, a reset link posting {purpose, token} without to, «sent» and email.link.sent, a 429 with its wait in email.link.sendFailed; every invitation and disposable account it creates removed after it",
+        desc="«Send by email» in Settings › Users (workstream E, lots E4b and E-8): the invitation and reset dialogs on the lane's backend, GET /system/instance answered with the real response and email.links true or false, POST /email/links on a simulated server: offered only with links, an invitation prefilled with its address posting {purpose, token, to} with no language by default, or with language: it chosen in its select, a reset link posting {purpose, token} without to or language, no select, «sent» and email.link.sent, a 429 with its wait in email.link.sendFailed; every invitation and disposable account it creates removed after it",
         prereq="Admin user + test users; registration open on the lane; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
         tests="settings/email-send-link.spec.ts",
     )

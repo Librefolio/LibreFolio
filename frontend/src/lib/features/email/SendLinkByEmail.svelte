@@ -1,14 +1,17 @@
 <!--
   SendLinkByEmail — «Send by email» next to a shared link (workstream E, lot E4): one of the extra actions of the share
   dialogs (`settings/users/linkShareActions.ts`, workstream A). An invitation goes to the address typed here, else to the
-  one written in it; a password-reset link only to the address of its account.
+  one written in it; a password-reset link only to the address of its account. An invitation's email goes in the
+  language chosen here, the instance's default language unless another is picked; a reset link's in the account's
+  (decision N69). The outcome says which language the email went in, as the server answered it.
 
   Only the token travels: the email's link starts with `LIBREFOLIO_PUBLIC_URL` (developer decision 45), whatever address
   the dialog shows. Colours are roles only.
 -->
 <script lang="ts">
     import {Mail} from 'lucide-svelte';
-    import {_} from '$lib/i18n';
+    import {_, LANGUAGE_OPTIONS, LOCALE_NAMES, type SupportedLocale} from '$lib/i18n';
+    import {SimpleSelect, type SelectOption} from '$lib/components/ui/select';
     import {notify} from '$lib/stores/app/notify.svelte';
     import type {LinkShareActionProps} from '$lib/features/settings/users/linkShareActions';
     import {linkSendFailureMessage, OUTCOME_CLASSES} from './emailText';
@@ -21,18 +24,32 @@
     /** The address typed by the administrator; until then, the one the dialog knows. */
     let edited = $state<string | null>(null);
     const to = $derived(edited ?? context.email ?? '');
+    /** The language of an invitation's email; '' leaves it to the instance's default language (decision N69). */
+    let language = $state<SupportedLocale | ''>('');
+    const languageOptions: SelectOption[] = $derived([{value: '', label: $_('email.sendLink.languageInstance')}, ...LANGUAGE_OPTIONS.map((option) => ({value: option.code, label: option.name, icon: option.flag}))]);
     let sending = $state(false);
     /** The last request's outcome; its text is rendered from it, so it follows a change of language. */
-    let outcome = $state<{kind: 'sent'; to: string} | {kind: 'failed'; failure: LinkSendFailure} | null>(null);
+    let outcome = $state<{kind: 'sent'; to: string; language: string} | {kind: 'failed'; failure: LinkSendFailure} | null>(null);
+
+    function chosenLanguage(value: string): SupportedLocale | '' {
+        return LANGUAGE_OPTIONS.find((option) => option.code === value)?.code ?? '';
+    }
+
+    /** A language as the selector names it, in its own language; a code the interface does not know, as it is. */
+    function languageName(code: string): string {
+        return LANGUAGE_OPTIONS.find((option) => option.code === code) ? LOCALE_NAMES[code as SupportedLocale] : code;
+    }
 
     async function send(): Promise<void> {
         if (sending || token === null) return;
         sending = true;
         outcome = null;
         const address = purpose === 'invite' ? to.trim() : '';
+        const chosen = purpose === 'invite' && language ? language : undefined;
         try {
-            const sent = await sendLinkByEmail({purpose, token, to: address || undefined});
-            outcome = {kind: 'sent', to: sent.to};
+            // No language key at all for the instance's language: the backend decides, as before N69
+            const sent = await sendLinkByEmail({purpose, token, to: address || undefined, ...(chosen ? {language: chosen} : {})});
+            outcome = {kind: 'sent', to: sent.to, language: sent.language};
             notify({name: 'email.link.sent', detail: {purpose, language: sent.language}});
         } catch (error) {
             const failure = readLinkSendFailure(error);
@@ -58,6 +75,17 @@
             type="email"
             value={to}
         />
+        <p class="block text-sm font-medium text-lf-secondary">{$_('email.sendLink.languageLabel')}</p>
+        <SimpleSelect
+            ariaLabel={$_('email.sendLink.languageLabel')}
+            disabled={sending}
+            dropdownPosition="auto"
+            onchange={(value) => (language = chosenLanguage(value))}
+            optionTestId={(option) => `send-link-email-language-option-${option.value || 'instance'}`}
+            options={languageOptions}
+            testId="send-link-email-language"
+            value={language}
+        />
     {:else}
         <p class="text-sm text-lf-secondary" data-testid="send-link-email-target">{$_('email.sendLink.resetTarget')}</p>
     {/if}
@@ -73,8 +101,8 @@
         {sending ? $_('email.sendLink.sending') : $_('email.sendLink.button')}
     </button>
     {#if outcome}
-        <p aria-live="polite" class={OUTCOME_CLASSES[outcome.kind]} data-testid="send-link-email-outcome" data-outcome={outcome.kind}>
-            {outcome.kind === 'sent' ? $_('email.sendLink.sent', {values: {to: outcome.to}}) : linkSendFailureMessage($_, outcome.failure)}
+        <p aria-live="polite" class={OUTCOME_CLASSES[outcome.kind]} data-language={outcome.kind === 'sent' ? outcome.language : undefined} data-outcome={outcome.kind} data-testid="send-link-email-outcome">
+            {outcome.kind === 'sent' ? $_('email.sendLink.sent', {values: {to: outcome.to, language: languageName(outcome.language)}}) : linkSendFailureMessage($_, outcome.failure)}
         </p>
     {/if}
 </div>

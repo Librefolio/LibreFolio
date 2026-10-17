@@ -120,7 +120,7 @@
       "toPlaceholder": "name@example.com",
       "resetTarget": "The link goes to the email address of the account.",
       "publicUrlHint": "The link in the email starts with the address set in LIBREFOLIO_PUBLIC_URL, which may differ from the one above.",
-      "sent": "Sent to {to}.",
+      "sent": "Sent to {to}. Language: {language}.",
       "errors": {
         "EMAIL_UNAVAILABLE": "Email is off or not working on this instance.",
         "EMAIL_LINKS_UNAVAILABLE": "Emails cannot carry links: LIBREFOLIO_PUBLIC_URL is not set, or cannot start a link.",
@@ -132,7 +132,9 @@
         "EMAIL_RATE_LIMITED": "The hourly email limit is reached: try again in {minutes} min.",
         "RECIPIENT_REFUSED": "The SMTP server refused the recipient's address.",
         "generic": "The email could not be sent."
-      }
+      },
+      "languageLabel": "Language of the email",
+      "languageInstance": "The instance's language"
     },
     "forgot": {
       "label": "Username or email address",
