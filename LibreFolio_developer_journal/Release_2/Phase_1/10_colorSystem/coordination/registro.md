@@ -2473,3 +2473,4 @@
 - **04:45, misure finali della notte:** m1 674 (561 categorie, 109 interruttori, 4 senza ruolo); token di componente letterali 6 (`table` 4, `media` 2); `chartTheme.ts` 152, `drawnColors.ts` 3. CSV dei motivi riallineato dopo gli spostamenti di FE8b (12 file trovati per nome).
   - Commit dei record: nel piano generale le sezioni «21:06 DataTable», «Notte 16→17/10» e «Regole nuove della notte», più le righe di T, DV, AF, G, L e dell'anteprima; la riga dell'indice del backlog; questo registro.
   - `dev_release2` è 367 commit avanti a origin.
+- **04:50, notte chiusa da parte nostra.** Record committati in `d3e26ae8a`. Briefing `review/notte-16-17/briefing-mattina.md` e domande `domande-bloccanti.md` completati e aperti nell'editor. Tutti i figli sono in idle (T, DV, AF, G, L; BK, IM, IW, TR già chiusi). Anteprima 6160 attiva su `ec6aa2007`. Nessuna domanda bloccante per il developer. Da qui in poi rispondo solo alla 1.3.
