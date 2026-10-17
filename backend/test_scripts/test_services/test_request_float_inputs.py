@@ -45,21 +45,22 @@ Under test: the app of ``backend/app/main.py``, its routes, and the schemas thei
 (d) The rule: no float leaf lets any of the four values through. Parametrised over the leaves the walk finds when this
     file is collected, with ``KNOWN_LEAVES``, the six of today, as a floor: the parametrisation is never empty, and a
     leaf of the floor the walk no longer finds fails by name. The message names the leaf, its annotation, what passed
-    and the routes that reach it. Today the five signal fields pass (``FiniteFloat``, that is
+    and the routes that reach it. Today all six pass: the five signal fields (``FiniteFloat``, that is
     ``Annotated[float, AllowInfNan(False)]``), and ``PluginSettingWriteItem.value`` (``PluginSettingPlainValue | None``,
-    ``PATCH /api/v1/settings/plugins/bulk``) is red: its float branch takes all four. The service refuses a number that
-    is not finite before saving it (``validate_value``, ``services/plugin_settings/fields.py``), but the rule is the
-    schema.
+    ``PATCH /api/v1/settings/plugins/bulk``), whose union has had ``Annotated[float, AllowInfNan(False)]`` as its float
+    branch since H-32 (``PluginSettingPlainValue``, ``schemas/plugin_settings.py``). The service also refuses a number
+    that is not finite before saving it (``validate_value``, ``services/plugin_settings/fields.py``), which alone would
+    not count: the rule is the schema.
 (e) Self-tests of the walk and of the judge, on a probe app built here: its routes in an ``APIRouter`` included under
     ``/api/v1/probe``, one in a router nested in it, one on the app itself, each walked with its full path. Reported,
     with what passes: a ``float`` field of the body (all four), ``Field(ge=0)`` alone (``inf`` and ``1E+400``), the
     float of a model inside a list of the body, a dict value, a tuple slot, a list of lists, a PEP 695 alias of
     ``float``, a recursive alias (the field and its items, and no further), a ``float`` query parameter of the nested
-    router, the ``float`` of the route of the app itself, and the union of ``PluginSettingPlainValue``. Found and not
-    reported: ``Annotated[float, AllowInfNan(False)]``, ``Field(ge=0, le=10)``, a field and a list item of a model whose
-    config sets ``allow_inf_nan=False``, and the same union with ``Annotated[float, AllowInfNan(False)]`` as its float
-    branch, the fix proposed for ``PluginSettingPlainValue``. Nothing else is a leaf there (a ``str`` key or slot,
-    ``JsonValue``), and no problem. On an app of its own, a dataclass in a body is a problem, not a pass.
+    router, the ``float`` of the route of the app itself, and the union ``PluginSettingPlainValue`` had before H-32.
+    Found and not reported: ``Annotated[float, AllowInfNan(False)]``, ``Field(ge=0, le=10)``, a field and a list item of
+    a model whose config sets ``allow_inf_nan=False``, and the same union with ``Annotated[float, AllowInfNan(False)]``
+    as its float branch, the fix applied in H-32 to ``PluginSettingPlainValue``. Nothing else is a leaf there (a ``str``
+    key or slot, ``JsonValue``), and no problem. On an app of its own, a dataclass in a body is a problem, not a pass.
 (f) The threat, end to end, on the probe app: ``{"x": 1E+400}``, and the same with ``NaN``, ``Infinity`` and
     ``-Infinity``, reaches the endpoint of a plain ``float`` as a number that is not finite, and never the endpoint of an
     ``Annotated[float, AllowInfNan(False)]``, which answers 422 ``finite_number``. The probe app writes its 422 without
@@ -84,18 +85,21 @@ Under test: the app of ``backend/app/main.py``, its routes, and the schemas thei
     position holds no float whose schema could refuse. The same body around a finite number is accepted: the barrier
     that the probe body is otherwise valid, so that a refusal is the number's doing. The provider probes name
     ``mockprov``, whose ``validate_params`` takes any parameters, and which must be registered: an unknown provider is
-    refused whatever its parameters. Today ``ToolComputeItem`` refuses (``allow_inf_nan=False`` in the config of
-    ``ToolTransportModel``, which ``JsonValue`` respects), and so does ``SignalRequest`` (``ensure_json_safe`` in a
-    validator of ``params``); the two provider requests (``FAProviderConfigBase``) and ``RiskAnalyticRequest`` take
-    every placement, and are red. Self-test, on an app of its own: ``Any``, ``object`` and ``JsonValue`` as a field, a
-    list item behind ``Annotated``, a mapping value and behind ``Optional``, each noted with its type and its route,
-    and the float beside them a leaf, not a free-form position.
+    refused whatever its parameters. Today all five refuse. ``ToolComputeItem`` refuses through the config of its
+    model: ``ToolTransportModel`` sets ``allow_inf_nan=False``, which ``JsonValue`` respects. The four others refuse
+    through ``ensure_json_safe`` (``backend/app/utils/json_utils.py``) in a ``mode="before"`` validator of their field:
+    ``SignalRequest.params``; ``provider_params`` in ``FAProviderConfigBase`` (``schemas/provider.py``), which both
+    provider requests inherit; and ``RiskAnalyticRequest.parameters`` (``schemas/risk.py``). The last two validators
+    came with H-34. Self-test, on an app of its own: ``Any``, ``object`` and ``JsonValue`` as a field, a list item
+    behind ``Annotated``, a mapping value and behind ``Optional``, each noted with its type and its route, and the
+    float beside them a leaf, not a free-form position.
 
 How to fix a red: make the float itself refuse them. ``Annotated[float, AllowInfNan(False)]`` (pydantic's
 ``FiniteFloat``) on the float, or on the float branch of its union; or bounds that exclude both, a lower and an upper one
 (``ge=0`` alone lets ``inf`` through); or ``allow_inf_nan=False`` in the config of a model only requests use, never in
-``StrictModel``. For ``PluginSettingPlainValue``: ``str | int | Annotated[float, AllowInfNan(False)] | bool``, the
-probe's ``FixedValueBody``. A new leaf needs no change here: the walk finds it, and it is parametrised on its own.
+``StrictModel``. An example, applied since H-32 on the float branch of a union: ``PluginSettingPlainValue``
+(``schemas/plugin_settings.py``), ``str | int | Annotated[float, AllowInfNan(False)] | bool``, as in the probe's
+``FixedValueBody``. A new leaf needs no change here: the walk finds it, and it is parametrised on its own.
 For a free-form position (g): ``ensure_json_safe`` (``backend/app/utils/json_utils.py``) in a ``mode="before"``
 validator of its field, as ``SignalRequest.params`` has, which refuses a number that is not finite anywhere inside and
 names its path, never its value; or ``allow_inf_nan=False`` in the config of a model only requests use, which
@@ -569,13 +573,13 @@ class ConfiguredBody(BaseModel):
 
 
 class PlainValueBody(BaseModel):
-    """The union of ``PluginSettingPlainValue``, and ``None``: a float takes the float branch."""
+    """The union of ``PluginSettingPlainValue`` as it was before H-32, and ``None``: a float takes the float branch."""
 
     value: str | int | float | bool | None = None
 
 
 class FixedValueBody(BaseModel):
-    """The same union with a float that refuses them: the fix proposed for ``PluginSettingPlainValue``."""
+    """The same union with a float that refuses them: the fix applied in H-32 to ``PluginSettingPlainValue``."""
 
     value: str | int | Annotated[float, AllowInfNan(False)] | bool | None = None
 
