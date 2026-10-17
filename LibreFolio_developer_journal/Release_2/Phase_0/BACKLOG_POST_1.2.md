@@ -6330,6 +6330,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     scrittori sulle stesse pagine.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-25 — un tetto alle
   richieste di massa di prezzi e cambi: analisi».
+- ✅ **Z-28 · Due file di lock aperti con `open()`, che segue un symlink** — basso, sicurezza; Z, 17/10
+  (dall'analisi di Z-23; via coordinatore, che l'ha assegnata). **Chiusa il 17/10 col lotto Z-28** (il commit è del
+  coordinatore).
+  - `db/post_migration/__init__.py` (`_exclusive_run`) e `services/brim/brim_provider.py` (`_acquire_file_lock`)
+    aprono il loro lock con `open(…, "a+")`: un symlink al suo posto viene seguito (uno pendente crea un file vuoto
+    altrove), e il modo viene dall'umask (di solito `0o644`).
+  - Cura: `os.open` con `O_RDWR | O_CREAT | O_NOFOLLOW` e `0o600`, come i lock del backup e dello scheduler.
+    Revisori: W (BRIM) e H (post-migrazione).
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-28 — due file di lock
+  aperti con `open()`».
 
 ## B · Backup e Docker (fase 01)
 

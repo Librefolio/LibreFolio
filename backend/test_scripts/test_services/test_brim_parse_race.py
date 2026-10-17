@@ -21,9 +21,14 @@ step G.5): see the section «THE REFUSAL SAYS WHY».
 A move also races the detection of a file's plugins, which step 5 of workstream L
 (item 8) runs again on read when the plugin catalogue changed, and every metadata
 write of a broker now takes that broker's lock: see the last section of this file.
+
+That lock's file is never a link, and is its owner's alone (Z-28): a symbolic link
+at its path is refused with ``OSError`` as the lock is entered, and the file the
+lock creates gives group and others nothing — see the end of the last section.
 """
 
 import json
+import stat
 import subprocess
 import sys
 import threading
@@ -393,6 +398,13 @@ def test_the_generic_csv_names_the_required_columns_a_file_misses(store):
 # - ``_broker_metadata_lock(broker_id)``: per broker, re-entrant on its thread, exclusive across processes through
 #   ``fcntl.flock`` on ``<broker reports>/.locks/broker_<id>.lock`` (``broker_none.lock`` without a broker), released
 #   on exceptions, and taken by every metadata write of the broker.
+# - Z-28 (RED until the cure), as the backup and scheduler locks: the lock file is opened with ``os.open(<lock>, O_RDWR |
+#   O_CREAT | O_NOFOLLOW, 0o600)`` and the descriptor ``flock``ed, as before. A symbolic link at its path — dangling, or
+#   to an existing file — makes ``broker_metadata_lock`` raise ``OSError`` as it is entered: the block never runs,
+#   nothing is created or changed behind the link, the link stays, and nothing is left on the thread — once the link is
+#   gone it takes and releases the lock as before. A lock file it creates gives group and others nothing (0o600, which
+#   the umask can only narrow). Today ``open(<lock>, "a+")`` follows the link, creating a dangling one's target, and
+#   creates the file 0o666 less the umask (0o644 under the usual 0o022).
 #
 # The tests that need the signature pin it with ``raising=False``: each fails on the behaviour it pins, not on the
 # missing name, which ``test_the_detection_signature_is_the_app_version`` pins alone. Every wait is bounded: a
@@ -1019,3 +1031,112 @@ def test_a_metadata_write_waits_for_the_broker_lock(store, monkeypatch, write):
     assert not (returned_while_held or changed_while_held), f"{write} did not wait for broker 1's lock, held by another thread (returned: {returned_while_held}, sidecars changed: {changed_while_held})"
     assert call.error is None, f"{write} failed once the lock was released: {call.trace}"
     landed(call.result)
+
+
+# ----------------------------------------------------------------------------- the lock file is never a link, and is its owner's alone (Z-28)
+#
+# Nothing here holds a broker lock while the lock under test is entered: its ``flock`` waits, and no test may hang on
+# it. The umask is left alone: it can only narrow 0o600, so the mode is pinned as "owner read and write, nothing for
+# group and others", never as an exact value.
+
+BEHIND_THE_LINK = b"not a lock file: behind a symbolic link\n"
+BEHIND_THE_LINK_MODE = 0o644
+LINKS = ("dangling", "to-an-existing-file")
+# What a probe process (``_probe``) finds behind the link once the lock refused it: no file, or a file nobody holds.
+PROBED_BEHIND = {"dangling": "no lock file", "to-an-existing-file": "free"}
+OWNER_RW = 0o600
+GROUP_AND_OTHERS = 0o077
+
+
+def _link_at(lock_file: Path, behind: Path, kind: str) -> Path:
+    """A symbolic link at ``lock_file``, to ``behind/never-created`` (``dangling``) or to ``behind/existing-file`` (``BEHIND_THE_LINK``, mode ``BEHIND_THE_LINK_MODE``): its target.
+
+    The dangling link's folder exists, so a lock that follows the link creates its target there rather than fail on a
+    missing folder: a ``FileNotFoundError`` is an ``OSError`` too, and would pass for the refusal.
+    """
+    behind.mkdir(parents=True)
+    target = behind / ("never-created" if kind == "dangling" else "existing-file")
+    if kind != "dangling":
+        target.write_bytes(BEHIND_THE_LINK)
+        target.chmod(BEHIND_THE_LINK_MODE)
+    lock_file.symlink_to(target)
+    return target
+
+
+def _what_is_at(path: Path) -> tuple:
+    """What is at ``path`` itself, never following a link: ``("absent",)``, ``("link", <target>)`` or ``("file", <bytes>, <mode>)``."""
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return ("absent",)
+    if stat.S_ISLNK(info.st_mode):
+        return ("link", str(path.readlink()))
+    return ("file", path.read_bytes(), oct(stat.S_IMODE(info.st_mode)))
+
+
+def _mode_bits(path: Path) -> tuple:
+    """``path`` itself, never following a link: ``(its ls-style mode, its owner's read and write bits, its group's and others' bits)``."""
+    mode = path.lstat().st_mode
+    return stat.filemode(mode), oct(stat.S_IMODE(mode) & OWNER_RW), oct(stat.S_IMODE(mode) & GROUP_AND_OTHERS)
+
+
+def _enter_the_lock(broker_id: Optional[int]) -> tuple:
+    """Enter ``broker_metadata_lock(broker_id)`` once, on this thread: ``(the OSError it raised or None, whether the block ran)``."""
+    ran: List[bool] = []
+    try:
+        with brim_provider.broker_metadata_lock(broker_id):
+            ran.append(True)
+    except OSError as error:
+        return error, bool(ran)
+    return None, bool(ran)
+
+
+@pytest.mark.parametrize("kind", LINKS)
+def test_a_symbolic_link_at_the_lock_file_is_refused_and_leaves_nothing_behind(store, kind):
+    """Z-28 (RED): with a symbolic link at ``.locks/broker_1.lock``, ``broker_metadata_lock(1)`` raises ``OSError`` as it is entered, and the block never runs.
+
+    Behind a dangling link nothing is created; an existing file behind it keeps its bytes and its mode and is not left
+    locked; the link is still there, to the same target. Nor is anything left on the thread (no depth, no handle):
+    once the link is gone, the same thread takes the lock — a regular lock file, held for another process — and
+    releases it, and so does another thread. Today ``open(<lock>, "a+")`` follows the link — creating a dangling one's
+    target —, locks the file behind it and runs the block: no ``OSError``.
+    """
+    lock_file = _lock_file(store, 1)
+    lock_file.parent.mkdir(parents=True)
+    target = _link_at(lock_file, store / "behind-the-link", kind)
+    behind, link = _what_is_at(target), _what_is_at(lock_file)
+
+    error, ran = _enter_the_lock(1)
+
+    assert error is not None and not ran, f"broker_metadata_lock(1) followed the symbolic link {lock_file.name} -> {target}: raised {error!r}, the block ran: {ran}; behind the link: {behind[0]}, now {_what_is_at(target)[0]}"
+    assert _what_is_at(target) == behind, f"{type(error).__name__}, but behind the link {behind[0]} is now {_what_is_at(target)[0]}: the lock followed it"
+    assert _probe(target) == PROBED_BEHIND[kind], "nothing behind the link is left locked"
+    assert _what_is_at(lock_file) == link, f"the link is left as it was: {link}, now {_what_is_at(lock_file)}"
+
+    lock_file.unlink()
+    with brim_provider.broker_metadata_lock(1):
+        inside = (_what_is_at(lock_file)[0], _probe(lock_file))
+    after = _probe(lock_file)
+    other = _Threaded("broker-1-after-a-refused-link", lambda: _take_and_release(1))
+    other.thread.start()
+    other.finish("another thread still waits for broker 1's lock after a link was refused")
+
+    assert (inside, after, other.outcome) == (("file", "held"), "free", ("returned", True)), f"once the link is gone the lock works as before (this thread: a regular lock file, held, then free; another thread: taken and released): {(inside, after, other.outcome)} {other.trace}"
+
+
+def test_the_lock_file_the_broker_lock_creates_is_its_owners_alone(store):
+    """Z-28 (RED): the first ``broker_metadata_lock(1)`` of a store creates ``.locks/broker_1.lock``, a regular file its owner reads and writes, with nothing for group and others.
+
+    Created 0o600, which the umask can only narrow, so only those bits are pinned, and the umask is left alone. Today
+    ``open(<lock>, "a+")`` creates it 0o666 less the umask: 0o644 under the usual 0o022, readable by every user of the
+    machine. Under a umask that already takes everything from group and others the defect cannot show, and this passes
+    either way.
+    """
+    lock_file = _lock_file(store, 1)
+    assert _what_is_at(lock_file) == ("absent",), "setup: no lock file in a new store"
+
+    error, ran = _enter_the_lock(1)
+
+    assert (error, ran) == (None, True), f"barrier: the block ran, so the lock was taken and its file created: {error!r}"
+    filemode, owner, others = _mode_bits(lock_file)
+    assert (filemode[0], owner, others) == ("-", oct(OWNER_RW), oct(0)), f"{lock_file.name} was created {filemode}: a regular file its owner reads and writes, group and others nothing (0o600, which the umask can only narrow)"
