@@ -256,7 +256,7 @@ class TestBuildOnlyServer:
 # (cmd_api_client), whose `npx openapi-zod-client` then fetched from the registry instead of the locked version.
 
 #: What ``cmd_fe_build`` does after its check, in its order: none of it may run while a tool is missing.
-FE_BUILD_STEPS = ((dev, "update_js_cache"), (dev, "cmd_api_sync"), (dev, "run_command_live"), (dev.i18n_catalog, "build"), (dev, "generate_favicon"))
+FE_BUILD_STEPS = ((dev, "update_js_cache"), (dev, "cmd_api_sync"), (dev, "run_command_live"), (dev.i18n_catalog, "build"), (dev, "generate_favicon"), (dev, "stamp_service_worker"))
 
 
 def frontend_node_bin(monkeypatch, root: Path, *tools: str, installed: bool = True, layout: str = "npm-symlinks") -> Path:
@@ -1498,7 +1498,7 @@ def stub_fe_build_steps(monkeypatch, *, failing: str | None = None) -> SimpleNam
 
     for name in TOOL_CONTRACT_RECORDING:
         forbid(monkeypatch, cli_base, name, f"cmd_fe_build reached cli_base.{name} around dev.py's import of it", raising=False)
-    for name in ("require_frontend_dependencies", "update_js_cache", "cmd_api_sync", "generate_favicon", "_write_frontend_build_mode_marker"):
+    for name in ("require_frontend_dependencies", "update_js_cache", "cmd_api_sync", "generate_favicon", "stamp_service_worker", "_write_frontend_build_mode_marker"):
         monkeypatch.setattr(dev, name, step(name))
     monkeypatch.setattr(dev.i18n_catalog, "build", step("i18n_catalog.build"))
     monkeypatch.setattr(dev, "run_command_live", run_command_live)
