@@ -27,6 +27,7 @@ Until you save, new and changed prices show on the chart as a purple line. A pri
 - **Close** is required and must be a positive number; **Open**, **High**, **Low** and **Volume** are optional, and the eraser in a cell clears its value.
 - Prices are in the asset's currency, shown beside the tabs (*Prices in USD*).
 - **Stale rows** are days without a price of their own, filled with the last known one. When there are some, a ⚠️ count and a switch appear: turn it on to hide them.
+- **A price the server refuses is named.** If it refuses some of your prices, such as a close above the row's **High** or below its **Low**, it saves the others. A warning then names up to five refused dates, each with its reason, and counts the rest; it stays for 20 seconds, so you can note them and enter them again. If it refuses the whole save, for example because a date is before 1900-01-01 or after tomorrow, nothing is saved: the message says why, and the editor stays open with your changes.
 
 ---
 
@@ -36,7 +37,7 @@ Each row has a **Type** (Dividend, Interest, Split, Price Adjustment or Maturity
 
 - **Events from a provider are read-only**: an edit would be overwritten at its next sync. You can delete one, but the provider adds it back at its next sync; to remove it for good, change the asset's provider settings.
 - **Editing one of your events changes that event**, its **Type** included: no second event is added. A transaction linked to it stays linked and is read according to the new type: an **Adjustment** linked to a split, for example, no longer counts as a split once the event is a Price Adjustment.
-- **Your event changes are saved all together, or not at all.** Deletions, edits and new rows go in one step, deletions first. If anything is refused, no event change is stored, deletions included: *Save failed* tells you why, in your language, and your changes stay in the editor for you to fix. Price changes from the same save are stored all the same, since prices are saved first.
+- **Your event changes are saved all together, or not at all.** Deletions, edits and new rows go in one step, deletions first. If anything is refused, no event change is stored, deletions included: *Failed to save: …* tells you why, in your language, and your changes stay in the editor for you to fix. Price changes from the same save are stored all the same, since prices are saved first.
 
 A save is refused, with a message that names the event at fault, when:
 
