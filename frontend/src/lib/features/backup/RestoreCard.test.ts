@@ -1241,3 +1241,38 @@ describe('B4b — RestoreCard: the password of an envelope keeps autocomplete="o
         expect(field, "an envelope's password, never the account's").toHaveAttribute('autocomplete', 'off');
     });
 });
+
+// =====================================================================================================================
+// B-16 — a server that never stops: the card hands the flag to the overlay (written red first)
+// =====================================================================================================================
+
+/*
+ * The contract (B-16 brief §2): RestoreCard passes `notStopping={controller.notStopping}` to the overlay; `onBack` stays
+ * `() => controller.load()`, after which the card shows the restore waiting, with «Restart now» and «Cancel the restore».
+ * This file renders the overlay through the real controller over the faked API, on fake timers and the controller's
+ * defaults (`pollMs` 1 000, `fastRestartMs` 30 000, `slowAfterMs` 60 000): a server up all along, the restore pending at
+ * every read, sixty seconds after the restart. Red today: the overlay publishes no `data-not-stopping`.
+ */
+describe('B-16 — RestoreCard: a server that never stops', () => {
+    it('up all along, the restore pending at every read: slowAfterMs after the restart the overlay says the server has not stopped; its restart-back reads the status again — the restore waiting, to restart or cancel', async () => {
+        await restartFromPending('up');
+        api.restoreOutcome.mockResolvedValue({kind: 'status', status: pending()});
+
+        await elapse(60_000 - 1);
+        expect(screen.getByTestId('restart-overlay'), 'not before slowAfterMs after the restart').toHaveAttribute('data-not-stopping', 'false');
+        await elapse(2 * POLL_MS + 1);
+        const overlay = screen.getByTestId('restart-overlay');
+        expect(overlay).toHaveAttribute('data-not-stopping', 'true');
+        expect(overlay).toHaveAttribute('data-outcome', 'waiting');
+        expect(screen.getByTestId('restart-not-stopped')).toBeInTheDocument();
+
+        api.getRestoreStatus.mockResolvedValueOnce(pending());
+        await fireEvent.click(screen.getByTestId('restart-back'));
+        await settle();
+
+        expect(screen.queryByTestId('restart-overlay'), 'back to the tab').toBeNull();
+        expect(card()).toHaveAttribute('data-state', 'pending');
+        expect(screen.getByTestId('restore-restart')).toBeInTheDocument();
+        expect(screen.getByTestId('restore-cancel-pending')).toBeInTheDocument();
+    });
+});
