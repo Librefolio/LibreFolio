@@ -383,7 +383,7 @@
                     numericValue={purchaseCostAmt}
                     formatValue={fmtMoneyUnsigned}
                     barPct={purchaseCostBarPct}
-                    barColor="bg-blue-500 dark:bg-blue-400"
+                    barColor="bg-lf-cat-etf"
                     marker={purchaseCostStartMarkerPct > 0 ? purchaseCostStartMarkerPct : undefined}
                     markerTooltip="{$_('dashboard.bookValueStart')}: {purchaseCostStartStr}"
                 />
@@ -395,7 +395,7 @@
                     numericValue={cashAmt}
                     formatValue={fmtMoneyUnsigned}
                     barPct={cashBarPct}
-                    barColor="bg-emerald-500 dark:bg-emerald-400"
+                    barColor="bg-lf-cat-liquidity"
                     marker={cashStartMarkerPct > 0 ? cashStartMarkerPct : undefined}
                     markerTooltip="{$_('dashboard.cashValueStart')}: {cashStartStr}"
                 />

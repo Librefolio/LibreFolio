@@ -2947,7 +2947,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     133/141, 155/162 e 176/184.
     - Il coordinatore (02:50) li vuole nel lotto di T sugli interruttori, tutti insieme con quelli dell'app (riga Q2
       della skill), così in scuro non ce n'è uno diverso dagli altri.
-  - **Le barre «valore contabile» e «liquidità» dei KPI** (`features/dashboard/KpiSection.svelte` @405 e @417, 4
+  - ✅ **Le barre «valore contabile» e «liquidità» dei KPI** (`features/dashboard/KpiSection.svelte` @405 e @417, 4
     classi: `bg-blue-500` e `bg-emerald-500` con le loro metà scure). Sono colori d'identità di due misure, non segni né
     stati: restano categorie (coordinatore, 16/10 12:07, regola 11 dello skill `design-system`).
     - **Per la designer:** quando decide il punto 2.2, la barra della liquidità potrebbe leggere il colore della
@@ -2956,6 +2956,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - **Decise dal giro 3** (designer e developer, 17/10, `decisioni.md` §1.7): il valore contabile nel blu dell'ETF
       (K1-a), la liquidità nel colore della Liquidità, ora blu ardesia. Le fa DV in **R3-5**, dopo i ruoli
       `--lf-cat-etf` e `--lf-cat-liquidity` di T (§1.9, decisione (A)).
+    - **Fatto il 18/10** (R3-5, sulla base merge `3dba7f894`, in attesa del commit del coordinatore): `bg-lf-cat-etf` e
+      `bg-lf-cat-liquidity`; le 4 classi escono dal baseline del ratchet (m1 594 → 590).
   - **Non di DV**, annotati per non perderli:
     - ✅ `INPUT` e `TITLE_INPUT` di `planner/ui.ts`: migrati dal lotto di T sull'input, `37972b529` (16/10);
     - ✅ i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi): stesso lotto di T, `37972b529`;
@@ -3018,6 +3020,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Decisione (A) del coordinatore, in due passi. Il primo è del giro 3: i valori in `lib/theme/chartCategories.ts`,
     i ruoli `--lf-cat-*` di T in `tokens.css` coi valori uguali, e il test di parità di `chartCategories.test.ts` che
     blocca le due copie (flag di consegna alla `PENDING_READERS`).
+    - Fatto il 18/10: T è entrato per primo (R3-b, `7845fc3d3`), DV ha girato il flag `CATEGORY_ROLES_IN_TOKENS` al
+      merge del target (`3dba7f894`); da allora i 12 ruoli sono tenuti uguali ai colori dei grafici, nei due temi.
   - **Resta il secondo:** il layer `category` del Designer Lab diventa una vista dei ruoli, e `chartCategories.ts`
     legge i tipi dai ruoli col ponte di `roleColors`; allora la copia nel file sparisce. Lotto da programmare con L
     (archiviato), coordinatore, 17/10.

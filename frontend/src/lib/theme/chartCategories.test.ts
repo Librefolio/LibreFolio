@@ -37,8 +37,8 @@
  *    buckets join both tables**: the engine draws the cash and the unclassified beside the types and beside the sectors
  *    alike. **«Unknown» joins the countries**: the geography history draws the unclassified beside them.
  * 10. **Parity with T's category roles (§1.9, decision A).** The badges are HTML and read classes, so the type colours
- *     become `--lf-cat-*` roles of tokens.css (T). Until they land, none may be declared; once `CATEGORY_ROLES_IN_TOKENS`
- *     is flipped, each must be `categoryColor` of its key, in both themes.
+ *     are also `--lf-cat-*` roles of tokens.css (T). Since `CATEGORY_ROLES_IN_TOKENS` was flipped (18/10/2026), each
+ *     must be `categoryColor` of its key, in both themes.
  *
  * Node env: pure functions, sources read as text with `fs`, esbuild run in process.
  *
@@ -1171,8 +1171,11 @@ describe('distinguishability (§1.8) — no pair of a table under ΔE00 5; under
  * batch that lands second — T's roles after this test, or this test after T's roles — flips it to true, and from then on
  * each role is held to `categoryColor` of its key, in both themes. Their `-soft` and `-on-soft` derivatives, the
  * badge's tint and its text, are T's contrast gate (`src/themeTokens.gate.test.ts`), not this test.
+ *
+ * True since 18/10/2026: T's roles landed first (R3-b, `7845fc3d3`), and DV flipped the flag at its merge of the target.
+ * A type colour now lives in two places until the Designer Lab moves to the roles (DV-11): change both together.
  */
-const CATEGORY_ROLES_IN_TOKENS = false;
+const CATEGORY_ROLES_IN_TOKENS = true;
 
 /** The base role of each type of the table and of the cash: the type key lower-cased, `_` → `-`; `Liquidity`, the bucket. */
 const CATEGORY_ROLES: ReadonlyArray<readonly [role: string, key: string]> = [
