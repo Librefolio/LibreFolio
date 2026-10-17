@@ -117,13 +117,20 @@ async def _live_quote_item(asset_id: int, assignment: AssetProviderAssignment, s
         _id_type = mapped_id_type
         _params = params
         async with semaphore:
+            # R13-SEC9-1: checked again once the slot is ours: a call for the same key that held the slot may have
+            # cached the quote meanwhile, and N waiters must not become N provider calls (and a cooldown for everyone).
+            cached_cv, cache_ok = core._asset_current_cache.get(cache_key)
+            if cache_ok:
+                quote = storable_current_value(cached_cv, asset_id, assignment.provider_code)
+                return (_quote_item(asset_id, quote, source) if quote is not None else None), None
             fetched = await core.call_provider(provider, lambda: provider.get_current_value(_id, _id_type, _params), timeout=10.0, scope=core.cooldown_scope_for(provider, _id, _id_type, _params))
-        quote = storable_current_value(fetched, asset_id, assignment.provider_code)
-        if quote is None:
-            return None, None
-        item = _quote_item(asset_id, quote, source)
-        core._asset_current_cache.set(cache_key, quote)
-        return item, None
+            # Cached before the slot is released, so the next waiter's re-check above always finds it
+            quote = storable_current_value(fetched, asset_id, assignment.provider_code)
+            if quote is None:
+                return None, None
+            item = _quote_item(asset_id, quote, source)
+            core._asset_current_cache.set(cache_key, quote)
+            return item, None
     except AssetRateLimitedError as refused:
         # Paused after «too many requests»: no call was made, or the provider refused this one. The
         # last stored price stands, and the item says why and for how long (decision 34, D-Z7-2).
@@ -862,7 +869,8 @@ class PriceQueryOperations:
             concurrency: Max parallel provider calls
 
         Returns:
-            List of FACurrentPriceItem (one per requested asset_id, preserving order)
+            List of FACurrentPriceItem (one per requested asset_id, preserving order); a repeated id is fetched and
+            written back once (R13-SEC9-1)
         """
         if not asset_ids:
             return []
@@ -915,9 +923,11 @@ class PriceQueryOperations:
                 **refusal_fields,
             )
 
-        # Run all fetches in parallel
-        tasks = [_fetch_one(aid) for aid in asset_ids]
-        results = await asyncio.gather(*tasks)
+        # Run all fetches in parallel, one per distinct id (R13-SEC9-1: a repeated id is fetched, and written back,
+        # once), the answer in request order
+        distinct_ids = list(dict.fromkeys(asset_ids))
+        fetched = dict(zip(distinct_ids, await asyncio.gather(*(_fetch_one(aid) for aid in distinct_ids)), strict=True))
+        results = [fetched[aid] for aid in distinct_ids]
 
         # F.2 + F.3 — persist current-price snapshots to PriceHistory.
         # ----------------------------------------------------------------
@@ -1010,7 +1020,8 @@ class PriceQueryOperations:
                     skipped_count,
                 )
 
-        return list(results)
+        # One item per requested id, in request order: a repeated id gets its distinct fetch's item again
+        return [fetched[aid] for aid in asset_ids]
 
     @staticmethod
     def _extend_ohlc_bounds(existing: PriceHistory, new_close: Decimal) -> dict:
