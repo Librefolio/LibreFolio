@@ -3674,8 +3674,12 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - In più, dal test-author di H-36: `_configure` deve svuotare le note di `client_address._untrusted_forwarding`. Così
     una nota lasciata da un altro file nello stesso processo non rompe i test che vogliono ogni controllo `ok`.
   - Si fa dopo l'ingresso di A8a e l'avanzamento del ramo di H.
+  - Cura fatta il 17/10, dopo A8a e B-9 (lotto «H-35», piano H §14):
+    - le due docstring di `config_audit.py`;
+    - in `test_config_audit.py`, via l'impalcatura di A8a e di B-9, e `CHECK_IDS` nell'ordine di `CONFIG_CHECKS`;
+    - `_configure` svuota le note di H-36, con un test che prima era rosso.
 
-  Dettagli: piano H, §14, «Review di A8a» e lotto «H-36».
+  Dettagli: piano H, §14, «Review di A8a» e lotti «H-36» e «H-35».
 - **H-36 · Dietro un proxy che uvicorn non considera fidato, i limiti per indirizzo contano tutti i visitatori
   insieme** — medio, sicurezza; E (R13-SEC6), via coordinatore, 17/10. Decisione notturna N70.
   - L'immagine Docker avvia uvicorn con i suoi default, che seguono `X-Forwarded-For` solo da `127.0.0.1`. Un proxy
@@ -4175,6 +4179,14 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   `docs-writer` di A8a (17/10). La riga del router dice «Authentication (login, token refresh)»: non c'è nessun
   refresh, il cookie dura `session_ttl_hours` (`security.md` «Token Expiration»). Lasciata fuori da A8a perché
   estranea. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A8a.6».
+- **A-46 · `./dev.py user create` non controlla la lunghezza del nome (3–50)** — minimo; dal `docs-writer` di A-21a
+  (17/10). La riga di comando rifiuta la `@` (A-21a) ma non un nome di 2 caratteri o di 60, che la registrazione e il
+  profilo rifiutano. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-21a.5».
+- **A-47 · `USERNAME_INVALID` riconosciuto dal testo del messaggio** — minimo; dalla revisione di E di A-21a (17/10,
+  LOW). `auth.py` (registrazione via `registration_service`, profilo) sceglie il codice confrontando
+  `error == USERNAME_RESERVED_MESSAGE`: un cambio di parole lo romperebbe in silenzio. Meglio un codice restituito da
+  `user_service.create_user`/`update_profile`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+  «A-21a — Revisione di E».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -6217,11 +6229,16 @@ sulla base `23f6578f3`.
   dal cloud) potrebbe darla alla CLI, che la usa per il rekey come quella di un backup sicuro (`derive_key_from`, la
   strada già descritta nella docstring di H). Solo CLI, mai un upload della chiave dalla UI. Dettagli: piano 07, «B4 —
   analisi sulla base nuova».
-- **B-19 · `backup decrypt` lanciato da root scrive uno zip di root** — minimo; B, 17/10 (docs-writer, B4). Gli altri
+- ✅ **B-19 · `backup decrypt` lanciato da root scrive uno zip di root** — minimo; B, 17/10 (docs-writer, B4). Gli altri
   comandi di `dev.py backup` lavorano come il proprietario della cartella dei dati (`_drop_root_privileges`); `decrypt`
   non legge la cartella dei dati, quindi con `docker compose exec` lo zip appartiene a root. La guida lo dice. Proposta:
   se la cartella dei dati esiste, `decrypt` passa al suo proprietario come gli altri; senza, resta l'utente che lo
   lancia (per decifrare su un portatile). Dettagli: piano 07, «B4 — analisi sulla base nuova» e seguenti.
+
+  ✅ **Fatto il 17/10** (checkpoint delle 09:23). Da root, con una cartella dei dati, `decrypt` passa al suo
+  proprietario come gli altri comandi, prima di toccare l'archivio, `-o` o di fare domande; legge prima
+  `--password-file` (un segreto di root funziona, come per `create`, `inspect`, `restore`). Senza essere root non legge
+  l'impostazione della cartella dei dati. Un archivio illeggibile dà `archive_unreadable`, non più `not_an_envelope`.
 - **B-20 · knip segnala `RESTORE_TICKET_HEADER` come export inutilizzato** — minimo; B, 17/10 (controlli statici di
   B4). L'export è di B5c (`frontend/src/lib/features/backup/backupApi.ts`). Il suo test lo legge con un cast sul modulo,
   scritto quando era ancora rosso, e knip non lo conta come uso. Correzione: il test lo importa per nome. Non è un
@@ -6354,13 +6371,30 @@ sulla base `23f6578f3`.
   (il codice del controllo) all'avvio del controllo; lì ogni altro `OSError` dà 500 `stage_failed` con una riga nel log,
   mai più il 500 senza codice. `jobs.out_of_space` è pubblica. Corretta anche la doppia `close` di `UploadWriter.finish()`
   (trovata da TA-B). Test: 21 rossi API e 18 nei servizi, poi tutti verdi; 4 guardie Vitest.
-- **B-31 · Conferma, annullamento e riavvio di un ripristino: un guasto del disco senza codice o senza messaggio** —
+- ✅ **B-31 · Conferma, annullamento e riavvio di un ripristino: un guasto del disco senza codice o senza messaggio** —
   basso; B, 17/10 (analisi di B-30). `POST /restore/stage/{id}/confirm` e `DELETE /restore/pending` lasciano uscire un
   `OSError` come 500 senza codice; `restore_restart_failed` (il biglietto del riavvio non scritto) ha un codice ma
   nessun messaggio nella UI (fuori da `ERROR_KEYS`: dice «unexpected») né una riga nella guida. Cura: un 500 con un
   codice e un messaggio suo per ciascuno (3 chiavi × 4 lingue, `ERROR_KEYS`, l'elenco §5 di `restoreI18n.test.ts`) e
   507 `backup_no_space` per un disco pieno alla conferma. Lotto separato, dopo B-30 (coordinatore, 07:18). Dettagli:
   piano 07, «B-30» (punti 4, 6, 7).
+
+  ✅ **Fatto il 17/10** (checkpoint delle 08:46). Conferma: 507 `backup_no_space` su un disco pieno, 500
+  `restore_confirm_failed` altrimenti, nulla confermato. Annullamento: 500 `restore_cancel_failed` prima di togliere il
+  ripristino, che resta in attesa; una copia che non si toglie dopo → 204 e un WARNING (anche da CLI). Riavvio: il suo
+  500 ora ha il messaggio e un test. Tre messaggi × 4 lingue in `ERROR_KEYS`. Test: 17 rossi API, 2 nei servizi, 6
+  Vitest, poi tutti verdi.
+- **B-32 · Dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile** — basso; B, 17/10 (B-31: TA-F,
+  TA-B, il docs-writer).
+  - In `restoreFlow.cancelPending()` la riga `state = 'pending'` è morta (`#fail` mette subito `failed`): un
+    annullamento rifiutato finisce sulla schermata di errore con «Try again», non sul blocco del ripristino in attesa con
+    l'errore accanto, come per il riavvio. Da decidere quale delle due.
+  - `dev.py backup pending --cancel` prende solo `RestoreNotPendingError`: un `OSError` prima della rimozione dello stato
+    finisce in un traceback; e la riga ✅ dice «with its copy» anche quando la copia è rimasta (B-31 la registra con un
+    WARNING).
+  - Uno stato illeggibile (EACCES, EIO) fa dire a `_read_state` `None`: l'annullamento risponde 404 «not pending», lo
+    stato del ripristino dice «none», mentre un ripristino può essere ancora in attesa.
+  Dettagli: piano 07, «B-31».
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
@@ -6602,8 +6636,10 @@ da Y il 15/10.
   - Rimedio proposto: `test-author` ricattura il corpus con la procedura del file, annotando che la differenza viene da
     I-01.
   - Dettagli: piano di Y, §7 «Y3».
-- **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
-  passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). **Serve una decisione del
+- ✅ **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
+  passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). ✅ 16/10, `6ac6ead12`
+  («test(e2e): rewrite lots comparison toggles test»): il test morto riscritto in due test sui controlli di oggi (P25),
+  con `aria-pressed` e il contatore dei rendering. La ✅ qui mancava: aggiunta il 17/10. **Serve una decisione del
   developer sulla funzione**, che porta il coordinatore. **Decisa il 16/10 (P25): si riscrive** sui controlli di oggi;
   è il prossimo lotto di Y, dopo Y12a.
   - Il test «Value presentation toggle…» (`e2e/brokers/brokers-detail.spec.ts:582`, numero di riga dopo la correzione
@@ -6732,9 +6768,13 @@ da Y il 15/10.
     `canRequestPnlCandles` più `untrack`) toglie il ciclo, ma serve una «chiave di scope» perché un cambio di periodo
     o un Refresh dopo un errore chiedano di nuovo.
   - Dettagli: piano di Y, «Y-16».
-- **Y-25 · Il ridimensionamento riallinea le frecce a ogni callback, e la riscrittura parte anche senza angoli cambiati**
-  — minimo, prestazioni; `test-author` di Y, 17/10 (analisi di Y-8). Comportamento preesistente, della stessa natura di
-  Y-8 ma su un gesto raro.
+- ✅ **Y-25 · Il ridimensionamento riallinea le frecce a ogni callback, e la riscrittura parte anche senza angoli cambiati**
+  — minimo, prestazioni; `test-author` di Y, 17/10 (analisi di Y-8). ✅ 17/10: (a) la riscrittura parte solo se una freccia
+  gira di più di 0,01°; (b) i tre `ResizeObserver` riallineano all'assestamento (`LineChart` e `CandlestickChart` riarmano
+  quello delle etichette, `PriceChartFull` lascia fare al suo rinvio da 200 ms), mai a ogni callback; (d)
+  `noteArrowMarkers`, dopo ogni disegno completo, fa uscire `updateArrowRotations` prima di `getOption()` sui grafici senza
+  frecce, cioè quasi tutti. 16 rossi prima (unità, componenti, pin), la prova del morso sul verso pericoloso di (d).
+  Commit al checkpoint.
   - Il `ResizeObserver` di `LineChart`, `CandlestickChart` e `PriceChartFull` chiama `updateArrowRotations` a ogni
     callback, cioè a ogni frame mentre si trascina il bordo della finestra: una copia di `getOption()` e una riscrittura
     di tutte le serie ciascuna, oltre al `resize()`.
@@ -6745,6 +6785,20 @@ da Y il 15/10.
     nessun angolo cambia (il test di Y-8 sull'assestamento va allora rifatto con lo zoom vero del registratore di
     Y-8b, che cambia gli angoli).
   - Dettagli: piano di Y, «Y-8 · `updateArrowRotations()` e `getOption()` a ogni passo dello zoom».
+- **Y-26 · La vista percentuale dei grafici di prezzo, da un primo valore 0, mostra valori assoluti come percentuali** —
+  basso, numeri; Y, 17/10 (revisione di J-44). Comportamento preesistente; serve una scelta del developer.
+  - `toDisplaySeries` (`components/charts/priceChartHelpers.ts:369`) rende la serie intatta quando il primo valore è 0
+    (lo dice il suo JSDoc): nella vista `%` la linea **e** il Δ del tooltip (`(Δ ${formatPercent(value)})`) mostrano
+    valori assoluti come percentuali, cioè un 10 assoluto si legge «+10.00%». J-44 ha tolto lo 0 % solo dalla vista
+    assoluta.
+  - Altre copie dello stesso ribasamento, con tre comportamenti su una base nulla (regola 10): `computeGhostSeries`
+    (`priceChartHelpers.ts:469`, tutto 0 %); `candlestickChartHelpers.toPercent` (`:35`) e
+    `charts/signals/backendRenderer.ts::transformValue` (`:37`), il valore grezzo; `lotWacPriceChartHelpers.toPercentSeries`
+    (`:130`), che ribasa sul primo valore non nullo e lascia null prima.
+  - Da decidere: da un inizio a 0, (a) niente vista `%` (il commutatore spento, con una nota); (b) una serie vuota, `—`,
+    cioè `changePct` dappertutto; (c) ribasare sul primo valore non nullo, come il grafico dei lotti. Poi una copia sola
+    della regola per tutte.
+  - Raro: un prezzo o un cambio esattamente a 0 all'inizio. Dettagli: piano di Y, «J-44 · revisione a posteriori».
 
 ## MF · Matematica finanziaria (fase 01)
 
