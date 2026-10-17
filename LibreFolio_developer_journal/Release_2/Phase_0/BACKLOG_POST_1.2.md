@@ -5718,6 +5718,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   500 characters»; lo stesso per una create o un update troppo lunghi). Cura: la modale d'unione mostra il conteggio e avvisa oltre 500;
   `string_too_long` tradotto (con `max_length` dai `ctx` dell'errore, che il parse del batch oggi scarta). Dettagli: piano 04, sezione
   «H-41 dentro SEC7-3».
+  Allargata il 17/10 (nota di H nella revisione di W-B75): lo stesso vale per ogni errore di campo con un contesto di dati semplici,
+  che il batch (`_lone_error_params`, W-B72) e il parse BRIM (W-B75) passano con `params` nulli. Un `greater_than` su `id_a`/`id_b`
+  (split e promozione) o su `from_tx_id` (la vecchia promozione), solo da API, arriva senza `{gt}`, e
+  `transactions.pydantic.greaterThan` («Value must be greater than {gt}») resta senza il valore. Cura con questa voce: il contesto di
+  dati semplici anche per gli errori di campo, nelle due copie della regola, rossi prima (i rifiuti di H-41 e del batch che oggi
+  fissano `params` nulli cambiano contratto).
 - **W-B71 · Il suggerimento di promozione (ed eventi) va in 500 con una data ai bordi del calendario** — basso, disponibilità; W, 17/10
   (SEC7-3). `promote_suggest_bulk` (`backend/app/services/transactions/promotion.py`) calcola `inp.date ± timedelta(days=tolerance_days)`
   (0–30, 7 di default): con `0001-01-01` o `9999-12-31` un `OverflowError`, un 500 per quella richiesta sola (niente memoria né CPU); da
@@ -5756,10 +5762,20 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
 - **W-B75 · Un errore di campo di un plugin BRIM può rendere la risposta del parse non serializzabile** — minimo, disponibilità; W,
   17/10 (W-B72). `BRIMProvider._create_transaction` (`backend/app/services/brim/brim_provider.py`) copia in `params` il contesto di ogni
   errore solo così com'è; quello di un `value_error` porta l'oggetto eccezione, e `BRIMValidationIssue.model_dump(mode="json")` alza
-  `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
+  `PydanticSerializationError` (verificato). **Correzione di H**: non un 500 ma un 400 «Unable to serialize…», perché il dump di
+  `brokers.py:1047` sta dentro il `try`, e il file resta `PARSED` senza risultato salvato (`move_to_failed` sposta solo da
+  `UPLOADED`). Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
   rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
   (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
   ➡️ 17/10: passata a **H** (bilanciamento del coordinatore); io la rivedo al checkpoint di H.
+  ✅ 17/10 (H): `BRIMProvider._lone_error_params`, la regola di W-B72, più 18 test; commit `118bd39bf` + `21a2610c8` → dev
+  `9ba7ef9d3`. Rivista da W dopo l'ingresso: OK. Le note di H archiviate in W-B70 (il `{gt}` latente) e W-B77 (le due copie).
+- **W-B77 · La regola dei `params` e `_loc_to_field` esistono in due copie (batch e BRIM)** — minimo, pulizia; W con H, 17/10
+  (revisione di W-B75). `_lone_error_params`, `_PLAIN_PARAM_TYPES` e `_loc_to_field` stanno sia in
+  `backend/app/services/transactions/transaction_batch_stages.py` sia in `backend/app/services/brim/brim_provider.py`, e una
+  modifica a una sola delle due fa divergere i `params` di una riga rifiutata dal parse e dal batch. Cura: un modulo condiviso (per
+  esempio in `schemas/` o `utils/`), con i test delle due parti; con l'occasione, la docstring di BRIM che dice «made the parse answer
+  500» (era un 400, la correzione stessa di H). Dopo W-B70, che cambia la regola. Dettagli: questa voce.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
