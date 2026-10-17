@@ -3901,6 +3901,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     montati, quindi i lettori dell'avvio (`env_secret`, la chiave generata) restano come sono.
   - Costo stimato: piccolo, una ventina di righe e i test (link, FIFO senza blocco, cartella, file regolare, opzione
     spenta come oggi). Si fa dopo B-38, così la CLI può passare all'opzione e togliere la sua copia.
+  - B-38 è entrato (`1ed071c2f`). La guardia della CLI apre il file e lo controlla, poi `read_secret_file` lo riapre
+    per percorso: sono due aperture, e fra le due il percorso può cambiare (`scripts/backup_cli.py`, «two opens»).
+    L'opzione legge dallo stesso descrittore che controlla: con lei basta una sola apertura, e la corsa sparisce
+    (coordinatore, 17/10).
 
   Dettagli: questa riga; la guardia di B in B-38.
 - **H-48 · `env_url` toglie la barra finale anche ai link di una pagina** — basso; H (review di A9), via coordinatore,
@@ -3957,6 +3961,28 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     OK, o lo fa X.
 
   Dettagli: questa riga.
+- **H-51 · Il motore del server vivo tiene `trusted_schema` acceso, con il `regexp` e il `floor` Python di SQLAlchemy**
+  — basso, sicurezza; H (review di B-36/B-37), deciso dal coordinatore il 17/10. Da fare dopo W-B75, nella 1.3.
+  - SQLAlchemy 2.0.52 (dialetto pysqlite, ereditato da aiosqlite) registra `regexp` e `floor` in Python su ogni
+    connessione. `trusted_schema` vale 1 di default.
+  - Il listener globale `set_sqlite_pragma()` (`db/session.py`) imposta solo `foreign_keys`, WAL e `busy_timeout`.
+  - B-28 controlla i tipi degli oggetti, non le espressioni.
+  - Sonda (`files/b36review/` della sessione H): un archivio con una colonna `DEFAULT (regexp(…))` passa il controllo
+    del ripristino, perché l'`integrity_check` della connessione semplice risponde `ok` (un CHECK invece lì fallisce,
+    «unknown function»). Poi, nel server, ogni insert che omette quella colonna fa girare il `regexp` Python con il
+    pattern e il valore dell'archivio; lo fa anche il motore async.
+  - Cura: `PRAGMA trusted_schema=OFF` per primo nel listener globale. Lo schema di LibreFolio (head 009) chiama solo
+    il built-in `lower()`, quindi per l'app non cambia niente.
+  - Nello stesso lotto: la frase di `security.md` sulla chiave d'istanza durante il ripristino, superata da B-18
+    (r. ~706). Va riscritta col percorso vero:
+    - `dev.py backup restore --instance-key-file`, solo da CLI;
+    - il file è letto da root prima del cambio di utente (B-38);
+    - `instance_key_invalid` scatta prima di creare qualsiasi cosa;
+    - la chiave dell'archivio vince (D1).
+  - Sempre nello stesso lotto, la frase sul motore di Alembic: il listener di `env.py` è una cura vera.
+  - Verifica nello slot: i miei test, le suite delle migrazioni e `api backup-restore`.
+
+  Dettagli: piano H, §14, «Review di B-36/B-37» e il lotto H-51.
 
 ## A · Account e accessi (fase 01)
 
