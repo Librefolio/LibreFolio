@@ -211,11 +211,11 @@ and any of them at most 15 significant digits.
   `ROUND_HALF_EVEN` to the scale of the model's column, then to 15 significant digits on a
   `RealDecimal` column (decision D6). On such a column the rounding always brings the
   result within the decimal places and the significant digits, but not within the third
-  limit, the digits before the decimal point (15 for a quantity, decision N63; 12 for a
-  per-unit cost), which no rounding brings back: the confirmation refuses a value past
-  them with `integerDigitsExceeded`. `broker_intesa/plugin.py` calls it on the patrimonio
-  seed's per-unit cost, `broker_credit_agricole/plugin.py` on the per-unit cost of a bond
-  received by succession, its price divided by 100.
+  limit, the digits before the decimal point (15 for a quantity and a cash amount,
+  decision N63; 12 for a per-unit cost), which no rounding brings back: the confirmation
+  refuses a value past them with `integerDigitsExceeded`. `broker_intesa/plugin.py` calls
+  it on the patrimonio seed's per-unit cost, `broker_credit_agricole/plugin.py` on the
+  per-unit cost of a bond received by succession, its price divided by 100.
 
 ---
 

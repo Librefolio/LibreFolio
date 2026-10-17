@@ -24,7 +24,12 @@ B's two functions around it, as the contract's §7 decided them (it overrides §
     (``-?[0-9]{1,60}(\\.[0-9]{1,60})?``), the lines not a list or a line not an object, a version that is not an ``int``
     (such as ``"1"`` or ``true``), lines missing or malformed, not an object. The recorded document reaches J's
     ``from_json`` and J's ``from_json`` refuses it; an exponent such as ``1E+999999999`` is never expanded.
-    ``unreadable`` when nothing was read on the copy; then the lines compared as maps, in J's canonical text, zero lines
+    ``unreadable`` when nothing was read on the copy, and when J's ``from_json`` refuses what was read there (B-29, E's
+    R13-SEC2: J's ``to_json`` writes every amount in plain text, so an exact sum such as ``1E+70`` is written with 71
+    digits, past the 60 it reads back): never an exception, which would end the whole check ``stage_failed``, and one
+    warning, «The control totals of the copy cannot be read: they are not compared», with nothing else in it, as the
+    recorded side's own; a recorded document J refuses is still ``absent`` first, whatever the copy's. Then the lines
+    compared as maps, in J's canonical text, zero lines
     dropped: ``same`` without a difference (``10.50`` is ``10.5``; lines in another order, an explicit zero line),
     ``changed`` otherwise, always with one line at least. The differences: cash first, then quantities; by broker,
     numerically; then currency, or asset numerically; J's canonical text, ``None`` for a line absent (zero) on that side;
@@ -35,10 +40,10 @@ Pure: one ``alembic upgrade head``, in a process of its own, makes the module's 
 every file a test reads is a copy of it under ``tmp_path``. This process is configured with a production data directory
 of the test that must stay absent (``configure`` of ``test_backup_staging.py``). No lane database, no server, no
 network. ``instance_backup.totals`` is imported by each test (the ``totals`` fixture), never at collection: until lot
-B-13 writes it, each test fails on its own, saying so. J's ``ControlTotals.from_json`` is wrapped for the tests of plain
-amounts: every document it gets is kept with its answer, and one holding an amount that is not plain text is refused at
-once, with the ``ValueError`` J answers, before J's own code runs: nothing is expanded in this process, even if J's rule
-regressed. Folder names with ``?`` are POSIX-only.
+B-13 writes it, each test fails on its own, saying so. J's ``ControlTotals.from_json`` is wrapped for the tests of what J
+refuses, recorded or read on the copy: every document it gets is kept with its answer, and one holding an amount that is
+not plain text is refused at once, with the ``ValueError`` J answers, before J's own code runs: nothing is expanded in
+this process, even if J's rule regressed. Folder names with ``?`` are POSIX-only.
 """
 
 from __future__ import annotations
@@ -68,6 +73,10 @@ needs_posix_names = pytest.mark.skipif(not POSIX, reason="? is not allowed in a 
 
 #: What ``ledger_totals_of`` logs, once, when it cannot read the totals.
 READ_ERROR = "The ledger's control totals could not be read"
+#: What ``compare_totals`` logs, once, a warning with nothing else in it, when J's ``from_json`` refuses the totals the
+#: backup recorded, or those read on the copy (B-29).
+RECORDED_UNREADABLE = "The control totals the backup recorded cannot be read: they are not compared"
+COPY_UNREADABLE = "The control totals of the copy cannot be read: they are not compared"
 #: An amount of a recorded document as J may read it (contract §7.3): plain decimal text, 60 digits at most on a side.
 PLAIN_AMOUNT = re.compile(r"-?[0-9]{1,60}(\.[0-9]{1,60})?")
 
@@ -455,7 +464,8 @@ async def test_inside_a_running_event_loop_it_is_none_and_one_error(totals, ledg
 
 #: (recorded, current, status): the decision order of contract §1 as §7 refines it, each step pinned against the next.
 #: What J's ``from_json`` refuses for B (amounts not plain, lines not lists, rows not objects: one rule, J's, B-22) is
-#: pinned by ``NOT_PLAIN`` below, with J's ``from_json`` watched.
+#: pinned by ``NOT_PLAIN`` below, and what it refuses on the copy (B-29) by ``REFUSED_ON_THE_COPY``, with J's
+#: ``from_json`` watched.
 DECISIONS = [
     pytest.param(None, CURRENT, "absent", id="1-nothing-recorded"),
     pytest.param(None, None, "absent", id="1-nothing-recorded-nothing-read"),
@@ -481,8 +491,10 @@ DECISIONS = [
     pytest.param("version 1", CURRENT, "absent", id="3-a-string"),
     pytest.param(1, CURRENT, "absent", id="3-a-number"),
     pytest.param(with_amount("balance", "1,5"), None, "absent", id="3-before-unreadable"),
+    pytest.param(with_amount("balance", "1,5"), with_amount("quantity", "1" + "0" * 60), "absent", id="3-before-what-j-refuses-on-the-copy"),
     pytest.param(CURRENT, None, "unreadable", id="4-nothing-read"),
     pytest.param(document(), None, "unreadable", id="4-nothing-read-of-an-empty-ledger"),
+    pytest.param(CURRENT, with_amount("quantity", "1" + "0" * 60), "unreadable", id="4-what-j-refuses-on-the-copy"),
     pytest.param(copy.deepcopy(CURRENT), CURRENT, "same", id="5-equal"),
     pytest.param(document(), document(), "same", id="5-two-empty-ledgers"),
     pytest.param(
@@ -561,6 +573,56 @@ def test_sixty_digits_on_each_side_of_the_point_are_plain(totals, j_reads, amoun
     comparison = totals.compare_totals(document(cash=[(5, "EUR", amount)]), document())
     assert (comparison.status, lines_of(comparison)) == ("changed", [("cash", 5, "EUR", None, amount, None)]), f"{len(amount)} characters: read and compared: {comparison.status}, {lines_of(comparison)}"
     print_success(f"{len(amount)} characters: read")
+
+
+#: What may be read on the copy that J's ``from_json`` refuses (B-29, E's R13-SEC2): ``CURRENT`` with one line spoiled.
+#: J's ``to_json`` writes every amount in plain text, so the exact sum 1E+60 is written with 61 digits, past the 60 its
+#: ``from_json`` reads back (E's example: 1E+70, 71 digits); the others stand for a document spoiled otherwise. An
+#: amount that is not plain text is refused by the test's wrapper on J's behalf, never expanded.
+REFUSED_ON_THE_COPY = [
+    pytest.param(with_amount("quantity", "1" + "0" * 60), id="61-digits-the-exact-1E+60-as-j-writes-it"),
+    pytest.param(with_amount("balance", "1E+999999999"), id="an-exponent-of-a-billion-digits"),
+    pytest.param({**CURRENT, "cash": [*CURRENT["cash"], "not a line"]}, id="a-line-not-an-object"),
+    pytest.param({**CURRENT, "quantities": [{"broker_id": 1, "asset_id": 7}]}, id="a-line-without-its-amount"),
+]
+
+
+def warnings_and_above(events: list[dict]) -> list[dict]:
+    """What was logged at WARNING or above, each event as it was logged."""
+    return [event for event in events if event.get("log_level") in ("warning", "error", "critical")]
+
+
+@pytest.mark.parametrize("current", REFUSED_ON_THE_COPY)
+def test_what_j_refuses_on_the_copy_is_unreadable_with_one_warning(totals, j_reads, current):
+    """(b) B-29 (E's R13-SEC2): the copy's totals, which J's ``from_json`` gets and refuses, are ``unreadable``: no
+    difference, a count of 0, never an exception, which would end the whole check ``stage_failed``. One warning, «The
+    control totals of the copy cannot be read: they are not compared», and nothing else in it: no amount, no value, no
+    exception message, as the recorded side's own warning."""
+    with capture_logs() as events:
+        try:
+            comparison = totals.compare_totals(copy.deepcopy(CURRENT), current)
+        except Exception as exc:
+            pytest.fail(f"compare_totals raised {type(exc).__name__}: {exc}: it never raises, and what J refuses on the copy is unreadable")
+    assert (comparison.status, comparison.differences, comparison.differences_count) == ("unreadable", (), 0), f"refused by J on the copy: unreadable without a difference, not {comparison.status} with {comparison.differences_count}"
+    answers = [answer for given, answer in j_reads if given == current]
+    assert answers == ["refused"], f"the copy's document reaches J's from_json once, and J refuses it: J's answers to it {answers}"
+    assert warnings_and_above(events) == [{"event": COPY_UNREADABLE, "log_level": "warning"}], f"one warning, its event alone: {warnings_and_above(events)}"
+    print_success("unreadable, one warning")
+
+
+def test_a_recorded_document_j_refuses_is_absent_whatever_is_read_on_the_copy(totals, j_reads):
+    """(b) B-29, the decision order kept (a guard, green from the start): the recorded side is decided first. Refused by
+    J (61 digits), it is ``absent``, with its own warning alone, though J would refuse the copy's too (an exponent): the
+    copy is never judged, and its warning never logged."""
+    recorded, current = with_amount("balance", "1" + "0" * 60), with_amount("balance", "1E+999999999")
+    with capture_logs() as events:
+        try:
+            comparison = totals.compare_totals(recorded, current)
+        except Exception as exc:
+            pytest.fail(f"compare_totals raised {type(exc).__name__}: {exc}: it never raises")
+    assert (comparison.status, comparison.differences, comparison.differences_count) == ("absent", (), 0), f"the recorded side refused first: absent, not {comparison.status} with {comparison.differences_count}"
+    assert warnings_and_above(events) == [{"event": RECORDED_UNREADABLE, "log_level": "warning"}], f"the recorded side's warning alone: {warnings_and_above(events)}"
+    print_success("absent first, the copy never judged")
 
 
 #: Two readings of a ledger, and their differences in order. Equal on both sides, left out: (2, USD) and (2, asset 5).

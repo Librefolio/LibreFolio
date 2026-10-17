@@ -376,6 +376,15 @@ def services_asset_signals(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Asset signal service tests", verbose=verbose)
 
 
+def services_period_changes(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the MF-P2 fixed-period changes of asset prices and FX rates."""
+    print_section("Services: Period Changes (MF-P2)")
+    print_info("Testing: assets/period_changes.py (get_period_changes_bulk), fx/period_changes.py (get_fx_period_changes_bulk)")
+    print_info("Parity: the Assets page's computePeriodDelta on the price query's series, the FX page's on per-day conversions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_period_changes.py", test_names)
+    return run_command(cmd, "Period changes service tests", verbose=verbose)
+
+
 def services_provider_contracts(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider interface contracts (FX, Asset, BRIM)."""
     print_section("Services: Provider Contract Tests")
@@ -399,6 +408,14 @@ def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> 
     print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration, the accrual golden (33 schedules, every number)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_synthetic_yield.py", test_names)
     return run_command(cmd, "Synthetic yield tests", verbose=verbose)
+
+
+def services_scheduled_investment_cost_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC7-2: the Scheduled Investment provider's cost."""
+    print_section("Services: Scheduled Investment Cost Bounds (R13-SEC7-2)")
+    print_info("Testing: scheduled_investment/plugin.py (COMPOUND late interest closed form, late history, cache cap, late horizon)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_cost_bounds.py", test_names)
+    return run_command(cmd, "Scheduled investment cost bounds tests", verbose=verbose)
 
 
 def services_synthetic_yield_integration(verbose: bool = False, test_names: list = None) -> bool:
@@ -1018,6 +1035,26 @@ def services_scheduler_leader(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Scheduler leader election tests", verbose=verbose)
 
 
+def services_scheduler_run_lock(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's lock across processes: scheduler_run_lock, a flock on the data directory's .scheduler.lock (Z-11, N71)."""
+    print_section("Services: Scheduler Lock Across Processes")
+    print_info("Testing: backend/app/services/platform/scheduler/run_lock.py (scheduler_run_lock, cross_process_lock_available, run_lock_path), against real child processes")
+    print_info(
+        "Tests: RL-001..009 — the block waits while another process holds the lock (LOCK_EX | LOCK_NB, POLL_SECONDS apart) and runs once it lets go or is killed; a cancelled wait, even with an attempt in flight, leaves no descriptor nor lock; released on an exception; 0o600 file kept, symlink refused; open/flock/close off the loop; constants, availability, path; without fcntl"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_run_lock.py", test_names)
+    return run_command(cmd, "Scheduler lock across processes tests", verbose=verbose)
+
+
+def services_scheduler_multiprocess(verbose: bool = False, test_names: list = None) -> bool:
+    """Test two real processes running the scheduler's due jobs at once: each job once, behind the lock across processes (Z-11, N71)."""
+    print_section("Services: Scheduler Across Two Processes")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs) with run_lock.py, in two child processes on one data directory")
+    print_info("Tests: MP-001..002 — each due job once across the two, one report ok, the other not_due, never not_leader nor am_i_leader; the state written once per job and re-read inside the lock; the data directory's .scheduler.lock")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_multiprocess.py", test_names)
+    return run_command(cmd, "Scheduler across processes tests", verbose=verbose)
+
+
 def services_scheduler_loop(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler loop integration (due_* + state roundtrip, no real loop)."""
     print_section("Services: Scheduler Loop Integration")
@@ -1031,7 +1068,9 @@ def services_scheduler_catchup(verbose: bool = False, test_names: list = None) -
     """Test the scheduler's catch-up on return and its shared lock: run_due_jobs and scheduler_loop (lot Z3)."""
     print_section("Services: Scheduler Catch-up and Lock")
     print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs, scheduler_loop), with sleep_wake/activity.py")
-    print_info("Tests: SCU-001..032 — constants, types, busy span, settle before clock and lock, a lock per event loop, short circuits in order, off-loop I/O, jobs and outcomes, failures by class name, cancellation, status, blocked then caught up, the loop: listener, nudges, shutdown")
+    print_info(
+        "Tests: SCU-001..034 — constants, types, busy span, settle before clock and lock, a lock per event loop, short circuits in order, the lock across processes or the leader without fcntl (Z-11), off-loop I/O, jobs and outcomes, failures by class name, cancellation, status, blocked then caught up, the loop: listener, nudges, shutdown"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_catchup.py", test_names)
     return run_command(cmd, "Scheduler catch-up tests", verbose=verbose)
 
@@ -1676,6 +1715,9 @@ Note: No backend server required.
     add_test(cat, "signal-plugins-volume", services_signal_plugins_volume, name="Volume Signal Plugins", desc="OBV rebasing and MFI zero/missing volume, levels and TA-Lib delegation")
     add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
+    # Write-scoped (the category default): unique-name assets deleted with their prices; FX rows only on AMD/BDT, AMD/SZL,
+    # AMD/LSL, BBD/BZD (MVR/SCR never seeded), pairs no other test uses, dated 1980-1987, wiped before and after.
+    add_test(cat, "period-changes", services_period_changes, name="Period Changes", desc="MF-P2: 1D … 5Y asset and FX changes from stored data, equal to the Assets/FX pages' numbers; order, weekend 1D = 0, gaps")
     add_test(cat, "provider-contracts", services_provider_contracts, name="Provider Contracts", desc="ABC compliance for ALL registered providers")
     add_test(
         cat,
@@ -1689,6 +1731,7 @@ Note: No backend server required.
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
+    add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in one pass, linear day counts, cache cap, horizon")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(
         cat,
@@ -2124,13 +2167,38 @@ Note: No backend server required.
     add_test(cat, "scheduler-settings", services_scheduler_settings, name="Scheduler Settings", desc="_parse_times, _parse_days pure functions")
     add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases; a missed slot of a configured day in the last 7 days is due once a run exists (D-Z3-1)")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
+    add_test(
+        cat,
+        "scheduler-run-lock",
+        services_scheduler_run_lock,
+        name="Scheduler Lock Across Processes",
+        desc="Z-11 (N71), run_lock.py: scheduler_run_lock(path) waits while another process holds the lock (each attempt LOCK_EX | LOCK_NB in a thread, POLL_SECONDS apart) and runs the block once it lets go or is SIGKILLed; a cancelled wait goes through, never runs the block, and leaves no descriptor nor lock, an attempt in flight that took it included; released on an exception (another process takes it at once); the file created 0o600 with its folder and never deleted; a symbolic link refused at once with OSError, nothing behind it created or locked; open/flock/close never on the event loop's thread; LOCK_FILE_NAME .scheduler.lock, POLL_SECONDS 0.2, cross_process_lock_available() with fcntl (false with fcntl None or not importable), run_lock_path() the data directory's, read at the call",
+        # PURE: no DB, no server, no lane port, no network. Every lock file lives under the test's tmp_path, and an autouse
+        # fixture points the data directory (LIBREFOLIO_TEST_DATA_DIR) there too, for the test and its children: no
+        # .scheduler.lock reaches the lane's. The other processes are real child interpreters the test starts (a holder of the
+        # lock, a one-shot probe), coordinated by files under tmp_path against deadlines of their own; each holder gives up
+        # by itself, and every child is killed and reaped in a finally.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "scheduler-multiprocess",
+        services_scheduler_multiprocess,
+        name="Scheduler Across Two Processes",
+        desc="Z-11 (N71): two real processes call run_due_jobs('wake') at once on one data directory, both jobs due and am_i_leader answering yes: each job runs once across the two, in the process that took the lock first (both ok), the other finds both not_due; neither reports not_leader, neither asks am_i_leader; the state file holds each last_run_at written once, the second process loaded it inside the lock; the lock file is the data directory's .scheduler.lock",
+        # PURE: no DB, no server, no lane port, no network. The two processes are child interpreters the test starts, their
+        # LIBREFOLIO_DATA_DIR a folder of tmp_path (test mode off, no switch nor coverage variable inherited): the state file
+        # and the lock file are real, both under tmp_path. Settings, jobs and the leader are patched in each child's memory;
+        # both are killed and reaped in a finally.
+        isolation="pure",
+    )
     add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
     add_test(
         cat,
         "scheduler-catchup",
         services_scheduler_catchup,
         name="Scheduler Catch-up and Lock",
-        desc="run_due_jobs: an unknown reason refused before anything; busy 'scheduler' from start to end (settle and lock wait included, also on an exception or a cancellation); return/wake settle the clock before the due checks and before the lock; one asyncio.Lock per event loop (no overlap, the second run loads what the first saved, two loops in a row); under the lock disabled, blocked, not_leader, setting off, in order, without loading the state; am_i_leader/load_state/save_state off the loop; one now for both due checks; jobs in order, each saved, outcomes copied from JobState; a job or a save raising is an error outcome by class name only, logged, the next job runs; report status ok/partial/error; blocked runs nothing, then the missed slot is caught up (D-Z3-4, D-Z3-1). scheduler_loop: disabled registers nothing; listener scheduler-catch-up at 60 s; startup after the first delay or a nudge; tick or return; a nudge from any thread; two nudges, one run; a failing run logged; shutdown ends it and removes the listener",
+        desc="run_due_jobs: an unknown reason refused before anything; busy 'scheduler' from start to end (settle and lock wait included, also on an exception or a cancellation); return/wake settle the clock before the due checks and before the lock; one asyncio.Lock per event loop (no overlap, the second run loads what the first saved, two loops in a row); under the lock disabled, blocked, setting off, in order, without loading the state; with fcntl the lock across processes (Z-11, N71) entered after the setting, the leader never asked, the state and the clock read inside it, a lock that cannot be taken raising before the state loads; without fcntl the leader instead (not_leader); the lock or am_i_leader, load_state and save_state off the loop; one now for both due checks; jobs in order, each saved, outcomes copied from JobState; a job or a save raising is an error outcome by class name only, logged, the next job runs; report status ok/partial/error; blocked runs nothing, then the missed slot is caught up (D-Z3-4, D-Z3-1). scheduler_loop: disabled registers nothing; listener scheduler-catch-up at 60 s; startup after the first delay or a nudge; tick or return; a nudge from any thread; two nudges, one run; a failing run logged; shutdown ends it and removes the listener",
         # PURE: no DB, no server, no lane port, no network. Every collaborator of run_due_jobs (switches, leader, settings, state
         # store, jobs, due functions, utc_now, settle_clock) is a fake set with monkeypatch; the process's ACTIVITY is replaced
         # only through monkeypatch by an Activity on a fake clock. The loop runs as a task of the test's own event loop, against
@@ -2197,7 +2265,7 @@ Note: No backend server required.
         "profile-defaults",
         services_profile_defaults,
         name="Profile Defaults",
-        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call",
+        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call; H-27: an entry not of the very type of the reader's literal fallback raises ProfileDefaultError (a TypeError naming the variable, the profile, both types and the table), None for the upload limit stops backup_max_upload_mb(), and the sources' profile_default(NAME, literal) calls are checked against every profile's entries; H-37 (E, R13-SEC7): under any profile but selfhosted a variable the profile does not list raises ProfileDefaultError instead of the self-hosted fallback (fail closed), the upload limit's managed entry removed stops its reader while selfhosted keeps 0, every call's variable is listed by every profile but selfhosted (guard and self-test), and an entry equal to its reader's own default is fine",
         # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
         # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
         isolation="pure",
@@ -2303,7 +2371,7 @@ Note: No backend server required.
         "backup-staging",
         services_backup_staging,
         name="Instance Backup Staging",
-        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy",
         # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
         # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
         # directory of the test configured (which must stay absent). No lane DB, no server, no network.

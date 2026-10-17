@@ -66,9 +66,9 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series, fixed-period changes of a price or rate (1D … 5Y, both orientations), recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
-├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360) and simple interest: the primitives the Scheduled Investment provider builds its accrual on
+├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form (compound_growth): the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
@@ -120,6 +120,17 @@ or annualization formula of its own.
   observations × 365 / days. An empty series gives `(0, None)`; a span of zero days or less raises `ValueError`. A
   caller that can meet a zero-day span picks its own fallback before calling: `portfolio_twrr_returns()`
   (`risk/results.py`) leaves the factor `None`, the `comparison` analytic takes the context's factor.
+
+`fixed_period_dates()` and `fixed_period_changes()` (`returns.py`) hold the change of a price or rate over the fixed
+periods of the Assets and FX tables (developer decision D-MF6 b). `FIXED_PERIODS` lists their keys and calendar days,
+in display order: 1D 1, 1W 7, 1M 30, 3M 91, 6M 182, 1Y 365, 2Y 730, 3Y 1095, 5Y 1825. `fixed_period_dates(as_of)`
+names the days to value: `as_of`, then `as_of − days` for each period. The caller values those days: the last stored
+price on or before each ([`POST /assets/prices/period-changes`](assets/architecture.md#fixed-period-changes)), or
+the rate `convert_bulk()` gives on it ([`POST /fx/currencies/period-changes`](fx/architecture.md#fixed-period-changes)).
+`fixed_period_changes(values, as_of)` then gives each period both orientations, as fractions: `change_ratio`,
+`value(as_of) / value(as_of − days) − 1`, and `inverse_change_ratio`, `value(as_of − days) / value(as_of) − 1`, the
+change of the inverted quote. Both are None when either value is missing or ≤ 0.
+{: #fixed-period-changes }
 
 ### ⚙️ The Portfolio Package at Work {: #portfolio-package }
 
@@ -285,7 +296,7 @@ version are not comparable, which is not the same as a difference.
 - **Why:** a manifest written by hand, or damaged, could otherwise make `_canonical()` write an
   exponent out in full; `"1E+50000000"` alone costs about 121 MB.
 - **Round trip:** it holds for every total within that bound, and every ledger the database can
-  hold stays within it (amounts `Numeric(18, 6)`, quantities `RealDecimal(22, 10)`).
+  hold stays within it (amounts `RealDecimal(18, 6)`, quantities `RealDecimal(22, 10)`).
 
 What the totals promise their caller:
 
@@ -544,7 +555,7 @@ for. The gate runs with the chart-safety unit tests:
 
 | Command | Runs (under `backend/test_scripts/`) | Covers |
 |---------|--------------------------------------|--------|
-| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`) and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
+| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`), `compound_growth()` of `interest.py` (`test_compound_growth.py`, against the day-by-day product in a 60-digit context), its ACT/ACT fraction across years, digit for digit with the year loop, and its memo (`test_act_act_fraction.py`), and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
@@ -572,7 +583,7 @@ for. The gate runs with the chart-safety unit tests:
 | `yield_on_cost.py` | — | [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) |
 | `splits.py` | — | [Split](../../financial-theory/instruments/asset-events/split.md) |
 | `ledger_totals.py` | [Ledger control totals](#ledger-totals) | — |
-| `interest.py` | [Scheduled Investment Provider](assets/provider_scheduled_investment.md#accrual-walk), its only consumer | [Day Count Conventions](../../financial-theory/fundamentals/day-count.md); simple interest in [Interest](../../financial-theory/instruments/asset-events/interest.md) |
+| `interest.py` | [Scheduled Investment Provider](assets/provider_scheduled_investment.md#accrual-walk), its only consumer; `compound_growth()` in its [late interest](assets/provider_scheduled_investment.md#late-interest) | [Day Count Conventions](../../financial-theory/fundamentals/day-count.md); simple interest in [Interest](../../financial-theory/instruments/asset-events/interest.md) |
 
 ---
 
