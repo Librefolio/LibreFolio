@@ -9,7 +9,7 @@
  */
 
 import {expect, test} from '../fixtures/playwright';
-import type {Locator, Page} from '../fixtures/playwright';
+import type {Locator, Page, Request} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
@@ -1384,6 +1384,234 @@ test.describe('Assets list — the Δ columns are the backend’s period changes
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
             if (assetId != null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
+        }
+    });
+});
+
+// ============================================================================
+// Which period changes the list keeps, and when it asks them (workstream X, lot X-R60)
+// ============================================================================
+
+/** The prices and backend signals of the list, asked in bulk. */
+const ASSET_PRICE_QUERY = /\/api\/v1\/assets\/prices\/query(\?.*)?$/;
+/** The asset signal catalogue: read as the page mounts, and again by the signals' retry. */
+const ASSET_SIGNAL_CATALOG = /\/api\/v1\/assets\/prices\/signals(\?.*)?$/;
+
+/** A backend signal (`SMA`, offered in both domains) as the chart settings keep it. */
+function smaSignal(id: string, period: number, color: string) {
+    return {id, signalType: 'sma', params: {period}, style: {color, lineWidth: 1, lineType: 'dotted', markerStart: null, markerEnd: null}};
+}
+
+/** The signal a settings save keeps, and the one it drops: two backend signal requests per asset before, one after. */
+const KEPT_SIGNAL = smaSignal('e2e-xr60-sma-5', 5, '#2563eb');
+const DROPPED_SIGNAL = smaSignal('e2e-xr60-sma-10', 10, '#dc2626');
+
+/**
+ * The Assets chart settings (`__global_assets__`) seeded with `signals` for the signed-in user. They live in this test's
+ * browser storage (`chartSettingsStore`, under the user's id): nothing shared is written, and the next page load reads
+ * them.
+ */
+async function seedAssetSignals(page: Page, signals: ReadonlyArray<ReturnType<typeof smaSignal>>): Promise<void> {
+    const me = await page.request.get('/api/v1/auth/me');
+    expect(me.ok(), `GET /api/v1/auth/me answered HTTP ${me.status()}`).toBe(true);
+    const userId = ((await me.json()) as {user?: {id?: unknown}}).user?.id;
+    if (typeof userId !== 'number' || !Number.isSafeInteger(userId)) throw new Error(`GET /api/v1/auth/me gave no user id (${String(userId)}): the chart settings are stored under it`);
+    await page.evaluate(
+        ({storageKey, seeded}) => {
+            const settings = {colorByBaseline: true, areaFill: true, gridLines: true, staleGradient: true, axisScales: {absolute: {mode: 'auto'}, percentage: {mode: 'include0'}, secondary: {}}, signals: [] as unknown[]};
+            localStorage.setItem(storageKey, JSON.stringify({version: 3, globalSettings: settings, pairOverrides: [['__global_assets__', {...settings, signals: seeded}]]}));
+        },
+        {storageKey: `lf_${userId}_chartSettingsStore`, seeded: signals},
+    );
+}
+
+/** Whether a bulk request asks, for some item, the backend signal `instanceId` alone: the reload after a save that dropped the others. */
+function asksOnlySignal(request: Request, instanceId: string): boolean {
+    try {
+        const body = request.postDataJSON() as Array<{signals?: Array<{instance_id?: string}>}> | null;
+        return Array.isArray(body) && body.some((item) => item.signals?.length === 1 && item.signals[0]?.instance_id === instanceId);
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Which period changes the Assets list keeps, and when it asks them (MF-P2, after X-R53).
+ *
+ * The list asks the period changes of every asset it lists as it loads or reloads, and keeps the answers through
+ * `PeriodChangesLedger` (`periodChanges.ts`, its rules pinned in `periodChanges.test.ts`). Observed and stubbed through
+ * the network:
+ *   · a refresh over the same range whose period changes fail keeps the Δ already computed for that day — the own
+ *     asset's, created here with the X-R53 figures, and deleted at the end;
+ *   · what the Δ do not depend on asks none: a settings save that changes the signals, the retry of the signal
+ *     catalogue. Each counter is proven by the load first, and read once the page has settled after the action.
+ *
+ * The range is about two months ending on a known day in the past, as in X-R53: no live price is asked. The chart
+ * settings are this browser's state, never the database's.
+ *
+ * Red today: a failed request clears every Δ, whatever day it asked; a settings save and the signals' retry reload the
+ * period changes along with the prices.
+ */
+test.describe('Assets list — which period changes the list keeps, and when it asks them (X-R60)', () => {
+    // A ceiling, never a delay: each test loads the list's waves — rows, prices, period changes — and reloads some.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a refresh over the same range whose period changes fail keeps the Δ of that day', async ({page}) => {
+        const token = uniqueToken(6);
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const failures: string[] = [];
+        let refusing = false;
+        let refused = 0;
+        let assetId: number | null = null;
+        try {
+            const createRes = await page.request.post('/api/v1/assets', {data: [{display_name: `E2E PeriodChanges kept ${token}`, currency: 'EUR', asset_type: 'STOCK'}]});
+            expect(createRes.ok(), `asset create must succeed: ${await createRes.text()}`).toBeTruthy();
+            const ownId = ((await createRes.json()) as {results: Array<{asset_id: number}>}).results[0].asset_id;
+            assetId = ownId;
+
+            // The load answers the own asset's period changes with the X-R53 figures; once refusing, every request fails.
+            await page.route(ASSET_PERIOD_CHANGES, async (route) => {
+                if (refusing) {
+                    await route.fulfill({status: 500, json: {detail: 'synthetic: the period changes are unavailable (X-R60)'}}).catch((error: unknown) => failures.push(String(error)));
+                    refused += 1;
+                    return;
+                }
+                try {
+                    const response = await route.fetch();
+                    if (!response.ok()) {
+                        failures.push(`HTTP ${response.status()}: ${await response.text()}`);
+                        await route.fulfill({response});
+                        return;
+                    }
+                    const answer = (await response.json()) as {items?: Array<{asset_id: number}>};
+                    const periods = PERIOD_DAYS.map(([key, days]) => ({key, days, change_ratio: STUBBED_RATIOS[key] ?? null}));
+                    const items = (answer.items ?? []).map((item) => (item.asset_id === ownId ? {...item, periods, errors: []} : item));
+                    await route.fulfill({response, json: {...answer, items}});
+                } catch (error) {
+                    // Nobody awaits a route callback, so what it throws would land on whatever runs next: recorded, and
+                    // the request let through, for the test to fail on its own assertions.
+                    failures.push(String(error));
+                    await route.continue().catch(() => undefined);
+                }
+            });
+
+            await goToAssetsPage(page, range);
+            const assetsPage = page.getByTestId('assets-page');
+            // The list narrowed to the own asset, then shown as a table.
+            await page.getByTestId('assets-search-input').fill(token);
+            await waitForSettled(assetsPage, 20_000);
+            await page.getByTestId('view-mode-list').click();
+            await waitForSettled(assetsPage, 20_000);
+            const row = page.locator(`tbody tr[data-row-id="${ownId}"]`);
+            await expect(row, 'the own asset is listed').toBeVisible({timeout: 10_000});
+            await expect(deltaCell(row, '1D'), 'the load: change_ratio 0.0125').toHaveText(percentCell('+1.25'), {timeout: 10_000});
+            await expect(deltaCell(row, '1W'), 'the load: change_ratio -0.25').toHaveText(percentCell('-25.00'));
+
+            // The page's refresh, over the same range: its period changes fail.
+            refusing = true;
+            const refresh = page.getByTestId('assets-refresh-button');
+            await expect(refresh).toBeEnabled();
+            await refresh.click();
+            await expect.poll(() => refused, {message: 'the refresh never asked the period changes again', timeout: 10_000}).toBeGreaterThan(0);
+            await waitForSettled(assetsPage, 20_000);
+            expect(failures, 'the period changes reached the page').toEqual([]);
+
+            await expect(row, 'the own asset is still listed').toBeVisible();
+            await expect(deltaCell(row, '1D'), 'the failed refresh asked up to the same day: the Δ computed for it stay, +1.25 %').toHaveText(percentCell('+1.25'));
+            await expect(deltaCell(row, '1W'), 'the failed refresh asked up to the same day: the Δ computed for it stay, −25 %').toHaveText(percentCell('-25.00'));
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+            if (assetId != null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
+        }
+    });
+
+    test('a settings save that changes the signals asks no period changes', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        let asked = 0;
+        try {
+            await seedAssetSignals(page, [KEPT_SIGNAL, DROPPED_SIGNAL]);
+            await page.route(ASSET_PERIOD_CHANGES, async (route) => {
+                // Counted on arrival, before any answer can reach the page: a page that has settled has been counted.
+                asked += 1;
+                await route.continue();
+            });
+            await goToAssetsPage(page, range);
+            const assetsPage = page.getByTestId('assets-page');
+            await page.getByTestId('view-mode-list').click();
+            await waitForSettled(assetsPage, 20_000);
+            expect(asked, 'premise: the list asks the period changes as it loads — the counter counts').toBeGreaterThan(0);
+
+            await page.getByTestId('assets-chart-settings-button').click();
+            const modal = page.getByTestId('chart-settings-modal');
+            await expect(modal).toBeVisible();
+            const kept = modal.getByTestId(`signal-card-${KEPT_SIGNAL.id}`);
+            const dropped = modal.getByTestId(`signal-card-${DROPPED_SIGNAL.id}`);
+            await expect(kept, 'premise: the seeded signals are the list’s — check the chart settings storage key').toBeVisible();
+            await expect(dropped).toBeVisible();
+            await modal.getByTestId(`signal-remove-${DROPPED_SIGNAL.id}`).click();
+            await expect(dropped).toHaveCount(0);
+            await expect(kept).toBeVisible();
+
+            const askedBefore = asked;
+            const signalsReloaded = page.waitForResponse((response) => ASSET_PRICE_QUERY.test(response.url()) && asksOnlySignal(response.request(), KEPT_SIGNAL.id), {timeout: 20_000});
+            await page.getByTestId('chart-settings-apply').click();
+            await expect(modal).toBeHidden();
+            // Presence first: the save reloaded the prices and signals, the one signal left.
+            expect((await signalsReloaded).ok(), 'the prices and signals, asked again with the signal left').toBe(true);
+            await expect(page.getByTestId('assets-refresh-button'), 'the reload the save started is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            await waitForSettled(assetsPage, 20_000);
+
+            expect(asked, 'the save asked the period changes again, though they do not depend on the signals').toBe(askedBefore);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('the retry of the signal catalogue asks no period changes', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        let asked = 0;
+        let catalogAsked = 0;
+        let catalogDown = true;
+        try {
+            // The signal catalogue fails as the list loads, so the settings dialog offers its retry.
+            await page.route(ASSET_SIGNAL_CATALOG, async (route) => {
+                catalogAsked += 1;
+                if (catalogDown) await route.fulfill({status: 500, json: {detail: 'synthetic: the asset signal catalogue is unavailable (X-R60)'}});
+                else await route.continue();
+            });
+            await page.route(ASSET_PERIOD_CHANGES, async (route) => {
+                // Counted on arrival, before any answer can reach the page: a page that has settled has been counted.
+                asked += 1;
+                await route.continue();
+            });
+            await goToAssetsPage(page, range);
+            const assetsPage = page.getByTestId('assets-page');
+            expect(catalogAsked, 'premise: the list asked the signal catalogue as it loaded').toBeGreaterThan(0);
+            expect(asked, 'premise: the list asks the period changes as it loads — the counter counts').toBeGreaterThan(0);
+
+            await page.getByTestId('assets-chart-settings-button').click();
+            const modal = page.getByTestId('chart-settings-modal');
+            await expect(modal).toBeVisible();
+            const unavailable = modal.getByTestId('signal-backend-error');
+            await expect(unavailable, 'the catalogue failed: the dialog says so, and offers its retry').toBeVisible();
+
+            catalogDown = false;
+            const askedBefore = asked;
+            const catalogAskedBefore = catalogAsked;
+            // The notice's one button is its retry.
+            await unavailable.getByRole('button').click();
+            await expect(unavailable, 'the retry read the catalogue again').toBeHidden({timeout: 10_000});
+            expect(catalogAsked, 'the retry asked the catalogue').toBeGreaterThan(catalogAskedBefore);
+            await expect(page.getByTestId('assets-refresh-button'), 'the retry is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            await waitForSettled(assetsPage, 20_000);
+
+            expect(asked, 'the retry asked the period changes again, though they do not depend on the signals').toBe(askedBefore);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
         }
     });
 });
