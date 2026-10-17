@@ -5122,7 +5122,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     Doc: le rotte nella pagina dev dei cambi; `api sync`.
   - **Peso**: come X-R58: una rotta del backend, la modale, tre livelli di test, una finestra E2E (`fx-add-pair`).
     L'alternativa solo frontend è piccola.
-- **X-R79 · Il `replace` di X-R75 sostituisce anche le gambe delle catene** — basso, **nella 1.3, fatta da B**, dopo
+- ✅ **X-R79 · Il `replace` di X-R75 sostituisce anche le gambe delle catene** (chiusa il 17/10 da B: `b4a66be9a` +
+  `13db415b8`, entrata in dev `6f11a6790`; opzione A, solo frontend) — basso, **nella 1.3, fatta da B**, dopo
   W-B64/65 (decisione del coordinatore, 17/10 19:05); X, 17/10 (revisione di X-R75).
   - `POST /fx/providers/routes?replace=true` vale per ogni coppia della richiesta, anche per le gambe che la modale
     aggiunge con «crea le coppie intermedie». La voce X-R75 le voleva solo aggiunte, mai sostituite.
@@ -5131,6 +5132,13 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     e cancella le altre. È una corsa stretta, e la docstring di B la dice.
   - Cura (frontend): in modifica, prima le gambe con un upsert semplice (solo aggiunta), poi la sola coppia principale
     con `replace=true`; un Vitest fissa l'ordine delle due richieste. Se fallisce la seconda, restano solo gambe nuove.
+  - Residui noti (accettati dal coordinatore, 17/10 20:2x):
+    - l'upsert semplice non è solo aggiunta: una gamba configurata nel frattempo ha ancora la sua priorità 1 riscritta
+      (le altre restano). L'opzione B, una bandiera `create_only` del backend, va a X dopo la 1.3;
+    - un 409 sulla richiesta della coppia, dopo le gambe scritte, mostra `fx.addPair.createConflict` («Nothing was
+      saved»), che per le gambe non è vero. È raro: serve un inserimento concorrente della stessa priorità;
+    - dopo le gambe scritte e la coppia rifiutata, lo store delle rotte non le conosce: un nuovo tentativo le riscrive
+      uguali.
 - **X-R80 · Le gambe delle catene non sono mai davvero «solo aggiunte»** — basso, **dopo la 1.3**; X, 17/10 (dall'analisi
   di B per X-R79, girata dal coordinatore).
   - `create_routes_bulk` fa un upsert per (base, quote, priorità): a una priorità esistente sovrascrive `chain_steps`
@@ -7796,7 +7804,8 @@ sulla base `23f6578f3`.
   - Un commento vecchio in `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` dice ancora «the form
     (12 integer digits, 6 decimals)».
   Dettagli: piano 07, «W-B64 + W-B65 (per W)».
-- **B-49 · Un testo non UTF-8 nei dati di un backup passa la verifica del ripristino** — basso, da decidere dopo
+- ✅ **B-49 · Un testo non UTF-8 nei dati di un backup passa la verifica del ripristino** (fatta il 17/10 da B,
+  checkpoint delle 21:26: la verifica lo rifiuta, `database_damaged`, prima dell'upgrade) — basso, da decidere dopo
   W-B65; E, 17/10 (RNW-109 e la barriera SCA-036 di E; la decisione è di B).
   - E l'ha trovato in 4 posti: un valore TEXT con byte non UTF-8 passa la verifica su copia. `integrity_check`, i
     conteggi e i totali non leggono quei testi.
@@ -7808,7 +7817,11 @@ sulla base `23f6578f3`.
   - Da decidere: la verifica rifiuta (un codice suo, senza mai citare il testo, che è dell'archivio) o avvisa come
     E-19b1. Per trovarli serve leggere i testi come byte (`text_factory = bytes`) e provarne la decodifica: un costo
     sui backup grandi.
-  Dettagli: piano 07, «W-B64 + W-B65 (per W)», punto di E-19b1.
+  - ✅ **Decisione e cura** (17/10): rifiutare (il coordinatore d'accordo). Il passo `_refuse_undecodable_text()` di
+    `staging.py` legge ogni testo della copia, prima dell'upgrade, e rifiuta con `database_damaged`; il log ha il solo
+    numero di tabelle. RNW-109 di E riscritto da B (ora si aspetta il rifiuto). Il paragrafo di `security.md` va nel
+    passaggio H-52 di H.
+  Dettagli: piano 07, «B-49».
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
