@@ -413,7 +413,7 @@ Note: No backend server required. Tests operate directly on test DB.
              desc="event_types: asset event types corrected when trimming and upper-casing makes them valid, deleted otherwise with their transactions unlinked; declared row-count changes checked exactly; dry run, log lines, rollback",
              prereq="None (temporary databases)")
     add_test(cat, "post-migration", db_post_migration, name="Post-Migration Fixes",
-             desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback; the run lock refuses a symlink and is created 0o600",
+             desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback; the run lock refuses a symlink and is created 0o600; B-36 (17): table names a database brings quoted (x\"y, a\" WHERE 1 --): the pending fix applied, its row counts holding them, no OperationalError",
              prereq="None (temporary databases)")
     add_test(cat, "post-migration-orphan-pairs", db_post_migration_orphan_pairs, name="Post-Migration Orphan Pair Halves",
              desc="orphan_pair_halves: the lone halves older broker deletions left become standalone rows; giving TRANSFER legs and unreadable rows left; dry run, log lines, rollback",
