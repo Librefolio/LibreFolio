@@ -27,6 +27,10 @@ The contract pinned here:
    member read-only, delivered to the plugin, recorded with the administrator who wrote them; deleting that
    administrator leaves the rows without an author (``SET NULL``); deleting a user deletes the user's rows (``CASCADE``).
 
+**X-R43** (workstream X): a JSON integer of 401 digits is the write's refusal — 422, ``INVALID_VALUE`` «too large», no
+digit of it in the answer, nothing written — never a 500; one of 5000 digits, past what the server's JSON parser reads,
+is FastAPI's own refusal. «Red today» is the state before the cure; a guard passes before and after.
+
 Isolation. The user fields are written only by accounts this module registers (never ``e2e_test_user``) and go with
 them at teardown; the search preferences of ``justetf`` and ``borsa_italiana`` are also cleared in a ``finally`` by the
 account that wrote them. The system fields are instance-wide singletons whose values make the fingerprint in the cache keys
@@ -38,6 +42,8 @@ found, after a red too. ``MOCKFX`` is never written over HTTP: its writes are co
 
 from __future__ import annotations
 
+import json
+import random
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -112,11 +118,16 @@ class _Lane:
     usernames: list[str] = field(default_factory=list)
     bodies: list[str] = field(default_factory=list)
 
-    async def call(self, method: str, path: str, *, account: _Account | None = None, json: Any = None, params: dict | None = None) -> httpx.Response:
-        """One request from a client of its own: no cookie jar, the session sent explicitly; the body is recorded."""
+    async def call(self, method: str, path: str, *, account: _Account | None = None, json: Any = None, params: dict | None = None, content: str | None = None) -> httpx.Response:
+        """One request from a client of its own: no cookie jar, the session sent explicitly; the body is recorded.
+
+        ``content`` is a JSON text sent as written (``Content-Type: application/json``): a number the client's own
+        serializer would not write as it stands (X-R43)."""
         headers = {"Cookie": f"{COOKIE}={account.cookie}"} if account else {}
+        if content is not None:
+            headers["Content-Type"] = "application/json"
         async with httpx.AsyncClient() as client:
-            response = await client.request(method, f"{API_BASE}{path}", json=json, params=params, headers=headers, timeout=TIMEOUT)
+            response = await client.request(method, f"{API_BASE}{path}", content=content, json=json, params=params, headers=headers, timeout=TIMEOUT)
         self.bodies.append(response.text)
         return response
 
@@ -462,6 +473,80 @@ async def test_each_refusal_has_its_code_and_never_the_value(lane: _Lane):
     assert not violations, "\n- " + "\n- ".join(violations)
     assert await _user_rows(member.user_id) == [], "a refused write must write nothing"
     print_success(f"{len(_REFUSALS)} refusals, each with its code, none with the value")
+
+
+# -----------------------------------------------------------------------------
+# X-R43: a JSON integer past what a double holds
+# -----------------------------------------------------------------------------
+
+
+def _digits(count: int) -> str:
+    """``count`` random decimal digits, the first not 0: a number no answer can show a run of by chance."""
+    return random.choice("123456789") + "".join(random.choices("0123456789", k=count - 1))
+
+
+def _shows_a_run_of(digits: str, text: str, width: int = 20) -> bool:
+    """Whether ``text`` holds ``width`` consecutive digits of ``digits``: the value whole, or any long piece of it."""
+    return any(digits[start : start + width] in text for start in range(len(digits) - width + 1))
+
+
+def _item_text(key: str, scope: str, number: str) -> str:
+    """One write item of mockprov as JSON text, its ``value`` the JSON number ``number`` exactly as written: no client
+    serializer in between (``json.dumps`` refuses an int past 4300 digits)."""
+    return json.dumps(_item(key, scope)).removesuffix("}") + f', "value": {number}}}'
+
+
+def _shown(field: dict[str, Any]) -> tuple:
+    """A field's state as the catalogue shows it: value, source, set, problem."""
+    return (field["value"], field["source"], field["is_set"], field["problem"])
+
+
+_ON_THEIR_DEFAULTS = {"preferred_language": ("all", "default", False, None), "results_limit": (10, "default", False, None)}
+
+
+@pytest.mark.asyncio
+async def test_a_json_integer_of_401_digits_is_refused_too_large_never_a_500(lane: _Lane):
+    """Red today (X-R43): 500. The server reads the integer whole (``json.loads`` reads up to 4300 digits), the
+    finiteness check of ``validate_value`` cannot convert it to a double, and nobody catches the ``OverflowError``: a
+    member who pastes a long number in a numeric setting gets a server error.
+
+    Contract: the write's refusal: 422, ``detail.results`` listing both items — the valid ``preferred_language``
+    accepted, ``results_limit`` ``INVALID_VALUE`` «too large» —, no run of the value's digits in the answer, nothing
+    written: the member's catalogue shows both fields as before. The member is this test's own, gone at teardown with
+    its rows."""
+    print_section("X-R43: a JSON integer of 401 digits")
+    member = await lane.member("ps_huge_integer")
+    before = await _fields(lane, member)
+    assert {key: _shown(before[key]) for key in _ON_THEIR_DEFAULTS} == _ON_THEIR_DEFAULTS, "precondition: a new member's fields are on their defaults"
+    digits = _digits(401)
+    body = '{"items": [' + json.dumps(_item("preferred_language", "user", value="it")) + ", " + _item_text("results_limit", "user", digits) + "]}"
+
+    refused = await lane.call("PATCH", BULK, account=member, content=body)
+    after = await _fields(lane, member)
+
+    assert refused.status_code == 422, f"a JSON integer of 401 digits for results_limit answers {refused.status_code} {refused.text[:200]!r}: expected the write's refusal, 422 INVALID_VALUE «too large» (X-R43)"
+    assert _outcomes(refused) == [("preferred_language", True, None), ("results_limit", False, "INVALID_VALUE")]
+    message = next(result["message"] for result in refused.json()["detail"]["results"] if result["field_key"] == "results_limit") or ""
+    assert "too large" in message, f"the refusal must say why: {message!r}"
+    assert not _shows_a_run_of(digits, refused.text), "the refusal repeats the value"
+    assert await _user_rows(member.user_id) == [], "a refused write must write nothing"
+    assert {key: _shown(after[key]) for key in _ON_THEIR_DEFAULTS} == _ON_THEIR_DEFAULTS, "the refused write changed the member's catalogue"
+    print_success(f"422, INVALID_VALUE: {message}")
+
+
+@pytest.mark.asyncio
+async def test_a_json_integer_past_what_the_server_reads_is_fastapis_own_refusal(lane: _Lane):
+    """Guard: green today and after (X-R43). 5000 digits are past what ``json.loads`` reads (4300): FastAPI refuses the
+    body itself — 400 «There was an error parsing the body», or a 422 of its own — never a 500; no run of the digits in
+    the answer, nothing written."""
+    member = await lane.member("ps_unreadable_integer")
+    digits = _digits(5000)
+
+    response = await lane.call("PATCH", BULK, account=member, content='{"items": [' + _item_text("results_limit", "user", digits) + "]}")
+
+    assert response.status_code in (400, 422), f"a JSON integer of 5000 digits answers {response.status_code} {response.text[:200]!r}: expected FastAPI's own refusal of the body, never a 500"
+    assert not _shows_a_run_of(digits, response.text), "the answer repeats the value"
+    assert await _user_rows(member.user_id) == [], "nothing may be written"
 
 
 # =============================================================================

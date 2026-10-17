@@ -37,6 +37,10 @@ doubles ``mockprov`` (asset: four system fields, three user fields, a secret of 
 6. **FX**: ``MOCKFX``'s two system fields are written here (never over HTTP, where they would change the cache keys
    of every FX call of the lane) and reach a configured ``MOCKFX``.
 
+**X-R43** (workstream X): an integer past the double range is refused like any value its field refuses — ``INVALID_VALUE``
+«too large», never with its digits, nothing written — instead of an ``OverflowError`` escaping the write. «Red today» is
+the state before the cure; a guard passes before and after.
+
 Pure: the database is a private SQLite file under ``tmp_path`` built by ``create_all``, with its own users; the instance
 key is a test key set with ``monkeypatch`` and the data directory points into ``tmp_path``; every variable is set with
 ``monkeypatch``, the ambient ones of the plugins removed first. The plugin with required fields is a lab plugin of this
@@ -48,6 +52,7 @@ an icon yet, so ``MOCKFX`` is given one with ``monkeypatch`` where the FX family
 from __future__ import annotations
 
 import json
+import random
 import sqlite3
 import uuid
 from collections.abc import AsyncIterator
@@ -786,6 +791,84 @@ async def test_no_refusal_message_contains_the_value(engine: AsyncEngine, people
 
     assert [result.error_code for result in results] == [INVALID, INVALID, INVALID, INVALID, UNKNOWN], "barrier: each item is refused, each for its own rule"
     assert not any(value in (result.message or "") for value in sent for result in results)
+
+
+# -----------------------------------------------------------------------------
+# X-R43: an integer past what a double holds
+# -----------------------------------------------------------------------------
+
+
+def _huge(sign: int = 1) -> int:
+    """An integer of 401 random digits, the first not 0, of the given sign: past the double range (about 309 digits)
+    like 10**400, and digits no message can show a run of by chance."""
+    return sign * int(random.choice("123456789") + "".join(random.choices("0123456789", k=400)))
+
+
+def _shows_a_run_of(number: int, text: str, width: int = 20) -> bool:
+    """Whether ``text`` holds ``width`` consecutive digits of ``number``: the value whole, or any long piece of it."""
+    digits = str(abs(number))
+    return any(digits[start : start + width] in text for start in range(len(digits) - width + 1))
+
+
+async def _refused_not_crashed(engine: AsyncEngine, user: User, items: list[PluginSettingWriteItem], story: str) -> list[PluginSettingWriteResult]:
+    """The outcome of every item of a write that must be refused. Any other exception fails the test, naming it — the
+    route answers 500 to it —, and so does a write that goes through."""
+    try:
+        written = await _write(engine, user, items)
+    except PluginSettingsRefused as refused:
+        return refused.results
+    except Exception as error:  # noqa: BLE001 — any other exception is the defect under test
+        pytest.fail(f"{story} raised {type(error).__name__} ({error}) instead of PluginSettingsRefused (X-R43): PATCH /settings/plugins/bulk answers 500 where the write's refusal, 422 INVALID_VALUE «too large», is due")
+    pytest.fail(f"{story} was written ({written.success_count} item(s)) instead of being refused «too large» (X-R43)")
+
+
+@pytest.mark.parametrize(
+    ("who", "key", "scope", "sign", "beside"),
+    [
+        pytest.param("alice", "results_limit", "user", 1, _item("preferred_language", "user", value="it"), id="a-members-integer"),
+        pytest.param("alice", "results_limit", "user", -1, _item("preferred_language", "user", value="it"), id="a-members-integer-negative"),
+        pytest.param("admin", "price_tolerance", "system", 1, _item("region", "system", value="us"), id="an-administrators-number"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_integer_past_the_double_range_is_invalid_value_and_nothing_is_written(engine: AsyncEngine, people: dict[str, User], who: str, key: str, scope: str, sign: int, beside: PluginSettingWriteItem):
+    """Red today (X-R43): ``OverflowError`` escapes ``write_settings`` — the finiteness check of ``validate_value``
+    cannot convert 401 digits to a double, and ``_check_item`` catches ``SettingValueError`` only —, so the route
+    answers 500 where the write's refusal is due.
+
+    Contract: ``PluginSettingsRefused`` listing every item in order: the valid one beside it accepted, the huge one
+    ``INVALID_VALUE`` «too large», never with its digits; nothing written, the valid item included (all or nothing)."""
+    print_section(f"X-R43: {who} writes {key} = {'minus ' if sign < 0 else ''}401 digits")
+    value = _huge(sign)
+
+    results = await _refused_not_crashed(engine, people[who], [beside, _item(key, scope, value=value)], f"{who}'s write of {key} with {'minus ' if sign < 0 else ''}401 digits")
+
+    assert _outcomes(results) == [(beside.field_key, True, None), (key, False, INVALID)], _outcomes(results)
+    refusal = results[1].message or ""
+    assert "too large" in refusal, f"the refusal must say why: {refusal!r}"
+    assert not _shows_a_run_of(value, repr(results)), "the refusal repeats the value"
+    await _assert_nothing_written(engine)
+    print_success(f"refused as a whole: {refusal}")
+
+
+@pytest.mark.parametrize(
+    ("who", "item", "reason"),
+    [
+        pytest.param("alice", _item("results_limit", "user", value=51), "above the maximum of 50", id="51"),
+        pytest.param("alice", _item("results_limit", "user", value=2**53 - 1), "above the maximum of 50", id="the-largest-safe-integer"),
+        pytest.param("alice", _item("results_limit", "user", value=-(2**53 - 1)), "below the minimum of 1", id="the-largest-safe-integer-negative"),
+        pytest.param("admin", _item("price_tolerance", "system", value=1e300), "above the maximum of 10", id="a-float-of-1e300"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_number_within_the_safe_limit_is_still_judged_by_the_bounds(engine: AsyncEngine, people: dict[str, User], who: str, item: PluginSettingWriteItem, reason: str):
+    """Guard: green today and after (X-R43). Only an integer past ``MAX_SAFE_INTEGER`` in absolute value is «too large»:
+    51, the largest safe integer of either sign and a float of 1e300 are refused by the bounds, as today; nothing written."""
+    (result,) = await _refused(engine, people[who], [item])
+
+    assert (result.success, result.error_code) == (False, INVALID), _outcomes([result])
+    assert reason in (result.message or "") and "too large" not in (result.message or ""), result.message
+    await _assert_nothing_written(engine)
 
 
 # =============================================================================
