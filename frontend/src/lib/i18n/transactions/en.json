@@ -247,7 +247,8 @@
       "significantDigitsExceeded": "At most {max} significant digits",
       "integerDigitsExceeded": "At most {max} digits before the decimal point",
       "dateOutOfRange": "Between {min} and {max}",
-      "autoCostUnreadable": "Automatic cost unavailable: {count, plural, one {# transaction used} other {# transactions used}} for this asset's average cost {count, plural, one {holds} other {hold}} a value that is not a number. Enter the cost by hand."
+      "autoCostUnreadable": "Automatic cost unavailable: {count, plural, one {# transaction used} other {# transactions used}} for this asset's average cost {count, plural, one {holds} other {hold}} a value that is not a number. Enter the cost by hand.",
+      "ledgerUnreadable": "The balances of {brokerName} can't be checked: {count, plural, one {# of its transactions holds} other {# of its transactions hold}} a value that is not a number. Ask the administrator to repair the data."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
