@@ -6059,3 +6059,63 @@ prossimo checkpoint.
 - ✅ **Slot (14:20–14:26, via del coordinatore, carico sotto 50)**: `front-broker detail` **40 passati** (2,7 min). Porta 6185
   libera.
 - ⏳ **Checkpoint J-33** (FROZEN, in attesa del commit del coordinatore). Riga 🐛 proposta per il CHANGELOG.
+- ✅ **Checkpoint J-33** (2026-10-17): committato dal coordinatore (`b13ee97be` diario e codice), entrato (dev `104333567`),
+  CHANGELOG 🐛 `b077dfd81`; worktree in fast-forward. Revisione A-42/A-43 `00b1b2e67`: OK (5 commenti, nessuna asserzione).
+
+#### J-51 — lo YoC di un co-proprietario sulle unità ricevute da un broker che non vede (analisi 17/10 ~14:35; base `b077dfd81`)
+
+- **Stato reale** (`financial_math/yield_on_cost.py`). `_load_transaction_context()` carica le righe dell'asset sui broker
+  visibili (accessi dell'utente ∪ broker delle posizioni); `_include_external_transfer_legs()` aggiunge al rigioco la
+  riga compagna di ogni TRANSFER il cui partner non è caricato, cioè sta su un broker che l'utente non vede.
+  `_broker_components()` unisce allora i due broker in un componente. Per il **destinatario** visibile (B) il
+  componente {A, B} rigioca un A che ha solo la gamba in uscita → `FIFO_SOURCE_QUANTITY_MISSING` → `FAILED` → YoC
+  «non disponibile» per la posizione in B. Per il **mittente** visibile funziona: A ha la sua storia, B ha l'arrivo.
+- **Perché non la lettura al confine intera di J-10**: lo YoC conta le unità in viaggio per il broker d'origine
+  (`test_transfer_in_transit_counts_for_source_not_destination`). Leggere al confine anche la partenza la toglierebbe dal
+  mittente alla data di partenza: un provento con stacco durante il viaggio cambierebbe, o diventerebbe orfano e
+  invaliderebbe la posizione. Il mittente oggi funziona: non si tocca.
+- **Disegno**:
+  - `financial_math/lots/scope_boundary.py`: `read_arrivals_at_scope_boundary(transactions, *, partners,
+    scope_broker_ids)`, pura, legge solo le gambe in arrivo (quantità > 0) il cui partner torna da un broker fuori dal
+    perimetro (gli stessi controlli, `_pairs_across`), come le legge J-10: un ADJUSTMENT-in delle sue unità alla sua data,
+    al suo costo; le partenze e ogni altra riga restano come sono. Nessun prezzo serve.
+  - `yield_on_cost.py`: il rigioco usa le righe con gli arrivi letti al confine; la riga compagna di un arrivo letto
+    esce dal rigioco, quella di una partenza resta (il viaggio come oggi). Il registro come salvato (le righe visibili più
+    le compagne) resta la fonte dell'impronta della cache e dei legami degli SPLIT (le copie non hanno
+    `asset_event_id`): l'impronta non cambia.
+- **Valori che cambiano (dichiarati prima del codice)**:
+  - V1: una posizione in un broker visibile le cui unità sono arrivate con un TRANSFER da un broker che l'utente non vede
+    (co-proprietario; la coppia torna): oggi YoC «non disponibile» (rigioco `FAILED`); dopo calcolato, con le unità
+    arrivate idonee dalla data d'arrivo, come la destinazione d'un viaggio oggi.
+  - Non cambiano: il mittente (la partenza tiene la compagna e il viaggio); una coppia che non torna (resta non
+    disponibile); l'impronta della cache; ogni posizione senza un trasferimento con un broker invisibile.
+  - Dove si vede: la colonna YoC delle posizioni della Dashboard (`PortfolioHolding.yield_on_cost` e la sua API), solo
+    dove oggi manca; nessuna forma cambia.
+    > **⚠️ Fuori pista (correzione)**: nell'analisi avevo scritto «e i campi YoC dell'AI Export»: falso, nessun file di
+    > `services/ai_export` legge `yield_on_cost`. Corretto anche col coordinatore.
+- **Rossi (test-author)**: servizio in `test_financial/test_yield_on_cost.py` (V1 col co-proprietario; guardie: il mittente
+  invariato, la coppia che non torna, l'impronta invariata); puro per `read_arrivals_at_scope_boundary`. Selettori:
+  `services roi-fifo-utils test_yield_on_cost`, e il file puro dei lotti di J-10.
+- **Coordinatore (14:4x)**: design e V1 OK; da fissare nei rossi: il costo delle unità arrivate è la base di costo della
+  gamba (come al confine di J-10), e una gamba senza base lascia lo YoC «non disponibile», mai un denominatore nullo o
+  zero. Risposta (fatti del codice): il denominatore dello YoC è il WAC della posizione della Dashboard
+  (`wac_per_unit = position.wac`); il rigioco dà solo le quantità. Nel perimetro del co-proprietario la Dashboard mette
+  nel costo medio la base della gamba in arrivo (lotto 41, D2); senza base il costo medio ha una parte ignota → `wac`
+  None → `MISSING_WAC` prima del rigioco (`_base_failure_reason`); un WAC ≤ 0 → `NON_POSITIVE_WAC`. Due prove in più,
+  sul percorso vero di `PortfolioService`: (a) rosso, WAC = la base per unità della gamba e YoC esatto; (b) guardia,
+  senza base (anche con un BUY proprio di B) `wac` None, `MISSING_WAC`, nessun valore.
+- ✅ **Rossi (test-author, codice vecchio)**: servizio 2 rossi (V1 `REPLAY_INCONSISTENT` → 0,125; Dashboard (a): WAC 16 già
+  oggi, YoC `REPLAY_INCONSISTENT` → 0,125), puri 13 rossi (`ImportError`); guardie verdi: il mittente (0,5: il dividendo
+  durante il viaggio conta per A), la coppia che non torna (`TRANSFER_PAIR_MISSING`), l'impronta (anche la quantità
+  della compagna), la Dashboard (b) (`wac` None, `MISSING_WAC`, anche col BUY proprio di B). Nessuna scoperta.
+- ✅ **Codice (14:45)**: `scope_boundary.py` — `read_arrivals_at_scope_boundary()` e `_read_arrival()` (usato anche dal
+  lettore intero di J-10); `yield_on_cost.py` — `_read_unseen_arrivals()` costruisce le righe del rigioco; la compagna di
+  un arrivo letto esce, quella di una partenza resta; l'impronta legge ancora il registro come salvato.
+  > **⚠️ Fuori pista**: un campo nuovo di `_TransactionContext` rompeva 7 test di MF
+  > (`test_yield_on_cost_date_min.py`, che costruiscono il dataclass privato): tolto il campo; i legami degli SPLIT si
+  > leggono dalle righe del rigioco saltando le copie (una copia sta per una gamba TRANSFER, che nessuno SPLIT lega).
+- ✅ **Verdi (14:46–14:52)**: mirati 78 + 34; `roi-fifo-utils` **1375**, `financial-math` **1224**, `lots-analysis-pure`
+  **192**, `portfolio-engine` **41**, check-orphans ✓, `mkdocs build` stretto ✓, check-links ✓; ruff e black puliti.
+  Doc: la pagina teorica dello YoC (un punto, solo EN: la cache di traduzione era già indietro, nessun timbro) e
+  `lots_analysis_service.md` («Yield on cost»); devWiki `decisions/yield-on-cost-definition.md`.
+- ⏳ **Checkpoint J-51** (FROZEN).
