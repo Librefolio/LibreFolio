@@ -5476,3 +5476,137 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 > - Quindi un conflitto di contratto fra X-R55 e il test di C-66: rosso deterministico su dev per chiunque. Y-27 tocca solo la
 >   tabella del frontend e non può cambiare ciò che restituisce l'API. Nessuna ripetizione: non è un timeout, la causa si
 >   legge nel codice. Diventa **Y-28** nel backlog, da instradare dal coordinatore (X-R55 o il proprietario di C-66).
+>
+> **Entrato**: `8e3c58ccc`, `51ba3bc2e`, `2aa8a0753` → dev `542c0e8b5`; l'unione di `log.md` sistemata dal coordinatore in
+> `e9cd5d6ef`; niente CHANGELOG (la potatura nasceva con X-R53, non rilasciato); Y-28 passato a X. HEAD avanzato a
+> `bab5a8fb9`.
+
+## Y12b, il resto · V11 e P5 — analisi (10:25–10:40, sola lettura; HEAD `bab5a8fb9`)
+
+> **Perché adesso**: MF-E1 è in dev (`e43dfae68`, dopo CP-7b di J): `LotTimelineEventSchema.opening_value` c'è (piano MF,
+> `:1423`; nel client generato: «For the event that opens a lot (BUY, ADJUSTMENT_IN): the lot's original cost …, in the
+> currency of unit_price. None on every other kind and when the conversion is missing»).
+>
+> **Stato reale**:
+> - **V11**: `LotWacPriceChart.svelte:1418-1422`, il tooltip di un BUY calcola `|quantità| × prezzo unitario`; la bolla per
+>   lotto (`:1034`) legge già `original_cost`. Atteso a numeri uguali (il costo d'origine è quantità × prezzo del lotto,
+>   nella stessa valuta): è la regola della casa unica, non un numero sbagliato; senza conversione il campo è null → «—».
+> - **T-U8, il modale della custodia**: `LotCustodyModal.svelte:236` legge già `original_cost`. Fatto (da J).
+> - **P5**, decisione D-MF6(b) (gli aggregati dei lotti scelti sono misure interattive dichiarate nel codice, con il
+>   marcatore e il gate di Y):
+>   - `unifiedLotsTableHelpers.ts:107-185`: il piè della tabella sulle righe visibili (somme, medie pesate sul valore,
+>     rendimento totale e netto sul valore d'apertura sommato, `ratioOrNull`);
+>   - `lotComparisonChartHelpers.ts:130-174`: l'aggregato dei lotti scelti nel grafico di confronto (valore, e rendimento
+>     = Σ P&L con proventi ÷ Σ costo d'origine);
+>   - `lotWacPriceChartHelpers.ts:124-145` (`toPercentSeries`): la vista % del grafico WAC, ribasata sul primo valore non
+>     nullo (è anche una delle copie di Y-26: dichiararla non cambia il suo comportamento su una base nulla);
+>   - il totale fisso dei lotti c'è già nel backend (`LotSummarySchema`).
+> - `lotGanttChartHelpers.isSplitTransition` (`:288-298`) moltiplica quantità × prezzo solo per riconoscere uno split senza
+>   eventi: un'euristica non mostrata, nessuna dichiarazione.
+> - Nessun test di componente per `LotWacPriceChart` (solo gli aiuti); un file di test nuovo vorrebbe una riga in
+>   `_frontend_utility.py`, del programma colori.
+>
+> **Proposta**:
+> 1. **V11**: un aiuto in `lotWacPriceChartHelpers.ts` (il valore d'apertura di un evento, cioè il campo del backend) usato
+>    dal ramo BUY del tooltip; rosso d'unità in `lotWacPriceChartHelpers.test.ts` (il campo anche quando differisce da
+>    quantità × prezzo; null senza campo) e un pin sul sorgente: il ramo BUY non moltiplica più.
+> 2. **P5**: i tre moduli dichiarano la loro misura nel JSDoc d'apertura (`@financial-math-exception`, D-MF6(b)); il gate
+>    `financialMathExceptions.gate.test.ts` (mio, Y12a) li aggiunge a `DECLARED_EXCEPTIONS` — il rosso: (A) finché i tag
+>    mancano; `financial_math.md` regola 6 li nomina (`docs-writer`).
+> 3. Nessun numero cambia; nessuna classe di colore. CHANGELOG: niente (parità e dichiarazioni).
+> 4. Prove leggere: i test dei lotti, il gate, svelte-check, Prettier, `theme-roles`; E2E `front-broker detail` (i grafici
+>    dei lotti e la tabella).
+>
+> **Conflitti da verificare dal coordinatore**: i tre aiuti e `LotWacPriceChart.svelte` (`features/brokers/lots`, FE7, miei;
+> i colori ci sono passati con DV); `financial_math.md` (J l'ha toccato stamattina per J-44, MF lo usa); il gate è mio.
+>
+> **Via del coordinatore** (10:25): V11 + P5 come proposti, rossi prima; il valore di ADJUSTMENT_IN resta fuori; nessun ramo
+> dei colori o di J tocca i miei file; in `financial_math.md` (aperto da MF per X-R59) il `docs-writer` tocca solo l'elenco
+> della regola 6; lo slot E2E `front-broker detail` lo chiedo quando sono pronto.
+>
+> **Passo 1 ✅, i rossi** (`test-author` `1170c251`, 10:27–10:39; i due file di test, già registrati):
+> - **V11** (`lotWacPriceChartHelpers.test.ts:511-651`, 7 rossi, 69 di prima verdi): quattro casi d'unità per
+>   `eventOpeningValue`, fermi alla barriera dell'import dinamico (stringa decimale, zero compreso; 29,97 e mai 3 × 10 = 30;
+>   `null`/assente; non numerico: `'n/a'` e `'Infinity'`, perché `safeDecimal` legge un numero iniziale, `'12abc'` → 12);
+>   tre pin sul sorgente del ramo BUY di `buildMarkerTooltip` (chiama `eventOpeningValue(event)`, non moltiplica quantità ×
+>   prezzo, importa l'aiuto), con un controllo positivo.
+> - **P5** (`financialMathExceptions.gate.test.ts`, 3 rossi, 14 di prima verdi): tre voci nuove in `DECLARED_EXCEPTIONS`;
+>   la regola (A) fallisce per ciascun file («its leading JSDoc block … carries no @financial-math-exception block tag»). Il
+>   docblock del gate dice ora che le eccezioni sono misure interattive che l'utente plasma su un grafico o una tabella, e
+>   nomina gli aggregati di D-MF6(b).
+> - **Osservazioni**: senza selezione il piè somma tutte le righe filtrate, su ogni pagina, non solo quelle a schermo (la
+>   frase del tag è corretta di conseguenza); una dichiarazione esenta tutto il file anche dalla regola (C), quindi
+>   un'annualizzazione aggiunta un giorno a uno dei tre moduli passerebbe in silenzio → **Y-29** nel backlog (minimo).
+>
+> **Passo 2 ✅, la correzione** (10:40, `files/scripts/v11p5_apply.py --apply`, 6 sostituzioni esatte; 4 file, +28 −1):
+> `eventOpeningValue` in `lotWacPriceChartHelpers.ts` e il ramo BUY di `LotWacPriceChart.svelte` che lo usa; il tag
+> `@financial-math-exception` nel JSDoc d'apertura dei tre moduli (D-MF6(b)).
+>
+> **Passo 3 ✅, prove leggere** (`files/scripts/v11p5_light.sh`, 10:40–10:44): `lotWacPriceChartHelpers` **77**, il gate **17**,
+> `unifiedLotsTableHelpers` 64, `lotComparisonChartHelpers` 162, `lotChartShared` 25, `lotGanttChartHelpers` 117,
+> `LotCustodyModal` 3, `moneyRenderSites` 7; svelte-check 0/0; Prettier pulito sui 6 file; `theme-roles --check` pulito;
+> `git diff --check` pulito.
+>
+> **Documentazione ✅**: `docs-writer` (`f7b35c59`) ha riscritto solo l'elenco della regola 6 di `financial_math.md` (un solo
+> blocco, +5 −1): le misure dei lotti plasmate dalle scelte dell'utente (D-MF6(b)) e i tre file. `mkdocs build` (strict) rc 0,
+> 0 WARNING; `check-links` 97. Lo stesso elenco sta in due righe di istruzioni condivise
+> (`.github/instructions/financial-math.instructions.md:48`, `frontend.instructions.md:49`): chiesto al coordinatore.
+>
+> **Istruzioni condivise ✅** (via del coordinatore, 10:47): `.github/instructions/financial-math.instructions.md` regola 6 e
+> `.github/instructions/frontend.instructions.md` «Financial numbers» nominano ora, oltre al righello e alle curve
+> «what-if», gli aggregati dei lotti scelti dall'utente (D-MF6(b)); poche parole per riga, `git diff --check` pulito.
+> **Slot E2E** `front-broker detail`: in coda (coordinatore, 10:47).
+>
+> **Passo 4 ✅, E2E** (slot, `files/scripts/v11p5_e2e.sh`, 10:52–10:58, HEAD `bab5a8fb9` più i miei file; carico a 5 minuti 40):
+> `front-broker detail` **38/38** (2,1 minuti). Porta 6189 libera alle 10:58.
+>
+> ### V11 + P5 — checkpoint 🧊 FROZEN (10:5x)
+>
+> 11 file tracciati, nessuno nuovo; `git diff --check` pulito; nessun server. T-U8 (sezione T) lo riconcilia il coordinatore:
+> con V11 e P5 il suo inventario è chiuso.
+>
+> **Entrato**: `10345abac` + `c97b0c5ee` → dev `d4ecfb692`; HEAD avanzato. T-U8 lo riconcilia il coordinatore nella sezione T.
+
+## Y-29 · il gate delle eccezioni: un segnalino «annualizza» per voce (dalle 11:00; HEAD `d4ecfb692`)
+
+> **Via del coordinatore** (10:59): rossi prima, prove leggere; dopo, mi passa lavoro da un'altra sezione mentre le voci del
+> developer aspettano.
+>
+> **Stato reale**: la regola (C) del gate (`financialMathExceptions.gate.test.ts`, «annualization by exponent only where
+> declared») filtra i colpi con `!DECLARED_FILES.has(hit.file)`: ogni file dichiarato è esente. Oggi alzano a un esponente
+> con 365 solo `MeasureSignal.ts` (`Math.pow(growth, 365 / days)`, il Δ%/anno del righello) e `CompoundSignal.ts`
+> (`Math.pow(1 + rate, 1 / 365)`, il fattore giornaliero della curva composta); `LinearSignal.ts` ha `days / 365` (nessun
+> esponente), `SineSignal.ts` niente, e i tre moduli dei lotti di D-MF6(b) sommano, mediano e ribasano.
+>
+> **Scelta** (tutta nel file del gate, quindi `test-author` `c23643d5` fa rosso e cura): (1) il filtro di (C) in una funzione
+> pura, senza cambi; (2) il rosso, un colpo sintetico in un modulo dei lotti che deve contare come trasgressore; (3) un
+> segnalino obbligatorio `annualizes: boolean` per voce, vero solo per `MeasureSignal.ts` e `CompoundSignal.ts`; (C) ammette
+> esponenti solo lì; docblock e messaggi aggiornati; un controllo che anche il colpo vero di `MeasureSignal` venga trovato.
+>
+> **Documentazione**: `financial_math.md` descrive (C) in due punti («outside the listed files»: la frase del gate nella
+> regola 6, `:478-479`, e il terzo punto della sezione del gate, `:629`); chiesto al coordinatore se toccarli ora (MF ha la
+> pagina aperta).
+>
+> **Fatto ✅** (`test-author` `c23643d5`, 11:00–11:14; solo il gate, +90 −30):
+> - base 17/17; **passo 1**, il filtro in `annualizationOffenders(hits, allowedFiles)` e l'insieme `ANNUALIZING_FILES` (per
+>   ora uguale a `DECLARED_FILES`): 17/17; **passo 2**, il rosso: un controllo (D) che fa produrre allo scanner del gate un
+>   esponente con 365 in un file non dichiarato, nei tre moduli dei lotti, in `MeasureSignal` e in `CompoundSignal`, e vuole
+>   trasgressori i primi quattro → 1 rosso («Y-29: being declared does not exempt a file from (C)…»: venivano segnalati solo
+>   il file non dichiarato, non i tre moduli); **passo 3**, la cura: `annualizes: boolean` obbligatorio in ogni voce, vero
+>   solo per `MeasureSignal.ts` e `CompoundSignal.ts`; `ANNUALIZING_FILES` costruito dal segnalino; titolo e messaggio di (C)
+>   aggiornati; docblock ((C), (D), «Adding an exception», «Completeness»); una guardia nuova (i due file sono nell'insieme,
+>   e ogni file dell'insieme ha un esponente vero) → **19/19**.
+> - Prove che la guardia morde, poi ripristinate col checksum: `LinearSignal` a `true` → rossa la sola guardia; `MeasureSignal`
+>   a `false` → tre rossi, e la regola (C) nomina l'esponente vero di `MeasureSignal.ts:56`.
+> - Osservazioni: prima di Y-29 il verdetto di (C) non aveva un controllo positivo (un filtro che non segnalava niente
+>   sarebbe passato): il controllo del passo 2 lo copre; la concessione resta per file (una seconda annualizzazione dentro
+>   `MeasureSignal` passerebbe), ora scritto in «Completeness».
+> - **Documentazione** (`docs-writer` `bc90fe07`, via del coordinatore per le sole due righe): `financial_math.md:479-480`
+>   («outside the listed files that annualize») e `:630-631` (il segnalino `annualizes: true`, il righello e la curva
+>   composta); `git diff` di due blocchi, +4 −2.
+> - **Prove leggere** (`files/scripts/y29_light.sh` e `y29_docs_check.sh`, 11:14–11:18): il gate **19/19**; svelte-check 0/0
+>   (il campo obbligatorio è controllato); Prettier pulito; `theme-roles --check` pulito; `git diff --check` pulito;
+>   `mkdocs build` (strict) rc 0, 0 WARNING; `check-links` 97.
+> - **Backlog**: Y-29 ✅. Nessun E2E: cambia solo un test e una pagina per sviluppatori.
+>
+> ### Y-29 — checkpoint 🧊 FROZEN (11:1x)

@@ -2183,13 +2183,19 @@ browser that the table and card views of `/assets` show it as text and run nothi
     user text where it enters an HTML string, sanitizes the sinks that receive mixed markup,
     and adds the first two gates above.
 
-## 🐳 Container Image Check
+## 🐳 Container Image Check {: #container-image-check }
 
 The automatic update check runs only for superusers, after login
-(`frontend/src/routes/(app)/+layout.svelte`). Its release lookup is cached in `localStorage`
+(`frontend/src/routes/(app)/+layout.svelte`), and only on a self-hosted instance (F05):
+`checkForNewerRelease()` awaits `instanceConfig.load()` and asks nothing of GitHub or of the registry,
+and writes nothing to its cache, unless `GET /system/instance` answered `profile: selfhosted`. A
+managed instance is updated by its hosting provider, and a failed configuration request skips the
+check too. Its release lookup is cached in `localStorage`
 (`librefolio-update-check`) for one hour (`CHECK_INTERVAL_MS`), and **Skip this version** is
 stored in the same entry. A manual **Check for updates** in the changelog modal bypasses both the
-cache and the dismissal, and reports errors.
+cache and the dismissal, and reports errors. `ChangelogModal` shows that button only once
+`GET /system/instance` has answered `profile: selfhosted`: not on a managed instance, not before the
+answer, and not when the configuration request failed.
 
 The update check reports a new release only once its Docker image can be pulled from GHCR.
 GHCR's anonymous token handshake is not available to browsers through CORS, so the frontend

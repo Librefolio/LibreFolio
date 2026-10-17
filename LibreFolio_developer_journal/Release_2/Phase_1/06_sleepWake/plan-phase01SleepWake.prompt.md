@@ -4264,3 +4264,144 @@ corsia.
      (`files/z25_build.sh`).
 6. ✅ 17/10 ~09:50 — Backlog, nella mia sezione: Z-25 chiusa (✅, commit del coordinatore), con i due residui; Z-27
    aggiunta (il seguito del web app per Y e X).
+7. ✅ 17/10 ~09:57 — Il coordinatore ha committato Z-25 sul mio ramo: `4b711e803` (fix) e `036007e99` (diario).
+   HEAD verificato: `036007e99` su `4b711e803` su `eed325d99`, albero pulito, impronte dei quattro file di prodotto
+   uguali a quelle provate. Ingresso dopo la revisione di X del ciclo dei cambi; riga del CHANGELOG come proposta.
+   Revisione di A8b (`scheduler.spec.ts`, una riga: `openSettingsTab(page, 'admin')`): OK, nessuna osservazione.
+
+### Z-26 — l'attesa del lock fra processi senza tempo massimo: analisi (17/10 ~10:00, sola lettura)
+
+Voce Z-26 del backlog (basso; E, R13-SEC8, via coordinatore). HEAD `036007e99`.
+
+**Stato reale.**
+- `scheduler_run_lock()` (`scheduler/run_lock.py:74`) riprova ogni `POLL_SECONDS` (0,2 s) finché il lock è libero,
+  senza limite (`:83`–`:91`). Chi aspetta tiene il lock del suo processo (`_run_lock()`, `scheduler.py:522`) e la
+  ragione `scheduler` dell'attività (`:519`): il suo ciclo non batte. Un `wake-sync` arrivato in quel processo aspetta
+  (uno spazio ogni 15 s), e quelli dopo rispondono 409 `wake_in_progress` (`api/v1/system/wake.py:136`).
+- Prima di Z-11 gli altri worker rispondevano subito `not_leader`; anche allora, fuori dal leader, nessun job girava.
+- Né lo scheduler né i job hanno un tempo massimo: `await job.run(state, settings)` (`scheduler.py:419`) aspetta
+  quanto serve. Un job fermo (un `await` che non torna) blocca prima di tutto il suo processo; Z-26 ne è la faccia
+  fra processi.
+- Portata: l'immagine Docker, quindi anche Fly, ha un solo processo (`Dockerfile:164`, nessun `--workers`): lì il lock
+  non ha mai concorrenti. Riguarda solo chi lancia più worker (`dev.py server --workers`, o un comando suo).
+- Le pagine dicono `not_leader` «solo su Windows»: `admin/sleep_wake.en.md:346` e `:378`,
+  `developer/backend/scheduler.md:65`, `:218` e `:237`. La pagina admin non ha traduzioni.
+
+**Proposta.**
+1. **Quanto.** Al più `LOCK_WAIT_SECONDS` di attesa, costante in `run_lock.py` (proposta: 600 s; nessuna variabile
+   d'ambiente). La scadenza parte all'inizio del giro (`run_due_jobs`) e copre le due attese, quella del lock del
+   processo e quella fra processi: una sveglia che arriva dietro un giro fermo dello stesso processo non aspetta il
+   doppio.
+   - Perché 600 s: più di un giro normale (minuti, con molti asset), e un giro che rinuncia non perde nulla: i job li
+     esegue l'altro processo, e il giro dopo (ogni `TICK_SECONDS`, 60 s) riprova.
+   - Non un solo tentativo con risposta immediata: Z-11 (N71) aspetta apposta, perché la risposta di un `wake-sync`
+     dica i job finiti (chi arriva secondo rilegge lo stato e li trova `not_due`).
+2. **Cosa risponde.** Il giro rinuncia senza eseguire nulla, con un avviso nel log (l'attesa e la ragione del giro):
+   è lì che un operatore vede il caso anomalo. Per lo stato, due strade:
+   - (a) `not_leader`, consigliata: il significato che pannello e cron già conoscono, «un altro worker esegue i job,
+     qui non è girato nulla»; nessun valore nuovo nell'API. Da correggere il «solo su Windows» delle due pagine.
+   - (b) uno stato nuovo (`busy`): più preciso, ma un valore che il pannello deve imparare, la descrizione del campo
+     in `schemas/sleep_wake.py:36` cambia (`api sync`), e una riga nuova nella tabella admin.
+3. La cancellazione resta com'è. Alla scadenza non c'è un tentativo in volo: la scadenza si guarda dopo un tentativo
+   fallito.
+
+**Superfici.** Tutte di Z (Z-11).
+- Prodotto: `run_lock.py` (la scadenza e un'eccezione, `SchedulerRunLockTimeout`), `scheduler.py` (la scadenza in
+  `run_due_jobs`, l'attesa del lock del processo limitata, l'eccezione tradotta nello stato).
+- Test (test-author): `test_scheduler_run_lock.py` (il detentore in un processo figlio: la rinuncia entro il limite,
+  senza descrittori né lock lasciati; un rilascio prima della scadenza, e il blocco gira); un giro `tick` e uno
+  `wake` col lock tenuto altrove e la scadenza abbassata: lo stato scelto, nessun job, stato su disco intatto,
+  `PRICE_REFRESH` chiuso. Non a livello API: il server di test ha `LIBREFOLIO_NO_SCHEDULER`, e risponde `disabled`
+  prima del lock.
+- Documentazione (inglese): `developer/backend/scheduler.md`, `admin/sleep_wake.en.md`.
+- Runner: le azioni esistenti (`scheduler-run-lock`, `scheduler-multiprocess`), al più una parola nelle descrizioni.
+- Peso: S (una ventina di righe di prodotto, quattro o cinque casi).
+
+**Decisioni chieste.** D-Z26-1: 600 s, o un altro tetto. D-Z26-2: (a) `not_leader` o (b) uno stato nuovo.
+
+> **Decisione** (coordinatore, 17/10 ~10:01): «Z-26: **D-Z26-1** = 600 s `LOCK_WAIT_SECONDS` constant, a single
+> deadline covering both waits, no env var. **D-Z26-2** = (a) `not_leader` plus the warning log, with the «only on
+> Windows» wording fixed in both pages. I'm recording both as night decision N79 for the developer's review. Go:
+> implement, reds first, light runs, then a FROZEN checkpoint. Z-24 was entered by H (`36a487e84`): close its line in
+> your section with this lot.»
+
+**Contratto (N79).**
+- `run_lock.py`: `LOCK_WAIT_SECONDS = 600.0`; `SchedulerRunLockTimeout(TimeoutError)`;
+  `scheduler_run_lock(path=None, *, deadline=None)`, `deadline` un istante di `time.monotonic()`. `None`: aspetta
+  quanto serve, come oggi. Con una scadenza: dopo un tentativo che trova il lock tenuto, se l'istante è passato
+  solleva `SchedulerRunLockTimeout` (nessun tentativo in volo, il descrittore già chiuso); altrimenti aspetta
+  `min(POLL_SECONDS, tempo che resta)` e riprova. Almeno un tentativo sempre: un lock libero si prende anche a
+  scadenza passata. La cancellazione resta com'è.
+- `scheduler.py` importa per nome `LOCK_WAIT_SECONDS` e `SchedulerRunLockTimeout`. `run_due_jobs`, dopo
+  l'assestamento dell'orologio, fissa una sola scadenza, `monotonic() + LOCK_WAIT_SECONDS`, che limita l'attesa del
+  lock del processo (`_run_lock()`) e poi quella del lock fra processi (`scheduler_run_lock(deadline=…)`). I job non
+  hanno limite: un giro che ha preso i due lock li esegue fino in fondo.
+- A scadenza, nell'una o nell'altra attesa: nessun job, lo stato su disco né letto né scritto, un avviso nel log
+  («Scheduler run gave up waiting for another run», con `reason`, `lock` = `process` o `data_dir`, `waited_s`,
+  `limit_s`), e il giro risponde `not_leader` senza job. Ragione `scheduler` dell'attività, tracciatore del recupero
+  (`PRICE_REFRESH`) e lock del processo si chiudono come per ogni giro; il giro che tiene i lock non è toccato.
+- Senza `fcntl` vale solo l'attesa del lock del processo. Il `wake-sync` non cambia: trasmette `not_leader`, il suo
+  task finisce, e la sveglia dopo è accettata (non 409).
+- Lo schema (`schemas/sleep_wake.py:36`, «`not_leader` (another worker runs the jobs)») non cambia, per non toccare
+  il client generato: la pagina admin dice i due casi.
+
+**Passi.**
+1. ✅ 17/10 ~10:05–10:40 — Rossi di test-author, nei file che esistono; nessun codice di prodotto toccato.
+   - `test_scheduler_run_lock.py`, clausole (g)(h): RL-010…016 (limite, eccezione e firma; la rinuncia senza nulla
+     lasciato; un lock libero preso a scadenza passata; uno tenuto, provato una volta; il detentore che lascia prima;
+     un tentativo in volo attraverso la scadenza; l'attesa tagliata alla scadenza con `POLL_SECONDS` a 3600).
+   - `test_scheduler_catchup.py`, clausole (p)(q): SCU-035…039 (nomi importati; rinuncia al lock fra processi per le
+     quattro ragioni; una sola scadenza, fissata dopo l'assestamento, su un orologio finto; rinuncia al lock del
+     processo, con e senza `fcntl`; i job mai limitati).
+   - Rossi per la ragione giusta: `scheduler-run-lock` 9 + 7 rossi, `scheduler-catchup` 93 + 10 rossi;
+     `scheduler-multiprocess` 2, `-backoff` 79, `-price-refresh` 44 verdi. Provati anche contro un'implementazione
+     di riferimento iniettata solo coi monkeypatch (16/16, 103/103) e tre mutanti (ognuno preso dai casi mirati),
+     poi rimossa: i file sono quelli lintati.
+2. ✅ 17/10 ~10:10–10:20 — Bozza fuori dal repo (`files/z26-draft/apply_z26.py`, 10 sostituzioni esatte in
+   `run_lock.py` e `scheduler.py`), provata su una copia: applicazione, compilazione, black pulito, inverso esatto.
+   Il I001 di ruff sulla copia è falso: lo dà anche il file intatto fuori dal repo (si ricontrolla sul repo).
+   - `run_lock.py`: `LOCK_WAIT_SECONDS`, `SchedulerRunLockTimeout(TimeoutError)`, `deadline` nell'attesa.
+   - `scheduler.py`: `_run_within_deadline()` (la scadenza unica, dopo l'assestamento; il lock del processo preso
+     con `asyncio.timeout`), `_log_gave_up()`, `_run_locked(reason, deadline)` che traduce il timeout in
+     `not_leader`. Gli stand-in del lock nei test accettano `*args, **kwargs`: la parola chiave `deadline` non li
+     rompe; nessun test tocca `_run_lock()` né `time_module`.
+3. ✅ 17/10 ~10:29–10:35 — Il coordinatore ha fatto entrare Z-25 (dev `d0bc7a547`, CHANGELOG `282c583b5`) e ha
+   portato il mio ramo a `282c583b5`; dev non ha toccato `run_lock.py` né `scheduler.py`. Il punto basso di X su
+   Z-25 entra in questo checkpoint: «The FX 422's `item_days` is the running count at the conversion that crossed
+   the budget, so it's a lower bound: say «at least {item_days}» in the FX message (or note it in
+   `#convert-request-limits`), without counting on (that would change the precedence).»
+   - `bulk_too_many_days_detail(…, *, at_least=False)`; i cambi passano `at_least=True`, e il messaggio dice
+     «would build at least 101». I prezzi no: il loro conto è esatto. Bozza `files/z25low-draft/apply_z25low.py`,
+     provata su una copia e applicata (2 sostituzioni, +8 −4); `ruff` e `black` puliti sul repo. Nessun test fissa
+     la frase: i casi BL guardano codice e numeri.
+4. ✅ 17/10 ~10:42 — Bozza applicata al repo (10 sostituzioni, +65 −10): `ruff` e `black` puliti su prodotto e
+   test, e il I001 della copia non c'è. Impronta in `files/z26-draft/applied.md5`. Nel caso SCU-038 il giro che
+   rinuncia non deve chiamare nulla dopo l'assestamento: la mia `utc_now()` del rapporto non conta, l'orologio
+   finto non scrive nella cronologia.
+5. ✅ 17/10 ~10:49 — Runner, col via del coordinatore («the text of your two entries only»): i testi di
+   test-author nelle voci `scheduler-run-lock` e `scheduler-catchup` (numerazioni RL-001..016 e SCU-001..039, una
+   clausola Z-26 in `print_info` e `desc`, una riga nel commento PURE). Solo quelle righe (+7 −4); `ruff` e `black`
+   puliti.
+
+6. ✅ 17/10 10:44–10:55 — Controlli leggeri, corsia 6186, uno alla volta (carico 27–38): `files/z26_light.sh
+   green`, log in `files/logs/z_z26_green_*.log`.
+   - `services`: `scheduler-run-lock` 16 (9 + 7), `scheduler-catchup` 103 (93 + 10): i 17 rossi ora verdi;
+     `scheduler-multiprocess` 2, `-backoff` 79, `-price-refresh` 44, `-leader` 8, `-state` 14, `-settings` 14,
+     `-settings-misc` 2, `-due` 25, `-loop` 5, `-jobs` 73, `-joblog-builders` 16, `-joblog-misc` 2.
+   - `api system-wake` 76 (prima ricostruzione del frontend, per l'avanzamento del ramo).
+   - Il punto basso di X su Z-25: `services range-ceiling` 50, `api fx` 25.
+   - Porta 6186 libera alla fine.
+7. ✅ 17/10 ~10:43–11:04 — Documentazione (docs-writer, solo inglese; le tre pagine non hanno traduzioni, nessuno
+   stamp), ogni affermazione verificata sul codice.
+   - `admin/sleep_wake.en.md`: la riga `not_leader` dice i due casi (dieci minuti di attesa, nello stesso processo
+     o in un altro; Windows con più processi); «Several Workers» con i dieci minuti, la rinuncia e il `409` dopo; il
+     consiglio a chi chiama («`not_leader`: nessun job per questa chiamata, riprovare»); «What a Wake-up Runs».
+   - `developer/backend/scheduler.md`: due archi nel diagramma; «Run lock», «Inside a Run», `RunReport`, il
+     tracciatore con più worker; in `#cross-process-lock` due punti nuovi, «The wait limit.» e «Giving up.». La
+     scadenza dello spegnimento ora si chiama «shutdown deadline», per non confonderla col limite dell'attesa.
+   - `developer/backend/fx/architecture.md`, `#convert-request-limits`: il messaggio dice «at least» (punto di X).
+   - 10:58–11:04: `mkdocs build` stretto rc 0, nessun avviso (carico 38); `check-links` 97 validi
+     (`files/z26_build.sh`). Nessuna àncora nuova.
+   - Lo schema resta com'è (`schemas/sleep_wake.py:36`, «another worker runs the jobs»): ora incompleto, per scelta.
+8. ✅ 17/10 ~10:57 — Backlog, nella mia sezione: Z-26 chiusa (✅, commit del coordinatore). Z-24 era già chiusa da
+   H (dev `36a487e84`), arrivata col mio avanzamento: nulla da fare.

@@ -120,6 +120,21 @@ def latest_range_end() -> date:
     return date.today() + timedelta(days=1)
 
 
+def shift_date(value: date, days: int) -> date:
+    """``value`` moved by ``days``, held at the calendar's ends (``date.min``, ``date.max``) instead of raising
+    ``OverflowError`` (W-B71).
+
+    For a window around a date a request or a parsed report names — the promote and event suggestions (± a tolerance),
+    the days around a report set's coverage and checkpoints — whose date may sit at an edge of the calendar: such a date
+    is refused when a transaction is saved (N74), but a suggestion or a check reads it, and
+    ``date(1, 1, 1) - timedelta(days=1)`` raised (a 500).
+    """
+    try:
+        return value + timedelta(days=days)
+    except OverflowError:
+        return date.max if days > 0 else date.min
+
+
 def parse_ISO_date(v) -> date:
     if isinstance(v, date):
         return v

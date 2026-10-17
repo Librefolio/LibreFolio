@@ -609,11 +609,35 @@ users with the same values do.
 ## 🧪 Test-Only Plugins {: #test-only }
 
 `test_only = True`, a class attribute (`False` by default), marks a plugin that exists for the tests.
-It hides the plugin from the provider lists (`GET /api/v1/assets/provider`, `GET /api/v1/fx/providers`)
-and from the settings catalogue, which lists it only when the `plugin_code` filter names it. The plugin
-stays registered: code that names it still reaches it, and a write, which always names its plugin, can
-set its fields. Today `mockprov`, `MOCKFX` and `MOCKFX_FAIL` are test-only; `MANUAL`, the sentinel of
-the hand-entered FX rates, stays hidden from the FX list by its code.
+Today `mockprov`, `MOCKFX` and `MOCKFX_FAIL` are test-only. `MANUAL`, the sentinel of the
+hand-entered FX rates, is not: it stays hidden from the FX list by its code.
+
+- **Never listed.** In every mode, the plugin is left out of the provider lists
+  (`GET /api/v1/assets/provider`, `GET /api/v1/fx/providers`), of the providers a search asks when the
+  request names none, and of the settings catalogue read without a `plugin_code` filter.
+- **Outside test mode, not served at all.** With `LIBREFOLIO_TEST_MODE` off, as on every production or
+  self-hosted instance, its registry does not know it: `get_plugin()` returns `None`, and so do
+  `get_plugin_instance()` and `get_provider_instance()`; `list_plugin_codes()` and `list_providers()`
+  leave it out. Naming it reaches nothing:
+    - an assignment (`POST /api/v1/assets/provider`) or a probe (`POST /api/v1/assets/provider/probe`)
+      is refused as an unknown code is, a 422 «Unknown provider code»;
+    - a search that names it skips it, as it skips a code no registry knows;
+    - the refresh of an asset already assigned to it finds no provider («Provider not found») and
+      deletes nothing: the assignment and the stored prices stay;
+    - the settings catalogue has no entry for it, even filtered on its code, and a write naming it is
+      refused with `UNKNOWN_FIELD`;
+    - a conversion route naming `MOCKFX` or `MOCKFX_FAIL` is refused («Unknown provider(s)»), and a
+      route that already uses one gets no rate from it, as from an unknown provider.
+- **In test mode, reachable by name.** The test server (`./dev.py server --test`) and every test run
+  set `LIBREFOLIO_TEST_MODE=1`. There, code that names the plugin reaches it, the catalogue lists it
+  when the `plugin_code` filter names it, and a write, which always names its plugin, can set its
+  fields.
+
+The rule lives in the registry base, `AbstractPluginRegistry._withheld()` in
+`backend/app/services/provider_registry.py`, which reads `is_test_mode()` at each lookup. A class that
+does not set the flag (every real provider, every plugin of the other families) is never affected.
+`./dev.py test services test-only-providers` covers the registries, the family runtimes and the
+validation of an assignment and of a probe, in both modes.
 
 ---
 
@@ -700,7 +724,8 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   shows *Set on* with its `updated_at`, then **Replace** or **Clear**.
 - **Configure** is `PluginSettingsModal`, on `ModalBase`, at layer 80 by default: above the asset
   dialog (50) and its prompts (70). Every opening reads the plugin afresh with
-  `fetchPluginEntry(family, code)`, which names the plugin, so a test-only plugin is listed there too.
+  `fetchPluginEntry(family, code)`, which names the plugin, so a test-only plugin is listed there too,
+  in test mode ([Test-Only Plugins](#test-only)).
   Two components open it, for asset providers:
     - `ProviderAssignmentSection.svelte` reads `fetchPluginEntry('asset', code)` whenever the chosen
       provider changes, with no module-level cache: a cache would outlive a logout and show the next

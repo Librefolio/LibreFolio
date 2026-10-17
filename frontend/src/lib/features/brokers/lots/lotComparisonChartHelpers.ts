@@ -15,6 +15,10 @@
  * reported separately. Extracting them would enshrine the bug behind a green
  * test, so they stay in the component until the parse is fixed.
  *
+ * @financial-math-exception The lot comparison chart's aggregate (D-MF6(b)): the value and the return of the lots the
+ * user selects, summed per day from each lot's backend series (return = Σ P&L with income ÷ Σ original cost). The
+ * selection is the user's, so no backend field can hold it.
+ *
  * @module brokers/lots/lotComparisonChartHelpers
  */
 
