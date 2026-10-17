@@ -111,24 +111,25 @@ $$
 A position is closed when its quantity at $t_{\mathrm{end}}$ is at or below the dust threshold of $10^{-5}$ units, so a residual left by redemptions in tranches counts as closed. It has no end cost, and a start value says nothing about a holding sold a few weeks in. Its annualized return uses the capital it deployed and the time it was held inside the period:
 
 $$
-\mathrm{CostSold} = \sum_{s\,\in\,(t_{\mathrm{from}},\ t_{\mathrm{end}}]} C_s
+\mathrm{CostOut} = \sum_{s\,\in\,(t_{\mathrm{from}},\ t_{\mathrm{end}}]} C_s \;+\; \sum_{m\,\in\,(t_{\mathrm{from}},\ t_{\mathrm{end}}]} C_m
 $$
 
 $$
-t_{\mathrm{start}} = \max(t_{\mathrm{from}},\ t_{\mathrm{first\ opening}}), \qquad t_{\mathrm{close}} = \text{last day its quantity fell to zero}
+t_{\mathrm{start}} = \max(t_{\mathrm{from}},\ t_{\mathrm{first\ opening}}), \qquad t_{\mathrm{close}} = \text{last day its quantity fell to the dust threshold or below}
 $$
 
 $$
 r_{\mathrm{ann}} =
-\operatorname{annualize}\left(\frac{\mathrm{PnL}_{period}}{\mathrm{CostSold}},\ t_{\mathrm{close}}-t_{\mathrm{start}}\right)
+\operatorname{annualize}\left(\frac{\mathrm{PnL}_{period}}{\mathrm{CostOut}},\ t_{\mathrm{close}}-t_{\mathrm{start}}\right)
 $$
 
 - $C_s$ is the historical cost, in $C^*$, of each disposal the period's Realized counts — a SELL, or an outgoing ADJUSTMENT with a cost basis ([Portfolio Engine — §8](index.md#8-realized-gain-loss)). A disposal left out of Realized adds no cost.
+- $C_m$ is the historical cost each transfer to another broker of the scope moved out, when the row counts that transfer's tract: it left after $t_{\mathrm{from}}$, arrived by $t_{\mathrm{end}}$, and both its value on arrival and the cost moved are known ([Period P&L](period-pnl.md), developer decision P22). The row's result carries what those units did until they arrived (the tract adjustment), so their cost belongs in the base.
 - $t_{\mathrm{first\ opening}}$ is the position's first acquisition at that broker: a transfer opens it on its arrival there, a split never does. It is the first one ever, not the last lot's, so days at zero between two closes inside the period stay in the window.
 - The numerator is the row's whole $\mathrm{PnL}_{period}$: for a position held at $t_{\mathrm{from}}$, its $\Delta\mathrm{UGL}$ gives back the unrealized gain/loss it started with.
 - The displayed period percentage keeps $|\mathrm{StartValue}|$ as base: only the annualized value changes base and window.
 
-When this gives no value — no cost sold (the position left through a transfer or an outgoing ADJUSTMENT without a cost basis, or its disposals are out of Realized), fewer than 30 days held, a return of $-100\%$ or worse — the row keeps the rule above: $|\mathrm{StartValue}|$ over $t_{\mathrm{from}} \to t_{\mathrm{end}}$, and no value for a position opened in the period.
+When this gives no value, the row keeps the rule above. That happens when units left the position in any other way — a transfer outside the scope, or still in transit at $t_{\mathrm{end}}$, a transfer or a disposal whose value or cost is unknown, an outgoing ADJUSTMENT without a cost basis — since the row's result would then hold more than its base covers; and with fewer than 30 days held, or a return of $-100\%$ or worse. The rule above is: $|\mathrm{StartValue}|$ over $t_{\mathrm{from}} \to t_{\mathrm{end}}$, and no value for a position opened in the period.
 
 ??? example "Example: a position sold 90 days into a one-year period"
 
@@ -143,6 +144,20 @@ When this gives no value — no cost sold (the position left through a transfer 
     $$
 
     The unrealized +100 it started with comes back out of $\Delta\mathrm{UGL}$, Realized adds +250. The period percentage stays $150 / 1{,}100 = 13.64\%$; annualized over the whole year on the start value, as an open position would be, the same +150 would read 13.64% as well.
+
+??? example "Example: half sold, half moved to another broker"
+
+    At $t_{\mathrm{from}}$ the position holds 10 units, worth 1,100 for a cost of 1,000. Five are sold for 625; five move to another broker of the scope and are worth 600 when they arrive:
+
+    $$
+    \mathrm{PnL}_{period} = \underbrace{(0 - 100)}_{\Delta\mathrm{UGL}} + \underbrace{(625 - 500)}_{\text{Realized}} + \underbrace{(600 - 500)}_{\text{tract}} = +125
+    $$
+
+    $$
+    \mathrm{CostOut} = 500 + 500 = 1{,}000, \qquad \frac{125}{1{,}000} = 12.5\%
+    $$
+
+    The cost of the sold units alone would read $125 / 500 = 25\%$: the moved units' result in the numerator, without their cost in the base (MF-A5).
 
 ## 🧬 FIFO Lots
 
