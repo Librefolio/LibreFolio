@@ -3284,6 +3284,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     «Limits» in `connection_checks`, e una riga in `configuration` che punta a `connection_checks.md#client-address`.
     **Ordine**: `configuration` va tradotta insieme a `connection_checks` o dopo, che deve tenere
     `{: #client-address }`; altrimenti la build rigorosa di quella lingua non trova l'ancora.
+  - 17/10, H-36: un blocco nuovo in fondo a `#client-address` di `connection_checks` (un paragrafo, quattro punti, un
+    paragrafo) e due frasi nel §2 di `docker_advanced`, che rimandano a `connection_checks.md#client-address`.
+    **Ordine**: `docker_advanced` va tradotta insieme a `connection_checks` o dopo, per la stessa ancora.
 
   Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
 - ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
@@ -3645,6 +3648,52 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     potrebbe poi elencarli.
 
   Dettagli: piano H, §14, lotto «H-32».
+- **H-35 · Dopo A8a: la docstring di `log_configuration_audit()` e la pulizia di `test_config_audit.py`** — minimo; H
+  (review di A8a), via coordinatore, 17/10.
+  - La docstring non nomina il `ValueError` di `LIBREFOLIO_LOGIN_LIMIT` né l'`AdminBootstrapConfigError` di F02.
+  - `test_config_audit.py`: togliere i 9 segni «updated in A8a (accounts check, H reviews)» e l'impalcatura «red until
+    A8a» (`_accounts_checks()` con `importlib`). `ACCOUNTS_CONFIG_CHECKS` e `check_login_limit` vanno importati in cima,
+    e l'id di A va in `CHECK_IDS`.
+  - In più, dal test-author di H-36: `_configure` deve svuotare le note di `client_address._untrusted_forwarding`. Così
+    una nota lasciata da un altro file nello stesso processo non rompe i test che vogliono ogni controllo `ok`.
+  - Si fa dopo l'ingresso di A8a e l'avanzamento del ramo di H.
+
+  Dettagli: piano H, §14, «Review di A8a» e lotto «H-36».
+- **H-36 · Dietro un proxy che uvicorn non considera fidato, i limiti per indirizzo contano tutti i visitatori
+  insieme** — medio, sicurezza; E (R13-SEC6), via coordinatore, 17/10. Decisione notturna N70.
+  - L'immagine Docker avvia uvicorn con i suoi default, che seguono `X-Forwarded-For` solo da `127.0.0.1`. Un proxy
+    davanti al container si collega dalla rete Docker (per esempio `172.18.0.2`), e ogni visitatore prende il suo
+    indirizzo. Il limite per indirizzo di A8a (50 tentativi) bloccherebbe allora l'accesso di tutti.
+  - Cura fatta il 17/10 (lotto «H-36», piano H §14):
+    - in `client_address.py`, `forwarded_by_untrusted_proxy(request)`: vero per un header di inoltro (`X-Forwarded-For`,
+      `Forwarded`, `X-Real-IP`) da un peer locale secondo `classify_ip`, quando né `LIBREFOLIO_CLIENT_IP_HEADER` né
+      uvicorn hanno sostituito l'indirizzo;
+    - `rate_limit_address(request)`: `None` in quel caso, cioè nessun conteggio per indirizzo, altrimenti
+      `client_address`;
+    - le note tengono solo i nomi degli header (N58); la prima di ogni classe va nel log, una volta per processo;
+    - il controllo `platform.client_address`, con le tre chiavi `instance.checks.clientAddress.*`.
+  - Restano ad A e a E: passare i punti di chiamata a `rate_limit_address` (A in A8a, E in E-13) e aggiornare le loro
+    frasi nei documenti, in «Callers.» di `security.md`, `connection_checks`, `configuration` ed `email`.
+
+  Dettagli: piano H, §14, lotto «H-36».
+- **H-37 · Se manca una voce del profilo `managed`, `profile_default` dà il fallback del codice, cioè nessun limite** —
+  basso, sicurezza; E (R13-SEC7), via coordinatore, 17/10.
+  - `profile_default` (`config/__init__.py`, ~584) usa il fallback del codice quando il profilo `managed` non elenca la
+    variabile, e per un limite il fallback 0 vuol dire «nessun limite».
+  - Deve fallire chiuso: rifiutare l'avvio, oppure un default sicuro dichiarato per ogni campo. Oggi il profilo
+    `managed` ha una sola voce, `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`: 500.
+  - Prima i rossi; E rivede. Si fa dopo H-36.
+- **H-38 · Tailscale Serve davanti al container, e Docker Desktop: cosa mettere in `FORWARDED_ALLOW_IPS`** — basso,
+  documentazione; H (dal docs-writer di H-36), 17/10.
+  - Tailscale Serve sull'host inoltra a `127.0.0.1:6040`. Con Docker su Linux il container vede probabilmente il gateway
+    della rete Docker (il proxy di Docker), quindi H-36 avvisa se Serve manda un header di inoltro; se non ne manda,
+    nessuno può accorgersene.
+  - Elencare il gateway sembra sicuro su Linux, dove gli altri visitatori arrivano col loro indirizzo. Non lo è con
+    Docker Desktop, dove tutti arrivano dal gateway.
+  - Da provare su un Docker vero (il demone oggi è spento, come per CP7a), poi una frase in `service_exposure` e in
+    `docker_advanced`.
+
+  Dettagli: piano H, §14, lotto «H-36».
 
 ## A · Account e accessi (fase 01)
 
