@@ -7294,6 +7294,57 @@ sulla base `23f6578f3`.
   ✅ **Fatto il 17/10** (checkpoint delle 14:56).
   - `outcome._report`: un errore la prima volta per cartella dati e processo, poi `debug` finché dura lo stesso errore.
   - `_forget` lo dimentica quando il file viene scritto, tolto, trovato mancante o letto.
+- ✅ **B-43 · Una funzione che il lettore non ha, nello schema dell'archivio, ferma la verifica con un errore grezzo** —
+  basso; H, 17/10 (H-51, revisione; misurato da B su SQLite 3.54.0).
+  - B-28 rifiuta trigger, viste e tabelle virtuali per tipo, ma non legge le espressioni. Un'espressione di un indice o
+    una colonna generata che chiama una funzione sconosciuta fanno fallire `integrity_check` anche in sola lettura: la
+    verifica si ferma in `describe_database()`.
+  - Un `CHECK` così passa invece la descrizione, perché in sola lettura SQLite salta i vincoli `CHECK`. Fallisce al primo
+    `integrity_check` in lettura e scrittura, quello delle correzioni post-migrazione.
+  - In tutti e due i casi esce un `sqlite3.OperationalError` grezzo: la verifica dell'app dice `stage_failed`, e
+    `dev.py backup restore` finisce con un traceback.
+  - Cura: in `_stage`, ogni errore `sqlite3` (non un `ProgrammingError`) mentre si legge o si controlla il database della
+    copia diventa `database_damaged`. Nel log vanno solo la classe e il nome dell'errore di SQLite, mai la funzione, che
+    è testo dell'archivio. Rossi prima.
+  - **Parte 1, dentro B-43** (coordinatore, 16:25; trovata da DW-B43, misurata da B): da H-51 le connessioni del server
+    registrano `regexp` e `floor` di SQLAlchemy e rileggono lo schema con `trusted_schema` spento. Uno schema che li
+    chiama in un indice o in una colonna generata passa tutta la verifica, poi ogni connessione del server fallisce
+    («unsafe use of …»), e il primo avvio dopo il ripristino cade. Cura: `_refuse_foreign_objects()` legge lo schema con
+    i due nomi registrati come segnaposto, mai eseguiti.
+  Dettagli: piano 07, «B-43 + B-44».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 16:45).
+  - Ogni errore `sqlite3` della fase del database diventa `database_damaged`, con un solo avviso (classe e
+    `sqlite_errorname`).
+  - Lo schema si legge con i segnaposto di `regexp` e `floor`.
+  - Il resto in B-45 (CHECK e DEFAULT) e B-46 (stderr dell'upgrade).
+- ✅ **B-44 · I testi su `trusted_schema` dell'upgrade dopo H-51** — minimo, testo; H, 17/10 (H-51).
+  - La docstring di `_schema_untrusted` in `env.py` dice «before anything else». Il listener di classe di
+    `db/session.py`, che i suoi import caricano, gira però prima, e il dialetto registra `regexp` e `floor` dopo di lui.
+  - Da H-51 il listener di classe spegne `trusted_schema` per primo e chiude con `writable_schema=RESET`.
+  - Da allineare a `security.md#trusted-schema-server`: la docstring e il punto «`trusted_schema` off on every connection
+    to the copy». Nello stesso checkpoint di B-43 (coordinatore).
+  Dettagli: piano 07, «B-43 + B-44».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 16:45): la docstring di `_schema_untrusted` e il punto di `security.md`
+  dicono l'ordine vero (listener di classe, dialetto, `_schema_untrusted`).
+- **B-45 · Un `CHECK` o un `DEFAULT` dell'archivio che chiama `regexp` o `floor` passa la verifica, poi rompe le
+  scritture su quella tabella** — basso, dopo la 1.3; B, 17/10 (parte 2 della scoperta di DW-B43; H e il developer
+  decidono).
+  - SQLite risolve le funzioni di un `CHECK` o di un `DEFAULT` solo quando servono. Così la lettura dello schema con i
+    segnaposto di B-43 non li vede. Su SQLite 3.54 `floor()` esiste anche senza SQLAlchemy, quindi un `CHECK` su `floor`
+    passa anche il controllo d'integrità in lettura e scrittura.
+  - Dopo il ripristino, da H-51, le scritture che li usano falliscono («unsafe use of …»): niente codice dell'archivio
+    viene eseguito, ma quella tabella resta in parte inutilizzabile.
+  - Cura possibile, più grande: confrontare l'SQL di ogni tabella e indice con lo schema di LibreFolio alla sua
+    revisione (un elenco di ciò che è ammesso, invece del solo tipo di oggetto di B-28).
+  Dettagli: piano 07, «B-43 + B-44».
+- **B-46 · Il log dell'upgrade di una verifica contiene testo dell'archivio** — basso, dopo la 1.3; B, 17/10 (DW-B43).
+  - `_upgrade()` registra `stderr=result.stderr[-4000:]` di Alembic. Il traceback porta il messaggio di SQLite, con nomi
+    di oggetti e di funzioni dell'archivio. B-28 e B-43 tengono invece fuori dal log ogni testo dell'archivio.
+  - È precedente a B-43. Da decidere: tenerlo, perché serve a capire un upgrade fallito di un archivio vero, o ridurlo
+    alla classe dell'ultima eccezione.
+  Dettagli: piano 07, «B-43 + B-44».
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
