@@ -5321,14 +5321,12 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   livello, importato da `zodios-client.ts` dal 15/10 (`cb34327e9`), sulla riga dopo `priceRefresh`: disaccoppiare
   il solo `instanceNotices` non basta a togliere il plugin, serve anche H. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Wiki-file di Z-3 e Z-20/Z-21».
-- **Z-21 · N58: altre quattro funzioni di Z usate solo dai test** — basso; Z, 16/10 (lotto A, `lint --dead-code`).
-  Vulture le mette fra le «Referenced only by tests»: `cooldown_snapshot()` (`services/platform/provider_cooldown.py`,
-  Z7a), la proprietà `ShutdownWatchdog.armed_at` e `current_shutdown_watchdog()`
-  (`services/platform/shutdown_budget.py`, Z6b), `ActivityTracker.is_busy` (`services/platform/sleep_wake/activity.py`,
-  Z2a). Cura: per ognuna, o un lettore di prodotto (per esempio il pannello dello scheduler per `cooldown_snapshot`),
-  o via, coi test riscritti sul comportamento. Da decidere col coordinatore; fuori dal lotto A per tenerlo corto.
-  Nata come Z-20, rinominata il 16/10 (il numero era già di J-26).
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A».
+- ✅ **Z-21 · N58: altre quattro funzioni di Z usate solo dai test** — basso; Z, 16/10 (lotto A, `lint --dead-code`).
+  **Chiusa il 17/10 col lotto Z-21** (il commit è del coordinatore): tolte `cooldown_snapshot()`, la proprietà
+  `ShutdownWatchdog.armed_at`, `current_shutdown_watchdog()` e `Activity.is_busy()`, con le due menzioni del runner. I
+  test leggono l'istanza in uso, il `deadline`, `shutdown_budget._watchdog` e `busy_reasons()`; nessun caso tolto.
+  `lint --dead-code` non le segnala più. Nata come Z-20, rinominata il 16/10 (il numero era già di J-26). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-21».
 
 ## B · Backup e Docker (fase 01)
 
