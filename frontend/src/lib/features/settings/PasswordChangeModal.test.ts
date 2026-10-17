@@ -107,6 +107,8 @@ vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
 
 import PasswordChangeModal from './PasswordChangeModal.svelte';
 import {zodiosApi} from '$lib/api';
+// The real toast store, the one `trySave` raises its toasts in: the limit's block (A8b) reads it to prove none was raised.
+import {toasts} from '$lib/stores/app/toastStore.svelte';
 
 const changePassword = vi.mocked(zodiosApi.change_password_api_v1_auth_change_password_post);
 
@@ -779,5 +781,102 @@ describe("PasswordChangeModal — the markup Chrome's password manager reads", (
         const ids = Array.from(container.querySelectorAll('[id]'), (el) => el.id).filter((id) => id !== '');
 
         expect([...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))]).toEqual([]);
+    });
+});
+
+/**
+ * Accounts lot A8b (release 1.3, workstream A, contract C11) — the server's limit on failed passwords.
+ *
+ * Since A8a the server counts a wrong current password typed here as a failed sign-in (F15): past 10 for the account,
+ * or 50 from the address, in 15 minutes, `POST /auth/change-password` refuses with a 429
+ * `{detail: {error_code: "TOO_MANY_ATTEMPTS", message}}` and a `Retry-After`, before it reads any password — the right
+ * one included. The dialog has no word for it: `onError` maps `PASSWORD_TOO_WEAK` and two sentences, so the refusal
+ * falls through to `trySave`'s extractor and the user reads the server's English `message`.
+ *
+ * The contract, the dialog's half:
+ *   - status 429 **and** `detail.error_code` `TOO_MANY_ATTEMPTS` → the error banner shows
+ *     `$_('settings.tooManyPasswordAttempts')`, and nothing of the server's `message`;
+ *   - the three fields keep what was typed (the user may try again later); no success state; no toast (the dialog
+ *     passes `toast: false` already);
+ *   - a 429 with another `error_code`, or none, keeps today's fallback: never the new key.
+ * Where the contract leaves room, its «and» is read both ways: the code on a status that is not 429 keeps today's
+ * fallback as well.
+ *
+ * Red until A8b: the wording. Guards, green today and to stay so: the form after the refusal, and the refusals that are
+ * not the limit's — their fallback asserted on the raw words each fixture carries (a server's or axios's, never a
+ * catalogue entry), as the block «errors reported by the server» does. The `Retry-After` is in the fixture because the
+ * server sends it; the contract asks nothing of it. «Usable» after the refusal is today's state after any refusal: the
+ * contract adds no wait before Save comes back.
+ */
+describe("PasswordChangeModal — the server's limit on failed passwords (A8b, C11)", () => {
+    /** The key the contract adds for the limit's refusal. */
+    const LIMIT_KEY = 'settings.tooManyPasswordAttempts';
+    /** The server's own sentence for it (`_refuse_too_many_failures`, `backend/app/api/v1/auth.py`): never on screen. */
+    const LIMIT_MESSAGE = 'Too many failed attempts: try again later';
+
+    /** A rejection as axios raises it once the server has answered: its status, its headers, its body. */
+    function answered(status: number, body: unknown, headers: Record<string, string> = {}): Error {
+        return Object.assign(new Error(`Request failed with status code ${status}`), {isAxiosError: true, response: {status, headers, data: body}});
+    }
+
+    /** The limit's refusal, as A8a sends it. */
+    const limitRefusal = () => answered(429, {detail: {error_code: 'TOO_MANY_ATTEMPTS', message: LIMIT_MESSAGE}}, {'retry-after': '900'});
+
+    /** Types a valid change, saves it against `failure`, and waits for the refusal on screen with the request over. */
+    async function submitRefused(failure: Error): Promise<Mounted> {
+        changePassword.mockRejectedValue(failure);
+        const mounted = mount();
+        await fillValid();
+
+        await fireEvent.click(saveButton());
+
+        // Both: an `onError` that words the refusal sets the banner while the request is still in flight.
+        await waitFor(() => {
+            expect(banner()).not.toBeNull();
+            expect(saveButton()).not.toHaveTextContent('common.loading');
+        });
+        expect(changePassword).toHaveBeenCalledTimes(1);
+        return mounted;
+    }
+
+    /** What the banner says, and nothing else. */
+    const shown = () => banner()!.textContent?.trim() ?? '';
+
+    // red until A8b (C11)
+    it("words the limit's 429 as settings.tooManyPasswordAttempts, never as the server's sentence", async () => {
+        await submitRefused(limitRefusal());
+
+        expect(shown(), 'the key of the limit, alone').toBe(LIMIT_KEY);
+        expect(shown(), "nothing of the server's English").not.toContain(LIMIT_MESSAGE);
+    });
+
+    // guard
+    it('keeps the three fields as typed and usable after it, with no success state and no toast', async () => {
+        toasts.clear();
+        const {close, success} = await submitRefused(limitRefusal());
+
+        expect(screen.getByTestId('password-current')).toHaveValue(OLD_PASSWORD);
+        expect(screen.getByTestId('password-new')).toHaveValue(GOOD_PASSWORD);
+        expect(screen.getByTestId('password-confirm')).toHaveValue(GOOD_PASSWORD);
+        for (const testId of ['password-current', 'password-new', 'password-confirm']) expect(screen.getByTestId(testId), `${testId}: usable`).toBeEnabled();
+        // No success state: neither its confirmation, nor the Save it locks, nor the two events it ends with.
+        expect(screen.queryByText('settings.passwordChanged')).toBeNull();
+        expect(saveButton()).toBeEnabled();
+        expect(success).not.toHaveBeenCalled();
+        expect(close).not.toHaveBeenCalled();
+        expect(toasts.items, 'the refusal is told inline only').toEqual([]);
+    });
+
+    // guard
+    it.each([
+        ['a 429 with another error_code', () => answered(429, {detail: {error_code: 'RATE_LIMITED', message: 'Slow down: rate limited'}}), 'Slow down: rate limited'],
+        ['a 429 whose detail is a sentence', () => answered(429, {detail: 'Too many requests'}), 'Too many requests'],
+        ['a 429 from a proxy, its own page for a body', () => answered(429, '<html><body><h1>429 Too Many Requests</h1></body></html>'), 'Request failed with status code 429'],
+        ['the code TOO_MANY_ATTEMPTS on a 400', () => answered(400, {detail: {error_code: 'TOO_MANY_ATTEMPTS', message: LIMIT_MESSAGE}}), LIMIT_MESSAGE],
+    ])("%s keeps today's fallback: never the new key", async (_label, failure, fallback) => {
+        await submitRefused(failure());
+
+        expect(shown()).not.toContain(LIMIT_KEY);
+        expect(shown()).toBe(fallback);
     });
 });

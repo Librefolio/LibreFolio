@@ -54,7 +54,7 @@ frontend/
 │       │   ├── onboarding/      # Welcome setup, intro tour and contextual guides
 │       │   ├── plugin-settings/ # Plugins tab, Configure dialog and form for plugin-declared settings
 │       │   ├── risk/            # Risk panels, levels, stores and request logic
-│       │   ├── settings/        # Settings tabs (Profile, Preferences, Global, About)
+│       │   ├── settings/        # Settings tab registry and tabs (Profile, Preferences, Global Settings, About, Users, Security)
 │       │   ├── support/         # Donation popup, social share and support links
 │       │   ├── tools/           # Tools hub, tool host and registry, PAC allocator tool
 │       │   └── update-check/    # New-release check and its modals (update available, ask an admin)

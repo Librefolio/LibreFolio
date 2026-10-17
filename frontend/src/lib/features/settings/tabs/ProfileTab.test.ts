@@ -1500,3 +1500,97 @@ describe('ProfileTab — a change of capitals only (P18)', () => {
         });
     });
 });
+
+// =========================================================================
+/**
+ * Lot A8b (release 1.3, workstream A, contract C11) — the server's limit on failed passwords, met by an e-mail change.
+ *
+ * Why. Since A8a, `PUT /auth/profile` checks the `current_password` of a change of address under the sign-in's limit
+ * (F15): past 10 wrong passwords in 15 minutes for the account, or 50 from the address, it refuses with a 429
+ * `{detail: {error_code: "TOO_MANY_ATTEMPTS", message}}` and a `Retry-After`, before it reads the password — the right
+ * one included. `describeRefusal` knows two codes, so this one reads as a failed update (`settings.updateFailed`) with
+ * no code published, and the tab puts the old address back: the user loses what they typed and is not told to wait.
+ *
+ * The contract, the tab's half: that 429 → `describeRefusal` yields
+ * `{code: 'TOO_MANY_ATTEMPTS', text: $_('settings.tooManyPasswordAttempts')}`, shown the way the A6e block shows
+ * `CURRENT_PASSWORD_INVALID` — the code on `profile-error` as `data-error-code`, the words inside it — and the new
+ * address and the typed password stay as they were. Unlike a wrong password, which the A6e block sees emptied: this one
+ * was never read.
+ *
+ * Red until A8b: the limit's refusal, through the row's Save and through save all. Guard, green today and to stay so:
+ * a 429 that is not the limit's — another code, a sentence, a proxy's page — is today's refusal: its words, no code,
+ * the address put back, never the new key.
+ *
+ * Not pinned: whether the tab reads the status beside the code (`describeRefusal` keys its refusals on the code alone);
+ * the `Retry-After`, in the fixture because the server sends it; the Saves after the refusal; the five seconds the
+ * banner lives, as for every refusal.
+ */
+describe("ProfileTab — the server's limit on failed passwords, met by an e-mail change (A8b, C11)", () => {
+    /** The key the contract adds for the limit's refusal. */
+    const LIMIT_KEY = 'settings.tooManyPasswordAttempts';
+    /** The server's own sentence for it (`_refuse_too_many_failures`, `backend/app/api/v1/auth.py`): never on screen. */
+    const LIMIT_MESSAGE = 'Too many failed attempts: try again later';
+
+    /** A rejection as axios raises it once the server has answered: its status, its headers, its body. */
+    function answered(status: number, body: unknown, headers: Record<string, string> = {}): Error {
+        return Object.assign(new Error(`Request failed with status code ${status}`), {isAxiosError: true, response: {status, headers, data: body}});
+    }
+
+    /** The limit's refusal, as A8a sends it. */
+    const limitRefusal = () => answered(429, {detail: {error_code: 'TOO_MANY_ATTEMPTS', message: LIMIT_MESSAGE}}, {'retry-after': '900'});
+
+    /** The two controls that save an e-mail change alone: the row's Save (its first variant, see `fieldButtons`) and save all. */
+    const EMAIL_SAVES = [
+        {via: "the e-mail row's Save", save: () => fieldButtons('profile-email', 'save')[0]},
+        {via: 'save all', save: () => screen.getByTestId('profile-save-all')},
+    ];
+
+    /** A change of address with its password, saved through `save` against `failure`: waits for the refusal on screen and the save over. */
+    async function emailChangeRefused(failure: Error, save: () => HTMLElement): Promise<void> {
+        profilePut().mockRejectedValue(failure);
+        await mountUnlocked();
+        await type(email(), 'new@example.com');
+        await typeEmailPassword(CURRENT_PASSWORD);
+
+        await fireEvent.click(save());
+
+        await waitFor(() => {
+            expect(error()).not.toBeNull();
+            expect(screen.getByTestId('profile-tab')).toHaveAttribute('data-busy', 'false');
+        });
+        // The request that met the refusal: the change of address, with its password.
+        expect(profilePut()).toHaveBeenCalledTimes(1);
+        expect(profilePut()).toHaveBeenCalledWith({email: 'new@example.com', current_password: CURRENT_PASSWORD});
+    }
+
+    // red until A8b (C11)
+    it.each(EMAIL_SAVES)('TOO_MANY_ATTEMPTS through $via: the key and its code on the banner, the new e-mail and the typed password as they were', async ({save}) => {
+        await emailChangeRefused(limitRefusal(), save);
+
+        expect(error()).toHaveAttribute('data-error-code', 'TOO_MANY_ATTEMPTS');
+        expect(error()).toHaveTextContent(LIMIT_KEY);
+        expect(error(), "nothing of the server's English").not.toHaveTextContent(LIMIT_MESSAGE);
+        // Nothing to type again: the address stays, and the field with the password in it.
+        expect(email()).toHaveValue('new@example.com');
+        expect(emailPassword(), 'the current-password field stays').not.toBeNull();
+        expect(emailPassword()).toHaveValue(CURRENT_PASSWORD);
+    });
+
+    /** 429s that are not the limit's, with the words today's refusal shows for each. */
+    const NOT_THE_LIMIT = [
+        {what: 'a 429 with another code', failure: () => answered(429, {detail: {error_code: 'RATE_LIMITED', message: 'Slow down: rate limited'}}), words: 'settings.updateFailed'},
+        {what: 'a 429 whose detail is a sentence', failure: () => answered(429, {detail: 'Too many requests'}), words: 'Too many requests'},
+        {what: 'a 429 from a proxy, its own page for a body', failure: () => answered(429, '<html><body><h1>429 Too Many Requests</h1></body></html>'), words: 'Request failed with status code 429'},
+    ];
+
+    // guard
+    it.each(NOT_THE_LIMIT.flatMap((refusal) => EMAIL_SAVES.map((via) => ({...refusal, ...via}))))("$what, through $via, is today's refusal: its words, no code, the e-mail put back — never the new key", async ({failure, words, save}) => {
+        await emailChangeRefused(failure(), save);
+
+        expect(error()).toHaveTextContent(words);
+        expect(error()).not.toHaveTextContent(LIMIT_KEY);
+        expect(error()!.getAttribute('data-error-code') ?? '', 'no code published').toBe('');
+        expect(email()).toHaveValue('alice@example.com');
+        expect(emailPassword()).toBeNull();
+    });
+});

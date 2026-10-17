@@ -11,7 +11,7 @@ These Playwright tests cover fundamental UI components that are used across the 
 | **Authentication** | Login, registration, logout, session persistence |
 | **Account links** | The invitation and password-reset pages, `/invite` and `/reset-password` (`auth-links`) |
 | **Settings** | Profile editing, preferences tabs, password change |
-| **Users tab** | Settings → Users, for administrators: account actions, invitation and password-reset links with their address check, deletion after its preview (`admin-users`) |
+| **Users tab** | Settings → Administration → Users, for administrators: account actions, invitation and password-reset links with their address check, deletion after its preview (`admin-users`) |
 | **Plugins tab** | Settings → Plugins and **Configure**, as a member and as an administrator: the two personal search preferences, `mockprov`'s settings through an asset's edit dialog, the search's «to configure» row and the 👑 legend (`plugin-settings`) |
 | **Files** | File upload, file list, drag & drop, file deletion |
 | **Select Components** | `SearchSelect`, `SimpleSelect`, currency pickers |
@@ -19,7 +19,7 @@ These Playwright tests cover fundamental UI components that are used across the 
 
 ### 👥 Users Tab (`admin-users`) {: #admin-users }
 
-`settings/admin-users.spec.ts` drives the **Users** tab of Settings on the lane's real backend.
+`settings/admin-users.spec.ts` drives the **Users** tab of Settings › Administration on the lane's real backend.
 `e2e_test_admin` acts through the page, and only on what the test itself created: accounts it
 registers and invitation addresses of its own. After each test, red or green, every invitation
 still pending with one of those addresses is revoked, and every account still there deletes

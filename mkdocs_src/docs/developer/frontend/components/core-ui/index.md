@@ -61,7 +61,7 @@ toolbar's `filters` snippet.
 | **[Modals](modals.md)** | ModalBase, ConfirmModal, SyncModalBase, PageSyncModal | Foundation for all modal dialogs, confirmations and provider syncs |
 | **[Feedback](feedback.md)** | ToastContainer, InfoBanner, DataQualityBanner, LoadingSpinner, Tooltip | Notifications and user feedback |
 | **[Pickers](datePickers.md)** | CalendarMonth, SingleDatePicker, DateRangePicker | Date selection components |
-| **[Toolbar & Responsive Layout](toolbar.md)** | PageToolbar, TabBar, `responsiveLayout.svelte.ts` | Container-width-driven responsive page toolbar shell |
+| **[Toolbar & Responsive Layout](toolbar.md)** | PageToolbar, TabBar, `responsiveLayout.svelte.ts` | Container-width-driven responsive page toolbar shell; the scrollable `TabBar` and its edge fade |
 | **[Atoms](atoms.md)** | ThemeToggle, PrivacyToggle, DocsLink, AnimatedBackground, OrderableList, PasswordInput, PasswordStrength, ExactDecimalInput, ExactQuantityInput, CompactDurationBadge, display blocks (KpiMetricBar, KpiDivergingFlowBar, RiskMetricCard, RiskCardGrid, CurrencyAmount, …) | Small standalone UI primitives, inputs and display blocks |
 | **[Datapoint Editor](data-editor.md)** | DataEditor, CsvEditor, DataImportModal | Inline editing and CSV import for financial datapoints |
 | **[DataTable](data-table.md)** | DataTable, DataTablePagination, ColumnVisibilityToggle | Sortable, filterable, paginated data grid |

@@ -5,13 +5,38 @@ every signed-in user can read them, only administrators can change them.
 
 ---
 
+## 🗂️ Settings › Administration {: #administration }
+
+**Global Settings** is the first tab of **Administration**, the group of tabs that look after the
+instance, at the right end of the **Settings** tab bar on a wide screen. Click **Administration**: it
+opens **Global Settings** and, for an administrator, a second row of tabs under the first one, with
+the tabs of the group.
+
+| Tab | Who has it | What it is for |
+|---|---|---|
+| ⚙️ **Global Settings** | Everyone, read-only unless you are an administrator | The settings of this page |
+| 👥 **Users** | Administrators | The accounts, invitations and password-reset links: [Users & Invitations](users.md) |
+| 💾 **Backup** | Administrators | The whole instance in one archive, and its restore: [Backup, Restore & Moving](backup_restore.md) |
+| ✉️ **Email** | Administrators | Whether LibreFolio can send emails, and a test email: [Email](email.md) |
+| 🛡️ **Security** | Administrators | How the instance is configured, and what needs your attention: [Security](#security-tab), below |
+
+- 👤 A user who is not an administrator has **Global Settings** alone in the group: **Administration**
+  opens it straight away, without a second row.
+- 🔁 Clicking **Administration** while one of its tabs is open keeps that tab open.
+- 🔢 A number on **Security**, repeated on **Administration**, counts the errors and warnings of the
+  [security checks](#security-tab).
+- 📱 On a phone, the tabs show their icons only, and the title of the page names the open tab.
+
+---
+
 ## ✏️ Change a Setting
 
 ### 🔓 1. Unlock the tab
 
-Open **Settings** (gear icon in the sidebar), then the **Admin** tab: its **Global Settings**
-panel groups the settings by category. Click the **lock icon** (🔒) in the header to unlock it.
-Only administrators (superusers) have the lock; everyone else gets a read-only view.
+Open **Settings** (gear icon in the sidebar), then **Administration**, which opens on
+**Global Settings**: its panel groups the settings by category. Click the **lock icon** (🔒) in the
+header to unlock it. Only administrators (superusers) have the lock; everyone else gets a read-only
+view.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="settings" data-name="global-settings" alt="Global Settings" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -121,9 +146,9 @@ local network gets a warning above the pages of the app:
 *Registration is open and this instance is reachable from outside your local network: anyone who
 finds it can create an account.*
 
-Its link, **Change who can sign up**, opens **Settings › Admin**, where this setting is. When
-`LIBREFOLIO_REGISTRATION` sets the mode on the server, the warning names that variable instead, and
-has no link: only the server's configuration can change the mode
+Its link, **Change who can sign up**, opens **Settings › Administration › Global Settings**, where
+this setting is. When `LIBREFOLIO_REGISTRATION` sets the mode on the server, the warning names that
+variable instead, and has no link: only the server's configuration can change the mode
 ([Accounts and Sign-ups](configuration.md#accounts)).
 
 - 👑 Only administrators see it.
@@ -143,6 +168,8 @@ has no link: only the server's configuration can change the mode
 - ✖️ Its close button hides it until the page is loaded again.
 - 🔄 It goes away as soon as the mode is no longer **Open**: saving **Registration** here updates it
   at once.
+- 🛡️ The [Security](#security-tab) tab lists the same warning among its findings, as long as it
+  holds, even after you close it above the pages.
 
 How it decides, for developers:
 [The Open-Registration Warning](../developer/architecture/security.md#open-registration-warning).
@@ -244,11 +271,70 @@ empties every cache too.
 
 ---
 
+## 🛡️ Security {: #security-tab }
+
+**Settings › Administration › Security** checks how this instance is configured, and lists first
+what needs your attention. Only administrators have this tab. It is not the 🛡️ **Security** category
+of Global Settings, which holds **Registration** and **Require Email Verification**.
+
+### 🚦 What It Lists {: #security-findings }
+
+Each finding says what is wrong, with its icon and its colour: ❌ an **error**, ⚠️ a **warning** or
+ℹ️ an **information**. Errors come first, then warnings, then information; within each severity, the
+findings keep the order of this table.
+
+| Check | A finding when | Its link |
+|---|---|---|
+| Session signing key | ℹ️ No key is set: every restart signs every user out. ⚠️ The key is shorter than 32 characters. ❌ Its `JWT_SECRET_FILE` cannot be read | — |
+| Secrets set twice | ⚠️ A secret is set both directly and through its `_FILE` variable: the direct value wins | — |
+| Instance key | ❌ It cannot be used. ⚠️ Its folder or its file is open to other users | — |
+| Session cookie | ⚠️ `SESSION_COOKIE_SECURE=never`: the cookie also travels over plain HTTP | — |
+| Log level | ℹ️ `DEBUG` or `TRACE` | — |
+| Failed sign-ins | ⚠️ The limit is off: `LIBREFOLIO_LOGIN_LIMIT=off` | — |
+| Email server | ❌ A `LIBREFOLIO_SMTP_*` value cannot be used: email stays off until it is fixed | **Open the Email tab** |
+| Email encryption | ⚠️ Emails, their links and the SMTP password travel unencrypted to a server outside your local network | **Open the Email tab** |
+| Links in emails | ℹ️ Email works, but `LIBREFOLIO_PUBLIC_URL` is not set. ⚠️ `LIBREFOLIO_PUBLIC_URL` cannot start a link | **Open the Email tab** |
+| Plugin secrets | ❌ Instance-wide plugin secrets cannot be read with the instance key | **Open the plugin settings**, to **Settings › Plugins** |
+| Open registration, checked by your browser | ⚠️ **Registration** is **Open**, and you reached LibreFolio at an address outside your local network, as for [the warning above the pages](#open-registration-warning) | **Change who can sign up**, to **Global Settings**. None when `LIBREFOLIO_REGISTRATION` sets the mode: the finding names that variable instead |
+
+The findings without a link are fixed on the server, in its configuration, and need a restart: what
+to do for each one is in the table of «Startup Checks» in [Configuration](configuration.md), where
+the server's log words the same checks.
+
+### 🔢 The Number on the Tab {: #security-badge }
+
+**Security** shows how many errors and warnings it lists, and **Administration** shows the same
+number, so you see it from every tab of Settings. Information is listed but never counted: with
+information only, there is no number, and the tab does not say *Nothing needs your attention.*
+either.
+
+### 🔄 When It Checks {: #security-refresh }
+
+LibreFolio reads the checks the first time you open **Settings** after the app loads in your
+browser, before you open the tab, so that its number is already there. It keeps them while you use
+the app: after you change the server's configuration and restart it, click **Check again**, at the
+top of the tab, or reload the page. The open-registration finding follows **Registration** at once:
+saving it in Global Settings updates the list and the number.
+
+- ⏳ Until the first answer, the tab shows placeholder rows.
+- ⚠️ When the checks cannot be read, the tab says *The security checks could not be loaded.*, with
+  **Try again**. After a **Check again** that fails, the last results stay listed under it.
+
+### ✅ Passed Checks {: #security-passed }
+
+With no finding, the tab says *Nothing needs your attention.* Below the findings, a folded section,
+**N checks passed**, lists the checks that passed, each with its own sentence (such as *Sessions are
+signed with a key set by the administrator.*): click it to unfold it. Email that is off, or sent
+unencrypted to a server of your own network, counts as passed, and says so there.
+
+---
+
 ## 🔗 Related
 
 - 📝 **[Environment Variables](configuration.md)** — The settings that live in `.env` instead
 - 👥 **[Users & Invitations](users.md)** — The accounts of the instance, invitations and password-reset links
 - 👤 **[User Preferences](../user/settings/preferences.md)** — What each user can change for themselves
 - 🧑‍💻 For developers: **[Settings System](../developer/architecture/settings.md)**,
-  **[Cache Registry](../developer/architecture/settings_cache.md)** and
-  **[Market Data Scheduler](../developer/backend/scheduler.md)**
+  **[Cache Registry](../developer/architecture/settings_cache.md)**,
+  **[Market Data Scheduler](../developer/backend/scheduler.md)** and
+  **[Configuration Checks](../developer/architecture/security.md#configuration-checks)**

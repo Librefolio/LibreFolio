@@ -4,7 +4,7 @@
     <img class="gallery-img" data-category="settings" data-name="profile" alt="Profile">
 </div>
 
-The **Profile** tab manages your **identity** in LibreFolio — who you are and how you log in. Display choices (language, currency, theme) live in **[Preferences](preferences.md)** instead; instance-wide options live in the **[Admin tab](../../admin/settings.md)**.
+The **Profile** tab manages your **identity** in LibreFolio — who you are and how you log in. Display choices (language, currency, theme) live in **[Preferences](preferences.md)** instead; instance-wide options live in **[Settings › Administration › Global Settings](../../admin/settings.md)**.
 
 ## 🔒 Edit Lock
 
@@ -37,7 +37,7 @@ Since the other users see your avatar, its picture is **shared**: an image you u
 As soon as the email in the field is another address than your current one, a **Current Password** field appears under the email's description, with a reminder: *To change your email, enter your current password. Your other devices will be signed out.* The email's save button, and **save all**, stay disabled until you type it.
 
 - **Wrong password**: the tab says *Current password is incorrect*. Your new email stays in its field and only the password is emptied: type it again, then save.
-- **Wrong password, again and again**: wrong passwords here and failed sign-ins with your username count together. After 10 in 15 minutes, the change is refused even with the right password, and so is signing in with your username, for up to 15 minutes.
+- **Wrong password, again and again**: wrong passwords here and failed sign-ins with your username count together. After 10 in 15 minutes, the change is refused even with the right password, and so is signing in with your username, for up to 15 minutes. The tab then says *Too many wrong passwords: wait a few minutes and try again.*, and keeps both your new email and the password you typed: save again once the wait is over.
 - **Email refused for another reason**, for example because another account already uses it, even with other capitals: the tab shows the reason, and your current email comes back.
 - **Email saved**: you stay signed in on this device. Every other device signed in to your account is signed out, and needs to sign in again. Any password-reset link sent to you before the change stops working, even one still waiting in your old mailbox.
 - **A notice to your old address**: when your instance can send emails, LibreFolio writes to the address you had before, to tell you of the change. It shows nothing of the new address, and says what to do if you did not make the change. Nothing goes to the new address.
@@ -65,7 +65,7 @@ The **Change Password** button (always available, no unlock needed) opens a moda
 
 The checklist follows what you type, and the server applies exactly the same rules. Letters and digits of any alphabet count: `É` is an uppercase letter, `é` a lowercase one. A special character is anything that is neither a letter, a number nor a space, such as `!`, `_` or `€`. If the server still refuses the new password, the modal says *Password does not meet security requirements*, and the checklist shows which rules are missing.
 
-Wrong current passwords and failed sign-ins with your username count together, as for [the email](#email-change): after 10 in 15 minutes, the change is refused even with the right current password, and so is signing in with your username, for up to 15 minutes.
+Wrong current passwords and failed sign-ins with your username count together, as for [the email](#email-change): after 10 in 15 minutes, the change is refused even with the right current password, and so is signing in with your username, for up to 15 minutes. The modal then says *Too many wrong passwords: wait a few minutes and try again.*, and keeps what you typed in its three fields: try again once the wait is over.
 
 After confirmation, your session remains active — you do not need to log in again. Every other device signed in to your account is signed out. Any password-reset link sent to you before the change stops working.
 
