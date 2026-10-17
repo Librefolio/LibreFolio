@@ -476,7 +476,8 @@ flowchart LR
    followed by what the exception computes and why it stays in the browser. The [gate](#frontend-exceptions-gate)
    (`frontend/src/financialMathExceptions.gate.test.ts`) holds the list of declared files and
    fails when a listed file lacks the tag, an unlisted file carries it, or an annualizing
-   exponent with 365 (`Math.pow(…, …365…)`, `** …365…` or `**= …365…`) appears outside the listed files:
+   exponent with 365 (`Math.pow(…, …365…)`, `** …365…` or `**= …365…`) appears outside the listed
+   files that annualize:
    adding an exception means extending that list on purpose; otherwise, use the backend's field.
 
 ---
@@ -626,7 +627,8 @@ fails when:
 - a file of its list, `DECLARED_EXCEPTIONS`, lacks `@financial-math-exception` in its leading
   JSDoc block, followed by a description of at least 20 characters;
 - any other source contains the tag, even in a comment or a string;
-- a power whose exponent holds 365 (`Math.pow(…, …365…)`, `**`, `**=`) appears outside the list.
+- a power whose exponent holds 365 (`Math.pow(…, …365…)`, `**`, `**=`) appears outside the listed
+  files that annualize, flagged `annualizes: true` — the measuring tool and the compound curve.
   Powers are found with the TypeScript and Svelte parsers, so comments and strings never count.
 
 As in the layer guard, each detector proves, on synthetic sources, that it sees what it looks
