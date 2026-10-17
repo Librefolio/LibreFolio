@@ -63,7 +63,10 @@ const POLL_MS = 300;
 /** Not the default count (5). */
 const MAX_FAILURES = 3;
 
-function job(overrides: Partial<InstanceBackupJob> = {}): InstanceBackupJob {
+/** B4 (§4): every job says whether its archive is encrypted. Written out until the client is generated again from the B4 backend. */
+type Job = InstanceBackupJob & {encrypted: boolean};
+
+function job(overrides: Partial<Job> = {}): Job {
     return {
         job_id: JOB_ID,
         status: 'running',
@@ -76,15 +79,16 @@ function job(overrides: Partial<InstanceBackupJob> = {}): InstanceBackupJob {
         file_size: null,
         warnings: [],
         error_code: null,
+        encrypted: false,
         ...overrides,
     };
 }
 
-const running = (overrides: Partial<InstanceBackupJob> = {}) => job({status: 'running', phase: 'database', ...overrides});
+const running = (overrides: Partial<Job> = {}) => job({status: 'running', phase: 'database', ...overrides});
 
-const done = (overrides: Partial<InstanceBackupJob> = {}) => job({status: 'done', phase: null, done_bytes: 4096, total_bytes: 4096, finished_at: '2026-10-15T12:01:00Z', file_name: 'librefolio-backup-20261015-120000.zip', file_size: 4096, ...overrides});
+const done = (overrides: Partial<Job> = {}) => job({status: 'done', phase: null, done_bytes: 4096, total_bytes: 4096, finished_at: '2026-10-15T12:01:00Z', file_name: 'librefolio-backup-20261015-120000.zip', file_size: 4096, ...overrides});
 
-const failedJob = (errorCode: InstanceBackupJob['error_code'], overrides: Partial<InstanceBackupJob> = {}) => job({status: 'failed', phase: null, finished_at: '2026-10-15T12:01:00Z', error_code: errorCode, ...overrides});
+const failedJob = (errorCode: InstanceBackupJob['error_code'], overrides: Partial<Job> = {}) => job({status: 'failed', phase: null, finished_at: '2026-10-15T12:01:00Z', error_code: errorCode, ...overrides});
 
 /** A refusal as the backup routes word it, raised by axios: `detail: {code, message}`. */
 function refusal(status: number, code: string) {
@@ -1676,5 +1680,70 @@ describe('without an api option', () => {
         await controller.remove();
         expect(zodios.delete_instance_backup_job_api_v1_backup_instance_jobs__job_id__delete).toHaveBeenCalledWith(undefined, {params: {job_id: JOB_ID}});
         expect(controller.state).toBe('idle');
+    });
+});
+
+// --- B4: the password of a secure backup ------------------------------------------------------------------------------
+
+/*
+ * B4 (brief §7): `BackupJobController.start(password?)`. With a password, the controller hands it to the request that
+ * starts the backup (`startInstanceBackup(password)`), and to nothing else; without one, the request of before. What the
+ * controller keeps of the job is the server's answer, as before: the password is never remembered — not in the storage
+ * that keeps the job id across a reload.
+ *
+ * Red today: `start()` takes no argument, so the password never reaches the api. The case of `start()` alone is the
+ * guard of «without a password, as today», green today. `start(password)` is reached through a cast, so the type check
+ * does not wait for the new parameter.
+ */
+
+const PASSWORD = 'Correct-Horse-Battery-9';
+
+/** `controller.start(password)`, as B4 makes it. */
+const startWith = (controller: BackupJobController, password?: string): Promise<void> => (controller as unknown as {start(password?: string): Promise<void>}).start(password);
+
+describe('B4 — start(password): the password of a secure backup goes to the request, and nowhere else', () => {
+    it('start(password) hands the password to the api, once, and follows the job it answers', async () => {
+        const {controller, api, storage} = setup();
+        api.start.mockResolvedValueOnce(running({phase: 'preparing'}));
+
+        await startWith(controller, PASSWORD);
+
+        expect(api.start.mock.calls, 'the password typed, handed to the request that starts the backup').toEqual([[PASSWORD]]);
+        expect(controller.state).toBe('running');
+        expect(controller.followedJobId).toBe(JOB_ID);
+        // The presence barrier: the storage was written (the job id); the password is in none of its writes.
+        expect(storage.items.get(KEY)).toBe(JOB_ID);
+        expect(
+            storage.setItem.mock.calls.flat().filter((value) => String(value).includes(PASSWORD)),
+            'the password was written to the storage',
+        ).toEqual([]);
+    });
+
+    it('start() hands no password: the api is called with no defined argument (green today: the guard)', async () => {
+        const {controller, api} = setup();
+        api.start.mockResolvedValueOnce(running());
+
+        await controller.start();
+
+        expect(api.start).toHaveBeenCalledTimes(1);
+        expect(
+            (api.start.mock.calls[0] as unknown[]).filter((argument) => argument !== undefined),
+            'a clear backup sends no password',
+        ).toEqual([]);
+    });
+
+    it.each<[string, string | undefined, unknown]>([
+        ['start(password) posts {password}', PASSWORD, {password: PASSWORD}],
+        ['start() posts no body, as before', undefined, null],
+    ])('without an api option: %s', async (_case, password, body) => {
+        zodios.start_instance_backup_api_v1_backup_instance_post.mockResolvedValue(running());
+        const controller = new BackupJobController({storage: null});
+        controllers.push(controller);
+
+        await startWith(controller, password);
+
+        expect(zodios.start_instance_backup_api_v1_backup_instance_post).toHaveBeenCalledTimes(1);
+        expect(zodios.start_instance_backup_api_v1_backup_instance_post.mock.calls[0][0], 'the body of POST /backup/instance').toStrictEqual(body);
+        expect(controller.state).toBe('running');
     });
 });

@@ -8,6 +8,10 @@ that died with its process (a restart, a crash), and reads as interrupted. The f
 released, so a finished run never reads as interrupted. A finished job keeps its archive for an hour: after that a read
 of the job answers that there is none and removes it, and the next start removes every such job.
 
+A secure backup (lot B4, decisions 38 and 39) is the same archive, with the instance key when LibreFolio generated it,
+then encrypted with the password into an ``.lfbk`` envelope; the clear archive is removed with the job's work files. The
+password lives in the job's thread only: never in its state, its log or its folder.
+
 Without ``fcntl`` (not POSIX) the lock only serialises the runs of one process.
 """
 
@@ -34,9 +38,11 @@ except ImportError:  # pragma: no cover - not POSIX: runs are serialised per pro
 
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
-from backend.app.services.platform.instance_backup.archive import BackupNoSpaceError, Phase, build_archive
+from backend.app.services.platform.instance_backup.archive import BackupNoSpaceError, build_archive
+from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX, EncryptedFile, encrypt_file
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
 from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, ensure_private_dir, is_job_id, job_dir, jobs_dir, lock_path, stages_dir
+from backend.app.services.platform.instance_backup.secure import exportable_instance_key, generated_key_unusable
 
 logger = get_logger(__name__)
 
@@ -46,9 +52,13 @@ JOB_RETENTION = timedelta(hours=1)
 _PROGRESS_INTERVAL_S = 0.5
 #: How many left-out entries a job's state lists.
 _SKIPPED_KEPT = 50
+#: Free space kept beyond the envelope of a secure backup, written beside its archive.
+_ENVELOPE_MARGIN = 64 * 1024 * 1024
 _PROCESS_LOCKS: dict[Path, threading.Lock] = {}
 
 JobStatus = Literal["running", "done", "failed"]
+#: The archive's phases (``archive.Phase``), then the encryption of a secure backup.
+Phase = Literal["preparing", "database", "files", "finalizing", "encrypting"]
 #: Why a job failed, as a stable code: no space, an error during the build, or its process died while it ran.
 JobError = Literal["backup_no_space", "backup_failed", "backup_interrupted"]
 
@@ -88,6 +98,8 @@ class BackupJob:
     #: The entries the build left out (links, special files, files that vanished or could not be read), at most 50.
     skipped: tuple[str, ...] = ()
     error_code: JobError | None = None
+    #: A secure backup: its file is an ``.lfbk`` envelope.
+    encrypted: bool = False
 
     def to_json(self) -> str:
         data = asdict(self)
@@ -108,9 +120,10 @@ class BackupJob:
         return cls(**data)
 
 
-def archive_name(created_at: datetime) -> str:
-    """The file name of an archive made at ``created_at``: ``librefolio-backup-YYYYMMDD-HHMMSS.zip``, in UTC."""
-    return f"librefolio-backup-{created_at.astimezone(UTC):%Y%m%d-%H%M%S}.zip"
+def archive_name(created_at: datetime, *, encrypted: bool = False) -> str:
+    """The file name of an archive made at ``created_at``: ``librefolio-backup-YYYYMMDD-HHMMSS.zip``, in UTC; ``.lfbk``
+    for the envelope of a secure backup."""
+    return f"librefolio-backup-{created_at.astimezone(UTC):%Y%m%d-%H%M%S}{FILE_SUFFIX if encrypted else '.zip'}"
 
 
 class _RunLock:
@@ -202,8 +215,12 @@ def _prepare(data_dir: Path, origin: BackupOrigin) -> tuple[_RunLock, BackupJob]
     return lock, job
 
 
-def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Phase, int, int], None] | None = None) -> BackupJob:
-    """Build the archive of a prepared job, keep its state up to date, and release the lock once the end is recorded."""
+def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Phase, int, int], None] | None = None, password: str | None = None) -> BackupJob:
+    """Build the archive of a prepared job, keep its state up to date, and release the lock once the end is recorded.
+
+    With ``password``, a secure backup: the archive carries the instance key when LibreFolio generated it (decision 39),
+    and is encrypted into the job's envelope.
+    """
     folder = job_dir(data_dir, job.job_id)
     name = archive_name(job.created_at)
     current = job
@@ -221,7 +238,15 @@ def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Pha
 
     started = time.monotonic()
     try:
-        built = build_archive(data_dir, folder, folder / name, origin=job.origin, progress=on_progress)
+        key = exportable_instance_key() if password is not None else None
+        built = build_archive(data_dir, folder, folder / name, origin=job.origin, progress=on_progress, instance_key=key)
+        file_name, file_size, file_sha256, warnings = name, built.size, built.sha256, built.warnings
+        if password is not None:
+            if key is None and generated_key_unusable():
+                warnings = (*warnings, "instance_key_unusable")
+            file_name = archive_name(job.created_at, encrypted=True)
+            sealed = _encrypt(folder, name, file_name, password, on_progress)
+            file_size, file_sha256 = sealed.size, sealed.sha256
     except BackupNoSpaceError as exc:
         current = replace(current, status="failed", phase=None, finished_at=_now(), error_code="backup_no_space")
         logger.warning("Instance backup refused: not enough free space", job_id=job.job_id, needed_bytes=exc.needed, free_bytes=exc.free)
@@ -236,21 +261,24 @@ def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Pha
             phase=None,
             done_bytes=current.total_bytes,
             finished_at=_now(),
-            file_name=name,
-            file_size=built.size,
-            file_sha256=built.sha256,
-            warnings=built.warnings,
+            file_name=file_name,
+            file_size=file_size,
+            file_sha256=file_sha256,
+            warnings=warnings,
             skipped=built.skipped[:_SKIPPED_KEPT],
+            encrypted=password is not None,
         )
         logger.info(
             "Instance backup written",
             job_id=job.job_id,
             origin=job.origin,
-            size_bytes=built.size,
+            encrypted=password is not None,
+            instance_key_included=key is not None,
+            size_bytes=file_size,
             files=len(built.manifest.files),
             alembic_revision=built.manifest.alembic_revision,
             seconds=round(time.monotonic() - started, 1),
-            warnings=list(built.warnings),
+            warnings=list(warnings),
             skipped=list(built.skipped[:_SKIPPED_KEPT]),
         )
     finally:
@@ -260,6 +288,18 @@ def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Pha
         finally:
             lock.release()
     return current
+
+
+def _encrypt(folder: Path, name: str, sealed_name: str, password: str, on_progress: Callable[[Phase, int, int], None]) -> EncryptedFile:
+    """Encrypt the job's archive into its envelope, once the space for it is checked; the archive is left to the clean-up."""
+    archive = folder / name
+    size = archive.stat().st_size
+    needed = size + _ENVELOPE_MARGIN
+    free = shutil.disk_usage(folder).free
+    if free < needed:
+        raise BackupNoSpaceError(needed, free)
+    on_progress("encrypting", 0, size)
+    return encrypt_file(archive, folder / sealed_name, password, progress=lambda done, total: on_progress("encrypting", done, total))
 
 
 def _remove_work_files(folder: Path, keep: str | None) -> None:
@@ -273,12 +313,15 @@ def _remove_work_files(folder: Path, keep: str | None) -> None:
             path.unlink(missing_ok=True)
 
 
-def start_backup(*, origin: BackupOrigin = "ui", data_dir: Path | None = None) -> BackupJob:
-    """Start a backup in a background thread and return its first state. ``BackupBusyError`` if one is running."""
+def start_backup(*, origin: BackupOrigin = "ui", data_dir: Path | None = None, password: str | None = None) -> BackupJob:
+    """Start a backup in a background thread and return its first state. ``BackupBusyError`` if one is running.
+
+    ``password``: a secure backup, whose password goes to the thread and nowhere else.
+    """
     data_dir = data_dir or get_data_dir()
     lock, job = _prepare(data_dir, origin)
     try:
-        thread = threading.Thread(target=_run, args=(data_dir, job, lock), name=f"backup-{job.job_id[:8]}", daemon=True)
+        thread = threading.Thread(target=_run, args=(data_dir, job, lock, None, password), name=f"backup-{job.job_id[:8]}", daemon=True)
         thread.start()
     except BaseException:
         lock.release()
@@ -286,11 +329,14 @@ def start_backup(*, origin: BackupOrigin = "ui", data_dir: Path | None = None) -
     return job
 
 
-def run_backup(*, origin: BackupOrigin = "cli", data_dir: Path | None = None, progress: Callable[[Phase, int, int], None] | None = None) -> tuple[BackupJob, Path]:
-    """Run a backup in this thread, holding the same lock as the API's jobs: the job's end state and its folder."""
+def run_backup(*, origin: BackupOrigin = "cli", data_dir: Path | None = None, progress: Callable[[Phase, int, int], None] | None = None, password: str | None = None) -> tuple[BackupJob, Path]:
+    """Run a backup in this thread, holding the same lock as the API's jobs: the job's end state and its folder.
+
+    ``password``: a secure backup.
+    """
     data_dir = data_dir or get_data_dir()
     lock, job = _prepare(data_dir, origin)
-    return _run(data_dir, job, lock, progress), job_dir(data_dir, job.job_id)
+    return _run(data_dir, job, lock, progress, password), job_dir(data_dir, job.job_id)
 
 
 def get_job(job_id: str, *, data_dir: Path | None = None) -> BackupJob:
