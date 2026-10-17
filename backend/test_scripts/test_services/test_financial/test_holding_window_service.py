@@ -38,6 +38,21 @@ Green on HEAD and after:
 - TestTransferIn — D-MF2 (a): 10 bought at broker A on BUY_DAY leave on MIDDLE_DAY and reach broker B on
   ARRIVAL_DAY (2024-06-07, a linked TRANSFER pair): at B the oldest open lot is ARRIVAL_DAY, in both views.
 
+MF-A7 — ``holding_window.oldest_open_lot_date`` sets aside the oldest lots that together hold the dust threshold
+(0.00001) or less, the residual a sale leaves, as ``closed_position_window`` and the rows already count it as not held.
+Before it (HEAD 5726486bc) the first open lot counted whatever its quantity. TestDustResidual, every amount at 100 a
+unit so that no sale realizes anything, the close 120:
+
+- red on HEAD: BUY 10 for 1000 (BUY_DAY), SELL 9.999999 for 999.9999 (MIDDLE_DAY), BUY 5 for 500 (LATE_DAY) — the
+  holding and the row date from LATE_DAY (HEAD: BUY_DAY, the 0.000001 left of the first BUY), and the row annualizes
+  its 100.00002 over the end cost 500.0001 (0.2000) over LATE_DAY → AS_OF (120 days), not 305; BUY 10 for 1000, SELL
+  9.999999 for 1199.99988 (LATE_DAY): the row is fully sold and has no open lot (HEAD: BUY_DAY); the fallback window
+  (J): 10 held since EARLY_DAY (2023-06-01, worth 1200 at PERIOD_FROM), 10 bought on BUY_DAY, an ADJUSTMENT −19.999999
+  without a cost (LATE_DAY) — no base for the closed-position rule, so the general rule annualizes −200 / 1200 over the
+  whole period, not from BUY_DAY, the date of the residual's lot;
+- green on HEAD too: the dust-closed row still annualizes its 0.2000 over its flight time BUY_DAY → LATE_DAY; a SELL
+  9.99998 leaves 0.00002, more than dust: BUY_DAY in both views and an annualized return over 305 days.
+
 Isolation: every test owns its user, brokers and asset (unique names) and writes only through a session that is
 rolled back: nothing is committed. Every amount is in EUR and read in EUR (``target_currency_override``), so no FX
 rate reaches the figures. The report, WAC and engine blob caches are emptied around each test. Rows are found by the
@@ -76,7 +91,8 @@ from backend.app.services.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
 
 EUR = "EUR"
-PERIOD_FROM = date(2024, 1, 1)  # before every row: the window starts at the oldest open lot
+EARLY_DAY = date(2023, 6, 1)  # before the period: a position held at its start (MF-A7's fallback window)
+PERIOD_FROM = date(2024, 1, 1)  # before every other row: the window starts at the oldest open lot
 BUY_DAY = date(2024, 3, 1)
 MIDDLE_DAY = date(2024, 6, 3)
 ARRIVAL_DAY = date(2024, 6, 7)
@@ -368,3 +384,138 @@ class TestTransferIn:
         assert (holding.quantity, holding.current_value) == (Decimal("10"), Decimal("1200")), "precondition: the 10 units are at B"
         assert (holding.oldest_open_lot_date, row.oldest_open_lot_date) == (ARRIVAL_DAY, ARRIVAL_DAY)
         print_success("transfer-in: the arrival date")
+
+
+# =============================================================================
+# MF-A7: a dust residual is no open lot
+# =============================================================================
+
+DUST_SOLD = "9.999999"  # of 10: 0.000001 left, dust (0.00001 or less)
+NOT_DUST_SOLD = "9.99998"  # of 10: 0.00002 left, more than dust
+
+
+def _sold_at(quantity: str, unit_price: str) -> str:
+    return str(Decimal(quantity) * Decimal(unit_price))
+
+
+async def _residual_then_buy(session: AsyncSession, keep_alive: list[object], label: str, sold: str) -> _Scope:
+    """BUY 10 for 1000 (BUY_DAY); SELL ``sold`` at cost, 100 a unit (MIDDLE_DAY); BUY 5 for 500 (LATE_DAY); close 120 (AS_OF)."""
+    scope = await _scope(session, keep_alive, label)
+    await _persist(
+        session,
+        keep_alive,
+        _trade(scope, TransactionType.BUY, BUY_DAY, "10", "-1000"),
+        _trade(scope, TransactionType.SELL, MIDDLE_DAY, f"-{sold}", _sold_at(sold, "100")),
+        _trade(scope, TransactionType.BUY, LATE_DAY, "5", "-500"),
+        _close(scope, AS_OF, "120"),
+    )
+    return scope
+
+
+async def _dust_closed(session: AsyncSession, keep_alive: list[object], label: str) -> _Scope:
+    """BUY 10 for 1000 (BUY_DAY); SELL 9.999999 at 120 a unit, 1199.99988 (LATE_DAY): 0.000001 left."""
+    scope = await _scope(session, keep_alive, label)
+    await _persist(session, keep_alive, _trade(scope, TransactionType.BUY, BUY_DAY, "10", "-1000"), _trade(scope, TransactionType.SELL, LATE_DAY, f"-{DUST_SOLD}", _sold_at(DUST_SOLD, "120")))
+    return scope
+
+
+class TestDustResidual:
+    @pytest.mark.asyncio
+    async def test_the_holding_dates_from_the_buy_after_the_residual(self, session, keep_alive):
+        """The first BUY's lot keeps 0.000001, dust: the oldest lot is LATE_DAY's BUY (HEAD: BUY_DAY, the residual's)."""
+        print_section("MF-A7 summary: dust residual, then a BUY")
+        scope = await _residual_then_buy(session, keep_alive, "a7dustsum", DUST_SOLD)
+
+        holding = await _holding(session, scope, scope.broker)
+
+        assert holding.quantity == Decimal("5.000001"), "precondition: the residual and the second BUY are held"
+        assert holding.oldest_open_lot_date == LATE_DAY, f"HEAD gave {BUY_DAY}, the date of the dust residual's lot"
+        print_success("oldest open lot: the BUY after the residual")
+
+    @pytest.mark.asyncio
+    async def test_the_row_annualizes_from_the_buy_after_the_residual(self, session, keep_alive):
+        """No start value: the end cost 500.0001 is the base of the unrealized 600.00012 − 500.0001 = 100.00002, the
+        sale at cost realizes nothing — 0.2000, annualized over LATE_DAY → AS_OF (120 days), not from BUY_DAY (305, HEAD)."""
+        print_section("MF-A7 contribution: dust residual, then a BUY")
+        scope = await _residual_then_buy(session, keep_alive, "a7dustrow", DUST_SOLD)
+        expected, head = _annualized_from(LATE_DAY, "100.00002", "500.0001"), _annualized_from(BUY_DAY, "100.00002", "500.0001")
+        assert expected is not None and expected != head, "precondition: the two windows must give two annualized returns"
+
+        row = await _row(session, scope, scope.broker)
+
+        assert (row.period_pnl, row.period_realized_gain_loss, row.start_value, row.end_value, row.is_fully_sold) == (Decimal("100.00002"), None, Decimal("0"), Decimal("600.00012"), False), "precondition: the period the annualized return is computed from"
+        assert row.oldest_open_lot_date == LATE_DAY, f"HEAD gave {BUY_DAY}"
+        assert row.annualized_return == expected, f"expected {expected} over {(AS_OF - LATE_DAY).days} days; HEAD gave {head} over {(AS_OF - BUY_DAY).days}"
+        print_success(f"annualized over {(AS_OF - LATE_DAY).days} days: {row.annualized_return}")
+
+    @pytest.mark.asyncio
+    async def test_a_dust_closed_row_has_no_open_lot(self, session, keep_alive):
+        """0.000001 left: the row counts it as not held (fully sold), and no lot is open (HEAD: BUY_DAY's)."""
+        print_section("MF-A7 contribution: dust-closed row, no open lot")
+        scope = await _dust_closed(session, keep_alive, "a7closed")
+
+        row = await _row(session, scope, scope.broker)
+
+        assert (row.is_fully_sold, row.end_value) == (True, Decimal("0")), "precondition: the residual counts as not held"
+        assert row.oldest_open_lot_date is None, f"HEAD gave {BUY_DAY}, the residual's lot"
+        print_success("dust-closed row: no open lot")
+
+    @pytest.mark.asyncio
+    async def test_a_dust_closed_row_annualizes_over_its_flight_time(self, session, keep_alive):
+        """The closed-position rule, as on HEAD: realized 1199.99988 − 999.9999 = 199.99998 on the cost sold 999.9999,
+        0.2000 over BUY_DAY → LATE_DAY (185 days)."""
+        print_section("MF-A7 contribution: dust-closed row, its flight time")
+        scope = await _dust_closed(session, keep_alive, "a7flight")
+        expected = cumulative_to_annualized(Decimal("0.2000"), (LATE_DAY - BUY_DAY).days)
+        assert expected is not None
+
+        row = await _row(session, scope, scope.broker)
+
+        assert (row.period_pnl, row.period_realized_gain_loss, row.is_fully_sold) == (Decimal("199.99998"), Decimal("199.99998"), True), "precondition: a fully sold position with its realized result"
+        assert row.annualized_return == expected
+        print_success(f"closed window {BUY_DAY} → {LATE_DAY}: {row.annualized_return}")
+
+    @pytest.mark.asyncio
+    async def test_a_residual_above_dust_is_still_an_open_lot(self, session, keep_alive):
+        """SELL 9.99998: 0.00002 is left of the first BUY, more than dust — BUY_DAY in both views, and the row's 0.2000
+        (100.0004 over 500.002) annualized over 305 days. The same on HEAD."""
+        print_section("MF-A7: residual above dust")
+        scope = await _residual_then_buy(session, keep_alive, "a7notdust", NOT_DUST_SOLD)
+        expected = _annualized_from(BUY_DAY, "100.0004", "500.002")
+
+        holding = await _holding(session, scope, scope.broker)
+        row = await _row(session, scope, scope.broker)
+
+        assert holding.quantity == Decimal("5.00002"), "precondition: the residual and the second BUY are held"
+        assert (holding.oldest_open_lot_date, row.oldest_open_lot_date) == (BUY_DAY, BUY_DAY)
+        assert row.annualized_return == expected
+        print_success("residual above dust: the first BUY's date")
+
+    @pytest.mark.asyncio
+    async def test_the_fallback_window_of_a_dust_closed_row_starts_with_the_period(self, session, keep_alive):
+        """J's case. 10 held since EARLY_DAY, worth 1200 at PERIOD_FROM (cost 1000); BUY 10 for 1000 (BUY_DAY); an
+        ADJUSTMENT −19.999999 without a cost (LATE_DAY) leaves 0.000001 of the BUY_DAY lot. The exit is no sale, so the
+        closed-position rule has no base and the general rule stands: −200 (the unrealized 200 of the start gone) over the
+        start value 1200, −0.1667, annualized from max(PERIOD_FROM, oldest open lot). No lot is open: the whole period,
+        365 days. HEAD: from BUY_DAY, the dust residual's lot, 305 days."""
+        print_section("MF-A7 contribution: the fallback window of a dust-closed row")
+        scope = await _scope(session, keep_alive, "a7fallback")
+        exit_without_cost = Transaction(broker_id=scope.broker.id, asset_id=scope.asset.id, type=TransactionType.ADJUSTMENT, date=LATE_DAY, quantity=Decimal("-19.999999"), amount=Decimal("0"))
+        await _persist(
+            session,
+            keep_alive,
+            _trade(scope, TransactionType.BUY, EARLY_DAY, "10", "-1000"),
+            _close(scope, PERIOD_FROM, "120"),
+            _trade(scope, TransactionType.BUY, BUY_DAY, "10", "-1000"),
+            exit_without_cost,
+        )
+        expected = cumulative_to_annualized(Decimal("-0.1667"), (AS_OF - PERIOD_FROM).days)
+        head = cumulative_to_annualized(Decimal("-0.1667"), (AS_OF - BUY_DAY).days)
+        assert expected is not None and expected != head, "precondition: the two windows must give two annualized returns"
+
+        row = await _row(session, scope, scope.broker)
+
+        assert (row.start_value, row.end_value, row.period_pnl, row.period_realized_gain_loss, row.is_fully_sold) == (Decimal("1200"), Decimal("0"), Decimal("-200"), None, True), "precondition: a dust-closed row with a start value and no realized sale"
+        assert row.oldest_open_lot_date is None, f"HEAD gave {BUY_DAY}"
+        assert row.annualized_return == expected, f"expected {expected} over {(AS_OF - PERIOD_FROM).days} days; HEAD gave {head} over {(AS_OF - BUY_DAY).days}"
+        print_success(f"fallback window over the whole period: {row.annualized_return}")
