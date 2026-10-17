@@ -53,6 +53,23 @@ WN-001's three ``0.0.0`` cases — NEW, red until the C-54 fix for a checkout wi
 after C-54 entered): today ``release_of`` reads ``v0.0.0-gabc1234``, ``v0.0.0-gabc1234-dirty`` and ``0.0.0`` as
 ``0.0.0``, so ``create_user`` there would write ``last_seen_version = '0.0.0'``. Every other case of the file is green
 with C-54.
+
+Reviewer E's note 1 on C-54 — ``mark_seen`` monotonic (the coordinator's contract, 17/10) — adds the section NEVER
+BACKWARDS at the end, every new red labelled ``# NEW — red until E's note 1 on C-54``. ``mark_seen`` never lowers
+``last_seen_version``: an account that saw a release newer than the running one — after a downgrade, or served by an
+older worker during a rolling update of a managed instance — keeps it, nothing written (``updated_at`` included), and
+``mark_seen`` answers it, the last release the account saw (WN-MONO-01; today it writes the running release and answers
+it, and the next upgrade shows the account again what it saw). It decides under SQLite's write lock: a newer release
+another worker commits after the account was loaded and before ``mark_seen``'s first write stays, and is answered
+(WN-MONO-04; today overwritten with the running release); the account deleted there answers None, raises nothing and
+writes nothing (WN-MONO-06; today ``StaleDataError`` escapes ``mark_seen``'s commit — its UPDATE matched no row —, the
+session rolled back: the route, which catches nothing, would answer 500). GUARDS, green today and after: forward as
+today — NULL, an older release, a string that names no release (read as nothing seen, as ``pending_for`` reads it),
+``1.9.0`` under ``1.10.0`` — (WN-MONO-02); the running release already stored writes nothing (WN-MONO-03); an older
+release committed in the window stops no write (WN-MONO-05). The window is A-42's, imported from
+``test_admin_bootstrap.py`` (``_issuer_engine``, ``_rival_before_the_first_write``). ``_mark_seen`` reads the caller's
+object without loading it: a ``mark_seen`` that ends its no-write path with a rollback expires it, which then reads
+``EXPIRED`` instead of raising in the helper.
 """
 
 from __future__ import annotations
@@ -63,7 +80,7 @@ import inspect
 import os
 import sqlite3
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -71,6 +88,8 @@ from typing import Any, Optional
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -82,7 +101,8 @@ from backend.app.services.accounts import auth_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.email import flows as email_flows
 from backend.app.services.email import verification as email_verification
-from backend.test_scripts.test_utils import print_section, print_success
+from backend.test_scripts.test_services.test_admin_bootstrap import _issuer_engine, _rival_before_the_first_write
+from backend.test_scripts.test_utils import print_info, print_section, print_success
 
 # =============================================================================
 # THE CONTRACT'S VALUES — a different decision is an edit here
@@ -371,12 +391,23 @@ async def _create(engine: AsyncEngine, commit: bool = True) -> int:
 
 @dataclass(frozen=True)
 class MarkSeen:
-    """What ``mark_seen`` did: its answer; ``last_seen_version`` on the caller's object after it; and every account's
-    ``last_seen_version`` in the file — only what was committed — before the caller commits anything."""
+    """What ``mark_seen`` did: its answer; ``last_seen_version`` on the caller's object after it, read without loading
+    (``EXPIRED`` when its session expired it); and every account's ``last_seen_version`` in the file — only what was
+    committed — before the caller commits anything."""
 
     answer: Any
     on_the_object: Optional[str]
     committed: dict[int, Optional[str]]
+
+
+#: What ``_held`` reads for an attribute its session expired: a rollback expires every object of the session.
+EXPIRED = "<expired: its session rolled back>"
+
+
+def _held(user: User) -> Optional[str]:
+    """``user.last_seen_version`` as the caller's object holds it, read without loading: ``EXPIRED`` when its session
+    expired it — loading it again, the session closed, would raise in the helper rather than say anything of the rule."""
+    return sa_inspect(user).dict.get("last_seen_version", EXPIRED)
 
 
 async def _mark_seen(engine: AsyncEngine, db_path: Path, user_id: int) -> MarkSeen:
@@ -393,7 +424,7 @@ async def _mark_seen(engine: AsyncEngine, db_path: Path, user_id: int) -> MarkSe
         answer = await call
         committed = _last_seen(db_path)
         await session.commit()
-    return MarkSeen(answer=answer, on_the_object=user.last_seen_version, committed=committed)
+    return MarkSeen(answer=answer, on_the_object=_held(user), committed=committed)
 
 
 # =============================================================================
@@ -577,3 +608,285 @@ async def test_mark_seen_writes_nothing_while_the_running_release_is_unknown(eng
     assert outcome.answer is None, f"running {version!r}, which holds no release: mark_seen must answer None: got {outcome.answer!r}"
     assert _changed(before, _rows(db_path)) == [], f"running {version!r}: mark_seen must write nothing, even once the caller commits: {_changed(before, _rows(db_path))}"
     assert outcome.on_the_object == OLDER_RELEASE, f"the caller's object must keep {OLDER_RELEASE!r}: {outcome.on_the_object!r}"
+
+
+# =============================================================================
+# NEVER BACKWARDS — mark_seen is monotonic (E's note 1 on C-54)
+# =============================================================================
+# Reviewer E's note 1 on C-54: ``mark_seen`` writes the running release whenever it differs from the stored one, so it
+# LOWERS ``last_seen_version`` when the running release is older — after a downgrade, or from an older worker during a
+# rolling update of a managed instance —, and after the next upgrade the account sees again chapters it already saw. And
+# it decides on the account as loaded, with no lock: a newer release another worker commits between the load and the
+# write is overwritten. The contract (the coordinator's, 17/10): never backwards — a stored release newer than the
+# running one is kept, nothing written, and answered: the last release the account saw —; forward as today; decided
+# under SQLite's write lock.
+#
+# The window is A-42's (``test_admin_bootstrap.py``): ``mark_seen``'s session runs on an engine of its own — a second
+# engine on the private file, the only one ``_rival_before_the_first_write`` listens to, and only for that call —, and
+# the rival, another worker, commits on the private engine, another connection, right before the first write statement
+# of ``mark_seen``'s engine: after the account was loaded, before anything ``mark_seen`` writes. Today that write is the
+# UPDATE of ``last_seen_version``; after the cure, the write lock taken before the decision, which then sees the rival.
+# The barrier: the rival landed once, right before a write of ``mark_seen`` (the statement is reported), the account
+# loaded with its old value and the file still holding it when the rival came.
+
+#: (the running version, its release, an account's last_seen_version — a release after the running one —): mark_seen
+#: writes nothing and answers the stored release. Releases compare as numbers: a patch release is newer, and 1.10.0 comes
+#: after 1.9.2, which a comparison of strings reverses.
+AHEAD = [
+    pytest.param(RUNNING_VERSION, RUNNING_RELEASE, NEWER_RELEASE, id="saw-1.4.0-running-1.3.0"),
+    pytest.param(RUNNING_VERSION, RUNNING_RELEASE, "1.3.1", id="saw-a-newer-patch-release"),
+    pytest.param("v1.9.2", "1.9.2", "1.10.0", id="saw-1.10.0-running-1.9.2"),
+]
+#: (the running version, its release, an account's last_seen_version — NULL, an older release, or a string that names no
+#: release, read as nothing seen as pending_for reads it —): mark_seen writes the running release and answers it, as
+#: today. 1.9.0 comes before 1.10.0, which a comparison of strings reverses.
+FORWARD = [
+    pytest.param(RUNNING_VERSION, RUNNING_RELEASE, None, id="null-from-before-c54"),
+    pytest.param(RUNNING_VERSION, RUNNING_RELEASE, OLDER_RELEASE, id="an-older-release"),
+    pytest.param(RUNNING_VERSION, RUNNING_RELEASE, "v1.2.0-5-gabc1234", id="an-older-release-written-as-git-describe"),
+    pytest.param(RUNNING_VERSION, RUNNING_RELEASE, "garbage", id="garbage"),
+    pytest.param(RUNNING_VERSION, RUNNING_RELEASE, "cd52e25fc", id="a-bare-hash"),
+    pytest.param(RUNNING_VERSION, RUNNING_RELEASE, "v0.0.0-gabc1234", id="an-untagged-checkout-v0.0.0"),
+    pytest.param("v1.10.0", "1.10.0", "1.9.0", id="saw-1.9.0-running-1.10.0"),
+]
+#: What the window reads for an account without a row: a deleted account is not a NULL.
+NO_ROW = "<no row>"
+
+
+async def _barrier_mark_seen_still_writes(engine: AsyncEngine, db_path: Path, release: str) -> None:
+    """The barrier of a «nothing written»: in the same scene, an account with NULL marked seen gets ``release`` — the
+    nothing was the stored release's, not a ``mark_seen`` that writes nothing at all."""
+    witness = await _add_account(engine, last_seen_version=None)
+    outcome = await _mark_seen(engine, db_path, witness)
+    assert (outcome.committed.get(witness), outcome.answer) == (release, release), f"barrier: in the same scene an account with NULL marked seen must get the running release {release!r}: the file holds {outcome.committed.get(witness)!r}, it answered {outcome.answer!r}"
+
+
+@dataclass(frozen=True)
+class Landing:
+    """The rival, landed: the account's ``last_seen_version`` in the file when it came (``NO_ROW`` for none) — what
+    ``mark_seen`` had committed by then —; what its write answered, or what escaped it; and, right after it committed,
+    every account's ``last_seen_version``, every row of every table, and every row with ``MARKED`` set aside."""
+
+    found: Any
+    answer: object
+    seen: dict[int, Optional[str]]
+    rows: Rows
+    rows_but_marked: Rows
+
+
+@dataclass(frozen=True)
+class Window:
+    """``mark_seen`` through the window: the account's ``last_seen_version`` as its session loaded it, and the statements
+    the rival had landed before by the end of that load (none); the statement the rival ran before, and its landings;
+    what ``mark_seen`` answered, or what escaped it; every account's ``last_seen_version`` in the file before the caller
+    commits."""
+
+    loaded: Optional[str]
+    fired_by_the_load: list[str]
+    fired: list[str]
+    landings: list[Landing]
+    answer: Any
+    escaped: Optional[Exception]
+    committed: dict[int, Optional[str]]
+
+
+async def _landing(db_path: Path, user_id: int, write: Callable[[], Awaitable[object]]) -> Landing:
+    """``write`` — the rival's, on its own connection, committed —, with what the file held for ``user_id`` before it and
+    the database right after it. What escapes ``write`` is recorded, not raised: raised inside the window, it would reach
+    ``mark_seen`` as its own failure."""
+    found = _last_seen(db_path).get(user_id, NO_ROW)
+    try:
+        answer = await write()
+    except Exception as escaped:  # recorded for the barrier: see above
+        answer = escaped
+    return Landing(found=found, answer=answer, seen=_last_seen(db_path), rows=_rows(db_path), rows_but_marked=_rows(db_path, ignoring=MARKED))
+
+
+def _seen_meanwhile(engine: AsyncEngine, db_path: Path, user_id: int, release: str) -> Callable[[], Awaitable[Landing]]:
+    """The rival of WN-MONO-04 and 05: another worker's own ``mark_seen`` — ``release`` written into the account's
+    ``last_seen_version`` and committed, on another connection —; it answers the rows it matched."""
+
+    async def write() -> object:
+        async with AsyncSession(engine) as session:
+            result = await session.execute(update(User).where(User.id == user_id).values(last_seen_version=release).execution_options(synchronize_session=False))
+            await session.commit()
+        return result.rowcount
+
+    async def rival() -> Landing:
+        return await _landing(db_path, user_id, write)
+
+    return rival
+
+
+def _deleted_meanwhile(engine: AsyncEngine, db_path: Path, user_id: int) -> Callable[[], Awaitable[Landing]]:
+    """The rival of WN-MONO-06: the account deleted through ``user_service.delete_user`` on another connection — what an
+    administrator's ``DELETE /users/{id}`` and the account's own ``DELETE /auth/users/me`` run —; it answers what that did."""
+
+    async def write() -> object:
+        async with AsyncSession(engine) as session:
+            return await user_service.delete_user(session, user_id)
+
+    async def rival() -> Landing:
+        return await _landing(db_path, user_id, write)
+
+    return rival
+
+
+async def _mark_seen_through_the_window(engine: AsyncEngine, db_path: Path, user_id: int, rival: Callable[[], Awaitable[Landing]]) -> Window:
+    """``await mark_seen(session, user)`` as ``POST /auth/whats-new/seen`` calls it — the account loaded in that session —,
+    the session on an engine of its own, ``rival`` committing on ``engine`` right before that engine's first write
+    statement. The listener is armed on that engine alone and only for this call: the setup, the rival and the reads go
+    through ``engine`` or SQLite directly. What escapes ``mark_seen`` is recorded, not raised; when nothing does, the file
+    is read before the session ends, then the session is committed, as a careless caller would."""
+    mark_seen = _reading_the_running_version("mark_seen")
+    landings: list[Landing] = []
+
+    async def landing() -> None:
+        landings.append(await rival())
+
+    answer: Any = None
+    escaped: Optional[Exception] = None
+    committed: dict[int, Optional[str]] = {}
+    async with _issuer_engine(engine) as own:
+        with _rival_before_the_first_write(own, landing) as fired:
+            async with AsyncSession(own, expire_on_commit=False) as session:
+                user = await session.get(User, user_id)
+                assert user is not None, f"setup: account #{user_id} exists"
+                loaded, fired_by_the_load = user.last_seen_version, list(fired)
+                call = mark_seen(session, user)
+                if not inspect.isawaitable(call):
+                    pytest.fail(f"mark_seen(session, user) must be awaited, as the contract writes it: it answered {call!r}", pytrace=False)
+                try:
+                    answer = await call
+                except Exception as raised:  # the test reports what escapes mark_seen, never raises it past the window
+                    escaped = raised
+                else:
+                    committed = _last_seen(db_path)
+                    await session.commit()
+    return Window(loaded=loaded, fired_by_the_load=fired_by_the_load, fired=list(fired), landings=landings, answer=answer, escaped=escaped, committed=committed)
+
+
+def _did(window: Window) -> str:
+    """What ``mark_seen`` did in the window, in words, for a failure message."""
+    if window.escaped is not None:
+        return f"raised {type(window.escaped).__name__}: {window.escaped}"
+    return f"answered {window.answer!r}, the file holding {window.committed} before the caller commits"
+
+
+def _assert_landed(window: Window, loaded: Optional[str], rival: str) -> Landing:
+    """The barrier of the window: the account loaded with ``loaded``, nothing landed by the end of the load; ``rival``
+    landed once, right before a write statement of ``mark_seen``'s engine, the file still holding ``loaded`` when it came
+    — ``mark_seen`` had committed nothing. Its landing."""
+    assert window.loaded == loaded and window.fired_by_the_load == [], f"setup: the session must load the account with last_seen_version {loaded!r}, the rival not landed yet: it loaded {window.loaded!r}, the rival landed before {window.fired_by_the_load}"
+    assert len(window.fired) == 1 and len(window.landings) == 1, f"barrier: {rival} must land once, right before mark_seen's first write: it landed {len(window.landings)} time(s), before {window.fired}; mark_seen {_did(window)}"
+    landing = window.landings[0]
+    assert landing.found == loaded, f"barrier: when {rival} came the file must still hold the loaded {loaded!r} — mark_seen had committed nothing —: it held {landing.found!r}"
+    return landing
+
+
+# NEW — red until E's note 1 on C-54
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("version", "release", "stored"), AHEAD)
+async def test_mark_seen_never_lowers_the_release_last_seen(engine: AsyncEngine, db_path: Path, monkeypatch: pytest.MonkeyPatch, version: str, release: str, stored: str) -> None:
+    """WN-MONO-01 — E's note 1 on C-54, NEW, red until the cure (today ``mark_seen`` writes the running release over the newer one and answers it: the account that saw ``1.4.0`` holds ``1.3.0``, and the next upgrade shows it again what it saw): an account written as a row with ``last_seen_version`` a release after the running one — ``1.4.0`` under ``v1.3.0-7-gabc1234``, seen before a downgrade or on a newer worker; a newer patch release, ``1.3.1``; ``1.10.0`` under ``v1.9.2``, the numeric order a comparison of strings reverses —, and another account with NULL. ``await mark_seen(session, user)`` writes nothing — every row of every table as it was, ``updated_at`` included, even once the caller commits — and answers the stored release, the last one the account saw. Barrier: in the same scene an account with NULL marked seen gets the running release."""
+    _run_as(monkeypatch, version)
+    member = await _add_account(engine, last_seen_version=stored)
+    await _add_account(engine, last_seen_version=None)
+    before = _rows(db_path)
+
+    outcome = await _mark_seen(engine, db_path, member)
+
+    written, answered = outcome.committed.get(member), outcome.answer
+    assert written == answered == stored, f"red until E's note 1 on C-54: account #{member} saw {stored!r}, the running {release!r} is older: mark_seen must keep {stored!r} and answer it, never lower it; the file holds {written!r} before the caller commits, it answered {answered!r}"
+    assert _changed(before, _rows(db_path)) == [], f"mark_seen must write nothing — every row of every table as it was, updated_at included —, even once the caller commits: {_changed(before, _rows(db_path))}"
+    await _barrier_mark_seen_still_writes(engine, db_path, release)
+
+
+# GUARD — green today, must stay green
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("version", "release", "stored"), FORWARD)
+async def test_mark_seen_moves_forward_as_today(engine: AsyncEngine, db_path: Path, monkeypatch: pytest.MonkeyPatch, version: str, release: str, stored: Optional[str]) -> None:
+    """WN-MONO-02 — E's note 1 on C-54, GUARD (green today and after the cure): an account written as a row with ``last_seen_version`` NULL — from before C-54 —, an older release — ``1.2.0``, or ``v1.2.0-5-gabc1234`` as git describe writes it —, or a string that names no release — ``garbage``, a bare hash, ``v0.0.0-gabc1234`` of a checkout without a tag: unreadable, it counts as nothing seen, as ``pending_for`` reads it —, under ``v1.3.0-7-gabc1234``; and ``1.9.0`` under ``v1.10.0``, the numeric order a comparison of strings reverses. ``mark_seen`` writes the running release into the account — committed by itself: the file holds it before the caller commits —, nobody else's and nothing else (``updated_at`` aside, the implementer's call), and answers it."""
+    _run_as(monkeypatch, version)
+    member = await _add_account(engine, last_seen_version=stored)
+    await _add_account(engine, last_seen_version=None)
+    seen_before, rows_before = _last_seen(db_path), _rows(db_path, ignoring=MARKED)
+
+    outcome = await _mark_seen(engine, db_path, member)
+
+    assert outcome.answer == release, f"running {version!r}, last_seen_version {stored!r}: mark_seen must answer the running release {release!r}: got {outcome.answer!r}"
+    assert outcome.committed == {**seen_before, member: release}, f"running {version!r}, last_seen_version {stored!r}: mark_seen must commit {release!r} into account #{member}'s last_seen_version, and nobody else's: before {seen_before}, the file holds {outcome.committed} before the caller commits"
+    assert _changed(rows_before, _rows(db_path, ignoring=MARKED)) == [], f"mark_seen writes last_seen_version and nothing else (updated_at aside): {_changed(rows_before, _rows(db_path, ignoring=MARKED))}"
+
+
+# GUARD — green today, must stay green
+@pytest.mark.asyncio
+async def test_mark_seen_of_the_running_release_writes_nothing(engine: AsyncEngine, db_path: Path) -> None:
+    """WN-MONO-03 — E's note 1 on C-54, GUARD (green today and after the cure): an account written as a row with ``last_seen_version`` the running release ``1.3.0`` — WN-009's second call, from a row —: ``mark_seen`` answers ``1.3.0`` and writes nothing — every row of every table as it was, ``updated_at`` included, even once the caller commits. Barrier: in the same scene an account with NULL marked seen gets ``1.3.0``."""
+    member = await _add_account(engine, last_seen_version=RUNNING_RELEASE)
+    before = _rows(db_path)
+
+    outcome = await _mark_seen(engine, db_path, member)
+
+    assert outcome.answer == RUNNING_RELEASE, f"account #{member} saw the running release {RUNNING_RELEASE!r}: mark_seen must answer it: got {outcome.answer!r}"
+    assert _changed(before, _rows(db_path)) == [], f"the running release already stored: mark_seen must write nothing — every row of every table as it was, updated_at included —, even once the caller commits: {_changed(before, _rows(db_path))}"
+    await _barrier_mark_seen_still_writes(engine, db_path, RUNNING_RELEASE)
+
+
+# NEW — red until E's note 1 on C-54
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stored", BEHIND)
+async def test_mark_seen_keeps_a_newer_release_committed_before_its_first_write(engine: AsyncEngine, db_path: Path, stored: Optional[str]) -> None:
+    """WN-MONO-04 — E's note 1 on C-54, NEW, red until the cure (today ``mark_seen`` decides on the account as loaded: it overwrites the newer release with the running one, ``1.3.0``, and answers it): an account written as a row with ``last_seen_version`` NULL or an older release, loaded in ``mark_seen``'s session; another worker — a newer one, during a rolling update — commits its own ``mark_seen``, ``1.4.0``, into the account on another connection after the load and before ``mark_seen``'s first write (the window). ``mark_seen``, running ``v1.3.0-7-gabc1234``, decides under the write lock: it raises nothing, leaves ``1.4.0`` — nothing written after the rival, every row of every table as it left them, ``updated_at`` included, even once the caller commits — and answers ``1.4.0``, the last release the account saw.
+
+    Barrier: the rival landed once, right before a write statement of ``mark_seen``'s engine — reported: today the UPDATE of ``last_seen_version`` —, the account loaded with its old value and the file still holding it; the rival wrote ``1.4.0``, one row.
+    """
+    print_section(f"WN-MONO-04: {NEWER_RELEASE} committed by another worker before mark_seen's first write, {stored!r} loaded")
+    member = await _add_account(engine, last_seen_version=stored)
+
+    window = await _mark_seen_through_the_window(engine, db_path, member, _seen_meanwhile(engine, db_path, member, NEWER_RELEASE))
+
+    landing = _assert_landed(window, stored, f"{NEWER_RELEASE!r} committed by another worker")
+    print_info(f"the rival landed before: {window.fired[0]!r}")
+    assert landing.answer == 1 and landing.seen.get(member) == NEWER_RELEASE, f"barrier: the rival must write {NEWER_RELEASE!r} into account #{member}: it matched {landing.answer!r} row(s), the file holds {landing.seen.get(member, NO_ROW)!r}"
+    assert window.escaped is None, f"mark_seen must raise nothing: it {_did(window)}"
+    written, answered = window.committed.get(member), window.answer
+    assert written == answered == NEWER_RELEASE, f"red until E's note 1 on C-54: {NEWER_RELEASE!r} committed by another worker after the load of {stored!r}, before mark_seen's first write: under the lock, mark_seen must leave it and answer it; the file holds {written!r}, it answered {answered!r}"
+    assert _changed(landing.rows, _rows(db_path)) == [], f"mark_seen must write nothing after the rival — every row of every table as it left them, updated_at included —, even once the caller commits: {_changed(landing.rows, _rows(db_path))}"
+    print_success(f"{NEWER_RELEASE!r} kept and answered; the rival landed before {window.fired[0]!r}")
+
+
+# GUARD — green today, must stay green
+@pytest.mark.asyncio
+async def test_an_older_release_committed_before_its_first_write_stops_no_write(engine: AsyncEngine, db_path: Path) -> None:
+    """WN-MONO-05 — E's note 1 on C-54, GUARD (green today and after the cure): ``mark_seen`` decides on what the database holds under the lock, not on whether anything moved. An account written as a row with NULL, loaded in ``mark_seen``'s session, and another account with NULL; another worker — an older one — commits its own ``mark_seen``, ``1.2.0``, into the account in the window. ``mark_seen``, running ``v1.3.0-7-gabc1234``, raises nothing, still writes ``1.3.0`` over ``1.2.0`` — nobody else's, nothing else (``updated_at`` aside) — and answers it. Barrier as WN-MONO-04's: the rival wrote ``1.2.0``, one row."""
+    member = await _add_account(engine, last_seen_version=None)
+    await _add_account(engine, last_seen_version=None)
+
+    window = await _mark_seen_through_the_window(engine, db_path, member, _seen_meanwhile(engine, db_path, member, OLDER_RELEASE))
+
+    landing = _assert_landed(window, None, f"{OLDER_RELEASE!r} committed by another worker")
+    print_info(f"the rival landed before: {window.fired[0]!r}")
+    assert landing.answer == 1 and landing.seen.get(member) == OLDER_RELEASE, f"barrier: the rival must write {OLDER_RELEASE!r} into account #{member}: it matched {landing.answer!r} row(s), the file holds {landing.seen.get(member, NO_ROW)!r}"
+    assert window.escaped is None and window.answer == RUNNING_RELEASE, f"an older release committed in the window stops no write: mark_seen must answer the running release {RUNNING_RELEASE!r}; it {_did(window)}"
+    assert window.committed == {**landing.seen, member: RUNNING_RELEASE}, f"mark_seen must commit {RUNNING_RELEASE!r} into account #{member} over {OLDER_RELEASE!r}, and nobody else's: after the rival {landing.seen}, the file holds {window.committed} before the caller commits"
+    assert _changed(landing.rows_but_marked, _rows(db_path, ignoring=MARKED)) == [], f"mark_seen writes last_seen_version and nothing else (updated_at aside): {_changed(landing.rows_but_marked, _rows(db_path, ignoring=MARKED))}"
+
+
+# NEW — red until E's note 1 on C-54
+@pytest.mark.asyncio
+async def test_mark_seen_of_an_account_deleted_before_its_first_write_answers_none(engine: AsyncEngine, db_path: Path) -> None:
+    """WN-MONO-06 — E's note 1 on C-54, NEW, red until the cure (today ``StaleDataError`` escapes ``mark_seen``'s commit — its UPDATE of the account matched no row —, the session rolled back and nothing written; the route, which catches nothing, would answer 500): an account written as a row with ``last_seen_version`` ``1.2.0``, loaded in ``mark_seen``'s session, and another account with NULL; the account deleted through ``user_service.delete_user`` on another connection in the window — an administrator's ``DELETE /users/{id}``, or its own ``DELETE /auth/users/me`` from another tab. ``mark_seen`` raises nothing, answers None and writes nothing: every row of every table as the deletion left them — the account not written back, the other one untouched —, even once the caller commits.
+
+    Barrier: the deletion landed once, right before a write statement of ``mark_seen``'s engine — reported —, the account loaded with ``1.2.0`` and the file still holding it; ``delete_user`` answered an ``AccountDeletion``, and the account had no row after it.
+    """
+    member = await _add_account(engine, last_seen_version=OLDER_RELEASE)
+    await _add_account(engine, last_seen_version=None)
+
+    window = await _mark_seen_through_the_window(engine, db_path, member, _deleted_meanwhile(engine, db_path, member))
+
+    landing = _assert_landed(window, OLDER_RELEASE, "the account's deletion")
+    print_info(f"the deletion landed before: {window.fired[0]!r}")
+    assert isinstance(landing.answer, user_service.AccountDeletion) and member not in landing.seen, f"barrier: the rival must delete account #{member}: delete_user answered {landing.answer!r}, the file holds {landing.seen}"
+    assert _changed(landing.rows, _rows(db_path)) == [], f"mark_seen must write nothing: every row of every table as the deletion left them, even once the caller commits: {_changed(landing.rows, _rows(db_path))}; it {_did(window)}"
+    assert window.escaped is None and window.answer is None, f"red until E's note 1 on C-54: account #{member} was deleted after mark_seen loaded it and before its first write: mark_seen must raise nothing and answer None; it {_did(window)}"
