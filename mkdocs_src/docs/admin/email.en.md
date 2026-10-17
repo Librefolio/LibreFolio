@@ -368,8 +368,11 @@ while emails with a link can go out: email **Ready** and a usable `LIBREFOLIO_PU
 form, a panel closed until clicked keeps the command an administrator can run on the server.
 Otherwise the page shows that command, open, under the warning *Email recovery is not available on
 this instance. Reset your password from the server terminal, or ask your administrator for a
-password-reset link.* An administrator creates that link in **Settings › Administration › Users**,
-even without email ([Password-Reset Links](users.md#reset-links)).
+password-reset link.* In the [managed profile](hosting_providers.md#managed-profile), the page shows
+neither the command nor that warning: in their place, *Ask your administrator for a password-reset
+link: they can create one for your account.* An administrator creates that link in
+**Settings › Administration › Users**, even without email
+([Password-Reset Links](users.md#reset-links)).
 
 It is safe because changing an account's email address asks for its current password
 ([Profile](../user/settings/profile.md)): see [Security Notes](#security).
