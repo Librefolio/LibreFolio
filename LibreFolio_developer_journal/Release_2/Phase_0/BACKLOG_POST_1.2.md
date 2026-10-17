@@ -5770,6 +5770,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `transactions.pydantic.greaterThan` («Value must be greater than {gt}») resta senza il valore. Cura con questa voce: il contesto di
   dati semplici anche per gli errori di campo, nelle due copie della regola, rossi prima (i rifiuti di H-41 e del batch che oggi
   fissano `params` nulli cambiano contratto).
+  ✅ 17/10 (D-W70-1…5, coordinatore): ogni errore porta come `params` il suo contesto di dati semplici, anche di campo
+  (`{max_length: 500}`, `{gt: 0}`, `{ge: 0}`), e i sotto-errori impacchettati passano dallo stesso filtro, in un solo modulo
+  (`backend/app/utils/pydantic_errors.py`, W-B77); `string_too_long` tradotto (`transactions.pydantic.stringTooLong`, 4 lingue) e
+  l'etichetta del ramo dei built-in escapata; la modale d'unione conta in punti di codice e blocca Conferma oltre 500; «Unisci tutto»
+  lascia la coppia troppo lunga, con un avviso. Rossi: backend 66, frontend 34, l'E2E PC7. Dettagli: piano 04, «W-B70 (+ W-B77) — cura».
 - **W-B71 · Il suggerimento di promozione (ed eventi) va in 500 con una data ai bordi del calendario** — basso, disponibilità; W, 17/10
   (SEC7-3). `promote_suggest_bulk` (`backend/app/services/transactions/promotion.py`) calcola `inp.date ± timedelta(days=tolerance_days)`
   (0–30, 7 di default): con `0001-01-01` o `9999-12-31` un `OverflowError`, un 500 per quella richiesta sola (niente memoria né CPU); da
@@ -5822,6 +5827,8 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   modifica a una sola delle due fa divergere i `params` di una riga rifiutata dal parse e dal batch. Cura: un modulo condiviso (per
   esempio in `schemas/` o `utils/`), con i test delle due parti; con l'occasione, la docstring di BRIM che dice «made the parse answer
   500» (era un 400, la correzione stessa di H). Dopo W-B70, che cambia la regola. Dettagli: questa voce.
+  ✅ 17/10, dentro W-B70 (D-W70-5): una sola copia, `backend/app/utils/pydantic_errors.py` (`PLAIN_PARAM_TYPES`, `loc_to_field`,
+  `error_params`); le due copie tolte senza alias, `TestOneCopy` lo tiene. La docstring «500» è sparita con la copia di BRIM. Rivede H.
 - **W-B78 · Le 10 cifre decimali di una quantità sono scritte a mano in 9 file del frontend** — minimo, pulizia; W, 17/10 (C-97c-3).
   I decimali che una quantità tiene (C-97a) sono un `10` letterale in dieci punti: `TxFormSingleSection.svelte` (2), `TxFormPairSection.svelte`,
   `txDisplayHelpers.ts`, `resolveValidationMessage.ts`, `WacPreviewSection.svelte`, `import/GapFixStep.svelte`,
@@ -5829,6 +5836,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `LOT_QUANTITY_FRACTION_DIGITS` (`lotChartShared.ts`, C-97c-2). Se la colonna cambia scala, ognuno va trovato a mano. Cura: una costante
   in `frontend/src/lib/utils/core/` accanto a `formatPrice`, letta da tutti (i lotti la importano). Dopo la 1.3: tocca le aree TR, IW, BK
   e DV. Dettagli: piano 04, sezione «C-97c-3».
+- **W-B79 · «Promuovi coppia» apre la modale d'unione anche quando differiscono solo data o costo** — minimo, chiarezza; W, 17/10
+  (docs-writer di W-B70). `onPromotePair` (`frontend/src/routes/(app)/transactions/+page.svelte:392-402`) conta come divergenza anche
+  data e costo base, che `PromoteMergeModal` non offre più dal maggio 2026 (SP-C Step 5): la modale si apre senza campi e il corpo dice
+  solo «Confirm promotion». Cura: la divergenza su descrizione e tag soltanto (come «Unisci» nel Bulk), altrimenti la conferma semplice;
+  un rosso di componente o E2E prima. Dopo la 1.3. Dettagli: piano 04, «W-B70 (+ W-B77) — cura».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
@@ -5840,6 +5852,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   offre solo descrizione e tag dal maggio 2026 (SP-C Step 5). La pagina ha già un debito di traduzione non timbrato (la cache di Aphra
   non corrisponde all'EN di HEAD): correggere l'EN e lasciare la traduzione alla pipeline. Dettagli: piano 04, sezione «R13-SEC7-3 —
   cura».
+  ✅ 17/10, con la doc di W-B70 (stessa riga della pagina): «If the rows have a different description or different tags, you choose
+  what to keep; each row keeps its own date», più il limite di 500 caratteri della modale. Solo l'EN: il debito di traduzione resta
+  alla pipeline (nessun timbro).
 - **W-B74 · Una riga illeggibile fa fallire il giro dei saldi senza codice** — basso, chiarezza; W, 17/10 (test-author di W-B69). Una
   quantità o un importo che si legge `None` (testo, o un inf: W-B58) fa sommare `None` a `_validate_broker_balances`
   (`backend/app/services/transactions/balances.py`): un `TypeError`, che il batch rende come «Balance validation error» senza codice né
