@@ -3708,6 +3708,22 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `docker_advanced`.
 
   Dettagli: piano H, §14, lotto «H-36».
+- **H-39 · Il profilo managed senza protezione dai frame non si vede** — basso, sicurezza; E (review di H-37, decisione
+  su `PROFILE_DEFAULTS`), via coordinatore, 17/10.
+  - Una voce managed persa in `PROFILE_DEFAULTS`, o un pannello che spegne `LIBREFOLIO_FRAME_PROTECTION`, riporta
+    in silenzio al default del codice. E non vuole una chiusura a runtime, ma un controllo che si veda.
+  - Cosa serve:
+    - un controllo `platform.frame_protection`: spento in managed è un warning, all'avvio e nella scheda Sicurezza;
+    - `platform.csp_report_only`: spento in managed è un info;
+    - il self-hosted è sempre ok.
+    - Le aspettative di managed stanno scritte nel controllo, non lette dalla tabella.
+  - In più, una regola di review: un campo `Settings` di sicurezza nuovo dichiara il suo valore managed nello stesso
+    lotto.
+  - Stato al 17/10: la regola è scritta in `.github/instructions/backend.instructions.md`, e la riga accanto a C-99 la
+    scrive il coordinatore. I due controlli, i test e le chiavi i18n aspettano l'ingresso di B-9, che scrive negli
+    stessi file (`config_audit.py`, `test_config_audit.py`). La cura in prova è pronta in `files/h39/` della sessione H.
+
+  Dettagli: piano H, §14, lotto «Z-24» (la nota di H-39).
 
 ## A · Account e accessi (fase 01)
 
