@@ -38,8 +38,9 @@ contract pinned here:
 Pure: no database, no server, no lane port, no network. The tracker cases (a)-(f) build trackers of their own on a fake
 wall clock; the process's ``PRICE_REFRESH`` is reset before and after every test (autouse fixture). For (g) every
 collaborator of ``run_due_jobs`` past ``PRICE_REFRESH`` is a fake set with ``monkeypatch`` — switches, leader, settings, a
-state store in memory, the due functions, the two jobs (each writes the ``items_ok`` the test chose) and ``settle_clock``
-— and the fakes read the tracker from inside the run. For (h) the loop runs as a task of the test's event loop, on the
+state store in memory, the due functions, the two jobs (each writes the ``items_ok`` the test chose), ``settle_clock``
+and the lock across processes (Z-11), a no-op that writes no file — and the fakes read the tracker from inside the
+run. For (h) the loop runs as a task of the test's event loop, on the
 real ``run_due_jobs`` over the same fakes, behind a recorder that signals each run's end; the process's ``ACTIVITY`` is
 replaced only through ``monkeypatch`` by an ``Activity`` on a fake clock. Nothing sleeps: every wait is on an event, with
 a bounded timeout.
@@ -92,6 +93,12 @@ API_ROUTE = f"{API_V1_PREFIX}/z5-probe-of-the-test"
 
 class ProviderExploded(Exception):
     """A job's failure."""
+
+
+@asynccontextmanager
+async def _no_cross_process_lock(*_args: object, **_kwargs: object) -> AsyncIterator[None]:
+    """``scheduler_run_lock`` stood in for (Z-11, N71): held at once, no file written; ``test_scheduler_run_lock.py`` tests the real one."""
+    yield
 
 
 # =============================================================================
@@ -174,6 +181,9 @@ class Fakes:
         monkeypatch.setattr(scheduler, "run_current_price_refresh", self.run_current_price_refresh)
         monkeypatch.setattr(scheduler, "run_history_sync", self.run_history_sync)
         monkeypatch.setattr(scheduler, "settle_clock", self.settle_clock)
+        # Z-11 (N71): with fcntl the run takes the lock across processes; stood in for, so that no .scheduler.lock is
+        # written in the lane's data directory. raising=False: the name exists only once Z-11 does.
+        monkeypatch.setattr(scheduler, "scheduler_run_lock", _no_cross_process_lock, raising=False)
 
     def _record(self, where: str) -> None:
         self.seen.append((where, scheduler.PRICE_REFRESH.snapshot(), scheduler.PRICE_REFRESH.header_value()))
