@@ -14,7 +14,7 @@ responsibility:
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation, refused, nothing of the request written, while a `SPLIT` it would delete has linked incoming adjustments without a cost ([Parametric Provider Change](events.md#parametric-provider-change)); the removal, refused, nothing removed, while a transaction is linked to an event the removed assignment generated ([Provider Removal](events.md#provider-removal)); and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
-| `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price or volume refused; a provider's truncated, and a provider's date with a value no column can keep skipped and reported), the [date bounds](#stored-date-bounds) of a stored price (a manual date outside refused, a provider's skipped and reported), and bounded write chunks. |
+| `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price or volume refused; a provider's truncated, and a provider's date with a value no column can keep skipped and reported), the [date bounds](#stored-date-bounds) of a stored price (a manual date outside refused, a provider's skipped and reported), the [currency](#price-currency-coherence) of a manual call's prices (refused before any write), and bounded write chunks. |
 | `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked; refused, nothing written, while a `SPLIT` of the asset has linked incoming adjustments without a cost ([Market-Data Wipe](events.md#market-data-wipe)). |
 | `split_guard.py` | The `SPLIT`s among the events a wipe would delete that have linked incoming adjustments without a cost, named as the caller may see them (`splits_with_costless_adjustments()`, `adjustments_count()`): the refusal of the currency-change wipe and of the parametric provider change. |
 | `event_links.py` | The transactions linked to asset events, as a refusal names them for its caller: `visible_transaction_ids()`, the ids on a broker the caller holds an access to, none without a caller (the rule `split_guard.py` imports), and `events_with_linked_transactions()`, the events among those given that transactions are linked to, each with the caller's view: the refusal of the provider removal. |
@@ -218,7 +218,9 @@ exceeds any of its limits — 12 digits before the decimal point, 12 decimal pla
 significant digits — or is not finite, or when a volume has more than 24 digits before the
 point (only its size is limited: a fractional volume is accepted), before anything of it is
 written — a `ValueError`, which the route answers with HTTP 400 naming the asset, the
-maxima (the volume's included) and the dates.
+maxima (the volume's included) and the dates. Two more checks follow, in this order and
+still before any write: the [dates](#stored-date-bounds) (X-R65) and the
+[currency](#price-currency-coherence) of the prices (X-R71).
 
 `bulk_upsert_prices()` also keeps every date it stores within `stored_date_bounds()` (X-R65,
 night decision N83): from `EARLIEST_RANGE_START` (1900-01-01, the floor every replay and
@@ -248,6 +250,35 @@ transactions have had the same floor since N74, with an end a year ahead
 `dateOutOfRange`). Price and rate rows already stored before 1900 are left as they are (backlog
 Z-30). The web app's data editors still show these 422s as a generic error; their coded message
 is a follow-up (workstream X).
+
+A manual call is all or nothing on the currency of its prices, as on its digits and dates
+(X-R71). Its third check, `_reject_currency_mismatches()`, runs right after
+`_reject_dates_out_of_range()`, before anything is written; a call that fails several checks
+gets the refusal of the first, in the order digits (400), dates (422 `date_out_of_range`),
+currency. It reads the currency of every asset the request names (`SELECT id, currency`, in
+slices of 500 ids, nothing else on the session), then checks every item, in the request's
+order: a point whose currency, when given, is not its asset's is at fault. The web app never
+sends a per-point currency, so only an API client meets this check. The
+`PriceCurrencyMismatchError` it raises (a plain `Exception`, like `DateOutOfRangeError`)
+becomes a 422 `{"code": "price_currency_mismatch", "message", "items", "count"}` (`message`:
+*Prices must be in their asset's currency: N are not*), built by
+`price_currency_mismatch_detail()` in `price_store.py`. `items` lists, in request order, each
+item at fault as `{"asset_id", "expected", "found", "dates"}` (at most ten items): `expected`
+is the asset's currency, `found` the currencies given, first seen first, and `dates` at most
+ten of the item's dates at fault, in request order; `count` is every date at fault. Nothing of
+the request is written. A database error in the middle of a large upload still leaves the
+slices already committed: that is the price of the slice commits, not a check. Before X-R71,
+the check ran only inside the per-asset loop, once the earlier assets were written, each in
+slices of 1,000 dates with a commit after each: a request whose third asset had a price in
+another currency answered 400 with the first two already saved.
+{: #price-currency-coherence }
+
+- **Unknown asset**: an item whose asset does not exist is left to the loop, which answers it
+  in its own result (*Asset N not found*, count 0) while the others are written, as before.
+- **The loop's check stays**: under a provider's key it still raises its `ValueError` (a
+  refresh writes one asset per call, and drops the points in another currency itself before);
+  for a manual call it is a safety net, for an asset whose currency changed between the read
+  and the write.
 
 ---
 
@@ -750,7 +781,7 @@ cost unknown it stays `MISSING`.
 | `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers (`asset_ids` in the query): deletes each assignment and the events it generated, manual events staying; a 409 `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`, nothing of the request removed, while a transaction is linked to one of those events, whatever its type; `params` names the refused asset (`asset_id`, `item_index`) and, in `events`, only the transactions the caller can see; a 409 `PROVIDER_REMOVAL_CONFLICT`, nothing removed and no SQL in the answer, when a link appears between the check and the delete ([Provider Removal](events.md#provider-removal)) |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
 | `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |
-| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400), and so does a date before 1900-01-01 or after tomorrow (422 `date_out_of_range`, see [stored-date bounds](#stored-date-bounds)) |
+| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400), and so does a date before 1900-01-01 or after tomorrow (422 `date_out_of_range`, see [stored-date bounds](#stored-date-bounds)), or a price in a currency other than its asset's, on any asset of the request (422 `price_currency_mismatch`, see [price currency](#price-currency-coherence)); every refusal comes before anything is written |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/period-changes` | POST | Bulk fixed-period changes, 1D … 5Y, of the Assets table (DB-only, backward-fill, optional `target_currency`), and the whole-range change with an optional `range_start` |
