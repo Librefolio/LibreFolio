@@ -223,6 +223,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dashboard Performance table**: each position's start and end value now comes from the same valuation as the portfolio (trade prices, splits, holdings valued at cost, the exchange rate of each boundary day), so the "Other" line no longer absorbs valuation differences; a transfer between your brokers during the period splits the result between them; a value that cannot be computed shows "—".
 - The web app no longer serves the build's hidden bookkeeping files (such as `/.build-debug`).
 - After the server catches up on prices (for example when an instance wakes up), the asset and currency pages ask for the new prices the next time you open them or change the period, instead of showing the ones kept from earlier in the session.
+- AI Export FIFO summary: open value and unrealized P&L now add up the same lots — those whose value and P&L are both known — so the two totals stay comparable when a lot's cost is unknown.
 
 #### 🔒 Security
 
