@@ -30,6 +30,7 @@ const PYDANTIC_BUILTIN_KEYS: Record<string, string> = {
     less_than_equal: 'transactions.pydantic.lessThanEqual',
     missing: 'transactions.pydantic.missing',
     string_type: 'transactions.pydantic.stringType',
+    string_too_long: 'transactions.pydantic.stringTooLong',
     decimal_parsing: 'transactions.pydantic.decimalParsing',
     int_parsing: 'transactions.pydantic.intParsing',
     value_error: 'transactions.pydantic.valueError',
@@ -249,7 +250,8 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
     if (builtinKey) {
         const builtinTranslated = t(builtinKey, {values: enriched});
         if (builtinTranslated !== builtinKey) {
-            return fieldLabel ? `${fieldLabel}: ${builtinTranslated}` : builtinTranslated;
+            // The label is escaped as in the two branches above: its fallback is the raw field name of the issue (W-B70).
+            return fieldLabel ? `${escapeHtml(fieldLabel)}: ${builtinTranslated}` : builtinTranslated;
         }
     }
 
