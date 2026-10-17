@@ -36,6 +36,7 @@ from backend.app.services.financial_math.fifo.models import (
     _require_decimal,
     _require_id,
 )
+from backend.app.services.financial_math.splits import is_valid_split_ratio
 
 # Tolerance for the split cost invariant (q*p0 = const). Division by a ratio that
 # doesn't divide evenly (e.g. a 3:1 split) produces a non-terminating decimal that
@@ -159,6 +160,10 @@ class FifoLotEngine:
         processed_transfer_pairs: set[int] = set()
         for tx in self.transactions:
             if tx.id in self.split_ratios_by_tx_id:
+                # MF-D4: a SPLIT whose stored ratio is unusable counts as missing — its row stays split-linked (never an
+                # ADJUSTMENT), and the lots are not rescaled; the portfolio report names the asset.
+                if not is_valid_split_ratio(self.split_ratios_by_tx_id[tx.id]):
+                    continue
                 events.append(
                     FifoEvent(
                         kind="SPLIT",

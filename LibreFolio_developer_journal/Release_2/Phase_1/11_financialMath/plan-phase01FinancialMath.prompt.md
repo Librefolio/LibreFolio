@@ -2040,3 +2040,64 @@ Quattro commit, uno per lotto che cambia numeri:
 - ✅ **Doc** (docs-writer, terzo giro): `provider_scheduled_investment.md` L51, L74 («History range»: `"min"`), L141–155
   (forma chiusa per data), L171–180 (tempi), L220–226 (`compound_growth` O(1) e i memo); `financial_math.md` L71,
   L517–527. `mkdocs build` stretto 0, `check-links` 0. Pagina utente invariata.
+
+#### MF-SI1 entrato; MF-D4 — uno split col rapporto non valido conta come mancante (17/10, 07:1x)
+- Coordinatore: MF-SI1 committato `f37b1d0ea` + giornale `8535de2b2`, base `576296a21` (dev `46c66f0c8`: J-43/SEC7-1,
+  X-R47, H-37, Z-24), combinata leggera verde (`financial-math` 1111, `synthetic-yield` 24, `-integration` 15,
+  `min-start` 10, `late-alignment` 32, `cost-bounds` 63, `asset-source-refresh` 18) → **entrato** dev `16f8c74ed`,
+  CHANGELOG `4c767685f`, HEAD ff **`4c767685f`**. J: OK (forme chiuse ≤ 4e-24, passi 30/360 400/400; nota: l'ACT/ACT
+  che salta gli anni può differire nelle ultime cifre dal prodotto per anno su intervalli di più anni, nessun golden lo
+  fissa). **`engine.py` è mio** (J-43/SEC7-1 entrati): MF-D4, poi J-45/SEC7-1b.
+- ✅ **Codice MF-D4** (opzione (a), concordata con J):
+  - `portfolio/models.py`: `InvalidSplitEvent(event_id, asset_id, date)` (frozen, prima di `PortfolioCalculationResult`);
+    `PortfolioCalculationResult.invalid_split_events` (dopo `realized_sales`, prima di `missing_fx`).
+  - `portfolio/engine.py`: nel caricamento degli split la riga resta in `split_linked_tx_ids` (riscalamento: costo
+    tenuto, mai capitale in natura), un rapporto non valido non crea `SplitRecord` (nessun prezzo di scambio
+    precedente viene riportato alle unità nuove; le quotazioni di mercato non lo sono mai) e va in `invalid_split_events` (una per evento, per id); niente più `ValueError` (il report
+    rispondeva 500). La chiave della cache tiene già le righe e i record: correggere il rapporto la cambia.
+  - `schemas/portfolio.py`: `IssueCode.INVALID_SPLIT_RATIO` dopo `MISSING_COST_BASIS`. `data_quality.py`: parametro
+    `invalid_split_assets` dopo `missing_cost_basis_assets`, blocco WARNING dopo quello di `MISSING_COST_BASIS`
+    (`dataQuality.invalidSplitRatio`, `{count}` = asset, `affected_asset_ids/names`, CTA `navigate_asset`,
+    `group_key="invalid_split_ratio"`). `portfolio_service.py`: `_invalid_split_assets(engine_result)` e l'argomento in
+    entrambe le chiamate (sommario e report).
+  - Lotti: `fifo/engine.py::classify_events` salta lo SPLIT col rapporto non valido (la riga resta legata allo split:
+    né ADJUSTMENT né riscalamento; nessuna riga SPLIT nella cronologia del lotto); YoC invariato (rende già il broker non
+    disponibile).
+  - i18n: `dataQuality.invalidSplitRatio` con `dev.py i18n add` nella sorgente `dataQuality/` (4 lingue, terminologia di
+    `events.saveError.invalidSplitRatio`); `i18n check` stretto verde. `api sync` exit 0 (enum nuovo; client non
+    tracciato). Il frontend non mappa i codici (il banner è generico): nessun `.svelte`.
+  - Suite esistenti verdi col codice: `financial-math` 1111, `roi-fifo-utils` **1178** (golden del motore),
+    `portfolio-engine` 41, `lots-analysis-pure` 177, `event-split-ratio` 78 (non fissava il `raise`).
+- In corso: test-author `mf-d4-tests` (motore, report, servizio, lotti, parità YoC e split valido), docs-writer
+  `mf-d4-docs`.
+- ✅ **Doc MF-D4** (docs-writer): `data-quality-banner.md` L22, L102 (riga `INVALID_SPLIT_RATIO`), L137–138 (la
+  regola), L149, L182 (come provocarlo: dopo X-R47 solo righe salvate prima o scritte nel DB); `assets/events.md`
+  L150–154; `financial_math.md` L145–152 (il passo 2 del motore senza `ValueError`); `lots_analysis_service.md` L120;
+  `fifo_lot_engine.md` L202 (la regola di `classify_events`, condizionale). `mkdocs build` stretto 0 (carico 38),
+  `check-links` 0 (lanciato per errore a carico 56: segnalato).
+- ⚠️ **Fuori pista — «quotazioni»**: il rapporto dello split riporta alle unità nuove solo i segni **derivati dagli
+  scambi** (`daily_state.py:1026-1029`, `mark.estimated`), mai le quotazioni di mercato: docstring di `models.py`,
+  `data_quality.py` e commento di `engine.py` corretti («no ratio restates a trade price observed before it»).
+- **Residui segnalati dal docs-writer, da portare al coordinatore**: (1) lotti contro WAC: il FIFO salta la riga legata
+  allo split non valido, le righe del WAC (`average_cost_lines`) ne applicano la quantità come uno split → le quantità
+  dei lotti e del pool divergono per quell'asset, una vendita dopo può dare `FIFO_SOURCE_QUANTITY_MISSING`
+  (dato corrotto: il report del portafoglio lo segnala); (2) la CTA `navigate_asset` può essere un vicolo cieco per un
+  evento del fornitore (non modificabile per id, `EVENT_NOT_EDITABLE`; non cancellabile con transazioni legate,
+  `EVENT_IN_USE`): area di X; (3) `test_event_split_ratio.py:335` ha ancora il messaggio del 500 (a test-author);
+  (4) la sezione della copertura dei test in `data-quality-banner.md` era già vecchia (39 test / 7 codici): non toccata.
+- ✅ **Test MF-D4** (test-author `mf-d4-tests`): `test_financial/test_portfolio_engine/test_invalid_split_ratio.py`
+  (puro, 40: guardie del rapporto, `InvalidSplitEvent`, il blocco del report, FIFO che salta la riga per ogni rapporto
+  non valido e riscala con 2 e 0,5) e `test_financial/test_invalid_split_ratio_ledger.py` (DB, annullato in rollback:
+  motore — nessuna eccezione, l'evento registrato, la riga resta `SPLIT_RESCALE`, costo 1000 e capitale invariati,
+  prezzo non riportato; un evento su due broker = un record; due eventi = due record per id —, `get_summary` e
+  `get_report` con e senza sommario: un solo `INVALID_SPLIT_RATIO`, nessun `MISSING_COST_BASIS`; lotti: 10 a 100 senza
+  riga dello split; YoC `UNAVAILABLE`/`INVALID_SPLIT`; rapporto 2: tutto come prima). Su HEAD i lotti sollevavano per
+  ogni rapporto non valido (0 `DivisionByZero`, −2 `Lot cost invariant violated`, None `Expected Decimal value`,
+  NaN/Inf `InvalidOperation`). Prosa di `test_event_split_ratio.py` (docstring, messaggio a :335) aggiornata, nessuna
+  asserzione toccata. Nessuna riga del runner: `roi-fifo-utils` gira tutto `test_financial/`.
+- ✅ **Rossi** (`files/d4.sh red`, 07:26, patch prodotto `df239e79…`, rimessa con lo stesso sha):
+  `roi-fifo-utils invalid_split_ratio` **49 failed / 18 passed** — `ValueError` del motore 18, lotti 23
+  (`DivisionByZero`, `Expected Decimal value`, invariante, `InvalidOperation`), parametro/codice/campo mancanti 7.
+- ✅ **Verdi** (07:26–07:37, attese per carico): `invalid_split_ratio` 67, `roi-fifo-utils` **1245** (golden),
+  `portfolio-engine` 41, `lots-analysis-pure` 177, `financial-math` 1111, `event-split-ratio` 78,
+  `utils gate-i18n-catalog` 176. ruff/black puliti. **Da fare in slot**: `api portfolio` (enum nuovo, report).
