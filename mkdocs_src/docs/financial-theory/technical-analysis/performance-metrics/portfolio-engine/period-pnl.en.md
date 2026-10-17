@@ -24,7 +24,7 @@ $$
 
 | Component | Definition |
 |-----------|-----------|
-| $\Delta\mathrm{UGL}$ | Change in unrealized gain/loss over the period — for assets priced in another currency, including the exchange-rate effect on their historical cost |
+| $\Delta\mathrm{UGL}$ | Change in unrealized gain/loss over the period: market value − open cost basis of the positions held at each boundary, securities in transit left out ([the period unrealized](index.md#two-unrealized-figures)) — for assets priced in another currency, including the exchange-rate effect on their historical cost |
 | Realized | Sum of (proceeds − historical cost of the units given up) for the SELLs in period and the outgoing ADJUSTMENTs with a cost basis, whose proceeds are the value they hand over; proceeds are converted at the transaction's date ([Portfolio Engine — §8](index.md#8-realized-gain-loss)) |
 | Income | DIVIDEND + INTEREST in period |
 | FeesTaxes | FEE + TAX in period |
@@ -159,6 +159,8 @@ The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b
 - **Unknown values.** A position held at a boundary whose unrealized gain/loss is unknown there — a missing exchange rate, an incomplete cost — has an unknown $\Delta\mathrm{UGL}(a,b)$, never the known side minus zero.
 
 Annualized period return clamps its window start to the later of the requested start and the oldest open lot date. It uses $|\mathrm{StartValue}|$ as annualization base, falling back to end cost basis for positions opened mid-period. See [Net Annualized Return](net-annualized-return.md).
+
+A position closed in the period — nothing left at $t_1$ — annualizes differently: on the historical cost of the units it sold in the period, over the time it was held inside it, from the later of $t_0$ and its first opening to the day its last units left. Its period percentage keeps $|\mathrm{StartValue}|$ as base. See [Net Annualized Return — Positions Closed in the Period](net-annualized-return.md#closed-in-period).
 
 🔗 See **[Portfolio Engine — §7 Period Contribution](index.md#7-period-contribution)** for details.
 
