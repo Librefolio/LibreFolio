@@ -142,9 +142,14 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
 
 1. resolves the target currency (by default `get_effective_base_currency()`) and the broker
    scope, each broker at its `effective_share()`;
-2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`;
-   an unusable ratio raises `ValueError`), and classifies them
-   (`ScopeAwareTransactionClassifier`, `classifier.py`). The range it replays starts no earlier than the first
+2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`),
+   and classifies them
+   (`ScopeAwareTransactionClassifier`, `classifier.py`). A split whose stored ratio fails `is_valid_split_ratio()`
+   (missing, not finite, or not above 0) counts as missing, never an exception (lot MF-D4; before, a `ValueError`).
+   Its linked rows stay in `split_linked_tx_ids`, the split's rescale with their cost kept. Only the ratio is dropped:
+   the event adds no `SplitRecord` to `split_history`, and goes once into `PortfolioCalculationResult.invalid_split_events`
+   (`InvalidSplitEvent`, sorted by event id), which the data-quality report turns into `INVALID_SPLIT_RATIO`.
+   The range it replays starts no earlier than the first
    transaction and ends no later than `latest_range_end()` (tomorrow, `utils/datetime_utils.py`): the replay walks every
    day, and an end far in the future held the instance (R13-SEC7-1). A range that ends before the first transaction
    gives an empty result;
