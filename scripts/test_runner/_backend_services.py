@@ -1005,11 +1005,22 @@ def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) 
 def services_probe_rate_limit(verbose: bool = False, test_names: list = None) -> bool:
     """Test the per-user limit of POST /assets/provider/probe (MF-SI2)."""
     print_section("Services: Probe Rate Limit")
-    print_info("Testing: config/plugins.py (probe_rate_limit), api/v1/assets/providers.py (probe_limiter, PROBES_BY_USER, probe_provider_config), dev.py (cmd_server lane env)")
-    print_info("Tests: 30 probes per 60 s per user; past it 429 PROBE_RATE_LIMITED, retry_after = Retry-After = ceil(wait) >= 1, manager not called, refusal not counted; per user; free again after the window; LIBREFOLIO_PROBE_RATE_LIMIT (30, 0 off, unusable → 30), the lanes off")
+    print_info("Testing: config/plugins.py (probe_rate_limit), api/v1/assets/providers.py (probe_limiter, PROBES_BY_LIMIT, probe_provider_config), dev.py (cmd_server lane env)")
+    print_info(
+        "Tests: 30 probes per 60 s per user; past it 429 PROBE_RATE_LIMITED, retry_after = Retry-After = ceil(wait) >= 1, manager not called, refusal not counted; per user; free again after the window; LIBREFOLIO_PROBE_RATE_LIMIT read at each probe (30, 0 off, unusable → 30, logged once per value), the lanes off"
+    )
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_probe_rate_limit.py", test_names)
     return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
+
+
+def services_bulk_writes_chunked(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-SEC9a: bulk writes of rates and prices in chunks SQLite can parse, a 10 000-item cap, no echoed error (private in-memory DB)."""
+    print_section("Services: Bulk Writes Chunked (MF-SEC9a)")
+    print_info("Testing: utils/sql_chunks.py, services/fx/storage.py (upsert_rates_bulk, delete_rates_bulk), services/assets/price_store.py (bulk_delete_prices), services/fx/sync.py (_stored_rates, ensure_rates_multi_source), api/v1/fx/currencies.py and api/v1/assets/prices.py (caps, 500s)")
+    print_info("Tests: 1 500-item upserts/deletions exact, no «Expression tree is too large» (500/501 at the chunk edge); change detection over 1 035 pairs; > 10 000 items 422 bulk_too_many_items before any write, 10 000 pass; no 500 or item error echoes its SQL; barrier: one OR of 1 500 refused")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_writes_chunked.py", test_names)
+    return run_command(cmd, "Bulk writes chunked tests", verbose=verbose)
 
 
 def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
@@ -2341,11 +2352,21 @@ Note: No backend server required.
         "probe-rate-limit",
         services_probe_rate_limit,
         name="Probe Rate Limit",
-        desc="POST /assets/provider/probe: PROBES_BY_USER is probe_limiter() at import, a SlidingWindowLimiter of 30 per 60 s by default; the first hits per user reach AssetSourceManager.probe_provider_config with the request, its operations and the user id; past the limit 429 PROBE_RATE_LIMITED with an int retry_after >= 1 (the wait rounded up) equal to Retry-After and a message, the manager not called and the refusal not counted; another user is not limited; past the window the user probes again. LIBREFOLIO_PROBE_RATE_LIMIT: probe_rate_limit() reads it at each call, unset/blank 30, stripped ASCII whole number 0..10000, anything else a ValueError naming the variable and the value; probe_limiter() is n per 60 s, None for 0 with one warning, 30 with one error for an unusable value (never off by mistake); with the limit off 40 probes of one user all reach the manager; the route applies the configured limit (2: the third is 429; unusable: 30); ./dev.py server --test hands the server LIBREFOLIO_PROBE_RATE_LIMIT=0, a start without --test does not",
-        # PURE: no DB, no server, no network. The route coroutine is called directly; PROBES_BY_USER is replaced by a
-        # private SlidingWindowLimiter on a fake clock and the manager's probe by a recording stub, both with monkeypatch,
-        # so the lane's real limiter is never consumed. The lane switch runs dev.cmd_server in-process with every launch
+        desc="POST /assets/provider/probe: probe_limiter() read at each probe, one SlidingWindowLimiter per value in PROBES_BY_LIMIT (counts kept when the value comes back; a new LIBREFOLIO_PROBE_RATE_LIMIT applies at the next probe), 30 per 60 s by default; the first hits per user reach AssetSourceManager.probe_provider_config with the request, its operations and the user id; past the limit 429 PROBE_RATE_LIMITED with an int retry_after >= 1 (the wait rounded up) equal to Retry-After and a message, the manager not called and the refusal not counted; another user is not limited; past the window the user probes again. LIBREFOLIO_PROBE_RATE_LIMIT: probe_rate_limit() reads it at each call, unset/blank 30, stripped ASCII whole number 0..10000, anything else a ValueError naming the variable and the value; probe_limiter() is n per 60 s, None for 0 with one warning, 30 with one error for an unusable value (never off by mistake); with the limit off 40 probes of one user all reach the manager; the route applies the configured limit (2: the third is 429; unusable: 30); ./dev.py server --test hands the server LIBREFOLIO_PROBE_RATE_LIMIT=0, a start without --test does not",
+        # PURE: no DB, no server, no network. The route coroutine is called directly; probe_limiter() returns a private
+        # SlidingWindowLimiter on a fake clock (or PROBES_BY_LIMIT starts empty per test) and the manager's probe is a
+        # recording stub, all with monkeypatch, so the lane's real limiters are never consumed. The lane switch runs dev.cmd_server in-process with every launch
         # stubbed (test_dev_designer_lab_banner.start_server): nothing starts.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "bulk-writes-chunked",
+        services_bulk_writes_chunked,
+        name="Bulk Writes Chunked (MF-SEC9a)",
+        desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; services, the FX provider lookup
+        # and route loggers replaced by monkeypatch; the cap/failure cases hand the routes stand-in sessions.
         isolation="pure",
     )
     add_test(
