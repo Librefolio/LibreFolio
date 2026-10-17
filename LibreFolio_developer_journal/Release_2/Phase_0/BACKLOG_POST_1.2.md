@@ -6259,6 +6259,10 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     allora le carte senza prezzi: l'errore arriva solo alla console (il `catch` di `fetchAllPriceData`).
   - Seguito: dividere la richiesta in lotti (Y, X). Il messaggio esplicito lo fa X (con X-R53), per non avere due
     scrittori sulle stesse pagine.
+  - **Anche i cambi a periodo fisso** (MF, 17/10, X-R59; decisione del coordinatore): `POST /assets/prices/period-changes`
+    e `POST /fx/currencies/period-changes` hanno lo stesso tetto (`MAX_BULK_ITEMS`, 422 `bulk_too_many_items`), più
+    ≤ 5 giorni `as_of`/`range_start` distinti (422 `period_changes_too_many_days`): la stessa regola di divisione in
+    lotti da 1 000 vale per loro, con un `as_of` per richiesta.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-25 — un tetto alle
   richieste di massa di prezzi e cambi: analisi».
 
