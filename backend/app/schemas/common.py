@@ -356,14 +356,14 @@ def is_fiat_currency(value: Any) -> bool:
 
 
 CurrencyCode = Annotated[str, BeforeValidator(Currency.validate_code)]
-"""Use instead of a bare ``str`` for a currency-**code** field that must be a valid
-ISO 4217 code.
+"""Use instead of a bare ``str`` for a currency-**code** field that a model **reads back** — a stored value, a
+computed payload. A field a request **stores** uses ``IsoCurrencyCode`` instead (E-18, below).
 
-``Currency.validate_code`` already normalises (``upper().strip()``) and checks the
-code against the ISO 4217 registry (via pycountry), raising ``ValueError`` on
-anything else -- a crypto ticker like ``BTC``, an internal placeholder, an empty
-string. This annotated type carries that one rule so a field opts in *by type*
-instead of every class repeating its own ``@field_validator`` (nineteen payloads
+``Currency.validate_code`` normalises (``upper().strip()``) and checks the code against the ISO 4217 registry (via
+pycountry), raising ``ValueError`` on a crypto ticker like ``BTC``, an internal placeholder, an empty string. It is
+lenient on purpose: ``pycountry.currencies.lookup`` also takes a currency name or a numeric code (``"Euro"``,
+``"978"``) and they come back as given, so a value stored before E-18 still loads. This annotated type carries that one
+rule so a field opts in *by type* instead of every class repeating its own ``@field_validator`` (nineteen payloads
 did, fifteen forgot).
 
 It does **not** change the wire shape: the field stays a JSON string. A value that
@@ -386,6 +386,54 @@ Usage::
     class MyPayload(StrictModel):
         target_currency: CurrencyCode
         currency: CurrencyCode | None = None  # None passes through; only real codes are checked
+"""
+
+
+# =============================================================================
+# STRICT CURRENCY CODES FOR THE WRITE PATHS (E-18, MF-SEC9b)
+# =============================================================================
+
+#: How many characters of a refused currency text the error quotes (E-18): enough to recognise it, never a long input.
+_REFUSED_CURRENCY_SHOWN = 16
+
+
+def iso_currency_code(value: Any) -> str:
+    """The currency code a write path stores (E-18, MF-SEC9b): an ISO 4217 alphabetic code, in upper case.
+
+    ``Currency.validate_code`` asks ``pycountry.currencies.lookup``, which also takes a currency name or a numeric code
+    (``"Euro"``, ``"978"``) and returns it as given: a request could store ``"EURO"`` or ``"978"`` as a currency. Here
+    the whitespace around the text is stripped (NBSP included) and the case is free — ``" eur "`` and ``"GBp"`` give
+    ``"EUR"`` and ``"GBP"`` —, and what is left must be three ASCII letters ISO 4217 lists as an alphabetic code
+    (``XXX``, ``XTS`` and the metals included). Anything else raises ``ValueError``, quoting at most 16 characters of
+    the text. The read paths keep ``Currency.validate_code``: a value stored before stays readable and deletable.
+    """
+    if not isinstance(value, str):
+        raise ValueError(f"Currency code must be a string, got {type(value).__name__}")
+    code = value.strip().upper()
+    if len(code) == 3 and code.isascii() and code.isalpha() and pycountry.currencies.get(alpha_3=code) is not None:
+        return code
+    shown = code if len(code) <= _REFUSED_CURRENCY_SHOWN else code[:_REFUSED_CURRENCY_SHOWN] + "…"
+    raise ValueError(f"Invalid currency code {shown!r}: expected an ISO 4217 alphabetic code, such as EUR")
+
+
+IsoCurrencyCode = Annotated[str, BeforeValidator(iso_currency_code)]
+"""``CurrencyCode`` for a field a write path stores (E-18): an ISO 4217 alphabetic code only, never a name or a number.
+
+A read model keeps ``CurrencyCode``: what was stored before E-18 must still load.
+"""
+
+
+def _iso_currency_amount(value: Currency) -> Currency:
+    """An amount a write path stores: its code must pass ``iso_currency_code`` (E-18). The object is unchanged."""
+    iso_currency_code(value.code)
+    return value
+
+
+IsoCurrencyAmount = Annotated[Currency, AfterValidator(_iso_currency_amount)]
+"""A ``Currency`` a write path stores (E-18): the same class and wire shape, its code an ISO 4217 alphabetic code.
+
+An after-validator, not a subclass: the services and the BRIM plugins build these fields with ``Currency`` objects, which
+a subclass would refuse. ``Currency`` itself stays lenient, for the amounts read back from what was stored.
 """
 
 

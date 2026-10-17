@@ -162,6 +162,11 @@ broker-scope Dashboard does:
   series. The re-run reads the edge of the accessible brokers in turn, for a partner at a broker the user cannot see.
   On a day valued at cost a leg moves the cost of its units instead (see
   [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)).
+- **Yield on cost.** `financial_math/yield_on_cost.py` reads the arrivals alone, with `read_arrivals_at_scope_boundary()`
+  (J-51): an arrival whose partner pairs back from a broker the user cannot see becomes an `ADJUSTMENT` in, and its
+  partner leaves the replay, which would otherwise join a broker with no history and fail. A departure keeps its partner,
+  because the yield on cost counts units in transit for the broker they left. It needs no price: the yield's cost is the
+  Dashboard's average cost of the position, never the replay's.
 - **The same rule as the Dashboard.** In a broker's own view the Dashboard counts an incoming leg's cost basis in the
   average cost and its market value as capital, and an outgoing leg's market value as the capital that left (lot 41,
   D2 and D5): lots and Dashboard agree broker by broker.
@@ -391,6 +396,8 @@ A lot's reference price is the denominator of its Open Return, `relative_return 
 | `TRADE_AVG`: no quote, that day's `BUY` / `SELL` average | `mark.unit_price`, `"fallback"` | `REFERENCE_PRICE_FALLBACK` |
 | `CARRIED`: a quote or a trade mark of an earlier day | `mark.unit_price`, `"fallback"` | `REFERENCE_PRICE_FALLBACK` |
 | `MISSING`: no observation on or before that day | `reference_unit_price=None`, `"unavailable"` (the lookup returns `None`) | `REFERENCE_PRICE_UNAVAILABLE` |
+
+The lots banner groups the issues of one code into a single message, with a chip for each lot, so the two messages (`dataQuality.referencePriceFallback`, `dataQuality.referencePriceUnavailable`) say how the reference is chosen and never a price: one price could not stand for every lot of the group (J-36). The `reference_price` param of `REFERENCE_PRICE_FALLBACK` stays in `message_params`, unread by the texts.
 
 An `ADJUSTMENT` is never an observation (developer decision P2): a lot opened by an opening position, a succession or a transfer from an untracked broker is compared with the market — the last quote, or a `BUY` / `SELL` more recent than it — and with its own cost basis only when the asset has no observation on or before its opening day.
 

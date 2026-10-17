@@ -36,6 +36,33 @@ handed; the market holiday table is an empty one.
 
 Red before the change (HEAD eed325d99), each for the reason its docstring gives ("Red before Z-25"): BL-001, BL-002,
 BL-I01…I03, BL-A01, BL-A03…A07, BL-F01…F03. Green then too — behaviour the change has to keep: BL-I04, BL-A02.
+
+Z-30 (coordinator decision, 17/10; X-R65's D3) bounds how far back a full-history item loads. Since X-R65 a price
+dated before 1900-01-01 is refused when it is written, but a row an older version stored stays, and a full-history item
+loaded from ``date.min``: one row dated 0001-01-01 made the fill of ONE visible day emit about 740 000 days — under the
+budget, so they were built. The contract pinned here (BL-L):
+
+5. ``get_prices_bulk`` changes the full-history warm-up, and nothing else (decision A, coordinator, 17/10): an item whose
+   signals need the whole history (``requires_full_history``) warms up for ``max(finite warm-up, visible start -
+   1900-01-01)`` days, then the ``date.min`` cap as before — the finite warm-up being the one its plan asks without the
+   flag (the drawdown's own, 2 points twice, included), and 1900-01-01 ``datetime_utils.EARLIEST_RANGE_START``. It
+   loads from the earlier of 1900-01-01 and the start of its finite warm-up: a full history extends the finite warm-up
+   back to 1900-01-01, never shortens it, and adds nothing to it from a visible start on or before that day. An item
+   without a full history keeps its finite warm-up, unchanged. Two formulas were dropped on the way:
+   ``max(visible start - warm-up, min(1900-01-01, visible start))`` cut every warm-up, a finite one too, and broke
+   ``services asset-signals``, whose calendar window warms up in the 1800s; then a full history loaded from the earlier
+   of 1900-01-01 and the visible start, in place of the finite warm-up, and a finite signal beside it lost its warm-up
+   near the floor or before it (BL-L07).
+6. The seed is still the last price before the load start: a row stored before 1900 seeds a full-history fill from
+   1900-01-01 (45 825 days to ``FROZEN_TODAY``, not 739 420), and point 3's count is that span. The comparison series
+   and the events read the same per-item load ranges. An asset with no row before 1900 is filled from its first stored
+   price, as before, and a visible range before 1900 keeps its own rows.
+
+The old rows are written through the ORM, as an older version stored them: the upsert now refuses their dates.
+Red before Z-30 (HEAD d12153a1f), each for the reason its docstring gives ("Red before Z-30"): BL-L01…L03. Green then
+too — behaviour the change has to keep: BL-L04…L07. Red under the full history first narrowed (from the earlier of
+1900-01-01 and the visible start, in place of the finite warm-up): BL-L01's three cases at or before the floor, and
+BL-L07.
 """
 
 from __future__ import annotations
@@ -58,7 +85,7 @@ from sqlalchemy.pool import NullPool
 from backend.app.api.v1.assets import prices
 from backend.app.api.v1.fx import currencies
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
-from backend.app.db.models import Asset, AssetType, PriceHistory
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, PriceHistory
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.fx import FXConversionRequest, FXConvertResponse
 from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResponse, FAPriceQueryResult
@@ -139,28 +166,29 @@ class _FuseTripped(Exception):
 
 
 class _DayStepFuse:
-    """Stands in for ``timedelta`` in one product module: counts the calls, and raises past ``limit``.
+    """Stands in for ``timedelta`` in one product module: counts the calls, and raises past ``limit``, saying ``why``.
 
     The per-day loops of the code under test step with ``timedelta(days=1)``, one call per item built; the values
     returned are real ``timedelta`` objects, so the arithmetic is unchanged.
     """
 
-    def __init__(self, limit: int = FUSE_DAY_STEPS) -> None:
+    def __init__(self, limit: int = FUSE_DAY_STEPS, why: str = "the request is being built day by day") -> None:
         self.limit = limit
+        self.why = why
         self.calls = 0
 
     def __call__(self, *args: Any, **kwargs: Any) -> timedelta:
         self.calls += 1
         if self.calls > self.limit:
-            raise _FuseTripped(f"more than {self.limit:,} timedelta() steps in one call: the request is being built day by day")
+            raise _FuseTripped(f"more than {self.limit:,} timedelta() steps in one call: {self.why}")
         return timedelta(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(timedelta, name)
 
 
-def _install_fuse(monkeypatch: pytest.MonkeyPatch, module: Any) -> _DayStepFuse:
-    fuse = _DayStepFuse()
+def _install_fuse(monkeypatch: pytest.MonkeyPatch, module: Any, *, limit: int = FUSE_DAY_STEPS, why: str = "the request is being built day by day") -> _DayStepFuse:
+    fuse = _DayStepFuse(limit, why)
     monkeypatch.setattr(module, "timedelta", fuse)
     return fuse
 
@@ -691,3 +719,264 @@ async def test_blf03_conversion_after_the_ceiling_counts_zero(monkeypatch, froze
     detail = _coded_detail(refused, "bulk_too_many_days")
     assert _numbers(detail) == {"max_item_days": 10, "item_days": 11}
     assert converter.calls == 0, converter.said()
+
+
+# =============================================================================
+# BL-L — Z-30: A FULL HISTORY EXTENDS A WARM-UP BACK TO 1900-01-01, NO FURTHER (get_prices_bulk, on a private database)
+# =============================================================================
+
+FLOOR = date(1900, 1, 1)  # EARLIEST_RANGE_START: the contract's floor, written here and not read from the code
+YEAR_ONE = date(1, 1, 1)  # date.min: the day of the row an older version stored (J's SEC8-1b)
+LEGACY_FUSE_DAY_STEPS = 60_000  # a full-history fill to FROZEN_TODAY: 45 825 day-steps from FLOOR, 739 420 from YEAR_ONE
+SHORT_DRAWDOWN = SignalRequest(instance_id="short_drawdown", signal_code="RISK_DRAWDOWN", params={"full_history": False})  # a finite warm-up: 4 days, its 2 points twice
+#: Four closes in the year before FROZEN_TODAY, all on Wednesdays (no weekend carry), the highest 147 days back: a
+#: drawdown on FROZEN_TODAY reads -20 % only if its history reaches that far.
+RECENT_CLOSES = {_day(-301): 100, _day(-147): 150, _day(-7): 110, _day(0): 120}
+LEGACY_CLOSE = 90  # the old row's close: below every recent one, so it is never the peak
+
+
+async def _priced_asset(engine: AsyncEngine, closes: dict[date, int], *, dividends_on: Iterable[date] = ()) -> int:
+    """An asset of the private database with ``closes`` (day → close) and a dividend on each day of ``dividends_on``.
+
+    Written through the ORM, as an older version stored its rows: X-R65 checks the day in the upsert, not in the table.
+    """
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        asset = Asset(display_name=f"Bulk limits {uuid.uuid4().hex[:8]}", currency="EUR", asset_type=AssetType.STOCK)
+        session.add(asset)
+        await session.flush()
+        for day, close in closes.items():
+            session.add(PriceHistory(asset_id=asset.id, date=day, close=Decimal(close), currency="EUR", source_plugin_key="MANUAL"))
+        for day in dividends_on:
+            session.add(AssetEvent(asset_id=asset.id, date=day, type=AssetEventType.DIVIDEND, value=Decimal("0.50"), currency="EUR"))
+        await session.commit()
+        return asset.id
+
+
+def _price_points(result: FAPriceQueryResult) -> list[tuple]:
+    """The visible points: the day, the close, and the backward fill (None on a stored day)."""
+    return [(point.date, point.close, point.backward_fill_info) for point in result.prices]
+
+
+def _visible_drawdown(result: FAPriceQueryResult) -> list[tuple[date, float]]:
+    """The visible points of the item's one signal, a drawdown, as (day, %); the test fails if it was not computed."""
+    (signal,) = result.signals
+    assert signal.error is None and len(signal.series) == 1, f"the drawdown was not computed: {signal.status}, {signal.error}"
+    return [(point.date, point.value) for point in signal.series[0].points]
+
+
+_L01_LOAD_STARTS = [
+    # (the visible start and end, the load start: the earlier of 1900-01-01 and the visible start less 4 days)
+    pytest.param(FROZEN_TODAY, FROZEN_TODAY, FLOOR, id="full-history-stops-at-the-floor"),
+    pytest.param(FLOOR, FLOOR, date(1899, 12, 28), id="full-history-from-the-floor"),
+    pytest.param(date(1899, 12, 31), date(1899, 12, 31), date(1899, 12, 27), id="full-history-from-the-day-before-the-floor"),
+    pytest.param(date(1850, 1, 1), date(1860, 12, 31), date(1849, 12, 28), id="full-history-over-a-range-before-the-floor"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("start", "end", "load_start"), _L01_LOAD_STARTS)
+async def test_bll01_load_start_read_through_the_count(private_db, frozen_ceiling, lower_budget, no_market_holidays, start, end, load_start):
+    """BL-L01: where a full-history item's load starts — the earlier of 1900-01-01 and the start of its finite warm-up,
+    the drawdown's own 4 days — read through its count. The asset holds a row an older version stored on 0001-01-01, a
+    seed before any load start: the fill, and so the count, runs from the load start itself, and ``item_days`` is the
+    days from it to the end — read exactly under a budget of 0, which refuses any count, short of the span as well as
+    past it. For a full-history drawdown:
+
+    - over one visible day, ``FROZEN_TODAY``: from 1900-01-01, 45 825;
+    - over 1900-01-01 itself: from 1899-12-28, 5; over 1899-12-31: from 1899-12-27, 5;
+    - over 1850-01-01 … 1860-12-31: from 1849-12-28, 4 022.
+
+    Red before Z-30: the full history reached ``date.min``, the old row's day: ``item_days`` 739 420, 693 596, 693 595
+    and 679 351. Red under the full history first narrowed (from the earlier of 1900-01-01 and the visible start,
+    without the finite warm-up): 1, 1 and 4 018 for the three cases at or before the floor.
+    """
+    asset_id = await _priced_asset(private_db, {YEAR_ONE: LEGACY_CLOSE, **RECENT_CLOSES})
+    span = (end - load_start).days + 1
+    lower_budget(0)
+
+    error = await _refused_for_days(lambda: _query(private_db, _item(asset_id, start, end, signals=[DRAWDOWN])))
+
+    assert (error.item_days, error.max_item_days) == (span, 0), f"counted from {end - timedelta(days=error.item_days - 1)}, not from {load_start}"
+
+
+@pytest.mark.asyncio
+async def test_bll02_comparison_series_follow_the_load_start(private_db, frozen_ceiling, lower_budget, no_market_holidays):
+    """BL-L02: one visible day with a full-history drawdown and a rolling beta against an asset that holds a row on
+    0001-01-01: the comparison's fill follows the item's load start — seeded by that row, from 1900-01-01, 45 825 days —
+    beside the item's own 302 from its first stored price (no row before 1900: as before). Under a budget one short of
+    46 127, ``item_days`` 46 127.
+
+    Red before Z-30: the comparison was counted from 0001-01-01, 739 420 days: ``item_days`` 739 722.
+    """
+    primary = await _priced_asset(private_db, RECENT_CLOSES)
+    legacy = await _priced_asset(private_db, {YEAR_ONE: LEGACY_CLOSE, **RECENT_CLOSES})
+    beta = SignalRequest(instance_id="beta", signal_code="RISK_ROLLING_BETA", params={"window": 2, "comparison_asset_id": legacy})
+    own = (FROZEN_TODAY - min(RECENT_CLOSES)).days + 1
+    seeded = (FROZEN_TODAY - FLOOR).days + 1
+    lower_budget(own + seeded - 1)
+
+    error = await _refused_for_days(lambda: _query(private_db, _item(primary, FROZEN_TODAY, FROZEN_TODAY, signals=[DRAWDOWN, beta])))
+
+    assert (error.item_days, error.max_item_days) == (own + seeded, own + seeded - 1), f"the comparison was counted over {error.item_days - own:,} days, not the {seeded:,} from {FLOOR}"
+
+
+@pytest.mark.asyncio
+async def test_bll03_old_row_seeds_a_full_history_from_the_floor(private_db, monkeypatch, frozen_ceiling, no_market_holidays):
+    """BL-L03 (guard, the real budget): an asset with a row an older version stored on 0001-01-01 and four closes in
+    the last year; one visible day with a full-history drawdown. Served within ``GUARD_SECONDS`` and under a fuse of
+    ``LEGACY_FUSE_DAY_STEPS`` day-steps on ``price_query.timedelta``: the fill walks from 1900-01-01, 45 825 days, seeded
+    by the old row. The visible day's point is its own close, 120; the drawdown measures it against the peak 147 days
+    back, -20 %; the series the drawdown was handed starts on 1900-01-01, the old row carried there; and the range it
+    reports analyzed is the load range, 1900-01-01 to the visible day.
+
+    Red before Z-30: the fill walked from 0001-01-01, 739 420 days for one visible point; the fuse stopped it after
+    ``LEGACY_FUSE_DAY_STEPS``.
+    """
+    asset_id = await _priced_asset(private_db, {YEAR_ONE: LEGACY_CLOSE, **RECENT_CLOSES})
+    _install_fuse(monkeypatch, price_query, limit=LEGACY_FUSE_DAY_STEPS, why="the fill starts before 1900-01-01")
+
+    (result,) = await _within_guard(lambda: _query(private_db, _item(asset_id, FROZEN_TODAY, FROZEN_TODAY, signals=[DRAWDOWN])))
+
+    assert _price_points(result) == [(FROZEN_TODAY, Decimal(120), None)]
+    assert _visible_drawdown(result) == [(FROZEN_TODAY, pytest.approx(-20.0))]
+    (drawdown,) = result.signals
+    assert drawdown.availability.input_coverage.first_available_date == FLOOR
+    assert drawdown.risk_metadata.analyzed_range == DateRangeModel(start=FLOOR, end=FROZEN_TODAY)
+
+
+@pytest.mark.asyncio
+async def test_bll04_range_before_the_floor_keeps_its_rows(private_db, frozen_ceiling, no_market_holidays):
+    """BL-L04: 1850-01-01 … 1860-12-31 with a full-history drawdown, on an asset whose only rows lie inside the range
+    (1855-03-12 and 1858-07-01, an older version's) with a dividend on 1856-01-15, events asked: the points run from
+    1855-03-12 to 1860-12-31 — the two rows as stored, every other day carried from the last one — and the dividend is
+    returned: the same points, events and errors as the range asked without a signal. The floor never cuts a visible
+    range, and a fill with no seed still starts at its first price.
+
+    Green before Z-30 too: it pins what the floor must leave alone.
+    """
+    first, second, dividend = date(1855, 3, 12), date(1858, 7, 1), date(1856, 1, 15)
+    asset_id = await _priced_asset(private_db, {first: 100, second: 104}, dividends_on=[dividend])
+    start, end = date(1850, 1, 1), date(1860, 12, 31)
+
+    (with_history,) = await _query(private_db, _item(asset_id, start, end, signals=[DRAWDOWN], include_events=True))
+    (plain,) = await _query(private_db, _item(asset_id, start, end, include_events=True))
+
+    assert [point.date for point in with_history.prices] == _days(first, end)
+    assert [point.date for point in with_history.prices if point.backward_fill_info is None] == [first, second]
+    assert [event.date for event in with_history.events] == [dividend]
+    assert with_history.model_dump(exclude={"signals"}) == plain.model_dump(exclude={"signals"})
+
+
+@pytest.mark.asyncio
+async def test_bll05_without_an_older_row_the_fill_starts_at_the_first_price(private_db, monkeypatch, frozen_ceiling, no_market_holidays):
+    """BL-L05: BL-L03's item on an asset without the old row — the four closes of the last year, the first one 301 days
+    back. The fill still walks from that first price, 302 days (a fuse at twice that stops a fill from 1900-01-01,
+    45 825), and the item gives what it gave: the visible point (120, as stored), the drawdown against the peak 147
+    days back (-20 %), and the four stored prices the drawdown was handed, from the first one.
+
+    ``risk_metadata.analyzed_range`` echoes the load range, so its start moves for every full-history item, old row or
+    not (``date.min`` before Z-30, 1900-01-01 after: BL-L03): the one field this guard leaves out.
+    Green before Z-30 too: it pins the output the floor must keep for an asset with no row before 1900.
+    """
+    asset_id = await _priced_asset(private_db, RECENT_CLOSES)
+    first = min(RECENT_CLOSES)
+    walk = (FROZEN_TODAY - first).days + 1
+    _install_fuse(monkeypatch, price_query, limit=2 * walk, why="the fill does not start at the first stored price")
+
+    (result,) = await _within_guard(lambda: _query(private_db, _item(asset_id, FROZEN_TODAY, FROZEN_TODAY, signals=[DRAWDOWN])))
+
+    assert _price_points(result) == [(FROZEN_TODAY, Decimal(120), None)]
+    assert _visible_drawdown(result) == [(FROZEN_TODAY, pytest.approx(-20.0))]
+    (drawdown,) = result.signals
+    assert drawdown.availability.input_coverage.first_available_date == first
+    assert drawdown.warmup.loaded_points == len(RECENT_CLOSES)
+
+
+_L06_FINITE_WARMUPS = [
+    # (the one visible day, the load start: 4 days before it, as before Z-30)
+    pytest.param(date(1900, 1, 2), date(1899, 12, 29), id="across-the-floor"),
+    pytest.param(date(1850, 1, 2), date(1849, 12, 29), id="before-a-range-before-the-floor"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("day", "load_start"), _L06_FINITE_WARMUPS)
+async def test_bll06_a_finite_warmup_is_unchanged_across_the_floor_and_before_it(private_db, frozen_ceiling, lower_budget, no_market_holidays, day, load_start):
+    """BL-L06: only a full history is bounded (point 5); a finite warm-up is not, across the floor or before it. The
+    drawdown without full history warms up for 4 days, its 2 points twice. On BL-L01's asset — the row on 0001-01-01
+    seeding any load start, so the count reads where the load starts — one visible day loads from 4 days before it,
+    5 days: over 1900-01-02 from 1899-12-29, across the floor; over 1850-01-02 from 1849-12-29, before a visible range
+    that starts before the floor. Under a budget of 4, ``BulkTooManyDaysError`` with ``item_days`` 5 for both.
+
+    Green before Z-30 too: it pins the warm-up the change must leave alone. The formula first agreed bounded it as well,
+    and counted 2 and 1 here.
+    """
+    asset_id = await _priced_asset(private_db, {YEAR_ONE: LEGACY_CLOSE, **RECENT_CLOSES})
+    lower_budget(4)
+
+    error = await _refused_for_days(lambda: _query(private_db, _item(asset_id, day, day, signals=[SHORT_DRAWDOWN])))
+
+    assert (error.item_days, error.max_item_days) == (5, 4), f"counted from {day - timedelta(days=error.item_days - 1)}, not from {load_start}"
+
+
+SMA200 = SignalRequest(instance_id="sma200", signal_code="SMA", params={"period": 200})  # a finite warm-up: 400 days, its 200 sessions twice
+
+
+def _sma200_reading(result: FAPriceQueryResult) -> tuple:
+    """The SMA 200's status and why it is not ok; its warm-up, as points loaded, points used before the visible start and
+    complete or not; the first day it was handed."""
+    sma = next(signal for signal in result.signals if signal.instance_id == SMA200.instance_id)
+    availability, warmup = sma.availability, sma.warmup
+    return (
+        sma.status.value,
+        availability.reason_code.value if availability and availability.reason_code else None,
+        warmup.loaded_points if warmup else None,
+        warmup.used_points if warmup else None,
+        warmup.complete if warmup else None,
+        availability.input_coverage.first_available_date if availability else None,
+    )
+
+
+def _sma200_series(result: FAPriceQueryResult) -> list[dict]:
+    """The SMA 200's visible output."""
+    sma = next(signal for signal in result.signals if signal.instance_id == SMA200.instance_id)
+    return [series.model_dump(mode="json") for series in sma.series]
+
+
+_L07_RANGES = [
+    # (the first and the last day stored, a close on each, as an older version stored them; the visible range)
+    pytest.param(date(1848, 1, 1), date(1850, 12, 31), date(1850, 6, 1), date(1850, 6, 30), id="a-range-before-the-floor"),
+    pytest.param(date(1898, 1, 1), date(1900, 12, 31), date(1900, 3, 1), date(1900, 3, 30), id="a-range-just-after-the-floor"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("first", "last", "start", "end"), _L07_RANGES)
+async def test_bll07_a_full_history_never_shortens_a_finite_warmup_beside_it(private_db, frozen_ceiling, no_market_holidays, first, last, start, end):
+    """BL-L07: a full history extends a finite warm-up, never shortens it (point 5). An SMA 200 warms up for 400 days,
+    its 200 sessions twice. On an asset priced every day of three years — 1848 … 1850, or 1898 … 1900, its days before
+    1900 stored by an older version — asked alone over 1850-06-01 … 06-30 or 1900-03-01 … 03-30, it is ok, its warm-up
+    complete: 430 points loaded, 400 used, from the visible start less 400 days. Asked beside a full-history drawdown,
+    in the same item, it is still ok, its warm-up complete, at least as long and starting no later, and its visible
+    output is the one it has alone.
+
+    Under decision A its warm-up is exactly alone's: 400 days, longer than what the full history reaches — nothing
+    before a visible start before the floor, 59 days back to 1900-01-01. Before Z-30 it started at the first stored
+    price (882 and 789 points used): green then too. Red under the full history first narrowed (from the earlier of
+    1900-01-01 and the visible start, in place of the finite warm-up): the SMA was unavailable, ``insufficient_history``,
+    with 0 and 59 points of warm-up.
+    """
+    asset_id = await _priced_asset(private_db, {day: 100 + n for n, day in enumerate(_days(first, last))})
+    warmup_start = start - timedelta(days=400)
+    (alone,) = await _query(private_db, _item(asset_id, start, end, signals=[SMA200]))
+    alone_reading = _sma200_reading(alone)
+    assert alone_reading == ("ok", None, 430, 400, True, warmup_start), f"premise, the SMA alone: {alone_reading}"
+
+    (beside,) = await _query(private_db, _item(asset_id, start, end, signals=[SMA200, DRAWDOWN]))
+
+    beside_reading = _sma200_reading(beside)
+    status, reason, _loaded, used, complete, first_input = beside_reading
+    said = f"beside a full-history drawdown the SMA reads {beside_reading}; alone, {alone_reading}"
+    assert (status, reason, complete) == ("ok", None, True), said
+    assert used >= 400 and first_input <= warmup_start, said
+    assert _sma200_series(beside) == _sma200_series(alone)

@@ -2,8 +2,12 @@
 
 R13-SEC7-1 ends every range that is walked day by day -- the portfolio engine's replay, the summary and the report, the
 lots histories, risk's portfolio scope, an AI Export period, and (X-R55) the asset price queries and the FX conversions --
-at ``latest_range_end()``, tomorrow. The modules that apply the bound import the function by name, so a test replaces
-the name where it is read: replacing it in ``backend.app.utils.datetime_utils`` would change nothing.
+at ``latest_range_end()``, tomorrow. Two more modules read it to refuse a date rather than to end a walk: (X-R65) the
+bounds on stored price and rate dates, and (R13-SEC9-4) the ``range_start`` of ``POST /prices/current``; the far-future
+suites lift them too, so they can save their own prices and rates. The modules that apply the bound import the function
+by name, so a test replaces the name where it is read: replacing it in ``backend.app.utils.datetime_utils`` would change
+nothing. J-49 (``TestRangeBoundSeamCoversEveryReader`` in ``test_financial/test_date_range_bounds.py``) holds
+``RANGE_BOUND_CONSUMERS`` to the modules of ``backend/app`` that bind the name.
 """
 
 from __future__ import annotations
@@ -21,6 +25,8 @@ RANGE_BOUND_CONSUMERS = (
     "backend.app.services.ai_export.runtime_service",
     "backend.app.services.assets.price_query",
     "backend.app.api.v1.fx.currencies",
+    "backend.app.utils.date_range_limits",
+    "backend.app.api.v1.assets.prices",
 )
 
 

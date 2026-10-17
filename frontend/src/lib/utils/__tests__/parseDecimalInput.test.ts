@@ -198,3 +198,262 @@ describe('decimalArrowStep hold acceleration', () => {
         expect(Number(value) - Number(afterTurn)).toBe(1);
     });
 });
+
+/*
+ * W-B66 — a pasted exponent, read exactly or kept (D-W66-1 (a), 17/10).
+ *
+ * Typed key by key, an `e` never enters a decimal field; pasted, a whole `1e-8` arrives at once. Until
+ * W-B66 both readers kept only its digits: `filterDecimalInput` (every input event of ExactDecimalInput)
+ * and `normalizeDecimalInput` (the fields that call it directly: the data editor's cells, the PAC planner,
+ * FixFlaggedStep, EventCreateMiniModal, CompactCashCell's blur). `1e-8` read 18, `3E+150` read 3150, `1e5x`
+ * read 15: another number, silently.
+ *
+ * The contract — a number is never changed in silence:
+ * - A text WHOLLY in scientific notation (trimmed; an optional leading `-`; a mantissa of digits with at
+ *   most one `.` or `,` mark and at least one digit; `e` or `E`; an optional exponent sign; exponent
+ *   digits) is expanded exactly to a canonical plain decimal when |exponent| ≤ 100, the backend's bound
+ *   (R13-SEC7-3).
+ * - Any other text holding an EXPONENT MARKER — a digit, an optional `.` or `,`, `e` or `E`, an optional
+ *   sign, a digit (`/\d[.,]?[eE][+-]?\d/`, unanchored) — is kept exactly as typed (trimmed), its sign
+ *   included even without allowNegative, so the field can say why it refuses it: beyond ±100 (`3E+150`),
+ *   or not wholly scientific (`1e5x`, `1.234,5e2`).
+ * - A text holding no marker is read exactly as before: a lone `e` is still dropped.
+ */
+
+/** The coordinator's table. `-2.5e2` reads `-250` where a leading minus is allowed. */
+const EXPANSIONS: ReadonlyArray<readonly [string, string]> = [
+    ['1e-8', '0.00000001'],
+    ['1,5E+3', '1500'],
+    ['-2.5e2', '-250'],
+    ['1.00E-08', '0.00000001'],
+    ['0e5', '0'],
+    ['12.34e1', '123.4'],
+    ['5e0', '5'],
+    ['1e100', `1${'0'.repeat(100)}`],
+    ['1e-100', `0.${'0'.repeat(99)}1`],
+];
+
+/** One row per rule of the canonical expansion, named by the rule it pins. */
+const CANONICAL_RULES: ReadonlyArray<readonly [string, string, string]> = [
+    ['a dot is the decimal mark, whatever the pasted one', '1,5e-1', '0.15'],
+    ['no leading zeros in the integer part', '0012e-1', '1.2'],
+    ['no trailing zeros in the fraction', '12.50e0', '12.5'],
+    ['no trailing dot', '2.0e0', '2'],
+    ['exact: no float rounding', '0.1234567890123456789e1', '1.234567890123456789'],
+    ['the whole value is trimmed first', ' \t1e-8 ', '0.00000001'],
+];
+
+/** The edges of the form, one row each. */
+const FORM_EDGES: ReadonlyArray<readonly [string, string, string]> = [
+    ['a mark may open the mantissa', '.5e1', '5'],
+    ['a mark may close the mantissa', '5.e1', '50'],
+    ['the exponent may carry leading zeros', '1e0005', '100000'],
+];
+
+/** Beyond ±100: the trimmed text, exactly as pasted. */
+const OUT_OF_RANGE: ReadonlyArray<readonly [string, string]> = [
+    ['1e-101', '1e-101'],
+    ['1e101', '1e101'],
+    ['3E+150', '3E+150'],
+    ['7,5E+150, its comma kept', '7,5E+150'],
+    ['an exponent of 400 digits', `2.5e${'9'.repeat(400)}`],
+    ['3E+150 between blanks, trimmed', '  3E+150 \t'],
+    ['-7.5e-1000, a permitted sign kept', '-7.5e-1000'],
+];
+
+/** Holding an exponent marker without being wholly scientific: the text, exactly as typed. */
+const MARKED: ReadonlyArray<readonly [string, string]> = [
+    ['1e5x', 'something after the exponent'],
+    ['1e-200x', 'beyond ±100, then a stray character'],
+    ['1e5e3', 'two exponents'],
+    ['1.2.3e4', 'two decimal marks'],
+    ['1.234,5e2', 'a grouped mantissa'],
+];
+
+/** A row's leading minus is meant: read it where a sign is allowed. */
+function signed(text: string): boolean {
+    return text.trim().startsWith('-');
+}
+
+describe('filterDecimalInput — a pasted exponent is read exactly, or kept (W-B66, D-W66-1 (a))', () => {
+    // Red before the W-B66 cure: the `e` and its sign are filtered out and the digits run together (1e-8 → 18).
+    it.each(EXPANSIONS)('expands %s exactly to %s', (pasted, expanded) => {
+        expect(filterDecimalInput(pasted, signed(pasted)), `${pasted} is wholly scientific, |exponent| ≤ 100: today its e is filtered out and the digits run together`).toBe(expanded);
+    });
+
+    // Red before the W-B66 cure, for the same reason.
+    it.each(CANONICAL_RULES)('expands to the canonical form — %s: %j → %j', (_rule, pasted, expanded) => {
+        expect(filterDecimalInput(pasted), 'today the e is filtered out and the digits run together').toBe(expanded);
+    });
+
+    // Red before the W-B66 cure: .5e1 → .51, 5.e1 → 5.1, 1e0005 → 10005.
+    it.each(FORM_EDGES)('reads the form at its edge — %s: %j → %j', (_rule, pasted, expanded) => {
+        expect(filterDecimalInput(pasted), 'today the e is filtered out and the digits run together').toBe(expanded);
+    });
+
+    // Red before the W-B66 cure: `-1e2` reads 12 — the minus is rightly dropped, but so is the e.
+    it.each([
+        ['-1e2', '100'],
+        ['-2.5e2', '250'],
+        [' -1e-8', '0.00000001'],
+    ])('drops the leading minus of %j without allowNegative, as for any number: %j', (pasted, expanded) => {
+        expect(filterDecimalInput(pasted, false), 'today the e is filtered out and the digits run together').toBe(expanded);
+    });
+
+    // Red before the W-B66 cure: beyond ±100 the text loses its e and becomes another number (3E+150 → 3150).
+    it.each(OUT_OF_RANGE)('keeps %s as pasted: beyond ±100 it is never a number without its e', (_label, pasted) => {
+        expect(filterDecimalInput(pasted, signed(pasted)), 'beyond ±100 the trimmed text stays as pasted; today its e is filtered out').toBe(pasted.trim());
+    });
+
+    // Red before the W-B66 cure: 1e5x → 15, 1e-200x → 1200, 1e5e3 → 153, 1.2.3e4 → 1.2.34, 1.234,5e2 → 1.234,52.
+    it.each(MARKED)('keeps %j as typed — %s: it holds an exponent marker without being wholly scientific', (typed) => {
+        expect(filterDecimalInput(typed), 'a text holding an exponent marker is kept as typed; today its e is filtered out').toBe(typed);
+    });
+
+    // Red before the W-B66 cure: the minus is dropped (no allowNegative), and the e with it: -1e-200 → 1200.
+    it.each([
+        ['-1e-200', 'beyond ±100'],
+        ['-1e5x', 'not wholly scientific'],
+    ])('keeps %j as typed without allowNegative, its sign included: kept (%s) beats the sign rule', (typed) => {
+        expect(filterDecimalInput(typed, false), 'a kept text keeps its sign; today the minus and the e are both filtered out').toBe(typed);
+    });
+
+    // Guard: a text holding no exponent marker filters exactly as before — a lone e is still dropped.
+    it.each([
+        ['12a3', '123', 'a letter among the digits'],
+        ['1.234,56', '1.234,56', 'grouping punctuation'],
+        ['1,234.56', '1,234.56', 'grouping punctuation'],
+        ['EUR 12,34', '12,34', 'an E with no digit before it'],
+        ['12EUR', '12', 'an E with no digit after it'],
+        ['1e', '1', 'no digit after the e'],
+        ['e5', '5', 'no digit before the e'],
+        ['e', '', 'a lone e'],
+        ['1e+-5', '15', 'two signs: no digit right after the first'],
+        ['1 e5', '15', 'a blank between the digit and the e'],
+    ])('filters %j as today, to %j: %s, so no exponent marker', (typed, filtered) => {
+        expect(filterDecimalInput(typed)).toBe(filtered);
+    });
+});
+
+describe('normalizeDecimalInput — an exponent is read exactly, or kept, too (W-B66, D-W66-1 (a))', () => {
+    // Red before the W-B66 cure: 1e-8 → 18, 1,5E+3 → 1.53, -2.5e2 → -2.52. No allowNegative here: the sign is kept.
+    it.each(EXPANSIONS)('expands %s exactly to %s, as filterDecimalInput does', (pasted, expanded) => {
+        expect(normalizeDecimalInput(pasted), `${pasted} is wholly scientific, |exponent| ≤ 100: today its e is dropped and the digits run together`).toBe(expanded);
+    });
+
+    // Red before the W-B66 cure, for the same reason.
+    it.each(CANONICAL_RULES)('expands to the canonical form — %s: %j → %j', (_rule, pasted, expanded) => {
+        expect(normalizeDecimalInput(pasted), 'today the e is dropped and the digits run together').toBe(expanded);
+    });
+
+    // Red before the W-B66 cure: .5e1 → .51, 5.e1 → 5.1, 1e0005 → 10005.
+    it.each(FORM_EDGES)('reads the form at its edge — %s: %j → %j', (_rule, pasted, expanded) => {
+        expect(normalizeDecimalInput(pasted), 'today the e is dropped and the digits run together').toBe(expanded);
+    });
+
+    // Red before the W-B66 cure: beyond ±100 the text loses its e and becomes another number (3E+150 → 3150).
+    it.each(OUT_OF_RANGE)('returns %s untouched: beyond ±100 it is never a number without its e', (_label, pasted) => {
+        expect(normalizeDecimalInput(pasted), 'beyond ±100 the trimmed text is returned untouched; today its e is dropped').toBe(pasted.trim());
+    });
+
+    // Red before the W-B66 cure: 1e5x → 15, 1e-200x → 1200, 1e5e3 → 153, 1.2.3e4 → 1.234, 1.234,5e2 → 1234.52.
+    it.each(MARKED)('returns %j untouched — %s: it holds an exponent marker without being wholly scientific', (typed) => {
+        expect(normalizeDecimalInput(typed), 'a text holding an exponent marker is returned untouched; today its e is dropped').toBe(typed);
+    });
+
+    // Guard: a text holding no exponent marker normalizes exactly as before.
+    it.each([
+        ['1.234,56', '1234.56'],
+        ['1,234.56', '1234.56'],
+        ['1.4,1', '1.41'],
+        ['-12', '-12'],
+        ['12a3', '123'],
+        ['', ''],
+        ['EUR 12,34', '12.34'],
+        ['12EUR', '12'],
+        ['1e', '1'],
+        ['e5', '5'],
+        ['1e+-5', '15'],
+        ['1 e5', '15'],
+    ])('normalizes %j as today, to %j: no exponent marker in it', (typed, normalized) => {
+        expect(normalizeDecimalInput(typed)).toBe(normalized);
+    });
+});
+
+/*
+ * W-B66 — a huge paste costs linear time (D-W66-1 (b)).
+ *
+ * 40 000 characters: a quadratic pattern takes seconds there (2.7–3.3 s, measured in V8), a linear one a
+ * fraction of a millisecond, so a 1 000 ms bound separates them even under load. A quadratic regex is
+ * synchronous and Vitest cannot interrupt it, which is why the size is not 200 000 (about 90 s).
+ */
+const HUGE = 40_000;
+const BOUND_MS = 1_000;
+const NINES = '9'.repeat(HUGE);
+
+function timed<T>(run: () => T): {result: T; ms: number} {
+    const started = performance.now();
+    const result = run();
+    return {result, ms: performance.now() - started};
+}
+
+/** A text as a failure message can show it: whole when short, its two ends and its length when huge. */
+function shown(text: string): string {
+    return text.length <= 64 ? JSON.stringify(text) : `${JSON.stringify(text.slice(0, 24))}…${JSON.stringify(text.slice(-16))} (${text.length} chars)`;
+}
+
+/** No exponent marker: [label, text, filtered, normalized] — each read as before. */
+const HUGE_PLAIN: ReadonlyArray<readonly [string, string, string, string]> = [
+    ['digits then "-"', `${NINES}-`, NINES, NINES],
+    ['digits then "x"', `${NINES}x`, NINES, NINES],
+    ['digits then a dangling "e"', `${NINES}e`, NINES, NINES],
+    ['a decimal then "x"', `1.${NINES}x`, `1.${NINES}`, `1.${NINES}`],
+];
+
+/** Holding an exponent marker: [label, text, read as]. */
+const HUGE_MARKED: ReadonlyArray<readonly [string, string, string]> = [
+    ['a 40 000-digit mantissa, expanded exactly', `1.${NINES}e-5`, `0.00001${NINES}`],
+    ['a 40 000-digit exponent, kept as pasted', `1e${NINES}`, `1e${NINES}`],
+    ['a 40 000-digit mantissa then e5x, kept as typed', `${NINES}e5x`, `${NINES}e5x`],
+];
+
+describe('a huge paste costs linear time (W-B66, D-W66-1 (b))', () => {
+    /*
+     * Guard — the red the brief asked for here cannot exist. CANONICAL (`/^-?(?:\d+\.?\d*|\.\d+)$/`) IS
+     * quadratic on 40 000 digits then `-`, but no such candidate reaches it: the body is filtered to
+     * digits, dots and commas before the test (the trailing `-` is gone), and every branch collapses the
+     * separators to one dot, so the only candidates CANONICAL rejects are `.` and `-.`. The bound stays as
+     * a guard on the exponent reading the cure adds to this function: a `\d*[.,]?\d*[eE]…` pattern would
+     * be quadratic on exactly these texts.
+     */
+    it.each(HUGE_PLAIN)('normalizeDecimalInput reads %s as today, in linear time', (_label, text, _filtered, normalized) => {
+        const {result, ms} = timed(() => normalizeDecimalInput(text));
+        expect(result === normalized, `normalized to ${shown(result)}, not ${shown(normalized)}`).toBe(true);
+        expect(ms, `normalizeDecimalInput took ${ms.toFixed(0)} ms on ${text.length} characters`).toBeLessThan(BOUND_MS);
+    });
+
+    // Guard: the filter is one character class. It stays linear once it reads exponents, on every input event.
+    it.each(HUGE_PLAIN)('filterDecimalInput reads %s as today, in linear time', (_label, text, filtered) => {
+        const {result, ms} = timed(() => filterDecimalInput(text));
+        expect(result === filtered, `filtered to ${shown(result)}, not ${shown(filtered)}`).toBe(true);
+        expect(ms, `filterDecimalInput took ${ms.toFixed(0)} ms on ${text.length} characters`).toBeLessThan(BOUND_MS);
+    });
+
+    /*
+     * Red before the W-B66 cure: the e is filtered out and the digits run together (…95, 1999…, …95). The
+     * bound keeps the reading linear: on the last row, past its marker, a two-star pattern such as
+     * `^-?\d*[.,]?\d*[eE][+-]?\d+$` takes 2.5 s (V8); `^-?(?:\d+(?:[.,]\d*)?|[.,]\d+)[eE][+-]?\d+$` 0.3 ms.
+     */
+    it.each(HUGE_MARKED)('filterDecimalInput reads %s, in linear time', (_label, text, expected) => {
+        const {result, ms} = timed(() => filterDecimalInput(text));
+        expect(result === expected, `read as ${shown(result)}, not ${shown(expected)}: today the e is filtered out`).toBe(true);
+        expect(ms, `filterDecimalInput took ${ms.toFixed(0)} ms on ${text.length} characters`).toBeLessThan(BOUND_MS);
+    });
+
+    // Red before the W-B66 cure, for the same reason.
+    it.each(HUGE_MARKED)('normalizeDecimalInput reads %s, in linear time', (_label, text, expected) => {
+        const {result, ms} = timed(() => normalizeDecimalInput(text));
+        expect(result === expected, `read as ${shown(result)}, not ${shown(expected)}: today the e is dropped`).toBe(true);
+        expect(ms, `normalizeDecimalInput took ${ms.toFixed(0)} ms on ${text.length} characters`).toBeLessThan(BOUND_MS);
+    });
+});

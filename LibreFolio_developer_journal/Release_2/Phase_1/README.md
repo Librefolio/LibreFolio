@@ -361,4 +361,50 @@ Sono tutti locali: la push la fa il developer.
 | 269 | 17/10 11:54 | H-46 test mode outside test lanes | `b7dcd3a25` |
 | 270 | 17/10 12:02 | A9 fix-forward forgot-password on failed config | `cd52e25fc` |
 | 271 | 17/10 12:04 | W-B74 balances refuse unreadable rows | `80cee9c2d` |
+| 272 | 17/10 12:14 | E R13-SEC9 review | `c2021cb52` |
+| 273 | 17/10 12:24 | E-16 forgot page docs | `ac3c03177` |
+| 274 | 17/10 12:25 | X-R49 plan change refuses costless split adjustments | `e710cf552` |
+| 275 | 17/10 12:35 | H-45 page policy on XML docs, none on 304 | `d617cb406` |
+| 276 | 17/10 12:35 | X TS2769 e2e point type | `9e8f6e8dc` |
+| 277 | 17/10 12:42 | B-35 restore unpack cap | `9fafc79b5` |
+| 278 | 17/10 12:43 | E-17 e2e tsc clean | `fc979d0b4` |
+| 279 | 17/10 12:52 | J-12 backend and AI Export half | `2fa8ec1a8` |
+| 280 | 17/10 12:52 | Y J-12 panel half | `46b5fbc0e` |
+| 281 | 17/10 12:52 | J-12 log graph line, CHANGELOG | `4e11fabec` |
+| 282 | 17/10 13:07 | X-R44c test_only guard | `e41427916` |
+| 283 | 17/10 13:08 | B-39 CSV formula escaping | `25d00f192` |
+| 284 | 17/10 13:09 | W-B72 refuse stray cost basis N78 | `7bc66c7ca` |
+| 285 | 17/10 13:10 | Z-27 web batching, SEC9-2 1M budget | `726d90d72` |
+| 286 | 17/10 13:10 | H-49 lane id bounds | `96da36422` |
+| 287 | 17/10 13:15 | H B-35 review fixes | `c7f414827` |
+| 288 | 17/10 13:17 | A-42/A-43 setup link lifecycle | `7156a24af` |
+| 289 | 17/10 13:33 | B-36/B-37 quoted tables, untrusted schema | `d1976bca8` |
+| 290 | 17/10 13:42 | X-R60 freshest Δ answer, no needless periods | `cb05410a5` |
+| 291 | 17/10 13:45 | MF X-R59 range change, SEC8-2a/2b, SEC9-1, D3, SI2, J45a | `482343eb3` |
+| 292 | 17/10 13:55 | J-50b one remedy table | `ef74ff9fc` |
+| 293 | 17/10 13:56 | SEC8-1b risk and replay date bounds | `a565e06d0` |
+| 294 | 17/10 13:57 | Y-31 E2E J12 locale rule, WAC state (pick) | `8aa8a821e` |
+| 295 | 17/10 13:57 | B-38 secret files read as root | `c2a09b960` |
+| 296 | 17/10 14:00 | W-B67 Auto cost on its own row N84 | `ac92e6fae` |
+| 297 | 17/10 14:02 | A profile helper, A-50, SC-LANE-01 | `d7641f368` |
+| 298 | 17/10 14:04 | E journal, MF-SEC9b analysis | `c3dc19fd9` |
+| 299 | 17/10 14:10 | B-34 missing instance key message | `202849800` |
+| 300 | 17/10 14:12 | X-R62 coded provider removal refusal | `907fb3b97` |
+| 301 | 17/10 14:14 | W-B72 html gate fix | `5603a23a7` |
+| 302 | 17/10 14:26 | J-33 lots performance at cost | `104333567` |
+| 303 | 17/10 14:38 | MF-SEC9a bulk writes chunked | `dd416f5bb` |
+| 304 | 17/10 14:39 | X-R64 batched period changes and live poll | `15132b448` |
+| 305 | 17/10 14:39 | W-B75 BRIM plain-data params (H) | `9ba7ef9d3` |
+| 306 | 17/10 14:41 | A-46/A-47 username rules | `abbe19d37` |
+| 307 | 17/10 14:49 | W-B66 pasted exponents | `e820279e1` |
+| 308 | 17/10 14:53 | J-51 YoC unseen-broker arrivals | `1becf502f` |
+| 309 | 17/10 14:53 | X-R65 stored date bounds (Z) | `c726b9d89` |
+| 310 | 17/10 14:53 | E-18 strict ISO currency on writes | `73366626e` |
+| 311 | 17/10 14:54 | B-41/B-42 outcome log noise | `d46113236` |
+| 312 | 17/10 15:00 | J-36 lots reference-price texts | `e5a975c8b` |
+| 313 | 17/10 15:06 | MF-SEC9a rest + MF-SEC9c | `29e30b6cc` |
+| 314 | 17/10 15:11 | W-B68 provider event values truncated | `06e9d2c20` |
+| 315 | 17/10 15:19 | J-49 range seam check | `e2e883136` |
+| 316 | 17/10 15:39 | Z-30 full-history load floored at 1900 | `fb514073b` |
+| 317 | 17/10 15:40 | risk Intl guard (J) | `b13ed7944` |
 | — | 17/10 00:05–00:45 | Colori: AF file, media e menu `9d3607eb6`; T `CompactCashCell` `b58108665` | — |

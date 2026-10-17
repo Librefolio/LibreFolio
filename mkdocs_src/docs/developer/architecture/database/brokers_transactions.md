@@ -191,7 +191,10 @@ BRIM plugins may set `cost_basis_override` directly when the source report alrea
 
 ## 💱 Currency & FX Integration
 
-The `currency` field in `transactions` is an **ISO 4217 string** (e.g., `EUR`, `USD`, `JPY`). There is **no foreign key** to an FX table — currencies are standard codes validated using `pycountry` + a crypto dictionary.
+The `currency` field in `transactions` is an **ISO 4217 string** (e.g., `EUR`, `USD`, `JPY`). There is **no foreign key** to an FX table — currencies are standard codes, validated with `pycountry` at the application layer:
+
+- **What a request writes** — a transaction's cash or cost basis, an asset's currency, a manual event, a manual FX rate or conversion route, a BRIM import — must be an ISO 4217 alphabetic code (`iso_currency_code()` in `schemas/common.py`, E-18). Case and surrounding spaces do not matter (` eur ` is stored as `EUR`); a currency name (`Euro`), a numeric code (`978`) or a crypto ticker (`BTC`) is refused with a 422.
+- **What is read back** is not checked again (`Currency.validate_code`, the lenient rule): a value stored by an earlier version still loads, lists and can be deleted.
 
 The dotted line in the ER diagram represents a **logical relationship**, not a relational one:
 

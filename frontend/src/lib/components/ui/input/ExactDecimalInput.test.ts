@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {_} from '$lib/i18n';
 import ExactDecimalInput from './ExactDecimalInput.svelte';
 
 const TID = 'exact-decimal';
@@ -55,11 +57,16 @@ function digitsError(testid: string): HTMLElement | null {
     return screen.queryByTestId(`${testid}-digits-error`);
 }
 
+/** A value as a failure message can show it: whole when short, its two ends and its length when it is a huge paste. */
+function shown(value: string): string {
+    return value.length <= 64 ? JSON.stringify(value) : `${JSON.stringify(value.slice(0, 24))}…${JSON.stringify(value.slice(-16))} (${value.length} chars)`;
+}
+
 /** Over the budget: the field is flagged, and under it a visible message carries the budget it broke. */
 function expectDigitsError(input: HTMLInputElement, testid: string, max: number): void {
-    expect(input, `${JSON.stringify(input.value)} is over a budget of ${max} decimals`).toHaveAttribute('aria-invalid', 'true');
+    expect(input, `${shown(input.value)} is over a budget of ${max} decimals`).toHaveAttribute('aria-invalid', 'true');
     const message = digitsError(testid);
-    expect(message, `${testid}-digits-error must say why ${JSON.stringify(input.value)} is refused; no such element is rendered`).not.toBeNull();
+    expect(message, `${testid}-digits-error must say why ${shown(input.value)} is refused; no such element is rendered`).not.toBeNull();
     if (!message) return;
     expect(message).toBeVisible();
     expect(message, 'the message carries the budget it enforces').toHaveAttribute('data-max', String(max));
@@ -68,7 +75,7 @@ function expectDigitsError(input: HTMLInputElement, testid: string, max: number)
 
 /** Within the budget: nothing to explain — the message is absent, or rendered hidden. */
 function expectNoDigitsError(input: HTMLInputElement, testid: string): void {
-    expect(input, `${JSON.stringify(input.value)} is within the budget`).toHaveAttribute('aria-invalid', 'false');
+    expect(input, `${shown(input.value)} is within the budget`).toHaveAttribute('aria-invalid', 'false');
     const message = digitsError(testid);
     if (message) expect(message, `${testid}-digits-error shows for a value within the budget`).not.toBeVisible();
 }
@@ -177,7 +184,7 @@ describe('ExactDecimalInput', () => {
      * C-97b rewrites the two pins of the old maxlength values (28 for 12+12, 23 for a signed 12+6): the
      * budget is still applied — by the flag and by the message under the field — but no longer by a
      * `maxlength`, which makes a browser truncate a longer paste silently.
-     * Red today: the field publishes maxlength 28 / 23, and no message element exists.
+     * Red before C-97b: the field published maxlength 28 / 23, and no message element existed.
      */
     it('applies the configured digit budget by its flag and message, without a truncating maxlength', async () => {
         const {input} = setup();
@@ -519,8 +526,8 @@ describe('ExactDecimalInput — Enter, and the form around it', () => {
 
 /**
  * C-97b — «the decimal places in input». Over the fractional budget the value is flagged
- * (`digitsValid` false, `aria-invalid`), and today nothing tells the user why: a red border on a
- * number that looks fine. The contract: a message under the field, `<testid>-digits-error`,
+ * (`digitsValid` false, `aria-invalid`), and before C-97b nothing told the user why: a red border on a
+ * number that looked fine. The contract: a message under the field, `<testid>-digits-error`,
  * carrying the budget in `data-max`; a value within the budget shows none; and a value longer than
  * the old `maxlength` budget is kept whole — no `maxlength` lets the browser cut a paste down to
  * something that looks valid.
@@ -529,7 +536,7 @@ describe('ExactDecimalInput — Enter, and the form around it', () => {
  * planner), so it is never read: only its id, its `data-max`, its visibility and its place.
  */
 describe('ExactDecimalInput — the digit budget says why it refuses (C-97b)', () => {
-    // Red today: no message element exists.
+    // Red before C-97b: no message element existed.
     it.each([
         [6, '0.1234567'],
         [10, '0.12345678912'],
@@ -544,7 +551,7 @@ describe('ExactDecimalInput — the digit budget says why it refuses (C-97b)', (
         expectDigitsError(input, TID, max);
     });
 
-    // Red today: the message never appears, so it cannot be withdrawn either.
+    // Red before C-97b: the message never appeared, so it could not be withdrawn either.
     it('withdraws the message as soon as the value is back within the budget', async () => {
         const {input} = setup({maxFractionDigits: 6});
 
@@ -555,7 +562,7 @@ describe('ExactDecimalInput — the digit budget says why it refuses (C-97b)', (
         expectNoDigitsError(input, TID);
     });
 
-    // Guard: green today (no message exists at all); after the cure a valid value must not grow one.
+    // Guard: a value within the budget is valid and grows no message (before C-97b there was none at all).
     it.each([
         [6, '0.123456'],
         [10, '0.1234567891'],
@@ -569,7 +576,7 @@ describe('ExactDecimalInput — the digit budget says why it refuses (C-97b)', (
         expectNoDigitsError(input, TID);
     });
 
-    // Red today: the field publishes maxlength="22" for 12+6, and no message exists. jsdom does not
+    // Red before C-97b: the field published maxlength="22" for 12+6, and no message existed. jsdom does not
     // apply maxlength to a value set by script, so the attribute is the honest handle on the browser's
     // cut; the value assertions pin that the component itself cuts nothing either, typed or blurred.
     it('keeps a paste longer than the old maxlength budget whole, flagged and explained', async () => {
@@ -586,5 +593,275 @@ describe('ExactDecimalInput — the digit budget says why it refuses (C-97b)', (
         expect(input, 'a refused value is not coerced on blur').toHaveValue(pasted);
         expect(oncommit).not.toHaveBeenCalled();
         expectDigitsError(input, TID, 6);
+    });
+});
+
+/*
+ * W-B66 — a pasted exponent, and a huge paste (D-W66-1, 17/10).
+ *
+ * (a) Typed key by key, an `e` never enters the field; pasted, `1e-8` arrives whole, and until W-B66
+ * `handleInput` filtered it to `18` — another number, valid, silently. The contract: a text WHOLLY in
+ * scientific notation is expanded exactly to a plain decimal when |exponent| ≤ 100 (the backend's bound).
+ * Any other text holding an exponent marker (a digit, an optional `.` or `,`, `e` or `E`, an optional sign,
+ * a digit) is kept as typed (trimmed), its sign included even without allowNegative: the field is invalid,
+ * and a `<p>` under it says why: `<testid>-exponent-error`, rendering `common.decimalExponentOutOfRange`
+ * with `max` 100. That covers beyond ±100 (`1e-200`) and not wholly scientific (`1e5x`). A text holding no
+ * marker reads as before: a typed `e` is dropped. Each input event re-reads the whole text, and an arrow
+ * key steps no kept text. A parent may hand the field an exponent too (a satoshi formatted through Number
+ * is `1e-8`): within ±100 it is valid.
+ *
+ * (b) A paste already over the digit budget is invalid without asking min/max, so `normalizedParts` must
+ * not reach `compareExact` (a BigInt of every pasted digit, scaled by 10^places): `rangeValid` then reads
+ * true. And an arrow key leaves an over-budget value as it is.
+ */
+const EXPONENT_MAX = 100;
+const EXPONENT_KEY = 'common.decimalExponentOutOfRange';
+const HUGE = 40_000;
+const BOUND_MS = 1_000;
+
+type Recorded = {mock: {calls: unknown[][]}};
+
+function exponentError(testid: string): HTMLElement | null {
+    return screen.queryByTestId(`${testid}-exponent-error`);
+}
+
+/** What the field shows, emits and says, in one object: a red shows every disagreement at once. */
+function fieldState(input: HTMLInputElement, onchange: Recorded) {
+    return {
+        dom: input.value,
+        emitted: onchange.mock.calls.at(-1)?.[0],
+        ariaInvalid: input.getAttribute('aria-invalid'),
+        exponentError: exponentError(TID) !== null,
+    };
+}
+
+function lastValidity(onvaliditychange: Recorded): Record<string, unknown> | undefined {
+    return onvaliditychange.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined;
+}
+
+/**
+ * A kept text: the field is flagged, and under it a visible paragraph says why. Its text is compared with
+ * what the contract's key renders in the test's own catalogue, never with a literal: what is pinned is the
+ * key and its `max`, in any language.
+ */
+function expectExponentError(input: HTMLInputElement, testid: string): void {
+    expect(input, `${shown(input.value)} holds an exponent marker and is kept as typed, so the field is invalid`).toHaveAttribute('aria-invalid', 'true');
+    const message = exponentError(testid);
+    expect(message, `${testid}-exponent-error must say why ${shown(input.value)} is refused; no such element is rendered`).not.toBeNull();
+    if (!message) return;
+    expect(message.tagName, 'a paragraph, as the digits message is').toBe('P');
+    expect(message).toBeVisible();
+    expect(input.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING, 'the message sits under the field: after it in document order').not.toBe(0);
+    const rendered = get(_)(EXPONENT_KEY, {values: {max: EXPONENT_MAX}});
+    expect(message.textContent?.trim(), `the message renders ${EXPONENT_KEY} with max ${EXPONENT_MAX}`).toBe(rendered);
+    expect.soft(rendered, `${EXPONENT_KEY} must be in the catalogue, or the field shows its bare key`).not.toBe(EXPONENT_KEY);
+}
+
+describe('ExactDecimalInput — a pasted exponent is read exactly, or kept (W-B66, D-W66-1 (a))', () => {
+    // Red before the W-B66 cure: the e and the minus are filtered out, and 1e-8 reads 18.
+    it('expands a pasted 1e-8 to 0.00000001: the value, the DOM text, a valid field', async () => {
+        const {input, onchange, onvaliditychange} = setup();
+
+        await fireEvent.input(input, {target: {value: '1e-8'}});
+
+        expect({...fieldState(input, onchange), normalized: lastValidity(onvaliditychange)?.normalized}, 'today the e and the minus are filtered out: 1e-8 reads 18').toEqual({
+            dom: '0.00000001',
+            emitted: '0.00000001',
+            ariaInvalid: 'false',
+            exponentError: false,
+            normalized: '0.00000001',
+        });
+    });
+
+    // Red before the W-B66 cure: each paste reads as a valid number (1200, 15, 1200), and no exponent-error exists.
+    it.each([
+        ['1e-200', 'beyond ±100', '1200'],
+        ['1e5x', 'not wholly scientific', '15'],
+        ['-1e-200', 'its sign kept without allowNegative: kept beats the sign rule', '1200'],
+    ])('keeps a pasted %s as typed — %s: invalid, with the exponent message under the field', async (pasted, _reason, today) => {
+        const {input, onchange} = setup();
+
+        await fireEvent.input(input, {target: {value: pasted}});
+
+        expect(fieldState(input, onchange), `today ${pasted} reads ${today}, valid, with nothing to explain`).toEqual({dom: pasted, emitted: pasted, ariaInvalid: 'true', exponentError: true});
+        expectExponentError(input, TID);
+        expect(digitsError(TID), 'no digit budget is at stake: only the exponent message shows').toBeNull();
+    });
+
+    // Red before the W-B66 cure: the first paste already reads 1200.
+    it('re-reads the whole text on each edit: kept while it holds a marker, expanded once wholly scientific within ±100', async () => {
+        const {input, onchange} = setup();
+
+        await fireEvent.input(input, {target: {value: '1e-200'}});
+        expect(fieldState(input, onchange), 'pasted beyond ±100: kept, invalid, explained').toEqual({dom: '1e-200', emitted: '1e-200', ariaInvalid: 'true', exponentError: true});
+
+        await fireEvent.input(input, {target: {value: '1e-200x'}});
+        expect(fieldState(input, onchange), 'a stray character after it: still holding a marker, kept — never 1200').toEqual({dom: '1e-200x', emitted: '1e-200x', ariaInvalid: 'true', exponentError: true});
+
+        await fireEvent.input(input, {target: {value: '1e-2000'}});
+        expect(fieldState(input, onchange), 'wholly scientific again, still beyond: kept').toEqual({dom: '1e-2000', emitted: '1e-2000', ariaInvalid: 'true', exponentError: true});
+
+        await fireEvent.input(input, {target: {value: '1e-2'}});
+        expect(fieldState(input, onchange), 'within ±100: expanded, valid, the message withdrawn').toEqual({dom: '0.01', emitted: '0.01', ariaInvalid: 'false', exponentError: false});
+    });
+
+    // Guard: a lone e holds no exponent marker, so a typed one is still dropped — key by key, an exponent never forms.
+    it('still drops a typed e: 12e reads 12, valid, with no exponent message', async () => {
+        const {input, onchange} = setup();
+
+        await fireEvent.input(input, {target: {value: '12e'}});
+
+        expect(fieldState(input, onchange)).toEqual({dom: '12', emitted: '12', ariaInvalid: 'false', exponentError: false});
+    });
+
+    // Red before the W-B66 cure: 1e-20 reads 120, a valid integer.
+    it('expands an in-range 1e-20 whole, and the digit budget flags its 20 decimals, not the exponent message', async () => {
+        const {input, onchange} = setup({maxFractionDigits: 12});
+        const expanded = `0.${'0'.repeat(19)}1`;
+
+        await fireEvent.input(input, {target: {value: '1e-20'}});
+
+        expect(fieldState(input, onchange), 'today 1e-20 reads 120').toEqual({dom: expanded, emitted: expanded, ariaInvalid: 'true', exponentError: false});
+        expectDigitsError(input, TID, 12);
+    });
+
+    // Red before the W-B66 cure: normalizedParts refuses any letter before reading the number, so the field is invalid and a blur keeps 1e-8.
+    it('accepts an in-range 1e-8 from its value prop: valid, and a blur commits 0.00000001', async () => {
+        const {input, oncommit, onvaliditychange} = setup({value: '1e-8'});
+        await waitFor(() => expect(onvaliditychange).toHaveBeenCalled());
+
+        const validity = lastValidity(onvaliditychange);
+        expect({flaggedInvalid: input.getAttribute('aria-invalid') === 'true', normalized: validity?.normalized, valid: validity?.valid}, 'today the letter e alone makes the value invalid').toEqual({
+            flaggedInvalid: false,
+            normalized: '0.00000001',
+            valid: true,
+        });
+
+        await fireEvent.blur(input);
+        expect({dom: input.value, committed: oncommit.mock.calls.at(-1)?.[0]}, 'the blur commits the plain decimal').toEqual({dom: '0.00000001', committed: '0.00000001'});
+    });
+
+    // Guard: the letter already makes it invalid; beyond ±100 it must stay so, and a blur must not coerce it.
+    it('keeps a 1e-200 value prop invalid, and a blur leaves it as given', async () => {
+        const {input, oncommit, onvaliditychange} = setup({value: '1e-200'});
+        await waitFor(() => expect(onvaliditychange).toHaveBeenCalled());
+
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+        expect(lastValidity(onvaliditychange)?.valid).toBe(false);
+
+        await fireEvent.blur(input);
+        expect(input).toHaveValue('1e-200');
+        expect(oncommit).not.toHaveBeenCalled();
+    });
+
+    // Red before the W-B66 cure: no exponent-error element exists.
+    it('explains a 1e-200 value prop with the exponent message', async () => {
+        const {input, onvaliditychange} = setup({value: '1e-200'});
+        await waitFor(() => expect(onvaliditychange).toHaveBeenCalled());
+
+        expectExponentError(input, TID);
+    });
+
+    // Red before the W-B66 cure: the arrow reads 1e-200 as 1200 and steps it, to 1200.000000000001.
+    it('leaves a kept 1e-200 from the value prop unchanged under an arrow key', async () => {
+        const {input, onchange} = setup({value: '1e-200'});
+
+        await arrow(input, 'ArrowUp');
+
+        expect({dom: input.value, emitted: onchange.mock.calls.length}, 'today the arrow reads 1e-200 as 1200 and steps it').toEqual({dom: '1e-200', emitted: 0});
+    });
+
+    // Red before the W-B66 cure: the paste already reads 1200, and the arrow steps it, to 1199.999999999999.
+    it('leaves a pasted, kept 1e-200 unchanged under an arrow key', async () => {
+        const {input, onchange} = setup();
+        await fireEvent.input(input, {target: {value: '1e-200'}});
+        const callsBeforeTheArrow = onchange.mock.calls.length;
+
+        await arrow(input, 'ArrowDown');
+
+        expect({dom: input.value, emittedByTheArrow: onchange.mock.calls.length - callsBeforeTheArrow}, 'today the paste reads 1200 and the arrow steps it').toEqual({dom: '1e-200', emittedByTheArrow: 0});
+    });
+});
+
+describe('ExactDecimalInput — a value over the digit budget costs no range check and no step (W-B66, D-W66-1 (b))', () => {
+    // Red before the W-B66 cure: compareExact runs on the over-budget value — each bound turns its 40 000 decimals into a BigInt and scales by 10^40000 — and judges the range (rangeValid false).
+    it('does not range-check a paste already over the digit budget: no BigInt from its digits, rangeValid true, within 1 000 ms', async () => {
+        const {input, onvaliditychange} = setup({min: '0', max: '1'});
+        const pasted = `5.${'1234567890'.repeat(HUGE / 10)}`;
+        const bigint = vi.spyOn(globalThis, 'BigInt');
+        try {
+            const started = performance.now();
+            await fireEvent.input(input, {target: {value: pasted}});
+            const ms = performance.now() - started;
+            const sizedByThePaste = bigint.mock.calls.filter(([arg]) => (typeof arg === 'string' && arg.length >= HUGE) || (typeof arg === 'number' && arg >= HUGE)).length;
+
+            expect(input.value === pasted, `the paste is kept whole; the field holds ${shown(input.value)}`).toBe(true);
+            expectDigitsError(input, TID, 12);
+            expect(ms, `the paste took ${ms.toFixed(0)} ms`).toBeLessThan(BOUND_MS);
+            const validity = lastValidity(onvaliditychange);
+            expect(
+                {bigintsSizedByThePaste: sizedByThePaste, digitsValid: validity?.digitsValid, rangeValid: validity?.rangeValid, valid: validity?.valid},
+                `compareExact ran on a value already over the digit budget (the paste took ${ms.toFixed(0)} ms): its ${HUGE} decimals became BigInts and the range was judged`,
+            ).toEqual({bigintsSizedByThePaste: 0, digitsValid: false, rangeValid: true, valid: false});
+        } finally {
+            bigint.mockRestore();
+        }
+    });
+
+    // Red before the W-B66 cure: the arrow steps any value it can read, budget or not, at the precision of its own digits.
+    it.each([
+        ['a fraction one digit past the budget', '1.1234567890123', 'ArrowUp'],
+        ['an integer one digit past the budget', '1000000000000.5', 'ArrowDown'],
+    ] as const)('leaves %s unchanged under an arrow key: %s, %s', async (_label, value, key) => {
+        const {input, onchange} = setup({value});
+
+        await arrow(input, key);
+
+        expect({dom: input.value, emitted: onchange.mock.calls.length}, 'today the arrow steps it like a valid value').toEqual({dom: value, emitted: 0});
+    });
+
+    // Red before the W-B66 cure: the arrow steps a 40 000-decimal value at 40 000 places, through BigInt.
+    it('leaves a 40 000-decimal value unchanged under an arrow key, within 1 000 ms', async () => {
+        const value = `5.${'1234567890'.repeat(HUGE / 10)}`;
+        const {input, onchange} = setup({value});
+
+        const started = performance.now();
+        await arrow(input, 'ArrowUp');
+        const ms = performance.now() - started;
+
+        expect({unchanged: input.value === value, emitted: onchange.mock.calls.length}, `today the arrow stepped it at ${HUGE} places (${ms.toFixed(0)} ms), to ${shown(input.value)}`).toEqual({unchanged: true, emitted: 0});
+        expect(ms, `the arrow took ${ms.toFixed(0)} ms`).toBeLessThan(BOUND_MS);
+    });
+
+    // Guard: a value exactly at the budget is valid, and steps as before.
+    it.each([
+        ['twelve decimals', '1.123456789012', '0.000000000001', '1.123456789013'],
+        ['twelve integer digits', '999999999998', '1', '999999999999'],
+    ])('still steps a value exactly at the budget: %s', async (_label, value, step, stepped) => {
+        const {input, onchange} = setup({value, step});
+
+        await arrow(input, 'ArrowUp');
+
+        expect(input).toHaveValue(stepped);
+        expect(onchange).toHaveBeenLastCalledWith(stepped);
+    });
+
+    // Guard: within the budget, min and max are still checked.
+    it.each([
+        ['above max', '10.5', false],
+        ['below min', '0.5', false],
+        ['within', '5', true],
+    ] as const)('still range-checks a value within the budget: %s (%s)', async (_label, typed, inRange) => {
+        const {input, onvaliditychange} = setup({min: '1', max: '10'});
+
+        await fireEvent.input(input, {target: {value: typed}});
+
+        const validity = lastValidity(onvaliditychange);
+        expect({ariaInvalid: input.getAttribute('aria-invalid'), digitsValid: validity?.digitsValid, rangeValid: validity?.rangeValid, valid: validity?.valid}).toEqual({
+            ariaInvalid: String(!inRange),
+            digitsValid: true,
+            rangeValid: inRange,
+            valid: inRange,
+        });
     });
 });

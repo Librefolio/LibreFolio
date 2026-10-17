@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
@@ -25,6 +26,7 @@ from backend.app.schemas import (
     FAUpsert,
 )
 from backend.app.schemas.prices import FACurrentValue
+from backend.app.utils.date_range_limits import DateOutOfRangeError, stored_date_bounds
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.sql_chunks import chunks
 
@@ -68,6 +70,26 @@ def _reject_prices_over_the_limit(data: List[FAUpsert]) -> None:
                 f"Too many digits in the prices of asset {item.asset_id}: at most {max_integer_digits(PriceHistory, 'close')} digits before the decimal point, {scale} decimal places and {REAL_SIGNIFICANT_DIGITS} significant digits "
                 f"(a volume, {max_integer_digits(PriceHistory, 'volume')} digits before the decimal point); {len(offending)} value(s): {shown}"
             )
+
+
+def _reject_dates_out_of_range(data: List[FAUpsert], earliest: date, latest: date) -> None:
+    """Refuse a manual upsert holding a date outside ``stored_date_bounds()``, before anything is written (X-R65, N83).
+
+    One entry per asset with such dates, in the request's order, with at most 10 of them; ``count`` is every one. A
+    provider's points are not refused: ``bulk_upsert_prices`` skips them, as it skips the unstorable ones.
+
+    Raises:
+        DateOutOfRangeError: the router turns it into HTTP 422 ``date_out_of_range``.
+    """
+    items: list[dict] = []
+    count = 0
+    for item in data:
+        dates = [price.date.isoformat() for price in item.prices if not earliest <= price.date <= latest]
+        if dates:
+            items.append({"asset_id": item.asset_id, "dates": dates[:10]})
+            count += len(dates)
+    if items:
+        raise DateOutOfRangeError(items=items, count=count, earliest=earliest, latest=latest)
 
 
 def _unstorable_provider_point(price: FAPricePoint) -> Optional[str]:
@@ -188,8 +210,10 @@ class PriceStoreOperations:
         """
         if not data:
             return {"inserted_count": 0, "updated_count": 0, "results": []}
+        earliest, latest = stored_date_bounds()
         if source_plugin_key == "MANUAL":
             _reject_prices_over_the_limit(data)
+            _reject_dates_out_of_range(data, earliest, latest)
 
         total_inserted = 0
         results = []
@@ -257,7 +281,15 @@ class PriceStoreOperations:
             # that failed in the truncation of a later slice left the earlier ones committed. A manual upsert never
             # gets here with one (``_reject_prices_over_the_limit`` refused it).
             unstorable_dates: list[str] = []
+            out_of_range_dates: list[str] = []
             if source_plugin_key != "MANUAL":
+                # X-R65 (N83): a provider's date outside stored_date_bounds() is skipped, never stored.
+                for date_key in list(valid_inputs):
+                    if not earliest <= date_key <= latest:
+                        del valid_inputs[date_key]
+                        out_of_range_dates.append(date_key.isoformat())
+                if out_of_range_dates:
+                    logger.warning("Provider prices skipped: date out of range", asset_id=asset_id, source=source_plugin_key, dates=out_of_range_dates[:5], count=len(out_of_range_dates), earliest=earliest.isoformat(), latest=latest.isoformat())
                 for date_key, price in list(valid_inputs.items()):
                     reason = _unstorable_provider_point(price)
                     if reason is not None:
@@ -378,6 +410,8 @@ class PriceStoreOperations:
             msg = f"Upserted {upserted_count} prices"
             if rejected_dates:
                 msg += f"; rejected {len(rejected_dates)} date(s) with impossible OHLC (close outside [low, high]): " + ", ".join(rejected_dates[:5]) + (f" (+ {len(rejected_dates) - 5} more)" if len(rejected_dates) > 5 else "")
+            if out_of_range_dates:
+                msg += f"; rejected {len(out_of_range_dates)} date(s) outside {earliest.isoformat()} to {latest.isoformat()}: " + ", ".join(out_of_range_dates[:5]) + (f" (+ {len(out_of_range_dates) - 5} more)" if len(out_of_range_dates) > 5 else "")
             if unstorable_dates:
                 msg += f"; rejected {len(unstorable_dates)} date(s) with a value no price column can keep: " + ", ".join(unstorable_dates[:5]) + (f" (+ {len(unstorable_dates) - 5} more)" if len(unstorable_dates) > 5 else "")
 
@@ -397,75 +431,52 @@ class PriceStoreOperations:
         Bulk delete price ranges (PRIMARY bulk method).
 
         Args:
-            data: List of FAAssetDelete (asset_id + date_ranges)
+            data: List of FAAssetDelete (asset_id + date_ranges); each range is inclusive, ``end`` defaulting to ``start``
             session: Database session
 
         Returns:
-            FABulkDeleteResponse with results and deleted count
+            FABulkDeleteResponse: one result per item, its ``deleted_count`` the rows deleted for its asset; ``total_deleted``
+            the rows deleted in all
 
-        Optimized: 1 SELECT COUNT + 1 DELETE query with complex WHERE
-        Note: Cannot parallelize with gather - DB operations are sequential and interdependent
+        Each asset's ranges, from every item that names it, are merged into disjoint day intervals (MF-SEC9e): a row is
+        counted once however many ranges cover it, and an asset in two items is counted over both. The counts are one
+        grouped ``COUNT … GROUP BY asset_id`` per chunk of intervals, the deletion one ``DELETE`` per chunk
+        (``utils/sql_chunks``, MF-SEC9a), in one transaction: at the ``MAX_BULK_WRITE_ITEMS`` cap about forty statements,
+        where one ``COUNT`` per range made ten thousand. The counts per asset add up to ``total_deleted``.
         """
         if not data:
-            return FABulkDeleteResponse(deleted_count=0, results=[])
+            return FABulkDeleteResponse(results=[], success_count=0, total_deleted=0, errors=[])
 
-        # Build count per asset before deletion
-        asset_delete_counts = {}
-
+        # Each asset's ranges merged into disjoint intervals of days (inclusive bounds), adjacent days joined
+        ranges_by_asset: dict[int, list[tuple[date, date]]] = {}
         for item in data:
-            asset_id = item.asset_id
-            ranges = item.date_ranges
-            count = 0
-
-            for date_range in ranges:
-                start = date_range.start
-                end = date_range.end or start  # Single day if no end
-
-                # Count rows for this specific range
-                count_stmt = (
-                    select(func.count())
-                    .select_from(PriceHistory)
-                    .where(
-                        and_(
-                            PriceHistory.asset_id == asset_id,
-                            PriceHistory.date >= start,
-                            PriceHistory.date <= end,
-                        )
-                    )
-                )
-                result = await session.execute(count_stmt)
-                count += result.scalar()
-
-            asset_delete_counts[asset_id] = count
-
-        # Build complex OR conditions for all ranges
+            for date_range in item.date_ranges:
+                ranges_by_asset.setdefault(item.asset_id, []).append((date_range.start, date_range.end or date_range.start))
         conditions = []
-        for item in data:
-            asset_id = item.asset_id
-            ranges = item.date_ranges
+        for asset_id, ranges in ranges_by_asset.items():
+            merged: list[list[date]] = []
+            for start, end in sorted(ranges):
+                if merged and start <= merged[-1][1] + timedelta(days=1):
+                    merged[-1][1] = max(merged[-1][1], end)
+                else:
+                    merged.append([start, end])
+            conditions.extend(and_(PriceHistory.asset_id == asset_id, PriceHistory.date >= start, PriceHistory.date <= end) for start, end in merged)
 
-            for date_range in ranges:
-                start = date_range.start
-                end = date_range.end or start  # Single day if no end
-                conditions.append(
-                    and_(
-                        PriceHistory.asset_id == asset_id,
-                        PriceHistory.date >= start,
-                        PriceHistory.date <= end,
-                    )
-                )
+        # The rows each asset will lose: the intervals are disjoint, so no row is counted twice across chunks
+        asset_delete_counts: dict[int, int] = {}
+        for chunk in chunks(conditions):
+            counted = await session.execute(select(PriceHistory.asset_id, func.count()).where(or_(*chunk)).group_by(PriceHistory.asset_id))
+            for asset_id, count in counted.all():
+                asset_delete_counts[asset_id] = asset_delete_counts.get(asset_id, 0) + count
 
-        if not conditions:
-            return FABulkDeleteResponse(deleted_count=0, results=[])
-
-        # One DELETE per chunk of ranges, in one transaction (MF-SEC9a): SQLite refuses an OR of a thousand terms
+        # One DELETE per chunk of intervals, in one transaction (MF-SEC9a): SQLite refuses an OR of a thousand terms
         deleted_count = 0
         for chunk in chunks(conditions):
             result = await session.execute(delete(PriceHistory).where(or_(*chunk)))
             deleted_count += result.rowcount
         await session.commit()
 
-        # Build results per asset with exact counts
+        # One result per item, its asset's count
         results = [
             FAPriceDeleteResult(
                 asset_id=item.asset_id,

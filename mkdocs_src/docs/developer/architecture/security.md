@@ -58,12 +58,14 @@ password» or «send the link again» could find A (workstream E's review, rated
 1. **No `@` in a new username** (`USERNAME_RESERVED_CHARACTER` in `backend/app/config/accounts.py`). Refused by
    `user_service.create_user()` (registration, open or by invitation, the first account included, and
    `./dev.py user create`), by `user_service.update_profile()` for a username that changes (the name an account
-   already has is not checked again), and by `admin_bootstrap_config()` for `LIBREFOLIO_ADMIN_USERNAME`. Nothing else
+   already has is not checked again), both through `_new_username_refusal()`, and by `admin_bootstrap_config()` for
+   `LIBREFOLIO_ADMIN_USERNAME`. Nothing else
    changes: spaces, accents, `.`, `_`, `-` and `+` are still taken. `POST /api/v1/auth/register` and
    `PUT /api/v1/auth/profile` answer `400` with
    `{"error_code": "USERNAME_INVALID", "message": "A username cannot contain @: the sign-in reads it as an email address"}`
-   in `detail`: the message is `USERNAME_RESERVED_MESSAGE`, which `register_user()` raises as the `RegistrationError`
-   `USERNAME_INVALID` (listed in `_REGISTRATION_REFUSALS`) and the profile route recognizes. The command line prints
+   in `detail`: the message is `USERNAME_RESERVED_MESSAGE`, and the code that of the service's refusal, which
+   `register_user()` raises as the `RegistrationError` `USERNAME_INVALID` (listed in `_REGISTRATION_REFUSALS`) and the
+   profile route answers ([Refusals with a code](#username-refusal-codes)). The command line prints
    that message after `❌` and exits with `1`. A `LIBREFOLIO_ADMIN_USERNAME` with an `@` raises the
    `AdminBootstrapConfigError` `ADMIN_USERNAME_INVALID`, whose message names the variable and the `@`, and stops the
    start ([The Initial Administrator](access_control.md#initial-admin)): the administrator signs in with
@@ -87,13 +89,37 @@ every account has one, and with that exact name while no account has it as its a
 Usernames are still compared exactly as written, capitals included. The administrator's side: «Usernames with an @»
 in [Users & Invitations](../../admin/users.md).
 
+**The length of a new username** (lot A-46). `_new_username_refusal()` checks the `@` first, then the length: 3 to 50
+characters (`USERNAME_MIN_LENGTH` and `USERNAME_MAX_LENGTH` in `backend/app/config/accounts.py`, which
+`LIBREFOLIO_ADMIN_USERNAME` follows too). Registration and the Profile refuse another length before the service, with
+the `422` of their request schemas (`AuthRegisterRequest`, `UpdateProfileRequest`); `./dev.py user create` had no such
+check, and now stops with `❌ A username must be 3 to 50 characters long` (`USERNAME_LENGTH_MESSAGE`), exit `1`, writing
+nothing. Over HTTP the `422` must stay first: the app words `USERNAME_INVALID` as the rule of the `@`
+(`auth.validation.usernameNoAt`). A name an account keeps is never checked again: one of 2 or 51 characters, which
+`user create` could write before lot A-46, stays as it is, and `./dev.py user set-email` still finds the account by it.
+
+**Refusals with a code** (lot A-47). `create_user()` and `update_profile()` answer `(None, error)` on a refusal, `error`
+a `user_service.AccountError`: a `str` subclass holding the message as before, so a caller that prints or compares it
+keeps working, with a `code`. `USERNAME_INVALID` for a new username against its rules, the `@` or the length;
+`USERNAME_TAKEN`; `EMAIL_TAKEN`, an address registered or another account's username; `USER_NOT_FOUND`, from
+`update_profile()`. `register_user()` and `PUT /api/v1/auth/profile` branch on the code, never on the wording:
+`USERNAME_INVALID` becomes the `RegistrationError` `USERNAME_INVALID`, or the profile's `400` with that `error_code`;
+any other refusal keeps its plain-string `400`, through the `RegistrationError` `ACCOUNT_EXISTS` for registration
+(not in `_REGISTRATION_REFUSALS`).
+{: #username-refusal-codes }
+
 Tests: `./dev.py test services username-rules` (`backend/test_scripts/test_services/test_username_rules.py`: the `@`
 refused by `user create` and in `LIBREFOLIO_ADMIN_USERNAME`, and nothing else of the character set; an address that is
 a username, in any A–Z case, refused by `register_user()`, `user set-email` and `user create`; a legacy name left as it
-is), `./dev.py test services username-lookup` (`test_username_lookup.py`: an address finds its owner before a legacy
+is; UNAME-020 to UNAME-023, lot A-46: a length of 2 or 51 refused by `user create`, `create_user()` and
+`update_profile()`, 3 and 50 taken, a legacy name of either length kept; UNAME-030 and UNAME-031, lot A-47: the code of
+every refusal, the message unchanged, and `register_user()` deciding on the code once the message is reworded),
+`./dev.py test services username-lookup` (`test_username_lookup.py`: an address finds its owner before a legacy
 name written like it, in both orders of the rows; the exact legacy fallback; without `@` a username only, exact) and
 `./dev.py test api username-rules` (`backend/test_scripts/test_api/test_username_rules_api.py`, in-process: the
-registration, profile and login routes, workstream E's scenes); for the app, `./dev.py test front-utility core-unit`
+registration, profile and login routes, workstream E's scenes; UNAME-API-12 to UNAME-API-14: both routes deciding on
+the code, the answer of the `@` as before, and a length still refused with `422` first); for the app,
+`./dev.py test front-utility core-unit`
 (`registrationErrors.test.ts`) and `./dev.py test front-utility component-unit` (`RegisterCard.test.ts`,
 `tabs/ProfileTab.test.ts`).
 
@@ -310,8 +336,8 @@ the current password and ends the account's other sessions. No other route chang
 | `400` | `{"error_code": "CURRENT_PASSWORD_REQUIRED", "message": …}` | An email change without `current_password`, left out or `null` |
 | `429` | `{"error_code": "TOO_MANY_ATTEMPTS", "message": …}`, with `Retry-After` | An email change with a `current_password`, while the account's username or the request's address is past the [failed sign-in limit](#login-limit): the password is not checked, nothing is written |
 | `400` | `{"error_code": "CURRENT_PASSWORD_INVALID", "message": …}` | A wrong `current_password`. Nothing is written, the failure counts toward the [failed sign-in limit](#login-limit) under the account's username, and the warning *Email change refused: wrong current password* goes to the log with `user_id` |
-| `400` | `{"error_code": "USERNAME_INVALID", "message": …}` | A new `username` holding `@` ([rule 1](#sign-in-identifier), lot A-21a): the name the account already has is not checked again. After the password when the email changes too. Nothing is written |
-| `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address belongs to another account, in any A–Z case, or is another account's username, in any A–Z case too ([rule 2](#sign-in-identifier), lot A-21a), or the name belongs to another account, compared exactly. Nothing is written |
+| `400` | `{"error_code": "USERNAME_INVALID", "message": …}` | A new `username` holding `@` ([rule 1](#sign-in-identifier), lot A-21a): the name the account already has is not checked again. After the password when the email changes too. Nothing is written. The route answers the code of the service's refusal, never its wording ([Refusals with a code](#username-refusal-codes), lot A-47); a length outside 3–50 never gets here, the `422` below comes first |
+| `400` | *Email already registered* or *Username already taken*, plain strings as before, the service's code (`EMAIL_TAKEN`, `USERNAME_TAKEN`) left out | The password was right, or not needed, but the address belongs to another account, in any A–Z case, or is another account's username, in any A–Z case too ([rule 2](#sign-in-identifier), lot A-21a), or the name belongs to another account, compared exactly. Nothing is written |
 | `422` | Validation errors | An empty `current_password`, an invalid `email`, a `username` outside 3–50 characters |
 | `200` | — | The change is committed. After an email change, the answer sets the new `session` cookie, and the log has *Email changed, other sessions ended* (`user_id`) |
 
@@ -704,10 +730,30 @@ check derives the archive's subkey with `derive_key_from(archive_key, SUBKEY_PUR
 `rekey_plugin_secrets(conn, old_subkey, new_subkey)` in
 `backend/app/services/plugin_settings/crypto.py`, on a connection to the copy's database. It derives
 this instance's subkey only when the copy holds secrets, so the check of an archive without any never
-generates the key file. Without the archive's key, or with one `derive_key_from()` refuses, it only
-counts the secrets this instance cannot read (`count_unreadable_secrets()`). No path gives the restore
-a key the administrator kept, such as a copy of the old `secrets/instance.key`: that is backlog item
-B-18 (`restore --instance-key-file`).
+generates the key file. Without a key, the archive's or one given for the restore (below), or with an
+archive's key that `derive_key_from()` refuses, it only counts the secrets this instance cannot read
+(`count_unreadable_secrets()`).
+
+A key the administrator kept, such as a copy of the old `secrets/instance.key`, reaches the restore
+from the command line only (lot B-18): `dev.py backup restore --instance-key-file FILE`. An upload from
+the app never brings one: `RestoreStageRequest` holds only `upload_id` and `password`, and the check it
+starts calls `stage_archive()` without `instance_key` (`restore_jobs._run_check()`);
+`instance_key_invalid`, below, is one of `RestoreErrorCode` only because that list holds every code
+`stage_archive()` can raise. The command reads the file before it switches to the data directory's
+owner, so that, started as root (`docker compose exec`), it reads a Docker secret only root can read;
+read as root, the file must be a regular file, reached through no link inside the data directory (lot
+B-38, the bullet «Secret files read as root» of [Secure Backups](#secure-backups)).
+`stage_archive(..., instance_key=…)` checks the key before anything else, before the lock, any folder
+or the archive (`_refuse_unusable_instance_key()`). A key `derive_key_from()` cannot use, that is a
+text shorter than `INSTANCE_KEY_MIN_LENGTH` (32 characters, the one rule it holds a key's text to), is
+`StagingError` `instance_key_invalid`, «The instance key given is too short: an instance key has at
+least 32 characters», a message without the key or its length. A key long enough but not the old
+instance's is no error: the secrets it should open stay counted as unreadable, and the command warns
+that it reads none of them (decision D2). When the archive carries its own key, the entry
+`secrets/instance.key`, that key wins over the one given (decision D1, `_stage()`), and the command
+says that it does not use the file. Tests: section (i) of `./dev.py test services backup-secure` and
+the B-18 cases of `./dev.py test utils backup-cli-restore`; the administrator's side is
+«The Instance Key of Another Installation» in [Command-Line Tools](../../admin/cli_tools.md).
 
 The generated file (`_create_key_file()`):
 
@@ -1940,6 +1986,15 @@ anything of it can run.
   of its own, stopped after an hour (`UPGRADE_TIMEOUT_SECONDS`), and `backend/alembic/env.py` turns it off on every
   connection with a `connect` listener, `_schema_untrusted`, whatever the URL: the copy's, given with
   `-x sqlalchemy.url`, and the live database's alike (lot B-37).
+- **Why the upgrade needs it.** SQLAlchemy's SQLite dialects (`pysqlite`, which `aiosqlite` inherits; SQLAlchemy
+  2.0.52, `SQLiteDialect_pysqlite.on_connect()`) register two Python functions on every connection: `regexp`
+  (`re.search`), behind the `REGEXP` operator, and `floor` (`math.floor`), in place of SQLite's own `floor()` where the
+  build has one. The upgrade runs on such connections. With `_schema_untrusted`, an insert of the upgrade that needs an
+  archive's `DEFAULT` calling them is refused («unsafe use of …»), and the upgrade fails (`upgrade_failed`) instead of
+  running Python code on the archive's pattern. A `CHECK` or an index's expression calling `regexp` is refused there
+  only since lot H-51, at the first statement: before it, `set_sqlite_pragma()` read the schema on those connections
+  before the dialect registered the functions, and such a call then ran at the insert
+  ([`trusted_schema` Off in the Server's Engines](#trusted-schema-server)).
 
 Tests: `./dev.py test services backup-staging` (`backend/test_scripts/test_services/test_backup_staging.py`, section
 (l): a trigger, a recursive view, an `fts5` virtual table and a comment between the keywords, each refused before
@@ -1949,6 +2004,50 @@ or a view; `trusted_schema` off first on every connection of a whole check, the 
 B-37), `./dev.py test db post-migration` (`backend/test_scripts/test_db/test_post_migration.py`: tables named `x"y` or
 `a" WHERE 1 --`, counted while a fix runs, lot B-36) and `./dev.py test utils dev-cli-db-path`
 (`backend/test_scripts/test_utilities/test_dev_cli_db_path.py`: the `connect` listener of `env.py`, lot B-37).
+
+#### `trusted_schema` Off in the Server's Engines {: #trusted-schema-server }
+
+`set_sqlite_pragma()` in `backend/app/db/session.py` is the `connect` listener every SQLAlchemy engine of the process
+gets: it is registered on the `Engine` class, so it holds for each engine, the synchronous one under the async engine
+included. Since lot H-51 it turns `trusted_schema` off first, before `foreign_keys`, WAL and `busy_timeout`, and ends
+with `PRAGMA writable_schema=RESET`.
+
+- **Why.** The check refuses triggers, views and virtual tables by their kind (lot B-28), but does not read the
+  expressions inside tables and indexes, and its plain `sqlite3` connections never evaluate a `DEFAULT`:
+  `PRAGMA integrity_check` answers `ok`. Before H-51, an archive whose column had `DEFAULT (regexp(…))` passed the
+  check, and in the server every insert that omitted that column ran SQLAlchemy's Python `regexp` with the archive's
+  pattern and value, through the async engine too. A `CHECK` or an index's expression calling a function plain
+  `sqlite3` lacks, such as `regexp`, stops the check at the `PRAGMA integrity_check` of `describe_database()`
+  («unknown function»), before the upgrade runs.
+- **Why the reset, last.** SQLAlchemy calls the listeners registered on a class before those of one engine, so this
+  one runs before the dialect's `on_connect()` registers `regexp` and `floor`, and its `PRAGMA journal_mode=WAL` makes
+  SQLite read the schema right then. SQLite marks a call as the schema's own only when it finds the function, and
+  checks nothing again later: read then, a `CHECK` or an index's expression calling `regexp` would run SQLAlchemy's
+  Python function at each insert into its table, `trusted_schema` off or not. `writable_schema=RESET` drops that
+  reading: SQLite reads the schema again at the next statement that needs it, with the functions registered and
+  `trusted_schema` off. It costs one more read of the schema per new connection, and both engines of `session.py` open
+  a new connection for each use (`NullPool`).
+- **When SQLite refuses.** A `CHECK` or an index's expression calling `regexp`: at the first statement of the
+  connection that needs the schema, a `SELECT` of another table included
+  (`malformed database schema (<object>) - unsafe use of REGEXP()`). A `DEFAULT` calling `regexp` or `floor`: at the
+  insert that needs it («unsafe use of regexp()»). The refusal comes at a statement, never inside the listener:
+  SQLAlchemy's pool does not close a connection whose `connect` listener raised (`_ConnectionRecord.__connect()`).
+- **Nothing of the app changes.** LibreFolio's own schema calls only the built-in `lower()` (the index
+  `ux_users_email_lower`, migration 009), and the pragma restricts only the SQL the schema holds, never top-level SQL.
+- **In the upgrade's process too.** `backend/alembic/env.py` imports `backend.app.db.base`, so the package's
+  `backend/app/db/__init__.py`, which imports `session.py`: the upgrade's connections get `set_sqlite_pragma()` as
+  well, before `_schema_untrusted`, which `env.py` registers on its own engine. Before H-51, `set_sqlite_pragma()`
+  read the schema there before `_schema_untrusted` turned the pragma off and before the functions existed:
+  `_schema_untrusted` stopped a `DEFAULT`, refused at the insert, but not a `CHECK` or an index's expression. Since
+  H-51, with the pragma off first and the schema reset last, the rule holds for all of them there too.
+
+Tests: `./dev.py test db session-pragmas` (`backend/test_scripts/test_db/test_session_pragmas.py`, through a sync and
+an async engine: `trusted_schema` at 0 on two new connections in a row; a `DEFAULT` calling `regexp` or `floor`
+refused at the insert that needs it, nothing written; a `CHECK` calling `regexp` through `REGEXP` refused at the first
+statement of every new connection, a `SELECT` of another table included, both tables left as the archive wrote them;
+guards: `foreign_keys`, WAL and `busy_timeout` as before, `lower()`, `length()` and `abs()` in the schema, `REGEXP`,
+`regexp_match` and `floor` in a statement's own SQL, and the schema at head, migrated under the listener, taking a
+user through the async engine).
 
 ### 📏 The Restore Limit {: #backup-restore-limit }
 
@@ -2049,8 +2148,10 @@ waiting (`waiting`), and the session version given at the commit.
   the system's words, never a path, through `read_restore`, `cancel_restore`, `prepare_restart` and `confirm_restore`
   (a `500` on the routes, exit `1` in `backup pending` and `backup restore`); a link or a folder in its place, or a
   content that does not validate, still reads as none, as above; the startup steps (`apply_pending_restore`,
-  `finish_pending_restore`), the outcome (`GET /backup/restore/outcome`) and the pruning (`protected_stage`) keep
-  reading it as none, the error logged, so a start applies nothing and goes on with the data as it is.
+  `finish_pending_restore`), the outcome (`GET /backup/restore/outcome`, which reads the state only for the ticket of
+  a restart not expired, so no other caller makes LibreFolio read it nor log the error, lot B-41) and the pruning
+  (`protected_stage`) keep reading it as none, the error logged, so a start applies nothing and goes on with the data
+  as it is.
 - **One at a time.** While a restore is not finished (`pending`, `applying`, `applied`, `rolling_back`), another one is
   refused (`restore_already_pending`), and its checked copy is never dropped nor pruned, however old
   (`restore_jobs.remove_check`, `prune`).
@@ -2163,8 +2264,11 @@ a session, the state of that restore and nothing else.
   answers `500` and the server keeps running.
 - **Kept as a hash.** Only its SHA-256 is stored, in `.restore/outcome-ticket.json` (`OutcomeTicket`), with the stage
   of its restore, `issued_at` and `expires_at`: `0600`, written atomically, never through a link, and read only in the
-  shape this LibreFolio writes. `.restore` is never swapped, so the ticket outlives the restart, the swap, the commit and
-  a rollback.
+  shape this LibreFolio writes. Any well-formed ticket reaches that file without a session, so a file that cannot be
+  read (a link included) or is not in that shape is logged as an error once per data directory in each server process,
+  then at `debug` while the same failure lasts. A failure of another kind, or one after the file was written, removed
+  or read successfully, is logged as an error again (lot B-42). `.restore` is never swapped, so the ticket outlives the
+  restart, the swap, the commit and a rollback.
 - **In a header.** The page sends it in `X-Restore-Ticket`, never in the URL, which the access log records
   ([Request Logs](#request-logs)): the route ignores the query string, and a `?ticket=…` typed by hand is written there
   as `***`. LibreFolio never logs it, and the page keeps it in memory only.
@@ -2178,7 +2282,8 @@ a session, the state of that restore and nothing else.
 - **One answer for every miss.** No ticket, a malformed one, an unknown one (never issued, replaced or removed), an
   expired one (then removed) or one of another restore: the same `404` `restore_outcome_not_found`. The hashes are
   compared in constant time (`hmac.compare_digest`), and a wrong ticket changes nothing: the route removes a ticket
-  only when its own holder presents it expired.
+  only when its own holder presents it expired. The ticket is checked before the state of the restore, so a caller
+  without the ticket of a restart not expired never makes LibreFolio read that state, nor log that it cannot (lot B-41).
 - **Nothing more.** `RestoreOutcome` holds `state`, `reason` and `waiting`: no name, date, version or path.
 
 When the route answers `404`, `401` or `423` (a ticket expired, replaced or removed, a server without the route, a

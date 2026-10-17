@@ -15,6 +15,11 @@ of a thousand («Expression tree is too large (maximum depth 1000)»). Four stat
 
 None of these routes had a cap, and their failures echoed ``str(e)``: an SQL error names the schema.
 
+MF-SEC9e, on HEAD 79d4ca239: ``bulk_delete_prices`` read its counts with one awaited ``COUNT`` per range — 10 000 at the
+cap —, an asset's count the sum over its item's ranges (a row in two overlapping ranges counted twice) and overwritten
+item by item (an asset named by two items answered the last item's count in both results); an empty request built a
+response without ``success_count``, a ``ValidationError``, and ``DELETE /assets/prices`` answered 500.
+
 The cure's contract, pinned here:
 
 1. ``utils/sql_chunks.chunks(items, size=500)``: consecutive slices of at most ``size``, in order, the last one partial;
@@ -23,7 +28,12 @@ The cure's contract, pinned here:
    the rate inverted) — stores every rate at its value and answers ``inserted`` for each; called again with new values,
    ``updated`` for each and every value replaced.
 3. ``delete_rates_bulk`` with 1 500 single days and four ranges answers each deletion its exact counts — a range counts
-   its own pair's rates only, a pair without rates 0 — and every other rate stays stored.
+   its own pair's rates only, a pair without rates 0 — and every other rate stays stored. Its matching is O(N log D), not
+   O(N × D) (E's review of MF-SEC9a, LOW-1): each deletion finds its rates by bisection over its pair's sorted dates, so
+   2 000 deletions over 2 000 dates compare their bounds at most 4 × ⌈log₂(D + 1)⌉ times each, never once per date of
+   the pair. On random requests — overlapping ranges, ranges whose end is before their start, pairs without rates, single
+   days given with or without an end, pairs given either way round — the counts and the ids deleted are those of a
+   brute-force scan of the stored rates.
 4. ``bulk_delete_prices`` with 1 500 ranges over two assets: ``total_deleted`` and each asset's count exact, every other
    price kept, a third asset's untouched.
 5. ``fx/sync._stored_rates`` reads every rate matching 1 500 conditions; ``ensure_rates_multi_source`` over 46 currencies
@@ -37,10 +47,39 @@ The cure's contract, pinned here:
    ``POST /assets/prices/sync`` and of the FX bulk deletion, and the per-item error texts of the FX upsert and of an FX
    «delete all» (in a 200, and in the 400 when every item failed) hold none of the SQL; the error is logged, with its
    exception. ``POST /assets/prices``' 400 for a ``ValueError`` keeps its domain message (guard).
+8. ``bulk_delete_prices`` counts each row once (MF-SEC9e): each asset's ranges, from every item naming it, are merged
+   into disjoint inclusive day intervals (``end`` defaulting to ``start``). Each item's result answers its asset's rows
+   deleted — a row in two ranges once, an asset named by two items the same total in both —, the message its own
+   item's range count; the counts of the distinct assets add up to ``total_deleted``; every other price is kept: what a
+   brute-force enumeration of the covered days says, on random requests as well (ranges overlapping within and across
+   items, repeated, adjacent, out of order; an asset without prices; more intervals than one chunk). 2 000 ranges send
+   at most ⌈intervals / 500⌉ + 2 SELECTs and as many DELETEs, counted as the engine sends them (a step count). An empty
+   request answers an empty response (``success_count`` 0, ``total_deleted`` 0), 200 on ``DELETE /assets/prices``.
 
 The cases of 2-4 also run at 500 and 501 OR terms, the edge of one chunk. The barrier,
 ``test_barrier_this_sqlite_refuses_one_or_of_1500_terms``, proves the SQLite these tests run on answers one OR of 500
 terms and refuses one of 1 500: without it a build with a higher limit would let the import-sized cases pass untested.
+
+Red on HEAD 79d4ca239 (MF-SEC9e):
+
+- ``test_bulk_delete_prices_counts_a_row_in_two_ranges_once`` (every case): one COUNT per range, summed — 9, 12, 2 for
+  7, 10, 1 rows deleted;
+- ``test_bulk_delete_prices_counts_an_asset_over_every_item_naming_it`` (both cases): both results of A answer the last
+  item's count — 2 for 5, 4 for 7;
+- ``test_bulk_delete_prices_matches_a_brute_force_reference`` (every seed): both of the above;
+- ``test_bulk_delete_prices_of_nothing_answers_an_empty_response``: ``ValidationError`` building the response;
+- ``test_delete_prices_route_of_nothing_answers_200``: 500;
+- ``test_bulk_delete_prices_reads_its_counts_per_chunk_not_per_range`` (both cases): 2 000 SELECTs, one per range.
+
+Green on HEAD 79d4ca239 too (guards): ``test_guard_bulk_delete_prices_inclusive_bounds_and_adjacent_ranges`` and
+``test_guard_bulk_delete_prices_disjoint_ranges_match_a_brute_force_reference`` (every seed) — without a shared day or
+an asset named twice, a COUNT per range summed is exact; they hold the merging to inclusive ends, an end defaulting to
+the start, adjacent ranges losing or doubling no day, ranges out of order, counts summed across chunks.
+
+Red on HEAD d63558abb (the chunks in, the matching still a scan):
+``test_delete_rates_bulk_matching_is_bisection_not_a_scan`` (both cases): every deletion compared with every date of its
+pair (``start <= day <= end``: 4 000 - k comparisons for the k-th single day), the budget of 88 000 passed within its
+first 25 deletions of 2 000 — at least N × D = 4 000 000 comparisons for the whole call.
 
 Red on HEAD 04955c498:
 
@@ -57,7 +96,9 @@ Red on HEAD 04955c498:
 
 Green before and after (guards): the barrier; the cases of 2-4 at 500 and 501 OR terms (under SQLite's limit);
 ``test_guard_fx_upsert_route_stores_1500_rates`` (the route upserts one rate at a time, so an import of any size passed);
-``test_guard_exactly_10000_items_pass``; ``test_guard_post_prices_value_error_keeps_its_domain_message``.
+``test_guard_exactly_10000_items_pass``; ``test_guard_post_prices_value_error_keeps_its_domain_message``;
+``test_guard_delete_rates_bulk_matches_a_brute_force_scan`` (every seed: the scan of d63558abb is the reference's own
+algorithm — the guard is there for the bisection, whose ends and empty slices a scan never had to get right).
 
 Isolation: PURE — no lane database, no server, no network. Each test that stores anything has its own in-memory SQLite
 database (``SQLModel.metadata.create_all``), closed and disposed at teardown; the services, the provider lookup and the
@@ -72,10 +113,13 @@ backend/app/api/v1/assets/prices.py (upsert_prices_bulk, delete_prices_bulk, syn
 
 from __future__ import annotations
 
+import contextlib
 import importlib
+import math
+import random
 import sys
 from collections import Counter
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Iterator
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from types import ModuleType
@@ -84,7 +128,8 @@ from typing import Any
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy import and_, insert, or_, select
+from pydantic import ValidationError
+from sqlalchemy import and_, event, insert, or_, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -105,7 +150,9 @@ from backend.test_scripts.test_utils import print_section, print_success
 CHUNK = 500  # OR_TERMS_PER_QUERY: the contract's number, written here and not read from the module under test
 MAX_WRITE_ITEMS = 10_000  # MAX_BULK_WRITE_ITEMS, written here as well
 IMPORT_SIZED = 1_500  # items of one import-sized request: past SQLite's limit, past two chunk boundaries
-DAY0 = date(2001, 1, 1)  # the first day of every series; any day would do
+#: The first day of every series: far enough back that 10 000 daily items end before today, inside the stored bounds
+#: (X-R65: a rate dated after tomorrow is refused before the write).
+DAY0 = date(1990, 1, 1)
 FETCHED_AT = datetime(2025, 1, 1)
 SOURCE = "SEC9a"
 #: What a failing service raises in the failure cases: an SQL error names the schema.
@@ -366,6 +413,209 @@ async def test_delete_rates_bulk_counts_each_deletion_of_an_import(session, sing
     stored = await _stored_fx(session)
     assert stored == expected, _differences(stored, expected)
     print_success(f"{terms} deletions counted exactly, {singles + 15} rates deleted, {len(expected)} kept")
+
+
+class _PastTheBudget(Exception):
+    """Raised by ``_Comparisons`` once past its budget: the call stops there instead of finishing a quadratic scan."""
+
+
+class _Comparisons:
+    """Counts the comparisons the deletions' bounds take part in, and stops the call once past ``budget``."""
+
+    def __init__(self, budget: int) -> None:
+        self.budget = budget
+        self.count = 0
+
+    def tick(self) -> None:
+        self.count += 1
+        if self.count > self.budget:
+            raise _PastTheBudget(f"{self.count} comparisons, past the budget of {self.budget}")
+
+
+def _counted_day_type(comparisons: _Comparisons) -> type[date]:
+    """A ``date`` whose every comparison is counted by ``comparisons``, whichever side of it the day is on.
+
+    On the left it is its own method; on the right Python asks the subclass first (its reflected method), so ``d < day``
+    is counted as well as ``day < d`` — in a scan (``start <= stored <= end``) and in a bisection (``a[mid] < start``,
+    ``end < a[mid]``) alike. Its hash is the date's: a dict lookup finds it as it finds the day.
+    """
+
+    class CountedDay(date):
+        __hash__ = date.__hash__
+
+        def __lt__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__lt__(self, other)
+
+        def __le__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__le__(self, other)
+
+        def __gt__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__gt__(self, other)
+
+        def __ge__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__ge__(self, other)
+
+        def __eq__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__eq__(self, other)
+
+        def __ne__(self, other: object) -> bool:
+            comparisons.tick()
+            return date.__ne__(self, other)
+
+    return CountedDay
+
+
+#: The step-count case: N deletions over D stored dates of one pair (E's example).
+STEP_DELETIONS = 2_000
+STEP_DATES = 2_000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("span", [pytest.param(0, id="2000-single-days"), pytest.param(6, id="2000-week-ranges")])
+async def test_delete_rates_bulk_matching_is_bisection_not_a_scan(session, span):
+    """2 000 deletions of EUR/USD — single days, or overlapping week-long ranges — over its 2 000 stored dates: the
+    deletions' bounds (dates that count their comparisons) are compared at most 4 × ⌈log₂(D + 1)⌉ = 44 times per
+    deletion — two bisections and room to spare, 88 000 in all — where a scan of the pair compares at least once per
+    stored date per deletion, N × D = 4 000 000. The count is a step count, not a time: the same on any machine and under
+    any load. Past the budget the call stops (``_PastTheBudget``), so a scan fails fast. Barrier: every deletion is
+    compared at least once — the counter sees the matching, else «at most 88 000» would hold for a matching it cannot
+    see. The counts stay exact.
+
+    Red on HEAD d63558abb: each deletion scans every date of its pair (``start <= day <= end``, one or two comparisons
+    per date), the budget passed within the first 25 deletions.
+    """
+    print_section(f"MF-SEC9a LOW-1: delete_rates_bulk, {STEP_DELETIONS} deletions over {STEP_DATES} dates of one pair")
+    budget = STEP_DELETIONS * 4 * math.ceil(math.log2(STEP_DATES + 1))
+    comparisons = _Comparisons(budget)
+    counted_day = _counted_day_type(comparisons)
+
+    def counted(offset: int) -> date:
+        day = _day(offset)
+        return counted_day(day.year, day.month, day.day)
+
+    await _seed_fx(session, [(_day(offset), "EUR", "USD", Decimal("1.1")) for offset in range(STEP_DATES)])
+    deletions = [("EUR", "USD", counted(offset), counted(offset + span) if span else None) for offset in range(STEP_DELETIONS)]
+    comparisons.count = 0  # building the deletions compared nothing; the count is the call's alone
+
+    try:
+        results = await delete_rates_bulk(session, deletions)
+    except _PastTheBudget as stopped:
+        pytest.fail(f"the matching is a scan: {stopped} (O(N log D) for N = {STEP_DELETIONS}, D = {STEP_DATES}; a scan at least N × D = {STEP_DELETIONS * STEP_DATES})")
+
+    assert comparisons.count >= STEP_DELETIONS, f"{comparisons.count} comparisons for {STEP_DELETIONS} deletions: the counter does not see the matching, so it measures nothing"
+    expected = [min(span + 1, STEP_DATES - offset) for offset in range(STEP_DELETIONS)]
+    counts = [existing for _success, existing, _deleted, _message in results]
+    wrong = [(offset, got, want) for offset, (got, want) in enumerate(zip(counts, expected, strict=False)) if got != want]
+    assert len(counts) == STEP_DELETIONS and not wrong, f"{len(counts)} answers; (deletion, count, expected): {wrong[:5]}"
+    print_success(f"{comparisons.count} comparisons for {STEP_DELETIONS} deletions (budget {budget}, a scan at least {STEP_DELETIONS * STEP_DATES})")
+
+
+#: The guard's stored pairs (EUR/USD, GBP/USD, CHF/JPY) and one without any rate.
+GUARD_PAIRS = (("EUR", "USD"), ("GBP", "USD"), ("CHF", "JPY"))
+GUARD_MISSING = ("NOK", "SEK")
+GUARD_WINDOW = 400  # days of the window the stored dates are drawn from
+GUARD_RANDOM_DELETIONS = 650  # with the fixed ones, past one chunk of OR terms: rows of one pair read by two statements
+
+
+def _guard_rows(rng: random.Random) -> list[tuple[date, str, str, Decimal]]:
+    """About half of the window's days for each stored pair, drawn at random, and always its first and last day."""
+    return [(_day(offset), base, quote, Decimal("1.5")) for base, quote in GUARD_PAIRS for offset in range(GUARD_WINDOW) if offset in (0, GUARD_WINDOW - 1) or rng.random() < 0.5]
+
+
+def _either_way(rng: random.Random, pair: tuple[str, str]) -> tuple[str, str]:
+    return pair if rng.random() < 0.5 else (pair[1], pair[0])
+
+
+def _guard_deletions(rng: random.Random, stored: dict[tuple[str, str], dict[date, int]]) -> list[tuple[str, str, date, date | None]]:
+    """Random deletions — single days without an end and with ``end == start``, ranges up to 40 days (overlapping one
+    another), ranges whose end is before their start, the pair without rates —, each pair given either way round, some
+    reaching past the window; every inverted range comes with a range covering it on the same pair, so the pair's sorted
+    dates hold days between its ends (a slice whose end is before its start, a negative count unless clamped). Then, for
+    each stored pair, its first day, its last day, both, and a range before and one after every stored date."""
+    deletions: list[tuple[str, str, date, date | None]] = []
+    while len(deletions) < GUARD_RANDOM_DELETIONS:
+        pair = GUARD_MISSING if rng.random() < 0.1 else rng.choice(GUARD_PAIRS)
+        start = _day(rng.randrange(-20, GUARD_WINDOW + 20))
+        kind = rng.choice(("single", "single-with-end", "range", "range", "inverted"))
+        if kind == "single":
+            deletions.append((*_either_way(rng, pair), start, None))
+        elif kind == "single-with-end":
+            deletions.append((*_either_way(rng, pair), start, start))
+        elif kind == "range":
+            deletions.append((*_either_way(rng, pair), start, start + timedelta(days=rng.randint(1, 40))))
+        else:
+            end = start - timedelta(days=rng.randint(1, 30))
+            deletions.append((*_either_way(rng, pair), start, end))
+            deletions.append((*_either_way(rng, pair), end - timedelta(days=3), start + timedelta(days=3)))
+    for pair in GUARD_PAIRS:
+        first, last = min(stored[pair]), max(stored[pair])
+        deletions += [
+            (*pair, first, None),
+            (*pair, last, last),
+            (*pair, first, last),
+            (*pair, first - timedelta(days=10), first - timedelta(days=1)),
+            (*pair, last + timedelta(days=1), last + timedelta(days=10)),
+        ]
+    return deletions
+
+
+def _brute_force(stored: dict[tuple[str, str], dict[date, int]], deletions: list[tuple[str, str, date, date | None]]) -> tuple[list[int], set[int]]:
+    """Each deletion's count and every id deleted, by scanning every stored rate of the deletion's pair: a rate on a day
+    from ``start`` to ``end`` (``start`` alone without an end) — none when the end is before the start."""
+    counts: list[int] = []
+    deleted: set[int] = set()
+    for from_currency, to_currency, start, end in deletions:
+        last = end if end is not None else start
+        matched = [rate_id for day, rate_id in stored.get(tuple(sorted((from_currency, to_currency))), {}).items() if start <= day <= last]
+        counts.append(len(matched))
+        deleted.update(matched)
+    return counts, deleted
+
+
+async def _stored_ids(session: AsyncSession) -> dict[tuple[str, str], dict[date, int]]:
+    result = await session.execute(select(FxRate.id, FxRate.base, FxRate.quote, FxRate.date))
+    stored: dict[tuple[str, str], dict[date, int]] = {}
+    for row in result.all():
+        stored.setdefault((row.base, row.quote), {})[row.date] = row.id
+    return stored
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("seed", [pytest.param(seed, id=f"seed-{seed}") for seed in range(5)])
+async def test_guard_delete_rates_bulk_matches_a_brute_force_scan(session, seed):
+    """``delete_rates_bulk`` on random requests (``_guard_deletions``, a fixed seed each: reproducible) answers each
+    deletion the count of a brute-force scan of the stored rates — overlapping deletions each count the rates they share,
+    an end before the start counts 0, a pair without rates 0 — with ``deleted_count`` equal to it and a message only
+    where it is 0; the rates deleted are exactly the union the scan finds, by id; every other rate stays stored.
+
+    Green on HEAD d63558abb too: its scan is the reference's algorithm. A guard for the bisection: its inclusive end, its
+    first and last day, and its empty slices are what a scan never had to get right.
+    """
+    rng = random.Random(seed)
+    await _seed_fx(session, _guard_rows(rng))
+    stored = await _stored_ids(session)
+    assert set(stored) == set(GUARD_PAIRS), f"seeded pairs: {sorted(stored)}"
+    deletions = _guard_deletions(rng, stored)
+    expected_counts, expected_deleted = _brute_force(stored, deletions)
+    inverted = sum(1 for _from, _to, start, end in deletions if end is not None and end < start)
+    print_section(f"MF-SEC9a LOW-1 guard (seed {seed}): {len(deletions)} deletions, {inverted} inverted, {sum(len(days) for days in stored.values())} rates")
+    assert inverted and expected_deleted and 0 in expected_counts, "the draw must hold inverted ranges, matches and misses"
+
+    results = await delete_rates_bulk(session, deletions)
+
+    answered = [(success, existing, deleted, message is None) for success, existing, deleted, message in results]
+    expected = [(True, count, count, count > 0) for count in expected_counts]
+    wrong = [(index, deletions[index], got, want) for index, (got, want) in enumerate(zip(answered, expected, strict=False)) if got != want]
+    assert len(answered) == len(deletions) and not wrong, f"{len(answered)} answers for {len(deletions)} deletions; (index, deletion, (success, existing, deleted, no message), expected): {wrong[:5]}"
+    remaining = {rate_id for days in (await _stored_ids(session)).values() for rate_id in days.values()}
+    all_ids = {rate_id for days in stored.values() for rate_id in days.values()}
+    assert remaining == all_ids - expected_deleted, f"{len(remaining & expected_deleted)} ids kept that should go, {len(all_ids - remaining - expected_deleted)} deleted that should stay"
+    print_success(f"{len(deletions)} counts and {len(expected_deleted)} deleted ids as the brute-force scan")
 
 
 # =============================================================================
@@ -889,3 +1139,351 @@ async def test_guard_post_prices_value_error_keeps_its_domain_message(monkeypatc
 
     assert (excinfo.value.status_code, excinfo.value.detail) == (400, message)
     print_success("400 with the domain message")
+
+
+# =============================================================================
+# 8. bulk_delete_prices(): EACH ROW COUNTED ONCE, EACH ASSET OVER EVERY ITEM NAMING IT (MF-SEC9e)
+# =============================================================================
+
+#: A range as these tests write it: day offsets from ``DAY0``, the end ``None`` for a single day sent without one.
+Span = tuple[int, int | None]
+
+
+async def _seed_prices(session: AsyncSession, rows: Iterable[tuple[int, int]]) -> set[tuple[int, date]]:
+    """A price for each (asset id, day offset), one statement per row (``executemany``); answers what is stored."""
+    values = [{"asset_id": asset_id, "date": _day(offset), "close": Decimal(offset + 1), "currency": "EUR", "source_plugin_key": SOURCE, "fetched_at": FETCHED_AT} for asset_id, offset in rows]
+    await session.execute(insert(PriceHistory), values)
+    await session.commit()
+    return await _stored_price_days(session)
+
+
+def _deletion(asset_id: int, *spans: Span) -> FAAssetDelete:
+    return FAAssetDelete(asset_id=asset_id, date_ranges=[DateRangeModel(start=_day(start), end=None if end is None else _day(end)) for start, end in spans])
+
+
+def _coverage(request: list[FAAssetDelete]) -> Counter[tuple[int, date]]:
+    """Brute force: how many ranges cover each (asset, day), over every item naming the asset, one day at a time."""
+    covered: Counter[tuple[int, date]] = Counter()
+    for item in request:
+        for date_range in item.date_ranges:
+            day, last = date_range.start, date_range.end or date_range.start
+            while day <= last:
+                covered[(item.asset_id, day)] += 1
+                day += timedelta(days=1)
+    return covered
+
+
+def _intervals(coverage: Counter[tuple[int, date]]) -> int:
+    """The disjoint intervals a request covers: per asset, the maximal runs of consecutive covered days."""
+    return sum(1 for asset_id, day in coverage if (asset_id, day - timedelta(days=1)) not in coverage)
+
+
+def _assert_deleted_as_the_reference(response: FABulkDeleteResponse, request: list[FAAssetDelete], before: set[tuple[int, date]], after: set[tuple[int, date]]) -> None:
+    """The answer and the database against brute force over ``before``: each item's result answers its asset's rows on
+    the days any item covers for it, each row once — an asset named by two items the same total in both —, success and
+    its own item's range count in the message; ``total_deleted`` the rows gone, which the counts of the distinct assets
+    add up to; ``after`` exactly the other rows."""
+    coverage = _coverage(request)
+    gone = {(asset_id, day) for asset_id, day in before if (asset_id, day) in coverage}
+    per_asset = Counter(asset_id for asset_id, _ in gone)
+    expected = Counter((item.asset_id, True, per_asset[item.asset_id], f"Deleted prices in {len(item.date_ranges)} range(s)") for item in request)
+    answered = Counter((result.asset_id, result.success, result.deleted_count, result.message) for result in response.results)
+    unexpected, missing = sorted((answered - expected).elements(), key=repr), sorted((expected - answered).elements(), key=repr)
+    assert answered == expected, f"(asset, success, deleted_count, message) answered and not expected: {unexpected[:5]}; expected and not answered: {missing[:5]}"
+    assert (response.total_deleted, response.success_count, response.errors) == (len(gone), len(request), []), f"total_deleted {response.total_deleted} (expected {len(gone)}), success_count {response.success_count}, errors {response.errors}"
+    by_asset = {result.asset_id: result.deleted_count for result in response.results}
+    assert sum(by_asset.values()) == response.total_deleted, f"the counts of the distinct assets add up to {sum(by_asset.values())}, total_deleted {response.total_deleted}"
+    kept = before - gone
+    assert after == kept, f"{len(kept - after)} prices deleted that should stay, e.g. {sorted(kept - after)[:5]}; {len(after - kept)} kept that should go, e.g. {sorted(after - kept)[:5]}"
+
+
+@contextlib.contextmanager
+def _statements_sent(session: AsyncSession) -> Iterator[Counter[str]]:
+    """The statements the session's engine sends while inside, counted by their first keyword (``SELECT``, ``DELETE``…)
+    as they reach the driver (``before_cursor_execute``)."""
+    sent: Counter[str] = Counter()
+
+    def count(_connection: Any, _cursor: Any, statement: str, _parameters: Any, _context: Any, _executemany: bool) -> None:
+        sent[statement.lstrip().split(None, 1)[0].upper()] += 1
+
+    engine = session.bind.sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        yield sent
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+
+
+#: One item of asset A whose ranges cover some days twice, and the rows of A they delete, each once.
+OVERLAPPING_RANGES = [
+    pytest.param(((0, 4), (3, 6)), 7, id="d0-d4-and-d3-d6"),
+    pytest.param(((0, 9), (2, 3)), 10, id="d2-d3-inside-d0-d9"),
+    pytest.param(((5, None), (5, 5)), 1, id="d5-twice"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("spans", "count"), OVERLAPPING_RANGES)
+async def test_bulk_delete_prices_counts_a_row_in_two_ranges_once(session, spans, count):
+    """One item of asset A whose ranges overlap — [d0, d4] and [d3, d6]; [d2, d3] inside [d0, d9]; d5 without an end and
+    [d5, d5] —, A and B priced on d0 to d14: A's ``deleted_count`` and ``total_deleted`` are the rows deleted, each once
+    (7; 10; 1); every other price of A and all of B's kept.
+
+    Red on HEAD 79d4ca239: one COUNT per range, summed — a row in two ranges counted twice (9; 12; 2) while the DELETE
+    removed it once, ``deleted_count`` above ``total_deleted``.
+    """
+    print_section(f"MF-SEC9e: bulk_delete_prices, one asset's ranges {spans}")
+    asset_a, asset_b = await _assets(session, 2)
+    before = await _seed_prices(session, [(asset_id, offset) for asset_id in (asset_a, asset_b) for offset in range(15)])
+    request = [_deletion(asset_a, *spans)]
+
+    response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    answered = [(result.asset_id, result.deleted_count) for result in response.results]
+    assert (answered, response.total_deleted) == ([(asset_a, count)], count), f"answered (asset, deleted_count) {answered}, total_deleted {response.total_deleted}: expected A {count}, each row once"
+    _assert_deleted_as_the_reference(response, request, before, await _stored_price_days(session))
+    print_success(f"{count} rows deleted and counted once")
+
+
+#: Three items — asset A, then B, then A again —, their ranges, and the rows A and B lose.
+ASSET_IN_TWO_ITEMS = [
+    pytest.param(((0, 2),), ((5, None),), ((10, 11),), 5, 1, id="A-d0-d2-B-d5-A-d10-d11"),
+    pytest.param(((0, 4),), ((5, None),), ((3, 6),), 7, 1, id="A-d0-d4-B-d5-A-d3-d6-overlapping"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("first", "other", "second", "count_a", "count_b"), ASSET_IN_TWO_ITEMS)
+async def test_bulk_delete_prices_counts_an_asset_over_every_item_naming_it(session, first, other, second, count_a, count_b):
+    """Three items, A [d0, d2], B d5, A [d10, d11] — or A [d0, d4], B d5, A [d3, d6], the two items of A overlapping —, A
+    and B priced on d0 to d14: both results of A answer A's rows over both items, each once (5 = 3 + 2; 7), B's its 1;
+    ``total_deleted`` their sum over the distinct assets (6; 8); the rows gone exactly those.
+
+    Red on HEAD 79d4ca239: the per-asset count overwritten item by item, both results of A answering the LAST item's
+    count (2; 4), the counts no longer adding up to ``total_deleted``.
+    """
+    print_section(f"MF-SEC9e: bulk_delete_prices, asset A in two items {first} and {second}")
+    asset_a, asset_b = await _assets(session, 2)
+    before = await _seed_prices(session, [(asset_id, offset) for asset_id in (asset_a, asset_b) for offset in range(15)])
+    request = [_deletion(asset_a, *first), _deletion(asset_b, *other), _deletion(asset_a, *second)]
+
+    response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    answered = Counter((result.asset_id, result.deleted_count) for result in response.results)
+    expected = Counter({(asset_a, count_a): 2, (asset_b, count_b): 1})
+    wanted = f"expected A {count_a} in both its results, B {count_b}, {count_a + count_b} in all"
+    assert (answered, response.total_deleted) == (expected, count_a + count_b), f"answered (asset, deleted_count) {sorted(answered.elements())}, total_deleted {response.total_deleted}: {wanted}"
+    _assert_deleted_as_the_reference(response, request, before, await _stored_price_days(session))
+    print_success(f"A {count_a} in both its results, B {count_b}, total {response.total_deleted}")
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_prices_of_nothing_answers_an_empty_response(session):
+    """``bulk_delete_prices([])`` answers a valid empty response — no result, ``success_count`` 0, ``total_deleted`` 0, no
+    error — and deletes nothing.
+
+    Red on HEAD 79d4ca239: it built ``FABulkDeleteResponse(deleted_count=0, results=[])`` — no ``success_count``, no
+    ``total_deleted``, a field the model forbids —: ``ValidationError``.
+    """
+    print_section("MF-SEC9e: bulk_delete_prices of nothing")
+    (asset_a,) = await _assets(session, 1)
+    before = await _seed_prices(session, [(asset_a, offset) for offset in range(5)])
+
+    try:
+        response = await AssetSourceManager.bulk_delete_prices([], session)
+    except ValidationError as error:
+        pytest.fail(f"an empty request could not build its response: {[(e['type'], e['loc']) for e in error.errors()]}")
+
+    assert isinstance(response, FABulkDeleteResponse), f"answered {type(response).__name__}"
+    assert (response.results, response.success_count, response.total_deleted, response.errors) == ([], 0, 0, [])
+    assert await _stored_price_days(session) == before
+    print_success("an empty response, nothing deleted")
+
+
+@pytest.mark.asyncio
+async def test_delete_prices_route_of_nothing_answers_200(session):
+    """``DELETE /assets/prices`` with no item, its coroutine called directly on the private database: the empty response,
+    valid against the route's ``response_model`` (200); nothing deleted.
+
+    Red on HEAD 79d4ca239: the service's ``ValidationError`` caught by the route, 500 «Internal error while deleting
+    prices».
+    """
+    print_section("MF-SEC9e: DELETE /assets/prices with no item")
+    (asset_a,) = await _assets(session, 1)
+    before = await _seed_prices(session, [(asset_a, offset) for offset in range(5)])
+
+    try:
+        response = await prices.delete_prices_bulk(assets=[], session=session, _current_user=None)
+    except HTTPException as refused:
+        pytest.fail(f"{refused.status_code} for an empty request: {refused.detail!r}")
+
+    answered = FABulkDeleteResponse.model_validate(response.model_dump())  # what the route's response_model checks
+    assert (answered.results, answered.success_count, answered.total_deleted, answered.errors) == ([], 0, 0, [])
+    assert await _stored_price_days(session) == before
+    print_success("200: an empty response, nothing deleted")
+
+
+#: Statements beyond one per chunk of intervals the counting, and the deletion, may each take.
+STATEMENT_SLACK = 2
+STATEMENT_ASSETS = 4
+STATEMENT_RANGES_PER_ASSET = 500
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("length", "intervals"), [pytest.param(0, 2_000, id="2000-separate-days"), pytest.param(6, STATEMENT_ASSETS, id="2000-overlapping-weeks")])
+async def test_bulk_delete_prices_reads_its_counts_per_chunk_not_per_range(session, length, intervals):
+    """2 000 ranges, 500 for each of four assets priced on d0 to d999, one starting every other day — single days (2 000
+    disjoint intervals), or week-long ranges overlapping one another (one interval per asset) —: the call sends at most
+    ⌈intervals / 500⌉ + 2 SELECTs and as many DELETEs (6; 3), where one COUNT per range sends 2 000. The statements are
+    counted as the engine hands them to the driver: a step count, not a time. Barrier: a SELECT and a DELETE are seen —
+    the counter sees the call. The counts and the rows are the brute-force reference's; a fifth asset keeps its prices.
+
+    Red on HEAD 79d4ca239: 2 000 SELECTs, one awaited COUNT per range — 10 000 at the cap.
+    """
+    print_section(f"MF-SEC9e: bulk_delete_prices, {STATEMENT_ASSETS * STATEMENT_RANGES_PER_ASSET} ranges of {length + 1} day(s), statements sent")
+    asset_ids = await _assets(session, STATEMENT_ASSETS + 1)
+    before = await _seed_prices(session, [(asset_id, offset) for asset_id in asset_ids for offset in range(2 * STATEMENT_RANGES_PER_ASSET)])
+    request = [_deletion(asset_id, *((2 * k, 2 * k + length) for k in range(STATEMENT_RANGES_PER_ASSET))) for asset_id in asset_ids[:STATEMENT_ASSETS]]
+    assert _intervals(_coverage(request)) == intervals, "the request's intervals, by brute force"
+    budget = math.ceil(intervals / CHUNK) + STATEMENT_SLACK
+
+    with _statements_sent(session) as sent:
+        response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    assert sent["SELECT"] >= 1 and sent["DELETE"] >= 1, f"statements seen {dict(sent)}: the counter does not see the call"
+    assert sent["SELECT"] <= budget, f"{sent['SELECT']} SELECTs for {intervals} interval(s) of 2 000 ranges: at most {budget}, one per chunk of 500 intervals (statements {dict(sent)})"
+    assert sent["DELETE"] <= budget, f"{sent['DELETE']} DELETEs for {intervals} interval(s): at most {budget} (statements {dict(sent)})"
+    _assert_deleted_as_the_reference(response, request, before, await _stored_price_days(session))
+    print_success(f"statements {dict(sent)} for {intervals} interval(s) (at most {budget} of each kind)")
+
+
+@pytest.mark.asyncio
+async def test_guard_bulk_delete_prices_inclusive_bounds_and_adjacent_ranges(session):
+    """One item per asset, no two ranges sharing a day, A, B and C priced on d0 to d29: A [d3, d3] and d7 without an end
+    — 2, each range its day alone; B [d0, d2] and [d3, d4], adjacent — 5; C [d20, d25] and [d10, d12], out of order — 9;
+    D, without prices, [d0, d5] — 0. ``total_deleted`` 16, every other price kept, as the brute-force reference says.
+
+    Green on HEAD 79d4ca239 too: without a shared day or an asset named twice, one COUNT per range summed is exact. A
+    guard for the merging: inclusive ends, an end defaulting to the start, adjacent ranges losing or doubling no day,
+    ranges given out of order.
+    """
+    print_section("MF-SEC9e guard: bulk_delete_prices, inclusive bounds and adjacent ranges")
+    asset_a, asset_b, asset_c, asset_d = await _assets(session, 4)
+    before = await _seed_prices(session, [(asset_id, offset) for asset_id in (asset_a, asset_b, asset_c) for offset in range(30)])
+    request = [_deletion(asset_a, (3, 3), (7, None)), _deletion(asset_b, (0, 2), (3, 4)), _deletion(asset_c, (20, 25), (10, 12)), _deletion(asset_d, (0, 5))]
+
+    response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    answered = sorted((result.asset_id, result.deleted_count) for result in response.results)
+    assert (answered, response.total_deleted) == (sorted([(asset_a, 2), (asset_b, 5), (asset_c, 9), (asset_d, 0)]), 16), f"answered (asset, deleted_count) {answered}, total_deleted {response.total_deleted}"
+    gone = {(asset_a, _day(3)), (asset_a, _day(7)), *((asset_b, _day(offset)) for offset in range(5)), *((asset_c, _day(offset)) for offset in (*range(10, 13), *range(20, 26)))}
+    after = await _stored_price_days(session)
+    assert after == before - gone, f"deleted {sorted(before - after)}, expected {sorted(gone)}"
+    _assert_deleted_as_the_reference(response, request, before, after)
+    print_success("2, 5, 9 and 0 deleted, 16 in all")
+
+
+#: The days the random cases' prices are drawn from; the asset ids priced, and one more without a price.
+PRICE_WINDOW = 2_000
+PRICED_ASSETS = 4
+PRICE_SEEDS = [pytest.param(seed, id=f"seed-{seed}") for seed in range(5)]
+
+
+def _random_prices(rng: random.Random, asset_ids: list[int]) -> list[tuple[int, int]]:
+    """About half of the window's days for each asset, drawn at random, and always its first and last day."""
+    return [(asset_id, offset) for asset_id in asset_ids for offset in range(PRICE_WINDOW) if offset in (0, PRICE_WINDOW - 1) or rng.random() < 0.5]
+
+
+def _random_disjoint_request(rng: random.Random, asset_ids: list[int]) -> list[FAAssetDelete]:
+    """One item per asset, its ranges walking forward from a little before the window to a little past it — single days
+    (with or without an end) or up to a week —, each next one starting the day after (adjacent) or after a gap, sent
+    shuffled: no day covered twice."""
+    request = []
+    for asset_id in asset_ids:
+        spans: list[Span] = []
+        start = rng.randint(-5, 5)
+        while start < PRICE_WINDOW + 5:
+            length = rng.choice((0, 0, 1, 3, 6))
+            spans.append((start, None) if length == 0 and rng.random() < 0.5 else (start, start + length))
+            start += length + rng.choice((1, 1, 2, 3, 5, 9))
+        rng.shuffle(spans)
+        request.append(_deletion(asset_id, *spans))
+    return request
+
+
+def _random_overlapping_request(rng: random.Random, asset_ids: list[int]) -> list[FAAssetDelete]:
+    """Items naming the assets at random — each asset in two items at least —, each of 20 to 40 ranges: single days (with
+    or without an end), ranges up to 11 days, starts reaching a little past the window, some ranges repeated; ranges
+    overlap within an item and across the items of an asset."""
+    owners = [*asset_ids, *asset_ids, *(rng.choice(asset_ids) for _ in range(40))]
+    rng.shuffle(owners)
+    request = []
+    for asset_id in owners:
+        spans: list[Span] = []
+        for _ in range(rng.randint(20, 40)):
+            start = rng.randrange(-10, PRICE_WINDOW + 10)
+            kind = rng.choice(("single", "single-with-end", "range", "range", "repeat"))
+            if kind == "repeat" and spans:
+                spans.append(rng.choice(spans))
+            elif kind == "single":
+                spans.append((start, None))
+            elif kind == "single-with-end":
+                spans.append((start, start))
+            else:
+                spans.append((start, start + rng.randint(1, 10)))
+        request.append(_deletion(asset_id, *spans))
+    return request
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("seed", PRICE_SEEDS)
+async def test_guard_bulk_delete_prices_disjoint_ranges_match_a_brute_force_reference(session, seed):
+    """Random requests without a shared day (``_random_disjoint_request``, a fixed seed each: reproducible) — one item per
+    asset, adjacent and separate ranges sent out of order, an asset without prices, more intervals than one chunk —:
+    counts, ``total_deleted`` and rows kept as the brute-force reference (``_assert_deleted_as_the_reference``).
+
+    Green on HEAD 79d4ca239 too: without a shared day or an asset named twice, one COUNT per range summed is exact. A
+    guard for the merging and for the counts summed across chunks.
+    """
+    rng = random.Random(seed)
+    asset_ids = await _assets(session, PRICED_ASSETS + 1)
+    before = await _seed_prices(session, _random_prices(rng, asset_ids[:PRICED_ASSETS]))
+    request = _random_disjoint_request(rng, asset_ids)
+    coverage = _coverage(request)
+    ranges, intervals = sum(len(item.date_ranges) for item in request), _intervals(coverage)
+    print_section(f"MF-SEC9e guard (seed {seed}): {ranges} disjoint ranges, {intervals} intervals, {len(before)} prices")
+    assert max(coverage.values()) == 1 and len({item.asset_id for item in request}) == len(request), "the draw must share no day and name each asset once"
+    assert CHUNK < intervals < ranges, f"{intervals} intervals of {ranges} ranges: the draw must join adjacent ranges and span two chunks"
+
+    response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    _assert_deleted_as_the_reference(response, request, before, await _stored_price_days(session))
+    print_success(f"{response.total_deleted} prices deleted as the reference")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("seed", PRICE_SEEDS)
+async def test_bulk_delete_prices_matches_a_brute_force_reference(session, seed):
+    """Random requests (``_random_overlapping_request``, a fixed seed each: reproducible) — every asset in two items or
+    more, ranges overlapping within and across items, repeated ranges, an asset without prices, more intervals than one
+    chunk —: each result its asset's distinct rows deleted, the counts of the distinct assets adding up to
+    ``total_deleted``, every other row kept, as the brute-force reference (``_assert_deleted_as_the_reference``).
+
+    Red on HEAD 79d4ca239 (every seed): rows in two ranges counted twice, and each asset answered its last item's count.
+    """
+    rng = random.Random(seed)
+    asset_ids = await _assets(session, PRICED_ASSETS + 1)
+    before = await _seed_prices(session, _random_prices(rng, asset_ids[:PRICED_ASSETS]))
+    request = _random_overlapping_request(rng, asset_ids)
+    coverage = _coverage(request)
+    ranges, intervals = sum(len(item.date_ranges) for item in request), _intervals(coverage)
+    print_section(f"MF-SEC9e (seed {seed}): {len(request)} items, {ranges} ranges, {intervals} intervals, {len(before)} prices")
+    named = Counter(item.asset_id for item in request)
+    assert min(named.values()) >= 2, f"every asset must be in two items: {named}"
+    assert any(times > 1 and key in before for key, times in coverage.items()), "the draw must cover a stored price twice"
+    assert intervals > CHUNK, f"{intervals} intervals: the draw must span two chunks"
+
+    response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    _assert_deleted_as_the_reference(response, request, before, await _stored_price_days(session))
+    print_success(f"{response.total_deleted} prices deleted as the reference, over {len(request)} items")
