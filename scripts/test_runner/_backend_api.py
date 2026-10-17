@@ -990,7 +990,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
-    add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions")
+    add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of, as_of ≥ 1900")
     add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
     add_test(api, "asset-signals", api_asset_signals, name="Asset Signals", desc="Price-query legacy, signal-only, annotations and isolation")
     add_test(api, "fx-signals", api_fx_signals, name="FX Signals", desc="Combined conversion, grouped signals, identity/rates and legacy output")
