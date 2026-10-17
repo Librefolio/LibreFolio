@@ -458,16 +458,22 @@ no props. The accounts of the instance, the open invitations and the places take
   none). Reactivate runs at once; the reset link and the deletion open their own dialogs.
 - **Cancel the setup link** (`cancel-setup`, lot A-43), for the
   [initial administrator](../../../architecture/access_control.md#initial-admin) waiting for its
-  setup: once confirmed, `PATCH /users/{id}` `{is_active: false}`, which revokes its setup links
-  ([Cancelling the setup link](../../../architecture/access_control.md#setup-cancel)).
+  setup: once confirmed, `PATCH /users/{id}` `{is_active: false, cancel_setup: true}`, which revokes
+  its setup links ([Cancelling the setup link](../../../architecture/access_control.md#setup-cancel)).
   The row still reads *Waiting for setup* afterwards, so a success toast
   (`settings.usersTab.toasts.setupCancelled`, *The setup link of {username} no longer works.*) tells
-  what changed.
+  what changed. `cancel_setup` (lot A-51) makes the request a cancellation and nothing else, never
+  the deactivation its `is_active: false` alone would be: when the administrator completed its setup
+  after the list was loaded, the backend answers `409` `SETUP_COMPLETED` and changes nothing. The tab
+  then shows `settings.usersTab.errors.SETUP_COMPLETED` in an error toast (*This administrator
+  completed its setup in the meantime: nothing was changed.*), notifies `accounts.action.failed`
+  with no success event, and reloads: the row shows the account active
+  ([A setup completed meanwhile](../../../architecture/access_control.md#setup-completed-meanwhile)).
 
 | Action | Call | Event on success | Toast |
 |---|---|---|---|
 | deactivate | `PATCH /users/{id}` `{is_active: false}` | `accounts.user.deactivated` | — |
-| cancel the setup link | `PATCH /users/{id}` `{is_active: false}` | `accounts.user.setup-cancelled` | success |
+| cancel the setup link | `PATCH /users/{id}` `{is_active: false, cancel_setup: true}` | `accounts.user.setup-cancelled` | success |
 | reactivate | `PATCH /users/{id}` `{is_active: true}` | `accounts.user.reactivated` | — |
 | promote | `PATCH /users/{id}` `{is_superuser: true}` | `accounts.user.promoted` | — |
 | demote | `PATCH /users/{id}` `{is_superuser: false}` | `accounts.user.demoted` | — |
@@ -646,7 +652,7 @@ the translated `key` otherwise.
 
 | Answer | `code` | Shown |
 |---|---|---|
-| `detail.error_code` among `LAST_ADMIN`, `USER_LIMIT_REACHED`, `REGISTRATION_DISABLED`, `ACCOUNT_PROTECTED`, `SELF_DELETION`, `DEMOTE_FIRST`, `PENDING_SETUP` (`ACCOUNT_ERROR_CODES`) | that code | `settings.usersTab.errors.<code>`; a `detail.billing_url` is passed as `params.billingUrl`. `PENDING_SETUP` is the `409` of a reactivation or, since lot A-43, a demotion of the initial administrator waiting for its setup: a list loaded earlier may still offer either |
+| `detail.error_code` among `LAST_ADMIN`, `USER_LIMIT_REACHED`, `REGISTRATION_DISABLED`, `ACCOUNT_PROTECTED`, `SELF_DELETION`, `DEMOTE_FIRST`, `PENDING_SETUP`, `SETUP_COMPLETED` (`ACCOUNT_ERROR_CODES`) | that code | `settings.usersTab.errors.<code>`; a `detail.billing_url` is passed as `params.billingUrl`. `PENDING_SETUP` is the `409` of a reactivation or, since lot A-43, a demotion of the initial administrator waiting for its setup: a list loaded earlier may still offer either. `SETUP_COMPLETED` (lot A-51) is the `409` of a cancellation of a setup link that the administrator spent since the list was loaded |
 | `404` | `NOT_FOUND` | `settings.usersTab.errors.NOT_FOUND` |
 | `422` | `INVALID_INPUT` | `settings.usersTab.errors.INVALID_INPUT` |
 | `500` of a deletion (`action` is `'delete'`) | `DELETION_FAILED` | `settings.usersTab.errors.DELETION_FAILED`: nothing was deleted |
@@ -703,12 +709,15 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
   `composeLink`), `users/addressProbe.test.ts` (`normalizeBase`, `probeUrl`, and `checkAddress`:
   the request options key by key, every verdict, the deadline on fake timers, never the network),
   `users/accountErrors.test.ts` (every code of `ACCOUNT_ERROR_CODES`, `PENDING_SETUP` included,
-  the answers read from the status, and each key a sentence in the four catalogues),
+  the answers read from the status, and each key a sentence in the four catalogues; AERR-13 and
+  AERR-14, lot A-51: the `409` `SETUP_COMPLETED` worded by its key, never the server's sentence),
   and the `users` row of `settingsTabs.test.ts`.
 - `./dev.py test front-utility component-unit`: `tabs/UsersTab.test.ts` (the tab against a mocked
   server that changes as the backend would; UTAB-55 to UTAB-60, lot A-43: the cancellation of a
   setup link confirmed as danger, its one `PATCH`, event and toast, a dismissed confirmation that
-  sends nothing, a stale demotion's `PENDING_SETUP`, and the keys in the four catalogues),
+  sends nothing, a stale demotion's `PENDING_SETUP`, and the keys in the four catalogues; UTAB-61
+  and UTAB-62, lot A-51: the cancellation's body exactly `{is_active: false, cancel_setup: true}`,
+  and a `409` `SETUP_COMPLETED` worded by its key, with no success, the row reloaded active),
   `users/LinkShare.component.test.ts` (not
   `LinkShare.test.ts`: `linkShare.test.ts` is in the same folder, and macOS volumes ignore case),
   `users/InviteDialog.test.ts`, `users/ResetLinkDialog.test.ts`, `users/UserRow.pendingSetup.test.ts`
