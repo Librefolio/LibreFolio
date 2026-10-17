@@ -38,6 +38,24 @@ The technical indicators (`services/signal_plugins/`, `services/signals/runtime.
 annualization, conversions, average cost, valuation — from the layer. FX conversion itself stays
 in the FX service: `convert_bulk()` in `services/fx/conversion.py` is the primitive the calculations call.
 
+### 🪞 Declared Float Twins {: #float-twins }
+
+Four float functions of `backend/app/services/risk/metrics.py` have a counterpart in `returns.py`.
+They are declared twins, not copies, and they stay in `risk/metrics.py` on purpose: series
+statistics live there (`.github/instructions/backend-risk.instructions.md`). The layer's versions
+take and return `Decimal`: NAV snapshots and cash flows for the TWRR, a rate over a span of days
+for the conversions. The twins run on the float return series of the risk analytics.
+
+- `compounded_return(returns)` — Π(1 + r) − 1, the geometric chaining that `calculate_twrr()`
+  applies to its sub-period returns.
+- `wealth_index(returns)` — 1, then Π(1 + r) after each return: the float form of the
+  `wealth_index` of `calculate_twrr_period_series()`.
+- `period_returns_from_cumulative(cumulative_returns)` — (1 + cₜ) / (1 + cₜ₋₁) − 1, which takes a
+  cumulative return series back to period returns: the inverse of chaining the TWRR.
+- `daily_risk_free_rate(annual_rate, periods_per_year)` — `expm1(log1p(R) / f)`, an annual rate
+  per observation, the same compounding as `annualized_to_cumulative()` and
+  `cumulative_to_annualized()`.
+
 ---
 
 ## 🗺️ Package Map {: #package-map }
@@ -48,7 +66,7 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
@@ -89,6 +107,18 @@ every point of the line (developer decision D-MF5): no rate when the value is ze
 capital up to that day — the first snapshot's value plus the flows after it (decision N54) — is zero or less; the
 series' last point is the card. `calculate_mwrr()` and `calculate_mwrr_series()` remain the bare solves, without that
 rule, and every point of the series is the single solve ending on its snapshot (one starting guess).
+
+`float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
+signal statistics read. `series_preparation.py`, which prepares those series, takes both from here and keeps no return
+or annualization formula of its own.
+
+- `float_price_return(start, end)` is `price_return()` as a float. It raises `ValueError` on a missing price or a zero
+  start: a series never carries an unavailable return.
+- `observed_annualization(n_observations, baseline_date, final_date)` returns the series' calendar span and its
+  [observed annualization factor](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md#formula),
+  observations × 365 / days. An empty series gives `(0, None)`; a span of zero days or less raises `ValueError`. A
+  caller that can meet a zero-day span picks its own fallback before calling: `portfolio_twrr_returns()`
+  (`risk/results.py`) leaves the factor `None`, the `comparison` analytic takes the context's factor.
 
 ### ⚙️ The Portfolio Package at Work {: #portfolio-package }
 
@@ -476,7 +506,7 @@ for. The gate runs with the chart-safety unit tests:
 
 | Command | Runs (under `backend/test_scripts/`) | Covers |
 |---------|--------------------------------------|--------|
-| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`) and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
+| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`) and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
@@ -499,7 +529,7 @@ for. The gate runs with the chart-safety unit tests:
 | `lots/` | [Lots Analysis Service](transactions/lots_analysis_service.md) | [FIFO Lot Analysis](../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md) |
 | `price_marks.py` | [Price Resolver](transactions/price_resolver.md) | [Price Resolution](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
 | `portfolio/` | [The portfolio package at work](#portfolio-package); its data-quality report in [Data Quality Banner](../frontend/data-quality-banner.md); its cache in [FX Architecture](fx/architecture.md#portfolio-cache-invalidation) | [Portfolio Engine — Mathematical Model](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md) |
-| `returns.py` | — | [ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md), [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md); the gain that recovers a drawdown in [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md#recovery-time) and [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back) |
+| `returns.py` | — | [ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md), [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md); the gain that recovers a drawdown in [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md#recovery-time) and [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back); the factor of a return series in [Observed Annualization](../../financial-theory/technical-analysis/risk-metrics/observed-annualization.md) |
 | `yield_on_cost.py` | — | [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) |
 | `splits.py` | — | [Split](../../financial-theory/instruments/asset-events/split.md) |
 | `ledger_totals.py` | [Ledger control totals](#ledger-totals) | — |
