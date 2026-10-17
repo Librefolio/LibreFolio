@@ -28,9 +28,9 @@ The contracts held here:
 The server cases run ``cmd_server`` in this process on a fake project under ``tmp_path``, the real helper bound to a
 fake build with ``functools.partial`` (its default ``build_dir`` is bound when ``dev.py`` is imported). What surrounds the
 banner is stood in for: the runtime configuration (it writes ``os.environ``), the database path, the data directory, the
-host, the builds, the port check and the uvicorn launch (``run_command_live``), whose recorder shows the start reached
-it. Read errors are injected by patching ``pathlib.Path.rglob`` or ``pathlib.Path.read_bytes`` for one path only: a
-``chmod 000`` would not stop a root user, as on a CI container.
+host, the builds, the port check and the uvicorn launch (``run_server_live``, formerly ``run_command_live``), whose
+recorder shows the start reached it. Read errors are injected by patching ``pathlib.Path.rglob`` or
+``pathlib.Path.read_bytes`` for one path only: a ``chmod 000`` would not stop a root user, as on a CI container.
 
 PURE: no DB, no server, no network, nothing written outside ``tmp_path``. An autouse fixture forbids every real process,
 exec and signal, and ``os.environ`` is compared before and after each ``cmd_server`` call. The only repository file read
@@ -183,7 +183,7 @@ def no_real_process(monkeypatch):
 
 
 class _LaunchResult:
-    """What the stood-in ``run_command_live`` returns: a caller returning it reached its launch and handed the result back."""
+    """What the stood-in launchers (``run_server_live``, ``run_command_live``) return: a caller returning it reached its launch and handed the result back."""
 
     def __repr__(self) -> str:
         return "<the stood-in launch's result>"
@@ -194,7 +194,7 @@ LAUNCH_RESULT = _LaunchResult()
 
 @dataclass
 class Launch:
-    """One ``run_command_live`` call: the command that would have started, and where. Its ``env`` is never printed."""
+    """One launch (``run_server_live`` or ``run_command_live``): the command that would have started, and where. Its ``env`` is never printed."""
 
     cmd: list[str]
     cwd: Path | None
@@ -202,7 +202,12 @@ class Launch:
 
 
 def record_launches(monkeypatch, steps: list[str] | None = None) -> list[Launch]:
-    """Stand in for ``dev.run_command_live``: record each call (and a ``launch`` step), start nothing, return ``LAUNCH_RESULT``."""
+    """Stand in for ``dev.run_server_live`` and ``dev.run_command_live``: record each call (and a ``launch`` step), start nothing, return ``LAUNCH_RESULT``.
+
+    The server launches through ``run_server_live`` (Z-10; formerly ``run_command_live``), which takes no ``cwd``: it
+    always starts the server in the project root, recorded as None. ``front dev`` launches through ``run_command_live``.
+    ``run_server_live`` is set with ``raising=False``, so the stand-in holds before and after dev.py defines it.
+    """
     launches: list[Launch] = []
 
     def run_command_live(cmd, cwd=None, env=None):
@@ -211,7 +216,14 @@ def record_launches(monkeypatch, steps: list[str] | None = None) -> list[Launch]
             steps.append("launch")
         return LAUNCH_RESULT
 
+    def run_server_live(cmd, env=None, grace_seconds=None):
+        launches.append(Launch(cmd=list(cmd), cwd=None, env=env))
+        if steps is not None:
+            steps.append("launch")
+        return LAUNCH_RESULT
+
     monkeypatch.setattr(dev, "run_command_live", run_command_live)
+    monkeypatch.setattr(dev, "run_server_live", run_server_live, raising=False)
     return launches
 
 
@@ -278,10 +290,10 @@ def start_server(monkeypatch, capsys, tmp_path: Path, lab_check: Callable[[], bo
     The arguments are a ``Namespace`` with ``port=PORT`` and ``options``. Stood in for, each recording a step: the
     frontend auto-build (``frontend_build(debug)`` runs in its place when given; ``cmd_fe_build``, reached only under
     ``--rebuild``, fails the test), the documentation build, the JS cache, the port check (nothing holds the port), the
-    Lab check (it calls ``lab_check``) and the launch (``run_command_live``). The runtime configuration, which writes
-    ``os.environ``, the database path, the data directory and the host are fixed, and ``dev.PROJECT_ROOT`` is
-    ``tmp_path``, so the «Frontend build found» check reads the fake project too. Fails the test when the call changed
-    ``os.environ``.
+    Lab check (it calls ``lab_check``) and the launch (``run_server_live``, formerly ``run_command_live``). The runtime
+    configuration, which writes ``os.environ``, the database path, the data directory and the host are fixed, and
+    ``dev.PROJECT_ROOT`` is ``tmp_path``, so the «Frontend build found» check reads the fake project too. Fails the test
+    when the call changed ``os.environ``.
     """
     steps: list[str] = []
     launches = record_launches(monkeypatch, steps)
