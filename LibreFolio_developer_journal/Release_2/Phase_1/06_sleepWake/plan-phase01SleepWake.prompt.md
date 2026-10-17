@@ -4405,3 +4405,164 @@ Voce Z-26 del backlog (basso; E, R13-SEC8, via coordinatore). HEAD `036007e99`.
    - Lo schema resta com'è (`schemas/sleep_wake.py:36`, «another worker runs the jobs»): ora incompleto, per scelta.
 8. ✅ 17/10 ~10:57 — Backlog, nella mia sezione: Z-26 chiusa (✅, commit del coordinatore). Z-24 era già chiusa da
    H (dev `36a487e84`), arrivata col mio avanzamento: nulla da fare.
+9. ✅ 17/10 ~11:05 — Il coordinatore ha fatto entrare Z-26: `e9999a11a`, `74f04d4eb`, `a2b8cc75d` → dev
+   `8c362c1f3`, CHANGELOG 🐛 `8850fe814`; il mio ramo è avanzato lì (verificato, albero pulito). La descrizione di
+   `schemas/sleep_wake.py:36` resta com'è (sua decisione).
+
+### Dopo Z-26: cosa resta di Z senza decisioni del developer (17/10 ~11:10, sola lettura)
+
+- Aperte nella mia sezione: Z-4 (un campo per asset, decisione di prodotto D-19), Z-7 (rimandata dal developer,
+  decisione 33), Z-14b e Z-15 (D1–D3), Z-27 (di Y e X). Resta solo Z-23, scritta «dopo la 1.3».
+- Z-23, i cinque lock su file, sono più diversi di quanto dice la riga:
+  - modi: esclusivo bloccante (`db/post_migration/__init__.py:193`, `brim/brim_provider.py:706`,
+    `instance_backup/apply.py:314`), tentativo senza attesa (`instance_backup/jobs.py:146`, `apply.py:582`),
+    condiviso (`apply.py:609`/`:612`), attesa asincrona con scadenza (`scheduler/run_lock.py`);
+  - senza `fcntl`: nessuna serializzazione (`post_migration:188`), un `threading.Lock` per processo (`jobs.py:138`,
+    `apply.py:306`, il lock in memoria di `brim_provider`), l'elezione del leader (scheduler);
+  - apertura: `os.open` con `O_NOFOLLOW` e `0o600` (`jobs.py:144`, `apply.py:312`, `run_lock.py`) contro
+    `open(…, "a+")` (`post_migration:189`, `brim_provider.py:705`), che segue un symlink e prende il modo dall'umask.
+- Un aiuto comune dovrebbe coprire tutto questo, senza nulla di visibile per l'utente, toccando il ripristino di B
+  (percorso critico) e file di altri tre proprietari: resta dopo la 1.3.
+- Il solo scarto concreto: i due `open()` che seguono un symlink. Rischio basso (serve già scrivere nella cartella
+  dati; un symlink pendente crea un file vuoto altrove, nulla viene scritto). Una riga per sito, dei loro
+  proprietari: proposta al coordinatore come voce piccola, separata da Z-23.
+
+### Z-28 — due file di lock aperti con `open()` (17/10 ~11:08)
+
+> **Decisione** (coordinatore, 17/10 ~11:08): «Agreed: Z-23 after 1.3. Do the hardening as **Z-28**, in your
+> section: `backend/app/db/post_migration/__init__.py:191` and `backend/app/services/brim/brim_provider.py:704`, with
+> `os.open(..., O_NOFOLLOW | O_CREAT | O_RDWR, 0o600)` + `fdopen` (or the backup/scheduler pattern); no worktree
+> touches either. Reds first (a symlinked lock path is refused, the mode is 0o600), light runs, then FROZEN.
+> Reviewers: W (BRIM) and H (post-migration). After that, a read-only analysis of **Z-27** (web-app batching over
+> 1,000 items for prices, period-changes and FX convert). X is on X-R49, so you own the analysis; the implementation
+> gets assigned after, coordinated with X-R58/X-R60.»
+
+**Stato reale.**
+- `_exclusive_run(db_path)` (`db/post_migration/__init__.py:182`): `open(<db>.post-migration.lock, "a+")` (`:189`),
+  `flock(LOCK_EX)` bloccante, preso prima di aprire il database; senza `fcntl` nessun lock. Il modulo non importa `os`.
+- `_acquire_file_lock(key)` (`services/brim/brim_provider.py:700`): `open(.locks/<key>.lock, "a+")` (`:705`),
+  `flock(LOCK_EX)` bloccante; il «handle» resta nello stato del thread (`_broker_metadata_lock`, `held`) e
+  `_release_file_lock` lo chiude. Nemmeno qui `os` è importato.
+- I test esistenti (`test_post_migration.py` contratto 12; `test_brim_parse_race.py`; `test_brim_api.py`) provano il
+  lock con descrittori propri: nessuno usa il tipo del handle.
+
+**Contratto.** Il modello del backup e dello scheduler: un descrittore, non un oggetto file.
+- I due lock si aprono con `os.open(path, O_RDWR | O_CREAT | O_NOFOLLOW, 0o600)`; `flock` sul descrittore, bloccante
+  come oggi; `LOCK_UN` e `os.close` nel `finally`.
+- Un symlink al posto del file di lock: `OSError`, prima di ogni altra cosa. Post-migrazione: nessuna correzione, il
+  database non aperto. BRIM: il blocco non gira, lo stato del thread resta pulito (un lock dopo funziona). Nulla
+  creato dietro il link, il link intatto.
+- Un file di lock nuovo nasce `0o600` (l'umask può solo stringere). Uno che esiste tiene il suo modo (è vuoto), come
+  nei siti del backup e dello scheduler. Senza `fcntl` nulla cambia.
+- Il solo ultimo componente è protetto: una cartella `.locks` che sia un symlink resta seguita, come negli altri siti.
+
+**Passi.**
+1. ✅ 17/10 ~11:10–11:24 — Rossi di test-author; nessun codice di prodotto toccato.
+   - `test_db/test_post_migration.py`, contratto 16: un symlink al file di lock (pendente, o verso un file che c'è)
+     rifiutato con `OSError` prima che il database si apra (nessun `sqlite3.connect`; il database, una 1.1 portata a
+     head che la corsa convertirebbe, resta identico); il file dietro il link mai creato o toccato; un lock nuovo
+     senza bit di gruppo e altri.
+   - `test_services/test_brim_parse_race.py`: lo stesso per `broker_metadata_lock(1)` (il blocco non gira); tolto il
+     link, lo stesso thread e un altro riprendono il lock normalmente; un lock nuovo senza bit di gruppo e altri.
+   - Rossi per la ragione giusta: `db post-migration` 41 + 3 rossi, `services brim-parse-race` 42 + 3 rossi. I casi
+     del modo dipendono dall'umask (rossi con `0022`, verdi anche oggi con `0077`: lo dicono le docstring).
+   - Da test-author: all'avvio un rifiuto è già preso dal gancio («could not run; starting normally»); lo script
+     offline non lo prende ed esce con 1 e lo stack. Non fissato da un test.
+   - Testi proposti per il runner (voci non mie: `_backend_db.py` post-migration, `_backend_services.py`
+     brim-parse-race): nel checkpoint, non applicati.
+2. ✅ 17/10 ~11:10–11:20 — Bozza fuori dal repo (`files/z28-draft/apply_z28.py`, 4 sostituzioni), provata su una
+   copia (compilazione, black, inverso esatto). Il descrittore al posto dell'oggetto file, come backup e scheduler;
+   `import os` in tutti e due i moduli.
+3. ✅ 17/10 ~11:24 — Applicata al repo (+23 −14): `ruff` e `black` puliti su prodotto e test. Impronta in
+   `files/z28-draft/applied.md5`.
+
+### Z-27 — il web app e i tetti delle richieste di massa: analisi (17/10 ~11:20, sola lettura)
+
+Richiesta del coordinatore (17/10 ~11:08, nella decisione di Z-28): «a read-only analysis of **Z-27** (web-app
+batching over 1,000 items for prices, period-changes and FX convert). X is on X-R49, so you own the analysis; the
+implementation gets assigned after, coordinated with X-R58/X-R60.» Fatti raccolti da un agente explore, i due decisivi
+riletti da me. Percorsi sotto `frontend/src/`.
+
+**I tetti, oggi.**
+- `POST /assets/prices/query` e `POST /fx/currencies/convert`: 1 000 voci (422 `bulk_too_many_items`) e 5 milioni di
+  voci-giorno (422 `bulk_too_many_days`), Z-25.
+- `POST /fx/currencies/period-changes`: 1 000 coppie (`PERIOD_CHANGES_MAX_PAIRS`, `Body(max_length)`: un 422 di
+  Pydantic, senza codice). `POST /assets/prices/period-changes`: 10 000 asset (`PERIOD_CHANGES_MAX_ASSETS`). Entrambi:
+  al più 5 giorni `as_of` distinti (422 con un `detail` stringa). MF-P2b.
+- Il web app non conosce nessuno di questi numeri; un 422 arriva al `catch` di ogni chiamante come `AxiosError` grezzo
+  (`lib/api/zodios-client.ts:136-157`).
+
+**Chi cresce con l'istanza.** Nessun chiamante divide la sua richiesta.
+- A. Lista asset, prezzi: `routes/(app)/assets/+page.svelte:751` (`fetchPriceSeries`, da `fetchAllPriceData`), axios
+  grezzo. Una voce per asset della lista che ha buchi nell'intervallo o segnali del backend; ogni voce copre tutto
+  l'intervallo (su «All» dal 2000-01-01, `resolveDateSentinel('min')`), con i segnali scelti nelle impostazioni del
+  grafico. Risposta elaborata dal pool di worker (`lib/workers/priceProcessingPool.ts:66`, divisa con `splitBalanced`).
+  Errore: solo console (`:797-805`). Il commento a `:742-750` tiene apposta una sola richiesta: il backend fa una sola
+  query SQL per tutti gli asset.
+- C. Lista cambi, tassi e segnali: `lib/stores/fxStoreRegistry.ts:429` (`loadFxRatesAndSignalsBulk`, da
+  `routes/(app)/fx/+page.svelte:508`). Una voce sull'intero intervallo per coppia con segnali, una per buco per le
+  altre; al primo carico su «All» circa una voce per coppia, di ~9 400 giorni. I segnali tornano con `request_index`,
+  letto come `entries[group.request_index]` (`:448-453`). Errore: console, dati in cache.
+- D. Lista cambi, colonne Δ: `lib/utils/periodChanges.ts:117` (`fetchFxPeriodChanges`), tutte le coppie in un POST.
+- B. Lista asset, colonne Δ: `periodChanges.ts:100` (`fetchAssetPeriodChanges`): un solo `as_of`, tetto a 10 000.
+- Limitati dalla UI: una coppia (`ensureFxRangeLoaded`, il dettaglio di un cambio), un giorno (`lookupFxRate`, il
+  prezzo dal vivo), un asset più i suoi confronti (dettaglio asset, `loadComparisonData.ts`). Senza chiamanti:
+  `ensureFxRangeLoadedBulk` (`fxStoreRegistry.ts:302`) e `ensureAssetPriceRangeLoaded`
+  (`assetPriceStoreRegistry.ts:99`), fuori dai test.
+
+**Dove si rompe davvero.** Prima il budget dei giorni che il numero di voci.
+- A su «All»: ~9 400 giorni per asset, quindi oltre ~530 asset il 422 è `bulk_too_many_days`, molto prima di
+  1 000. Con segnali di più: il riscaldamento si aggiunge, e un segnale su tutta la storia riempie dal primo prezzo
+  salvato.
+- C su «All»: ~530 coppie senza segnali; con segnali circa la metà (le voci dei segnali si sommano alle giornaliere).
+- D oltre 1 000 coppie; B mai in pratica.
+- Il peso, a parte: 300 asset su «All» sono ~2,8 milioni di punti, centinaia di MB di JSON. Le richieste divise ne
+  limitano il picco per risposta, non il totale. È un problema di progetto della lista (uno storico intero per una
+  scheda), fuori da Z-27.
+
+**Proposta.**
+1. Un aiuto comune, `lib/api/bulkBatches.ts`: dato l'elenco delle voci, una stima dei giorni di ciascuna e i tetti,
+   restituisce i lotti in ordine; una sola richiesta quando tutto sta sotto i tetti, come oggi (la query SQL unica del
+   commento resta per il caso comune). Lotti in sequenza o con poca concorrenza (`mapWithConcurrency`,
+   `lib/utils/core/requestConcurrency.ts:67`): il backend in produzione ha un solo processo.
+2. Tetti nel web app come costanti, con margine: 1 000 voci e un budget di ~4 milioni di voci-giorno (l'80 % di 5).
+   Stima: i giorni dell'intervallo (tagliato a domani e a 100 anni), più un margine per i segnali. La stima non può
+   essere esatta: il primo prezzo salvato e il riscaldamento li conosce solo il backend.
+3. Rete di sicurezza: a un 422 `bulk_too_many_days`, il lotto si divide secondo `item_days / max_item_days` e si
+   riprova, con un limite di profondità. `bulk_too_many_items` non deve mai arrivare.
+4. Ogni lotto si elabora con le sue voci: i `request_index` dei segnali dei cambi sono locali al lotto, e il pool di
+   worker riceve un lotto alla volta (picco di memoria più basso). Un lotto fallito segna come non caricate solo le
+   sue voci; il messaggio esplicito è quello di X-R58.
+5. Colonne Δ: lo stesso aiuto, con 1 000 coppie e 10 000 asset; priorità bassa.
+6. Contorno: le due funzioni senza chiamanti vanno tolte o usate (N58); il commento di `:742-750` va riscritto.
+
+**Superfici e sovrapposizioni.**
+- Nuovo: `lib/api/bulkBatches.ts` e i suoi test Vitest (lotti, ordine, `request_index`, divisione dopo un 422).
+- Da toccare: `routes/(app)/assets/+page.svelte` (`fetchPriceSeries`), `lib/stores/fxStoreRegistry.ts`
+  (`loadFxRatesAndSignalsBulk`), `lib/utils/periodChanges.ts`.
+- X-R58 (il messaggio, negli stessi `catch` delle due liste) e X-R60 (colonne Δ: `loadPairPeriodChanges`, i
+  rifacimenti, l'errore che svuota Δ) toccano le stesse funzioni: un solo scrittore, in fila o nello stesso lotto.
+- Peso: M. L'aiuto è S; tre chiamanti S ciascuno; i test.
+
+**Decisioni chieste.**
+- D-Z27-1: tetti come costanti con margine più la divisione dopo un 422 (consigliata), o una rotta che li espone
+  (backend condiviso).
+- D-Z27-2: lotti in sequenza (consigliata) o 2–3 in parallelo.
+- D-Z27-3: le schede si riempiono lotto per lotto, o tutte alla fine (più semplice, come oggi).
+- D-Z27-4: chi lo fa, e in che ordine rispetto a X-R58 e X-R60.
+4. ✅ 17/10 11:25–11:35 — Controlli leggeri, corsia 6186, uno alla volta (carico 23–30): `files/z28_light.sh green`,
+   log in `files/logs/z_z28_green_*.log`.
+   - `db post-migration` 44 (41 + 3), `post-migration-event-types` 36, `post-migration-orphan-pairs` 47.
+   - `services brim-parse-race` 45 (42 + 3), `backup-staging` 161 (la preparazione di un ripristino corre la
+     post-migrazione); `utils gate-event-loop-io` 14.
+   - `api brim` 118 (il lock del broker a ogni scrittura dei metadati, sul backend della corsia).
+   - Porta 6186 libera alla fine.
+5. ✅ 17/10 ~11:36–11:46 — Documentazione (docs-writer, solo inglese; le due pagine non hanno traduzioni, nessuno
+   stamp), ogni affermazione verificata sul codice.
+   - `developer/architecture/database/index.md`: la voce 1 delle correzioni post-migrazione (`O_NOFOLLOW`, `0600`, il
+     symlink rifiutato prima di aprire il database; all'avvio un WARNING e l'avvio prosegue senza le correzioni,
+     `database_bootstrap.py:158`; lo script offline esce con 1) e la riga della tabella dei file.
+   - `developer/backend/brim/architecture.md`, riga «Sidecar writes»: `O_NOFOLLOW`, `0600`, il symlink rifiutato.
+   - 11:44–11:46: `mkdocs build` stretto rc 0, nessun avviso (carico 47, dopo tre minuti sopra 50); `check-links`
+     97 validi (`files/z28_build.sh`).
+6. ✅ 17/10 ~11:40 — Backlog: Z-28 chiusa (✅, commit del coordinatore).
