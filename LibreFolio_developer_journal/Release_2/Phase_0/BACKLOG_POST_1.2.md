@@ -4958,7 +4958,11 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     - (a) una migrazione di dati che toglie, o mette da parte, le righe con `rate < 1E-10` o `rate >= 1E+14`: richiede
       il via del developer, perché tocca dati dell'utente;
     - (b) lo stesso filtro, `usable_fx_rate_bounds()`, in ogni lettore: molti file di J e dell'AI Export.
-- **X-R46 · Editor dei cambi (e degli asset): i rifiuti del server non si vedono** — basso-medio, **subito dopo X-R38**; X, 17/10
+- ✅ **X-R46 · Editor dei cambi (e degli asset): i rifiuti del server non si vedono** (chiusa il 17/10, in attesa del commit
+  del coordinatore: le due scritture manuali nominano ogni data lasciata fuori in `rejected`, data e motivo; il 400 dei
+  cambi tutto rifiutato ha `detail` `{code: fx_rates_refused, message, rejected}`; `writeRefusal.ts` dà una frase tradotta
+  per ogni rifiuto codificato e un avviso che nomina le date; Axios non arriva più all'utente. Dettagli nel piano 03,
+  «X-R46») — basso-medio, **subito dopo X-R38**; X, 17/10
   (trovato dal docs-writer di X-R38).
   - Gemello trovato da B (17/10): `AssetDataEditorSection.svelte` (~316) conta come salvata ogni riga inviata e non legge
     `results[].message`, così una data scartata dal controllo OHLC è annunciata come salvata.
@@ -4976,8 +4980,9 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     `front-fx fx-editor`. Poi la frase della pagina utente (`user/fx/detail/data-editor.en.md`) può dire «con un messaggio
     che nomina la data».
 - **X-R75 · La modale delle rotte di un cambio cancella prima di salvare** — piccolo-medio, perdita di dati a ogni
-  salvataggio fallito, **nella 1.3, insieme a X-R46** (stesso editor dei cambi, stessa finestra E2E); X, 17/10 (E, E-19,
-  girata dal coordinatore).
+  salvataggio fallito, **nella 1.3, fatta da B** (decisione del coordinatore, 17/10 17:05: B ha già l'analisi, con lo
+  stesso gemello, e fa l'opzione A, un `replace=true` atomico su `POST /fx/providers/routes`; X rivede; la modale delle
+  rotte resta a B); X, 17/10 (E, E-19, girata dal coordinatore).
   - `FxPairAddModal.svelte` (~321-339), `handleSave()` in modifica: prima `DELETE /fx/providers/routes` con
     `[{base, quote}]` (tutte le priorità della coppia), poi `POST /fx/providers/routes` con le rotte nuove. Due richieste,
     due transazioni.
@@ -5231,6 +5236,34 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Una richiesta con `end` 9999-12-30 o `start` 0001-01-01 blocca l'istanza.
   - Direzione, come J: la fine limitata a oggi + 1 (margine per i fusi orari); l'inizio limitato al primo dato o a un
     arco di 100 anni. Prima i rossi con date moderate, poi le date estreme come guardie con un limite di tempo.
+- **X-R76 · I valori degli eventi di un piano d'investimento programmato oltre i 6 decimali si troncano in silenzio** —
+  basso, numeri, **dopo la 1.3** (non costa poco, sotto); X, 17/10 (W, residuo di W-B68, girato dal coordinatore).
+  - Gli eventi pianificati di uno Scheduled Investment (`asset_events` di `FAScheduledInvestmentSchedule`, parametri
+    dell'utente) passano dal percorso degli eventi dei provider (`_storable_events`, `services/assets/event_store.py`).
+  - Da W-B68 un valore con più di 6 decimali vi si tronca alla colonna (`RealDecimal(18, 6)`), in silenzio; prima si
+    rileggeva arrotondato, in silenzio anche allora.
+  - Cura: rifiutarlo all'ingresso del piano, nel provider, con un messaggio che nomina l'evento. Non su
+    `FAAssetEventPoint`: è condiviso con l'uscita dei provider, dove il troncamento è giusto.
+  - Perché non costa poco: `validate_params` dello Scheduled Investment gira anche a ogni lettura (valore corrente e
+    storico, `plugin.py` ~543 e ~616) e al refresh (`refresh.py` ~149). Un controllo nello schema farebbe smettere di
+    sincronizzarsi i piani già salvati con 7 decimali. Serve una regola per quelli (rifiuto solo in scrittura, o
+    arrotondamento esplicito con avviso), più il messaggio nel modulo del piano.
+- **X-R77 · Il test di X-R47 accetta qualunque numero come «nome dell'asset»** — minimo, test, al prossimo tocco di
+  `test_event_split_ratio.py`; X, 17/10 (W, nota dopo W-B68, girata dal coordinatore).
+  - `_names_the_asset` cerca l'id come numero intero ovunque nel testo dell'evento di log. Con l'asset 1 basta il
+    `count=1` dell'avviso «Splits skipped» a soddisfarlo.
+  - Cura: confrontare la chiave `asset_id` dell'evento di structlog (`event_store.py` la scrive) invece del testo.
+- **X-R78 · Prezzi manuali: con un solo limite vero dalla parte sbagliata della chiusura, la riga si salva incoerente** —
+  basso, decisione di politica, **dopo la 1.3**; X, 17/10 (test-author di X-R46, dopo la cura del −1).
+  - Da X-R46 un limite cancellato (−1) non è un limite: il controllo stretto di `bulk_upsert_prices` vale solo con due
+    limiti veri in arrivo.
+  - Con un solo limite vero la riga si scrive com'è. Così l'editor può salvare un Low sopra la chiusura con High
+    cancellato, o un High sotto la chiusura con Low cancellato; il test
+    `test_a_manual_edit_erasing_low_with_high_below_the_close_is_saved_as_is` fissa questa politica com'è oggi.
+  - Vicino: un Low mandato da solo, col High salvato, è allargato in silenzio fino alla chiusura (il ramo «widen»,
+    pensato per i provider che mandano solo la chiusura).
+  - Da decidere: rifiutare un limite vero dalla parte sbagliata (`ohlc_inconsistent`), allargarlo, o scriverlo. Poi
+    cambia il test.
 
 ## W · Import e transazioni (fase 01)
 
