@@ -224,7 +224,13 @@ class ECBProvider(FXRateProvider):
                             for obs_idx, obs_value in obs_data.items():
                                 idx = int(obs_idx)
                                 rate_date_str = time_periods[idx]["id"]
-                                ecb_rate = Decimal(str(obs_value[0]))
+                                try:
+                                    ecb_rate = Decimal(str(obs_value[0]))
+                                except ArithmeticError:
+                                    # A value that is no number (a null included) loses its day only, never the whole
+                                    # currency, as BOE, SNB and FED skip a line (X-R52, X-R50)
+                                    logger.debug(f"ECB: skipping a value that is no number for {currency} on {rate_date_str}: {obs_value[0]!r}")
+                                    continue
                                 rate_date = date.fromisoformat(rate_date_str)
                                 observations.append((rate_date, self.base_currency, currency, ecb_rate))
 
