@@ -5454,6 +5454,16 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   `backup-staging` nel runner non nomina B-49 (file condiviso, non assegnato).
 > - File della sonda (`/tmp/lf_b49_probe`, 488 MB) cancellati.
 > - 🧊 **CHECKPOINT READY** (21:26): 7 file tracciati, nessun file nuovo; FROZEN.
+> - **Entrato in dev** (coordinatore, 21:34): `709dfb1e4`, dopo l'unione di dev nel mio ramo (`74c08dafe`; conflitto
+>   solo nel backlog, X-R79 contro X-R80 di X, tenuti entrambi). Sull'albero unito il coordinatore ha fatto girare
+>   `backup-staging` 202, `restore-non-iso-warning` 46, `api backup-restore` 161, `api backup-restore-apply` 215: verdi.
+> - ✅ **Coda** (coordinatore, 21:34; H-52 entrato, `security.md` libero; 21:34-21:37):
+>   - `developer/architecture/security.md`: il paragrafo di B-49 dopo «What the check cannot read», e
+>     `_refuse_undecodable_text()` nell'elenco delle connessioni del punto `trusted_schema`. Nello stesso elenco mancava
+>     la lettura E-19b1 (`_holds_non_iso_currencies()`, `mode=ro`, `trusted_schema=OFF` per primo): aggiunta, detto al
+>     coordinatore;
+>   - la `desc` di `backup-staging` nel runner nomina B-49 (o); ruff e black puliti, il runner si carica;
+>   - doc: build stretta, `check-links`, `utils gate-docs-links` 63; `git diff --check` pulito. CHECKPOINT READY 21:37.
 
 ### W-B64 + W-B65 (per W) — il budget delle cifre contato come il backend; e un «Applica» senza modifiche nel Bulk (2026-10-17, 18:31-19:56) — ✅ 🧊 FROZEN (checkpoint delle 19:56)
 
