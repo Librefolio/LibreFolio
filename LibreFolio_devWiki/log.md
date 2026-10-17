@@ -3837,4 +3837,9 @@ account. The service keeps only the WAC lines, the issues that fail the replay (
 `fails_analysis` and the giving leg of a transfer) and the WAC-line gaps; the AI Export declares the asset in
 `failed_lot_reconstructions` (FIFO lots v3, lot detail v4) with the scope totals null. Updated:
 [[entities/lots-analysis-service]] (backend half; the decision record and the panel half are Y's).
+## [2026-10-17] file | A FAILED lots analysis explains and hides (N81, J-12)
+The «warn but show» choice of 2026-07-22 let the lots panel draw the lots of a replay that had failed. N81 (option A)
+reverses it: the backend sends the lot-derived sections null and flags the blocking issues; the panel keeps only the
+average-cost lines and lists each transaction to fix, by broker name, day and a link.
+Filed: revision of [[decisions/fifo-v4-gross-net-status-model]].
 Graph: not updated; graphify is not available in this worktree.

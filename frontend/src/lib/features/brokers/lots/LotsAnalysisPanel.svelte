@@ -27,6 +27,11 @@
   the old panel's pattern. The comparison chart takes only an *initial* xAxisRange (plan
   §16: "possiede zoom indipendente") — no live sync back into it.
 
+  A FAILED analysis (J-12, N81 option A) has no reliable lot: the panel takes no lot-derived
+  section from it, draws only the average-cost lines of the WAC chart, hides the Gantt, the table
+  and the comparison, and shows LotAnalysisFailedNotice (the transactions to fix) above the
+  banner, which keeps the issues that did not break the replay.
+
   Aperti/Tutti lot filter (refinement v1 §11) is lifted here from LotGanttChart so
   UnifiedLotsTable shows the same lot set (visibleLots below); the toggle control still
   renders inside LotGanttChart.
@@ -51,6 +56,8 @@
     import type {LotIncomeEvent} from './LotComparisonChart.svelte';
     import {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import LotDataQualityBanner from './LotDataQualityBanner.svelte';
+    import LotAnalysisFailedNotice from './LotAnalysisFailedNotice.svelte';
+    import {partitionLotIssues} from './lotDataQualityHelpers';
     import {asArray, asObject, collectInvolvedLotIds, filterVisibleLots, lotIsOpenish, normalizeQuoteBaseQuantity} from './lotsAnalysisHelpers';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
@@ -136,6 +143,10 @@
 
     let visibleLots = $derived.by((): LotSummarySchema[] => filterVisibleLots(lots, lotStateFilter));
 
+    /** J-12: on a FAILED analysis the issues that broke the replay go to the failure notice, the rest to the banner. */
+    let analysisFailed = $derived(calculationStatus === 'FAILED');
+    let issueParts = $derived(partitionLotIssues(dataQualityIssues, analysisFailed));
+
     /** lot_id → opening_date for the currently visible lots, so the data-quality banner can turn each
      * issue's message_params.lot_id into a labelled, clickable chip (→ pulses that lot's bubble). */
     let visibleLotDates = $derived.by((): Map<number, string> => {
@@ -173,18 +184,27 @@
 
     function applyMain(response: LotsAnalysisResponse) {
         shownMain = response;
-        lots = asArray<LotSummarySchema>(response.lots);
-        ganttSegments = asArray<GanttSegmentSchema>(response.gantt_segments);
+        calculationStatus = typeof response.calculation_status === 'string' ? response.calculation_status : null;
+        // J-12 (N81, option A): a FAILED analysis has no reliable lot. The backend sends its lot-derived sections null;
+        // the panel takes none of them either (an answer cached before that change may still hold them), so nothing
+        // below can draw a lot and the selection empties.
+        const failed = calculationStatus === 'FAILED';
+        function lotSection<T>(value: unknown): T[] {
+            return failed ? [] : asArray<T>(value);
+        }
+        lots = lotSection<LotSummarySchema>(response.lots);
+        ganttSegments = lotSection<GanttSegmentSchema>(response.gantt_segments);
         // EVENT_HISTORY is a superset of the old CUSTODY_HISTORY filter (backend computes the
         // full per-lot event list unconditionally either way — see lots_analysis_service.py
         // _build_lot_event_rows/_CUSTODY_KINDS) — fetching it once here feeds both the WAC
         // chart's transaction markers and the Custody modal's full chronology, no double fetch.
-        lotEvents = asArray<LotTimelineEventSchema>(response.lot_events);
-        priceHistory = asArray<LotPriceHistoryPoint>(response.price_history);
+        lotEvents = lotSection<LotTimelineEventSchema>(response.lot_events);
+        // Per lot (`LotPriceHistoryPoint.lot_id`): the market line is their union by date, so it goes with the lots.
+        priceHistory = lotSection<LotPriceHistoryPoint>(response.price_history);
         brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
         cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
         quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
-        incomeEvents = asArray<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(response.income_events).map((event) => ({
+        incomeEvents = lotSection<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(response.income_events).map((event) => ({
             type: event.type,
             date: event.date,
             broker_id: event.broker_id ?? null,
@@ -192,7 +212,6 @@
             lot_ids: event.lot_ids ?? [],
         }));
         dataQualityIssues = asArray<DataQualityIssue>(asObject<{issues?: unknown}>(response.data_quality)?.issues);
-        calculationStatus = typeof response.calculation_status === 'string' ? response.calculation_status : null;
 
         const metadata = response.calculation_metadata;
         const computedFrom = asObject<string>(metadata?.computed_date_from);
@@ -469,14 +488,12 @@
         </div>
 
         <div class="p-4 space-y-4">
-            {#if dataQualityIssues.length > 0}
-                <LotDataQualityBanner issues={dataQualityIssues} lotDates={visibleLotDates} onLotClick={handleLotWarningClick} />
+            {#if analysisFailed}
+                <LotAnalysisFailedNotice issues={issueParts.failure} {brokers} onGotoTransaction={handleGotoTransaction} />
             {/if}
 
-            {#if calculationStatus === 'FAILED'}
-                <div class="rounded-lg border border-lf-danger-line bg-lf-danger-soft px-4 py-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="lots-analysis-panel-failed">
-                    {$_('brokers.lots.analysisFailed')}
-                </div>
+            {#if issueParts.banner.length > 0}
+                <LotDataQualityBanner issues={issueParts.banner} lotDates={visibleLotDates} onLotClick={handleLotWarningClick} />
             {/if}
 
             {#if error}
@@ -513,40 +530,42 @@
                     onSelectionChange={handleSelectionChange}
                 />
 
-                <LotGanttChart
-                    bind:this={ganttRef}
-                    lots={visibleLots}
-                    segments={ganttSegments}
-                    events={lotEvents}
-                    {brokers}
-                    {currency}
-                    {selectedLotIds}
-                    onSelectionChange={handleSelectionChange}
-                    {xAxisRange}
-                    onZoomChange={handleZoomChange}
-                    externalZoomStart={sharedZoomStart}
-                    externalZoomEnd={sharedZoomEnd}
-                    onRowDoubleClick={handleGanttRowDoubleClick}
-                    openSelected={lotStateFilter.open}
-                    closedSelected={lotStateFilter.closed}
-                    onToggleOpen={() => (lotStateFilter = {...lotStateFilter, open: !lotStateFilter.open})}
-                    onToggleClosed={() => (lotStateFilter = {...lotStateFilter, closed: !lotStateFilter.closed})}
-                />
+                {#if !analysisFailed}
+                    <LotGanttChart
+                        bind:this={ganttRef}
+                        lots={visibleLots}
+                        segments={ganttSegments}
+                        events={lotEvents}
+                        {brokers}
+                        {currency}
+                        {selectedLotIds}
+                        onSelectionChange={handleSelectionChange}
+                        {xAxisRange}
+                        onZoomChange={handleZoomChange}
+                        externalZoomStart={sharedZoomStart}
+                        externalZoomEnd={sharedZoomEnd}
+                        onRowDoubleClick={handleGanttRowDoubleClick}
+                        openSelected={lotStateFilter.open}
+                        closedSelected={lotStateFilter.closed}
+                        onToggleOpen={() => (lotStateFilter = {...lotStateFilter, open: !lotStateFilter.open})}
+                        onToggleClosed={() => (lotStateFilter = {...lotStateFilter, closed: !lotStateFilter.closed})}
+                    />
 
-                <UnifiedLotsTable
-                    bind:this={tableRef}
-                    lots={visibleLots}
-                    {currency}
-                    {brokers}
-                    {selectedLotIds}
-                    onSelectionChange={handleSelectionChange}
-                    onCustodyCellClick={handleCustodyCellClick}
-                    onViewGanttLot={handleTableRowDoubleClick}
-                    onGotoOpeningTransaction={handleGotoOpeningTransaction}
-                    onRowDoubleClick={handleTableRowDoubleClick}
-                />
+                    <UnifiedLotsTable
+                        bind:this={tableRef}
+                        lots={visibleLots}
+                        {currency}
+                        {brokers}
+                        {selectedLotIds}
+                        onSelectionChange={handleSelectionChange}
+                        onCustodyCellClick={handleCustodyCellClick}
+                        onViewGanttLot={handleTableRowDoubleClick}
+                        onGotoOpeningTransaction={handleGotoOpeningTransaction}
+                        onRowDoubleClick={handleTableRowDoubleClick}
+                    />
 
-                <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} {incomeEvents} {brokers} {currency} {xAxisRange} />
+                    <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} {incomeEvents} {brokers} {currency} {xAxisRange} />
+                {/if}
             {/if}
         </div>
     </div>
