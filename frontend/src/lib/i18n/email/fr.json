@@ -120,7 +120,7 @@
       "toPlaceholder": "nom@exemple.fr",
       "resetTarget": "Le lien part vers l'adresse e-mail du compte.",
       "publicUrlHint": "Le lien de l'e-mail commence par l'adresse définie dans LIBREFOLIO_PUBLIC_URL, qui peut différer de celle ci-dessus.",
-      "sent": "Envoyé à {to}.",
+      "sent": "Envoyé à {to}. Langue : {language}.",
       "errors": {
         "EMAIL_UNAVAILABLE": "L'e-mail est désactivé ou ne fonctionne pas sur cette instance.",
         "EMAIL_LINKS_UNAVAILABLE": "Les e-mails ne peuvent pas contenir de lien : LIBREFOLIO_PUBLIC_URL n'est pas définie, ou ne peut pas commencer un lien.",
@@ -132,7 +132,9 @@
         "EMAIL_RATE_LIMITED": "La limite horaire d'e-mails est atteinte : réessayez dans {minutes} min.",
         "RECIPIENT_REFUSED": "Le serveur SMTP a refusé l'adresse du destinataire.",
         "generic": "L'e-mail n'a pas pu être envoyé."
-      }
+      },
+      "languageLabel": "Langue de l'e-mail",
+      "languageInstance": "La langue de l'instance"
     },
     "forgot": {
       "label": "Nom d'utilisateur ou adresse e-mail",
