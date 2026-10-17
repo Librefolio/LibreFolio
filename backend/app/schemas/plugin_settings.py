@@ -12,8 +12,9 @@ code, and when one item is refused nothing is written — the answer is a 422 wh
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Annotated
 
-from pydantic import Field, SecretStr
+from pydantic import AllowInfNan, Field, SecretStr
 
 from backend.app.schemas.common import StrictModel
 
@@ -71,8 +72,9 @@ class PluginSettingErrorCode(StrEnum):
     INVALID_VALUE = "INVALID_VALUE"
 
 
-#: A plain value as it travels in JSON.
-PluginSettingPlainValue = str | int | float | bool
+#: A plain value as it travels in JSON. A number is finite: infinity and NaN are refused here, at the edge (H-32), as
+#: ``fields.validate_value`` refuses them before a value is saved.
+PluginSettingPlainValue = str | int | Annotated[float, AllowInfNan(False)] | bool
 
 
 class PluginSettingOptionRead(StrictModel):

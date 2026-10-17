@@ -1128,6 +1128,14 @@ def services_profile_defaults(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Profile defaults tests", verbose=verbose)
 
 
+def services_request_float_inputs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that every float a request can carry refuses infinity and NaN in its schema (H-32)."""
+    print_section("Services: Request Float Inputs")
+    print_info("Testing: every route of backend.app.main (iter_route_contexts): bodies, nested models, query, path, header and cookie parameters")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_request_float_inputs.py", test_names)
+    return run_command(cmd, "Request float inputs tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -2143,6 +2151,16 @@ Note: No backend server required.
         desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call",
         # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
         # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "request-float-inputs",
+        services_request_float_inputs,
+        name="Request Float Inputs",
+        desc="H-32: every float a request can carry (body, nested model, query, path, header, cookie) refuses inf, -inf, NaN and 1E+400 in its schema; barriers on the number of routes walked",
+        # The app is imported, never served: its routes are walked with iter_route_contexts and each float judged with a
+        # TypeAdapter. No DB, no server, no network.
         isolation="pure",
     )
     add_test(
