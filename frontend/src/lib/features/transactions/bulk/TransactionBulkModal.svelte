@@ -70,7 +70,7 @@
         type IdentifiedBulkOp,
     } from '$lib/features/transactions/bulk/bulkDisplay';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {cashAmountsCancel, mergeStrings, mergeTagSets} from '$lib/features/transactions/bulk/promoteHelpers';
+    import {cashAmountsCancel, resolvePromoteAllFields, TX_DESCRIPTION_MAX_LENGTH} from '$lib/features/transactions/bulk/promoteHelpers';
     import {assetQuantitiesCancel, importableSuggestions as importableFromResults, mixedPromotePairs, newRowSuggestId} from '$lib/features/transactions/bulk/promoteSuggest';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
@@ -3064,10 +3064,12 @@
     /**
      * «Merge all» of the banner: every suggested pair at once. Where the two rows of a pair differ in
      * description or tags, one answer settles all of them: the left row's (the one the banner lists
-     * first), the right row's, or both combined — PromoteMergeModal's default.
+     * first), the right row's, or both combined — PromoteMergeModal's default. A pair whose combined notes would pass
+     * the description's limit is left unpromoted, for the merge dialog, and a notice counts them (W-B70).
      */
     function mergeAllSuggestions(strategy: PromoteAllStrategy) {
         promoteAllOpen = false;
+        let leftForManualMerge = 0;
         for (const sug of [...mergeAllPairs]) {
             const rawA = ops.find((o) => o.tempId === sug.tempIdA);
             if (!rawA || isPaired(rawA)) continue;
@@ -3080,16 +3082,19 @@
             const {opA, opB} = pair;
             if (!findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB))) continue;
             const [left, right] = swapped ? [opB, opA] : [opA, opB];
-            const leftTags = left.fields.tags ?? [];
-            const rightTags = right.fields.tags ?? [];
-            const diverges = left.fields.description !== right.fields.description || JSON.stringify(leftTags) !== JSON.stringify(rightTags);
-            let resolved: Record<string, unknown> = {};
-            if (diverges) {
-                if (strategy === 'left') resolved = {description: left.fields.description, tags: [...leftTags]};
-                else if (strategy === 'right') resolved = {description: right.fields.description, tags: [...rightTags]};
-                else resolved = {description: mergeStrings(left.fields.description ?? '', right.fields.description ?? ''), tags: mergeTagSets(leftTags, rightTags)};
+            const resolved = resolvePromoteAllFields(strategy, left.fields, right.fields);
+            if (resolved === null) {
+                leftForManualMerge += 1;
+                continue;
             }
             executePromote(opA, opB, resolved);
+        }
+        if (leftForManualMerge > 0) {
+            notify({
+                name: 'tx.bulk.promote-all.left-for-manual-merge',
+                detail: {pairs: leftForManualMerge},
+                toast: {variant: 'warning', message: $t('transactions.promote.mergeAllLeftTooLong', {values: {count: leftForManualMerge, max: TX_DESCRIPTION_MAX_LENGTH}})},
+            });
         }
     }
 

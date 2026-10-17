@@ -7,10 +7,13 @@ Covers:
   - Multiple validation errors → multiple issues appended
   - Context parameter preservation
   - Fee transaction pattern (same helper, different kwargs)
-  - W-B75 (written by H, for W): a refused transaction's params. A field's error (a value_error, whose context holds
-    the exception itself; string_too_long) carries none, and the parse output holding it serializes; a lone
-    model-level business rule keeps its plain context, a packed one each rule's; BRIMProvider._lone_error_params,
-    the transaction batch's rule (W-B72)
+  - A refused transaction's params (W-B75, written by H, for W; W-B70, D-W70-1): a field's error carries its context
+    when that is plain data (string_too_long: {max_length}), a value_error, whose context holds the exception itself,
+    carries none, and the parse output holding either serializes; a lone model-level business rule keeps its plain
+    context, a packed one each rule's. The field and the params come from backend.app.utils.pydantic_errors
+    (loc_to_field, error_params), the one copy shared with the transaction batch (W-B77), whose own contract — the
+    packed branch meeting a context that is not plain data, which no rule of TXCreateItem raises, included — is
+    test_utilities/test_pydantic_errors.py's.
 """
 
 import json
@@ -213,22 +216,6 @@ class TestCreateTransaction:
         assert cash_sign_issues[0].params.get("type") == "INTEREST"
 
 
-class TestLocToField:
-    """Tests for BRIMProvider._loc_to_field() static method."""
-
-    def test_simple_field(self):
-        assert BRIMProvider._loc_to_field(("cash", "amount")) == "cash.amount"
-
-    def test_with_indices(self):
-        assert BRIMProvider._loc_to_field(("body", 0, "cash", "amount")) == "body.cash.amount"
-
-    def test_empty_tuple(self):
-        assert BRIMProvider._loc_to_field(()) is None
-
-    def test_single_field(self):
-        assert BRIMProvider._loc_to_field(("type",)) == "type"
-
-
 class TestBRIMValidationIssueSchema:
     """Tests for BRIMValidationIssue Pydantic schema."""
 
@@ -273,11 +260,8 @@ class TestBRIMValidationIssueSchema:
 
 
 # =============================================================================
-# W-B75: the params of a refused transaction's issue (written by H, for W)
+# W-B75 and W-B70: the params of a refused transaction's issue
 # =============================================================================
-
-# A model-level error's context made only of plain data: str, int, float, bool and None.
-_PLAIN_CONTEXT = {"type": "BUY", "qty": "1.5", "count": 2, "ratio": 0.5, "flag": True, "none": None}
 
 
 def _buy_kwargs(**overrides) -> dict:
@@ -295,14 +279,14 @@ def _pydantic_errors(kwargs: dict) -> list:
 
 
 def _json_or_fail(what: str, dump) -> dict:
-    """``dump()``. A ``PydanticSerializationError`` is W-B75's red, reported as what the user meets rather than as a crash."""
+    """``dump()``. A ``PydanticSerializationError`` is the red, reported as what the user meets rather than as a crash."""
     try:
         return dump()
     except PydanticSerializationError as exc:
         failure = str(exc)
     pytest.fail(
-        f"W-B75: {what} raises PydanticSerializationError ({failure}). The issue's params hold pydantic's context of a value_error, the ValueError object itself, "
-        "and the parse route saves its response with model_dump(mode='json'): today the user's parse fails with a 400 carrying that serializer message "
+        f"W-B75: {what} raises PydanticSerializationError ({failure}). The issue's params hold a context that is not plain data — a value_error's, the ValueError object itself — "
+        "and the parse route saves its response with model_dump(mode='json'): the user's parse fails with a 400 carrying that serializer message "
         "(the route's `except ValueError` catches it) instead of listing the row's issue."
     )
 
@@ -320,20 +304,16 @@ def _serialized_issue(issue: BRIMValidationIssue) -> dict:
     return alone
 
 
-def _lone_error_params_or_fail():
-    """``BRIMProvider._lone_error_params``; its absence, before the cure, is W-B75's red rather than a collection error."""
-    lone_error_params = getattr(BRIMProvider, "_lone_error_params", None)
-    if lone_error_params is None:
-        pytest.fail("W-B75: BRIMProvider._lone_error_params does not exist yet: the static method, beside _loc_to_field, that gives an error raised alone its params, by the transaction batch's rule (W-B72).")
-    return lone_error_params
-
-
 class TestCreateTransactionIssueParams:
-    """W-B75: the ``params`` of the issue a refused transaction becomes, and the parse output carrying it serializing.
+    """W-B75 and W-B70 (D-W70-1): the ``params`` of the issue a refused transaction becomes, and the parse output carrying
+    it serializing.
 
-    The transaction batch's rule (``_lone_error_params``, W-B72): an error ``TXCreateItem`` raises alone keeps its context
-    as ``params`` only when it is model-level (``loc`` empty) and plain data; a field's error is named by its field. A
-    packed one (``multipleBusinessRuleErrors``) keeps each rule's context.
+    The rule shared with the transaction batch (``backend.app.utils.pydantic_errors.error_params``, W-B77): an error
+    ``TXCreateItem`` raises keeps its context as ``params`` when that context is plain data — a field's error too, its
+    ``loc`` no longer read (D-W70-1) — and a ``value_error``, whose context holds the exception itself, keeps none. A
+    packed one (``multipleBusinessRuleErrors``) keeps each rule's plain context: no rule of ``TXCreateItem`` packs any
+    other, so the filter on a packed sub-context that is not plain data is pinned by the module's own tests
+    (``test_utilities/test_pydantic_errors.py``), not through this constructor.
     """
 
     @pytest.fixture
@@ -349,10 +329,11 @@ class TestCreateTransactionIssueParams:
         ],
     )
     def test_value_error_issue_carries_no_params_and_serializes(self, provider, overrides, field, validator_message):
-        """Red before the W-B75 cure. A value its validator refuses with a ``ValueError`` (``cash`` handed over as a dict, not a
-        ``Currency``, past the exponent bound or with an empty code; tags as a tuple) is pydantic's ``value_error``,
-        whose context holds the exception itself. Its issue names the field and carries no params, and the parse output
-        holding it serializes: before, the issue carried the exception and the parse failed."""
+        """Guard, green since the W-B75 cure and after W-B70. A value its validator refuses with a ``ValueError`` (``cash``
+        handed over as a dict, not a ``Currency``, past the exponent bound or with an empty code; tags as a tuple) is
+        pydantic's ``value_error``, whose context holds the exception itself. Its issue names the field and carries no
+        params, and the parse output holding it serializes: before W-B75, the issue carried the exception and the parse
+        failed."""
         kwargs = _buy_kwargs(**overrides)
         errors = _pydantic_errors(kwargs)
         assert [error["type"] for error in errors] == ["value_error"], f"premise: a single value_error; pydantic reports {errors}"
@@ -369,16 +350,25 @@ class TestCreateTransactionIssueParams:
         assert (issue.row, issue.code, issue.field, issue.context) == (42, "value_error", field, "BUY: ACME Corp")
         assert issue.message == f"Value error, {validator_message}"
         serialized = _serialized_issue(issue)
-        assert issue.params is None, f"W-B75: a field's error is named by its field and carries no params; got {issue.params!r}"
+        assert issue.params is None, f"W-B75, D-W70-1: a value_error's context holds the exception itself, which no response can carry: no params; got {issue.params!r}"
         assert serialized == {"row": 42, "code": "value_error", "message": f"Value error, {validator_message}", "field": field, "params": None, "context": "BUY: ACME Corp"}
 
-    def test_field_error_with_plain_context_carries_no_params(self, provider):
-        """Red before the W-B75 cure. A field's error is named by its field even when its context is plain data: ``description``
-        past its 500 characters is pydantic's ``string_too_long``, context ``{max_length: 500}``; its issue carries no
-        params, as the transaction batch's does (W-B72). Before, it carried that context."""
-        kwargs = _buy_kwargs(description="x" * 501)
+    @pytest.mark.parametrize(
+        ("overrides", "field", "params"),
+        [
+            pytest.param({"description": "x" * 501}, "description", {"max_length": 500}, id="description-501-characters"),
+            pytest.param({"link_uuid": "u" * 37}, "link_uuid", {"max_length": 36}, id="link-uuid-37-characters"),
+        ],
+    )
+    def test_field_error_carries_its_plain_context_as_params(self, provider, overrides, field, params):
+        """Red until the W-B70 cure (D-W70-1). A field's error keeps its context when it is plain data: a text past its
+        limit — ``description`` past 500 characters, ``link_uuid`` past 36 — is pydantic's ``string_too_long``, context
+        ``{max_length: N}``; its issue names the field and carries that context as params, which the app's message
+        reads, and serializes with it, as the transaction batch's does. Today it carries none: W-B75 followed the
+        batch's rule of then, a field's error without params."""
+        kwargs = _buy_kwargs(**overrides)
         errors = _pydantic_errors(kwargs)
-        assert [(error["type"], error["loc"], error.get("ctx")) for error in errors] == [("string_too_long", ("description",), {"max_length": 500})], f"premise: pydantic reports {errors}"
+        assert [(error["type"], error["loc"], error.get("ctx")) for error in errors] == [("string_too_long", (field,), params)], f"premise: pydantic reports {errors}"
 
         transactions = []
         issues = []
@@ -388,9 +378,9 @@ class TestCreateTransactionIssueParams:
         assert transactions == []
         assert len(issues) == 1, f"one refused field, one issue: {issues}"
         issue = issues[0]
-        assert (issue.row, issue.code, issue.field, issue.message, issue.context) == (8, "string_too_long", "description", errors[0]["msg"], "BUY: ACME Corp")
-        assert issue.params is None, f"W-B75: a field's error is named by its field and carries no params, as in the transaction batch; got {issue.params!r}"
-        assert _serialized_issue(issue)["params"] is None
+        assert (issue.row, issue.code, issue.field, issue.message, issue.context) == (8, "string_too_long", field, errors[0]["msg"], "BUY: ACME Corp")
+        assert issue.params == params, f"W-B70 (D-W70-1): a field's error keeps its plain context as params, {params}, as in the transaction batch; today it carries {issue.params!r}"
+        assert _serialized_issue(issue)["params"] == params
 
     @pytest.mark.parametrize(
         ("overrides", "code", "params"),
@@ -437,53 +427,3 @@ class TestCreateTransactionIssueParams:
         expected = {"brokerRequired": ({"broker_id": 0}, None, 21, "BUY: ACME Corp"), "cashSignNegative": ({"type": "BUY"}, None, 21, "BUY: ACME Corp")}
         assert {issue.code: (issue.params, issue.field, issue.row, issue.context) for issue in issues} == expected
         assert {issue.code: _serialized_issue(issue)["params"] for issue in issues} == {"brokerRequired": {"broker_id": 0}, "cashSignNegative": {"type": "BUY"}}
-
-
-class TestLoneErrorParams:
-    """W-B75: ``BRIMProvider._lone_error_params`` on synthetic pydantic errors, the twin of the transaction batch's
-    (``transaction_batch_stages._lone_error_params``, W-B72). An error's context becomes its params only when the error
-    is model-level (``loc`` empty) and every value is plain data: str, int, float, bool or None. Red before the cure."""
-
-    def test_plain_model_level_context_is_copied(self):
-        """A model-level error with a plain context: a new dict, equal to it, and the error's own left as it was."""
-        lone_error_params = _lone_error_params_or_fail()
-        context = dict(_PLAIN_CONTEXT)
-        params = lone_error_params({"type": "someRule", "loc": (), "msg": "m", "ctx": context})
-        assert isinstance(params, dict)
-        assert params == _PLAIN_CONTEXT
-        assert params is not context, "a new dict, not pydantic's context itself"
-        assert context == _PLAIN_CONTEXT, "the error's context is left as it was"
-
-    @pytest.mark.parametrize(
-        "value",
-        [
-            pytest.param(ValueError("Value out of range"), id="exception"),
-            pytest.param(Decimal("1.5"), id="decimal"),
-            pytest.param(date(2024, 1, 15), id="date"),
-            pytest.param(["BUY", "SELL"], id="list"),
-            pytest.param({"type": "BUY"}, id="dict"),
-        ],
-    )
-    def test_one_value_not_plain_gives_none(self, value):
-        """One value that is not plain data, among plain ones, and the whole context stays out: ``None``."""
-        lone_error_params = _lone_error_params_or_fail()
-        assert lone_error_params({"type": "someRule", "loc": (), "msg": "m", "ctx": {**_PLAIN_CONTEXT, "extra": value}}) is None
-
-    @pytest.mark.parametrize("loc", [pytest.param(("description",), id="field"), pytest.param(("cash", "amount"), id="nested-field")])
-    def test_field_error_gives_none(self, loc):
-        """A field's error is named by its field, even with a plain context: ``None``."""
-        lone_error_params = _lone_error_params_or_fail()
-        assert lone_error_params({"type": "string_too_long", "loc": loc, "msg": "m", "ctx": dict(_PLAIN_CONTEXT)}) is None
-
-    @pytest.mark.parametrize(
-        "error",
-        [
-            pytest.param({"type": "someRule", "loc": (), "msg": "m"}, id="ctx-missing"),
-            pytest.param({"type": "someRule", "loc": (), "msg": "m", "ctx": None}, id="ctx-none"),
-            pytest.param({"type": "someRule", "loc": (), "msg": "m", "ctx": {}}, id="ctx-empty"),
-        ],
-    )
-    def test_no_context_gives_none(self, error):
-        """No context, or an empty one: ``None``, never an empty dict."""
-        lone_error_params = _lone_error_params_or_fail()
-        assert lone_error_params(error) is None

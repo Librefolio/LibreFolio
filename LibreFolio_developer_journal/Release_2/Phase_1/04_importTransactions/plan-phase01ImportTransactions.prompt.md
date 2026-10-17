@@ -6493,3 +6493,118 @@ file nuovo `AssetPriceSummary.test.ts` (registrato in component-unit); nel cance
    compreso), dev `685d76dab` (HEAD `6e503e0f6` antenato, 42 commit avanti; tocca due miei file condivisi, il backlog e
    `_frontend_utility.py`, in altre righe): 0 conflitti; `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito (log
    `files/logs/c97c3/20_sim.log`). `git diff --check` pulito. Handoff FROZEN; revisori X (AF) e Y (DV). Chiude C-97c.
+
+### W-B70 (+ W-B77) — i parametri degli errori di campo, la descrizione unita oltre 500: cura ✅ (2026-10-17) — 🧊 FROZEN
+
+**Base**: HEAD `a5d615fd7` = dev con C-97c-3 (`164babac1` → `e19f7c7e6`, CHANGELOG `a5d615fd7`). Via e decisioni D-W70-1…5 del
+coordinatore (sopra, «W-B70 — analisi»). OK di scrittura: `PromoteMergeModal.svelte`, `TransactionBulkModal.svelte`; in BRIM solo
+l'import, i doppioni e i siti di chiamata (la SEC9g di MF è in `search_asset_candidates_bulk`).
+
+**Contratto — backend**:
+- **`backend/app/utils/pydantic_errors.py`** (nuovo, una sola copia, W-B77):
+  - `PLAIN_PARAM_TYPES = (str, int, float, bool, NoneType)`;
+  - `loc_to_field(loc)`: gli indici saltati, `resolved_fields.` tolto davanti a un campo (H-41; innocuo per il BRIM, che non ha quel
+    campo), `None` per un `loc` vuoto;
+  - `error_params(error)`: il `ctx` dell'errore copiato quando ogni valore è dato semplice, `None` se manca, è vuoto o ne tiene uno che
+    non lo è (l'eccezione di un `value_error`). Non guarda più `loc`: un errore di campo porta il suo contesto (D-W70-1).
+- **Batch** (`transaction_batch_stages._parse_lenient`) e **BRIM** (`BRIMProvider._create_transaction`): `error_params` per l'errore
+  solo **e per ogni sotto-errore impacchettato** (`multipleBusinessRuleErrors`, la nota di H), `loc_to_field` per il campo. Via
+  `_PLAIN_PARAM_TYPES`, `_loc_to_field` e `_lone_error_params` dai due moduli (BRIM: la riga 95 e i due metodi statici).
+- **L'effetto**, misurato su `TXPromoteResolvedFields` (17/10): `string_too_long` → `{max_length: 500}`; `greater_than` → `{gt}`;
+  `greater_than_equal` → `{ge}`; `date_from_datetime_parsing` → `{error: <testo di pydantic>}`; `model_type` → `{class_name}`;
+  `value_error`, `missing`, `extra_forbidden`, `string_type` → `None`. I testi in più sono innocui: il risolutore escapa ogni
+  parametro di testo e nessuna traduzione li legge.
+- La docstring di `schemas/transactions/batch.py:191` nomina la funzione nuova.
+
+**Contratto — frontend**:
+- `resolveValidationMessage.ts`: `string_too_long` → `transactions.pydantic.stringTooLong` («At most {max_length} characters», 4
+  lingue); nel ramo dei built-in l'etichetta del campo passa da `escapeHtml` come negli altri due rami.
+- `bulk/promoteHelpers.ts`: `TX_DESCRIPTION_MAX_LENGTH = 500` (il `max_length` di `TXCreateItem`, `TXUpdateItem` e
+  `TXPromoteResolvedFields.description`), `textLength(text)` in punti di codice (come `len()` di Python), e
+  `resolvePromoteAllFields(strategy, left, right)`: `{}` se i due lati non divergono, i campi del lato o l'unione, `null` quando
+  l'unione supererebbe il limite.
+- `PromoteMergeModal.svelte`: sotto la textarea il contatore `promote-merge-desc-counter` («{n} / {max}», `data-state` `ok`|`over`,
+  muto o rosso in un ternario); oltre il limite la textarea `aria-invalid` (`aria-invalid:border-lf-danger`), il messaggio
+  `promote-merge-desc-too-long` (`text-xs text-lf-danger`, `data-max`, `transactions.promote.descriptionTooLong`) e Conferma
+  disabilitato (`disabled:opacity-50 disabled:cursor-not-allowed`), come `EventCreateMiniModal`. Solo ruoli.
+- `TransactionBulkModal.svelte`, `mergeAllSuggestions`: `resolvePromoteAllFields`; una coppia `null` resta non promossa e si conta;
+  alla fine `notify({name: 'tx.bulk.promote-all.left-for-manual-merge', detail: {pairs}, toast: {variant: 'warning', …}})` con
+  `transactions.promote.mergeAllLeftTooLong` (plurale ICU). Mai un testo perso.
+
+**Test** (due test-author in parallelo, file distinti): backend (il modulo nuovo, `utils pydantic-errors`; i tre test che fissano
+`None` riscritti come rossi; i sotto-errori impacchettati filtrati) e frontend (Vitest: risolutore, aiuti, modale d'unione; un E2E
+di «promuovi tutto», scritto e girato nello slot).
+
+**Passi**:
+1. ✅ **Cura pronta** (17/10): `files/scripts/wb70_cure.py` (dry run pulito su 8 file, uno nuovo; più le tre descrizioni del runner
+   `_backend_services.py` che nominavano `_loc_to_field`) e `files/scripts/wb70_i18n.sh` (le tre chiavi con `dev.py i18n add`, poi
+   `i18n check`).
+2. ✅ **Rossi** (17/10):
+   - **backend** (test-author `wb70-backend-reds`, corsia 6184, log `files/logs/wb70/01`–`04`):
+
+     | Selettore | Rossi | Verdi | Oggi |
+     |---|---|---|---|
+     | `utils pydantic-errors` (file nuovo `test_utilities/test_pydantic_errors.py`, registrato in `_backend_utils.py`) | 51 | 10 | 49 casi: il modulo non c'è; 2 `TestOneCopy`: le due copie esistono ancora e nessuno importa il modulo |
+     | `services brim-create-transaction` | 2 | 16 | `params` nulli dove `{max_length: 500}`, `{max_length: 36}` (`link_uuid`) |
+     | `services transaction` | 5 | 125 | nulli dove `{max_length: 500}`, `{gt: 0}` ×2 (split, promote), `{ge: 0}` (update); l'impacchettato copia `object()` e un `ValueError` (risposta non serializzabile) |
+     | `services transaction-decimal-places` | 8 | 193 | H-41: 4 casi × validate/commit nulli dove il contesto semplice di pydantic (atteso calcolato dagli errori stessi, nessun testo fissato) |
+
+     Una cura simulata in memoria (`files/wb70_harness/`) porta tutto al verde salvo `TestOneCopy`, che vuole i file veri. Il ramo
+     impacchettato del BRIM con un contesto non semplice non si raggiunge senza toccare il modello (ogni regola di `TXCreateItem` impacchetta
+     dati semplici): coperto dal contratto di `error_params` e da `TestOneCopy`. Nessun `test_api` fissava `None` su un errore di campo.
+     > **⚠️ Fuori pista**: una chiamata `--run-status` del test-author (senza test) ha usato `.testLog` di default nella mia corsia e ha
+     > archiviato un log precedente in `.testLog/00_archive/logs_20261017_183605.tar.xz` (file ignorati, recuperabili).
+   - **frontend** (test-author `wb70-frontend-reds`; uguali nella mia corsia, carico 11, `files/logs/wb70/10_my_front_reds.log`):
+     **34 rossi, 97 verdi** in 3 file — `resolveValidationMessage.test.ts` 7 (la traduzione di `string_too_long`, l'etichetta escapata da
+     `field` e da `loc`, la chiave nei 4 cataloghi), `promoteHelpers.test.ts` 19 (i nomi nuovi; la logica di oggi come guardie),
+     `PromoteMergeModal.test.ts` 8 (contatore, `aria-invalid`, messaggio, Conferma disabilitato, punti di codice). Più l'E2E **PC7** in
+     `tx-bulk-promote-cost-basis.spec.ts` (scritto, non girato: rosso atteso «la coppia da 501 resta due righe: atteso 2, ricevuto 1»).
+3. ✅ **Cura applicata e verdi** (17/10, 18:3x–18:5x): `wb70_cure.py --apply` (9 file, uno nuovo), `wb70_i18n.sh` (le tre chiavi nelle
+   4 lingue, `i18n check` stretto: 5 063 chiavi). In BRIM solo i blocchi permessi: l'import (l. 84), la costante (l. 93-97), i due
+   metodi statici (l. 539-559), la docstring e i due siti di `_create_transaction`. Poi `files/scripts/wb70_light.sh`, una prova alla
+   volta, carico < 50 (log `files/logs/wb70/light_*.log`):
+
+   | Prova | Esito |
+   |---|---|
+   | `ruff check`, `black --check` sui 10 file Python | puliti |
+   | `utils pydantic-errors` | verde (51 rossi + 10 guardie) |
+   | `services brim-create-transaction` | verde (18) |
+   | `services transaction` | verde (130) |
+   | `services transaction-decimal-places` | verde (201) |
+   | Vitest dei 3 file | 131/131 |
+   | `front-utility core-unit` | verde |
+   | `front-transaction tx-unit` | verde |
+   | `utils gate-i18n-catalog`, `utils gate-i18n-usage` | verdi |
+   | `dev.py test check-orphans` | ogni test registrato raggiungibile |
+   | `dev.py front check` | 0/0, dopo un secondo `api sync` |
+
+   > **⚠️ Fuori pista**: il primo `front check` ha dato 2 errori in `features/changelog/whatsNewStore.svelte.ts` (C-54, entrato con
+   > l'avanzamento): il client generato, ignorato da git, era quello di prima dell'avanzamento. `api sync` (uscita 0, nessun file
+   > tracciato cambiato) e `front check` 0/0. Lezione: dopo ogni avanzamento della base, `api sync` prima del primo `front check`.
+4. ✅ **Doc** (17/10, docs-writer `46ade847`, solo EN, `mkdocs build` stretto e `check-links` verdi): `developer/backend/transactions/
+   service.md` (la regola e la sua casa), `split_promote.md` (i `params` del rifiuto, il limite nel frontend), `developer/frontend/state/
+   transaction-draft.md` (contatore, «Merge all», i test), `developer/architecture/patterns/brim_plugin_guide.md:456` (più una mia
+   correzione: il `field` solo per l'errore di un campo, un sotto-errore impacchettato non ne ha), `user/transactions/index.en.md` (l. 49:
+   **W-B73** chiuso, la modale offre descrizione e tag; l. 62: «Combine» lascia la coppia troppo lunga). Nessun timbro: la pagina utente
+   ha già un debito di traduzione.
+   > **Scoperte del docs-writer**: (1) un limite `Decimal` resta senza `params` (`Decimal` non è dato semplice; nei modelli delle
+   > transazioni ogni `gt`/`ge` è su un intero), scritto nella pagina; (2) **W-B79**: `onPromotePair` della pagina Transazioni apre la
+   > modale d'unione anche quando differiscono solo data o costo, che la modale non offre più (il corpo dice solo «Confirm promotion»):
+   > nel backlog, dopo la 1.3.
+5. ✅ **Slot** (via del coordinatore 18:5x, carico a 5 minuti < 50; `files/scripts/wb70_slot.sh`, log `files/logs/wb70_slot_*.log`,
+   18:58–19:15): `db populate --force` sulla mia cartella, poi uno alla volta:
+
+   | Prova | Esito |
+   |---|---|
+   | `front-transaction tx-bulk-promote-cost-basis` (con **PC7**) | 9/9 |
+   | `front-transaction tx-bulk-promote-exec` | 9/9 |
+   | `api transactions-validate` | 12/12 |
+   | `api batch-split-promote` | 38/38 |
+   | `api brim` | 118/118 |
+
+   Porta 6184 libera dopo. Il rosso di PC7 è ragionato dal codice (oggi la coppia da 501 si unisce in una riga), non visto: la cura era
+   già applicata quando lo slot è arrivato.
+6. ✅ **Simulazione** (17/10, 19:16–19:18): `sim_cherry_pick.sh dev_release2 --docs` sui 29 file (i due nuovi, non tracciati, compresi),
+   dev `a6adb0066` (HEAD `a5d615fd7` antenato; dev tocca solo il backlog, in altre sezioni): 0 conflitti; `mkdocs build` stretto e
+   `check-links` con uscita 0 (log `files/logs/wb70/31_sim.log`; la stessa a 18:56 su `d9e9a88b2`). `git diff --check` pulito.
+   Handoff FROZEN; H rivede W-B77.
