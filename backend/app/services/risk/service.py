@@ -117,13 +117,21 @@ class RiskService:
 
         # One holiday table per request, handed to every preparation and reading of it (see `market_calendar`).
         market_holidays = await ensure_market_holidays()
-        prepared = await prepare_asset_series(
-            self.db,
-            asset_ids=tuple(sorted(set(scope_inputs.requested_asset_ids) | (comparison_dependency_asset_ids & existing_asset_ids))),
-            date_range=request.date_range,
-            target_currency=request.target_currency,
-            market_holidays=market_holidays,
-        )
+        try:
+            prepared = await prepare_asset_series(
+                self.db,
+                asset_ids=tuple(sorted(set(scope_inputs.requested_asset_ids) | (comparison_dependency_asset_ids & existing_asset_ids))),
+                date_range=request.date_range,
+                target_currency=request.target_currency,
+                market_holidays=market_holidays,
+            )
+        except RiskUnavailableError as exc:
+            # J-50: a scope refused as a whole (its prices exceed a size limit) answers every planned analytic with that
+            # refusal; one already answered (unknown, invalid parameters) keeps its own.
+            for index, plan in plans.items():
+                if index not in results:
+                    results[index] = unavailable_result(plan.request, exc.code, str(exc), details=exc.details)
+            return await self._response(request, results)
         never_priced_asset_ids = await load_never_priced_asset_ids(
             self.db,
             tuple(item.asset_id for item in scope_exclusions(scope_inputs.requested_asset_ids, prepared) if item.reason == DataQualityExclusionReason.MISSING_PRICE),
@@ -269,6 +277,10 @@ class RiskService:
                 computation=computation,
             )
 
+        return await self._response(request, results)
+
+    async def _response(self, request: RiskQueryRequest, results: dict[int, RiskAnalyticResult]) -> RiskQueryResponse:
+        """The response: one result per requested analytic, in request order, with its warnings' asset names."""
         items = await with_warning_asset_names(self.db, [results[index] for index in range(len(request.analytics))])
         if request.scope.kind == RiskScopeKind.ASSET_SET:
             items = await with_asset_set_quality_issues(self.db, items)

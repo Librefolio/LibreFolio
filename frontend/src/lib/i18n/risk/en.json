@@ -302,7 +302,8 @@
       "resource_limit_paths_or_horizon": "This simulation is too large to run. Use fewer simulation paths or a shorter horizon.",
       "resource_limit_horizon_or_sampling": "This quasi-Monte Carlo simulation is too large to run. Shorten the horizon or choose Monte Carlo sampling.",
       "resource_limit_period": "This simulation is too large to run: the period holds too much history. Choose a shorter period.",
-      "resource_limit_positions": "A simulation can include at most 100 holdings, and this portfolio has more. Simulate a broker with fewer holdings instead."
+      "resource_limit_positions": "A simulation can include at most 100 holdings, and this portfolio has more. Simulate a broker with fewer holdings instead.",
+      "resource_limit_period_or_assets": "This analysis is too large to run: these assets cover too many days of prices. Choose a shorter period or fewer assets."
     },
     "warnings": {
       "sharpe_undefined": "Sharpe is undefined because volatility is zero.",

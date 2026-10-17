@@ -6081,13 +6081,18 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   (`from …datetime_utils import latest_range_end`) è uguale alla lista. Prima un rilevatore che vede un modulo finto,
   come le regole di `test_layer_boundaries.py`. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «R13-SEC7-1».
-- **J-50 · Il rifiuto dei troppi giorni di `get_prices_bulk` diventa un 500 nel rischio e nell'AI Export** — basso,
+- ✅ **J-50 · Il rifiuto dei troppi giorni di `get_prices_bulk` diventa un 500 nel rischio e nell'AI Export** — basso,
   chiarezza (è già un rifiuto, non un DoS); dal coordinatore (17/10 08:34), dopo SEC8-1b. Con Z-25 (N77)
   `get_prices_bulk` alza `BulkTooManyDaysError` (il nome lo darà Z all'ingresso di Z-25) oltre 5 M giorni-asset per
   richiesta. Il rischio (l'ambito degli asset) e l'AI Export lo chiamano dall'interno: senza traduzione l'utente vede
   un 500. Va tradotto in un rifiuto con codice, dalla parte del rischio (`RiskUnavailableError` con un `RiskErrorCode`)
   e dell'AI Export. Prima i rossi. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+  - ✅ 17/10: fatta da J (checkpoint J-50).
+    - Rischio: ogni analitica risulta `unavailable` · `resource_limit` col rimedio `period_or_assets`, la
+      convenzione D379 (200), al posto del 500.
+    - AI Export: 422 `selection_not_applicable`, `reason_code` `too_many_price_days`, al posto del 503.
+    - Una frase propria in 4 lingue per tutti e due. Dettagli: piano 05, sezione «J-50».
 - **J-51 · Lo YoC di un co-proprietario manca sulle unità ricevute da un broker che non vede** — medio, numeri;
   J, 17/10, letto nel codice durante J-10, non riprodotto. `yield_on_cost._include_external_transfer_legs` aggiunge
   al rigioco la sola gamba della compagna. Se quel broker non è visibile, il componente {A, B} parte da un A senza
