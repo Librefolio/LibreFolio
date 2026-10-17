@@ -138,6 +138,39 @@ class TestInitialBalancesValidation:
 
 
 # ============================================================================
+# 2.2b R13-SEC7-3 — AN INITIAL BALANCE PAST THE EXPONENT BOUND IS REFUSED
+# ============================================================================
+
+
+class TestInitialBalanceExponentBound:
+    """R13-SEC7-3 (E's R13-SEC7, finding 3): an initial balance is a ``Currency``, so the cure's bound applies to it —
+    an amount whose ``Decimal.adjusted()`` lies outside [-100, 100] is refused when ``POST /brokers`` validates its body:
+    a ``ValidationError`` on ``initial_balances.<i>.amount``, the route's 422, before ``BrokerService.create_bulk``
+    could build the deposit's raw row with ``format(amount, "f")`` (a billion digits for ``1E+999999999``).
+
+    Red today: accepted, the amount positive, so the broker would get a deposit of it.
+    """
+
+    @pytest.mark.parametrize("amount", ["1E+101", "1E+5000000", "1E+999999999"])
+    def test_an_initial_balance_past_the_exponent_bound_is_refused_on_its_amount(self, amount):
+        """Contract: refused on the second balance's amount, behind a valid one; the item is never built."""
+        try:
+            BRCreateItem(name="Exponent Bound Broker", initial_balances=[{"code": "EUR", "amount": "100"}, {"code": "USD", "amount": amount}])
+        except ValidationError as exc:
+            locs = [tuple(error["loc"]) for error in exc.errors()]
+            assert ("initial_balances", 1, "amount") in locs, f"R13-SEC7-3: the initial balance of {amount} USD was refused, but not on its amount: {locs}"
+            return
+        pytest.fail(f"R13-SEC7-3: BRCreateItem accepted an initial balance of {amount} USD (adjusted() = {Decimal(amount).adjusted()}); an amount whose exponent lies outside [-100, 100] must be refused at the boundary: POST /brokers answers 422")
+
+    def test_guard_an_initial_balance_at_the_bound_is_kept(self):
+        """Guard: green today and after. 1E+100 is inside the bound: the schema keeps it (the batch, not the schema,
+        refuses its digits later), next to an ordinary balance."""
+        broker = BRCreateItem(name="Exponent Bound Broker", initial_balances=[{"code": "EUR", "amount": "100"}, {"code": "USD", "amount": "1E+100"}])
+
+        assert [(balance.code, balance.amount) for balance in broker.initial_balances] == [("EUR", Decimal("100")), ("USD", Decimal("1E+100"))]
+
+
+# ============================================================================
 # 2.3 UPDATE SCHEMA
 # ============================================================================
 

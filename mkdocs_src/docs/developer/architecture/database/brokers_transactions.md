@@ -134,8 +134,8 @@ staged receiver row. A manual payload instead supplies the
 
 Batch promote is a separate boundary: `TXPromoteBatchItem` has no
 `cost_basis_mode`, and the promote stage does not calculate WAC. Its resolved
-per-unit value comes from `resolved_fields.cost_basis_override`, normally
-prepared by the frontend merge flow.
+per-unit value comes from `resolved_fields.cost_basis_override`, which only an API
+client sends: the merge dialogs send `description` and `tags` alone.
 
 See **[📊 Weighted Average Cost (WAC)](../../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)** for the full formula, transaction effects, and examples.
 

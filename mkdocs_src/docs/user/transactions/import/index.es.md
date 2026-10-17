@@ -278,7 +278,7 @@ Las copias entre los archivos que importas juntos se manejan de la misma manera,
 
 ## ⛔ Antes de la fecha de apertura del bróker {: #before-opening }
 
-Si un bróker tiene una **fecha de apertura**, las filas con fecha anterior no se pueden importar; el propio día de apertura sí es válido. Si la fecha es incorrecta, corrígela desde el paso [Revisar](how-to.md#opening-date) y las filas se comprueban de nuevo.
+Si un bróker tiene una **fecha de apertura**, las filas con fecha anterior no se pueden importar; el propio día de apertura sí es válido. Si la fecha es incorrecta, corrígela desde el paso [Revisar](how-to.md#opening-date) y las filas se comprueban de nuevo. Sea cual sea la fecha de apertura, las fechas de las transacciones van del 1 de enero de 1900 a un año a partir de hoy: una fila con una fecha fuera de ese intervalo se rechaza al guardar las filas importadas, con un mensaje como *Fecha: Entre 1900-01-01 y 2027-10-17*, si hoy es 17 de octubre de 2026.
 
 ---
 

@@ -245,7 +245,8 @@
       "cashNonzero": "{type} requires a non-zero cash amount",
       "decimalPlacesExceeded": "At most {max} decimal places",
       "significantDigitsExceeded": "At most {max} significant digits",
-      "integerDigitsExceeded": "At most {max} digits before the decimal point"
+      "integerDigitsExceeded": "At most {max} digits before the decimal point",
+      "dateOutOfRange": "Between {min} and {max}"
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",

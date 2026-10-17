@@ -245,7 +245,8 @@
       "cashNonzero": "{type} nécessite un montant non nul",
       "decimalPlacesExceeded": "Au maximum {max} décimales",
       "significantDigitsExceeded": "Au maximum {max} chiffres significatifs",
-      "integerDigitsExceeded": "Au maximum {max} chiffres avant la virgule"
+      "integerDigitsExceeded": "Au maximum {max} chiffres avant la virgule",
+      "dateOutOfRange": "Entre {min} et {max}"
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",
