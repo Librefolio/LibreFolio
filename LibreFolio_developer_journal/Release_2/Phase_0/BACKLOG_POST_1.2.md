@@ -3503,6 +3503,14 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     / H-28.
 
   Dettagli: piano H, §14, «Residuo di H-24».
+  - Cura fatta il 17/10 (lotto «H-27», piano H §14).
+    - `profile_default()` accetta solo un valore del tipo esatto del ripiego; un altro tipo alza
+      `ProfileDefaultError` (un `TypeError`) e il lettore si ferma: un `None` non diventa più «nessun limite».
+    - Una guardia statica in `services profile-defaults` confronta il ripiego letterale di ogni chiamata con le voci
+      dei profili.
+    - Nessun controllo all'avvio: il tipo atteso lo conosce solo il lettore.
+    - Resta a B, se lo vuole: con una tabella sbagliata le due rotte di `restore.py` rispondono 500, perché catturano
+      solo `BackupConfigError`; per il suo 503 basta catturare anche `ProfileDefaultError`.
 - **H-28 · Il catch-all della SPA serve i file nascosti di `frontend/build/`** — basso, sicurezza (informazione); H
   (analisi del residuo di H-24), 17/10.
   - `frontend_catchall()` (`backend/app/services/platform/static_site.py` ~130) serve qualunque file che

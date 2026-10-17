@@ -4669,3 +4669,110 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
     - Nessuna delle due pagine ha traduzioni.
   - Facoltativa: la docstring di `derive_key_from`. Anche un archivio protetto lascia fuori una chiave data
     dall'ambiente.
+
+### Lotto «H-27: `profile_default` controlla il tipo del valore del profilo» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (01:50): «Next is H-27», dopo il commit del lotto H-26/H-24r/H-28 (`b34f5e990` …
+> `063d2aa42`, entrato in dev `40a76bf1a`; più la riga del CHANGELOG per H-28 in `5beecac3d`). Base: fast-forward del
+> coordinatore a `5beecac3d`, verificato pulito. Origine: E, R13-SEC3; il testo originale non è nel repo, solo le due
+> voci del backlog che ne derivano (H-27, X-R36).
+
+1. ✅ **Analisi** (01:50–02:00, sola lettura).
+   - `profile_default(name, fallback)` (`config/__init__.py` ~576) restituisce `cast(T, values[name])`: nessun
+     controllo. L'unico lettore è `backup_max_upload_mb()` (`config/backup.py:78`, di B), con ripiego `0` = nessun
+     limite.
+   - I suoi due chiamanti (`api/v1/backup/restore.py`) catturano solo `BackupConfigError`:
+     - `_upload_limit()` calcola `limit_mb * _MEGABYTE if limit_mb else None`, quindi con `None` nel profilo non
+       applica **nessun limite**: è il «fail-open» di E;
+     - `_readable_limit_mb()` lo mostrerebbe come limite illeggibile.
+   - **Cosa è già coperto quando girano i test**, per la voce di oggi:
+     - `test_managed_lists_the_decided_variables_with_their_types` (`services profile-defaults`) confronta
+       `ENVIRONMENT_PROFILE_DEFAULTS["managed"]` con la tabella decisa, valore e tipo esatto: una voce tolta o `None`
+       fa diventare rosso il test;
+     - le prove API di B (`test_backup_restore.py:535`, `test_backup_restore_apply.py:1162`) fissano «managed-unset →
+       500» attraverso l'endpoint.
+   - **Cosa non è coperto**:
+     - (1) quando l'app gira, niente impedisce a un valore del tipo sbagliato di passare;
+     - (2) per un lettore futuro, nessun test confronta il tipo del ripiego con quello della voce. La tabella decisa
+       del test fissa il valore che il lavoro dichiara, non il tipo che il lettore si aspetta: una voce `None` scritta
+       in entrambe le tabelle passerebbe.
+   - **Cura proposta**, solo file miei:
+     - `profile_default` controlla il tipo esatto: `type(value) is type(fallback)`, così `True` non vale come `int` e
+       `60` non vale come `60.0`, come già la regola stretta di `PROFILE_DEFAULTS`. Un tipo diverso alza
+       `ProfileDefaultError(TypeError)`, con un messaggio che nomina variabile, profilo, i due tipi e la tabella; il
+       lettore non lo legge mai. Il valore è una costante del codice, mai un segreto: si può citare.
+     - Un test statico generico: ogni chiamata `profile_default(NOME, <letterale>)` delle sezioni di `config/` ha un
+       ripiego dello stesso tipo esatto della voce di ogni profilo che elenca `NOME`.
+     - Più i casi a runtime: `None`, `"500"`, `500.0` e `True` per un ripiego `int`, eccetera; il valore giusto torna
+       così com'è; il self-hosted non cambia; più il caso di E, il lettore vero di B con `None` nel profilo, che alza
+       invece di dare «nessun limite».
+   - **Scelta, documentata**: nessun controllo all'avvio. La proposta del backlog diceva «un errore chiaro
+     all'avvio», ma il tipo atteso lo conosce solo il lettore, e i lettori girano quando servono (B ha scelto un 503
+     al momento dell'uso per i suoi errori dell'operatore). La tabella è codice: il test statico la ferma prima del
+     rilascio, e a runtime il lettore si ferma invece di ripiegare.
+     - Con la cura, un valore sbagliato fa rispondere 500 alle due rotte di B, non 503. Se B vuole il suo 503, gli
+       basta catturare `ProfileDefaultError` in `_upload_limit()` e in `_readable_limit_mb()`: lo segnalo, il file è
+       suo.
+   - `PROFILE_DEFAULTS` (i campi di `Settings`): la convalida stretta del test (d) già controlla ogni valore contro il
+     tipo del suo campo. A runtime niente, perché `get_settings()` ricostruisce `Settings` a ogni chiamata. Resta
+     così: E ha segnalato `profile_default`.
+   - Doc: `developer/architecture/settings.md` ~58 («`profile_default()` converts nothing (a `cast`)») e l'elenco
+     delle guardie lì vicino. Nessuna traduzione.
+   - Selettori: `services profile-defaults` e `services config-env-example`; `api backup-restore` e
+     `api backup-restore-apply` solo se la build della corsia è fresca, altrimenti in uno slot.
+2. ✅ **Rossi, doc e cura a secco** (02:00–02:08, in parallelo).
+   - **Rossi** (test-author, solo `test_profile_defaults.py`): da 52 a 88 casi; previsti 11 rossi e 77 verdi.
+     - `test_profile_default_error_is_a_type_error`;
+     - (g) 9 tipi sbagliati: `None`, `"500"`, `500.0`, `True` per un ripiego `int`; `1` e `None` per `bool`; `60`
+       per `float`; `None` e `0` per `str`. Ognuno deve alzare l'errore, con un messaggio che nomina variabile,
+       profilo, i due tipi e la tabella;
+     - (g) 18 casi self-hosted o con profilo non impostato, che restituiscono il ripiego stesso;
+     - 4 casi del tipo giusto, che restituiscono la voce;
+     - il caso di E con il lettore vero `backup_max_upload_mb()` e `None` nel profilo, più la sua guardia (500, un
+       `int`);
+     - (h) la guardia statica `type_mismatches()` e il suo autotest. Il test-author ha aggiunto anche il controllo
+       che ogni voce sia letta da una chiamata trovata.
+     - I tre test vecchi con ripiego `object()` per una variabile elencata ora usano `type(expected)()`.
+     > **⚠️ Fuori pista** (dal test-author): `None` passa se anche il ripiego è `None`, perché il controllo è sul
+     > tipo esatto. Il lettore di oggi usa `0`; la docstring del test lo dice. Inoltre la descrizione del catalogo di
+     > `services profile-defaults` nomina solo H-17: non è mia, non la tocco.
+   - **Doc** (docs-writer): `developer/architecture/settings.md`, al posto della frase sul `cast`, il controllo
+     (tipo esatto, `ProfileDefaultError`, il lettore si ferma; nessun controllo all'avvio, e perché). Nell'elenco
+     delle guardie i due controlli nuovi; nell'istruzione per aggiungere una variabile, «un ripiego letterale del tipo
+     della variabile».
+   - **Cura a secco** (`files/h27/apply_cure.py`): `ProfileDefaultError(TypeError)` e il controllo in
+     `profile_default`; ruff e black puliti.
+3. ✅ **Rosso → cura → verdi** (02:08–02:09; il resto è fermo per il congelamento della galleria, carico 160).
+   - **Rosso**: `services profile-defaults` **11 failed / 77 passed**, la previsione. 9 casi restituiscono il valore
+     sbagliato, il lettore restituisce `None` (il fail-open di E), e `ProfileDefaultError` manca.
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi** (gli ultimi due a carico tornato sotto 50, alle 02:28):
+
+     | Selettore | Risultato |
+     |---|---|
+     | `services profile-defaults` | 88/88 |
+     | `services config-env-example` | 38/38 |
+     | `services config-misc` | 12/12 |
+     | `services config-package` | 843/843 |
+
+   - **Statici** (02:32–02:39, `files/runs/h27-finish.sh`): ruff e black 0 → 0 su `config/__init__.py`,
+     `instance_block.py` e `test_profile_defaults.py`; `mkdocs build` exit 0, senza avvisi oltre al banner del team di
+     Material; `check-links` **97**; `git diff --check` pulito.
+   - Non eseguiti, per scelta: `api backup-restore` e `api backup-restore-apply`. Farebbero ricostruire il frontend
+     della corsia, stantio dopo il fast-forward, e sono vietati fino alle 03:30. Il lettore vero è coperto dentro il
+     processo.
+
+### Mini-lotto «La docstring di `instance_block.py`: `POST /email/verification/resend`» (2026-10-17, notte) — ✅ provato
+
+> Da E, via coordinatore (02:06): E-11 si appoggia a `POST /email/verification/resend`, che EVA-017 fissa fuori da
+> `ALLOWED_WHEN_BLOCKED`, ma la docstring (:21-25) non lo nomina fra le rotte pubbliche che, a istanza bloccata,
+> rispondono 401.
+
+- ✅ Verificato: `resend_email_verification` (`email.py:190`) non ha dipendenze di sessione, quindi è pubblico e
+  fuori dalla lista. `security.md` non elenca queste rotte per nome; `developer/backend/email.md:935` dice già che
+  `/verification/resend` non vuole sessione. `EVA-017` non è ancora in questo albero (ramo di E).
+- ✅ Docstring: «the email verification ``POST /email/verification/confirm`` and its new link
+  ``POST /email/verification/resend``», con il resto del paragrafo riavvolto a 120 colonne. Uguale alla prova a
+  secco; ruff e black puliti. L'insieme delle righe lunghe è invariato.
+- ✅ Controllo d'import (02:32): il modulo si importa, `ALLOWED_WHEN_BLOCKED` ha 23 voci, `resend` è nella docstring.
+  `api instance-block` non l'ho eseguito: è un passo pesante, vietato fino alle 03:30, e per una docstring non serve.
