@@ -66,6 +66,14 @@ def schemas_currency_write_strict(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Currency write strict tests", verbose=verbose)
 
 
+def schemas_currency_suggestion(verbose: bool = False, test_names: list = None) -> bool:
+    """E-19a: the ISO code a stored currency value stands for, the 422 naming it, a user's base currency strict."""
+    print_section("Schemas: Currency Suggestion (E-19a)")
+    print_info("Testing: backend/app/schemas/common.py (suggested_iso_currency, iso_currency_code's text), schemas/settings.py (base_currency)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_currency_suggestion.py", test_names)
+    return run_command(cmd, "Currency suggestion tests", verbose=verbose)
+
+
 def schemas_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Test transaction Pydantic schemas."""
     print_section("Schemas: Transactions (TXCreateItem, TXReadItem, etc.)")
@@ -230,6 +238,15 @@ Tests for Pydantic/SQLModel schema validation:
         name="Currency Write Strict",
         desc="MF-SEC9b (E-18): write paths take ISO 4217 alpha-3 codes only; read paths stay tolerant",
         # PURE: schemas and plain functions only; no row, no server, no network, no file.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "currency-suggestion",
+        schemas_currency_suggestion,
+        name="Currency Suggestion",
+        desc="E-19a: the ISO code a stored currency value stands for (none when ambiguous or a subunit), the 422 naming it, base_currency strict",
+        # PURE: schemas and plain functions over pycountry's data; no row, no server, no network, no file.
         isolation="pure",
     )
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")

@@ -120,7 +120,8 @@ class FAPricePoint(StrictModel):
         description=(
             "Currency code (ISO 4217). Post-Blocco I: OPTIONAL in both request and response. "
             "On upsert, if omitted the backend uses `asset.currency`; if provided and != asset.currency, "
-            "the upsert is rejected with HTTP 400 (defensive — the frontend no longer sends it). "
+            "the whole upsert is refused with HTTP 422 price_currency_mismatch before anything is written "
+            "(defensive — the frontend no longer sends it). "
             "On response, kept populated for backward compat but the frontend uses `asset.currency` "
             "as single source of truth; see phase-07 Blocco I for rationale."
         ),

@@ -63,6 +63,25 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     ``unpacked_too_large`` in the contract's words, once the entries are checked and before the free space is asked or a
     byte written — never unpacked, the progress never past ``checking``, nothing left. A secure archive is decrypted
     first, then refused the same way. ``None``: no limit, the check as before.
+(n) Lot B-43, a function the reader lacks: B-28 lets tables and indexes through by their kind, without reading their
+    expressions. An index's expression, a virtual generated column or a CHECK calling a function this LibreFolio does not
+    have (``lf_b43_probe``, registered only while its database is built) ends the check with ``database_damaged`` once
+    unpacked — never a raw ``sqlite3.OperationalError`` («unknown function») escaping it — the copy removed as for any
+    refusal, the lock free, the archive only read, the live data directory untouched. The index and the column fail the
+    copy's first description (its integrity check, read only); SQLite leaves a CHECK out of the schema of a read-only
+    connection, so that description finds the database intact (the barrier: ``describe_database`` of that very database,
+    and the check's own first description of its copy) and the first read-write step refuses it. One warning, with the
+    error's class and ``sqlite_errorname``; the function's name, the archive's text, in no message and no line of the
+    log. The guard: a CHECK calling ``abs``, built in and innocuous, is checked as usual.
+    Part 1, the functions the server registers: since H-51 the server's connections register ``regexp`` (2 arguments)
+    and ``floor`` (1), deterministic and never innocuous, with ``trusted_schema`` off, so a schema calling one in an
+    index's expression or a generated column cannot be read there, and a restored instance fails every connection. The
+    check's plain readers pass it (``regexp`` unknown to them and never computed in a virtual column without a declared
+    type; ``floor`` built in): a generated column on ``regexp`` and an index on ``floor`` are refused ``database_damaged``
+    where the copy's schema is first read, with the server's functions as stand-ins, before ``describe_database`` opens
+    the copy; the same one warning, no line naming the function. The guard: this LibreFolio's own index on
+    ``lower(email)`` reads with the stand-ins, and its backup checks as usual. A CHECK or a DEFAULT calling them is
+    resolved only when used: lot B-45's, not pinned here.
 
 Real databases: two, made once for the module by ``alembic upgrade`` in a process of their own (at the head, and at
 ``OLDER``), then copied for every data directory and given accounts by SQL. Two more ``alembic`` processes
@@ -80,7 +99,15 @@ backup copy, a new file beside the copy, is no connection to it. Two of its arch
 whose database was then edited through ``writable_schema``: SQLite refuses their schema, so no backup is made of them.
 ``staging._refuse_foreign_objects`` is looked up by the test that needs it, never at collection. (m) replaces
 ``staging._unpack`` with a function that fails the test, and ``staging._check_space`` with a disk without room; each
-of its cases asks ``stage_archive`` for ``max_unpacked`` first, so that until lot B-35 each fails on its own.
+of its cases asks ``stage_archive`` for ``max_unpacked`` first, so that until lot B-35 each fails on its own. (n) wraps
+``describe_database`` as ``staging`` imports it, the real one, to keep what each description answered. Its archives are
+a real backup at the head whose database then got, on the one connection where the function it calls is registered
+(``lf_b43_probe``, ``regexp``; ``floor`` and ``abs`` are built in), an object calling it, and was put back in its place,
+the manifest listing its new bytes and its tables: the snapshot's ``VACUUM INTO`` fails on a function its connection
+lacks, so only a hand puts such a database in an archive (``floor``'s index takes the same road). Every reader the
+product opens today lacks ``lf_b43_probe`` and ``regexp``; the server's connections are played by a read-only reader
+that registers ``regexp`` and ``floor`` as stand-ins, deterministic and never run, ``trusted_schema`` off
+(``server_schema_error``).
 
 Pure: every data directory, database and archive lives in ``tmp_path``. This process and every process it starts are
 configured with a production data directory of the test (``LIBREFOLIO_TEST_*`` removed, ``LIBREFOLIO_DATA_DIR`` set and
@@ -2761,3 +2788,352 @@ def test_no_cap_is_today_s_check(instance, head_archive):
     report = stage_archive(head_archive.path, instance.root, progress=progress, max_unpacked=None)
     assert (report.action, report.restorable, progress.phases) == ("same", True, ["checking", "unpacking", "verifying"]), f"the check as before: {report.action}, {report.blockers}, {progress.phases}"
     print_success("no cap: checked as before")
+
+
+# =============================================================================
+# (n) Lot B-43: a function the reader lacks
+# =============================================================================
+#
+# B-28 lets tables and indexes through by their kind, without reading their expressions: an index's expression, a
+# generated column or a CHECK may call a function the connection that reads the copy does not have. SQLite loads such a
+# schema all the same, and fails the first statement that needs the expression: «unknown function». An index or a
+# generated column fails the integrity check of any connection, so the copy's first description raises; SQLite leaves a
+# CHECK out of the schema of a read-only connection, so that description passes and the first read-write integrity
+# check raises (the post-migration fixes'). Either way the check ends with ``database_damaged`` and removes its copy, as
+# for any refusal — never with the raw ``sqlite3`` error (an API job's ``stage_failed``, a traceback on the command line)
+# — and the function's name, the archive's text, is in no message and no line of the log.
+#
+# Part 1, the functions the server registers. Since H-51 the server's connections register ``regexp`` (2 arguments) and
+# ``floor`` (1), deterministic and never innocuous (SQLAlchemy 2.0's pysqlite dialect, ``on_connect``), with
+# ``trusted_schema`` off, and read the schema again: an index's expression or a generated column calling one cannot be
+# read there («malformed database schema (…) - unsafe use of regexp()»), so every connection of a restored server fails.
+# The check's plain readers pass such a schema (``regexp`` unknown to them and never computed in a virtual column without
+# a declared type; ``floor`` built into SQLite): it must be refused where the copy's schema is first read, with the
+# server's functions registered as stand-ins, before ``describe_database`` opens the copy. A CHECK or a DEFAULT calling
+# them is resolved only when used, and reads: lot B-45's, not pinned here.
+
+#: The function each schema of this section calls: registered on the one connection that builds its database, never on
+#: a reader's. Its name is the archive's text (B-28's rule): no message and no line of the log may hold it.
+B43_FUNCTION = "lf_b43_probe"
+#: (Part 1) The functions the server's connections register, and their numbers of arguments: deterministic, never
+#: innocuous. With ``trusted_schema`` off, a schema calling one in an index's expression or a generated column cannot
+#: be read on such a connection.
+SERVER_FUNCTIONS = (("regexp", 2), ("floor", 1))
+
+
+@dataclass(frozen=True)
+class FunctionCall:
+    """An object of a schema that calls ``function``: ``statements`` make it, and its rows, on a connection where
+    ``function`` is registered with ``registered`` arguments, answering 1 (``None``: SQLite has it built in);
+    ``table``, the table it adds with one row (``None``: an index on a table of the app). Whether the ``PRAGMA
+    integrity_check`` of a plain reader — no function registered, ``trusted_schema`` off as on every connection to a
+    copy — fails: read only (the copy's descriptions), and read write (the post-migration fixes, the plugin secrets).
+    ``unreadable_by_the_server``: whether a reader that registers ``SERVER_FUNCTIONS`` as the server's connections do
+    cannot read the schema (part 1)."""
+
+    name: str
+    function: str
+    registered: int | None
+    statements: tuple[str, ...]
+    table: str | None
+    fails_read_only: bool
+    fails_read_write: bool
+    unreadable_by_the_server: bool = False
+
+
+#: An index on an expression calling it, on a table of the app that has rows: ``users``, by its ``id``.
+IN_AN_INDEX = FunctionCall(name="index-expression", function=B43_FUNCTION, registered=1, statements=(f"CREATE INDEX ix_b43 ON users ({B43_FUNCTION}(id))",), table=None, fails_read_only=True, fails_read_write=True)
+#: A virtual generated column calling it, in a table of its own with one row.
+IN_A_GENERATED_COLUMN = FunctionCall(
+    name="generated-column",
+    function=B43_FUNCTION,
+    registered=1,
+    statements=(f"CREATE TABLE b43_gen (x INTEGER, y INTEGER GENERATED ALWAYS AS ({B43_FUNCTION}(x)) VIRTUAL)", "INSERT INTO b43_gen (x) VALUES (1)"),
+    table="b43_gen",
+    fails_read_only=True,
+    fails_read_write=True,
+)
+#: A CHECK calling it, in a table of its own with one row. Read only, SQLite leaves the CHECK out of the schema: the
+#: copy's first description finds the database intact, and the first read-write integrity check fails.
+IN_A_CHECK = FunctionCall(
+    name="check-constraint",
+    function=B43_FUNCTION,
+    registered=1,
+    statements=(f"CREATE TABLE b43_check (x INTEGER CHECK ({B43_FUNCTION}(x)))", "INSERT INTO b43_check (x) VALUES (1)"),
+    table="b43_check",
+    fails_read_only=False,
+    fails_read_write=True,
+)
+#: The guard: a CHECK calling ``abs``, built in and innocuous, which every reader has, in a table of its own with one
+#: row; the server's stand-ins read it too.
+BUILT_IN_CHECK = FunctionCall(
+    name="built-in-check",
+    function="abs",
+    registered=None,
+    statements=("CREATE TABLE b43_builtin (x INTEGER CHECK (abs(x) >= 0))", "INSERT INTO b43_builtin (x) VALUES (-7)"),
+    table="b43_builtin",
+    fails_read_only=False,
+    fails_read_write=False,
+)
+#: (Part 1) A virtual generated column calling ``regexp``, without a declared type, in a table of its own with one row:
+#: no plain reader computes it (SQLite 3.54's integrity check computes a virtual column only when it declares a type),
+#: so every plain reader passes it; the server's connections cannot read the schema.
+REGEXP_IN_A_GENERATED_COLUMN = FunctionCall(
+    name="regexp-in-a-generated-column",
+    function="regexp",
+    registered=2,
+    statements=("CREATE TABLE b43_regexp (x TEXT, y GENERATED ALWAYS AS (regexp('a', x)) VIRTUAL)", "INSERT INTO b43_regexp (x) VALUES ('abc')"),
+    table="b43_regexp",
+    fails_read_only=False,
+    fails_read_write=False,
+    unreadable_by_the_server=True,
+)
+#: (Part 1) An index on ``floor()`` of a REAL column, in a table of its own with one row: SQLite's own ``floor()``, built
+#: in and innocuous, serves every plain reader; the server's connections, which register their own, cannot read the
+#: schema.
+FLOOR_IN_AN_INDEX = FunctionCall(
+    name="floor-in-an-index",
+    function="floor",
+    registered=None,
+    statements=("CREATE TABLE b43_floor (x REAL)", "INSERT INTO b43_floor (x) VALUES (2.5)", "CREATE INDEX ix_b43_floor ON b43_floor (floor(x))"),
+    table="b43_floor",
+    fails_read_only=False,
+    fails_read_write=False,
+    unreadable_by_the_server=True,
+)
+#: The three calls a reader without the function cannot check.
+LACKED_FUNCTION_CALLS = [pytest.param(call, id=call.name) for call in (IN_AN_INDEX, IN_A_GENERATED_COLUMN, IN_A_CHECK)]
+#: (Part 1) The two calls every plain reader checks and the server cannot read.
+SERVER_FUNCTION_CALLS = [pytest.param(call, id=call.name) for call in (REGEXP_IN_A_GENERATED_COLUMN, FLOOR_IN_AN_INDEX)]
+
+
+def plain_integrity_error(database: Path, *, read_only: bool) -> sqlite3.DatabaseError | None:
+    """The error ``PRAGMA integrity_check`` raises on ``database`` for a plain reader — no function registered,
+    ``trusted_schema`` off as on every connection to a copy —; ``None`` when it answers. Run on a scratch copy of the
+    file, read only or read write: ``database`` stays as it is."""
+    scratch = database.with_name(f"{database.name}.{'read-only' if read_only else 'read-write'}")
+    shutil.copyfile(database, scratch)
+    try:
+        with closing(sqlite3.connect(f"{scratch.resolve().as_uri()}?mode={'ro' if read_only else 'rw'}", uri=True)) as conn:
+            conn.execute("PRAGMA trusted_schema=OFF")
+            conn.execute("PRAGMA integrity_check").fetchall()
+    except sqlite3.DatabaseError as exc:
+        return exc
+    return None
+
+
+def never_run(*values: object) -> object:
+    """A stand-in of one of the server's functions: registered so that a schema calling it cannot be read, never run."""
+    raise AssertionError("a stand-in of the server's functions ran: reading a schema computes none of its expressions")
+
+
+def server_schema_error(database: Path) -> sqlite3.DatabaseError | None:
+    """(Part 1) The error reading the schema of ``database`` raises on a reader that registers ``SERVER_FUNCTIONS`` as the
+    server's connections do — stand-ins, deterministic, never run — ``trusted_schema`` off, read only; ``None`` when it
+    reads it. ``database`` stays as it is."""
+    try:
+        with closing(read_only(database)) as conn:
+            conn.execute("PRAGMA trusted_schema=OFF")
+            for name, arguments in SERVER_FUNCTIONS:
+                conn.create_function(name, arguments, never_run, deterministic=True)
+            conn.execute("SELECT sql FROM sqlite_master").fetchall()
+    except sqlite3.DatabaseError as exc:
+        return exc
+    return None
+
+
+def error_met_first(database: Path, call: FunctionCall) -> sqlite3.DatabaseError | None:
+    """The error the check meets first on a copy of ``database``, as ``call`` says: the read of its schema with the
+    server's stand-ins (part 1); else the integrity check of a plain reader, read only (the copy's first description),
+    or read write (the post-migration fixes) when only that fails."""
+    if call.unreadable_by_the_server:
+        return server_schema_error(database)
+    return plain_integrity_error(database, read_only=call.fails_read_only)
+
+
+def archive_calling(tmp: Path, database: Path, call: FunctionCall) -> Path:
+    """A real backup of a data directory made from ``database`` (at the head: no upgrade runs), whose database then got
+    ``call``'s object, trusted, on the one connection where ``call.function`` is registered (unless SQLite has it built
+    in), and was put back in its place, the manifest listing its new bytes and its tables: only the database itself
+    tells. Added after the backup: the snapshot's ``VACUUM INTO`` fails on a schema calling a function its connection
+    lacks («no such function»), so only a hand puts such a database in an archive (a built-in one, ``floor``, takes the
+    same road). Checked: intact for a reader that has the function, nothing beside it; its tables the backup's, plus
+    ``call.table`` with its row; the integrity check of a plain reader failing as ``call`` says, and the read of its
+    schema with the server's stand-ins too (part 1); each error naming the function (so that a log of its message would
+    leak it). Also the command line's tests' (``test_backup_cli_restore.py``)."""
+    data = make_data_dir(tmp / "data", database)
+    built = build_into(data, tmp / "work")
+    edited = database_of(built.path, tmp / "b43.db")
+    with closing(sqlite3.connect(edited)) as conn:
+        # Trusted, as SQLite opens a database by default: untrusted, a schema may not call a function that is not innocuous.
+        conn.execute("PRAGMA trusted_schema=ON")
+        if call.registered is not None:
+            conn.create_function(call.function, call.registered, lambda *values: 1, deterministic=True)
+        with conn:
+            for statement in call.statements:
+                conn.execute(statement)
+        intact = conn.execute("PRAGMA integrity_check").fetchall()
+        names = [name for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+        tables = {name: conn.execute(f'SELECT count(*) FROM "{name}"').fetchone()[0] for name in names}
+    assert (intact, side_files(edited)) == ([("ok",)], []), f"precondition: {call.name}: intact for a reader that has the function, nothing beside it: {intact}, {side_files(edited)}"
+    added = {call.table: 1} if call.table else {}
+    assert tables == built.manifest.database.tables | added, f"precondition: {call.name}: the tables of the backup, plus {added}: {tables}"
+    errors = {mode: plain_integrity_error(edited, read_only=mode == "read-only") for mode in ("read-only", "read-write")}
+    failing = {mode: error is not None for mode, error in errors.items()}
+    assert failing == {"read-only": call.fails_read_only, "read-write": call.fails_read_write}, f"precondition: {call.name}: a plain reader fails its integrity check as the case says: {errors}"
+    errors["server"] = server_schema_error(edited)
+    assert (errors["server"] is not None) == call.unreadable_by_the_server, f"precondition: {call.name}: a reader with the server's stand-ins reads the schema as the case says (unreadable: {call.unreadable_by_the_server}): {errors['server']!r}"
+    unnamed = {mode: repr(error) for mode, error in errors.items() if error is not None and call.function not in str(error)}
+    assert not unnamed, f"precondition: {call.name}: SQLite's error names the function, so that a log of its message would leak it: {unnamed}"
+    raw = edited.read_bytes()
+    entries = [replace(entry, data=raw) if entry.name == DATABASE_ENTRY else entry for entry in entries_of(built)]
+    files = [listed(DATABASE_ENTRY, raw) if entry.path == DATABASE_ENTRY else entry for entry in built.manifest.files]
+    manifest_database = built.manifest.database.model_copy(update={"tables": tables})
+    return pack(tmp / "b43.zip", entries, built.manifest.model_copy(update={"files": files, "database": manifest_database}))
+
+
+def recorded_descriptions(patch: pytest.MonkeyPatch) -> list[str]:
+    """``describe_database`` as ``staging`` imports it, the real one, what each call answered kept in order: the
+    integrity check it found, or ``raised`` (and it raises again what it raised)."""
+    answers: list[str] = []
+    real = staging.describe_database
+
+    def describe(path: Path) -> DatabaseDescription:
+        try:
+            description = real(path)
+        except BaseException:
+            answers.append("raised")
+            raise
+        answers.append(description.integrity_check)
+        return description
+
+    patch.setattr(staging, "describe_database", describe)
+    return answers
+
+
+@pytest.mark.parametrize("call", LACKED_FUNCTION_CALLS)
+def test_a_function_the_reader_lacks_ends_the_check_as_database_damaged_never_a_raw_sqlite3_error(instance, databases, tmp_path, monkeypatch, call):
+    """(n) B-43 An index's expression, a generated column or a CHECK calling a function this LibreFolio does not have:
+    ``StagingError`` ``database_damaged`` once unpacked, as for a database that fails its integrity check (red before
+    B-43: the ``sqlite3.OperationalError`` «unknown function» escapes the check, an API job's ``stage_failed``). Nothing
+    of the copy left, the lock free, the archive only read, the live data directory untouched; the message names no path
+    and not the function."""
+    print_section("B-43: a function the reader lacks")
+    archive = archive_calling(tmp_path, databases.head, call)
+    original = sha256(archive.read_bytes())
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    error, progress = refused(archive, instance)
+    assert (error.code, progress.phases) == ("database_damaged", UNPACKED), f"{call.name}: refused as damaged, once unpacked: {error.code}, {progress.phases}: {error}"
+    assert call.function not in str(error), f"{call.name}: the message names no function of the archive: {error}"
+    assert sha256(archive.read_bytes()) == original, f"{call.name}: the archive is only read"
+    after = fingerprint(instance.root)
+    assert after == instance.before, f"{call.name}: the live data directory changed: {changed(instance.before, after)}"
+    print_success(f"{call.name}: database_damaged, nothing left")
+
+
+def test_a_check_calling_a_function_the_reader_lacks_passes_the_read_only_description_and_is_refused_after_it(instance, databases, tmp_path, monkeypatch):
+    """(n) B-43 The barrier: ``describe_database`` of that very database, read only, finds it intact — SQLite leaves the
+    CHECK out of the schema of a read-only connection — at the head, its tables those of its manifest. The check's own
+    first description of its copy answers the same; the refusal comes after it, from a read-write step that meets the
+    function: ``database_damaged``, the copy removed (red before B-43: the raw ``sqlite3.OperationalError`` of the
+    post-migration fixes' integrity check)."""
+    archive = archive_calling(tmp_path, databases.head, IN_A_CHECK)
+    with zipfile.ZipFile(archive) as zf:
+        manifest = BackupManifest.from_bytes(zf.read(MANIFEST_ENTRY))
+    described = snapshot.describe_database(database_of(archive, tmp_path / "b43-described.db"))
+    found = (described.integrity_check, described.alembic_revision, described.tables)
+    assert found == ("ok", HEAD, manifest.database.tables), f"barrier: read only, the database is intact, at the head, its tables its manifest's: {found}"
+    answers = recorded_descriptions(monkeypatch)
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    error, _progress = refused(archive, instance)
+    assert error.code == "database_damaged", f"refused as damaged: {error.code}: {error}"
+    assert answers == ["ok"], f"the check's first description of its copy found it intact too, and the refusal came after it, from a read-write step: {answers}"
+    print_success("CHECK: described intact read only, then database_damaged")
+
+
+@pytest.mark.parametrize("call", [*LACKED_FUNCTION_CALLS, *SERVER_FUNCTION_CALLS])
+def test_the_refusal_warns_with_the_error_s_class_and_sqlite_name_never_the_function_s_name(instance, databases, tmp_path, monkeypatch, call):
+    """(n) B-43 One warning, with the class of the ``sqlite3`` error the check met and SQLite's name for it
+    (``sqlite_errorname``), never its message, which names the function: the archive's text (B-28's rule). No line of
+    the log holds the function's name. The error expected is the one SQLite raises for a plain reader, first read only
+    (the index, the column), else read write (the CHECK); for a function the server registers (part 1), the one the read
+    of the schema with the server's stand-ins raises (red before part 1: nothing refuses those)."""
+    archive = archive_calling(tmp_path, databases.head, call)
+    met = error_met_first(database_of(archive, tmp_path / "b43-probed.db"), call)
+    assert met is not None and call.function in str(met), f"precondition: {call.name}: the error the check meets first names the function, so that a log of its message would leak it: {met!r}"
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    with staging_logs() as events:
+        error, _progress = refused(archive, instance)
+    assert error.code == "database_damaged", f"precondition: {call.name}: refused as damaged: {error.code}: {error}"
+    lines = [event for event in events if event.get("event") != LOG_CANARY]
+    leaked = [event for event in lines if call.function in repr(event)]
+    assert not leaked, f"{call.name}: no line of the log names the function of the archive: {leaked}"
+    warned = [event for event in lines if event.get("log_level") in ("warning", "error", "critical")]
+    assert [event.get("log_level") for event in warned] == ["warning"], f"{call.name}: one warning, and only that one: {[(event.get('log_level'), event.get('event')) for event in lines]}"
+    fields = {key: value for key, value in warned[0].items() if key not in ("event", "log_level")}
+    assert any(type(met).__name__ in str(value) for value in fields.values()), f"{call.name}: the warning gives the error's class, {type(met).__name__}: {fields}"
+    assert any(str(value) == met.sqlite_errorname for value in fields.values()), f"{call.name}: and SQLite's name for it, {met.sqlite_errorname}: {fields}"
+    print_success(f"{call.name}: warned {type(met).__name__}, {met.sqlite_errorname}; no function named")
+
+
+def test_a_check_calling_a_built_in_function_is_checked_as_usual(instance, databases, tmp_path, monkeypatch):
+    """(n) B-43, the guard (green before and after): a CHECK calling ``abs``, built in and innocuous, which every reader
+    has, in a table of its own, built and put in the archive as the cases above: checked as any backup at the head,
+    read only and read write with ``trusted_schema`` off — restorable, its table with its row before and after."""
+    archive = archive_calling(tmp_path, databases.head, BUILT_IN_CHECK)
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    report = stage_archive(archive, instance.root)
+    copy = stage_dir(instance.root, report.stage_id) / STAGE_DATA_FOLDER / DATABASE_ENTRY
+    kept = rows_of(copy, f"SELECT sql FROM sqlite_master WHERE name = '{BUILT_IN_CHECK.table}'")
+    assert kept and "CHECK (abs(x) >= 0)" in kept[0][0], f"precondition: the copy keeps the CHECK: {kept}"
+    assert (report.action, report.migrations, report.post_migration_fixes) == ("same", [], []), f"at the head: nothing to upgrade, nothing to fix: {report.action}, {report.migrations}, {report.post_migration_fixes}"
+    assert report.tables[BUILT_IN_CHECK.table] == TableRows(before=1, after=1), f"its table, with its row before and after: {report.tables.get(BUILT_IN_CHECK.table)}"
+    assert (report.warnings, report.blockers, report.restorable, report.administrators) == ([], [], True, ADMINISTRATORS), f"nothing to warn, restorable: {report.warnings}, {report.blockers}, {report.administrators}"
+    print_success("abs() in a CHECK: same, restorable")
+
+
+# -----------------------------------------------------------------------------
+# (n) B-43, part 1: the functions the server registers
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("call", SERVER_FUNCTION_CALLS)
+def test_a_function_the_server_registers_in_an_index_or_a_generated_column_is_refused_before_anything_else_opens_the_copy(instance, databases, tmp_path, monkeypatch, call):
+    """(n) B-43, part 1: ``regexp`` in a virtual generated column, ``floor`` in an index's expression. Every plain reader
+    of the check passes them, the server's connections cannot read the schema: restored, the instance would fail every
+    connection. Refused ``database_damaged`` where the copy's schema is first read, with the server's functions as
+    stand-ins, before ``describe_database`` opens the copy, as (l)§1 refuses what LibreFolio never creates (red before
+    part 1: nothing refuses it, and ``describe_database`` opens the copy). Nothing of the copy left, the lock free, the
+    archive only read, the live data directory untouched; the message names no path and not the function."""
+    print_section("B-43, part 1: a function the server registers")
+    archive = archive_calling(tmp_path, databases.head, call)
+    original = sha256(archive.read_bytes())
+    described = never_described(monkeypatch)
+    monkeypatch.setattr(staging, "_upgrade", never_upgrade)
+    error, progress = refused(archive, instance)
+    assert described == [], f"{call.name}: refused before describe_database opened the copy: {described}"
+    assert (error.code, progress.phases) == ("database_damaged", UNPACKED), f"{call.name}: refused as damaged, once unpacked: {error.code}, {progress.phases}: {error}"
+    assert call.function not in str(error), f"{call.name}: the message names no function of the archive: {error}"
+    assert sha256(archive.read_bytes()) == original, f"{call.name}: the archive is only read"
+    after = fingerprint(instance.root)
+    assert after == instance.before, f"{call.name}: the live data directory changed: {changed(instance.before, after)}"
+    print_success(f"{call.name}: database_damaged before describe_database, nothing left")
+
+
+#: (Part 1) This LibreFolio's own index on an expression (revision ``009_email_unique_ignoring_case``).
+OWN_LOWER_INDEX = "ux_users_email_lower"
+
+
+def test_this_librefolio_s_own_index_on_lower_reads_with_the_server_s_functions_and_its_backup_checks_as_usual(instance, databases, head_archive):
+    """(n) B-43, part 1, the guard (green before and after): the head made by alembic indexes an expression,
+    ``ux_users_email_lower`` on ``lower(email)``: SQLite's own ``lower()``, built in and innocuous, never one of the
+    server's stand-ins. A reader that registers them reads this schema, and the module's head archive checks as a
+    backup at the head, restorable, as in (b): the stand-ins are the server's functions, not every function a schema
+    calls."""
+    own = rows_of(databases.head, f"SELECT sql FROM sqlite_master WHERE type = 'index' AND name = '{OWN_LOWER_INDEX}'")
+    assert own and re.search(r"\(\s*lower\s*\(\s*email\s*\)\s*\)", own[0][0], re.IGNORECASE), f"precondition: this LibreFolio's own schema indexes lower(email) as {OWN_LOWER_INDEX}: {own}"
+    error = server_schema_error(databases.head)
+    assert error is None, f"a reader with the server's stand-ins reads this LibreFolio's own schema: {error!r}"
+    report = stage_archive(head_archive.path, instance.root)
+    assert (report.action, report.warnings, report.blockers, report.restorable) == ("same", [], [], True), f"the head archive checks as a backup at the head, restorable: {report.action}, {report.warnings}, {report.blockers}"
+    print_success(f"{OWN_LOWER_INDEX} on lower(email): read with the stand-ins, the head archive restorable")

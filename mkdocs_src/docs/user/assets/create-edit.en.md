@@ -182,6 +182,12 @@ split with linked adjustments without a purchase cost, the change of plan or pro
 the form names the split by its date, and the rest of your edit is saved — give those adjustments
 a [purchase cost](../transactions/form.md) first.
 
+**No Provider** deletes the events the provider generated, but keeps the asset's prices. While a
+transaction is linked to one of those events, such as a dividend or a coupon you recorded against
+it, the removal is refused and the provider stays: the form names the event by its type and date,
+and the rest of your edit is saved — first remove that link, with **No linked event** in the
+transaction's **Linked Event** field ([Transaction Form](../transactions/form.md)).
+
 ## 🏷️ Edit identifiers {: #one-instrument-several-codes }
 
 One security can have several codes. LibreFolio keeps **one asset** with all of them, under

@@ -86,6 +86,17 @@ setup cancelled, through the Users tab's PATCH with a token in the configuration
 guard: a link that ran out, an earlier one revoked by a re-arm counting for nothing. The remedy is today's:
 ``./dev.py user setup-link``, and ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`` only when the configuration carries a token. Only
 a distinctive word of the warning is pinned, never its sentence: the log is English, for the developer.
+
+Lot A-51 (the setup completed while an operator acts; cure approved by the coordinator, 17/10) adds one section right
+after A43's — the same two commands —, every new red labelled ``# red until A-51``. A51 — ``set_user_active(...,
+False)`` (``./dev.py user deactivate``) and ``set_user_admin(..., False)`` (``./dev.py user demote``) take SQLite's
+write lock, refresh the account, and only then decide their guards: on a fresh F02 instance whose only administrator is
+the waiting one, a setup completed between the command's load of the account and its decision makes it the instance's
+only active administrator, and the command refuses it as the last active administrator — falsy, its message naming the
+last active administrator —, nothing changed since the setup. A51-007 (``user deactivate``; today ``(True, None)``,
+«deactivated», while the account stays active and only its sessions end) and A51-008 (``user demote``; today ``(True,
+None)``, the only active administrator demoted). The window is played as A42's, without threads: the setup lands after
+the command's load of the account or before its first write, whichever comes first.
 """
 
 from __future__ import annotations
@@ -2820,6 +2831,114 @@ async def test_the_cli_still_demotes_any_other_administrator(engine: AsyncEngine
     assert await _waiting(engine, bootstrap, admin_id) == (True, True, admin_id), "the waiting administrator must still wait"
     assert await _status(engine, TOKEN_ONE, moment + AFTERWARDS) == TokenStatus.VALID, "its setup link must stay valid"
     print_success("demoted; the waiting administrator untouched")
+
+
+# =============================================================================
+# A51 — LOT A-51: THE SETUP COMPLETED WHILE THE CLI DEACTIVATES OR DEMOTES
+# =============================================================================
+# A-51: ``set_user_active(..., False)`` — the CLI's ``user deactivate`` — and ``set_user_admin(..., False)`` — ``user
+# demote`` — load the account, then decide the last-administrator guard (``_is_last_active_admin``) on what they loaded,
+# while ``_is_pending_admin`` reads the database afresh; pysqlite defers BEGIN to the first write, so nothing holds the
+# account between the load and the decision. On a fresh F02 instance whose only administrator is the waiting one, a
+# setup completed in that window leaves the command deciding on an account still inactive — so not the last active
+# administrator — that no longer waits. The cure (approved by the coordinator, 17/10): the write lock first, the account
+# refreshed, then the guards — refused as the last active administrator, falsy, nothing changed.
+#
+# The window is played without threads, as A42's: the setup — ``complete_admin_setup`` through TOKEN_ONE, another worker
+# serving ``POST /auth/setup`` — commits on another connection right after the command loaded the account
+# (``_rival_after_the_load``: the object it returns keeps what it read, inactive), or right before the command's first
+# write (``_rival_before_the_first_write``, the command on an engine of its own), whichever comes first: whichever order
+# the cure loads the account and takes the lock in, the setup lands before the lock. The calls are the ones the commands
+# make, ``user_service.set_user_active`` and ``user_service.set_user_admin``, on a session of their own; they read the
+# clock, so the scene is dated from it, as A43's.
+
+#: What the refusal of the last-administrator guard names, in the message of ``set_user_active`` and ``set_user_admin``.
+LAST_ADMIN_WORDS = "last active administrator"
+
+#: A command of A-51 on its session — ``user deactivate`` or ``user demote`` of ADMIN_USERNAME —: its ``(success, message)``.
+Command = Callable[[AsyncSession], Awaitable[tuple[bool, Optional[str]]]]
+
+
+def _once(rival: Callable[[], Awaitable[None]]) -> Callable[[], Awaitable[None]]:
+    """``rival`` at its first call only: of the two moments that may run it (A-51), the first lands it."""
+    ran: list[bool] = []
+
+    async def once() -> None:
+        if not ran:
+            ran.append(True)
+            await rival()
+
+    return once
+
+
+def _rival_after_the_load(monkeypatch: pytest.MonkeyPatch, username: str, rival: Callable[[], Awaitable[None]]) -> list[str]:
+    """``user_service.get_user_by_username`` replaced: the real load, in the caller's session, then — for ``username`` — ``rival``, before the loaded object is returned: it keeps what it read, as an ORM object does. The usernames it loaded, in order."""
+    real = user_service.get_user_by_username
+    loaded: list[str] = []
+
+    async def get_user_by_username(session: AsyncSession, name: str) -> Optional[User]:
+        user = await real(session, name)
+        loaded.append(name)
+        if name == username:
+            await rival()
+        return user
+
+    monkeypatch.setattr(user_service, "get_user_by_username", get_user_by_username)
+    return loaded
+
+
+async def _the_command_while_the_setup_completes(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, monkeypatch: pytest.MonkeyPatch, command: Command) -> tuple[tuple[bool, Optional[str]], int, dict[str, list[Any]]]:
+    """A-51's window: a fresh F02 instance — the waiting administrator, created by the bootstrap with TOKEN_ONE an hour ago, its only account and so its only administrator —, then ``command`` on a session of its own engine while the setup completes through TOKEN_ONE, landing after the command's load of the account or before its first write, whichever comes first. ``(what the command answered, the account's id, the database as the setup left it)``.
+
+    Barriers: before, the instance holds that one account, waiting; the setup lands once, during the command.
+    """
+    moment = utcnow()
+    created = await _created(engine, bootstrap, f02, token=TOKEN_ONE, now=moment - HOUR)
+    assert await _accounts(engine) == {ADMIN_USERNAME: (created.user_id, ADMIN_EMAIL, False, True)}, "barrier: a fresh F02 instance — its only account, so its only administrator, the waiting one"
+    assert await _waiting(engine, bootstrap, created.user_id) == (True, True, created.user_id), "barrier: the F02 administrator waits for its setup"
+    landed: Landed = []
+    rival = _once(_setup_completed_meanwhile(engine, bootstrap, TOKEN_ONE, moment, landed))
+    loaded = _rival_after_the_load(monkeypatch, ADMIN_USERNAME, rival)
+
+    async with _issuer_engine(engine) as issuer:
+        with _rival_before_the_first_write(issuer, rival):
+            async with AsyncSession(issuer) as session:
+                outcome = await command(session)
+
+    assert len(landed) == 1, f"barrier: the setup must land once, during the command — after its load of the account, or before its first write: it loaded {loaded}, the setup landed {len(landed)} time(s)"
+    return outcome, created.user_id, landed[0]
+
+
+# red until A-51
+@pytest.mark.asyncio
+async def test_user_deactivate_refuses_the_only_administrator_set_up_while_it_ran(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A51-007 — NEW, red until A-51 (today ``(True, None)``, «deactivated», while the account stays active: the guard read it inactive, as loaded — not the last active administrator —; the command raised its session version, ending the sessions its setup opened, and wrote no ``is_active``, the value it set equal to the stale one it loaded): ``./dev.py user deactivate`` of the waiting administrator — ``set_user_active(session, username, False)`` —, the only administrator of a fresh F02 instance, while its setup completes (``_the_command_while_the_setup_completes``): by the time the command decides, the account is the instance's only active administrator. Refused as the last active administrator — falsy, its message naming the last active administrator —, and nothing changed since the setup: every account, token and setting as it left them — the administrator active, an administrator, its session version, so its sessions alive."""
+    print_section("A51-007: user deactivate, the setup completed while it ran")
+    outcome, user_id, set_up = await _the_command_while_the_setup_completes(engine, bootstrap, f02, monkeypatch, lambda session: user_service.set_user_active(session, ADMIN_USERNAME, False))
+
+    after = await _account(engine, user_id)
+    version = next(row["session_version"] for row in set_up["users"] if row["id"] == user_id)
+    afterwards = f"active {after.is_active}, an administrator {after.is_superuser}, session version {version} → {after.session_version}"
+    assert outcome[0] is False and LAST_ADMIN_WORDS in str(outcome[1]), f"red until A-51: set up before it decided, the account was the only active administrator: user deactivate must refuse it as the last one; it answered {outcome!r}, the account afterwards {afterwards}"
+    assert await _snapshot(engine) == set_up, "a refused deactivation must change nothing: every account, token and setting as the setup left them"
+    assert (after.is_active, after.is_superuser) == (True, True), "the administrator must stay active, an administrator"
+    print_success("refused: the last active administrator; nothing changed")
+
+
+# red until A-51
+@pytest.mark.asyncio
+async def test_user_demote_refuses_the_only_administrator_set_up_while_it_ran(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A51-008 — NEW, red until A-51 (today ``(True, None)`` and the instance left without an administrator: the guard read the account inactive, as loaded — not the last active administrator —, ``_is_pending_admin`` read afresh that it waits no more, and the only active administrator is demoted): ``./dev.py user demote`` of the waiting administrator — ``set_user_admin(session, username, False)`` —, the only administrator of a fresh F02 instance, while its setup completes (``_the_command_while_the_setup_completes``). Refused as the last active administrator — falsy, its message naming the last active administrator —, and nothing changed since the setup: every account, token and setting as it left them — the account active and an administrator, its session version, so its sessions alive."""
+    print_section("A51-008: user demote, the setup completed while it ran")
+    outcome, user_id, set_up = await _the_command_while_the_setup_completes(engine, bootstrap, f02, monkeypatch, lambda session: user_service.set_user_admin(session, ADMIN_USERNAME, False))
+
+    after = await _account(engine, user_id)
+    version = next(row["session_version"] for row in set_up["users"] if row["id"] == user_id)
+    afterwards = f"active {after.is_active}, an administrator {after.is_superuser}, session version {version} → {after.session_version}"
+    assert outcome[0] is False and LAST_ADMIN_WORDS in str(outcome[1]), f"red until A-51: set up before it decided, the account was the only active administrator: user demote must refuse it as the last one; it answered {outcome!r}, the account afterwards {afterwards}"
+    assert await _snapshot(engine) == set_up, "a refused demotion must change nothing: every account, token and setting as the setup left them"
+    assert (after.is_active, after.is_superuser) == (True, True), "the account must stay active, an administrator"
+    print_success("refused: the last active administrator; nothing changed")
 
 
 # =============================================================================

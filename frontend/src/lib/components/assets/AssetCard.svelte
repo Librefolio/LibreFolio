@@ -47,9 +47,9 @@
         livePrice?: number | null;
         /** Direction of last price change (for flash animation) */
         livePriceDirection?: LivePriceDirection;
-        /** Delta percent (first vs last in range — from chart data) */
+        /** Δ over the range on screen, in percent: the backend's (X-R59), null where it has none */
         deltaPercent?: number | null;
-        /** Delta absolute (from chart data) */
+        /** Δ over the range on screen, absolute, in the asset's currency: the backend's (X-R59) */
         deltaAbs?: number | null;
         /** Date range start (passed to detail page on navigation) */
         dateStart?: string;
@@ -228,13 +228,13 @@
             <span class="text-xs text-lf-muted emoji-flag">{currencyFlag(asset.currency)}</span>
             <span class="text-xs text-lf-muted">{asset.currency}</span>
             {#if cardViewMode === 'absolute' && deltaAbs !== null}
-                <span class="text-sm font-medium {deltaAbs >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
+                <span class="text-sm font-medium {deltaAbs >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="asset-range-delta" data-mode="absolute">
                     {deltaAbs >= 0 ? '▲' : '▼'}
                     {formatFixed(Number(deltaAbs), 2, {signed: true})}
                     {asset.currency}
                 </span>
             {:else if deltaPercent !== null}
-                <span class="text-sm font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
+                <span class="text-sm font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="asset-range-delta" data-mode="percentage">
                     {deltaPercent >= 0 ? '▲' : '▼'}
                     {formatPercent(Number(deltaPercent))}
                 </span>

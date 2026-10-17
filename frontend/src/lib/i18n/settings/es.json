@@ -315,7 +315,8 @@
         "INVALID_INPUT": "Revisa lo que has introducido: puede que la dirección de correo no sea válida.",
         "generic": "La acción ha fallado. Inténtalo de nuevo.",
         "load": "No se han podido cargar las cuentas.",
-        "PENDING_SETUP": "Este administrador espera su configuración: no se puede reactivar ni degradar desde aquí."
+        "PENDING_SETUP": "Este administrador espera su configuración: no se puede reactivar ni degradar desde aquí.",
+        "SETUP_COMPLETED": "Este administrador completó su configuración mientras tanto: no se ha cambiado nada."
       },
       "invite": {
         "button": "Invitar",

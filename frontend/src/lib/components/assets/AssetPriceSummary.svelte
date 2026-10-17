@@ -108,14 +108,14 @@
                     </Tooltip>
                 {/if}
                 {#if deltaAbs !== null}
-                    <span class="text-xs text-lf-muted">
+                    <span class="text-xs text-lf-muted" data-testid="asset-price-summary-range-delta-abs">
                         ({formatFixed(deltaAbs, 2, {signed: true})})
                     </span>
                 {/if}
             </div>
 
             {#if deltaPercent !== null}
-                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
+                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="asset-price-summary-range-delta">
                     {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
                     {formatPercent(deltaPercent)}
                 </span>

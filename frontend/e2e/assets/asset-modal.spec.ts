@@ -653,7 +653,7 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             // lies in the past, whereas a foreign write-back can only ever create today's
             // row. That is why the wipe is asserted through `inventedDates()` and never
             // through `countPrices()`.
-            await page.route('**/api/v1/assets/prices/current', async (route) => {
+            await page.route('**/api/v1/assets/prices/current*', async (route) => {
                 await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({results: [], success_count: 0, errors: []})});
             });
 
