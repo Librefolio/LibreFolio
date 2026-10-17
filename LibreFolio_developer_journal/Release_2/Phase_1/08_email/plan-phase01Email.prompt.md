@@ -3945,6 +3945,22 @@ Se arriva il via a (b) e (c):
 > - `BACKLOG`: gli hunk di dev sono fuori dalla sezione E;
 > - `devWiki/log.md`: due aggiunte in coda, da risolvere per unione.
 
+> **E-9 committato** (coordinatore, 01:34):
+> - `3dd23eaa4` (fix: codice, test, `auth.py`, `_backend_api.py` col `print_info`, approvato), `bb392de35` (docs),
+>   `7fc549fea` (journal);
+> - base aggiornata: merge di dev `b36e3873f`, con A7b e X-R35, pulito; HEAD `169a9d798`.
+>
+> **Validazione combinata** ✅ (01:35–01:50, `files/tools/e9_combined.sh`, carico sotto 50, una alla volta):
+> - `services email-*`: 124, 329, 149, 127, 32, 74, 87, 144, 67;
+> - `api`: `email` 158, `email-verification` 49, `email-verification-hooks` 16, `email-change-notice` 14, `profile` 28,
+>   `auth` 95;
+> - `schemas openapi-client-text` 78; `api sync`;
+> - `mkdocs build` stretto con 0 avvisi; `check-links` 97;
+> - worktree pulito, porta libera.
+>
+> **E-9 entrato in dev** (`49c07a95a`; la riga 🔒 del CHANGELOG in `3a5ff5194`). `_usable_base` resta com'è (OK del
+> coordinatore).
+
 ### E-11 — «Send the link again» su un'istanza bloccata
 
 #### E-11.0 — Analisi ✅ (2026-10-17, 01:15–01:25, in sola lettura su `dev_release2` `3e5336a0a`)
@@ -3997,3 +4013,81 @@ il testo inglese.
 - i Vitest di `features/email`;
 - `front check`, `i18n check`, `api sync`;
 - `mkdocs build` stretto.
+
+#### E-11.1 — Rossi ✅ (2026-10-17, 01:5x–02:07)
+> **Il via del coordinatore** (01:5x), sulla mia base `169a9d798`, che ha dentro A7b. Il `desc` di `email-verification`
+> nel catalogo condiviso (`_backend_api.py:1109`) va in questo lotto, col suo via; la nota su `instance_block.py`, che
+> non nomina `resend`, va ad H.
+>
+> **Rossi scritti** (`test-author`, 01:53–02:05; l'agente ha eseguito solo `py_compile`, `ruff`, `black` e `prettier`,
+> tutti puliti):
+> - `test_email_verification_api.py`:
+>   - EVA-006 riscritto: il 401 codificato, uguale per un account sconosciuto e una password sbagliata;
+>   - EVA-014: le due righe riscritte;
+>   - **EVA-017** nuovo, una guardia: `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`, con due controlli contro un
+>     verde a vuoto;
+>   - il contratto 6 dice che il modulo non monta la dipendenza del blocco.
+> - `verificationApi.test.ts`:
+>   - VFA-08 riscritto: il 401 codificato dà `INVALID_CREDENTIALS`;
+>   - **VFA-23**: ogni altro 401 dà `INSTANCE_BLOCKED`, su 12 corpi × 2 tipi d'errore;
+>   - **VFA-24**: il 423 `instance_blocked`;
+>   - **VFA-25**, una guardia: un 423 senza il codice, e il corpo del blocco su 403 o 500, danno `UNKNOWN`;
+>   - **VFA-26**: col client vero.
+> - `emailText.test.ts`: la riga `INSTANCE_BLOCKED` → `auth.instanceBlocked` (ETX-09 ed ETX-10).
+> - `VerificationNotice.test.ts`:
+>   - VNT-05 e VNT-06 usano il 401 codificato;
+>   - **VNT-08**: un 401 nudo mostra `auth.instanceBlocked`, l'evento porta `INSTANCE_BLOCKED` e il pulsante resta
+>     acceso.
+>
+> **Rossi visti** ✅ (02:06–02:07, `files/tools/e11_checks.sh reds`):
+> - `api email-verification`: **6 falliti** e 44 passati (EVA-006 ×4, EVA-014 ×2), perché la rotta risponde ancora
+>   con la stringa;
+> - Vitest sui 3 file: **32 falliti** e 427 passati (VFA-23 ×24, VFA-24 ×4, VFA-26 ×2, ETX-09, VNT-08).
+>
+> I 38 previsti dall'agente, tutti per la ragione giusta: il lettore dà `INVALID_CREDENTIALS` a ogni 401 e `UNKNOWN`
+> al 423, e il testo non ha il caso `INSTANCE_BLOCKED`.
+
+#### E-11.2 — Cura e docs ✅ (2026-10-17, 02:07–02:2x)
+> **Cura** (02:07, `files/e9/e11_cure.py --apply`, 5 modifiche in 3 file, dry run pulito prima):
+> - `api/v1/email.py`: il 401 della rotta diventa `{"error_code": "INVALID_CREDENTIALS", "message": "Invalid
+>   credentials"}`. La docstring lo dice, e dice che ogni altro 401 di questa rotta pubblica è del blocco (E-11).
+> - `features/email/verificationApi.ts`, `readResendFailure()`:
+>   - un 401 col codice dà `INVALID_CREDENTIALS`;
+>   - ogni altro 401, o il 423 che `isInstanceBlockedError()` riconosce, dà `INSTANCE_BLOCKED`, come oggetto
+>     `{errorCode}` esatto, senza `retryAfter`, come chiedono VFA-08 e VFA-23.
+> - `features/email/emailText.ts`: `INSTANCE_BLOCKED` → `auth.instanceBlocked`, la chiave di A7b; nessuna chiave nuova.
+> - Nessun `.svelte` toccato.
+>
+> **Col via del coordinatore**: il `desc` di `email-verification` nel catalogo condiviso
+> (`scripts/test_runner/_backend_api.py:1109`): «401 INVALID_CREDENTIALS (coded: any other 401 is the block's) and 403
+> byte for byte the login's».
+>
+> **Docs** (`docs-writer`, 02:12–02:20):
+> - `developer/backend/email.md`:
+>   - la tabella delle risposte di «resend», col 401 codificato e un paragrafo sul 401 del blocco;
+>   - la sezione frontend: `readResendFailure()`, `resendFailureMessage()` e `VerificationNotice` su un'istanza
+>     bloccata;
+>   - «Testing»: EVA-001…017, VFA-01…26, VNT-01…08.
+> - `admin/email.en.md`: il punto dell'istanza bloccata dice cosa mostra «Send the link again».
+> - Corretti per strada, perché la doc contraddiceva il codice:
+>   - la riga 502 di «resend» citava `smtp_code`, che la rotta non manda;
+>   - la pagina admin dava un testo vecchio per la registrazione su un'istanza bloccata, mentre il codice mostra
+>     `auth.instanceBlocked`, come dopo A-13.
+> - Fuori dai miei file, per H: la riga «Public routes outside the list» di `security.md` (Instance Block) non nomina
+>   le rotte email, come la docstring di `instance_block.py`.
+
+#### E-11.3 — Verdi ✅ (2026-10-17, 02:08–02:37)
+> **Verdi** (`files/tools/e11_checks.sh greens`, una alla volta, carico sotto 50; dalle 02:11 alle 02:29 in pausa per
+> il freeze della galleria, a carico 109–184):
+> - `api email-verification` 50; `api email` 158;
+> - Vitest sui 3 file 459, e su tutto `features/email` 837 in 12 file;
+> - `ruff`, `black` e `prettier` puliti;
+> - `api sync`; `schemas openapi-client-text` 78;
+> - `i18n check` stretto, 4938 chiavi;
+> - `front check`: 0 errori e 0 avvisi;
+> - `git diff --check` pulito, porta 6188 libera.
+>
+> **Docs** (`files/tools/e11_docs.sh`, 02:37–02:49, dopo l'attesa del carico): `mkdocs build` stretto con 0
+> WARNING; `check-links` 97 validi; `git diff --check` pulito; porta 6188 libera.
+>
+> **Checkpoint mandato al coordinatore** (02:5x). FROZEN.

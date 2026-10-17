@@ -812,6 +812,10 @@ describe('AI Export compact Snapshot Data renderer', () => {
      * stays the literal `null` the format preamble declares (`null=explicitly unavailable`): never `0`,
      * never YAML. Versions the renderer does not know keep falling back to YAML. No prompt wording is
      * frozen: texts are placeholders and cells are read by column header.
+     *
+     * MF-E1 (T-B8): `portfolio.fifo_summary`/`broker.fifo_summary` 2 → 3 — an asset's open value and
+     * unrealized P&L sum the same open lots, those valued in full — with the same schema-1 payload shape,
+     * so v3 renders compactly too, as the very same text as its v1.
      */
     describe('unknown lot amounts (B3b)', () => {
         type FifoLotsId = 'portfolio.fifo_lots' | 'broker.fifo_lots';
@@ -1207,6 +1211,9 @@ describe('AI Export compact Snapshot Data renderer', () => {
             ['portfolio.fifo_summary', 2],
             ['broker.fifo_summary', 1],
             ['broker.fifo_summary', 2],
+            // MF-E1 (T-B8): the market totals sum the lots valued in full. Before MF-E1: v3 fell back to YAML.
+            ['portfolio.fifo_summary', 3],
+            ['broker.fifo_summary', 3],
         ] as const)('renders %s v%i (schema 1) compactly, an unknown asset amount and total as null', (componentId, version) => {
             const rendered = render(componentId, version);
 
@@ -1230,6 +1237,9 @@ describe('AI Export compact Snapshot Data renderer', () => {
             ['broker.fifo_lots', 2],
             ['portfolio.fifo_summary', 2],
             ['broker.fifo_summary', 2],
+            // MF-E1 (T-B8). Before MF-E1: v3 fell back to YAML (the renderer knew v1 and v2 only).
+            ['portfolio.fifo_summary', 3],
+            ['broker.fifo_summary', 3],
         ] as const)('renders %s v%i (schema 1) as the very same text as its v1', (componentId, version) => {
             const v1 = render(componentId, 1).content;
             const bumped = render(componentId, version).content;
@@ -1245,7 +1255,8 @@ describe('AI Export compact Snapshot Data renderer', () => {
         it.each([
             ['asset.lot_detail v4', 'asset.lot_detail', 4, 1],
             ['portfolio.fifo_lots v3', 'portfolio.fifo_lots', 3, 1],
-            ['broker.fifo_summary v3', 'broker.fifo_summary', 3, 1],
+            // Before MF-E1 this was v3, the first version the renderer did not know.
+            ['broker.fifo_summary v4', 'broker.fifo_summary', 4, 1],
             ['asset.lot_detail v3 with schema 2', 'asset.lot_detail', 3, 2],
         ] as const)('still falls back to YAML for %s', (_label, componentId, version, schemaVersion) => {
             const rendered = render(componentId, version, {schemaVersion}).content;

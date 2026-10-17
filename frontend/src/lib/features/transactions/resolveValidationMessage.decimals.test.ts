@@ -31,6 +31,17 @@
  *
  * Registered in `scripts/test_runner/_frontend_utility.py`, in the Vitest list of `front_utility_unit` (action
  * `core-unit`), next to `resolveValidationMessage.test.ts`.
+ *
+ * R13-SEC2 (W-B58, E's security review of 17/10; the limits of the coordinator's decision N63). A third code of a value
+ * over its column's limit: past the digits the column keeps before the decimal point, the batch answers
+ * `{code: 'integerDigitsExceeded', params: {max}, field}` — `max` 15 for a quantity and a cash amount, 12 for a per-unit
+ * cost basis. The catalogue gains `transactions.errors.integerDigitsExceeded` (EN «At most {max} digits before the
+ * decimal point», IT «Al massimo {max} cifre prima della virgola», FR «Au maximum {max} chiffres avant la virgule», ES
+ * «Como máximo {max} cifras en la parte entera»), and the code joins `FIELD_PREFIXED_CODES`: the label goes in front,
+ * «Quantity: At most 15 digits before the decimal point», «Cost basis override: At most 12 digits before the decimal
+ * point». The same two halves, reds today: the resolver with the faked catalogue (today the text comes back without its
+ * label), and the app's catalogue in English and Italian (today the key is missing, and the backend's English `error`
+ * comes back behind the label); the French and Spanish texts of the catalogue too.
  */
 import {afterEach, beforeAll, describe, expect, it} from 'vitest';
 import {get} from 'svelte/store';
@@ -155,5 +166,102 @@ describe('C-97a — the app catalogue: «label: text» in English and in Italian
         expect(type, 'control: the type has a name in the catalogue').not.toBe('transactions.types.TRANSFER');
 
         expect(resolveIssueMessage(COST_BASIS_REQUIRED, t)).toBe(t(key, {values: {type}}));
+    });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// R13-SEC2 — integerDigitsExceeded (decision N63: 15 for a quantity and a cash amount, 12 for a per-unit cost basis)
+// ---------------------------------------------------------------------------------------------------------------------
+
+type Speech = 'en' | 'it' | 'fr' | 'es';
+
+/** The `max` the backend sends with `integerDigitsExceeded`: `max_integer_digits` of the field's column (N63). */
+const INTEGER_MAX: Record<DecimalField, number> = {quantity: 15, 'cash.amount': 15, cost_basis_override: 12};
+
+/** Every field with its integer `max`. */
+const INTEGER_CASES = FIELDS.map((field) => ({field, max: INTEGER_MAX[field]}));
+
+/** The contract's texts of `transactions.errors.integerDigitsExceeded`, `{max}` filled in. */
+const INTEGER_TEXT: Record<Speech, (max: number) => string> = {
+    en: (max) => `At most ${max} digits before the decimal point`,
+    it: (max) => `Al massimo ${max} cifre prima della virgola`,
+    fr: (max) => `Au maximum ${max} chiffres avant la virgule`,
+    es: (max) => `Como máximo ${max} cifras en la parte entera`,
+};
+
+/** The C-97a text of `decimalPlacesExceeded` with max 10, per language: proves the language switched (that key exists). */
+const DECIMALS_10: Record<Speech, string> = {
+    en: 'At most 10 decimal places',
+    it: 'Al massimo 10 decimali',
+    fr: 'Au maximum 10 décimales',
+    es: 'Como máximo 10 decimales',
+};
+
+/** The issue `check_decimal_limits` writes past the integer digits: its English `error` names the field, and differs from the catalogue's text. */
+function integerIssue(field: DecimalField): ResolvableIssue {
+    const max = INTEGER_MAX[field];
+    return {operation: 'create', code: 'integerDigitsExceeded', params: {max}, field, error: `${field} has more than ${max} integer digits`};
+}
+
+describe('R13-SEC2 — the resolver puts the field label in front of integerDigitsExceeded (catalogue faked)', () => {
+    const t = makeT({
+        'transactions.errors.integerDigitsExceeded': 'At most {max} digits before the decimal point',
+        [labelKey('quantity')]: EN_LABEL.quantity,
+        [labelKey('cash.amount')]: EN_LABEL['cash.amount'],
+        [labelKey('cost_basis_override')]: EN_LABEL.cost_basis_override,
+    });
+
+    // Red today: integerDigitsExceeded is not in FIELD_PREFIXED_CODES, so its text comes back without the label.
+    it.each(INTEGER_CASES)('integerDigitsExceeded on $field reads «label: At most $max digits before the decimal point»', ({field, max}) => {
+        expect(resolveIssueMessage(integerIssue(field), t)).toBe(`${EN_LABEL[field]}: ${INTEGER_TEXT.en(max)}`);
+    });
+});
+
+describe('R13-SEC2 — the app catalogue: integerDigitsExceeded reads «label: text» in every language', () => {
+    /** Switches the UI language as LanguageSelector does, and answers the app's translate function in it. */
+    async function speak(lang: Speech): Promise<Translate> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        return get(_);
+    }
+
+    beforeAll(async () => {
+        init({fallbackLocale: 'en', initialLocale: 'en'});
+        await waitLocale('en');
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await speak('en');
+    });
+
+    // Red today: the key is missing, so the backend's English `error` comes back behind the label.
+    it.each(INTEGER_CASES)('English: integerDigitsExceeded on $field reads «label: At most $max digits before the decimal point»', async ({field, max}) => {
+        const t = await speak('en');
+        expect(t(labelKey(field)), 'control: the catalogue labels the field as the contract names it').toBe(EN_LABEL[field]);
+
+        expect(resolveIssueMessage(integerIssue(field), t)).toBe(`${EN_LABEL[field]}: ${INTEGER_TEXT.en(max)}`);
+    });
+
+    // Red today: as in English.
+    it.each(INTEGER_CASES)('Italian: integerDigitsExceeded on $field reads «etichetta: Al massimo $max cifre prima della virgola»', async ({field, max}) => {
+        const t = await speak('it');
+        const label = t(labelKey(field));
+        expect(label, 'control: the field has a label in the catalogue').not.toBe(labelKey(field));
+        expect(label, 'control: the language switched, the Italian label is not the English one').not.toBe(EN_LABEL[field]);
+
+        expect(resolveIssueMessage(integerIssue(field), t)).toBe(`${label}: ${INTEGER_TEXT.it(max)}`);
+    });
+
+    // Red today: the key is missing in French and Spanish too.
+    it.each(['fr', 'es'] as const)('%s: integerDigitsExceeded reads «label: text» on every field', async (lang) => {
+        const t = await speak(lang);
+        expect(t('transactions.errors.decimalPlacesExceeded', {values: {max: 10}}), 'control: the language switched (a C-97a text of the catalogue)').toBe(DECIMALS_10[lang]);
+
+        for (const {field, max} of INTEGER_CASES) {
+            const label = t(labelKey(field));
+            expect(label, `control: ${field} has a label in the catalogue`).not.toBe(labelKey(field));
+            expect(resolveIssueMessage(integerIssue(field), t), `${lang}, ${field}`).toBe(`${label}: ${INTEGER_TEXT[lang](max)}`);
+        }
     });
 });

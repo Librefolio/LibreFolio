@@ -48,11 +48,11 @@ from backend.app.services.financial_math.lots.histories import (
     trim_dates,
 )
 from backend.app.services.financial_math.lots.prices import last_day_without_observation, opening_reference_price
+from backend.app.services.financial_math.lots.summary import lot_summary_figures
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, MarkSource, build_asset_price_series
-from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.financial_math.splits import load_split_links
-from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
+from backend.app.services.financial_math.valuation import normalize_quote_base_quantity
 
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,
@@ -752,63 +752,29 @@ class LotsAnalysisService:
             asset_income = None if lot_id in withheld.income_from else income_by_lot.get(lot_id, Decimal("0"))
             allocated_fees = None if lot_id in withheld.fees_from else fees_by_lot.get(lot_id, Decimal("0"))
             allocated_taxes = None if lot_id in withheld.taxes_from else taxes_by_lot.get(lot_id, Decimal("0"))
-            # Every figure reads converted amounts only: a missing rate leaves it unknown,
-            # never computed from the native cost, proceeds, realized P&L, income or costs.
-            opening_value = converted_original_cost
-            open_value = total_value = pnl = relative_return = None
-            market_pnl: Decimal | None = None
-            value_source: str | None = None
-            if latest_market_price is not None:
-                value_source = "MARKET_PRICE"
-                open_value = compute_holding_value(lot.open_quantity, latest_market_price, quote_base_quantity)
-                if known_proceeds is not None:
-                    if lot.direction == "LONG":
-                        total_value = open_value + known_proceeds
-                        pnl = total_value - opening_value if opening_value is not None else None
-                    elif known_buybacks is not None:
-                        total_value = known_proceeds - known_buybacks - open_value
-                        pnl = total_value
-                if pnl is not None and lot_realized_pnl is not None:
-                    market_pnl = pnl - lot_realized_pnl
-                if reference_unit_price not in (None, Decimal("0")):
-                    relative_return = (latest_market_price / reference_unit_price) - Decimal("1")
-            elif estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0") and opening_value is not None:
-                # No current price: value the open portion at cost. Market P&L is 0 until a real price exists.
-                value_source = "ESTIMATED_AT_COST"
-                open_value = opening_value * lot.open_quantity / lot.original_quantity
-                market_pnl = Decimal("0")
-                if known_proceeds is not None:
-                    total_value = open_value + known_proceeds
-                    pnl = total_value - opening_value
-            total_pnl = None
-            if market_pnl is not None and lot_realized_pnl is not None and asset_income is not None:
-                total_pnl = market_pnl + lot_realized_pnl + asset_income
-            cash_yield = None
-            total_return = None
-            if opening_value is not None and opening_value > Decimal("0"):
-                cash_yield = asset_income / opening_value if asset_income is not None else None
-                if total_pnl is not None:
-                    total_return = total_pnl / opening_value
-            net_total_pnl = None
-            net_total_return = None
-            if total_pnl is not None and allocated_fees is not None and allocated_taxes is not None:
-                net_total_pnl = total_pnl - allocated_fees - allocated_taxes
-                if opening_value is not None and opening_value > Decimal("0"):
-                    net_total_return = net_total_pnl / opening_value
             closing_date = None
             if lot.open_quantity == Decimal("0"):
                 lot_closures = closures_by_lot.get(lot_id, [])
                 if lot_closures:
                     closing_date = max(closure.close_date for closure in lot_closures)
-            # Annualize the NET total return (income - fees - taxes) over the lot's
-            # live window so short- and long-held lots become comparable: end =
-            # closing_date for a fully closed lot, else the analysis end date (open
-            # lots run to "now"). Uses net_total_return (not gross) per the product
-            # rule that the annualized figure must be net of income and costs.
-            annualized_return = None
-            if net_total_return is not None:
-                lot_end = closing_date if closing_date is not None else analysis_end
-                annualized_return = cumulative_to_annualized(net_total_return, (lot_end - lot.opening_date).days)
+            # Every figure reads converted amounts only (financial_math.lots.summary): a missing rate leaves it
+            # unknown, never computed from the native cost, proceeds, realized P&L, income or costs.
+            figures = lot_summary_figures(
+                lot=lot,
+                original_cost=converted_original_cost,
+                known_proceeds=known_proceeds,
+                known_buybacks=known_buybacks,
+                realized_pnl=lot_realized_pnl,
+                latest_market_price=latest_market_price,
+                reference_unit_price=reference_unit_price,
+                income=asset_income,
+                fees=allocated_fees,
+                taxes=allocated_taxes,
+                estimated_mode=estimated_mode,
+                quote_base_quantity=quote_base_quantity,
+                closing_date=closing_date,
+                analysis_end=analysis_end,
+            )
             out.append(
                 LotSummarySchema(
                     lot_id=lot.lot_id,
@@ -831,21 +797,21 @@ class LotsAnalysisService:
                     reference_price_source=reference_price_source if reference_unit_price is not None else None,
                     states=sorted(engine_result.get_lot_states(lot_id)),
                     current_custody=current_custody,
-                    open_value=open_value,
-                    total_value=total_value,
-                    pnl=pnl,
-                    relative_return=relative_return,
+                    open_value=figures.open_value,
+                    total_value=figures.total_value,
+                    pnl=figures.pnl,
+                    relative_return=figures.relative_return,
                     asset_income=asset_income,
-                    market_pnl=market_pnl,
-                    total_pnl=total_pnl,
-                    cash_yield=cash_yield,
-                    total_return=total_return,
-                    annualized_return=annualized_return,
-                    value_source=value_source,
+                    market_pnl=figures.market_pnl,
+                    total_pnl=figures.total_pnl,
+                    cash_yield=figures.cash_yield,
+                    total_return=figures.total_return,
+                    annualized_return=figures.annualized_return,
+                    value_source=figures.value_source,
                     allocated_fees=allocated_fees,
                     allocated_taxes=allocated_taxes,
-                    net_total_pnl=net_total_pnl,
-                    net_total_return=net_total_return,
+                    net_total_pnl=figures.net_total_pnl,
+                    net_total_return=figures.net_total_return,
                     net_metrics_status="UNAVAILABLE" if withheld.reaches(lot_id) else "AVAILABLE",
                 )
             )
@@ -911,7 +877,10 @@ class LotsAnalysisService:
                 if lot_id not in selected:
                     continue
                 # The opening price is in the lot's currency: a BUY's own, the cost basis's for a priced ADJUSTMENT.
-                converted_unit_price = fx_resolver.convert(event.unit_price, lots_by_id[lot_id].currency, event.date)
+                lot = lots_by_id[lot_id]
+                converted_unit_price = fx_resolver.convert(event.unit_price, lot.currency, event.date)
+                # V11: the value the lot opened at, the summary's original cost, in the same currency as the price.
+                opening_value = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
                 rows.append(
                     LotTimelineEventSchema(
                         lot_id=lot_id,
@@ -930,6 +899,7 @@ class LotsAnalysisService:
                         realized_pnl=None,
                         proceeds=None,
                         ratio=event.ratio,
+                        opening_value=opening_value,
                     )
                 )
             elif event.kind == "SPLIT":

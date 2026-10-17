@@ -16,6 +16,7 @@ The service keeps the orchestration (`get_lots_analysis()`), the database loader
 | `conversions.py` | `FxRateResolver`; `convert_closure()` → `ConvertedClosure`, a closure's two legs each in its own currency at its own date, and `need_closure_rates()`, the two rates it reads (see [Closures: each leg at its own date](#closure-conversion)); the conversions each view needs: `collect_fx_needs()`, `collect_performance_fx_needs()`, `needs_market_series()`, `unconvertible_ids()` |
 | `economic_events.py` | The engine's income and FEE/TAX inputs (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`), their outputs (`extract_income_outputs()`, `extract_cost_outputs()`), `WithheldEconomics` / `withheld_economics()` and `map_economic_groups()` |
 | `histories.py` | The value, return, price and performance histories (`build_value_history()`, `build_return_history()`, `build_price_history()`, `build_performance_history()`) with their per-day snapshot helpers, `lot_history_end_date()`, `trim_dates()`, `known_realized_pnl()`, `known_cumulative_proceeds()` |
+| `summary.py` | A lot's figures, read by the lot summary and the histories: `residual_cost()`, the original cost of the quantity still open (also the AI Export's `lot_residual_cost_basis()`); `lot_value()`, a lot's total value and P&L by direction; `lot_summary_figures()` → `LotSummaryFigures`, the lot summary's computed figures from its converted inputs — `_build_lot_summaries()` gathers those inputs and maps the result |
 | `average_cost_lines.py` | `ALL_BROKERS`, and the broker and cumulative WAC history points (`build_broker_wac_history()`, `build_cumulative_wac_history()`, `average_cost_points()`) |
 
 `FxRateResolver.load()` is the package's only async step and its only I/O: one `convert_bulk()` call for the rates registered since the previous load. The FIFO replay is in `financial_math/fifo/` ([FIFO Lot Engine](fifo_lot_engine.md)), the daily marks in `financial_math/price_marks.py` ([Price Resolver](price_resolver.md)). The functions of `lots/` and the service's sync builders are tested by `./dev.py test services lots-analysis-pure`.
@@ -142,7 +143,7 @@ Service converts:
 
 - lot opening cost and opening unit price
 - each selected lot's reference price, from its currency at the lot's opening date (see [Reference Price](#reference-price))
-- event-history opening rows (`BUY` / `ADJUSTMENT_IN`, `_build_opening_and_split_rows()`): the opening unit price, from the **lot's** currency at the opening date — a `BUY`'s own currency, the cost basis's for an `ADJUSTMENT_IN` priced by its `cost_basis_override` (see `FifoLot.currency` in [FIFO Lot Engine](fifo_lot_engine.md)); for these rows `collect_fx_needs()` registers the lot's currency on every opening event
+- event-history opening rows (`BUY` / `ADJUSTMENT_IN`, `_build_opening_and_split_rows()`): the opening unit price, from the **lot's** currency at the opening date — a `BUY`'s own currency, the cost basis's for an `ADJUSTMENT_IN` priced by its `cost_basis_override` (see `FifoLot.currency` in [FIFO Lot Engine](fifo_lot_engine.md)); and `opening_value`, the lot's original cost at the opening date — the summary's `original_cost`, in the currency of `unit_price`; for these rows `collect_fx_needs()` registers the lot's currency on every opening event
 - closures, through `convert_closure()` alone: each leg in its own currency at its own date — the lot's side at the lot's opening date, the closing side at the closure date — an `ADJUSTMENT_OUT`'s value handed over at cost included (see [Closures: each leg at its own date](#closure-conversion))
 - Gantt fragment unit prices
 - native resolver marks from `build_asset_price_series()`
@@ -228,8 +229,9 @@ The native placeholder therefore never reaches the response.
 
     The analysis fixes this in two places:
 
-    - **Valuation path**: the service's `_build_lot_summaries()` and the `financial_math/lots/histories.py`
-      functions `build_value_history()`, `build_return_history()` and `build_performance_history()` call
+    - **Valuation path**: `lot_summary_figures()` (`financial_math/lots/summary.py`, the lot summary) and the
+      `financial_math/lots/histories.py` functions `build_value_history()`, `build_return_history()` and
+      `build_performance_history()` call
       `compute_holding_value(..., quote_base_quantity)` so `open_value = (qty / qbq) * price`.
     - **Reference-price fallback path**: `opening_reference_price()` (`financial_math/lots/prices.py`)
       multiplies `lot.opening_unit_price * quote_base_quantity` when the lot has no market reference:
@@ -346,7 +348,7 @@ derived only when they can be meaningful:
 
 ```text
 net_total_pnl    = total_pnl - allocated_fees - allocated_taxes          # total_pnl INCLUDES income
-net_total_return = net_total_pnl / opening_value       (opening_value > 0)
+net_total_return = net_total_pnl / original_cost       (original_cost > 0)
 ```
 
 History builders expose their own net lines: `build_value_history()` emits
@@ -406,10 +408,10 @@ In the value and return histories, `_lot_snapshot_on_date()` (`financial_math/lo
 
 The return history has no `relative_return` on an `at_cost` day. An asset first priced after a lot opened by an adjustment therefore shows that lot at cost — a flat value line, no market P&L — from its opening to the day before the first quote, `BUY` or `SELL`, then at the mark.
 
-In the summary, `estimated_mode` values the remaining quantity of a LONG lot at residual cost, provided the cost itself converts (`opening_value`, the original cost converted at the opening date, is not `None`; otherwise the lot is not valued):
+In the summary (`lot_summary_figures()`), `estimated_mode` values the remaining quantity of a LONG lot at residual cost, provided the cost itself converts (`original_cost`, converted at the opening date, is not `None`; otherwise the lot is not valued):
 
 ```python
-open_value = opening_value * lot.open_quantity / lot.original_quantity
+open_value = residual_cost(original_cost, lot.open_quantity, lot.original_quantity)
 value_source = "ESTIMATED_AT_COST"
 market_pnl = Decimal("0")
 ```
