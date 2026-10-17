@@ -9,10 +9,15 @@ import pytest
 from backend.app.config import get_data_dir, is_test_mode
 from backend.test_scripts import test_aiosqlite_guard as aiosqlite_guard
 
-# The limit on failed sign-ins (F15) counts per process: the in-process apps of many files share one pytest process,
-# and the suites sign in wrongly on purpose. Off for every test process, as dev.py does for the lane's server; the
-# limit's own tests turn it on with monkeypatch, on limiters of their own. An explicit value still wins.
-os.environ.setdefault("LIBREFOLIO_LOGIN_LIMIT", "off")
+# The limit on failed sign-ins (F15) counts per process: the in-process apps of many files share one pytest process
+# and its limiters, and the suites sign in wrongly on purpose. So it is off in every test process, as dev.py makes it
+# for the lane's server: set once here, at import, for the code that runs before any fixture. Once is not enough:
+# configure_test_runtime(), reached at import by setup_test_database() and its siblings, drops every LIBREFOLIO_* name
+# the lane does not keep, this one included, at collection (lot E-15). Hence restore_login_limit, which puts the
+# session's value back before each test that finds it missing. An explicit value still wins: setdefault keeps it.
+# The limit's own tests turn it on, or remove it, after that fixture: their autouse fixtures and monkeypatch run later.
+_LOGIN_LIMIT_VARIABLE = "LIBREFOLIO_LOGIN_LIMIT"
+_SESSION_LOGIN_LIMIT = os.environ.setdefault(_LOGIN_LIMIT_VARIABLE, "off")
 
 # Matches PRAGMA busy_timeout=30000 in backend/app/db/session.py: this fixture
 # competes for the same write lock as the app, so it waits as long as the app.
@@ -113,6 +118,21 @@ def restore_registration_setting():
             )
     except sqlite3.Error:
         pass
+
+
+@pytest.fixture(autouse=True)
+def restore_login_limit():
+    """Put the session's ``LIBREFOLIO_LOGIN_LIMIT`` back for a test that starts without it, and remove it at teardown.
+
+    The lane's configuration drops it at collection (lot E-15); a value present when the test starts is left alone, and
+    the limit's own tests, whose fixtures and monkeypatch run after this one, still turn it on or remove it.
+    """
+    # A MonkeyPatch of its own, not the monkeypatch fixture: requested here, that one would be set up before the
+    # fixtures of every module and test, and so undo each test's own patches after their teardowns instead of before.
+    with pytest.MonkeyPatch.context() as patch:
+        if _LOGIN_LIMIT_VARIABLE not in os.environ:
+            patch.setenv(_LOGIN_LIMIT_VARIABLE, _SESSION_LOGIN_LIMIT)
+        yield
 
 
 # The aiosqlite leak guard (J-6) is installed here, when this conftest is imported: before any test module of the
