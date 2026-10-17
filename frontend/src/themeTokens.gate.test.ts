@@ -301,6 +301,19 @@ const pairsOver = (foregrounds: string[], background: string, unders: string[], 
  * there; a lighter tint would not cure it — at 6% the muted text still gives 4.17:1 — and it is an open item, TC-15.
  * Measured on 16/10: the link 4.53:1 at worst, over the dark card; the secondary text 5.45:1, over the dark panel.
  *
+ * And round 3 of the designer (17/10), the toasts and the banners (§2), X one of `STATUSES`. The toasts are tints now,
+ * like the banners: their text, --lf-X-on-soft, and their icon, --lf-X, on --lf-X-soft were held already. A chip or a
+ * button inside a banner (proposal a, `STATUS_TONES.bannerChip`) stands on the card with its edge in --lf-X, held
+ * already on the card and on its own tint: the developer and the designer chose it on 17/10 (T3-b) over her
+ * --lf-X-line, 1.1–1.6:1 there, under the 3:1 of a control's border. New pairs: the chip's text, --lf-X-on-soft, on the
+ * card; the dismiss ✕ of a toast or a banner, an icon in --lf-X-on-soft, on its hover fill, --lf-X-line; a link inside
+ * a banner (the action of InstanceNotices) on each tint; the focus ring on each tint and on each --lf-X-line, the
+ * hovered dismiss it surrounds; and the icon and the chip edge of a row on the tint of a worse one — a grouped
+ * data-quality banner takes the tint of its worst issue, each row keeps its own state: --lf-warning and --lf-info on
+ * --lf-danger-soft, --lf-info on --lf-warning-soft. Measured on 17/10, the worst in light and in dark: the chip's text
+ * 6.83 and 9.20:1, the dismiss 5.69 and 6.38:1, the link 5.36 and 4.83:1, the focus ring 5.36 and 4.83:1 on a tint and
+ * 4.40 and 3.28:1 on a line, a row on a worse tint 4.52 and 4.67:1.
+ *
  * What C3 cannot express: a control told apart by two colours at once. The knob of a switch turned off,
  * --lf-switch-knob-off, is white on the light track of --lf-switch-off in light, and the control is recognised by the
  * --lf-border-input edge the knob is drawn with — an edge between two fills, which no pair holds. An item for the
@@ -346,6 +359,14 @@ const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...pairs(['bar-indicator'], ['surface-bar', 'bar-active-bg'], NON_TEXT),
     ...pairs(['bar-focus'], ['surface-bar', 'bar-hover', 'bar-active-bg', 'bar-logout-bg'], NON_TEXT),
     ...pairs(['bar-success', 'bar-danger'], ['surface-bar', 'bar-hover'], NON_TEXT),
+
+    // Round 3 of the designer (17/10): toasts and banners (§2)
+    ...STATUSES.flatMap((status) => pairs([`${status}-on-soft`], ['surface-card'], TEXT)),
+    ...STATUSES.flatMap((status) => pairs([`${status}-on-soft`], [`${status}-line`], NON_TEXT)),
+    ...STATUSES.flatMap((status) => pairs(['link'], [`${status}-soft`], TEXT)),
+    ...STATUSES.flatMap((status) => pairs(['focus'], [`${status}-soft`, `${status}-line`], NON_TEXT)),
+    ...pairs(['warning', 'info'], ['danger-soft'], NON_TEXT),
+    ...pairs(['info'], ['warning-soft'], NON_TEXT),
 ];
 
 interface KnownException {
