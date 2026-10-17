@@ -399,7 +399,8 @@
       "pricesSaved": "{count, plural, one {# prezzo salvato} other {# prezzi salvati}}",
       "pricesDeleted": "{count, plural, one {# prezzo eliminato} other {# prezzi eliminati}}",
       "pricesSkipped": "{count, plural, one {# riga scartata (non valida)} other {# righe scartate (non valide)}}",
-      "eventsSaved": "{count, plural, one {# evento salvato} other {# eventi salvati}}"
+      "eventsSaved": "{count, plural, one {# evento salvato} other {# eventi salvati}}",
+      "pricesRefused": "{count, plural, one {# prezzo rifiutato} other {# prezzi rifiutati}}"
     }
   },
   "events": {

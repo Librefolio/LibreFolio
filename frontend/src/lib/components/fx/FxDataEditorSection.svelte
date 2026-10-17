@@ -19,6 +19,7 @@
     import type {FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {rejectedMessage, saveErrorText, type Rejection} from '$lib/api/writeRefusal';
     import {t} from '$lib/i18n';
     import FxDataImportModal from './FxDataImportModal.svelte';
 
@@ -73,6 +74,8 @@
     let rows: DataRow[] = $state([]);
     let error: string | null = $state(null);
     let prevChartData: FxDataPoint[] | null = null;
+    /** How long a save's warning about refused rates stays (X-R46): it names dates to enter again. */
+    const REFUSAL_TOAST_MS = 20000;
 
     // =========================================================================
     // Convert FxDataPoint[] → DataRow[]
@@ -172,6 +175,7 @@
 
             let upsertedCount = 0;
             let deletedCount = 0;
+            let refused: Rejection[] = [];
 
             if (validUpserts.length > 0) {
                 // Normalize base/quote to alphabetical order (backend convention)
@@ -185,8 +189,10 @@
                     date: r.date,
                     rate: isInverted ? 1 / Number(r.values.rate) : Number(r.values.rate),
                 }));
-                await zodiosApi.upsert_rates_endpoint_api_v1_fx_currencies_rate_post(rateItems);
-                upsertedCount = validUpserts.length;
+                // X-R46: the server may leave single rates out (`rejected`); only the answered ones are saved
+                const response = await zodiosApi.upsert_rates_endpoint_api_v1_fx_currencies_rate_post(rateItems);
+                upsertedCount = response.results.length;
+                refused = (response.rejected ?? []).map(({date, reason}) => ({date: String(date), reason}));
             }
 
             if (deleteRows.length > 0) {
@@ -223,9 +229,14 @@
             // Toast success
             const parts: string[] = [];
             if (upsertedCount > 0) parts.push($t('fxDetail.savedCount', {values: {n: upsertedCount}}));
+            if (refused.length > 0) parts.push($t('fxDetail.refusedCount', {values: {n: refused.length}}));
             if (deletedCount > 0) parts.push($t('fxDetail.deletedCount', {values: {n: deletedCount}}));
             if (invalidCount > 0) parts.push($t('fxDetail.skippedCount', {values: {n: invalidCount}}));
-            toasts.success($t('fxDetail.savedSummary', {values: {details: parts.join(', ')}}));
+            const summary = $t('fxDetail.savedSummary', {values: {details: parts.join(', ')}});
+            // A refused rate is named, with its date and reason, in a warning instead of a success
+            const refusal = rejectedMessage(refused, $t);
+            if (refusal === null) toasts.success(summary);
+            else toasts.warning(`${summary}\n${refusal}`, REFUSAL_TOAST_MS);
 
             // Compute expanded date range if appended rows fall outside current chart range
             const appendedRows = dirty.filter((r) => r.status === 'appended');
@@ -245,7 +256,8 @@
             onsave?.(expandedRange);
         } catch (e: any) {
             console.error('Failed to save rates:', e);
-            const msg = e?.message || $t('common.unknownError');
+            // X-R46: what the server refused, in the interface language when coded; never Axios's «Request failed …»
+            const msg = saveErrorText(e, $t);
             error = $t('dataEditor.saveFailed', {values: {error: msg}});
             toasts.error($t('fxDetail.saveFailed', {values: {error: msg}}));
         } finally {
@@ -284,7 +296,7 @@
 <div class="space-y-3">
     <!-- Error banner -->
     {#if error}
-        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-lg px-4 py-2 text-sm text-lf-danger-on-soft">
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-lg px-4 py-2 text-sm text-lf-danger-on-soft" data-testid="fx-editor-error">
             {error}
         </div>
     {/if}

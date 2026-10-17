@@ -25,6 +25,7 @@
     import EventDataImportModal from './EventDataImportModal.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {eventSaveErrorMessage} from '$lib/features/transactions/events/eventSaveError';
+    import {rejectedMessage, saveErrorText, type Rejection} from '$lib/api/writeRefusal';
     import {_ as t, locale} from '$lib/i18n';
     import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/features/transactions/events/eventTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
@@ -56,6 +57,9 @@
     }
 
     let {assetId, currency, chartData, events, saving = $bindable(false), dirtyCount = $bindable(0), onsave, oncancel, onpendingchange}: Props = $props();
+
+    /** How long a save's warning about refused prices stays (X-R46): it names dates to enter again. */
+    const REFUSAL_TOAST_MS = 20000;
 
     // Currency flag emoji for tab labels (I-bis #3). Empty when currency missing.
     let currencyFlag = $derived(currency ? getCurrencyInfo(currency).flag_emoji : '');
@@ -272,7 +276,9 @@
         error = null;
 
         try {
-            const counts: AssetDataSaveCounts = {pricesSaved: 0, pricesDeleted: 0, pricesSkipped: 0, eventsDeleted: 0, eventsSaved: 0};
+            const counts: AssetDataSaveCounts = {pricesSaved: 0, pricesRefused: 0, pricesDeleted: 0, pricesSkipped: 0, eventsDeleted: 0, eventsSaved: 0};
+            let refusedPrices: Rejection[] = [];
+            let unexplained: string | null = null;
 
             // ─── PRICES ─────────────────────────────────────
             if (dirtyPrices.length > 0) {
@@ -307,13 +313,20 @@
                         low: optionalField(r.values.low),
                         volume: optionalField(r.values.volume),
                     }));
-                    await zodiosApi.upsert_prices_bulk_api_v1_assets_prices_post([
+                    // X-R46: the server may leave single dates out (`rejected`: a close outside low–high once merged
+                    // with the stored row); only `count` prices are saved
+                    const response = await zodiosApi.upsert_prices_bulk_api_v1_assets_prices_post([
                         {
                             asset_id: assetId,
                             prices: priceItems,
                         },
                     ]);
-                    counts.pricesSaved = validUpserts.length;
+                    const result = response.results.find((item) => item.asset_id === assetId);
+                    counts.pricesSaved = result?.count ?? 0;
+                    refusedPrices = (result?.rejected ?? []).map(({date, reason}) => ({date: String(date), reason}));
+                    counts.pricesRefused = refusedPrices.length;
+                    // Rows neither saved nor named (the asset gone meanwhile): the server's own sentence says why
+                    if (result !== undefined && result.count + refusedPrices.length < validUpserts.length) unexplained = result.message;
                 }
 
                 if (deletePrices.length > 0) {
@@ -403,7 +416,10 @@
             // The event always; the toast only when there is something to report (O-8). A delete fully blocked by
             // RESTRICT (in_use) reports nothing here: the warning toast already informs the user.
             const summary = assetDataSaveSummary(counts, $t);
-            notify({name: 'assets.data.saved', detail: {...counts}, toast: summary === null ? undefined : {variant: 'success', message: summary}});
+            // A refused price is named, with its date and reason, in a warning instead of a success (X-R46)
+            const refusals = [rejectedMessage(refusedPrices, $t), unexplained].filter((part): part is string => !!part);
+            const toast = refusals.length > 0 ? {variant: 'warning' as const, message: [summary, ...refusals].filter(Boolean).join('\n'), duration: REFUSAL_TOAST_MS} : summary === null ? undefined : {variant: 'success' as const, message: summary};
+            notify({name: 'assets.data.saved', detail: {...counts}, toast});
 
             // Compute expanded date range from appended price rows
             const appendedPrices = priceRows.filter((r) => r.status === 'appended');
@@ -423,7 +439,9 @@
             onsave?.(expandedRange);
         } catch (e: any) {
             console.error('Failed to save asset data:', e);
-            const msg = e?.message || $t('common.unknownError');
+            // X-R46: what the server refused, in the interface language when coded; never Axios's «Request failed …».
+            // The events' refusal arrives as an Error already worded by eventSaveErrorMessage, and keeps its text.
+            const msg = saveErrorText(e, $t);
             error = $t('dataEditor.saveFailed', {values: {error: msg}});
             notify({name: 'assets.data.saveFailed', detail: {error: msg}, toast: {variant: 'error', message: error}});
         } finally {

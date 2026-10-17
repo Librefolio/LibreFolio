@@ -48,6 +48,13 @@ A rate the database cannot keep — more than 14 digits before the decimal point
 LibreFolio keeps each pair in alphabetical order, so on the USD/EUR page it applies to 1 ÷ the rate
 you type.
 
+If the server refuses some of your rates, such as a rate too large or too small to store, it saves
+the others. A warning then names up to five refused dates, each with its reason, and counts the
+rest; it stays for 20 seconds, so you can note them and enter them again. If it refuses the whole
+save, for example because a date is before 1900-01-01 or after tomorrow, or because none of the
+rates can be stored, nothing is saved: the message says why, and the editor stays open with your
+changes.
+
 !!! warning "Synced data overwrites manual edits"
 
     A later sync of the same dates replaces your values with the provider's. For full manual

@@ -26,6 +26,7 @@ proposal.
 """
 
 import asyncio
+import json
 import sys
 import uuid
 from datetime import date, timedelta
@@ -33,6 +34,7 @@ from decimal import Decimal
 
 import pytest
 import pytest_asyncio
+from pydantic import ValidationError
 
 from backend.app.config import PROJECT_ROOT
 
@@ -49,10 +51,11 @@ from structlog.testing import capture_logs
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, PriceHistory, Transaction, TransactionType
 from backend.app.db.session import get_async_engine
+from backend.app.schemas import prices as prices_schemas
 from backend.app.schemas.assets.assets import FAAinfoFiltersRequest
 from backend.app.schemas.assets.events import FAAssetEventPoint, FAEventUpsert
 from backend.app.schemas.common import Currency, DateRangeModel
-from backend.app.schemas.prices import FAHistoricalData, FAPricePoint, FAPriceQueryItem, FAUpsert
+from backend.app.schemas.prices import FAHistoricalData, FAPricePoint, FAPriceQueryItem, FAUpsert, FAUpsertResult
 from backend.app.schemas.provider import ProviderInputType
 from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
 from backend.app.services.assets import core as asset_source_core
@@ -1461,3 +1464,287 @@ async def test_a_providers_currency_mismatch_still_raises_value_error(clean_pric
 
     assert type(raised.value).__name__ != "PriceCurrencyMismatchError", f"{type(raised.value).__mro__}: a provider's mismatch is not the manual refusal"
     assert await _stored_days(clean_prices) == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# X-R46: an asset's result names the dates the upsert refused, machine-readable
+#
+# The defect, on HEAD 1c1456713: ``bulk_upsert_prices`` drops a date, asset by asset, in three cases -- a candle whose
+# close lies outside its own [low, high] (``rejected_dates``, under any key), a provider's date outside
+# ``stored_date_bounds()`` (``out_of_range_dates``, X-R65) and a provider's value no price column can keep
+# (``unstorable_dates``, W-B58) -- and says so only in the English ``results[].message`` («Upserted N prices; rejected 1
+# date(s) with impossible OHLC …»), while ``count`` leaves them out. The Data Editor cannot read which rows were refused,
+# and announces every row it sent as saved.
+#
+# Contract (X-R46): ``schemas.prices.FAPriceRejection`` (a ``StrictModel``) {``date``, ``reason``:
+# ``ohlc_inconsistent`` | ``date_out_of_range`` | ``value_not_storable``}; ``FAUpsertResult.rejected:
+# List[FAPriceRejection]``, ``[]`` by default, sorted by date. ``bulk_upsert_prices`` puts it in each asset's result
+# dict, from its three lists: ``rejected_dates`` → ``ohlc_inconsistent``, ``out_of_range_dates`` →
+# ``date_out_of_range``, ``unstorable_dates`` → ``value_not_storable``. ``count`` and the English message are unchanged.
+#
+# A rejection is compared as JSON (its date ISO), whether the service holds it as a dict or as the model, its date as a
+# date or as text; and through ``FAUpsertResult``, as the route parses each result (``FAUpsertResult(**r)``).
+# ``FAPriceRejection`` is read from ``schemas.prices`` inside the cases: before X-R46 it does not exist, and the cases
+# fail on what the upsert answered instead of breaking the module's import. The prices go on this unit's own asset
+# (``clean_prices``), in its window; a provider's key and the frozen ceiling are X-R65's.
+# ─────────────────────────────────────────────────────────────────────────────
+
+XR46_PRICE_REASONS = ("ohlc_inconsistent", "date_out_of_range", "value_not_storable")
+
+
+def _xr46_as_json(entry: object) -> dict:
+    """One rejection as JSON, its date ISO: a model through ``model_dump``, a dict with its dates written out."""
+    if hasattr(entry, "model_dump"):
+        return entry.model_dump(mode="json", by_alias=True)
+    return {key: value.isoformat() if isinstance(value, date) else value for key, value in dict(entry).items()}
+
+
+def _xr46_rejected(row: dict) -> list[dict]:
+    """The asset's result ``rejected``, as JSON; a result without it fails the test, naming what it holds instead."""
+    if "rejected" not in row:
+        pytest.fail(f"X-R46: the asset's result has no 'rejected', its refused dates are told only in its English message: {row}")
+    return [_xr46_as_json(entry) for entry in row["rejected"]]
+
+
+def _xr46_route_rejected(row: dict) -> list[dict]:
+    """``rejected`` as ``POST /assets/prices`` answers it: the service's result parsed into ``FAUpsertResult``, as the
+    route does, each entry a ``FAPriceRejection``, written as JSON."""
+    rejection = getattr(prices_schemas, "FAPriceRejection", None)
+    assert rejection is not None, "X-R46: backend.app.schemas.prices has no FAPriceRejection"
+    parsed = FAUpsertResult(**row)
+    assert all(isinstance(entry, rejection) for entry in parsed.rejected), parsed.rejected
+    return parsed.model_dump(mode="json", by_alias=True)["rejected"]
+
+
+def _xr46_unordered(rejections: list[dict]) -> list[str]:
+    """The rejections as sorted canonical JSON texts: the same entries, whatever their order."""
+    return sorted(json.dumps(entry, sort_keys=True, default=str) for entry in rejections)
+
+
+async def _xr46_upsert(asset_id: int, prices: list[FAPricePoint], key: str = "MANUAL") -> dict:
+    """``bulk_upsert_prices`` of ``prices`` for ``asset_id`` under ``key``: the asset's own result."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        result = await AssetSourceManager.bulk_upsert_prices([FAUpsert(asset_id=asset_id, prices=prices)], session, source_plugin_key=key)
+    return next(entry for entry in result["results"] if entry["asset_id"] == asset_id)
+
+
+@pytest.mark.asyncio
+async def test_xr46_a_manual_close_outside_its_low_high_is_listed_in_rejected(clean_prices: int):
+    """X-R46: a manual upsert of two candles, the first with its close (50) outside its own [9, 12].
+
+    Red on HEAD 1c1456713: the asset's result is ``{asset_id, count, message}``; the refused date is told only in the
+    English message («… rejected 1 date(s) with impossible OHLC …»), and ``FAUpsertResult`` has no ``rejected``: the
+    Data Editor announces the row as saved.
+    Contract: the second day alone stored; ``count`` 1 and the message as before; ``rejected`` ``[{"date": the first
+    day, "reason": "ohlc_inconsistent"}]``, in the service's result and through ``FAUpsertResult``.
+    """
+    refused, kept = BASE_DATE, BASE_DATE + timedelta(days=1)
+
+    row = await _xr46_upsert(clean_prices, [_point(0, "50", low="9", high="12"), _point(1, "11", low="9", high="12")])
+
+    assert await _stored_days(clean_prices) == [kept], "barrier: the inconsistent candle should be refused, the other stored"
+    assert row["count"] == 1 and row["message"].startswith("Upserted 1 prices; rejected 1 date(s) with impossible OHLC") and refused.isoformat() in row["message"], row
+    expected = [{"date": refused.isoformat(), "reason": "ohlc_inconsistent"}]
+    assert _xr46_rejected(row) == expected, row
+    assert _xr46_route_rejected(row) == expected
+
+
+@pytest.mark.asyncio
+async def test_xr46_guard_a_clean_manual_upsert_lists_no_rejection(clean_prices: int):
+    """X-R46 guard of the cure: a manual upsert of two consistent candles.
+
+    Red on HEAD 1c1456713 only because the asset's result has no ``rejected``; green once it has.
+    Contract: both days stored; ``count`` 2 and the message «Upserted 2 prices»; ``rejected`` ``[]``, in the service's
+    result (the key is there) and through ``FAUpsertResult``.
+    """
+    row = await _xr46_upsert(clean_prices, [_point(0, "10", low="9", high="12"), _point(1, "11", low="9", high="12")])
+
+    assert await _stored_days(clean_prices) == [BASE_DATE, BASE_DATE + timedelta(days=1)], "barrier: both candles should be stored"
+    assert (row["count"], row["message"]) == (2, "Upserted 2 prices"), row
+    assert _xr46_rejected(row) == []
+    assert _xr46_route_rejected(row) == []
+
+
+@pytest.mark.asyncio
+async def test_xr46_a_providers_dates_outside_the_bounds_are_listed_in_rejected(clean_prices: int, frozen_stored_ceiling: date):
+    """X-R46 on X-R65's provider case: under a provider's key, 1899-12-31, a day, the day after the (frozen) ceiling,
+    another day.
+
+    Red on HEAD 1c1456713: the two dropped dates are told only in the message («rejected 2 date(s) outside …»).
+    Contract: the two days inside alone stored; ``count`` 2 and the message as before; ``rejected`` the two dates
+    outside, ``date_out_of_range``, by date, in the service's result and through ``FAUpsertResult``.
+    """
+    inside = [BASE_DATE, BASE_DATE + timedelta(days=1)]
+
+    row = await _xr46_upsert(clean_prices, [_on(XR65_BEFORE, "9"), _on(inside[0], "10"), _on(XR65_AFTER, "11"), _on(inside[1], "12")], key=XR65_PROVIDER)
+
+    assert await _stored_days(clean_prices) == inside, "barrier: the two dates outside the bounds should be dropped, the others stored"
+    assert row["count"] == 2 and "rejected 2 date(s) outside" in row["message"], row
+    expected = [{"date": XR65_BEFORE.isoformat(), "reason": "date_out_of_range"}, {"date": XR65_AFTER.isoformat(), "reason": "date_out_of_range"}]
+    assert _xr46_rejected(row) == expected, row
+    assert _xr46_route_rejected(row) == expected
+
+
+@pytest.mark.asyncio
+async def test_xr46_a_providers_three_kinds_of_refusal_are_listed_by_date(clean_prices: int, frozen_stored_ceiling: date):
+    """X-R46: under a provider's key, a date refused for each reason, out of date order: day 2, a candle whose close (50)
+    lies outside its [9, 12]; the day after the (frozen) ceiling; day 1, a sound close; day 0, a close no price column
+    can keep (1E+15); 1899-12-31.
+
+    Red on HEAD 1c1456713: the four refusals are told only in the English message.
+    Contract: day 1 alone stored; ``count`` 1 and the message as before, naming the three kinds; ``rejected`` sorted by
+    date -- 1899-12-31 ``date_out_of_range``, day 0 ``value_not_storable``, day 2 ``ohlc_inconsistent``, the day after
+    the ceiling ``date_out_of_range`` -- an order neither of the input nor of any concatenation of the three lists (the
+    two dates out of range lie on either side of the others). The service's entries are compared whatever their order
+    (where the sort happens is the cure's choice); the route's, through ``FAUpsertResult``, in that order.
+    """
+    day0, day1, day2 = (BASE_DATE + timedelta(days=offset) for offset in range(3))
+    prices = [_point(2, "50", low="9", high="12"), _on(XR65_AFTER, "11"), _on(day1, "11"), _on(day0, "1E+15"), _on(XR65_BEFORE, "9")]
+
+    row = await _xr46_upsert(clean_prices, prices, key=XR65_PROVIDER)
+
+    assert await _stored_days(clean_prices) == [day1], "barrier: day 1 alone should be stored"
+    assert row["count"] == 1 and all(said in row["message"] for said in ("with impossible OHLC", "rejected 2 date(s) outside", "no price column can keep")), row
+    expected = [
+        {"date": XR65_BEFORE.isoformat(), "reason": "date_out_of_range"},
+        {"date": day0.isoformat(), "reason": "value_not_storable"},
+        {"date": day2.isoformat(), "reason": "ohlc_inconsistent"},
+        {"date": XR65_AFTER.isoformat(), "reason": "date_out_of_range"},
+    ]
+    assert _xr46_unordered(_xr46_rejected(row)) == _xr46_unordered(expected), row
+    assert _xr46_route_rejected(row) == expected
+
+
+def test_xr46_fa_price_rejection_holds_one_of_three_reasons_and_a_result_defaults_to_none():
+    """X-R46, the schemas alone (no database): ``FAPriceRejection`` holds a date and one of the three reasons, and
+    refuses any other reason; an ``FAUpsertResult`` built without ``rejected`` -- the service's «Asset N not found» and
+    «No prices to upsert» results -- answers ``[]``.
+
+    Red on HEAD 1c1456713: ``schemas.prices`` has no ``FAPriceRejection``.
+    """
+    rejection = getattr(prices_schemas, "FAPriceRejection", None)
+    assert rejection is not None, "X-R46: backend.app.schemas.prices has no FAPriceRejection"
+    for reason in XR46_PRICE_REASONS:
+        assert rejection(date=BASE_DATE, reason=reason).model_dump(mode="json", by_alias=True) == {"date": BASE_DATE.isoformat(), "reason": reason}
+    with pytest.raises(ValidationError):
+        rejection(date=BASE_DATE, reason="not_a_reason")
+    assert FAUpsertResult(asset_id=1, count=0, message="Asset 1 not found").model_dump(mode="json", by_alias=True).get("rejected") == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# The erase sentinel -1 is no bound for the OHLC check (the docs-writer's finding, 17/10)
+#
+# The defect, on HEAD 1c1456713 with X-R46's cure: the strict branch of the OHLC integrity policy (see its section above;
+# ``if price.low is not None and price.high is not None`` in ``bulk_upsert_prices``) reads the raw incoming ``price.low``
+# and ``price.high``, so it takes the erase sentinel ``-1`` (F.4: «SET NULL», which ``_merge_field`` resolves to None
+# just before) for a real bound. In the asset data editor, erasing High while Low stays (close 12, low 11, high -1) is
+# refused as ``ohlc_inconsistent`` (low above high), and erasing both (-1, -1) too (close 12 outside [-1, -1]): the date
+# is not saved, and its row keeps the bounds the user erased.
+#
+# Contract: an erased bound is no bound. The strict check runs only when both incoming bounds are real; otherwise the
+# existing branch applies: the merged bounds widened around the close when both exist, else written as they are. An edit
+# left with one real bound is written as it is, even on the wrong side of the close (decided 17/10: today's one-bound
+# partial update; X-R78 will decide whether to refuse it instead).
+#
+# Each case seeds ``ERASE_DAY`` on this unit's own asset (``clean_prices``) with open/high/low/close 12/14/10/12 through
+# a first manual upsert, checked as a barrier, then sends its manual edit of that day, open and volume omitted (F.4:
+# kept). The upsert and its ``rejected`` are read as X-R46's cases read them (``_xr46_upsert``, ``_xr46_rejected``).
+# ─────────────────────────────────────────────────────────────────────────────
+
+ERASE_OFFSET = 0
+ERASE_DAY = BASE_DATE + timedelta(days=ERASE_OFFSET)
+ERASE_SEED = (Decimal("12"), Decimal("14"), Decimal("10"), Decimal("12"))  # open, high, low, close of ERASE_DAY before each edit
+
+
+async def _stored_ohlc(asset_id: int, day: date) -> tuple | None:
+    """The asset's (open, high, low, close) on ``day``, None without a row, read by a session of its own."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        row = (await session.execute(select(PriceHistory.open, PriceHistory.high, PriceHistory.low, PriceHistory.close).where(PriceHistory.asset_id == asset_id, PriceHistory.date == day))).one_or_none()
+    return None if row is None else tuple(row)
+
+
+async def _erase_seeded(asset_id: int) -> None:
+    """``ERASE_DAY`` stored as ``ERASE_SEED`` through a first manual upsert, checked: a barrier."""
+    seed = await _xr46_upsert(asset_id, [_point(ERASE_OFFSET, "12", low="10", high="14", open_="12")])
+    stored = await _stored_ohlc(asset_id, ERASE_DAY)
+    assert (seed["count"], stored) == (1, ERASE_SEED), f"barrier: the seed of {ERASE_DAY} should store open/high/low/close 12/14/10/12: {seed}; stored {stored}"
+
+
+async def _erase_outcome(asset_id: int, row: dict) -> tuple:
+    """What an edit of ``ERASE_DAY`` came to: the asset's ``count``, its ``rejected`` as JSON and the day's stored
+    (open, high, low, close)."""
+    return row["count"], _xr46_rejected(row), await _stored_ohlc(asset_id, ERASE_DAY)
+
+
+@pytest.mark.asyncio
+async def test_a_manual_edit_erasing_high_is_saved_not_rejected(clean_prices: int):
+    """The day stored 12/14/10/12 (open/high/low/close); the editor erases High and sets Low to 11, the close staying 12:
+    close 12, low 11, high -1.
+
+    Red on HEAD 1c1456713 with X-R46's cure: the check reads high -1 as a bound, below low 11: the date is refused
+    (``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``) and the row keeps 12/14/10/12.
+    Contract: an erased bound is no bound: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high NULL,
+    low 11, close 12 -- one merged bound left, nothing to widen.
+    """
+    await _erase_seeded(clean_prices)
+
+    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="11", high="-1")])
+
+    outcome = await _erase_outcome(clean_prices, row)
+    assert outcome == (1, [], (Decimal("12"), None, Decimal("11"), Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
+
+
+@pytest.mark.asyncio
+async def test_a_manual_edit_erasing_both_bounds_is_saved_not_rejected(clean_prices: int):
+    """The day stored 12/14/10/12 (open/high/low/close); the editor erases High and Low, the close staying 12: close 12,
+    low -1, high -1.
+
+    Red on HEAD 1c1456713 with X-R46's cure: the check reads [-1, -1] as the bounds, the close 12 outside them: the date
+    is refused (``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``) and the row keeps 12/14/10/12.
+    Contract: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high NULL, low NULL, close 12.
+    """
+    await _erase_seeded(clean_prices)
+
+    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="-1", high="-1")])
+
+    outcome = await _erase_outcome(clean_prices, row)
+    assert outcome == (1, [], (Decimal("12"), None, None, Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
+
+
+@pytest.mark.asyncio
+async def test_a_manual_edit_erasing_low_with_high_below_the_close_is_saved_as_is(clean_prices: int):
+    """The mirror that tells the cures apart: the day stored 12/14/10/12 (open/high/low/close); the editor erases Low and
+    sets High to 11, below the close 12: close 12, low -1, high 11.
+
+    Red on HEAD 1c1456713 with X-R46's cure, and under a cure that resolves the sentinel of High alone: the check reads
+    low -1 as a bound, the close 12 outside [-1, 11]: the date is refused (``count`` 0, ``rejected`` ``[{the day,
+    "ohlc_inconsistent"}]``) and the row keeps 12/14/10/12. The two erasing cases above pass under either cure; this one
+    only when the sentinel is resolved on both bounds.
+    Contract (decided 17/10): one real incoming bound is not checked; the edit is written as it is, as today's one-bound
+    partial update is: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high 11, low NULL, close 12.
+    This pins the current one-bound policy, not an endorsement of the row it leaves, a close above its only bound:
+    X-R78 will decide whether a lone real bound on the wrong side of the close should be refused instead, and this case
+    changes with that decision.
+    """
+    await _erase_seeded(clean_prices)
+
+    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="-1", high="11")])
+
+    outcome = await _erase_outcome(clean_prices, row)
+    assert outcome == (1, [], (Decimal("12"), Decimal("11"), None, Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
+
+
+@pytest.mark.asyncio
+async def test_a_manual_edit_with_two_real_bounds_and_the_close_below_low_is_still_rejected(clean_prices: int):
+    """Guard, green before the cure and after: the strict check still runs when both incoming bounds are real. The day
+    stored 12/14/10/12 (open/high/low/close); the edit: close 12, low 13, high 14.
+
+    Contract (unchanged): the date refused, ``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``; the row keeps
+    12/14/10/12.
+    """
+    await _erase_seeded(clean_prices)
+
+    row = await _xr46_upsert(clean_prices, [_point(ERASE_OFFSET, "12", low="13", high="14")])
+
+    outcome = await _erase_outcome(clean_prices, row)
+    assert outcome == (0, [{"date": ERASE_DAY.isoformat(), "reason": "ohlc_inconsistent"}], ERASE_SEED), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
