@@ -6312,3 +6312,73 @@ Ordine del coordinatore (17/10): TS2769 → X-R44c → X-R60.
   un conflitto sicuro. Il dettaglio di X-R60 (quale risposta resta, l'indicatore, un errore che tiene lo stesso giorno,
   inversione e impostazioni che non chiedono nulla) va in X-R64, che riscrive quei passi dopo MF e Z-27.
 - ✅ **X-R60 chiuso il 17/10 (13:35)**, in attesa del commit del coordinatore.
+
+### Revisione del seguito di MF (`ad399d383`, SEC9-1, D1, SI2), sola lettura — 17/10 13:45–14:00
+
+Sul mio dominio: rotte dei prezzi, servizi dei periodi (asset e FX), regola di `range_change`/`fixed_period_changes`,
+divisione in blocchi delle coppie FX, `price_query`, SI2 (limite delle sonde) e il tetto degli eventi del piano.
+**Esito: OK.** Chiusi i miei rilievi su X-R59:
+- il percorso d'errore è provato (`test_xr59_guard_the_quotes_stand_when_the_range_change_fails`);
+- il 422 di `range_start` ha la forma standard e il tetto a domani;
+- la descrizione di `change_ratio` è corretta;
+- un estremo a 0 dà −100 % (decisione del coordinatore), con una sola regola per la Δ dell'intervallo e le colonne
+  1D…5Y.
+
+Simulazione della fusione con dev: pulita. Rilievi:
+1. `/prices/current` ora rifiuta oltre 1.000 id: il sondaggio dal vivo della lista Asset li manda tutti insieme → la
+   divisione va in X-R64, nello stesso treno (sì del coordinatore).
+2. Un 429 `PROBE_RATE_LIMITED` non è tradotto nel modulo dell'asset → **X-R66** (basso, dopo X-R58).
+3. Il limite di 30 al minuto resta ovunque (decisione del coordinatore).
+
+### X-R64 ✅ — period-changes e sondaggio dal vivo in lotti da 1.000 (14:00–14:45)
+
+- Base: `04955c498` (contiene MF `482343eb3`). X-R64 va per primo; Y aggiunge `range_start`/`range_change` solo nel
+  costruttore degli item e nel mappatore dei risultati, e lascia a me le righe di invio e fusione e quelle di
+  `fetchCurrentPrices` (accordo del coordinatore).
+- **Disegno**:
+  - `fetchAssetPeriodChanges`, `fetchFxPeriodChanges` e `fetchCurrentPrices` passano per
+    `sendBulkBatches(items, () => 0, send)` di Z-27: lotti consecutivi da al massimo 1.000, uno dopo l'altro, senza
+    stima dei giorni;
+  - tutto o niente: un lotto fallito rifiuta con il suo errore così com'è (il `Retry-After` per `livePollFailure`), e il
+    registro di X-R60 vede una sola risposta unita.
+- **Codice pronto**: `xr64_code.py`, 5 sostituzioni in 2 file, a secco pulito, prettier pulito.
+- **Rossi** affidati a un test-author (14:02): `periodChanges.test.ts` e `livePriceService.test.ts`.
+- **Rossi** (test-author, 14:05): 10 rossi e 3 guardie.
+  - In `periodChanges.test.ts`, per ogni fetch: 1.001 elementi → 2 chiamate; i periodi presi da un lotto successivo;
+    2.500 elementi → 3 chiamate; un errore nel secondo lotto → rifiuto e nessun invio dopo. Guardia: esattamente 1.000.
+  - In `livePriceService.test.ts`: LPS-14 (1.001 id → 2 richieste); LPS-15 (guardia: 1.000); LPS-16 (un 429 nel secondo
+    lotto arriva al chiamante così com'è, e `livePollFailure` legge ancora il `Retry-After`).
+  - Prima del codice: **10 failed, 141 passed**, ciascuno sulla lista delle chiamate (una sola invece di due o tre).
+- **Codice applicato** (14:06): `xr64_code.py`, 6 sostituzioni in 2 file; compresa l'intestazione di
+  `livePriceService.ts`, che dava la pagina di dettaglio come chiamante (quella usa solo gli aiuti e manda il suo id).
+- **Verdi**:
+  - i due file: **151 passed**;
+  - `front check`: 0 errori e 0 avvisi;
+  - `front-asset asset-unit`: **974 passed**;
+  - slot 14:10–14:19: `front-asset asset-list` **34 passed**, `front-fx fx-list` **18 passed**; porta libera.
+  > **⚠️ Fuori pista (14:09)** — `front-utility core-unit`: 1 failed su 8.379, il cancello
+  > `htmlInterpolation.gate.test.ts`. Le chiavi `transactions.errors.costBasisNotAllowed` e `costBasisModeIncompatible`
+  > portano `<b>` nelle 4 lingue, da `e71b68d50` (N78, un altro lotto, già in dev). X-R64 non tocca traduzioni:
+  > segnalato al coordinatore.
+  > **Nota** — un sondaggio su più di 1.000 asset segnala una mutazione del portafoglio per ogni lotto
+  > (`portfolioMutation.ts` non le raggruppa). Dalla decisione E1 una mutazione marca le viste come superate, senza
+  > buttarle: accettabile, scritto nella documentazione.
+- **Documentazione** (docs-writer, 14:20): i due passi di MF «not split yet» (asset e FX) con i lotti e il flusso di
+  X-R60, e la riga di `fetchCurrentPrices` in `live-ticker.md`.
+  - pagine di backend asset e FX: i passi «not split yet» di MF sostituiti dai lotti e dal flusso di X-R60 (registro,
+    `data-busy`, un errore che tiene lo stesso giorno, nuovo tentativo/impostazioni/inversione che non chiedono nulla);
+  - `live-ticker.md`: la riga di `fetchCurrentPrices`, la tabella dei sondaggi, «Still a write» (una mutazione per
+    lotto), i test LPS-14…16;
+  - `registries.md`, sezione di Z «Bulk requests in batches»: la frase «Δ columns … still send one request each» era
+    diventata falsa; ora elenca i tre nuovi chiamanti e la differenza: Z tiene i lotti già risposti, i miei sono tutto
+    o niente;
+  - strict build e `check-links` puliti.
+  > **⚠️ Fuori pista (14:30)** — il docs-writer nota che «la lista non mostra mai le Δ di una parte soltanto» è falso
+  > col registro di X-R60. Per esempio, la richiesta propria di una coppia per lo stesso giorno sopravvive a una
+  > richiesta piena fallita. Riformulato in «never shows a partial answer» su entrambe le pagine.
+  > **⚠️ Fuori pista (14:32)** — attribuzione nei commenti dei test: il tetto di 1.000 su period-changes è di X-R59
+  > (allineato a Z-25), R13-SEC9-1 è quello di `/prices/current`. Corretto dal test-author; le etichette «Red today»
+  > restano, per convenzione.
+- **Nessuna riga nel CHANGELOG**: i tetti (X-R59, R13-SEC9-1) e i lotti arrivano nella stessa versione 1.3, e
+  period-changes non è ancora rilasciato: per chi aggiorna dalla 1.2 nulla di visibile cambia.
+- ✅ **X-R64 chiuso il 17/10 (14:45)**, in attesa del commit del coordinatore.

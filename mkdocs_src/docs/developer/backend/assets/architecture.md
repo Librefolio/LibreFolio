@@ -391,10 +391,27 @@ directly, so a 5Y change exists whatever range the page has loaded.
 The Assets list calls the endpoint through `fetchAssetPeriodChanges()` (`frontend/src/lib/utils/periodChanges.ts`):
 one request for every asset of the list, native (no `target_currency`), with `as_of` the end of the selected range.
 Besides its fixed 1D column, the table shows each period whose `days` fit in the range's whole calendar days
-(`visiblePeriodColumns()`). The request is not split yet: past 1,000 assets it gets `bulk_too_many_items`, the
-`catch` of `loadPeriodChanges()` (`frontend/src/routes/(app)/assets/+page.svelte`) logs it to the browser console,
-and the Δ columns stay empty. Splitting the request into batches (backlog Z-27, as for the
-[price query](#bulk-request-limits)) is to cover this endpoint too: at most 1,000 items and one `as_of` per request.
+(`visiblePeriodColumns()`). Past 1,000 assets that request goes in batches (X-R64): the function hands the assets to
+`sendBulkBatches(items, () => 0, send)` (`frontend/src/lib/api/bulkBatches.ts`, Z-27,
+[Bulk requests in batches](../../frontend/state/registries.md#bulk-requests-in-batches)), which sends consecutive
+batches of at most `BULK_MAX_ITEMS` (1,000) assets, in the order given, one request after the other. There is no day
+estimate: the endpoint has the item cap, not the item-days budget of the [price query](#bulk-request-limits), and
+every batch asks up to the same `as_of`. The answers merge as if one request had answered, the periods taken from the
+first item that has any; up to 1,000 assets it is one request, as before. All or nothing: a batch that fails rejects
+the whole call with its own error and nothing is sent after it, so the list never shows a partial answer.
+
+Several of these requests can be in flight at once, a range change during a refresh for instance: the list keeps a
+`PeriodChangesLedger` (`periodChanges.ts`, X-R60) that says which answer it keeps.
+
+- Every request of the Assets list is full, for every asset, whatever starts it (the first load, a range change, a
+  refresh, an asset's sync), and it replaces every request before it: an older answer that lands later is not kept.
+- The page's `data-busy` (`data-testid="assets-page"`) stays true while the latest request is in flight; one it
+  replaced no longer counts.
+- A failed request keeps the Δ computed up to the same `as_of` (the end of the range) and drops the others. The
+  `catch` of `loadPeriodChanges()` (`frontend/src/routes/(app)/assets/+page.svelte`) logs it to the browser console,
+  unless a newer request has replaced it.
+- The signals' retry and a chart-settings save reload only the prices and signals (`fetchPriceSeries()`; a save, only
+  when it changes the backend signals), never the period changes: the Δ do not depend on the signals.
 
 ### 💹 Current Quotes and Today's OHLC
 
