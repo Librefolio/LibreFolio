@@ -20,7 +20,7 @@ import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
 import {getBackendSignalProblem, type SignalProblem} from '$lib/charts/signals/signalProblem';
 import {truncateName} from '$lib/utils/text';
 import {aggregateLineSeries, bucketEventMarkers, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
-import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPrice} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {CHART_GAIN_LOSS, PRICE_SERIES} from '$lib/theme/chartTheme';
@@ -605,7 +605,7 @@ export function buildDeltaHtml(value: number, firstValue: number, isPercentage: 
 
     const deltaAbs = value - firstValue;
     const deltaPct = changePct(firstValue, value);
-    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${deltaPct === null ? '—' : formatPercent(deltaPct)})</span>`;
+    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${formatPrice(deltaAbs, {minDecimals: 4, signed: true})} / ${deltaPct === null ? '—' : formatPercent(deltaPct)})</span>`;
 }
 
 /**

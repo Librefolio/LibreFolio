@@ -65,6 +65,8 @@ class _FetchedRefreshData:
     events: list[dict]
     #: Reasons the result reports beside its prices: a refused current value (X-R51)
     notes: tuple[str, ...] = ()
+    #: The quote currency as the provider reported it with its history (Yahoo's ``GBp``), kept on the assignment (Z-32)
+    reported_currency: str | None = None
 
 
 async def _prepare_refresh_items(  # noqa: C901 — per-item validation maps each rejection to a typed result
@@ -220,6 +222,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
             async with semaphore:
                 prices_data = []
                 events_data = []
+                reported_currency: str | None = None  # the provider's own quote currency (Z-32)
                 today = date_type.today()
 
                 # Cache key for this provider+identifier combo.
@@ -253,6 +256,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                 if cache_ok and cached_entry:
                                     cached_dates = cached_entry.get("dates", {})
                                     cached_events = cached_entry.get("events", [])
+                                    reported_currency = cached_entry.get("currency")
                                     # Determine if we have a gap
                                     if cached_dates:
                                         # Check if requested range is fully covered
@@ -304,9 +308,12 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                 if hist_data and hist_data.events:
                                     events_data = [e.model_dump() for e in hist_data.events]
                                     logger.debug(f"Fetched {len(events_data)} events for asset {asset_id}")
+                                # Z-32: the quote currency as the provider reported it (not normalized: Yahoo's GBp)
+                                if hist_data and hist_data.currency:
+                                    reported_currency = hist_data.currency
 
-                                # Update cache with merged data
-                                core._asset_history_cache.set(cache_key, {"dates": cached_dates, "events": events_data})
+                                # Update cache with merged data (the reported currency too, for a later full hit)
+                                core._asset_history_cache.set(cache_key, {"dates": cached_dates, "events": events_data, "currency": reported_currency})
 
                                 # Build prices_data from full cached_dates for requested range
                                 prices_data = list(cached_dates.values())
@@ -355,6 +362,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                         source=provider_code,
                         events=events_data,
                         notes=(refused_note,) if refused_note else (),
+                        reported_currency=reported_currency,
                     ),
                     None,
                     refusal,
@@ -620,6 +628,11 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
                 fresh_assignment = assign_res.scalar_one_or_none()
                 if fresh_assignment:
                     fresh_assignment.last_fetch_at = utcnow()
+                    # Z-32: the provider's own quote currency, as the column holds it (8 characters); a history that
+                    # reports none leaves the last one
+                    reported = (remote_data.reported_currency or "").strip()
+                    if reported and len(reported) <= 8:
+                        fresh_assignment.reported_currency = reported
                     persist_session.add(fresh_assignment)
                     await persist_session.commit()
             except Exception as e:

@@ -86,7 +86,7 @@ async def create_assets_bulk(
         return await AssetCRUDService.create_assets_bulk(assets, session)
     except Exception as e:
         logger.exception(f"Error in bulk asset creation: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while creating assets") from e
 
 
 @crud_router.patch("", response_model=FABulkAssetPatchResponse, tags=["FA CRUD"])
@@ -152,7 +152,7 @@ async def patch_assets_bulk(
         raise
     except Exception as e:
         logger.exception(f"Error in bulk asset patch: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while updating assets") from e
 
 
 @crud_router.get("/all", response_model=List[FAinfoResponse], tags=["FA CRUD"])
@@ -172,7 +172,7 @@ async def get_all_assets(session: AsyncSession = Depends(get_session_generator),
         return await AssetCRUDService.list_assets(filters, session, user_id=current_user.id)
     except Exception as e:
         logger.exception(f"Error getting all assets: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while listing assets") from e
 
 
 @crud_router.get("/query", response_model=List[FAinfoResponse], tags=["FA CRUD"])
@@ -243,7 +243,7 @@ async def list_assets(
         return await AssetCRUDService.list_assets(filters, session, user_id=current_user.id)
     except Exception as e:
         logger.exception(f"Error listing assets: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while listing assets") from e
 
 
 @crud_router.delete("", response_model=FABulkAssetDeleteResponse, tags=["FA CRUD"])
@@ -290,7 +290,7 @@ async def delete_assets_bulk(
         return await AssetCRUDService.delete_assets_bulk(asset_ids, session)
     except Exception as e:
         logger.exception(f"Error in bulk asset deletion: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while deleting assets") from e
 
 
 @crud_router.post("/merge", response_model=FAAssetMergeResponse, tags=["FA CRUD"])
@@ -336,7 +336,7 @@ async def merge_assets(
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Error merging assets: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while merging assets") from e
 
 
 # Bulk read endpoint
@@ -460,4 +460,4 @@ async def read_assets_bulk(
         return responses
     except Exception as e:
         logger.exception(f"Error reading assets bulk: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while reading assets") from e

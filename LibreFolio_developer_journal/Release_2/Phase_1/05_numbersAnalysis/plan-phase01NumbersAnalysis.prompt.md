@@ -6338,3 +6338,253 @@ prossimo checkpoint.
 - **devWiki**: `decisions/ai-export-versioned-snapshot-boundary.md` (un punto nella «Decision», data, fonti), indice,
   registro. Il grafo non è aggiornato: graphify non c'è in questo worktree.
 - ⏳ **Checkpoint T-B7** (FROZEN).
+- ✅ **Checkpoint T-B7** (2026-10-17): entrato (dev `36d24e7d2`, `7184cb123`), CHANGELOG 🔄 `066c54dc6`; worktree in
+  fast-forward. T-B7 nella sezione T e la nota E-19 li chiude il coordinatore.
+
+#### Revisione di MF-A2 (17/10 ~16:20, sola lettura; `0ac117bff`, letto a `066c54dc6`)
+
+- Richiesta del coordinatore: le tre pagine teoriche di MF-A2 (`portfolio-engine/index.en.md` §5 «Two Unrealized Figures»,
+  `period-pnl.en.md`, `net-annualized-return.en.md` «Positions Closed in the Period») corrispondono al motore?
+- **Esito: corrispondono.** Verificato:
+  - `UGL = NAV − Book = (MV − OCB) + (MV^tr − CB^tr)`, con la cassa che si annulla (`daily_state.py:510-514`);
+  - il non realizzato del periodo è MV − OCB ai due bordi (`period.py:114,119`);
+  - il P&L del periodo è ΔNAV − flussi: un titolo in viaggio a un bordo va nel residuo;
+  - campi, rotta e riepiloghi dell'AI Export;
+  - la regola delle posizioni chiuse: polvere `1e-5`, il costo venduto su (t_from, t_end] con proventi e costo noti,
+    la finestra, 30 giorni, ≤ −100%;
+  - l'esempio (+76,27%).
+- **Una svista di testo**: «t_close = last day its quantity fell to zero» va letto «fell to the dust threshold or
+  below».
+- **Tre reperti di codice, di MF** (girati al coordinatore):
+  1. un trasferimento in uscita parziale falsa la regola delle chiuse: la base è il solo costo venduto, mentre il
+     numeratore porta anche il risultato delle unità trasferite (esempio: 25% invece di circa 12,5%);
+  2. la polvere rompe l'identità del §7: lo stato giornaliero valuta ogni quantità > 0, le righe no;
+  3. `oldest_open_lot_date` non ha soglia di polvere.
+
+#### J-54 — le colonne il cui `null` vuol dire «nessuno» (17/10, dalle 16:17; base `066c54dc6`)
+
+- **Decisione del coordinatore** (opzione (2), prima del rilascio): il renderer tratta un insieme piccolo e nominato
+  di campi «null = nessuno» come «non si applica», non come «non disponibile».
+  - L'elenco sta in una costante esportata, descritta in `ai_export_composition.md`, con un test per voce.
+  - Nessun salto di componente; le etichette restano `_v2`, perché è lo stesso rilascio.
+- **L'insieme (8), ciascuno con la prova nel backend; OK del coordinatore, `asset_ref` compreso**:
+  - **ovunque**:
+    - `closing_date`: un lotto aperto (`map_fifo_lot_row` la scrive solo se il lotto è chiuso);
+    - `reason_code`: una riga senza problemi (`PortfolioAssetDrawdownRow`);
+    - `partial_reason_code`: un risultato non parziale (ENTITY STATUS);
+    - `conversion_reason`: un importo convertito (`IncomeTimelineRow`, che spiega solo un vuoto);
+  - **solo in OUTPUT DEFINITIONS**: `component`, `minimum` e `maximum` (`IndicatorOutputColumn`);
+  - **solo in `portfolio.income_timeline` › `TABLE rows`**: `asset_ref`, un reddito senza asset (`asset_id=tx.asset_id`
+    di una cedola sulla cassa).
+
+  Esclusi perché lì `null` vuol dire anche «ignoto»: gli importi dei lotti (B3b), `value_source` (nessun prezzo),
+  i campi di `PortfolioAssetDrawdownRow` diversi dal codice (null quando la riga non è disponibile).
+- ✅ **Rossi, primo giro (16:4x)**: 663 test, **21 rossi**, 642 verdi; controlli verdi. Il test-author ha trovato 4 punti,
+  verificati da J nel backend.
+  > **⚠️ Fuori pista (l'insieme cambia: da 8 a 11 voci)**:
+  > - **`partial_reason_code` esce.** ENTITY STATUS elenca solo i risultati PARTIAL (`technical_shared.py:939` esporta
+  >   OK/PARTIAL), e lì il campo è null solo per un PARTIAL senza motivo noto (`:1072`): vuol dire «ignoto», e resta
+  >   nominato (controllo).
+  > - **`asset_ref` vale per ogni tabella di `portfolio.income_timeline`.** In COMPACT i redditi stanno in `TABLE
+  >   aggregated_rows` (`AggregatedIncomeRow.asset_id` null per una cedola sulla cassa), negli altri dettagli in `TABLE
+  >   rows`.
+  > - **Entrano i due pesi del PERIOD SUMMARY di `asset.indicators` e `fx.indicators`** (4 voci): un solo Asset o una
+  >   sola coppia non hanno un portafoglio in cui pesare, e `SingleTargetIndicatorsPayload` lascia i pesi a `None`. È il
+  >   fatto che T-B7 lascia già muto in SERIES. Nei componenti a più asset (`portfolio.technical_indicators`) un peso
+  >   nullo vuol dire un valore mancante: resta nominato (controllo).
+  > - **Restano nominati**: `conversion` del calendario dei redditi (null solo senza cambio; le conversioni identiche
+  >   sono compilate) e `remaining_to_peak_percent` (perdita totale).
+- ✅ **Rossi, secondo giro (16:5x)**, sull'insieme di 11: 674 test, **27 rossi**, 647 verdi; 12 controlli verdi.
+  - Fra i controlli: `partial_reason_code` nominato dopo ENTITY STATUS; i pesi nominati nel PERIOD SUMMARY a più asset
+    (portafoglio e broker); `asset_ref` nominato nelle righe del drawdown; 6 tabelle miste che stampano ancora `null`.
+  - Il test-author ha controllato nel backend: ogni `reason_code` annullabile è null solo con lo stato OK o registrato (i
+    validatori lo impongono); `asset.indicators` e `fx.indicators` sono alla v1, già compatti.
+- ✅ **Codice (17:00)**: le due patch applicate dopo il rosso.
+  - `NULL_MEANS_NONE_COLUMNS` esportata, con la ricerca `meansNoneWhenNull`.
+  - `pipeTable` riceve un contesto (titolo, componente) da OUTPUT DEFINITIONS e dal PERIOD SUMMARY.
+  - `renderGenericPayload` riceve il componente, e la tabella è `TABLE <path>`.
+  - Doc: la terza specie di colonna non nominata, con la tabella delle voci (`ai_export_composition.md`), e una frase
+    nel flusso della sonda.
+- ✅ **Verdi (17:01–17:07)**:
+  - `front-ai-export unit` **674**;
+  - `utils ai-export-probe-helpers` **73**;
+  - prettier pulito;
+  - `front check` 0/0;
+  - `mkdocs build` stretto ✓, check-links ✓.
+
+  Porta 6185 libera; solo Vitest.
+  > **⚠️ Fuori pista**: il primo `front check` ha dato 1 errore in `UsersTab.svelte:174` (`cancel_setup` sconosciuto).
+  > Il client generato e ignorato (`generated.ts`, 14:20) era più vecchio del fast-forward (`AdminUserUpdateRequest`
+  > di un'altra corsia). `dev.py api sync`, che non tocca nessun file tracciato, l'ha rigenerato: poi 0/0. È lo stesso
+  > caso di J-12; nessuna modifica di J-54 c'entra.
+- **devWiki**: il punto di T-B7 in `decisions/ai-export-versioned-snapshot-boundary.md` ora descrive la lista; una voce
+  nel registro.
+- ⏳ **Checkpoint J-54** (FROZEN).
+- ✅ **Checkpoint J-54** (2026-10-17): entrato (dev `f9aef5d99`, `0081cb950`); la riga 🔄 di T-B7 estesa
+  (`a3d4d60a7`); worktree in fast-forward. Il coordinatore conferma le 11 voci; T-B9 chiusa come verificata.
+- **Celle delle tabelle miste**: restano `null` (decisione del coordinatore); il seguito, dopo la 1.3, è **J-55**.
+- ⏳ **Rossi** (test-author, brief 16:2x).
+- Patch pronte, non applicate: `files/j/j54/apply_fix.py` (7 ancore: la costante, la ricerca, `pipeTable` col contesto,
+  il titolo di OUTPUT DEFINITIONS, `renderGenericPayload` col componente e i suoi due chiamanti) e `apply_docs.py`
+  (2 pagine). Prova a secco OK.
+
+#### T-B9 — analisi (17/10 ~16:35, sola lettura; base `066c54dc6`)
+
+- **La voce** (sezione T): il renderer stampa `0` un residuo monetario sotto l'unità minima della valuta
+  (`MONETARY_RESIDUAL_FIELDS`: `residual`, `period_other_result`, `reconciliation_diff`, `snapshotDataRenderer.ts:262`),
+  mentre `reconciled` tollera solo `CONVERSION_DUST`, cioè 1e-9 (C-53). Un residuo fra le due soglie darebbe
+  `reconciled=false` accanto a `residual.amount=0`.
+- **Verificato: non può nascere dal servizio.**
+  - Il residuo (`portfolio_financial.py:491`, `broker_financial.py:432`) è `pnl − (ΔUGL + realized + income − fees +
+    other_result)`.
+  - `period_other_result` è calcolato da `period_math.period_other_result` (`portfolio_service.py:884`) sugli stessi
+    `Decimal` che il riepilogo espone (`:1054-1065`), senza arrotondamenti: `Currency.amount` è `SafeDecimal`, che
+    cambia solo la stampa JSON. Il broker passa dallo stesso rapporto (`load_portfolio_report`, `BROKER_REPORT_RESOURCE`).
+  - Il residuo è quindi solo l'arrotondamento del contesto `Decimal` predefinito, a 28 cifre: l'app non lo cambia; i
+    contesti di `db/precision.py` e `ledger_totals.py` sono locali.
+  - L'errore vale circa 1e-27 × la grandezza degli importi: per toccare 1e-9 servono importi di circa 1e17, anche in
+    VND o IDR.
+  - Lo fissa già `test_engine_closing_term_reconciles_despite_decimal_rounding` (`1E-24`, reconciled).
+- **Proposta**: chiudere T-B9 come verificata, senza codice. Una regola del renderer che non azzera `residual` quando
+  `reconciled` è falso aggiungerebbe un caso speciale per una combinazione che il servizio non produce.
+
+- ✅ **T-B9 chiusa come verificata** dal coordinatore (17/10, con l'ingresso di J-54).
+
+#### Revisioni di MF-J45b e C-97c-2 (17/10 ~17:10–17:30, sola lettura; base `a3d4d60a7`)
+
+- **MF-J45b** (`00397db34`, single-flight nel motore): **OK**.
+  - La chiave del volo è `(blob_key, actual_from, actual_to)`, e `blob_key` contiene già utente, perimetro, quote,
+    valuta, impronte (transazioni, prezzi, cambi, split), i due `include_*` e `period_start or date_from`: nessun
+    seguace riceve il risultato di altri ingressi.
+  - Il ciclo di vita del future è corretto: `shield`, regolato prima di togliere la chiave, `exception()` letto, futures
+    di un altro loop ignorati.
+  - LOW: un errore deterministico si ritenta in fila, uno per seguace.
+  - Nit di doc: il volo vuole il range esatto, mentre la cache accetta anche un blob che parte prima.
+  - Il LOW e il nit vanno a MF (coordinatore).
+- **C-97c-2** (`a8ec9d309`, cifre dei lotti, W): **OK**.
+  - Il dubbio sui float a 10 decimali non regge: una quantità salvata ha al più 15 cifre significative
+    (`REAL_SIGNIFICANT_DIGITS`), che un float tiene.
+  - Nit: il messaggio del commit dice che la somma della custodia non somma più float, invece somma ancora in float;
+    l'arrotondamento alla decima ne nasconde il rumore, e una somma oltre 15 cifre perde una fetta minuscola.
+  - Nit: «a price under a cent» sottostima l'effetto. Ogni prezzo unitario sotto 10 prende fino a 4 cifre
+    significative (`1.23456` → `1.235`), coerente con `formatPrice` di C-97c-1.
+- **Proposta del prossimo lotto** (al coordinatore, 17:3x):
+  - **J-52**: l'output dello stress dice la finestra rigiocata (`prepared.requested_range`), mentre `metadata.params`
+    ripete la richiesta. Proposto il salto `algorithm_version` 3.0.0 → 3.0.1 per il valore che cambia fuori dai limiti;
+    copre anche SEC8-1b, che non l'aveva fatto (regola del rischio: «bump whenever the values change»).
+  - Poi **CP-10d**, il lotto di riordino più piccolo, sbloccato da MF-D1 (`aca75c7ca`): `series_preparation.py` →
+    `services/market_series.py`, solo import e `applyTo`, circa 16 file.
+
+#### J-52 — una convenzione sola per la finestra del rigioco (17/10, dalle 17:3x; base `a3d4d60a7`)
+
+- **Via del coordinatore (17:3x)**: GO, e sì al salto 3.0.0 → 3.0.1, una volta, per SEC8-1b e J-52; riga 🐛 nel
+  CHANGELOG che nomina il salto. Dopo l'ingresso, «ready for CP-10d»: il coordinatore controlla che `assets/`,
+  `ai_export/components/` e il runner siano quieti in tutti i worktree.
+- **Convenzione**: `metadata.params` ripete ciò che è stato chiesto; l'output e `metadata.analyzed_range` dicono ciò che
+  è stato rigiocato.
+  - `risk_plugins/stress/plugin.py:637`: `replay_range=params.replay_range` → `prepared.requested_range`, la richiesta
+    limitata da SEC8-1b (`risk/replay.py:51`).
+  - Cambia solo per una finestra fuori dai limiti. Nessun lettore: il frontend manda `replay_range` nella richiesta
+    (`riskRequest.ts:153`) e non legge l'eco; l'AI Export non usa lo stress.
+- **La versione**: `StressAnalytic.algorithm_version` 3.0.0 → 3.0.1 (regola del rischio: «bump whenever the values
+  change»). SEC8-1b aveva cambiato la finestra rigiocata senza salto; uscita nella 1.2.0 come 3.0.0. Nessuno fissa
+  `3.0.0` nei test, nel frontend o nella doc.
+- ✅ **Rossi (17:2x)** del test-author, sul codice vecchio (`-k replay_range_bounds`): **3 rossi, 7 verdi**.
+  - R1: l'eco è la finestra grezza (fino a oggi + 400), e il controllo «niente oltre domani» ora la vede.
+  - **R6** (nuovo): una finestra che parte prima del pavimento, su un libro F quotato il giorno prima del pavimento,
+    quindi rigiocabile. L'eco grezza parte dal 1917 invece del pavimento del 1926.
+  - **R7** (nuovo): la versione è `3.0.0` invece di `3.0.1`.
+  - R2, R3, R5 e G2 non fissano un'eco: lì il rigioco non è disponibile, quindi non c'è output. G1 è verde.
+  - Il test-author ha verificato nel codice:
+    - `prepared.requested_range` è la richiesta limitata (`replay.py:51,104`);
+    - `metadata.params` è la richiesta grezza (`results.py:446`);
+    - `bounded_range()` restituisce lo stesso oggetto dentro i limiti.
+  - Nota: `test_risk_analytics.py:1660` fissa `output.replay_range == replay_range` su un contesto sintetico dove le
+    due finestre coincidono: resta verde, ma non distingue la fonte.
+- ✅ **Codice (17:29)**: la patch applicata dopo il rosso. La versione 3.0.1 col commento, l'eco
+  `prepared.requested_range` e la frase di «Replay Coverage».
+- ✅ **Verdi (17:29–17:38)**:
+  - ruff e black puliti;
+  - il file **10**;
+  - `risk-all` **918**;
+  - `schemas risk` **93**;
+  - `mkdocs build` stretto ✓, check-links ✓.
+
+  Porta 6185 libera.
+- ⏳ **Checkpoint J-52** (FROZEN).
+- ✅ **Checkpoint J-52** (2026-10-17): entrato (dev `df1194de4`, merge `ae3f02530`, conflitto del backlog risolto dal
+  coordinatore con la chiusura di J-53, tenendo le due), CHANGELOG 🐛 `7cff26b61`; worktree in fast-forward.
+- Patch pronta, non applicata: `files/j/j52/apply_fix.py` (3 ancore: versione col commento, l'eco, la frase di «Replay
+  Coverage» in `risk/architecture.md`). Prova a secco OK. Verdi previsti: lint, il file, `risk-all`, `schemas risk`,
+  doc.
+
+#### Revisioni di J-53 e MF-A5; CP-10d in attesa (17/10 ~17:45, sola lettura; base `7cff26b61`)
+
+- **CP-10d: non ancora** (coordinatore). `assets/` è aperta in Z (`refresh.py`, `provider_management.py`) e in X
+  (`price_store.py`), i file del runner in sei worktree: ricontrolla dopo le due revisioni.
+  - Lo script è pronto, non applicato: `files/j/cp10d/apply_rename.py` (21 file, 43 menzioni, un `mv` semplice perché
+    `git mv` metterebbe in stage). A secco OK su `a3d4d60a7`: va rifatto prima di applicarlo.
+  - Restano col loro nome, come dice CP-10d («soli import e `applyTo`»): il file di test `test_series_preparation.py` e
+    l'azione `series-preparation` del runner, che quindi non si tocca. Fuori anche diari, `TODO_FUTURI.md` e le cache di
+    graphify.
+  - Due commenti sono nei file di Y (`assetSetLevels.ts`, `.test.ts`).
+- **J-53** (`fd8aeaf18`, Y): **OK**.
+  - Una riga per le issue su un lotto, coi chip; una riga per ogni issue senza lotto, deduplicata per chiave e parametri.
+  - I quattro codici senza lotto del motore (`TRANSFER_PAIR_MISSING`, `FIFO_SOURCE_QUANTITY_MISSING`, `SHORT_*`) fanno
+    fallire l'analisi, quindi vanno all'avviso. Al banner arrivano solo fondi orfani, «al costo» e cambi: nessuna riga
+    ripetuta.
+- **MF-A5** (`f7057cb2f`): **OK sul lato del mittente**.
+  - La base = costo venduto + costo spostato dalle tratte contate (`counted_tract`). Un'uscita non coperta fa
+    ripiegare; l'esempio dà 12,5%; il nit «fell to zero» è corretto.
+  - **Reperto (medio-basso, di MF), lo specchio sul lato del ricevente**: il P&L di una riga che riceve unità con una
+    tratta contata parte dal loro valore d'arrivo (`−tract`), mentre la base resta il costo storico. Comprato 500, vale
+    600 all'arrivo, venduto 660: 60/500 = 12% invece di 60/600 = 10%. Cura proposta: aggiungere alla base le tratte
+    ricevute, oppure ripiegare.
+- **J-53, le modifiche di Y a `lots_analysis_service.md`** (l.400 e l.600), verificate:
+  - «the issues of one code that name a lot» è esatto;
+  - i fondi orfani sono uno per fondo (`fifo/engine.py:899-913`, `:1015-1029`);
+  - `_report_gaps()` passa da `build_data_quality_report`: due `MISSING_FX_RATES` e un `MISSING_COST_BASIS`, senza
+    lotto;
+  - l'ancora `#degraded-economic-pools` esiste.
+- **CP-10d ancora fermo** (coordinatore, ~17:50): `assets/` aperta in X e Z, `_backend_services.py` in A ed E. In
+  coda, dalla sezione di W: W-B55.
+
+#### W-B55 — la decisione 47 in un'altra valuta, da capo a fondo (17/10, dalle 17:50; base `7cff26b61`; solo test, W rivede)
+
+- **La lacuna**: dalla cancellazione del broker che riceve fino ai numeri in un'altra valuta, nessun test fa tutto il
+  percorso.
+  - La gamba che cede diventa `ADJUSTMENT −q` al costo Auto del suo broker (`_handover_cost` → `compute_wac_iterative`,
+    nella valuta dell'ultimo acquisto).
+  - J-24 realizza D − C nel giorno della consegna.
+  - Oggi la cosa è coperta a metà: lo specchio di W (`TestOrphanOutgoingTransfer`) scrive la riga in EUR; il libro
+    estero di J (`TestForeignAdjustmentOutHandsOverAtItsDate`) legge una riga USD scritta a mano.
+- **Il caso** (brief al test-author): la classe `TestOrphanOutgoingTransferInAnotherCurrency` nel file di W, con il
+  controllo (riga scritta a mano) e l'orfano (cancellazione vera).
+  - X″ in USD, rapporto in EUR.
+  - Giorno 1: 1000 USD e 10 X″ a 100 USD, EUR/USD 1,25.
+  - Giorno 3: 4 X″ da A a B, EUR/USD 1,60, prezzo 110 USD; poi B cancellato. Lettura il giorno 3, su date FX che nessun
+    altro test scrive.
+- **Attesi (derivati da J)**:
+  - la riga: `ADJUSTMENT −4`, 100 `USD`;
+  - Dashboard: investito 550 (800 − 250), realizzato −70 (250 − 320), non realizzato −67,5, patrimonio 412,5, P&L
+    −137,5;
+  - lotti: costo 800, proventi 250, realizzato −70, valore aperto 412,5, P&L totale −137,5;
+  - Dashboard e lotti dicono −70.
+- ✅ **Esecuzione (18:0x)**: **verde sulle due origini**, al primo giro. File 27/27 (21 + 6 nuovi). Nessun valore
+  corretto dopo la corsa.
+  - **La riga** lasciata dalla cancellazione è esattamente quella del controllo: `ADJUSTMENT −4`, 100 `USD`, senza
+    partner.
+  - **Dashboard**: investito 550, realizzato −70, patrimonio 412,5, P&L −137,5; costo aperto 480; X″ 6 a 80 (valore
+    412,5, guadagno −67,5).
+  - **Lotti**: COMPLETE, un lotto di 10, costo 800, proventi 250, realizzato −70, valore aperto 412,5, P&L di mercato
+    −67,5, totale −137,5.
+  - **Parità**: −70 e −137,5 da una parte e dall'altra.
+  - **Date**: 3 e 5 dicembre 2018, libere in tutti i test (le altre scritture EUR/USD stanno nel 2018-11, nel 2046-47,
+    nel 2024 e nel 1990; il popolamento parte da oggi − 3 anni). Scritte con «cancella e poi aggiungi».
+  - **Aiuti di W toccati**, tutti con parole chiave e valori di oggi come predefiniti: `_user_and_asset(currency=)`,
+    `_lots(date_to=)`, `_dashboard(date_to=)`. I 21 test di prima restano verdi.
+- ✅ **Verifica di J (18:1x)**: `services orphan-transfer-numbers` **27**, check-orphans ✓, ruff e black puliti (corsa del
+  test-author); porta 6185 libera.
+- **Esito: la decisione 47 in USD è corretta da capo a fondo**, quindi nessun difetto. W-B55 si chiude con la consegna di
+  soli test; la riga è nella sezione di W e la chiude il coordinatore.
+- ⏳ **Checkpoint W-B55** (FROZEN; W rivede).

@@ -25,7 +25,7 @@
     import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {isSoftProbeFailure, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml} from './providerProbe';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {resolveProviderError} from './resolveProviderError';
     import {createProviderProbeState, providerConfigurationKey, type ProviderConfiguration, type ProviderProbeState} from './providerProbeState.svelte';
@@ -378,7 +378,7 @@
             // I3: failures resolve code+details to a localized message; the
             // raw English `error` stays as fallback for unmapped codes.
             const cpError = cp.success ? null : resolveProviderError({error: safeString(cp.error), error_code: safeString(cp.error_code), error_details: safeScalar(cp.error_details)}, $t);
-            const detail = cp.success ? `${formatFixed(Number(cpValue), 2)} ${ccyLabel}${cpDate ? ` (${formatDay(cpDate)})` : ''}` : (cpError ?? undefined);
+            const detail = cp.success ? `${formatPrice(Number(cpValue))} ${ccyLabel}${cpDate ? ` (${formatDay(cpDate)})` : ''}` : (cpError ?? undefined);
             items.push({
                 success: cp.success,
                 operation: 'current_price',

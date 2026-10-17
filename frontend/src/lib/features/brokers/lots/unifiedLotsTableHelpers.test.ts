@@ -33,6 +33,17 @@
  * Italian one bare `it` (an en-US browser lends no region to Italian). The language is
  * switched as LanguageSelector does and put back to English after each case; Italian
  * digits come from `Intl.NumberFormat` in this runtime, never typed.
+ *
+ * C-97c-2 (decision D-C97c-1 of the coordinator, 17/10): a quantity on screen loses no
+ * digit the database keeps, and a lot quantity keeps ten decimals. `formatLotQuantity`
+ * — the table's quantity, its masked and partial cells, and with the cure the custody
+ * modal's and the WAC chart's too — cuts it at the sixth today. The contract: up to ten,
+ * never in exponent notation. Reds, in the `formatLotQuantity` block: «caps at ten»
+ * (which pinned six), 0.1234567891 (today 0.123457) and 0.0000001, a lot of 10 satoshis
+ * (today 0: the lot reads empty). Guards there, green today and after: the `—` of an
+ * absent quantity, 2.5, and a quantity within six decimals passed `it` explicitly. The
+ * M-18 block's quantities stay within six decimals, so they reach no cut before or after
+ * the cure and that block reads the notation alone.
  */
 import {afterAll, afterEach, beforeEach, describe, it, expect, vi} from 'vitest';
 
@@ -105,18 +116,43 @@ describe('formatLotQuantity', () => {
         expect(formatLotQuantity(null, 'en-US')).toBe('—');
     });
 
-    it('formats a finite value with up to six fraction digits (not-null branch)', () => {
+    it('formats a finite value with up to ten fraction digits (not-null branch)', () => {
         expect(formatLotQuantity(1000.5, 'en-US')).toBe('1,000.5');
     });
 
-    it('caps at six fraction digits', () => {
-        expect(formatLotQuantity(0.123456789, 'en-US')).toBe('0.123457');
+    it('caps at ten fraction digits: the tenth is shown, the eleventh is not (C-97c-2)', () => {
+        // Why: the eleventh decimal, 2, reads the same whether the cap rounds or cuts; the case pins where the cap is.
+        expect(formatLotQuantity(0.12345678912, 'en-US'), 'ten decimals, no more (today cut at the sixth: 0.123457)').toBe('0.1234567891');
     });
 
     it('without a locale, the interface locale: an English UI on an en-US browser writes en-US (M-18)', () => {
         // M-18 rewrite: this case accepted the machine locale and only looked for the digits. The
         // absent locale is the interface's now; the Italian side is in the M-18 block below.
         expect(formatLotQuantity(1234.5)).toBe('1,234.5');
+    });
+
+    // C-97c-2 — a lot quantity keeps every decimal of its column (D-C97c-1): red until the cure.
+    it('0.1234567891 reads 0.1234567891: the ten decimals of its column, not six (C-97c-2)', () => {
+        expect(formatLotQuantity(0.1234567891, 'en-US'), 'ten decimals (today cut at the sixth: 0.123457)').toBe('0.1234567891');
+    });
+
+    it('0.0000001, a lot of 10 satoshis, reads 0.0000001, not 0 (C-97c-2)', () => {
+        expect(formatLotQuantity(0.0000001, 'en-US'), 'its seventh decimal (today 0: the lot reads empty)').toBe('0.0000001');
+    });
+
+    // C-97c-2 guards: green before and after the cure. The `—` of an absent quantity is the first case of this block.
+    it('guard: 2.5 still reads 2.5 (C-97c-2)', () => {
+        expect(formatLotQuantity(2.5, 'en-US')).toBe('2.5');
+    });
+
+    it('guard: an explicit it locale writes 12345.123456 in Italian notation, its six decimals whole (C-97c-2)', () => {
+        // Why six decimals: no cut is reached before the cure (six) nor after (ten), so the case reads the notation alone.
+        const atTen = (locale: string) => new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 10}).format(12345.123456);
+        const italian = atTen('it');
+        expect(italian, 'control: Italian writes the quantity otherwise than English').not.toBe(atTen('en-US'));
+        expect(italian.replace(/\D/g, ''), 'control: and keeps its digits').toBe('12345123456');
+
+        expect(formatLotQuantity(12345.123456, 'it')).toBe(italian);
     });
 });
 
@@ -204,9 +240,9 @@ describe('formatLotQuantityCell', () => {
 });
 
 describe('formatLotQuantity / formatLotQuantityMasked / formatLotQuantityCell — without a locale, the interface language (M-18)', () => {
-    /** A quantity as Intl writes it in `locale`, with the formatter's options: up to six fraction digits. */
+    /** A quantity as Intl writes it in `locale`, with the formatter's options: up to ten fraction digits (C-97c-2). */
     function intlQuantity(locale: string, value: number): string {
-        return new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6}).format(value);
+        return new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 10}).format(value);
     }
 
     /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
@@ -231,8 +267,10 @@ describe('formatLotQuantity / formatLotQuantityMasked / formatLotQuantityCell �
 
     it('formatLotQuantity: an Italian UI reads Italian digits without passing a locale; an explicit locale still wins', async () => {
         // 1234.5 is grouped in en-US only (Italian groups from five digits), 12345.678 in both, and
-        // 0.123456789 is capped at six fraction digits.
-        const quantities = [1234.5, 12345.678, 0.123456789];
+        // 0.123456 shows its six fraction digits. None reaches a cut — the sixth decimal before C-97c-2,
+        // the tenth after — so this case reads the notation alone: how many decimals a quantity keeps
+        // is the subject of the C-97c-2 cases of the `formatLotQuantity` block.
+        const quantities = [1234.5, 12345.678, 0.123456];
         const italian = quantities.map((value) => intlQuantity('it', value));
         const american = quantities.map((value) => intlQuantity('en-US', value));
         italian.forEach((text, index) => expect(text, `control: Italian writes ${quantities[index]} otherwise than en-US`).not.toBe(american[index]));

@@ -6866,3 +6866,149 @@ its i18n keys in 4 languages, and run the HTML gate/`core-unit` with them. Add t
 - Doc dopo lo slot: `security.md` («Refusals with a code»: `AccountError` sopravvive a copia, deepcopy e pickle con il
   suo codice; UNAME-032 fra i test). Build strict e `check-links` (97 validi) puliti.
 - **A-51 (+ A-45, + la cura di E su A-47): definizione di fatto ✅** (revisione di E dopo l'ingresso).
+
+## A-51 — Entrato; A11 / C-54 «Novità dalla tua ultima versione» (17/10, 16:06–; base `15ae6f61e`)
+- **Entrato**: dev `180be0ff1` (`86b2f2f47`), CHANGELOG 🐛 ×2 `15ae6f61e`. Revisione di H di A-42/A-43 e A-50: OK, con una
+  nota (`hosting_providers.en.md`: «(not for a protected account)») per questo lotto.
+- Dal coordinatore: «A11 / C-54 … yes for 1.3, analysis first. On LibreFolio Cloud the operator updates the instance, so
+  users otherwise never learn what changed.» Vincoli: `ChangelogModal` è nell'area dei colori (nessuna classe; chiedere
+  prima di toccare il markup); il testo del changelog resta quello del bundle, le stringhe del modale in i18n.
+
+### C-54 — Analisi (16:20, sola lettura)
+**Stato reale**
+- `users.last_seen_version` esiste già (`VARCHAR(40) NULL`, migrazione 005, D-A12): nessuna migrazione. Oggi nessuno lo
+  scrive né lo legge.
+- Il bundle: `CHANGELOG.md` più le traduzioni `CHANGELOG.{it,fr,es}.md`; `features/changelog/changelog.ts` le analizza
+  (`parseChangelog`, `[Unreleased]` tenuto come capitolo) e `localizedChangelog` dà i capitoli nella lingua
+  dell'interfaccia, in inglese dove manca la traduzione (con la pastiglia «non ancora tradotto» in `ChangelogModal`).
+- `ChangelogModal` (`components/layout/`, area dei colori; montato da Sidebar e About): ricerca, indice a chip, pieghe,
+  il pulsante «Controlla aggiornamenti» (solo self-hosted confermato).
+- `DeferredAppPopups` (`features/onboarding/components/`): un popup automatico alla volta (oggi `donation`, poi `update`),
+  in attesa finché c'è una guida o un modale aperto; una richiesta manuale dell'aggiornamento passa sopra.
+- Versioni: backend `get_version()` (`LF_APP_VERSION`, `git describe`, `VERSION`: in corsia `v1.2.1-2106-g…-dirty`);
+  frontend `APP_VERSION` (lo stesso build) e `compareVersions()`/`parseVersion()` in `update-check/updateCheck.ts`.
+- Al login la risposta porta `show_donation_popup` (deciso dal backend); `AuthUserResponse` (login e `/auth/me`) non ha
+  la versione vista.
+
+**Disegno proposto**
+1. *Dove*: `users.last_seen_version`, per utente, sempre una release base `X.Y.Z` (la versione in esecuzione senza il
+   suffisso di `git describe`; una versione illeggibile → nulla di scritto).
+2. *Account nuovi mai*: `user_service.create_user` scrive la release in esecuzione (ogni via di creazione ci passa:
+   registrazione, inviti, CLI, admin F02).
+3. *Account di prima* (`NULL`): una volta, con il solo capitolo della release in esecuzione (alternativa: scritti in
+   silenzio senza mostrare nulla, ma allora chi passa alla 1.3 non vede le novità della 1.3).
+4. *Quando*: al primo caricamento dell'app dopo un aggiornamento — login o una sessione sopravvissuta all'aggiornamento —
+   via `AuthUserResponse.last_seen_version` (login e `/auth/me`); finché non è segnato visto.
+5. *Quali capitoli*: quelli rilasciati con `last_seen < v ≤ release in esecuzione`, dal più nuovo; mai `[Unreleased]`;
+   nessun capitolo → nessun modale (le build di sviluppo).
+6. *Visto*: alla chiusura (pulsante, Esc, sfondo) `POST /api/v1/auth/whats-new/seen` → il server scrive la sua release
+   (mai una versione mandata dal client), 204, idempotente; se fallisce, il modale torna al caricamento dopo.
+7. *Profili*: uguale su gestito e self-hosted (niente codice solo cloud); sul gestito è l'unico canale.
+8. *UI*: un modale nuovo `features/changelog/WhatsNewModal.svelte` (ModalBase, solo ruoli dei colori, i capitoli col
+   cammino Markdown di `ChangelogModal`: `marked` + `sanitizeHtml` + `typesetFrenchMarkdown`; sezioni aperte; un link al
+   changelog completo). `ChangelogModal` non si tocca. `DeferredAppPopups` (area dell'onboarding) prende un tipo nuovo
+   `whats-new`, prima di `update` e `donation`: uno alla volta, mai sopra una guida o un altro modale. Chiavi i18n
+   `changelog.whatsNew.*` nella sorgente `app` (dove vive `changelog`).
+9. *Test*: backend (la release base; `create_user` la scrive; `last_seen_version` nella risposta di login e di `/me`;
+   `POST …/seen`: 401 anonimo, 204, la release scritta, idempotente); Vitest (la regola dei capitoli: `NULL`, intervallo,
+   `[Unreleased]`, downgrade, build di sviluppo; il modale; l'ordine e l'attesa in `DeferredAppPopups`); E2E nuovo in
+   `e2e/layout/` con le risposte intercettate (un utente con una versione vista vecchia → i capitoli giusti per
+   `data-testid` → chiusura → il POST osservato → ricarica → niente modale; gestito e self-hosted). Slot ~15 min (l'E2E
+   nuovo, API `auth`, Vitest `core-unit`/`component-unit`). Galleria (G) dopo l'ingresso.
+10. *Doc*: utente (cosa vede al primo accesso dopo un aggiornamento), admin (gestito/self-hosted), developer (API,
+    `DeferredAppPopups`, il modale).
+
+**Da decidere (coordinatore)**: (a) il punto 3; (b) i capitoli tradotti del bundle (come `ChangelogModal`) contro il
+vincolo «il testo resta inglese»; (c) il permesso su `DeferredAppPopups`; (d) il punto 4 (ogni caricamento vs solo login).
+**Conflitti**: `schemas/auth.py` (`AuthUserResponse`, tocchi di E), `DeferredAppPopups` (onboarding), la sorgente i18n
+`app`. **Peso**: medio. Più la nota di H (`hosting_providers.en.md`).
+- **Coordinatore (16:09): GO**, rossi prima. (a) account `NULL`: una volta, il solo capitolo della release in esecuzione;
+  (b) `localizedChangelog` (tradotto dove c'è, inglese altrimenti: «il mio "solo inglese" era sbagliato»); (c) scrittura
+  su `DeferredAppPopups.svelte` per il tipo nuovo e l'ordine soltanto; (d) a ogni caricamento finché non è segnato
+  visto. `WhatsNewModal` solo ruoli (`theme-roles --check`); riga ✨ al checkpoint; slot ~15 min a richiesta.
+- **⚠️ Rischio trovato, e la correzione (coordinatore OK 16:14)**: i DB delle corsie sono popolati da prima, i loro utenti
+  hanno `NULL` → con (a) ognuno vedrebbe il modale al primo caricamento e gli E2E di tutte le corsie si fermerebbero.
+  Quindi: il backend manda `user.whats_new: {since, release} | null` già deciso (non la colonna grezza); un interruttore
+  nascosto `LIBREFOLIO_DISABLE_WHATS_NEW` (come quello delle donazioni, D-A7: solo nella doc dei test, né
+  `.env.example` né pagine admin) lo spegne; `dev.py server --test` lo mette su ogni corsia (una riga, permesso del
+  coordinatore: E e H toccano `dev.py` altrove); l'E2E del lotto intercetta `/auth/me` e il POST, non scrive mai sugli
+  utenti condivisi.
+- **Nota di H** applicata: `admin/hosting_providers.en.md` «…but not for a protected account, whose button is off».
+
+### C54.1 — Rossi (16:15–, tre `test-author` in parallelo, file distinti)
+- Backend: `test_services/test_whats_new_service.py` (WN-…), `test_api/test_whats_new_api.py` (WN-API-…), unità
+  `services whats-new` e `api whats-new`.
+- Frontend: `whatsNew.test.ts`, `whatsNewStore.test.ts`, `WhatsNewModal.test.ts`, i casi nuovi di
+  `DeferredAppPopups.test.ts`; registrati con `changelog.test.ts`.
+- E2E: `e2e/layout/whats-new.spec.ts` (WNE-…), unità `front-utility whats-new`.
+- Codice pronto, non applicato (`work/c54/`): `whats_new_service.py` (`release_of`: almeno `X.Y`, così un hash non è una
+  release; `current_release` da `config.get_version()` a ogni chiamata; `pending_for`; `mark_seen` idempotente),
+  `config.accounts.whats_new_disabled()`, `WhatsNewRead` e `AuthUserResponse.whats_new`, `_auth_user()` per le sei
+  risposte con l'utente, `POST /auth/whats-new/seen` (204), `create_user` con la release in esecuzione, la riga di
+  `dev.py`; `whatsNew.ts`, `whatsNewStore.svelte.ts` (`fromStore(auth)`), `WhatsNewModal.svelte` (ruoli; lo stile del
+  Markdown come in `ChangelogModal`, con le variabili dei ruoli), `DeferredAppPopups` (`whats-new` primo);
+  `i18n_c54.py` (5 chiavi `changelog.whatsNew.*`, i termini delle chiavi `changelog.*`). Dry-run pulito.
+- E2E (16:35): `e2e/layout/whats-new.spec.ts` (WNE-01…06, solo desktop; le attese dal `CHANGELOG.md` della radice: oggi
+  `release` 1.2.1, `since` 1.2.0; `/auth/me` intercettato che cambia `user.whats_new` ma non aggiunge un campo che manca;
+  il POST intercettato e contato; ogni caso controlla anche che la corsia dica `whats_new: null`, cioè l'interruttore).
+  Registrato (`front-utility whats-new`, accanto a `legal-managed`). Non eseguito (serve lo slot): rosso per
+  costruzione finché il backend non manda il campo. tsc e Prettier puliti.
+- Backend, osservati (16:49): `test_whats_new_service.py` (WN-001…010, 52 casi) e `test_whats_new_api.py` (WN-API-01…07,
+  8 casi; 04 e 07 aggiunti dal test-author) → **57 rossi** (il modulo che non c'è; «create_user must write the running
+  release … holds None»; «the answer's user must carry whats_new … it carries ['created_at', …]»; «… must be 401: got
+  404»), **3 guardie verdi** (WN-008). Il test-author li ha provati verdi su una controfigura del contratto (60/60) e
+  rossi su otto difetti voluti. Registrati: `services whats-new`, `api whats-new`.
+- Frontend, osservati (16:50): `whatsNew.test.ts` (WN-01…11, 28 casi), `whatsNewStore.test.ts` (WNS-00…12, 16: WNS-00
+  verde di proposito — l'auth vero tiene `whats_new` come arriva), `WhatsNewModal.test.ts` (WNM-01…10, 12),
+  `DeferredAppPopups.test.ts` (DAP-WN-01…05) → **60 rossi** per il motivo voluto (i moduli che non ci sono; «nothing
+  imports …whatsNewStore.svelte»), i 5 casi di prima verdi. Registrati in `core-unit`, dopo `changelog.test.ts`.
+  > **Scelte del test-author, approvate**: il modale prova con lo store e l'auth veri; la pastiglia dentro il blocco del
+  > capitolo; i capitoli in inglese subito, senza segnaposto; `chapters` dello store = i capitoli inglesi semplici;
+  > DAP-WN-05: una richiesta manuale d'aggiornamento interrompe «What's new» senza chiuderlo, che poi torna.
+
+### C54.2 — Codice ✅ e verdi (16:49–17:04)
+- `work/c54/apply_c54.py` (6 file modificati, 4 nuovi; `auth.py`: le sei risposte con l'utente passano da `_auth_user`;
+  `black` ha aggiunto una riga vuota) e `work/c54/i18n_c54.py` (5 chiavi; `i18n check` stretto, 5 059 chiavi).
+  `api sync`; `front check` **0/0**; `theme-roles --check` pulito; Prettier: niente da cambiare; ruff e black puliti sui
+  miei file. `dev.py`: i 43 errori di ruff e il formato non-black sono gli stessi a HEAD (toccata una riga).
+- In processo: `test_whats_new_service.py` **52/52**, `test_whats_new_api.py` **8/8**; regressione `test_admin_setup_api.py`
+  48, `test_username_rules_api.py` 47, `test_users_admin_api.py` 98, `test_username_rules.py` 55.
+- Vitest: i 4 file nuovi o cambiati più ogni test che monta l'ospite dei popup → **347/347**, tranne
+  `OnboardingCoachmark.test.ts`, che non si caricava più (atteso: «Denied ID …/CHANGELOG.md?raw» sotto jsdom).
+  > **⚠️ Fuori pista (riparazione, `test-author`)**: `OnboardingCoachmark.test.ts` (area dell'onboarding) monta
+  > `DeferredAppPopups` per davvero: due mock inerti (lo store mai in attesa; il modulo del changelog con lo stesso stub di
+  > `AboutTab.test.ts`), +11 righe, nessuna asserzione cambiata → **176/176**; `features/onboarding` **290/290**.
+- Corsia, servizi: `whats-new` 52, `user-profile` 52, `registration` 151, `admin-bootstrap` 218, `email-verification` 127,
+  `session-version` 56 → **656/656**; porta libera.
+- Doc: sesto giro del `docs-writer` in corso. Slot chiesto (API `auth`, `whats-new`; E2E `whats-new`, `admin-users`;
+  Vitest `core-unit`, `component-unit`, `onboarding-component-unit`): `work/slot_c54/slot.sh`.
+- Coordinatore (17:04): slot in coda (tre esecuzioni pesanti); la riparazione di `OnboardingCoachmark.test.ts` accettata;
+  `WhatsNewModal.test.ts` spostato da `core-unit` a `component-unit` (accanto a `ChangelogModal.test.ts`), prima dello slot.
+
+### C54.3 — Slot ✅ (GO 17:10; 17:10–17:28; impronta `fb4d8d29975cb738`) e le due correzioni del `docs-writer`
+- Il `docs-writer` (sesto giro) era a metà: messo in pausa sulle build (le avviate del server dello slot ricostruiscono
+  `mkdocs_src/site`), lo slot partito dopo un controllo che nessun `mkdocs build` girasse.
+- API `auth` **95**, `whats-new` **8**; E2E `whats-new` **6/6** (la spec nuova, prima osservazione: il rosso era per
+  costruzione, senza corsia prima del codice), `admin-users` **10/10**; Vitest `component-unit` **180 file, 4 846**,
+  `onboarding-component-unit` **16, 470**; `core-unit` **8 765 verdi e 1 rosso**: `htmlSink.gate.test.ts`. Impronta
+  invariata; porta 6182 libera; lane restituita al coordinatore (H dopo).
+- **Correzione 1 (il cancello è il rosso)**: `WhatsNewModal` faceva `{@html render(…)}` con `sanitizeHtml` dentro il
+  helper; il cancello vuole `sanitizeHtml(…)` diretto nel template → `{@html sanitizeHtml(renderMarkdown(chapter.body))}`
+  (stesso risultato). `htmlSink`, `htmlInterpolation` e `features/changelog` **278/278**; `core-unit` rifatto **213 file,
+  8 766/8 766**; `front check` **0/0**; colori puliti.
+- **Correzione 2 (rosso prima)**: una copia senza tag dà `v0.0.0-g<hash>` (`get_git_version`), che diventava la release
+  `0.0.0`: gli account creati lì avrebbero visto tutto il changelog alla prima release vera. Rossi (`test-author`): tre righe
+  di WN-001 (`v0.0.0-gabc1234`, `…-dirty`, `0.0.0`) osservate rosse («must be None: got '0.0.0'»). Cura: `release_of`
+  dà None per una base 0.0.0. `test_whats_new_service.py` **55/55**, `test_whats_new_api.py` **8/8**.
+- Doc del sesto giro (11 pagine, `docs-writer`): `user/settings/about.en.md` (sezione nuova `#whats-new`),
+  `user/installation.en.md`, `admin/hosting_providers.en.md`, `developer/frontend/onboarding.md` (l'ordine e la sezione
+  `#whats-new`), `state/app-state.md`, `api/index.md`, `database/users_access.md`, `architecture/settings.md` e
+  `test-walkthrough/front-overview.md` (l'interruttore nascosto, solo qui), `frontend/index.md`, `access_control.md`.
+  Le pagine non inglesi linkano `about.md#changelog-modal` (l'ancora nuova esiste solo in inglese finché non si traduce).
+  Debito di traduzione: la sezione nuova di `about` e il punto di `installation`. Build in corso.
+- Doc chiusa (17:40): il `docs-writer` ha allineato `onboarding.md` (la release 0.0.0, il `sanitizeHtml` al punto del
+  `{@html}`) e `users_access.md`; build strict e `check-links` (97 validi) puliti; nessun timbro; debito: `about` (sezione
+  nuova) e `installation` (un punto).
+- **C-54 (+ la nota di H): definizione di fatto ✅** (revisione di E, H — `DeferredAppPopups`, onboarding — e della squadra
+  dei colori per `WhatsNewModal` dopo l'ingresso; galleria di G dopo). La riga C-54 dell'indice sta nella sezione C (non
+  la mia): la chiude il coordinatore.
