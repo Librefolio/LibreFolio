@@ -1729,6 +1729,18 @@ hand into a query string. `mask_query_credentials()` holds the rule. One mode is
 `--log-level trace`, which LibreFolio never passes, logs every ASGI message on `uvicorn.asgi`, headers included. It is
 a debugging mode, not meant for a server with real users.
 
+Nor does the log keep a response that breaks its model (lot H-33, from workstream E's security review R13-SEC4). When
+an endpoint returns what its `response_model` refuses, FastAPI raises `ResponseValidationError`, for which it registers
+no handler: the exception used to go on to uvicorn, which logged it on `uvicorn.error` (*Exception in ASGI application*)
+with its traceback, whose message, `str(exc)`, lists every error with its `input`: the response itself, the data of the
+user who asked. Now `install_response_validation_handler(app)` (`backend/app/api/response_validation.py`) handles it,
+for every route, and logs one ERROR, *A response does not match its model*, with the method, the route (its path
+template), the endpoint and, for each error, its `type` and `loc` only: never the `input`, never the `msg` (a validator
+may build it from the value), never the traceback (its message is `str(exc)`). The answer does not change:
+`500 Internal Server Error` in plain text, with the [security headers](#response-headers). It is now the handler's own
+answer, which crosses the middleware stack like any other, and the exception stops there. Tests:
+`./dev.py test services response-validation` (`backend/test_scripts/test_services/test_response_validation.py`).
+
 ## 🤐 Validation Errors Without the Input {: #validation-errors }
 
 FastAPI answers a request that fails validation (`RequestValidationError`) with `422` and one error per problem, each
@@ -1756,6 +1768,9 @@ process, a small app with and without the handler — a password too short, a mi
 parameter, a body that is not JSON, then a valid request and a route's own `422`, answered as before —; on the lane's
 server, every route with a secret in its body, the secret field invalid and another field missing, the secret nowhere
 in the answer; the shape a plain `422` keeps, and the OpenAPI schema.
+
+A `422` never sends the request's input back; a `500` from a response that breaks its model never writes the response
+to the log: see [Request Logs](#request-logs).
 
 ## 🏷️ Response Headers {: #response-headers }
 
