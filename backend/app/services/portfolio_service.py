@@ -100,6 +100,7 @@ from backend.app.services.financial_math.returns import (
     calculate_simple_roi_series,
     calculate_twrr,
     calculate_twrr_series,
+    change_ratio,
     cumulative_to_annualized,
     gain_loss_ratio,
     group_gain_loss,
@@ -742,7 +743,11 @@ class PortfolioService:
                         prev_price_base, mp = await self._convert_to_base(prev_raw, prev_ccy, base_currency, prev_date)
                         all_missing_pairs.extend(mp)
                     if prev_price_base is not None and prev_price_base != 0:
-                        price_change_1d = ((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))
+                        # MF-A12 (N92): the change over the size of the previous price, measured as the % column measures
+                        # the value's (the same association: a tie rounds as before); a negative price's change keeps the
+                        # move's sign, as the % column's does
+                        price_ratio_1d = change_ratio(current_price - prev_price_base, prev_price_base)
+                        price_change_1d = price_ratio_1d.quantize(Decimal("0.0001")) if price_ratio_1d is not None else None
                         # Bugfix: raw quoted prices (current_price/prev_price_base) are NOT
                         # 1 unit == 1 currency unit for every asset — e.g. bonds are quoted
                         # "per quote_base_quantity" (BTPs: quote_base_quantity=100, price=98.70
@@ -756,7 +761,8 @@ class PortfolioService:
                         previous_position_value = compute_holding_value(ps.quantity, prev_price_base, asset.quote_base_quantity)
                         gain_loss_change_1d = current_position_value - previous_position_value
                         if abs(previous_position_value) > Decimal("0.01"):
-                            gain_loss_change_1d_percent = (gain_loss_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))
+                            value_ratio_1d = change_ratio(gain_loss_change_1d, previous_position_value)
+                            gain_loss_change_1d_percent = (value_ratio_1d * 100).quantize(Decimal("0.01")) if value_ratio_1d is not None else None
 
             if ps.valuation_source == "MISSING":
                 missing_price_assets.append(
