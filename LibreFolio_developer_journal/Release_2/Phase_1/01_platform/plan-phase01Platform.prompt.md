@@ -6558,3 +6558,37 @@ server parte. E lo vede nella revisione del checkpoint.
   - la sonda confronta il token grezzo, il controllo lo prende senza spazi;
   - `ensure_test_lane_id()` tiene un id ereditato di qualsiasi lunghezza (in `scripts/cli_base.py`, condiviso), ma uno
     fuori dai limiti fa fallire la sonda.
+
+### La nota in `settings.md` dopo B-35, la clausola di `--instance-key-file`, la review di B-35 (2026-10-17, 13:15) — ✅
+
+> Dal coordinatore (dopo l'ingresso di H-49, dev `96da36422`):
+> - una frase in `developer/architecture/settings.md` (la voce del limite di upload nel profilo managed);
+> - la review dopo l'ingresso del lettore di B-35 e della sua modifica alla mappa degli id nel mio
+>   `test_config_audit.py`;
+> - facoltativa: una clausola in `configuration.en.md` «Saved Secrets and the Instance Key» che rimandi a
+>   `--instance-key-file` (B-18).
+>
+> La richiesta di review di B-18 è arrivata una seconda volta, uguale. B-18 è già entrato (`5c4d7456a`). La mia review
+> delle 10:55 vale ancora: il LOW-1 e i due appunti sono la voce B-34 di B, e i cambi successivi sulle mie superfici
+> (`max_unpacked` di B-35 in `staging.py`, `_restore_limit` nella CLI) non toccano la strada della chiave d'istanza.
+
+- **Review di B-35** (`32739feaa`): OK.
+  - `backup_max_restore_mb()` (`config/backup.py`):
+    - non impostato: `0` in `selfhosted`, come prima della 1.3; altrove `RESTORE_TO_UPLOAD_RATIO` (8) volte
+      `backup_max_upload_mb()`, quindi 4000 MB in `managed`;
+    - fallisce chiuso con gli errori di quel lettore; un valore esplicito vince sempre;
+    - la CLI e `check_restore_limit` prendono gli stessi errori;
+    - da sapere: in `managed`, un `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=0` esplicito toglie anche il limite del restore, se
+      questo non è impostato. B lo scrive nella docstring; ora lo dice anche `settings.md`.
+  - La mappa degli id nel mio test: l'import e `check_restore_limit: "backup.restore_limit"` dopo l'upload, nell'ordine
+    di `CONFIG_CHECKS`. I test della tupla leggono `BACKUP_CONFIG_CHECKS`, quindi prendono da sé il terzo controllo.
+  - **Reperto mio, corretto**: `_configure` toglieva il token e il limite di upload di B, ma non
+    `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`. Un valore rimasto nell'ambiente, fuori dal runner (che lo toglie già), avrebbe
+    reso rosso `backup.restore_limit` nei casi «tutto ok». Aggiunto, con il commento «three checks».
+- **Doc** (mia, solo inglese, nessun timbro):
+  - `architecture/settings.md`, dopo la voce del limite di upload: la frase di B-35;
+  - `configuration.en.md`, «Saved Secrets and the Instance Key»: la clausola su `backup restore --instance-key-file`,
+    con il link a `cli_tools.md#backup-restore-instance-key`. Debito di traduzione per H-5.
+- **Controlli** (`files/runs/b35note.sh`):
+  - `services config-audit` 220; ruff e black puliti;
+  - `mkdocs build` stretto pulito, 97 link validi, `git diff --check` pulito; porta libera.

@@ -330,7 +330,10 @@ reports them as unreadable, and never uses a wrong value. The tab says so under 
 one: *Saved, but this instance's key cannot read it. If an administrator can put the old key back,
 that comes first; otherwise enter it again.* If you still have the old
 key, put it back before anyone enters them again: a secret entered under the new key would become
-unreadable once the old one is back. From the first start after the change, and at every start
+unreadable once the old one is back. To bring them into another installation, which keeps its own
+key, restore a backup there with the old key: `backup restore` with `--instance-key-file`
+re-encrypts them with that installation's key ([The Instance Key of Another
+Installation](cli_tools.md#backup-restore-instance-key)). From the first start after the change, and at every start
 until they are entered again or the old key is back, the log has an error that counts the
 instance-wide ones, if there are any: see [Startup Checks](#startup-checks).
 
