@@ -4750,10 +4750,10 @@ describe('GrowthChart broker lines follow a Designer Lab edit (C4, TD-1b)', {tim
 
     it('rebuilds the P&L line in full on notifyChartColorsChange(): the line of the edited category takes the edited colour, the other keeps the table’s', async () => {
         expect(document.documentElement.classList.contains('dark'), 'premise: the light theme').toBe(false);
-        // The table's colours, read before any edit: line i wears the i-th of the first eight asset types.
-        const keys = BROKER_NAMES.map((_name, index) => CATEGORY_SEQUENCE[index % CATEGORY_SEQUENCE.length]);
-        const table = keys.map((key) => categoryColor('type', key, false));
-        const editedKey = keys[1];
+        // The table's colours, read before any edit: line i wears the i-th of the first eight asset types (references).
+        const refs = BROKER_NAMES.map((_name, index) => CATEGORY_SEQUENCE[index % CATEGORY_SEQUENCE.length]);
+        const table = refs.map(({kind, key}) => categoryColor(kind, key, false));
+        const editedRef = refs[1];
         expect(new Set([...table, EDITED]).size, 'control: the lines and the edit, all distinct colours').toBe(table.length + 1);
 
         const {getByTestId} = render(GrowthChart, {props: {history: HISTORY, brokerPnlHistory: BROKER_PNL_HISTORY, baseCurrency: BASE_CURRENCY}});
@@ -4766,7 +4766,7 @@ describe('GrowthChart broker lines follow a Designer Lab edit (C4, TD-1b)', {tim
         // Premise: under Vitest the switch is not defined and no hook is published, so deleting both restores what was found.
         expect(Object.getOwnPropertyDescriptor(globalThis, '__LF_DESIGNER_LAB__'), 'premise: no define under Vitest').toBeUndefined();
         expect(Object.getOwnPropertyDescriptor(globalThis, '__lfDesignerLab'), 'premise: no Lab hook published').toBeUndefined();
-        const hook = vi.fn((kind: string, key: string) => (kind === 'type' && key === editedKey ? EDITED : null));
+        const hook = vi.fn((kind: string, key: string) => (kind === editedRef.kind && key === editedRef.key ? EDITED : null));
         vi.stubGlobal('__LF_DESIGNER_LAB__', true);
         vi.stubGlobal('__lfDesignerLab', {categoryColor: hook});
         try {
@@ -4780,8 +4780,8 @@ describe('GrowthChart broker lines follow a Designer Lab edit (C4, TD-1b)', {tim
             notifyChartColorsChange();
 
             const rebuilt = await fullOptionAfter(before);
-            expect(brokerLineColours(rebuilt), 'the broker lines of the full rebuild').toEqual(linesIn(keys.map((key, index) => (key === editedKey ? EDITED : table[index]))));
-            expect(hook, 'the edit was read through the C3 hook, with the chart’s own arguments').toHaveBeenCalledWith('type', editedKey, false);
+            expect(brokerLineColours(rebuilt), 'the broker lines of the full rebuild').toEqual(linesIn(refs.map((ref, index) => (ref === editedRef ? EDITED : table[index]))));
+            expect(hook, 'the edit was read through the C3 hook, with the chart’s own arguments').toHaveBeenCalledWith(editedRef.kind, editedRef.key, false);
         } finally {
             Reflect.deleteProperty(globalThis, '__LF_DESIGNER_LAB__');
             Reflect.deleteProperty(globalThis, '__lfDesignerLab');

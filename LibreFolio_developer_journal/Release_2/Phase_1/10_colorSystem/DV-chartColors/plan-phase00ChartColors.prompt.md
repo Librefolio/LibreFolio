@@ -2022,6 +2022,180 @@ parte, dopo lo slot di B4: solo `roleColors.ts` e i suoi test; nessun grafico ca
   >   `roleColors.ts` serve «if a chart or a drawn colour reads it» (era «if a chart reads it»); il punto è riavvolto a
   >   120 colonne.
 
+### Giro 3 — La palette finale dei grafici ⏳ (17/10/2026 sera)
+
+Il developer, 22:05: «leggilo e applicalo, modifica i temi colori esistenti, e se ne servono altri, creali»; la designer
+ha scelto con lui le correzioni. Valgono D-T27/D-T28. Base `38b7e6313` (fast-forward del coordinatore), corsia 6156 e
+`/tmp/librefolio-r2-dv`. La specifica, da una sola fonte:
+`designer-feedback/2026-10-17-round3-grafici/decisioni.md` (accanto `palette-finale.json`, i due originali, il foglio
+delle scelte). Il campo di DV è il §1; i file liberi secondo la 1.3 (ferma, STOP del developer alle 21:45), salvo
+Z-29b su `LineChart.svelte`, che resta fuori.
+
+- [x] ✅ (17/10/2026) G3-0, analisi (22:42–23:15, sola lettura; misure in `files/dv_r3_measure.py` e nei log
+  `dv_r3_measure.log` e `dv_r3_badges.log` della sessione).
+  > **I valori, verificati coi conti** (`palette-finale.json`, ΔE00 e contrasto come i gate):
+  > - tutte le categorie ≥ 3:1 sulla card, nessuna nella banda verde (OKLCH 115–225, croma > 0,03), nessuna a meno di
+  >   ΔE00 10 dal verde di successo;
+  > - nessuna coppia sotto 5 nella stessa tavolozza; le coppie fra 5 e 8 sono quelle del §1.8, più **ETF/Liquidità 5,9
+  >   in chiaro** fra i tipi, gli stessi colori di Tecnologia/Liquidità (il §1.8 la dà per implicita). ETF/Obbligazione
+  >   in scuro mi viene 7,3 (il documento dice 7,4): arrotondamento;
+  > - barre KPI, ETF contro Liquidità, ΔE00 5,9/10,2, tutte e due ≥ 3:1 sulla traccia;
+  > - correlazione: il migliore fra nero e bianco ≥ 4,59:1 su tutta la scala, interpolata in sRGB come zrender.
+  > - **⚠️ L'ideale del PAC contro «Non classificato»:** in scuro `#858E9B` contro `#83939D`, ΔE00 **4,1**; in chiaro
+  >   7,6. L'8,6 del §1.8 è il tipo più vicino (Altro), non il secchio: nel PAC la riga «Non classificato» disegna il
+  >   reale quasi uguale all'ideale. Domanda al coordinatore.
+  > - **⚠️ Badge (§1.9, per T):** i fondi della designer sono esattamente `color-mix(in srgb, tipo 14%, card)` (ΔE00
+  >   0,0; Fondo scuro 0,5, calcolato sul viola di prima). In `oklab`, la convenzione dei derivati (D-T5), Obbligazione
+  >   e Altro in chiaro scendono a 4,46:1: va scritto `in srgb`.
+  > - Da sapere: «senza dati» della mappa in chiaro a ΔE00 4,9 dal primo passo (più scuro, «neutro» per scelta); il
+  >   centro della correlazione sulla card a 2,94/2,76:1, visibile (ΔE00 27,6/25,4) ma sotto 3:1.
+  > **Già com'è oggi:** il reale del PAC nel colore della riga, coi sottotipi sfumati (TD-1); i KPI con segno su
+  > `SIGN_TEXT`; oltre il 14° paese le sfumature (GR5); i primi otto tipi nell'ordine del §1.5 (`CATEGORY_SEQUENCE`); un
+  > solo «Non classificato» per tutte le tavolozze; una riga per valore (C2).
+  > **Lotti proposti:**
+  > - R3-1, le tabelle di `chartCategories.ts`: tipi, settori, Liquidità in blu ardesia (non più il salvia di GR3),
+  >   «Non classificato»; la sequenza dei paesi come elenco di riferimenti a tipi e settori (`{kind, key}`), perché il
+  >   §1.4 vuole che ne segua le scelte; `sequenceColor` prende riferimenti. Il Lab (C1–C3) non legge le sequenze.
+  > - R3-2, le scale: `GEO_CHOROPLETH_SCALE` e «senza dati» (`GEO_MAP_COLORS.land`); la correlazione su una scala sua
+  >   (`CORRELATION_SCALE`) invece di danger/panel/info, col testo di cella `readableOn(cella, ['#000000',
+  >   '#FFFFFF'])`. Nessun ruolo diventa morto: danger, info e panel li leggono altri.
+  > - R3-3, PAC e KPI: l'ideale come coppia di valori, non più `--lf-text-secondary`; l'effetto tempi su
+  >   `SIGN_TEXT.kpi` senza l'alfa variabile (sotto ±0,05 il testo neutro, come l'etichetta); `timingEffectColor`
+  >   sparisce.
+  > - R3-4, la semi-ciambella per chiave: la chiave di un proprietario è il suo `user_id`, il colore il tipo del suo
+  >   rango fra i proprietari ordinati per `user_id`. Serve una riga in `features/brokers/BrokerSharingPanel.svelte`,
+  >   fuori dai miei file: domanda.
+  > - R3-5, le due barre della card del patrimonio (ETF e Liquidità): dipendono dal §1.9, perché sono HTML.
+  > - Test con `test-author`: `chartCategories`, `CorrelationHeatmap`, `SemiDonutChart`, `AllocationHistoryChart`,
+  >   `KpiSection`, `exposureBarColours` (eccezioni: Altro 8,6 e «Non classificato» 7,6 in chiaro, 4,1 in scuro).
+  > - Fuori, salvo via del coordinatore: gli indicatori del §1.5 (S9; i colori salvati dagli utenti non cambiano).
+  > **§1.9, la fonte unica, proposta (A) in due passi:**
+  > - (A) ruoli `--lf-cat-*` in `tokens.css`: casa `tokens.css`; i grafici col ponte e gli stand-in del gate di parità;
+  >   badge e barre utilità normali, contrasti nel gate C3 di T. Il layer `category` del Lab diventa una vista dei ruoli
+  >   (un rifacimento per L). Prima i valori in `chartCategories.ts` e i ruoli di T coi valori uguali, bloccati da un
+  >   test di parità; poi, con L, `chartCategories.ts` legge i ruoli.
+  > - (B) i valori restano in `chartCategories.ts` e un modulo scrive a runtime le variabili in un `<style>`, di nuovo a
+  >   ogni C4: una casa, Lab invariato; ma variabili fuori da `tokens.css`, classi arbitrarie, contrasti fuori dal gate
+  >   di T, un installatore nel layout condiviso.
+  > - (C) CSS generato in build da `chartCategories.ts`: una casa, niente runtime, ma le modifiche dal vivo del Lab non
+  >   arrivano ai badge.
+  > **Run:** leggere sotto 50 (Prettier, compilatore, ratchet, `front check`, circa 50 Vitest); slot al via del
+  > coordinatore (`core-unit`, `component-unit`, E2E `dashboard`, `risk`, `risk-lab`, `asset-detail`, broker `detail`,
+  > `broker-sharing`, `pac-allocator-real`, `allocation-negative-cash`); galleria di G.
+- [x] ✅ (17/10/2026, 23:03) **Via del coordinatore a R3-1…R3-4**, sul via del developer delle 22:05.
+  > **Decisioni:**
+  > - **§1.9 = (A), in due passi.** Stanotte DV scrive i valori in `chartCategories.ts`; T crea i ruoli dei **tipi**
+  >   (11 più la Liquidità) coi valori uguali, più `-soft` e `-on-soft` in `color-mix(in srgb, … 14%, card)`. Il test
+  >   di parità di DV blocca le due copie. Il Lab passa ai ruoli in un lotto successivo (L è archiviato).
+  > - **R3-5**, le due barre della card del patrimonio, dopo i ruoli di T: `--lf-cat-etf` e `--lf-cat-liquidity`.
+  > - **L'ideale del PAC contro «Non classificato», 4,1 in scuro:** si applicano i valori del documento e il punto
+  >   resta **aperto** nel test; il coordinatore lo porta alla designer con delle opzioni e manda il valore scelto.
+  > - **`BrokerSharingPanel.svelte`:** una riga per R3-4, dichiarata fuori area (su 16 worktree il file non ha
+  >   modifiche né commit).
+  > - **ETF/Liquidità 5,9 in chiaro** fra le eccezioni nominate.
+  > - **Fuori:** gli indicatori (S9: il giro 3 non parla dei segnali, i colori salvati non si toccano); Z-29b su
+  >   `LineChart.svelte`.
+  > - **Run:** leggere sotto 50; lo slot di circa 60 minuti al via del coordinatore, coordinato con la run di T.
+  > **Domande aperte (23:20):** i nomi dei ruoli di T per la parità (`--lf-cat-real-estate`?); chi aggiorna le righe
+  > «Charts» dello skill `design-system` che il giro 3 rende false.
+- [x] ✅ (17/10/2026, 23:35) **Risposte del coordinatore.**
+  > - Nomi confermati per DV e T: `--lf-cat-stock`, `-etf`, `-bond`, `-crypto`, `-fund`, `-hold`, `-crowdfund`,
+  >   `-commodity`, `-real-estate`, `-index`, `-other`, `-liquidity`, più i derivati `-soft` e `-on-soft`; passaggio
+  >   di consegne alla `PENDING_READERS`, girato a T.
+  > - Lo skill: la sezione «Charts» è di DV, aggiornata in questo lotto e dichiarata; la tabella dei moduli e
+  >   `palette.md` le fa T in R3-c, dopo l'ingresso di DV.
+  > - **L'ideale del PAC, scelto dalla designer:** chiaro `#8C929E` (P1-a′), scuro `#868594` (P2-c). Misurato
+  >   (`files/dv_r3_ideal.py`): in chiaro 3,01:1, sotto 10 solo «Non classificato» 8,0 e Altro 8,7, la sfumatura ETF
+  >   più vicina a 14,0; in scuro 4,82:1, tutto ≥ 10 (minimo «Non classificato» 10,1, sfumatura ETF 14,4). Riferito al
+  >   coordinatore: nessun conflitto, nessuna sfumatura sotto 8.
+- [x] ✅ (17/10/2026) G3-1…G3-4, il codice (Prettier pulito; test con `test-author` in G3-5).
+  > **Note implementazione:**
+  > - **R3-1, `chartCategories.ts`:** tipi, settori, Liquidità (blu ardesia) e «Non classificato» del §1.2–1.3, una
+  >   riga per valore (C2), commenti di tinta aggiornati, nessun esadecimale fuori dalle tabelle. Nuovo
+  >   `CategoryRef {kind, key}`; `CATEGORY_SEQUENCE` diventa 8 riferimenti di tipo; `KEYLESS_SEQUENCE` sostituito da
+  >   `COUNTRY_SEQUENCE`, i 14 riferimenti del §1.4 (a parità di colore il tipo: 1 ETF, 10 FUND, 11 HOLD, 14 OTHER);
+  >   `sequenceColor(sequence, rank, dark, poles)`. Chiamanti: `growthBrokerColor`, `AllocationHistoryChart`,
+  >   `SemiDonutChart`.
+  > - **R3-2:** `GEO_CHOROPLETH_SCALE` sui sei blu, `GEO_MAP_COLORS.land` sul «senza dati» (ΔE00 4,9/6,1 dal primo
+  >   passo); `CORRELATION_SCALE` e `CORRELATION_CELL_TEXT` in `chartPalettes.ts`; `CorrelationHeatmap` senza
+  >   `chartRoles`, testo di cella `readableOn(cella, nero/bianco)`: minimo 4,59:1 (`files/dv_r3_scales.py`).
+  >   Danger, info, panel e text-secondary restano letti (`drawnColors`, `chartTheme`): nessun ruolo morto.
+  > - **R3-3:** `PAC_EXPOSURE_COLORS.ideal` in `chartTheme.ts`, `idealColour(dark)`; effetto tempi sulle classi di
+  >   segno (`SIGN_TEXT.headline` il valore, `SIGN_TEXT.kpi` l'etichetta; neutro: testo primario e muted), con
+  >   `data-direction` (`favorable`/`unfavorable`/`neutral`); `timingEffectColor` rimossa.
+  > - **R3-4:** `OwnerSlice.key`; il colore per rango fra i proprietari ordinati per chiave (numeri per valore), non
+  >   per ordine dei dati; `BrokerSharingPanel` passa `key: o.user_id` (fuori area, approvato).
+  > **⚠️ Fuori pista:**
+  > - `CorrelationPairsList.svelte`: solo il commento della polarità («gli estremi della scala» non sono più info e
+  >   danger), fuori area, da dichiarare.
+  > - Docs: due frasi diventano false (`user/dashboard/kpi-cards`: «più forte il colore, più grande l'effetto»;
+  >   `user/assets/correlation`: «pallido» per lo zero). Correzione puntuale nelle 4 lingue e stamp, da dichiarare.
+  > - Per T in R3-c: le righe della tabella dello skill per `chartColorScales.ts` (nomina `timingEffectColor`),
+  >   `chartPalettes.ts` (manca `CORRELATION_SCALE`) e `chartTheme.ts` (manca `PAC_EXPOSURE_COLORS`).
+  > - Per il coordinatore: `decisioni.md` §1.7 e `palette-finale.json` hanno ancora l'ideale di prima
+  >   (`#8B929E`/`#858E9B`).
+  > - Misure: con i due secchi in entrambe le tabelle e «Non classificato» accanto ai paesi, le coppie sotto 8 sono
+  >   esattamente quelle del §1.8 più ETF/Liquidità 5,9 (`files/dv_r3_pairs.py`); al limite OTHER/«Non classificato»
+  >   in chiaro, 8,004.
+- [x] ✅ (17/10/2026) G3-6, skill e docs (dichiarati).
+  > - **Skill `design-system`, sezione «Charts»** (di DV): niente verdi nelle categorie e Liquidità in blu ardesia; la
+  >   semi-ciambella per chiave; le linee dei broker (la riga «il nono broker ripete il primo» era già falsa dopo DV-8);
+  >   i paesi su `COUNTRY_SEQUENCE`; le scale con valori propri (mappa, «senza dati», correlazione e testo di cella);
+  >   l'ideale del PAC; la riga «la lista è in revisione (domanda aperta 1)» chiusa. Non toccate: la tabella dei moduli
+  >   e la sezione delle domande aperte (T, R3-c).
+  > - **Docs, 4 lingue:** `user/dashboard/kpi-cards` («né verde né rosso» invece di «più forte il colore, più grande
+  >   l'effetto») e `user/assets/correlation` («grigio» invece di «pallido»). Le due pagine erano pulite a HEAD (MD5
+  >   registrato = HEAD), quindi `dev.py mkdocs translate-stamp` su entrambe: `.translate-hashes.json` cambia solo nelle
+  >   loro due voci.
+  > - `node scripts/theme/theme-roles.mjs`: «Colour gates: clean».
+- [x] ✅ (17/10/2026) G3-5, i test (`test-author`, agente `93d14ac3`; 12 file di test, nessun file nuovo, nessun
+  codice di produzione).
+  > **Note implementazione:**
+  > - `chartCategories.test.ts`: i valori del giro 3; gli export (`COUNTRY_SEQUENCE` al posto di `KEYLESS_SEQUENCE`);
+  >   le sequenze a riferimenti, coi paesi del §1.4 nei due temi; «la regola dei verdi» del §1.1 (nessuna tinta OKLCH
+  >   115–225 con croma > 0,03, ΔE00 ≥ 10 da `--lf-success`, ≥ 3:1 sulla card, letti da `tokens.css`); la
+  >   distinguibilità con pavimento 5 senza eccezioni e soglia 8 con le 15 coppie nominate; il blocco di parità coi
+  >   ruoli `--lf-cat-*` di T, flag `CATEGORY_ROLES_IN_TOKENS = false`, col controllo positivo su token sintetici.
+  > - `exposureBarColours`/`ExposureBars`: l'ideale come valore; la regola dei 10 su tipi, settori, secchi e su tutte
+  >   le sfumature dei sottotipi (le sei ETF e quella di Crowdfund), eccezioni solo in chiaro: «Non classificato» 8,05
+  >   e Altro 8,70; in scuro nessuna (minimo «Non classificato» 10,07).
+  > - `CorrelationHeatmap`: la scala del tema e il testo di cella nero o bianco, ≥ 4,5:1 su 401 passi; un test C4.
+  > - `SemiDonutChart`, `BrokerSharingPanel`, `chartFont.load`: la chiave; `AllocationHistoryChart`, `GrowthChart`:
+  >   i riferimenti; `KpiSection`: `data-direction` dell'effetto tempi, nessuno stile in linea.
+  > - `src/__tests__/colorDistance.ts`: `oklabOfXyz` e `oklchOf`, provati sulle tabelle pubblicate (Ottosson, CSS
+  >   Color 4).
+  > - Misure col righello del repo (`files/dv_r3_tests_measure.log`): le tre coppie al limite valgono 8,0039, quindi
+  >   non sono eccezioni; STOCK/FUND e Paesi 2/10 5,91.
+  > **⚠️ Fuori pista:**
+  > - **Il nuovo test C4 ha trovato un difetto mio:** tolti i ruoli dalla scala della correlazione, l'effetto di
+  >   ridisegno non leggeva più `colorsVersion`, quindi una modifica del Lab non ridisegnava la matrice. Corretto con
+  >   `void neutrals;` nell'effetto.
+  > - **Una svista nella mia risposta al coordinatore delle 23:35:** non ha sottotipi solo l'ETF, anche Crowdfund
+  >   (`CROWDFUND_REAL_ESTATE`). La sua sfumatura dista dall'ideale 21,5 in chiaro e 14,8 in scuro
+  >   (`files/dv_r3_ideal_crowdfund.log`): nessun effetto, da correggere nell'handoff.
+- [x] ✅ (18/10/2026, 00:14) G3-7, prove leggere sulla base `38b7e6313` col lotto (`files/dv_r3_light.sh`, log in
+  `files/r3-light/`; carico sempre sotto 12).
+  > - Prettier pulito sui file cambiati; compilatore Svelte su 8 file, 0 errori e 0 avvisi; ratchet dei colori pulito.
+  > - `front check`: **0 errori e 0 avvisi**, dopo `dev.py api sync`.
+  > - **31 file Vitest, 1451 test, tutti verdi:** i gate `themeRoles` (80) e `themeTokens` (21), i moduli di
+  >   `lib/theme`, i grafici, il PAC, la correlazione, la semi-ciambella, `BrokerSharingPanel`, `GrowthChart`,
+  >   `KpiSection` e i sei test del Lab che leggono il file delle categorie.
+  > **⚠️ Fuori pista:** il primo `front check` aveva 37 errori in 18 file, nessuno del lotto (backup, legal, cambi,
+  > lotti…): proprietà che il client generato non aveva ancora (`secrets_rekeyed`, `legal`, `whats_new`…), perché il
+  > client, ignorato da git, era fermo a una base vecchia. `api sync` (schema esportato nel processo, nessun server,
+  > nessun file tracciato cambiato), poi tutta la serie di nuovo sullo stesso stato: verde. Riepilogo del primo giro in
+  > `files/r3-light/summary-1-stale-client.txt`.
+- [x] ✅ (18/10/2026, 00:20) **T R3-b è entrato prima di DV** (`7845fc3d3`): i ruoli `--lf-cat-<tipo>`, `-soft` e
+  `-on-soft`, le utility `bg-lf-cat-etf` e `bg-lf-cat-liquidity`. Il flag di parità lo gira DV, dopo il merge del target.
+  > - Parità pre-verificata in sola lettura sul commit (`files/dv_r3_parity_precheck.mjs`, `.log`): i 12 ruoli nei due
+  >   temi coincidono coi valori di `chartCategories.ts`, 24 controlli su 24.
+  > - Sovrapposizione col target: solo `BACKLOG_POST_1.2.md` (TC-19 di T attorno alla riga 2835, le righe di DV dalla
+  >   2949): disgiunte, ma un merge non si fa su un file modificato e non committato.
+  > - Il target ha già corretto l'ideale del PAC in `decisioni.md` e `palette-finale.json` (`ba8e06763`): la nota per
+  >   il coordinatore di G3-1…G3-4 è chiusa.
+- [ ] G3-8, dopo il merge del target: girare `CATEGORY_ROLES_IN_TOKENS`, prove leggere sul ramo unito; R3-5 se il
+  coordinatore lo include; poi la richiesta dello slot.
+
 ## Definizione di fatto
 
 - **Un colore fisso per chiave:** ogni chiave ha un colore per tema, uguale in torta e storico, in dashboard, broker
