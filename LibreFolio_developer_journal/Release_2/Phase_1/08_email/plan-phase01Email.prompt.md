@@ -6202,7 +6202,8 @@ non sposti il registro.
 > - Verificato da me: è l'unica sottoclasse di lettura dei modelli stretti.
 > - Aggiunta la guardia **CWS-025**: base, quote o passo intermedio `978` restano validi, costruiti come fa la lista.
 > - **Per il codice**: il controllo stretto delle rotte non deve passare per ereditarietà. Una classe base comune, con
->   la regola stretta solo nella richiesta.
+>   la regola stretta solo nella richiesta. Superato in E-18.2: un test di contratto fissa l'ereditarietà, quindi la
+>   lettura la tiene e rinuncia al controllo con un `ClassVar`.
 >
 > **Le altre scelte del `test-author`** (accettate):
 > - `FXRouteStep` vuole anche `provider`, quindi la guardia passa `MOCKFX`;
@@ -6223,6 +6224,86 @@ non sposti il registro.
 > **Non ancora**: la registrazione nel runner. Lo snippet del `test-author` è pronto
 > (`schemas currency-write-strict`, `isolation="pure"`) e va con il codice. Il file non registrato non gira in nessun
 > run del runner, quindi i suoi 236 rossi non toccano i cancelli.
+> - Il coordinatore (14:05): i rossi sono committati sul mio ramo soltanto (`93f8aa877`). Un file non registrato in
+>   dev farebbe scattare `check-orphans`, quindi entrano col codice.
+> - Poi ha unito dev nel mio ramo (`719903aba`, con X-R59/SEC9-1 di MF, dev `482343eb3`): il codice di E-18 può
+>   partire.
+
+#### E-18.2 — Il codice ✅ (2026-10-17, 14:0x–14:3x; base `719903aba`)
+> **Sulla base unita**, i rossi prima del codice: gli stessi 236, tutti marcati, e 628 verdi.
+>
+> **Note implementazione**:
+> - **`schemas/common.py`**, dopo `CurrencyCode`:
+>   - `iso_currency_code()`: non stringa rifiutata; `strip().upper()`; tre caratteri `isascii()` e `isalpha()`; poi
+>     `pycountry.currencies.get(alpha_3=...)`. Il messaggio cita al più 16 caratteri e nomina «ISO 4217»;
+>   - `IsoCurrencyCode` (`BeforeValidator`) per i campi `str`;
+>   - `IsoCurrencyAmount = Annotated[Currency, AfterValidator(...)]` per i campi `Currency`. È la stessa classe, quindi
+>     gli oggetti `Currency` dei servizi e dei plugin passano ancora, e lo schema JSON resta lo stesso `$ref`.
+> - **Le transazioni**: `TXCreateItem` e `TXUpdateItem` (`cash`, `cost_basis_override`),
+>   `TXPromoteResolvedFields` e `TXTransferPromoteRequest` (`cost_basis_override`) passano a
+>   `Optional[IsoCurrencyAmount]`. `TXReadItem` resta `Currency`. In `batch.py` e `promotion.py` l'import `Currency`
+>   non serviva più ed è tolto; nessuno lo reimportava da lì.
+> - **Gli asset**: `currency_uppercase` di `FAAssetCreateItem` e `FAAssetPatchItem` chiama `iso_currency_code`; il
+>   filtro di info resta tollerante.
+> - **Gli eventi**: un `field_validator("value")` su `FAEventUpsertPoint`, la sottoclasse solo di richiesta.
+>   - Verificato: la strada dei provider (`refresh.py:602`, `_upsert_asset_events`) non passa da lì; solo
+>     `bulk_upsert_events` (manuale) chiama `_as_upsert_points`.
+> - **FX**:
+>   - `FXUpsertItem` è stretto;
+>   - le rotte: `FXConversionRouteItem` ha un `ClassVar` `iso_currencies_required = True` e il validatore
+>     `iso_currencies` (la coppia e ogni passo);
+>   - `FXConversionRouteReadItem` **resta una sottoclasse** e mette il `ClassVar` a `False`: costruito dalle rotte
+>     salvate, non ricontrolla (CWS-025);
+>   - una futura sottoclasse di richiesta eredita il controllo.
+>
+> **⚠️ Fuori pista: la base condivisa è caduta.** Il primo disegno (una base privata `_FXConversionRouteFields`, da cui
+> derivavano richiesta e lettura) rompeva `test_fx_route_schemas.py:189`, che fissa
+> `issubclass(FXConversionRouteReadItem, FXConversionRouteItem)`: la lettura *è* la richiesta più i metadati di sola
+> risposta.
+> - È rosso in `schemas all` alle 14:12, il primo giro dei selettori.
+> - Invece di riscrivere un test di contratto di un altro proprietario, ho tenuto l'ereditarietà e reso esplicita la
+>   rinuncia della lettura.
+> - Il giro dei selettori è stato fermato (porta libera, nessun processo rimasto) e rifatto da capo sul codice finale.
+> - Ho tolto anche una riga vuota doppia lasciata dalla riscrittura (black).
+> - **BRIM**: `broker_investimental._extract_currency_from_account` passa a `iso_currency_code`.
+>   - Il resto dell'ingresso BRIM passa da `TXCreateItem` con l'aiuto `brim_provider` (`:553-600`), che prende la
+>     `ValidationError` e la registra come problema di riga: una riga con un codice largo diventa un problema di
+>     quella riga, non un import fallito.
+> - **Il runner**: la suite `schemas currency-write-strict` (`isolation="pure"`) in `_backend_schemas.py`.
+> - **I docs**:
+>   - `developer/architecture/database/brokers_transactions.md:194`: scritture strette e letture tolleranti. È
+>     corretta anche la frase «pycountry + a crypto dictionary», falsa: non c'è nessun dizionario cripto, e `BTC` è
+>     rifiutato;
+>   - `.github/instructions/backend-schemas.instructions.md`, la sezione Currency: quale tipo per scrivere e quale per
+>     leggere, e la regola di non mettere lo stretto su un modello che le letture costruiscono;
+>   - la docstring di `CurrencyCode` (`common.py`), che prometteva la rigidità: ora dice che è il tipo delle letture,
+>     e manda a `IsoCurrencyCode` per le scritture.
+>
+> **Il formato sul filo è invariato, provato**: `dev.py api schema` prima e dopo. Componenti, percorsi e `info` sono
+> identici; cambia solo `info.version`, `-dirty` perché l'albero è modificato. Rifatto sul codice finale alle 14:25
+> (`files/e18/openapi_{before,final}.json`): nessun `api sync` da fare.
+>
+> **Prove sul codice finale** (carico sotto 50, una cosa alla volta):
+> - `files/tools/e9_suites.sh e18b …` (14:15–14:24), **17 selettori, tutti exit 0, 3 674 verdi, 0 rossi**:
+>   - `schemas all` 2 816, compresi gli 864 di `currency-write-strict`;
+>   - `services`: `transaction` 125, `brim-create-transaction` 14, `brim-report-sets` 274, `brim-provider-base` 39,
+>     `asset-event-store` 71;
+>   - `api`: `transactions` 26, `transactions-validate` 12, `transfer-promotion` 5, `batch-split-promote` 38,
+>     `transactions-wac` 20, `assets-crud` 35, `assets-patch-fields` 7, `asset-currency-change` 4, `assets-events`
+>     45, `fx` 25, `brim` 118.
+> - `files/tools/e18_docs.sh` (14:25–14:26):
+>   - `ruff check` e `black --check` sui 9 file Python;
+>   - `mkdocs build` stretto, 0 righe WARNING/ERROR;
+>   - `check-links`, 97 link validi;
+>   - `git diff --check` pulito; la porta 6188 è libera.
+> - Log: `files/logs/e18b_suites.out`, `e9_e18b_*.log`, `e18_docs.out`, `e18_docs_*.log`.
+>
+> **Residuo, per il proprietario del BRIM**: il gap-fix costruisce `TXCreateItem` direttamente (`brim_gap_fix.py:148`,
+> `:183`), senza l'aiuto che prende gli errori.
+> - Le valute vengono dal «truth» del plugin; oggi solo Danske Bank produce cassa di truth, da una costante
+>   (`CURRENCY`).
+> - Un codice di truth non ISO oggi non si raggiunge. Se arrivasse, ora alzerebbe un errore dentro `_cash_proposals`.
+> - La cura, se la si vuole: saltare quella valuta con un avviso.
 
 ### SEC9-1 — La revisione della cura di MF (2026-10-17, 13:4x; sola lettura, ramo di MF `ad399d383`)
 > **Esito: OK, nessun reperto.** Ogni punto della mia cura c'è.
@@ -6266,6 +6347,107 @@ non sposti il registro.
 > 3. **Info, preesistente**: il caso peggiore per richiesta è ora di 1 000 id distinti. Con un provider lento (timeout
 >    10 s, 5 alla volta) una richiesta può durare circa 33 minuti di chiamate in uscita, e il semaforo per richiesta si
 >    moltiplica con le richieste parallele. Un limite globale per provider lo chiuderebbe.
+
+### MF-SEC9a — La revisione della cura di MF (2026-10-17, 14:2x–14:4x; sola lettura, ramo di MF `34cc1a58b`)
+> **Il compito** (coordinatore, 14:2x): le mie note di SEC9-1.
+> - Letture e scritture in blocchi di 500 (`utils/sql_chunks.py`): `fx/storage.py`, `price_store.bulk_delete_prices`,
+>   `fx/sync._stored_rates`.
+> - `MAX_BULK_WRITE_ITEMS` 10 000, 422 su `POST`/`DELETE /fx/currencies/rate` e `DELETE /assets/prices`.
+> - Testi d'errore generici; il limite delle sonde letto a ogni chiamata.
+>
+> **La correzione di MF alla mia nota 1 è giusta.** La rotta `POST` salva un tasso per chiamata (`currencies.py:148`,
+> `upsert_rates_bulk` con una voce), quindi l'import CSV passava. Quello che falliva era cancellare più di 1 000 giorni
+> separati.
+>
+> **Esito: OK per l'ingresso. Un LOW da curare in avanti, un difetto funzionale preesistente fuori dalla cura, note.**
+>
+> **Verificato, in ordine:**
+> - `chunks()`: niente per una sequenza vuota, `size < 1` rifiutato, l'ordine tenuto.
+> - **Upsert**:
+>   - la lettura dell'esistente a blocchi (3 parametri × 500);
+>   - un `INSERT … ON CONFLICT` per blocco (6 × 500 = 3 000 parametri);
+>   - un solo commit alla fine, atomico come prima. I doppioni dentro una richiesta tengono l'ultimo valore come prima:
+>     SQLite processa le righe in ordine.
+> - **Delete dei tassi**:
+>   - un indice per coppia al posto della scansione di tutti i tassi;
+>   - stessa semantica, giorno esatto o intervallo incluso;
+>   - id cancellati a blocchi di 500.
+> - **Delete dei prezzi**: `DELETE` a blocchi, `rowcount` sommato, un commit.
+> - **`_stored_rates`**:
+>   - a blocchi, in sequenza sull'unica sessione dentro il task raccolto (il fetch non tocca la sessione);
+>   - cura anche il ripiego silenzioso «tabella mancante», che contava ogni tasso come nuovo.
+> - **I limiti**:
+>   - controllati prima di ogni lettura o scrittura;
+>   - `DELETE /assets/prices` conta gli intervalli di tutti gli asset;
+>   - riusano la forma 422 `bulk_too_many_items`.
+> - **I 500**:
+>   - nessun `str(e)` nei corpi delle tre rotte dei prezzi e di quelle FX; il log tiene `logger.exception`;
+>   - il `BoundLogger` stdlib di structlog accetta i kwargs (`item=`, `pair=`), come altrove.
+> - **La sonda**:
+>   - `probe_rate_limit()` legge `os.environ` a ogni chiamata;
+>   - un `SlidingWindowLimiter` per valore in `PROBES_BY_LIMIT`, quindi i conteggi restano: nessun azzeramento a ogni
+>     chiamata;
+>   - un valore nuovo vale alla sonda dopo; i log escono una volta per valore; la chiamata all'import tiene l'avviso
+>     d'avvio.
+> - **I test**:
+>   - `bulk-writes-chunked` è puro (un SQLite in memoria per test) ed è registrato;
+>   - il test API possiede MAD/PKR (le altre menzioni di `MAD` sono in test puri) e cancella prima e dopo.
+>
+> **Le prove**, solo in memoria (nessuna corsia, nessun server; `files/mfsec9a/probe/`: `probe.py`, `probe_brim.py`,
+> `loop.py`, coi log). Il codice di MF è caricato da `git show`, senza toccare il mio albero.
+>
+> | `delete_rates_bulk` di MF, aiosqlite in memoria | voci | secondi |
+> |---|---|---|
+> | il tetto di prima: 999 giorni singoli | 999 | 0,12 |
+> | la pagina FX, una coppia intera: 1 400 tratti di 5 giorni su 7 000 | 1 400 | 1,29 |
+> | giorni singoli su 10 000 salvati | 2 500 / 5 000 | 0,38 / 1,18 |
+> | il tetto nuovo: 10 000 giorni singoli | 10 000 | **4,15** |
+> | solo il ciclo di confronto, 10 000 giorni singoli | 10 000 | 4,43, contro **0,009** con `bisect` |
+>
+> **1. LOW, disponibilità, da curare in avanti: il confronto di `delete_rates_bulk` è quadratico.**
+> - Ogni cancellazione scorre tutte le date della sua coppia. Prima l'OR unico falliva sopra le 1 000 voci, quindi il
+>   ciclo restava sotto un milione di passi.
+> - Col tetto a 10 000: circa 10⁸ passi, cioè 4 secondi di Python **sul ciclo degli eventi**. Il server intero si ferma,
+>   per tutti.
+> - Le rotte FX in scrittura chiedono solo il login (`get_current_user`; i dati sono condivisi per disegno), quindi ci
+>   arriva ogni utente.
+> - La cura, una manciata di righe:
+>   - per coppia, le date ordinate e gli id paralleli, una volta;
+>   - per cancellazione, `bisect_left(start)` e `bisect_right(end or start)`; `ids.update(id[lo:hi])`; conteggio
+>     `hi - lo`.
+>   - Provata: stessi id e conteggi su tutte e due le forme (`loop.py`).
+>
+> **2. Difetto funzionale preesistente, fuori dalla cura: il parse del BRIM fallisce con circa 100 strumenti.**
+> - `search_asset_candidates_bulk` (`brim_provider.py:2036`) fa **un solo** OR per file. Una voce `name` è un `or_` di
+>   7 `ilike`, e SQLAlchemy lo **appiattisce** nella stessa catena.
+> - Il primo numero di asset distinti che fallisce, provato sulla funzione vera:
+>   - 91 con simbolo, ISIN e nome (11 termini a voce);
+>   - 100 con ISIN e nome;
+>   - 111 con simbolo e nome;
+>   - 499 col solo ISIN, 999 col solo simbolo.
+> - Le `except` della rotta di parse (`brokers.py`) non prendono `OperationalError`: è un 500.
+> - È nei rilasci da v1.1.0 (`d1e04b2b8`, 12/08; spostato da `548a0688d`). Un conto di qualche anno con 100 strumenti
+>   non si importa.
+> - Per chi lo cura: `chunks()` conta gli elementi, non i termini. Bisogna dividere per asset (circa 40 per comando) o
+>   per termini appiattiti, unire per `Asset.id` e riordinare per `display_name`.
+>
+> **3. Info, stessa classe, preesistente:**
+> - `pac_allocator/source/wac.py:44`: un termine per (coppia, data) distinta delle conversioni di costo degli asset
+>   scelti. Fallisce da circa 999 chiavi (per esempio un piano settimanale in valuta per 20 anni).
+> - `scheduler/jobs.py:100` (`_last_fx_dates`): un termine per coppia configurata, circa 999 coppie, improbabile.
+> - `portfolio/engine.py:133`: limitato dalle valute, sicuro.
+>
+> **4. Note minori:**
+> - La docstring di `sql_chunks.py` dice «every such statement»: vale per i quattro punti curati, non per BRIM, WAC e
+>   job. E non dice che un `or_` annidato conta tutti i suoi termini. Una frase eviterebbe un riuso sbagliato nella cura
+>   del BRIM.
+> - Docstring superate:
+>   - `delete_rates_bulk` («single batch query», «single batch»);
+>   - `bulk_delete_prices` («1 SELECT COUNT + 1 DELETE»: sono un `COUNT` per intervallo e i `DELETE` a blocchi).
+> - `bulk_delete_prices` fa ancora un `COUNT` per intervallo prima di cancellare: fino a 10 000 query in sequenza col
+>   tetto nuovo. Sono attese, quindi niente blocco del ciclo, solo una richiesta lenta. È preesistente.
+>
+> Nessuna riga nel backlog di E: il coordinatore smista i reperti nel codice degli altri, come per SEC9-1.
 
 ### MF-SEC9b — `Currency.validate_code` accetta nomi e numeri: analisi (2026-10-17, 13:2x–13:5x; sola lettura)
 > **Il compito del coordinatore** (13:22), dal backlog di MF, che è occupato con SEC9-1/D1: dove si usa, a che cosa
