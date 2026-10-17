@@ -239,6 +239,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - AI Export: a drawdown section no longer fails on a total loss or on one implausible price — the −100 % stays in the export with no recovery gain, and only the affected asset's row is marked as failed.
 - Dashboard and broker page: the day's change under Total P&L, and its two percentages, compare with the calendar day before, even when the growth chart shows one point per week.
 - Exposure treemap: a broker's or an asset type's gain/loss % no longer counts a holding with an unknown gain/loss as if its value were cost; a group without a figure shows «—».
+- Scheduled investments with the ACT/ACT day count: late interest across a year end no longer loses one day per year end.
+- Scheduled investments: the maturity settlement no longer includes the last coupon, already paid the same day as interest; after maturity the asset is worth its principal.
+- Measure tool: the yearly rate (Δ%/yr) appears from 30 days, as in the rest of the app (`—` below); a measure that starts from 0 shows `—` instead of 0 % for Δ% and Δ%/yr, and a line that ends on the other side of zero has no yearly rate.
 
 #### 🔒 Security
 
