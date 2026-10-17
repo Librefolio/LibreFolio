@@ -114,6 +114,8 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
     - Keys outside the class — `LIBREFOLIO_DATA_DIR`, `LIBREFOLIO_TEST_DATA_DIR`,
       `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` (both
       also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
+      `LIBREFOLIO_DISABLE_WHATS_NEW` (both hidden switches, set by `./dev.py server --test` on every
+      test lane, decision D-A7; the second turns off the «What's new» window of lot C-54),
       `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`,
       `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_LOGIN_LIMIT`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TOS_URL`,
       `LIBREFOLIO_PRIVACY_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release

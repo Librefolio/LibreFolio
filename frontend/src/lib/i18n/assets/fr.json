@@ -445,6 +445,9 @@
     "RATE_LIMITED_NO_TIME": "Trop de requêtes : réessayez plus tard",
     "RATE_LIMITED_DAY": "En pause pour trop de requêtes jusqu'au {time}",
     "NOT_CONFIGURED": "Ce fournisseur doit être configuré avant usage",
-    "PROVIDER_ERROR": "Le fournisseur a échoué : {detail}"
+    "PROVIDER_ERROR": "Le fournisseur a échoué : {detail}",
+    "PROBE_RATE_LIMITED": "Trop de vérifications : réessayez à {time}",
+    "PROBE_RATE_LIMITED_DAY": "Trop de vérifications : réessayez le {time}",
+    "PROBE_RATE_LIMITED_NO_TIME": "Trop de vérifications : réessayez dans une minute"
   }
 }

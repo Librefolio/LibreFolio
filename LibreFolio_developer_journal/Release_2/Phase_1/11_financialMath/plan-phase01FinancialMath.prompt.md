@@ -2962,3 +2962,148 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
   `api portfolio`, `api portfolio-wac`).
 - ✅ **Slot** (16:22–16:27, GO del coordinatore, carico 22; HEAD `98b364b45`): `api portfolio` **52**, `api portfolio-wac`
   **12**. Porta libera. CHANGELOG: 🔄 (prestazioni), non 🐛 (coordinatore). **CHECKPOINT READY** inviato, FROZEN.
+
+#### J45b + A4 entrati (dev `a228b9d30`); MF-SEC9g — la classificazione BRIM fuori dal ciclo (17/10, 16:3x)
+- Coordinatore: J45b + A4 **entrati** (dev `a228b9d30`, 🔄 `633e30ca9`); worktree a `633e30ca9`. Coda: **SEC9g**, poi
+  **MF-A5** (+ nota di doc), dalla revisione di J di MF-A2 (le tre pagine coincidono col motore). Backlog: chiuse MF-J45b,
+  MF-A4; nuove MF-SEC9g, MF-A5, MF-A6 (polvere e identità del §7, dopo la 1.3), MF-A7 (`oldest_open_lot_date` senza
+  soglia, dopo la 1.3).
+- **MF-SEC9g** ✅ codice `brim_provider.py`: `_candidate_view` legge una volta dall'oggetto ORM ciò che serve
+  (`_CandidateView`: id, nome, ISIN, ticker, `other_text` serializzato una volta, i campi del nome);
+  `_classify_candidates(unique, views)` pura — stesse cinque priorità, ISIN e ticker esatti da un indice che tiene
+  l'ordine dell'universo, un pattern LIKE compilato una volta per ago (`_contains_matcher`, `_contains` tolto) —
+  chiamata con `await asyncio.to_thread(...)`; via il `noqa: C901` della funzione di massa (ora semplice). Docstring e
+  `brim/architecture.md` («Candidate search»). Suite esistenti col codice: `bulk-reads-chunked` 10, `db brim-bulk` 7,
+  `brim-provider-base` 39 (⚠️ **Fuori pista**: partite col carico a 1 minuto 54,8, soglia non attesa).
+- In corso: test-author `sec9g-tests`.
+- ✅ **Test SEC9g** (test-author `sec9g-tests`, in `test_bulk_reads_chunked.py`): classificazione fuori dal ciclo (thread di
+  ogni compilazione LIKE registrato + il ciclo risponde a una coroutine a metà classificazione; HEAD: 150 000 compilazioni
+  su 150 000 sul thread del ciclo); lavoro limitato contato (≤ una compilazione per ago, ≤ un dump di `identifier_other`
+  per asset; HEAD 150 000 e 60 000); guardie: parità a taglia (300 estrazioni su 1 011 asset, jolly, codici in minuscolo,
+  titolari doppi) e ordine dei colpi esatti. 6 mutanti presi. Il percorso per asset confronta i codici in modo sensibile
+  alle maiuscole (SQLite `=`): un ISIN salvato in minuscolo non è mai EXACT — preservato dall'indice. **Corsia** (16:45;
+  prodotto tolto `brim_provider.py`, sha `780769b3…` uguale dopo): rosso **2** / 14; verdi `bulk-reads-chunked` 14,
+  `db brim-bulk` 7, `brim-provider-base` 39, `utils gate-event-loop-io` 14. Testi del runner aggiornati. ruff/black,
+  diff-check, `mkdocs build` stretto, `check-links`. Slot chiesto (`files/sec9g.sh slot`: `api brim`, `api brim-scalable`).
+- ✅ **Slot** (in coda; partito 16:53 col carico a 5 minuti < 50, HEAD `633e30ca9`): `api brim` **118**, `api brim-scalable`
+  **2**. Porta libera. **CHECKPOINT READY** inviato, FROZEN.
+- **MF-A5 — analisi** (sola lettura, durante l'attesa dello slot): la riga del mittente nell'esempio di J fa +125 =
+  ΔUGL −100 + Realizzato +125 + ritocco del tratto +100; `closed_position_annualized` divide per il solo costo venduto
+  (500) → 25 %. **Decisione del coordinatore: (1) + (2)**, un predicato condiviso: (1) il `cost_moved` dei trasferimenti
+  interni il cui tratto la riga conta (la condizione di `transfer_tract_adjustments`) entra nella base → 12,5 %; (2) se
+  un'unità è uscita altrimenti (fuori perimetro, in transito alla fine, valore o costo ignoto, ADJUSTMENT senza costo)
+  → la regola generale. CHANGELOG 🐛 con i numeri che cambiano. Dopo il checkpoint di SEC9g, rossi prima.
+
+#### SEC9g entrato (dev `650c02b17`); MF-A5 — il costo spostato nella base delle posizioni chiuse (17/10, 17:0x)
+- Coordinatore: SEC9g **entrato** (dev `650c02b17`, merge `acbbd42ba`); worktree a `203197f5a`; W rivede a posteriori.
+- **MF-A5** ✅ codice (decisione (1) + (2), un predicato condiviso):
+  - `contributions.py`: `counted_tract(transfer, date_from, end)` — partito dopo l'inizio, arrivato entro la fine,
+    valore all'arrivo e costo spostato noti — usato da `transfer_tract_adjustments` e dal nuovo
+    `transfer_costs_moved_out` (per riga mittente: costo spostato e quanti); `closed_position_base(cost_sold, sales,
+    moved_out, exits)`: costo venduto + costo spostato quando ogni uscita è coperta, altrimenti None (la regola generale);
+  - `holding_window.exits_in(moves, date_from, end)`: le uscite di quantità del periodo, gli split a parte;
+  - `portfolio_service.get_positions_contribution`: `per_sales` (le vendite che entrano nel costo venduto), `moved_out`,
+    la base passata a `closed_position_annualized`.
+  - Effetto: l'esempio di J 25 % → 12,5 % (prima dell'annualizzazione); un'uscita non coperta (fuori perimetro, in
+    transito alla fine, valore o costo ignoto, ADJUSTMENT senza costo, **anche una vendita fuori dal Realizzato**) →
+    regola generale. Vendite pure: invariate.
+  - Doc: `net-annualized-return.en.md` (CostOut = C_s + C_m, la nota di J «soglia della polvere», i casi di ricaduta, il
+    secondo esempio), `period-pnl.en.md` (la frase delle chiuse), mappa della casa (`financial-math.instructions.md`,
+    `financial_math.md`: `exits_in`). Suite esistenti col codice: `financial-math` 1224, `roi-fifo-utils` 1398.
+- In corso: test-author `a5-tests`.
+- ✅ **Test A5** (test-author `a5-tests`, valori calcolati a mano): NUOVO `test_financial_math/test_portfolio_contributions.py`
+  (tabella di verità di `counted_tract` a 16 righe e i giorni di confine; `transfer_tract_adjustments` uguale alla copia di
+  HEAD — guardia; `transfer_costs_moved_out`; `closed_position_base`; l'esempio di J 0,1250 contro 0,2500) e
+  `TestExitsIn` in `test_holding_window.py`; in `test_financial/test_positions_contribution_engine.py`
+  `TestClosedPositionBase` (5 casi, percorso report e autonomo): l'esempio di J, perimetro solo A, in transito alla fine,
+  guardia delle vendite pure, uscita solo per trasferimento. ⚠️ **Cambio di comportamento da dichiarare** (caso 5): una
+  posizione uscita **solo** per trasferimento interno, senza vendite, prima annualizzava con la regola generale (nessun
+  costo venduto), ora con la regola delle chiuse sul costo spostato (100/1 000 su 61 giorni invece di 100/1 100 su 105).
+  20 mutanti presi. Nessuna riga di runner (cartelle già registrate).
+- ✅ **Corsia** (17:21; prodotto tolto = `contributions.py`, `holding_window.py`, `portfolio_service.py`, sha
+  `5fe8c58a…` uguale dopo): `financial-math -k "contributions or holding_window"` rosso **78** / 84;
+  `roi-fifo-utils test_positions_contribution_engine` rosso **8** / 70. Verdi: `financial-math` **1309**,
+  `roi-fifo-utils` **1408**, `portfolio-engine` 41 (attese a carico 73–75). Slot chiesto (`files/a5.sh slot`:
+  `api portfolio`).
+- ✅ **Slot** (17:29, GO col carico a 5 minuti < 50; HEAD `203197f5a`): `api portfolio` **52**. Porta libera. Riga 🐛
+  approvata con i tre effetti. **CHECKPOINT READY** inviato, FROZEN. Dopo: J45d (le eccezioni vere ai seguaci,
+  `_LeaderGone` solo per la cancellazione) + la nota di doc di J sull'intervallo esatto.
+
+#### MF-A5 entrato (dev `aa52a43f7`); MF-J45d — un errore della costruzione va subito a chi aspettava (17/10, 17:3x)
+- Coordinatore: MF-A5 **entrato** (dev `aa52a43f7`, merge `2b08c2647`, 🐛 `c5ff1f68d`); worktree a `c5ff1f68d`. J ha
+  rivisto J45b (OK) con due punti: (1) BASSO, una costruzione che fallisce sempre (dati corrotti) era ritentata dai
+  seguaci uno dopo l'altro — il k-esimo aspettava k costruzioni —; (2) nota di doc sull'intervallo esatto. Fatti qui (J45d).
+- ✅ **Codice** `engine.py`: `except Exception as error` → `flight.set_exception(error)` (+ `exception()` per segnarlo
+  letto) e `raise`; `else` → `set_result`; nel `finally` `_LeaderGone` resta solo per la cancellazione (una
+  `BaseException`): allora i seguaci ricostruiscono. Commenti e docstring di `_LeaderGone` allineati.
+- ✅ **Doc** `financial_math.md` `#single-flight`: chiave per intervallo **esatto** — la cache risponde anche a un inizio
+  più tardo, il volo no: una richiesta identica con un inizio più tardo costruisce da sé (nota di J); il fallimento va a
+  tutti subito, la cancellazione lascia ricostruire.
+- In corso: test-author `j45d-tests` (adattare `test_engine_single_flight.py`).
+- ✅ **Test J45d** (test-author `j45d-tests`, `test_engine_single_flight.py`): nuovo `TestTheLeaderFails` (un capo e 3
+  seguaci, la costruzione solleva: una sola costruzione, tutti e quattro sollevano lo **stesso** oggetto d'errore, un solo
+  volo chiuso con quell'errore e la sua chiave tolta a volo già chiuso; poi una richiesta identica ricostruisce e
+  riesce); la cancellazione invariata (i seguaci ricostruiscono); il volo «retrieved» anche per il fallimento. Mutanti:
+  `except BaseException`, niente `exception()`, `_LeaderGone` per i fallimenti, copia dell'errore — presi.
+  ⚠️ **Compromesso da dichiarare** (dal test-author): un errore **transitorio** del capo («database is locked»,
+  l'esecutore spento) ora fa fallire anche i seguaci, che prima ricostruivano e potevano riuscire.
+- ✅ **Corsia** (17:47; prodotto tolto `engine.py`, sha `383a938a…` uguale dopo): rosso **1** / 11 (`TestTheLeaderFails`);
+  verdi il file 11, `roi-fifo-utils` **1407**, `portfolio-engine` 41, `app-lifecycle` 53 (attese a carico 55–87). ruff,
+  black, diff-check, `mkdocs build` stretto, `check-links`. Porta libera.
+
+#### J45d entrato (dev `685d76dab`); MF-A8 — il lato ricevente della base delle chiuse (17/10, 17:5x)
+- Coordinatore: J45d **entrato** (dev `685d76dab`, merge `6a6725ad9`, nessuna riga di CHANGELOG, nessuno slot); il
+  compromesso degli errori transitori resta salvo richiesta di J. Il fast-forward è arrivato con le modifiche di A8 già
+  nell'albero: intatte sopra `685d76dab`.
+- **Revisione di J di MF-A5** (OK sul lato mittente) → **MF-A8**: una riga che riceve unità da un tratto contato le
+  misura dal valore all'arrivo (−tratto) ma la base delle sue vendite è il costo storico. Scelta: **la preferita di J**,
+  Σ(V_arrivo − C_spostato) dei tratti ricevuti nella base — numeratore e base contano le unità ricevute dallo stesso
+  valore (P22, il tratto del ricevente parte da V); l'annualizzazione sul tempo di volo resta anche per «spostato e poi
+  venduto», che una ricaduta perderebbe; su una catena A→B→C la riga di mezzo dà (V₂ − V₁)/V₁. ✅ Codice:
+  `contributions.transfer_tracts_moved_in` (stesso `counted_tract`), `closed_position_base(..., moved_in)` con base
+  **> 0** (prima ≠ 0), `portfolio_service` lo passa. Doc: `net-annualized-return.en.md` (il termine Σ(V_a − C_a), il
+  rovescio nell'esempio). Backlog: MF-A5 chiusa, MF-A8 in corso.
+- In corso: test-author `a8-tests`.
+- ✅ **Test A8** (test-author `a8-tests`): in `test_portfolio_contributions.py` `TestTransferTractsMovedIn`,
+  `TestClosedPositionBaseMovedIn`, `TestMovedInExamples` (J 0,10 contro 0,12; arrivo in perdita 0,10 contro 0,08; catena
+  45/600 contro 45/500) e la guardia di `closed_position_base` senza `moved_in` (copia di HEAD); in `TestClosedPositionBase`
+  (report e autonomo) l'esempio di J e la catena con B attraversato, più la guardia «in transito all'inizio». 11 mutanti
+  presi. Seguito → backlog **MF-A9** (una riga ricevente ancora aperta annualizza sul costo storico: C 5/500 invece di
+  5/645).
+- ✅ **Corsia** (18:11; prodotto tolto `contributions.py` + `portfolio_service.py`, sha `6c86b61b…` uguale dopo):
+  `financial-math -k contributions` rosso **64** / 88; `roi-fifo-utils test_positions_contribution_engine` rosso **4** /
+  80. Verdi: `financial-math` **1386**, `roi-fifo-utils` **1413**, `portfolio-engine` 41. ruff, black, diff-check,
+  `mkdocs build` stretto, `check-links`. Porta libera. Slot chiesto (`files/a8.sh slot`: `api portfolio`).
+- ✅ **Slot** (GO; partito 18:18, HEAD `685d76dab`): esito qui sotto. Coordinatore: la scelta di A8 è giusta; **MF-A9** nella
+  1.3 come prossimo lotto (analisi inviata: solo le righe senza valore iniziale, base `end_cost + Σ(V_a − C_a)` quando la
+  riga non ha uscite nel periodo — esatto —, altrimenti il costo alla fine com'è, limite dichiarato: il trasferimento non
+  porta la quantità). Revisione Z-32 (c) `QUOTE_IN_MINOR_UNIT`: OK, nessun rilievo. **CHECKPOINT READY** inviato, FROZEN.
+
+#### A8 entrato (dev `bc466d969`); MF-A9 — la riga ricevente aperta (17/10, 18:2x)
+- Coordinatore: A8 **entrato** (dev `bc466d969`, merge `4f9f29e8e`, clausola 🐛 `770928213`); worktree a `770928213`.
+- **MF-A9** ✅ codice: `annualized_period_return(..., moved_in=None)` — senza valore iniziale la base di ricaduta è
+  `end_cost` (≠ 0, com'era) o, con `moved_in`, `end_cost + moved_in` (> 0); `get_positions_contribution` calcola
+  `row_exits` una volta e passa `moved_in` solo se `row_exits == 0` (tutte le unità ricevute ancora tenute: esatto).
+  Limite dichiarato: con uscite nel periodo la base resta il costo alla fine (il trasferimento non porta la quantità).
+  Doc: `net-annualized-return.en.md` (la ricaduta della base: + Σ(V_a − C_a), il limite). Backlog: A8 chiusa, A9 in corso.
+- ✅ **Test A9** (test-author `a9-tests`): in `test_portfolio_contributions.py` la guardia
+  `TestAnnualizedPeriodReturnWithoutMovedInUnchanged` (copia di HEAD, 11 casi) e `TestAnnualizedPeriodReturnMovedIn`
+  (C 5/645 = 0,0078 contro 5/500; arrivo in perdita base 400; al costo; base ≤ 0 → `None`; il valore iniziale vince;
+  `moved_in=None` = HEAD); in `test_positions_contribution_engine.py` `TestOpenPositionMovedInBase` (report e autonomo):
+  la catena di A8 letta fino al 16/05 (`_passed_through_held_longer`, chiusura 130) — sul periodo di A8 la finestra di C
+  è 28 giorni, sotto i 30 dell'annualizzazione, `None` prima e dopo —, C **0,066576** (5/645, 44 giorni) contro HEAD
+  0,086045; guardie: un BUY a 645 dà lo stesso numero, e la riga ricevente poi venduta in parte resta sul costo alla fine
+  (1,370355, il limite dichiarato). Mutanti presi tutti. Note: `moved_in=0` con costo alla fine negativo → `None`
+  (prima un numero; coerente con `> 0` di `closed_position_base`, lo tengo); la riga tenuta all'inizio e ricevente ha
+  solo test puri (vince il valore iniziale).
+- ✅ **Corsia** (18:33; prodotto tolto `contributions.py` + `portfolio_service.py`, sha `a751853b…` uguale dopo):
+  `financial-math contributions` rosso **32** / 164 (tutti `TypeError … 'moved_in'`); `roi-fifo-utils
+  test_positions_contribution_engine` rosso **2** / 88 (C 0,086045 ≠ 0,066576, entrambi i percorsi). Verdi:
+  `financial-math` **1430**, `roi-fifo-utils` **1433**, `portfolio-engine` 41. ruff, black, diff-check; `mkdocs build`
+  stretto e `check-links` verdi (dopo la doc). Porta libera. Slot chiesto (`files/a9.sh slot`: `api portfolio`).
+- ✅ **Slot** (GO 18:37; partito 18:38, HEAD `770928213`): `api portfolio` **53** passati; porta 6190 libera.
+  Coordinatore: il `> 0` resta; il caso «costo alla fine negativo con `moved_in` → «—»» va solo qui, senza clausola
+  CHANGELOG. Revisione J di MF-A8: OK; nit doc preso: in `net-annualized-return.en.md`, dopo il termine $V_a − C_a$, la
+  frase «CostOut non è solo costo storico: per le unità ricevute la base tiene il loro valore all'arrivo». `mkdocs
+  build` stretto + `check-links` verdi dopo il nit. Rinomina CP-10d (`series_preparation` → `market_series`): A9 non
+  importa nessuno dei due. **CHECKPOINT READY** inviato, FROZEN.

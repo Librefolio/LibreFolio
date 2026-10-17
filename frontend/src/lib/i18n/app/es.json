@@ -43,7 +43,14 @@
     "imagePending": "Se ha detectado una versión estable más reciente, pero su imagen Docker aún no está disponible.",
     "imageCheckFailed": "Se ha detectado una versión estable más reciente, pero no se ha podido verificar su imagen Docker. Inténtalo de nuevo.",
     "adminLookupFailed": "Hay una actualización disponible, pero no se ha podido cargar la lista de administradores.",
-    "notTranslated": "Aún sin traducir"
+    "notTranslated": "Aún sin traducir",
+    "whatsNew": {
+      "title": "Novedades de LibreFolio",
+      "intro": "LibreFolio se ha actualizado desde tu última visita. Esto es lo que ha cambiado.",
+      "introRelease": "Estas son las novedades de la versión {version}.",
+      "close": "Entendido",
+      "fullChangelog": "Registro de cambios completo"
+    }
   },
   "support": {
     "title": "Apoya LibreFolio",

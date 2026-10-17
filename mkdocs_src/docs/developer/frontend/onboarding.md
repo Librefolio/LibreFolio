@@ -373,9 +373,11 @@ documented in [Settings](components/features/settings.md).
 
 ## 🔕 Deferred popups {: #deferred-popups }
 
-The layout mounts `DeferredAppPopups.svelte`, which owns the popups nobody asked for: the donation
-prompt and the update-available modal. It holds them while a guide is active or any modal is open,
-and shows the next one when both are gone. A prompt the user did ask for — a manual update check,
+The layout mounts `DeferredAppPopups.svelte`, which owns the popups nobody asked for, one at a time
+and in this order: [What's new](#whats-new) (lot C-54), the donation prompt and the update-available
+modal. It holds them while a guide is active or any modal is open, and shows the next one when both
+are gone; the host says which one shows in `data-active-popup` (`whats-new`, `donation`, `update`
+or `none`). A prompt the user did ask for — a manual update check,
 shown with `updateAvailable.show(release, {requested: true})` — appears at once, above a guide or
 a modal.
 
@@ -392,6 +394,68 @@ self-hosted instance ([Container Image Check](../architecture/security.md#contai
 `DonationPopupModal.svelte` has no close button and ignores backdrop clicks and
 <kbd>Esc</kbd> (`closeOnBackdropClick={false}`, `closeOnEscape={false}`): only **Buy Me a Coffee**
 and **Maybe later** dismiss it, and a share button opens the share dialog above it.
+
+### ✨ What's new since your last version {: #whats-new }
+
+After an update, each signed-in user sees once the chapters of the changelog released since the
+version whose changelog they saw last (lot C-54). It is the same in both profiles; on a managed
+instance, where no update check runs, it is how users hear of an update. The user's side: «What's
+new after an update» in [Changelog Modal](../../user/settings/about.md#changelog-modal).
+
+- **The backend says whether, and from which release.** `users.last_seen_version` holds a base
+  release `X.Y.Z` ([`USER`](../architecture/database/users_access.md#user)).
+  `whats_new_service.pending_for(user)` (`backend/app/services/accounts/whats_new_service.py`)
+  compares it with `current_release()`, the base release of `config.get_version()`: `release_of()`
+  reads `v1.3.0-7-gabc1234` and `1.3.0-rc1` as `1.3.0`, `1.3` as `1.3.0`, and finds no release in
+  `unknown`, `dev`, a bare hash or a base of `0.0.0`, which is how `get_git_version()` reports a
+  checkout with no tag (`v0.0.0-g<hash>`). Every answer that carries the user — `POST /auth/login`,
+  `GET /auth/me`, `POST /auth/register`, `PUT /auth/profile` and `POST /auth/setup` — puts the
+  result in `user.whats_new` (`WhatsNewRead`, `{since, release}`), through `_auth_user()` in
+  `backend/app/api/v1/auth.py`; `since` is null for a `NULL` column, an account from before the
+  feature, which sees the `release` chapter alone. `user.whats_new` is null when nothing is newer
+  than what the user saw, a downgrade included; when the running version names no release, a
+  checkout with no tag included, where `create_user()` therefore writes nothing; and
+  when `whats_new_disabled()` says so, a hidden switch like the donation prompt's (decision D-A7),
+  which the test lanes turn on ([Automated Setup](../test-walkthrough/front-overview.md#automated-setup)).
+- **A new account has nothing to catch up on.** `user_service.create_user()` writes the running
+  release into `last_seen_version`.
+- **Closing the window records it.** `POST /api/v1/auth/whats-new/seen` (`204`, a session required,
+  idempotent) calls `mark_seen()`, which writes the server's own running release, never a value from
+  the client, and logs *What's new seen* (`user_id`, `release`) when it changes the column. With
+  the running release unknown it writes nothing.
+- **The app picks the chapters.** `whatsNewChapters(chapters, whatsNew)`
+  (`lib/features/changelog/whatsNew.ts`) keeps the released chapters of the bundled changelog with
+  `since < version ≤ release`, or the `release` chapter alone when `since` is null, never
+  `[Unreleased]`, in the changelog's order, newest first. Versions compare as numbers, with the
+  update check's `compareVersions()`.
+- **The store.** `whatsNew` (`lib/features/changelog/whatsNewStore.svelte.ts`) reads `user.whats_new`
+  from the auth store. `shouldShow` holds while a user is signed in, the window was not closed on
+  this page load, and at least one chapter matches: a `whats_new` that names no bundled chapter
+  shows nothing, and records nothing. `dismiss()` hides the window at once and posts; a failed
+  `POST` is only logged, and the window comes back at the next page load, since the server still
+  says it. The closed flag is reset when the client session ends (`registerClientSessionReset`).
+- **The window.** `WhatsNewModal.svelte` (`whats-new-modal`): the title `changelog.whatsNew.title`;
+  the intro `changelog.whatsNew.intro`, or `changelog.whatsNew.introRelease` with the version when
+  `since` is null; one `whats-new-chapter` per chapter, its version in `data-version`, in the
+  interface language when the bundle translates it (`localizedChangelog`, loaded as
+  `ChangelogModal` loads it), in English otherwise, with the pill `changelog.notTranslated`
+  (`whats-new-not-translated`); the Markdown rendered by `marked` and passed through
+  `sanitizeHtml()` at the `{@html}` sink itself, as the [`htmlSink` gate](../architecture/security.md#output-escaping)
+  requires; `whats-new-full-changelog` (`changelog.whatsNew.fullChangelog`), the changelog on
+  GitHub in a new tab, `rel="noopener noreferrer"`; `whats-new-close` (`changelog.whatsNew.close`,
+  *Got it*). Every close — the button, <kbd>Esc</kbd>, the backdrop — calls `dismiss()`. The window
+  uses colour roles only, and `ChangelogModal` is unchanged.
+- **Tests.** `./dev.py test services whats-new` (`test_services/test_whats_new_service.py`, WN-001
+  to WN-010: the base release, the switch, `pending_for()`, `create_user()`, `mark_seen()`) and
+  `./dev.py test api whats-new` (`test_api/test_whats_new_api.py`, WN-API-01 to WN-API-07,
+  in-process: `user.whats_new` in the answers, the `POST`). `./dev.py test front-utility core-unit`
+  runs `whatsNew.test.ts` (WN-01 to WN-11) and `whatsNewStore.test.ts` (WNS-00 to WNS-12),
+  `component-unit` runs `WhatsNewModal.test.ts` (WNM-01 to WNM-10), and `onboarding-component-unit`
+  runs `DeferredAppPopups.test.ts` (DAP-WN-01 to DAP-WN-05: first of the three, then the next one
+  once closed; held by a guide or a modal; under a requested update, interrupted and not dismissed).
+  `./dev.py test front-utility whats-new` (`frontend/e2e/layout/whats-new.spec.ts`, WNE-01 to
+  WNE-06, both profiles) answers `GET /auth/me` with the real response and its `user.whats_new`
+  replaced, and `POST /auth/whats-new/seen` itself, so it never writes a shared test user.
 
 ## 🗄️ Backend {: #backend }
 

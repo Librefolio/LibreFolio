@@ -229,10 +229,10 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("database", lambda: ensure_database_exists()),
     # Then the repairs that cannot be migrations, before anything else opens the database
     Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup)),
-    # Then one warning when stored currency codes are not ISO 4217 codes (E-19a): read-only, never a stop
-    Step("stored-currencies", lambda: asyncio.to_thread(log_stored_currency_audit)),
     # Then the lone giving TRANSFER legs older deletions left, at their Auto cost, which the fixes cannot compute (decision 47)
     Step("lone-transfer-legs", lambda: convert_lone_giving_legs_at_startup()),
+    # Then, after both repairs, one warning when stored currency codes are not ISO 4217 codes (E-19a): read-only, never a stop
+    Step("stored-currencies", lambda: asyncio.to_thread(log_stored_currency_audit)),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
     # The initial administrator of LIBREFOLIO_ADMIN_EMAIL (F02, workstream A), once the settings exist

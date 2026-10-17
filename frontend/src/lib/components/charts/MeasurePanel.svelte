@@ -25,7 +25,7 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef, HtmlCell} from '$lib/components/table/types';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
@@ -297,12 +297,13 @@
 
     function fmtValue(v: number): string {
         if (measurementUnit === 'percentage-points') return formatPercent(v, {signed: false});
-        if (Math.abs(v) >= 1) return formatFixed(v, 4);
-        return formatFixed(v, 6, {trim: true});
+        // C-97c: the decimals of today, and more when 4 significant digits need them (a price under 0.001).
+        if (Math.abs(v) >= 1) return formatPrice(v, {minDecimals: 4});
+        return formatPrice(v, {minDecimals: 0, floorDecimals: 6});
     }
 
     function fmtDelta(v: number): string {
-        return measurementUnit === 'percentage-points' ? formatPercent(v, {suffix: ' pp'}) : formatFixed(v, 4, {signed: true});
+        return measurementUnit === 'percentage-points' ? formatPercent(v, {suffix: ' pp'}) : formatPrice(v, {minDecimals: 4, signed: true});
     }
 
     function fmtPct(v: number): string {
@@ -531,7 +532,7 @@
     <!-- Pending indicator -->
     {#if measureActive && pendingStartDate}
         <div class="text-xs text-lf-warning-on-soft bg-lf-warning-soft rounded px-3 py-1.5 border border-lf-warning-line">
-            📍 {$t('measure.pending', {values: {startDate: pendingStartDate, startValue: pendingStartValue == null ? '' : formatFixed(pendingStartValue, 4)}})}
+            📍 {$t('measure.pending', {values: {startDate: pendingStartDate, startValue: pendingStartValue == null ? '' : formatPrice(pendingStartValue, {minDecimals: 4})}})}
         </div>
     {/if}
 

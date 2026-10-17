@@ -3853,3 +3853,10 @@ keeps `undefined`/`''` columns silent (not applicable), and labels its tables `_
 writes `null` for "none".
 Filed: revision of [[decisions/ai-export-versioned-snapshot-boundary]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Columns whose null means "none" are not named (J-54)
+T-B7 named every column null in every row; the backend also writes `null` for "none" (an open lot's closing date, an
+unbounded output's bounds), so J-54 adds one exported list of such columns, `NULL_MEANS_NONE_COLUMNS` (11 entries, scoped
+by table and component), whose all-null drop stays silent. `partial_reason_code` stays out: its null means unknown.
+Filed: revision of [[decisions/ai-export-versioned-snapshot-boundary]].
+Graph: not updated; graphify is not available in this worktree.

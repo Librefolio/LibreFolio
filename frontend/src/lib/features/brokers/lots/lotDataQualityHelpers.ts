@@ -2,7 +2,9 @@
  * Pure helpers extracted from LotDataQualityBanner.svelte.
  *
  * The banner collapses the backend's one-issue-per-lot stream into one row per
- * code, each listing the affected lots as chips. The grouping, de-duplication,
+ * code, each listing the affected lots as chips. An issue without a lot cannot
+ * become a chip, so it keeps a message line of its own inside its code's row,
+ * with its own amount, day or pair (J-53). The grouping, de-duplication,
  * per-day disambiguation index and severity ordering are pure functions of the
  * issues and the visible-lot date map — lifted here so they can be unit tested
  * without mounting the banner or a live i18n runtime.
@@ -32,12 +34,23 @@ export interface LotChip {
     label: string;
 }
 
-/** One issue category after grouping: its message and the lots it touches. */
+/** One message line of a group: its catalogue key and the params it is formatted with. */
+export interface IssueMessage {
+    /** Unique within its group and stable for the same issues: the banner's `{#each}` key. */
+    key: string;
+    messageKey: string;
+    params: Record<string, string | number | boolean | null | undefined>;
+}
+
+/**
+ * One issue category after grouping: its message lines and the lots it touches. The lines are, in first-occurrence
+ * order, one for the code's issues on a lot (the first one's params; the lots are the chips) and one per distinct issue
+ * without a lot (J-53). Never empty.
+ */
 export interface IssueGroup {
     code: string;
     severity: IssueSeverity;
-    messageKey: string;
-    messageParams: Record<string, string | number | boolean | null | undefined>;
+    messages: IssueMessage[];
     lots: LotChip[];
 }
 
@@ -78,20 +91,35 @@ export function groupedSeverity(errorCount: number, warningCount: number): Issue
  * and lots sharing an opening day get a `#index` suffix so they are
  * distinguishable. Groups come out ordered by severity.
  *
+ * The issues of a code on a lot (a finite `lot_id`, visible or not) share one message line, the first one's. An issue
+ * without a lot (`lot_id` null, absent or not a number) has no chip to show where it applies, so its own params are the
+ * only place its amount, day or pair is said: it gets a line of its own, and the same key with the same params gives
+ * one line (J-53: an orphan income or cost pool per line, never only the first).
+ *
  * `labelForDate(iso)` supplies the localized base label for a lot's opening date.
  */
 export function buildIssueGroups(issues: readonly DataQualityIssueLike[], lotDates: ReadonlyMap<number, string>, labelForDate: (iso: string) => string): IssueGroup[] {
-    const byCode = new Map<string, {code: string; severity: IssueSeverity; messageKey: string; messageParams: Record<string, string | number | boolean | null | undefined>; lotIds: number[]}>();
+    const byCode = new Map<string, {code: string; severity: IssueSeverity; messages: IssueMessage[]; lotIds: number[]; hasLotLine: boolean; lotlessSeen: Set<string>}>();
     for (const issue of issues) {
         let group = byCode.get(issue.code);
         if (!group) {
-            group = {code: issue.code, severity: issue.severity, messageKey: issue.message_i18n_key, messageParams: issue.message_params ?? {}, lotIds: []};
+            group = {code: issue.code, severity: issue.severity, messages: [], lotIds: [], hasLotLine: false, lotlessSeen: new Set()};
             byCode.set(issue.code, group);
         }
-        const lotId = resolveLotId(issue.message_params?.lot_id);
-        if (Number.isFinite(lotId) && lotDates.has(lotId) && !group.lotIds.includes(lotId)) {
-            group.lotIds.push(lotId);
+        const params = issue.message_params ?? {};
+        const lotId = resolveLotId(params.lot_id);
+        if (Number.isFinite(lotId)) {
+            if (!group.hasLotLine) {
+                group.hasLotLine = true;
+                group.messages.push({key: `${group.code}:lots`, messageKey: issue.message_i18n_key, params});
+            }
+            if (lotDates.has(lotId) && !group.lotIds.includes(lotId)) group.lotIds.push(lotId);
+            continue;
         }
+        const identity = messageIdentity(issue.message_i18n_key, params);
+        if (group.lotlessSeen.has(identity)) continue;
+        group.lotlessSeen.add(identity);
+        group.messages.push({key: `${group.code}:${group.messages.length}`, messageKey: issue.message_i18n_key, params});
     }
 
     const result: IssueGroup[] = [];
@@ -115,10 +143,20 @@ export function buildIssueGroups(issues: readonly DataQualityIssueLike[], lotDat
             return {lotId: entry.id, label: total > 1 ? `${base} #${index}` : base};
         });
 
-        result.push({code: group.code, severity: group.severity, messageKey: group.messageKey, messageParams: group.messageParams, lots});
+        result.push({code: group.code, severity: group.severity, messages: group.messages, lots});
     }
 
     return result.sort((left, right) => severityOrder[left.severity] - severityOrder[right.severity]);
+}
+
+/** The same message key with the same params, whatever their order: two such lines would say the same thing. */
+function messageIdentity(messageKey: string, params: Record<string, string | number | boolean | null | undefined>): string {
+    return JSON.stringify([
+        messageKey,
+        Object.keys(params)
+            .sort()
+            .map((name) => [name, params[name] ?? null]),
+    ]);
 }
 
 type IssueParams = Record<string, string | number | boolean | null | undefined>;

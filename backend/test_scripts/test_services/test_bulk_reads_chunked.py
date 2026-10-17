@@ -45,17 +45,36 @@ Green before and after (guards): both barriers; ``test_guard_bulk_candidates_in_
 (50 and 90 triples); the WAC case at 500 and 501 keys. «No key, no statement» is pinned by
 ``test_portfolio_allocation_source.py::test_wac_fx_rows_are_read_at_exactly_the_rate_date_the_cost_used``.
 
+MF-SEC9g — the classification after the read. HEAD 633e30ca9 ran the five-step priority of every extraction over the
+whole universe on the event loop, rebuilding a LIKE pattern at every test of every asset and dumping
+``identifier_other`` at every check: E measured 104 s of stalled loop for 1 000 generic names over 5 000 assets. The cure
+(``_candidate_view``, ``_classify_candidates`` in a worker thread, one matcher per needle, exact ISIN/ticker indexes),
+pinned here:
+
+3. the LIKE matching of the classification runs in a thread that is not the loop's, and the loop runs a coroutine sent
+   from inside the classification (thread identity and a handshake, no clock);
+4. at most one LIKE compile per needle and one ``identifier_other`` text per stored asset (counted, not timed).
+
+Red on HEAD 633e30ca9: ``test_bulk_candidates_classify_off_the_event_loop`` (150 000 compiles, all on the loop's
+thread) and ``test_bulk_candidates_compile_each_needle_once_and_dump_each_asset_once`` (150 000 compiles for 200
+needles, 60 000 dumps for 300 assets). Green before and after (guards):
+``test_guard_bulk_candidates_at_size_match_the_per_asset_search`` (300 extractions over 1 011 assets, wildcard bond
+names, codes stored in either case, duplicate holders) and ``test_guard_bulk_exact_hits_keep_the_universe_order``.
+
 Isolation: PURE — no lane database, no server, no network. Each test has its own in-memory SQLite database
 (``SQLModel.metadata.create_all``), closed and disposed at teardown.
 
 Reference: backend/app/utils/sql_chunks.py, backend/app/services/brim/brim_provider.py (search_asset_candidates,
-search_asset_candidates_bulk), backend/app/services/pac_allocator/source/wac.py (_load_wac_fx_rows),
+search_asset_candidates_bulk, _classify_candidates, _contains_matcher, _like_to_regex, _other_as_text),
+backend/app/services/pac_allocator/source/wac.py (_load_wac_fx_rows),
 backend/test_scripts/test_db/test_brim_bulk_candidates.py (the same parity on a small universe).
 """
 
 from __future__ import annotations
 
+import asyncio
 import random
+import threading
 from collections.abc import AsyncIterator
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -450,3 +469,305 @@ async def test_wac_fx_rows_reads_every_key_of_a_long_history(session, stored_key
             wrong.append(((base, quote, rate_date), (row.id, row.rate, row.source), expected))
     assert not wrong, f"{len(wrong)} keys with another row (key, got, expected): {wrong[:3]}"
     print_success(f"{len(keys)} keys: the {stored_keys} stored ones answered, each with its own row; none of the others")
+
+
+# =============================================================================
+# 3. MF-SEC9g: the candidate classification off the event loop, its work bounded, its answers unchanged at size
+# =============================================================================
+
+#: Words of generic fund names: every asset's display name is two of them, so every extracted name below runs the whole
+#: priority chain (unknown ISIN, unknown symbol, a name) over the whole universe, the shape E measured.
+GENERIC_WORDS = ("Global", "Equity", "Bond", "Income", "World", "Euro", "Growth", "Value", "Index", "Dividend")
+N_GENERIC_ASSETS = 300
+#: Seconds the classification's thread waits for the event loop to run a coroutine: a deadline, met at once when the
+#: loop is free, never a sleep.
+LOOP_ANSWER_DEADLINE = 30.0
+
+
+def _generic_display_name(index: int) -> str:
+    return f"{GENERIC_WORDS[index % 10]} {GENERIC_WORDS[(index // 10) % 10]} Fund {index:04d}"
+
+
+async def _seed_generic_assets(session: AsyncSession) -> None:
+    """300 generic funds, each with an ISIN, a ticker and an alternate, so every identifier text is there to be tested."""
+    order = list(range(N_GENERIC_ASSETS))
+    random.Random(17).shuffle(order)
+    session.add_all(
+        Asset(
+            display_name=_generic_display_name(index),
+            currency="EUR",
+            asset_type=AssetType.FUND,
+            identifier_isin=f"GN{index:010d}",
+            identifier_ticker=f"GT{index:04d}",
+            identifier_other=[f"GA{index:010d}"],
+        )
+        for index in order
+    )
+    await session.commit()
+
+
+def _generic_triples() -> list[Triple]:
+    """100 distinct extractions, unknown symbol and ISIN, a generic name: the ten words alone, then 90 of their pairs."""
+    names = list(GENERIC_WORDS) + [f"{first} {second}" for first in GENERIC_WORDS for second in GENERIC_WORDS if first != second]
+    triples: list[Triple] = [(f"NOSYM{k:03d}", f"ZZ{k:010d}", name) for k, name in enumerate(names)]
+    assert len(set(triples)) == len(triples) == 100, "the fixture's triples are distinct"
+    return triples
+
+
+@pytest.mark.asyncio
+async def test_bulk_candidates_classify_off_the_event_loop(session, monkeypatch):
+    """While ``search_asset_candidates_bulk`` classifies 100 generic names over 300 generic funds, its LIKE matching runs
+    in a thread that is not the event loop's, and the loop runs a coroutine sent to it from inside the classification.
+
+    Deterministic, no clock: ``_like_to_regex`` — what the classification calls for every LIKE it reproduces — is wrapped
+    to record the thread it runs in. At the first call off the loop's thread the classification itself, mid-flight,
+    sends a coroutine to the loop and waits for its answer (``LOOP_ANSWER_DEADLINE``, met at once by a free loop): the
+    concurrent request the import must not starve. Red on HEAD 633e30ca9: every compile on the loop's thread — the
+    classification ran on the event loop, stalling it (0.5 s for 1 000 realistic instruments, 104 s for 1 000 generic
+    names over 5 000 assets, E's measures).
+    """
+    print_section("MF-SEC9g: the candidate classification runs off the event loop")
+    await _seed_generic_assets(session)
+    triples = _generic_triples()
+    loop = asyncio.get_running_loop()
+    loop_thread = threading.get_ident()
+    compile_threads: list[int] = []
+    loop_answers: list[Optional[int]] = []
+    like_to_regex = brim_provider._like_to_regex
+
+    async def _answer_from_the_loop() -> int:
+        return threading.get_ident()
+
+    def _recording_like_to_regex(pattern: str):
+        thread = threading.get_ident()
+        compile_threads.append(thread)
+        if thread != loop_thread and not loop_answers:
+            # Mid-classification, from its own thread: the loop must run a coroutine now. Not asked on the loop's
+            # thread, where the answer cannot come by construction: the thread check there is the red.
+            try:
+                loop_answers.append(asyncio.run_coroutine_threadsafe(_answer_from_the_loop(), loop).result(timeout=LOOP_ANSWER_DEADLINE))
+            except TimeoutError:
+                loop_answers.append(None)
+        return like_to_regex(pattern)
+
+    monkeypatch.setattr(brim_provider, "_like_to_regex", _recording_like_to_regex)
+    bulk = await brim_provider.search_asset_candidates_bulk(session, triples)
+
+    assert set(bulk) == set(triples), f"one answer per distinct triple: {len(bulk)} for {len(triples)}"
+    assert all(candidates for candidates, _ in bulk.values()), "every generic name matches funds: the classification did its work"
+    assert compile_threads, "the probe saw the classification's LIKE matching (_like_to_regex): without it the thread check below proves nothing"
+    on_loop = sum(thread == loop_thread for thread in compile_threads)
+    assert on_loop == 0, f"{on_loop} of {len(compile_threads)} LIKE patterns of the classification compiled on the event loop's thread: the loop stalled for the whole classification (MF-SEC9g)"
+    assert loop_answers == [loop_thread], f"the event loop did not run a coroutine within {LOOP_ANSWER_DEADLINE} s while the classification ran in its thread: {loop_answers}"
+    print_success(f"{len(compile_threads)} LIKE compiles, none on the loop's thread; the loop answered mid-classification")
+
+
+@pytest.mark.asyncio
+async def test_bulk_candidates_compile_each_needle_once_and_dump_each_asset_once(session, monkeypatch):
+    """The classification's work is bounded by its input, not by input × universe: at most one LIKE pattern compiled per
+    needle (an extraction's ISIN, its name) and one ``identifier_other`` text built per stored asset, for 100 generic
+    names (asked twice in part: duplicates collapse) over 300 funds.
+
+    Counted, never timed: ``_like_to_regex`` and ``_other_as_text`` wrapped. Red on HEAD 633e30ca9: ``_contains`` rebuilt
+    the pattern at every test of every asset, and ``identifier_other`` was dumped again at every check — about
+    150 000 compiles and 60 000 dumps here, for 200 needles and 300 assets.
+    """
+    print_section("MF-SEC9g: one LIKE compile per needle, one identifier_other text per asset")
+    await _seed_generic_assets(session)
+    triples = _generic_triples()
+    compiles: list[str] = []
+    dumps: list[Optional[list[str]]] = []
+    like_to_regex, other_as_text = brim_provider._like_to_regex, brim_provider._other_as_text
+
+    def _counting_like_to_regex(pattern: str):
+        compiles.append(pattern)
+        return like_to_regex(pattern)
+
+    def _counting_other_as_text(value: Optional[list[str]]) -> str:
+        dumps.append(value)
+        return other_as_text(value)
+
+    monkeypatch.setattr(brim_provider, "_like_to_regex", _counting_like_to_regex)
+    monkeypatch.setattr(brim_provider, "_other_as_text", _counting_other_as_text)
+    bulk = await brim_provider.search_asset_candidates_bulk(session, triples + triples[::5])
+
+    assert set(bulk) == set(triples), f"one answer per distinct triple: {len(bulk)} for {len(triples)}"
+    needles = sum(bool(isin) + bool(name) for _, isin, name in triples)
+    assert compiles and dumps, f"the probes saw the classification: {len(compiles)} compiles, {len(dumps)} dumps"
+    assert len(compiles) <= needles and len(dumps) <= N_GENERIC_ASSETS, f"{len(compiles)} LIKE compiles for {needles} needles, {len(dumps)} identifier_other dumps for {N_GENERIC_ASSETS} stored assets: the classification's work grows with extractions × universe (MF-SEC9g)"
+    print_success(f"{len(compiles)} compiles for {needles} needles, {len(dumps)} dumps for {N_GENERIC_ASSETS} assets")
+
+
+#: The universe of the parity case at size: 1 000 generic funds, then the assets of the special cases below.
+N_SIZED_ASSETS = 1_000
+SIZED_SPECIAL_ASSETS: tuple[tuple[str, Optional[str], Optional[str], Optional[list[str]]], ...] = (
+    # (display name, ISIN, ticker, identifier_other)
+    ("BTP Valore 3,35% Mar27", "IT0005000001", "BTPV27", None),  # a «%» in the name: SQL LIKE reads it as «anything»
+    ("BTP Valore 3,35 Giu28", "IT0005000002", "BTPV28", None),  # reached by «BTP Valore 3,35%» only through the wildcard
+    ("BTP Valore 3,45% Ott29", "IT0005000003", None, None),
+    ("BTP Italia 1,6% Nov30", "IT0005000004", None, ["IT0005000044"]),
+    ("Isin Case Lower Holding", "lc0000000001", "lctk01", None),  # stored lower case, past the model's validators
+    ("Isin Case Upper Holding", "LC0000000001", "LCTK01", None),  # the same codes, upper case: the index must not fold
+    ("Isin Case Alternate Holding", "MX0000000001", None, ["Lc0000000001"]),  # the alternate's LIKE folds ASCII case
+    ("Isin Lone Lower Holding", "lq0000000001", None, None),  # stored lower case, no upper twin: never an exact hit
+    ("Twin Isin Zulu", "TW0000000001", "TWTK", None),  # duplicates: two primaries, an alternate, two tickers
+    ("Twin Isin Alpha", "TW0000000001", "TWTK", None),
+    ("Twin Isin Mike", None, None, ["TW0000000001"]),
+)
+#: Extractions of the special cases: the wildcard bond names, case-only differences, duplicates.
+SIZED_SPECIAL_TRIPLES: tuple[Triple, ...] = (
+    (None, None, "BTP Valore 3,35%"),
+    (None, None, "btp valore 3,35%"),
+    (None, None, "BTP_Valore"),
+    (None, None, "3,_5%"),
+    (None, "IT0005000044", "BTP Italia"),
+    ("NOSYM-LCU", "LC0000000001", "Nothing case upper"),
+    ("NOSYM-LCL", "lc0000000001", "Nothing case lower"),
+    (None, None, "Isin Case Lower"),
+    ("NOSYM-LQ", "LQ0000000001", "Isin Lone Lower"),
+    ("LCTK01", None, None),
+    ("lctk01", None, "lctk01"),
+    ("NOSYM-TW", "TW0000000001", "Twin"),
+    ("twtk", None, None),
+)
+
+
+def _sized_isin(index: int) -> Optional[str]:
+    return None if index % 13 == 6 else f"SZ{index:010d}"
+
+
+def _sized_ticker(index: int) -> Optional[str]:
+    return None if index % 9 == 4 else f"ST{index:04d}"
+
+
+def _sized_display_name(index: int) -> str:
+    return f"{GENERIC_WORDS[index % 10]} {GENERIC_WORDS[(index // 10) % 10]} {index:04d}"
+
+
+async def _seed_sized_assets(session: AsyncSession) -> None:
+    """1 000 generic funds in shuffled order, then the special assets against their display names' order: no id order
+    is a display-name order, the twins' least of all (raw rows: the lower-case codes stay lower)."""
+    rows = [
+        {
+            "display_name": _sized_display_name(index),
+            "identifier_isin": _sized_isin(index),
+            "identifier_ticker": _sized_ticker(index),
+            "identifier_other": [f"SA{index:010d}", f"Soft sized {index:04d}"] if index % 40 == 0 else None,
+        }
+        for index in range(N_SIZED_ASSETS)
+    ]
+    random.Random(23).shuffle(rows)
+    specials = sorted(SIZED_SPECIAL_ASSETS, key=lambda special: special[0], reverse=True)
+    rows += [{"display_name": name, "identifier_isin": isin, "identifier_ticker": ticker, "identifier_other": other} for name, isin, ticker, other in specials]
+    now = datetime(2026, 1, 1)
+    await session.execute(insert(Asset), [{**row, "currency": "EUR", "asset_type": AssetType.FUND, "created_at": now, "updated_at": now} for row in rows])
+    await session.commit()
+
+
+def _sized_triples(count: int) -> list[Triple]:
+    """``count`` distinct extractions: exact ISINs and tickers (either case), alternates, generic words and pairs, whole
+    names with their ASCII case swapped, nothing at all; the special cases on both ends."""
+    triples: list[Triple] = []
+    k = 0
+    while len(triples) < count - len(SIZED_SPECIAL_TRIPLES):
+        index = (k * 37) % N_SIZED_ASSETS
+        unknown_symbol, unknown_isin, unknown_name = f"NO{k:04d}", f"ZZ{k:010d}", f"Nothing {k:04d}"
+        kind = k % 7
+        if kind == 0:  # by ISIN, either case; an asset without one falls through to its ticker, then its name
+            isin = _sized_isin(index) or unknown_isin
+            triples.append((_sized_ticker(index) or unknown_symbol, isin.lower() if k % 2 else isin, _sized_display_name(index)))
+        elif kind == 1:  # by ticker, lower case
+            triples.append(((_sized_ticker(index) or unknown_symbol).lower(), unknown_isin, unknown_name))
+        elif kind == 2:  # by an alternate ISIN
+            triples.append((unknown_symbol, f"SA{(k * 40) % N_SIZED_ASSETS:010d}", unknown_name))
+        elif kind == 3:  # by a generic word (about 190 funds) or a pair of them (10 funds), sometimes swapped
+            word = GENERIC_WORDS[k % 10] if k % 3 == 0 else f"{GENERIC_WORDS[k % 10]} {GENERIC_WORDS[(k // 10) % 10]}"
+            triples.append((unknown_symbol, unknown_isin, _ascii_swapcase(word) if k % 2 else word))
+        elif kind == 4:  # by the whole display name, its ASCII case swapped
+            triples.append((unknown_symbol, unknown_isin, _ascii_swapcase(_sized_display_name(index))))
+        elif kind == 5:  # by a soft label
+            triples.append((None, None, f"soft sized {(k * 40) % N_SIZED_ASSETS:04d}"))
+        else:  # by nothing at all
+            triples.append((unknown_symbol, unknown_isin, unknown_name))
+        if len(set(triples)) < len(triples):
+            triples.pop()  # a generic word asked again: keep the triples distinct
+        k += 1
+    half = len(SIZED_SPECIAL_TRIPLES) // 2
+    triples = list(SIZED_SPECIAL_TRIPLES[:half]) + triples + list(SIZED_SPECIAL_TRIPLES[half:])
+    assert len(set(triples)) == len(triples) == count, "the fixture's triples are distinct"
+    return triples
+
+
+@pytest.mark.asyncio
+async def test_guard_bulk_candidates_at_size_match_the_per_asset_search(session):
+    """Guard: 300 distinct extractions (some asked twice) over 1 011 assets — exact ISINs and tickers in either case,
+    alternates, generic words matching about 190 funds, soft labels, nothing, bond names with ``%`` and ``_``
+    (``BTP Valore 3,35%`` reaches ``BTP Valore 3,35 Giu28`` only through the wildcard), codes stored lower case beside
+    the same codes upper case and alone, two primaries and an alternate of one ISIN, two holders of one ticker — answer,
+    triple by triple, what ``search_asset_candidates`` answers: candidate ids, confidences, order, auto-selection.
+
+    The per-asset path compares the extraction upper-cased with the stored code, case-sensitively (SQLite's ``=``): a
+    code stored lower case is never an exact hit, whatever the extraction's case — the lone one is found by its name,
+    LOW — while an alternate's LIKE folds ASCII case. The exact indexes are keyed by the stored code and looked up
+    upper-cased: the same answer, which a case-folding key would break. Green before and after: what MF-SEC9g moved off
+    the loop must answer what the scan answered.
+    """
+    print_section("MF-SEC9g guard: 300 extractions over 1 011 assets == per-asset search")
+    await _seed_sized_assets(session)
+    ids_by_name = {name: asset_id for asset_id, name in (await session.execute(select(Asset.id, Asset.display_name))).tuples().all()}
+    assert ids_by_name["Twin Isin Zulu"] < ids_by_name["Twin Isin Alpha"], "the twins' ids against their display names' order"
+    triples = _sized_triples(300)
+
+    expected = await _assert_bulk_matches_per_asset(session, triples)
+
+    confidences = {confidence for candidates, _ in expected.values() for _, confidence in candidates}
+    assert confidences == set(BRIMMatchConfidence), f"every confidence reached: {sorted(confidences)}"
+    assert any(not candidates for candidates, _ in expected.values()), "a triple matching nothing"
+    assert any(auto is not None for _, auto in expected.values()), "a triple auto-selected"
+    assert max(len(candidates) for candidates, _ in expected.values()) >= 150, "a generic word answering most of a word's funds"
+    wildcard = {asset_id for asset_id, _ in expected[(None, None, "BTP Valore 3,35%")][0]}
+    assert ids_by_name["BTP Valore 3,35 Giu28"] in wildcard, "«BTP Valore 3,35%» reaches a name without «%»: the wildcard case is compared"
+    reached = {asset_id for candidates, _ in expected.values() for asset_id, _ in candidates}
+    case_holders = {ids_by_name[name] for name in ("Isin Case Lower Holding", "Isin Case Upper Holding", "Isin Lone Lower Holding")}
+    assert case_holders <= reached, "the codes stored in either case are in the universe the exact indexes are built from"
+    print_success(f"{len(triples)} extractions over {len(ids_by_name)} assets: every answer the per-asset one")
+
+
+@pytest.mark.asyncio
+async def test_guard_bulk_exact_hits_keep_the_universe_order(session):
+    """Guard: three assets with one primary ISIN and two with one ticker, inserted against their display names' order,
+    come out of the exact steps in display-name order — the order of the scan the index replaced, and of the per-asset
+    search — with the alternate holder after them; ids in insertion order would show.
+
+    Green before and after: the index's lists keep the universe's order.
+    """
+    print_section("MF-SEC9g guard: exact ISIN and ticker hits in display-name order")
+    now = datetime(2026, 1, 1)
+    rows = [
+        ("Zulu twin isin", "TW0000000009", None, None),
+        ("Kilo twin isin", "TW0000000009", None, None),
+        ("Alpha twin isin", "TW0000000009", None, None),
+        ("Mike alternate twin", None, None, ["TW0000000009"]),
+        ("Yankee twin ticker", None, "TWTK9", None),
+        ("Bravo twin ticker", None, "TWTK9", None),
+    ]
+    await session.execute(
+        insert(Asset),
+        [{"display_name": name, "identifier_isin": isin, "identifier_ticker": ticker, "identifier_other": other, "currency": "EUR", "asset_type": AssetType.BOND, "created_at": now, "updated_at": now} for name, isin, ticker, other in rows],
+    )
+    await session.commit()
+    ids_by_name = {name: asset_id for asset_id, name in (await session.execute(select(Asset.id, Asset.display_name))).tuples().all()}
+    assert ids_by_name["Zulu twin isin"] < ids_by_name["Alpha twin isin"], "ids against the display names' order"
+
+    by_isin, by_ticker = ("NOSYM-TW9", "TW0000000009", None), ("twtk9", None, None)
+    bulk = await brim_provider.search_asset_candidates_bulk(session, [by_isin, by_ticker])
+
+    exact, high, medium = BRIMMatchConfidence.EXACT, BRIMMatchConfidence.HIGH, BRIMMatchConfidence.MEDIUM
+    expected = {
+        by_isin: ([(ids_by_name[name], confidence) for name, confidence in (("Alpha twin isin", exact), ("Kilo twin isin", exact), ("Zulu twin isin", exact), ("Mike alternate twin", high))], None),
+        by_ticker: ([(ids_by_name["Bravo twin ticker"], medium), (ids_by_name["Yankee twin ticker"], medium)], None),
+    }
+    for triple, answer in expected.items():
+        assert _shape(bulk[triple]) == answer, f"{triple}: bulk {_shape(bulk[triple])}, expected {answer}"
+        assert _shape(await brim_provider.search_asset_candidates(session, *triple)) == answer, f"{triple}: the per-asset search agrees"
+    print_success("three primaries, one alternate, two tickers: display-name order in both paths")
