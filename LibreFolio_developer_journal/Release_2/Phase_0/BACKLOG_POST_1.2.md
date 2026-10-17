@@ -4500,7 +4500,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
      (`except (ValueError, IndexError, ZeroDivisionError)`): lo chiudo insieme.
   - Inoltre E ha classato MEDIUM 8/10 le scritture dei cambi da parte di qualunque utente (profilo gestito): va al
     developer insieme a D-SEC2-1, non a X.
-- ✅ **X-R51 · Il refresh non dice più perché ha scartato il valore corrente** (consegnata il 17/10, 05:15; SHA all'ingresso) — piccolo, **subito dopo l'ingresso di
+- ✅ **X-R51 · Il refresh non dice più perché ha scartato il valore corrente** (chiusa il 17/10: `ce798e36a`, entrata in dev `b3cae6e0e`) — piccolo, **subito dopo l'ingresso di
   X-R40/W-B62**; X, 17/10 (trovato dal docs-writer di X-R40).
   - Con X-R40/W-B62 una quotazione corrente che nessuna colonna tiene si scarta prima dell'upsert. Il risultato del
     refresh perde così il motivo («rejected … no price column can keep»): con lo storico è OK senza messaggio, senza
@@ -4513,12 +4513,26 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
       massimo 14 cifre prima della virgola», ma ne ha 14. Aggiungere «sotto 100000000000000». I test cercano solo i
       numeri 14 e 10, e la frase va aggiornata anche in `backend/fx/configuration.md`;
     - la docstring di `_collect_leg_rates()` (`sync.py`) nomina solo l'overflow, non l'underflow.
-- **X-R52 · ECB: un valore che non è un numero fa perdere tutta la valuta** — piccolo, disponibilità; X, 17/10 (trovato dal
+- ✅ **X-R52 · ECB: un valore che non è un numero fa perdere tutta la valuta** (consegnata il 17/10, 05:35; SHA all'ingresso) — piccolo, disponibilità; X, 17/10 (trovato dal
   docs-writer di X-R50).
   - `ecb/plugin.py` non ha un `try` per osservazione, e il suo `except (KeyError, IndexError, ValueError)` non cattura
     `InvalidOperation`: un valore ostile fa uscire l'eccezione grezza invece di `FXServiceError`, e si perde la valuta,
     forse tutto il fetch di ECB. ECB è il fornitore principale dei cambi.
   - Cura: saltare l'osservazione (`ArithmeticError`), come BOE, SNB e FED con X-R50. Un rosso in `test_fx_parse_errors.py`.
+- **X-R53 · Usare il campo dei periodi fissi (1D, 1W…) che MF porta nel backend** — medio, **quando MF manda il
+  contratto**; X, 17/10 (coordinatore).
+  - Oggi la tabella dei periodi fissi di asset e cambi si calcola nel frontend (`lib/utils/assetPriceDerived.ts:193`,
+    `AssetTable.svelte:239`, `routes/(app)/fx/+page.svelte:236`). MF, nel lotto MF-P, crea il campo nel backend.
+  - Da fare: leggerlo da lì nei miei file, quando MF scrive col contratto. Non ora.
+  - Accordo con MF (17/10, 05:25), detto al coordinatore:
+    - endpoint dedicati: `POST /assets/prices/period-changes` e `POST /fx/currencies/period-changes`;
+    - `as_of` = la fine dell'intervallo, come oggi: le serie sono giornaliere e riempite all'indietro, quindi i numeri
+      non cambiano, compreso un 1D a 0 % nel fine settimana;
+    - resta la regola di oggi, che mostra le colonne fino all'intervallo scelto, quindi niente cambia a vista. Mostrare
+      tutti i periodi che hanno un valore va proposto al developer;
+    - `target_currency` col cambio di ogni giorno;
+    - MF scrive il backend (moduli nuovi, rotte e schemi aggiunti nei miei file) e io lo rivedo; il frontend è mio, dopo
+      l'ingresso di MF.
 
 ## W · Import e transazioni (fase 01)
 

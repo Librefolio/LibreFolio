@@ -2413,7 +2413,7 @@ Note: No backend server required.
         "provider-errors",
         services_provider_errors,
         name="Provider Error Paths",
-        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE and FED when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50)",
+        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52)",
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
