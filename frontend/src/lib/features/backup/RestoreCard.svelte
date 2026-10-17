@@ -290,7 +290,7 @@
         </p>
     {/if}
 
-    <!-- A refusal, or a restart request that failed: the restore then stays confirmed, in the block above. -->
+    <!-- A refusal, or a restart or a cancel request that failed: the restore then stays confirmed, in the block above. -->
     {#if (controller.state === 'failed' || controller.state === 'pending') && controller.errorCode !== null}
         <div class="flex items-start gap-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="restore-error" data-error-code={controller.errorCode}>
             <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />

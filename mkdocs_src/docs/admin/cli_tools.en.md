@@ -535,7 +535,7 @@ After the restore:
 Good to know:
 
 - 🔒 On an instance its hosting provider blocked (`LIBREFOLIO_BLOCKED`), the command confirms all the same, and adds `⚠️ The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)`: the first start after the unblock applies it.
-- 🚦 One restore at a time: while one waits or is being applied, `backup restore` stops before the check with `❌ A restore already waits for the next start: ./dev.py backup pending --cancel drops it (restore_already_pending)` and exits with `1`. `--dry-run` still works.
+- 🚦 One restore at a time: while one waits or is being applied, `backup restore` stops before the check with `❌ A restore already waits for the next start: ./dev.py backup pending --cancel drops it (restore_already_pending)` and exits with `1`. It stops there too when it cannot read the state of the restore, since it cannot tell whether one waits: `❌ The state of the restore cannot be read: <reason> (restore_state_unreadable)`, exit code `1`, nothing checked. `--dry-run` still works.
 - ❌ If the confirmation itself is refused, the command prints one line that ends with a code, removes the copy and exits with `1`: `restore_stage_outdated` when LibreFolio was updated between the check and the confirmation, `restore_stage_expired` when the question waited more than 24 hours, `restore_already_pending` when another restore was confirmed meanwhile. Run the command again.
 - 📍 Run it where the server runs, in the container with Docker: the restore is recorded for the path of the data directory, and a server that finds its data directory under another path does not apply it.
 - 🔗 Keep the four folders real folders of the data directory: one that is a link, or that is mounted on its own, cannot be swapped. The start then leaves the data as it is, and records the restore as rolled back with `swap_failed`.
@@ -552,7 +552,7 @@ pipenv run ./dev.py backup pending
 pipenv run ./dev.py backup pending --cancel
 ```
 
-`backup pending` changes nothing and exits with `0`. It shows one of these:
+`backup pending` changes nothing and exits with `0`, except when it cannot read the state of the restore: it then prints `❌ The state of the restore cannot be read: <reason> (restore_state_unreadable)` and exits with `1`. The reason, such as `Permission denied`, says why: give `.restore/` and its files back to the user that runs LibreFolio, readable by it. Otherwise it shows one of these:
 
 | It prints | What it means |
 | --- | --- |
@@ -578,7 +578,7 @@ When a start found a restore waiting and did not apply it, one more line says wh
 
 A rollback also removes the restored data and the copy: to try again, run `backup restore` again. If even putting the data back fails, on a disk or permission error for instance, LibreFolio does not start: its log has `The data directory is half restored: the restore could not be undone, and LibreFolio does not start on it`, and every start tries again.
 
-`--cancel` drops the restore waiting, with its checked copy, whoever confirmed it: `✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is`, exit code `0`. If the copy cannot be removed, on a permission or disk error for instance, the restore is dropped all the same, with that line and exit code `0`: the log above it has the warning `The copy of a cancelled restore could not be removed: it goes when its check expires`, and LibreFolio removes the copy at its first start once the check is 24 hours old. When no restore waits, or one is already being applied: `❌ No restore waits for the next start: nothing to cancel (restore_not_pending)`, exit code `1`.
+`--cancel` drops the restore waiting, with its checked copy, whoever confirmed it: `✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is`, exit code `0`. If the copy cannot be removed, on a permission or disk error for instance, the restore is dropped all the same, exit code `0`, with two lines instead: `✅ The restore waiting for the next start was dropped: the data stays as it is` and `⚠️ Its checked copy could not be removed: it goes when its check expires`. When the removal failed with an error, the log above them has the warning `The copy of a cancelled restore could not be removed: it goes when its check expires`; a copy left without an error, such as one holding a read-only folder, has none. LibreFolio tries again at its first start once the check is 24 hours old. If the restore itself cannot be dropped, on a file-system error before it is (its lock, or removing its state): `❌ The restore could not be cancelled: <reason>. It still waits for the next start (restore_cancel_failed)`, exit code `1`. When the state of the restore cannot be read: the `restore_state_unreadable` line of `backup pending`, exit code `1`. When no restore waits, or one is already being applied: `❌ No restore waits for the next start: nothing to cancel (restore_not_pending)`, exit code `1`.
 
 ### 🔓 Decrypt a Secure Archive {: #backup-decrypt }
 

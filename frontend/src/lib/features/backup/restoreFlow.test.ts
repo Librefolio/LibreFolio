@@ -54,7 +54,7 @@
  *     line's `backup pending --cancel` does (B-17): the controller never sends a `DELETE /stage` of its own — not after
  *     an accepted cancel, whatever the status held says of the copy (its `stage_id`, null, or none), and not after any
  *     refusal. A `404 restore_not_pending` (the restore became something else, a start applying it maybe) reads the
- *     status again without failing; another refusal → `failed` (`cancel`);
+ *     status again without failing; another refusal → `pending` with the error (`failure` `cancel`), as B-32 decided;
  *   - the probe: `probeServer()` every `pollMs` once the restart is accepted; seen `down` then `up` → `restoreOutcome()`
  *     once, with the restart's ticket (below): `signed_out`, or a `committed` status → `restored`, `restored {}`,
  *     `restoreNavigation.toSignIn()` once (no message, §0.2); a `rolled_back` status → `rolled_back`, `outcomeStatus`,
@@ -85,11 +85,13 @@
  * started, as backupJob.svelte.ts does; `staged` is announced for a check seen running here (B5a's decision 2); a refused
  * drop is `failed` with failure `cancel`; the polling that gets no answer gives up within thirty pauses; a refused
  * `restartNow()` is `pending` with the error, like the restart after a confirm (§0.1: «a restart that failed» shows the
- * pending block), `restore_not_pending` aside, as decided since; the fast read maps a rolled-back status to
- * `rolled_back`; `load()` ends a restart episode. Left open on purpose: whether the pick-up of a check already done is
- * announced, whether a status read that fails at mount is announced (B5a's pick-up is silent; a `retry()` that fails
- * must be), the state while the DELETE of `dropCheck()` is out, whether the status is read again after an aborted
- * upload, `outcome` while the restart request is still out, and the state once the outcome is known.
+ * pending block), `restore_not_pending` aside, as decided since; so is a refused `cancelPending()`, failure `cancel`,
+ * `restore_not_pending` aside (B-32 §1: the restore still waits, and the failed screen would offer an archive whose
+ * confirmation the server refuses); the fast read maps a rolled-back status to `rolled_back`; `load()` ends a restart
+ * episode. Left open on purpose: whether the pick-up of a check already done is announced, whether a status read that
+ * fails at mount is announced (B5a's pick-up is silent; a `retry()` that fails must be), the state while the DELETE of
+ * `dropCheck()` is out, whether the status is read again after an aborted upload, `outcome` while the restart request is
+ * still out, and the state once the outcome is known.
  *
  * What of the ticket cannot be seen, and how this file sees the rest. Nothing reads after `dispose()`, so its forgetting
  * has no case. A read happens only after an accepted restart, which carries its own ticket, and every way from an
@@ -1673,18 +1675,21 @@ describe('a restore found pending at load: restartNow() and cancelPending()', ()
         ['no answer', noAnswer, 'network'],
         ['an answer without a code', codelessAnswer, 'unexpected'],
         ['423 instance_blocked: the hosting provider blocked the instance, every restore route with it', () => refusal(423, 'instance_blocked'), 'instance_blocked'],
-    ])('cancelPending() refused — %s: failed (cancel), announced, no copy dropped', async (_case, refused, code) => {
+    ])('cancelPending() refused — %s: pending with the error (failure cancel), the restore still waiting, announced, no copy dropped (B-32 §1)', async (_case, refused, code) => {
         const {controller, api, events} = await pendingRestore();
         api.cancelPending.mockRejectedValueOnce(refused());
 
         await controller.cancelPending();
         await flush();
 
-        expect(controller.state).toBe('failed');
+        expect(controller.state).toBe('pending');
         expect(controller.errorCode).toBe(code);
         expect(controller.failure).toBe('cancel');
         expect(controller.busy).toBe(false);
+        expect(controller.status, 'the restore still waits').toEqual(pending());
+        expect(api.status, 'the status is not read again').toHaveBeenCalledTimes(1);
         expect(api.dropCheck, 'the copy of a restore still pending was dropped').not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
         expect(events()).toEqual([['backup.restore.failed', {code, what: 'cancel'}]]);
     });
 });
@@ -1702,6 +1707,9 @@ describe('a restore found pending at load: restartNow() and cancelPending()', ()
  *
  * Red today: `restoreErrorKey` knows none of the three codes and gives `backup.restore.errors.unexpected`. The case of
  * 507 `backup_no_space` is a guard, green today.
+ *
+ * B-32 (§1) changed the cancel's ending: a refused cancel leaves the restore `pending` with the error, as a refused
+ * restart does. Its case below says so, for the server's own code and for no answer at all; red until B-32 lands.
  */
 describe('B-31 — a confirmation, a cancellation or a restart the server could not carry out', () => {
     it.each<[string, number, string]>([
@@ -1724,20 +1732,26 @@ describe('B-31 — a confirmation, a cancellation or a restart the server could 
         expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe(`backup.restore.errors.${code}`);
     });
 
-    it('cancelPending() refused — 500 restore_cancel_failed: failed (cancel) as any refused cancel, no copy dropped, worded by backup.restore.errors.restore_cancel_failed', async () => {
+    it.each<[string, () => unknown, string]>([
+        ['500 restore_cancel_failed', () => refusal(500, 'restore_cancel_failed'), 'restore_cancel_failed'],
+        ['no answer', noAnswer, 'network'],
+    ])('cancelPending() refused — %s: pending with the error (failure cancel), the restore still waiting, no copy dropped, no status read, worded by backup.restore.errors.<code> (B-32 §1)', async (_case, refused, code) => {
         const {controller, api, events} = await pendingRestore();
-        api.cancelPending.mockRejectedValueOnce(refusal(500, 'restore_cancel_failed'));
+        api.cancelPending.mockRejectedValueOnce(refused());
 
         await controller.cancelPending();
         await flush();
 
-        expect(controller.state).toBe('failed');
-        expect(controller.errorCode).toBe('restore_cancel_failed');
+        expect(controller.state, 'the restore still waits: the pending block, with the error').toBe('pending');
+        expect(controller.errorCode).toBe(code);
         expect(controller.failure).toBe('cancel');
         expect(controller.busy).toBe(false);
+        expect(controller.status, 'the status held is still the pending one').toEqual(pending());
+        expect(api.status, 'the status is not read again').toHaveBeenCalledTimes(1);
         expect(api.dropCheck, 'the copy of a restore still pending was dropped').not.toHaveBeenCalled();
-        expect(events()).toEqual([['backup.restore.failed', {code: 'restore_cancel_failed', what: 'cancel'}]]);
-        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe('backup.restore.errors.restore_cancel_failed');
+        expect(vi.getTimerCount(), 'nothing scheduled').toBe(0);
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'cancel'}]]);
+        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe(`backup.restore.errors.${code}`);
     });
 
     it('the restart refused after the confirmation — 500 restore_restart_failed: pending with the error (failure restart), the restore still confirmed, nothing probed, worded by backup.restore.errors.restore_restart_failed', async () => {
@@ -1762,6 +1776,83 @@ describe('B-31 — a confirmation, a cancellation or a restart the server could 
             ['backup.restore.failed', {code: 'restore_restart_failed', what: 'restart'}],
         ]);
         expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe('backup.restore.errors.restore_restart_failed');
+    });
+});
+
+// =====================================================================================================================
+// B-32 — after a refused cancel, the restore still waits; a state the server cannot read (written red first)
+// =====================================================================================================================
+
+/*
+ * B-32 §1: a refused cancel of a pending restore leaves the controller `pending` with the error (the cases above), so
+ * the card's pending block stays and its two actions work again: `cancelPending()` once more, and `restartNow()`.
+ * §3 and §4: `GET /backup/restore/status` answers 500 `restore_state_unreadable` when the server cannot read the state
+ * of the restore; `load()` takes it as any status read that fails (`failed`, failure `status`), worded by its own
+ * sentence. Red today: a refused cancel ends `failed`, where neither action does anything; `restoreErrorKey` does not
+ * know `restore_state_unreadable` and gives `backup.restore.errors.unexpected`.
+ */
+
+/** A restore found pending at load, whose cancel the server refused with 500 `restore_cancel_failed`: still pending, with the error. */
+async function cancelRefused() {
+    const context = await pendingRestore();
+    context.api.cancelPending.mockRejectedValueOnce(refusal(500, 'restore_cancel_failed'));
+    await context.controller.cancelPending();
+    await flush();
+    expect(context.controller.state, 'precondition: a refused cancel leaves the restore pending (B-32 §1)').toBe('pending');
+    expect(context.controller.errorCode).toBe('restore_cancel_failed');
+    context.onEvent.mockClear();
+    return context;
+}
+
+describe('B-32 — after a refused cancel, the pending restore can be cancelled again or restarted', () => {
+    it('cancelPending() again, accepted: the status read again, idle, the error cleared, cancelled {what: pending} once, no copy dropped', async () => {
+        const {controller, api, events} = await cancelRefused();
+        api.cancelPending.mockResolvedValueOnce(undefined);
+        api.status.mockResolvedValueOnce(none());
+
+        await controller.cancelPending();
+        await flush();
+
+        expect(api.cancelPending, 'the second DELETE /pending').toHaveBeenCalledTimes(2);
+        expect(api.status, 'the status read again').toHaveBeenCalledTimes(2);
+        expect(controller.state).toBe('idle');
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        expect(api.dropCheck, 'the server drops the copy with the cancel (B-17)').not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.cancelled', {what: 'pending'}]]);
+    });
+
+    it('restartNow(): the restart requested — restarting, the error cleared, waiting, restart.requested', async () => {
+        const context = await cancelRefused();
+        const {controller, api, events} = context;
+        serve(context, 'down');
+        api.restart.mockResolvedValueOnce(accepted());
+
+        void controller.restartNow();
+        await flush();
+
+        expect(api.restart).toHaveBeenCalledTimes(1);
+        expect(controller.state).toBe('restarting');
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
+        expect(controller.outcome).toBe('waiting');
+        expect(events()).toEqual([['backup.restore.restart.requested', {}]]);
+    });
+});
+
+describe('B-32 — a state of the restore the server cannot read', () => {
+    it('load() refused with 500 restore_state_unreadable: failed, failure status, not busy, worded by backup.restore.errors.restore_state_unreadable', async () => {
+        const context = await setup();
+        context.api.status.mockRejectedValueOnce(refusal(500, 'restore_state_unreadable'));
+
+        await context.controller.load();
+        await flush();
+
+        expect(context.controller.state).toBe('failed');
+        expect(context.controller.errorCode).toBe('restore_state_unreadable');
+        expect(context.controller.failure).toBe('status');
+        expect(context.controller.busy).toBe(false);
+        expect(restoreErrorKey(context.controller.errorCode), 'the sentence the card shows').toBe('backup.restore.errors.restore_state_unreadable');
     });
 });
 
