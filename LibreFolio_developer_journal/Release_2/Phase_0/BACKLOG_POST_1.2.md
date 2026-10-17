@@ -7024,12 +7024,16 @@ sulla base `23f6578f3`.
   - Con una correzione da applicare, il nome di un archivio ostile rompe la verifica (`stage_failed`). Su un database
     ripristinato, rompe un avvio successivo in cui una correzione si applica.
   - sqlite3 esegue un solo statement e non carica estensioni: nessuna fuga dalla copia.
-  - Cura: quotare come `snapshot._quoted`. Test: una tabella `x"y` con una correzione pendente.
+  - Cura: quotare come `snapshot._quoted` (oggi `snapshot._identifier`, dopo la nota di H). Test: una tabella `x"y`
+    con una correzione pendente.
   - **Il modulo non è di B**: passa dal coordinatore.
 - ✅ **B-37 · `trusted_schema` resta acceso su due connessioni alla copia** — ⚪ basso, difesa in profondità; BZ parte 1, F2.
   - Le connessioni sono quella delle correzioni post-migrazione (`PM:211`) e il motore di Alembic su `-x sqlalchemy.url`.
     Sono le uniche alla copia senza `PRAGMA trusted_schema=OFF`.
-  - Dopo B-28 restano solo tabelle e indici, e nessuna funzione dell'app è registrata lì: nessun exploit noto.
+  - Dopo B-28 restano solo tabelle e indici. La connessione `sqlite3` delle correzioni non registra funzioni, il
+    motore di Alembic sì: SQLAlchemy (dialetto pysqlite, 2.0.52) registra `regexp` e `floor` in Python a ogni
+    connessione. Senza `trusted_schema=OFF` un `CHECK` dell'archivio potrebbe eseguire `re.search` con un suo pattern
+    durante l'upgrade: il listener di `env.py` è una cura vera, non solo coerenza (revisione di H, 17/10).
   - Cura: spegnerlo in entrambe. **Proprietari fuori da B** (post_migration, `env.py`).
   ✅ **Fatto il 17/10** (B-36 + B-37, checkpoint delle 13:33), con il permesso del coordinatore sui due file.
   - `_row_counts` quota i nomi raddoppiando `"`.
