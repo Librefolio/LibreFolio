@@ -1906,19 +1906,27 @@ anything of it can run.
 - **A schema SQLite refuses to read** is `database_damaged`: any `sqlite3.DatabaseError` of that read, such as a row
   whose SQL does not parse, or a row that disguises its object, a trigger whose row says `type = 'table'` (SQLite then
   refuses the whole schema, «malformed database schema», checked on 3.54.0).
-- **`trusted_schema` off on every connection to the copy.** Every connection B opens on the copy runs
+- **`trusted_schema` off on every connection to the copy.** Every connection to the copy runs
   `PRAGMA trusted_schema=OFF` before any other statement: this read, `describe_database()` (`snapshot.py`, which also
-  describes the backup's own snapshot), `_plugin_secrets()` and `_administrators()` (`staging.py`), and the totals'
-  `aiosqlite` connection (`totals.py`). The SQL the schema keeps in its tables and indexes (a `CHECK`, a `DEFAULT`, a
-  generated column, an index's expression) may then call only the functions SQLite marks innocuous. The post-migration
-  fixes keep their own connection, shared code that runs after the refusal, and the upgrade runs `alembic upgrade head`
-  in a process of its own, stopped after an hour (`UPGRADE_TIMEOUT_SECONDS`).
+  describes the backup's own snapshot), `_plugin_secrets()` and `_administrators()` (`staging.py`), the totals'
+  `aiosqlite` connection (`totals.py`), the post-migration fixes and the upgrade. The SQL the schema keeps in its tables
+  and indexes (a `CHECK`, a `DEFAULT`, a generated column, an index's expression) may then call only the functions
+  SQLite marks innocuous. `run_post_migration_fixes()` (`db/post_migration/__init__.py`), shared code that runs after
+  the refusal, turns it off first on its own connection, on the live database too, where nothing changes, since
+  LibreFolio's schema holds only tables and indexes (lot B-37); its `count(*)` of each table quotes the name, doubling
+  `"`, since an archive's tables may be named anything (lot B-36). The upgrade runs `alembic upgrade head` in a process
+  of its own, stopped after an hour (`UPGRADE_TIMEOUT_SECONDS`), and `backend/alembic/env.py` turns it off on every
+  connection with a `connect` listener, `_schema_untrusted`, whatever the URL: the copy's, given with
+  `-x sqlalchemy.url`, and the live database's alike (lot B-37).
 
 Tests: `./dev.py test services backup-staging` (`backend/test_scripts/test_services/test_backup_staging.py`, section
 (l): a trigger, a recursive view, an `fts5` virtual table and a comment between the keywords, each refused before
 `describe_database()` runs, the log with the count and the kinds and no name; a disguised row and a row that does not
 parse, `database_damaged`; the head database, tables and indexes only, a guard for the day a migration adds a trigger
-or a view; `trusted_schema` off first on every connection of a whole check).
+or a view; `trusted_schema` off first on every connection of a whole check, the post-migration fixes' included, lot
+B-37), `./dev.py test db post-migration` (`backend/test_scripts/test_db/test_post_migration.py`: tables named `x"y` or
+`a" WHERE 1 --`, counted while a fix runs, lot B-36) and `./dev.py test utils dev-cli-db-path`
+(`backend/test_scripts/test_utilities/test_dev_cli_db_path.py`: the `connect` listener of `env.py`, lot B-37).
 
 ### 📏 The Restore Limit {: #backup-restore-limit }
 

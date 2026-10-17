@@ -810,7 +810,7 @@ Tests for utility modules and helper functions:
         "dev-cli-db-path",
         utils_dev_cli_db_path,
         name="Dev CLI db path",
-        desc="dev.py db current/upgrade/downgrade/migrate/check act on the [path] they are given (absolute, or relative to the project root), never on the configured database: a missing file is refused (upgrade creates it), a path with %, ? or # is refused, db check runs the CHECK constraints hook; without a path the configured database is used",
+        desc="dev.py db current/upgrade/downgrade/migrate/check act on the [path] they are given (absolute, or relative to the project root), never on the configured database: a missing file is refused (upgrade creates it), a path with %, ? or # is refused, db check runs the CHECK constraints hook; without a path the configured database is used; B-37 (DBP-j, static): env.py's run_migrations_online registers a connect listener on its engine, for every URL, before it connects, executing PRAGMA trusted_schema=OFF",
         # Temporary databases and data dirs under tmp_path, free ports, dev.py and alembic
         # in subprocesses: no lane DB, no server, no network, no repo writes (db migrate
         # only ever runs its refusal, with no database at head within its reach).
