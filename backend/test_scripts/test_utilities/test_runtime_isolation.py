@@ -1160,6 +1160,11 @@ def capture_server_child(monkeypatch) -> dict:
         captured["events"].append("spawn")
         return 0
 
+    def capture_server_launch(command, env=None, grace_seconds=None):
+        captured.update(command=command, env=dict(env or {}), grace_seconds=grace_seconds)
+        captured["events"].append("spawn")
+        return 0
+
     def capture_exec(_executable, command, env):
         captured.update(command=command, env=dict(env))
         captured["events"].append("spawn")
@@ -1170,6 +1175,9 @@ def capture_server_child(monkeypatch) -> dict:
     monkeypatch.setattr(dev, "auto_build_mkdocs", lambda *_a, **_kw: capture_build("mkdocs", None))
     monkeypatch.setattr(dev, "update_js_cache", lambda *_a, **_kw: capture_build("js-cache", 0))
     monkeypatch.setattr(dev, "run_command_live", capture_run)
+    # Z-10 moves the server launch to run_server_live, which dev.py does not define before it (raising=False): without
+    # this stand-in, dev.main() would start a real uvicorn on the test's port and hang.
+    monkeypatch.setattr(dev, "run_server_live", capture_server_launch, raising=False)
     monkeypatch.setattr(dev.os, "execvpe", capture_exec)
     return captured
 
