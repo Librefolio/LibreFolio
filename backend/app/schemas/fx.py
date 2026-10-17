@@ -51,6 +51,7 @@ from backend.app.schemas.common import (
     BaseListResponse,
     Currency,
     DateRangeModel,
+    PeriodChangesAsOf,
     SafeDecimal,
     StrictModel,
 )
@@ -511,12 +512,16 @@ class FXDeleteRoutesResponse(BaseBulkDeleteResponse[FXDeleteRouteResult]):
 # ============================================================================
 
 
+#: The most pairs one fixed-period changes request may list (MF-P2b): the FX table sends every pair it lists.
+PERIOD_CHANGES_MAX_PAIRS = 1_000
+
+
 class FXPeriodChangesRequest(StrictModel):
     """One pair of a fixed-period changes request: the FX table's Δ columns (1D … 5Y), up to ``as_of``."""
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217): the rate is quote per 1 base")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
-    as_of: date_type = Field(..., description="Anchor day: the end of the range the table shows")
+    as_of: PeriodChangesAsOf = Field(..., description="Anchor day: the end of the range the table shows (1900-01-01 or later)")
 
     @field_validator("base", "quote", mode="before")
     @classmethod
@@ -535,8 +540,8 @@ class FXPeriodChange(StrictModel):
 
     key: str = Field(..., description="Period key: 1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y")
     days: int = Field(..., ge=1, description="Calendar days of the period")
-    change_ratio: Optional[SafeDecimal] = Field(None, description="Rate on as_of / rate on as_of − days − 1 (quote per base); null without a rate on either day")
-    inverse_change_ratio: Optional[SafeDecimal] = Field(None, description="The same change with the pair inverted (base per quote): rate on as_of − days / rate on as_of − 1")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="(Rate on as_of ÷ rate on as_of − days) − 1 (quote per base); null without a rate on either day")
+    inverse_change_ratio: Optional[SafeDecimal] = Field(None, description="The same change with the pair inverted (base per quote): (rate on as_of − days ÷ rate on as_of) − 1")
 
 
 class FXPeriodChangesResult(StrictModel):
