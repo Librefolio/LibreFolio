@@ -741,6 +741,12 @@ encrypt (`backend/app/api/v1/backup/panel.py` passes no password). The format is
 - **The codes.** `EnvelopeError.code` is `wrong_password`, `envelope_damaged` or `envelope_unsupported`; the messages
   hold no path and no secret.
 
+**The start** (`job_views.start_job()`, for `POST /backup/instance` and the hosting panel's `POST /backup/panel/jobs`
+alike). `jobs.start_backup()` creates the job's folder and its first state before the thread runs: a full disk or quota
+there (`jobs.out_of_space()`) answers `507` `backup_no_space`, `Not enough free space to start the backup`, logged as a
+warning, `Instance backup could not start: not enough free space` (lot B-30). Another backup running stays `409`
+`backup_busy`, and any other failure `500` `backup_folder_unusable` or `backup_failed`.
+
 **The creation** (`jobs._run()`). With a password, `build_archive()` writes the zip as for a clear backup, in the
 job's folder `backups/.jobs/<id>/` (`0700`, the zip `0600`), with the instance key entry when there is one to carry
 (below). `_encrypt()` then checks the free space for the envelope (the zip's size plus 64 MiB, or `backup_no_space`),
@@ -975,7 +981,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 18 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose nine messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). No page shows the `instance`, `auth` and `backup` messages yet: the checks reach the log, and [`GET /security/checks`](#security-checks-endpoint) returns them for the «Security» tab of the admin settings, which does not exist yet |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 24 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose nine messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). No page shows the `instance`, `auth` and `backup` messages yet: the checks reach the log, and [`GET /security/checks`](#security-checks-endpoint) returns them for the «Security» tab of the admin settings, which does not exist yet |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -995,11 +1001,23 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `platform.session_cookie` | `SESSION_COOKIE_SECURE=never` | `warning` |
 | `platform.client_address` | Since the start, forwarding headers came from an untrusted local peer ([Behind a Proxy Nobody Trusts](#untrusted-proxy)): `instance.checks.clientAddress.untrustedProxy`, `detail` `{"headers": …}` with the names met, such as `"X-Forwarded-For, X-Real-IP"`, summary `UNTRUSTED_PROXY_SUMMARY` | `warning` |
 | `platform.client_address` | Since the start, they came from untrusted public peers only: `instance.checks.clientAddress.publicForwarding`, the names met in `headers`, summary `PUBLIC_FORWARDING_SUMMARY` | `info` |
+| `platform.frame_protection` | `LIBREFOLIO_FRAME_PROTECTION` is off with `LIBREFOLIO_PROFILE=managed`, whose entry in `PROFILE_DEFAULTS` turns it on ([Frame Protection and the Report-Only Policy](#managed-headers)): a value set in the environment or in `.env`, or the entry lost from the table. `instance.checks.frameProtection.offManaged`, summary `LIBREFOLIO_FRAME_PROTECTION is off in the managed profile: any site can show LibreFolio in a frame; the managed profile turns it on` | `warning` |
+| `platform.csp_report_only` | `LIBREFOLIO_CSP_REPORT_ONLY` is off with `LIBREFOLIO_PROFILE=managed`, the same way: `instance.checks.cspReportOnly.offManaged`, summary `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on`. Only an `info`: the policy reports, and never blocks | `info` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
 | `backup.panel_token` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, or its `_FILE`, is set but cannot be used: `backup.checks.panelToken.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `backup.upload_limit` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, or the profile's entry for it, cannot be used: `backup.checks.uploadLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `accounts.login_limit` | `LIBREFOLIO_LOGIN_LIMIT=off`, in any case: the [failed sign-in limit](#login-limit) is off. `auth.checks.loginLimit.off`, and one fixed summary however `off` is written: `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance` | `warning` |
 | `accounts.login_limit` | Any value other than `on` or `off`: `auth.checks.loginLimit.invalid`, `detail` `{"value": <the value, stripped>}`, as `login_limit_value()` reads it. `log_configuration_audit()` stops the start on such a value (below), so the error shows only for a value read after the start | `error` |
+
+The two checks of the managed profile's security switches (lot H-39), `check_frame_protection()` and
+`check_csp_report_only()`, read `get_settings()` and give no `detail`. Each is `ok` while its switch is on, in any
+profile (`instance.checks.frameProtection.on`, `instance.checks.cspReportOnly.on`), and while it is off outside
+`managed`, the self-hosted default (`instance.checks.frameProtection.offSelfHosted`,
+`instance.checks.cspReportOnly.offSelfHosted`). The managed expectation is written in the check, never read from
+`PROFILE_DEFAULTS`: read there, an entry lost from the table would change the expectation along with the value, and
+nothing would show. No value is refused at run time: a provider may turn a switch off on purpose, frame protection for
+a hosting panel that shows the app in a frame ([Hosting for Others](../../admin/hosting_providers.md#managed-profile)),
+and the checks only show it, in the startup log and in [the checks on demand](#security-checks-endpoint).
 
 Workstream A's check, `ok` as `auth.checks.loginLimit.ok` while the limit is on, is `check_login_limit()` in
 `backend/app/services/accounts/checks.py`, in the tuple `ACCOUNTS_CONFIG_CHECKS`, which `config_audit.py` unpacks into
@@ -1037,8 +1055,9 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
    and `detail` as fields. A generated key file gone bad or out of reach is logged as an error, and the
    start goes on.
 
-Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` included: the platform's checks, A's,
-then E's three); the stop on a `LIBREFOLIO_ADMIN_*` value is in `./dev.py test services admin-bootstrap`, the check
+Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` included: the platform's checks, B's two,
+A's, then E's three; and the two checks of the managed profile's switches in every state, a `PROFILE_DEFAULTS` entry
+removed included); the stop on a `LIBREFOLIO_ADMIN_*` value is in `./dev.py test services admin-bootstrap`, the check
 `accounts.login_limit` and the stop on a `LIBREFOLIO_LOGIN_LIMIT` value in `./dev.py test services accounts-checks`.
 What the administrator sees and does is in [Configuration](../../admin/configuration.md), section «Startup Checks».
 
@@ -1255,6 +1274,28 @@ both by default; a finite value too large for its column is another matter: see
   `PluginSettingPlainValue` (`backend/app/schemas/plugin_settings.py`) now has `AllowInfNan(False)` on its `float`
   branch, as `validate_value()` (`backend/app/services/plugin_settings/fields.py`) already refused a non-finite
   number before saving: see [Types and Validation](patterns/plugin_settings.md#types).
+- **Free-form JSON (lot H-34).** The H-32 rule is for `float` fields; a request can also carry free-form JSON, a
+  position typed `Any`, `object` or pydantic's `JsonValue`, where any number may sit. The guard walks those positions
+  too: it requires exactly the free-form positions it knows (`KNOWN_FREE_FORM`), and that each refuses a number that is
+  not finite anywhere inside, at the top, in a list or in a nested mapping, without the number in the refusal's
+  message. A new free-form position fails it until it is added there with its probe. Today there are five:
+  `FAProviderAssignmentItem.provider_params` and `FAProviderProbeRequest.provider_params` (`POST /assets/provider` and
+  `/assets/provider/probe`; their base is `FAProviderConfigBase`, in `backend/app/schemas/provider.py`),
+  `RiskAnalyticRequest.parameters` (`POST /risk/query`, `backend/app/schemas/risk.py`), `SignalRequest.params`
+  (`POST /assets/prices/query`, `/fx/currencies/convert` and `/signals/preview`; `backend/app/schemas/signals.py`) and
+  `ToolComputeItem.parameters` (`POST /tools/compute`, `backend/app/schemas/tools.py`). The provider parameters hold
+  `Any`, the other three `JsonValue`. The two provider requests and `RiskAnalyticRequest` now run `ensure_json_safe`
+  (`backend/app/utils/json_utils.py`) in a `field_validator(mode="before")`, as `SignalRequest.params` already did:
+  the answer is a `422` that names the path, such as `provider_params.deep[1]`, never the value
+  ([Validation Errors Without the Input](#validation-errors)). Before H-34, a provider's parameter was saved as
+  `Infinity` and read back as `null`. `ToolComputeItem` refuses through `allow_inf_nan=False` in the config of its
+  base, `ToolTransportModel`, which `JsonValue` respects and `Any` does not; on top of that, the tools route's own JSON
+  parser (`parse_json()` in `backend/app/services/tools/wire.py`) refuses the `NaN` and `Infinity` tokens, and a
+  number too large for a double such as `1E+400`.
+- **Not covered: a bare `dict` or `list`.** Without item types, the walk does not open it. `TXMixedBatch`
+  (`POST /transactions/validate` and `/commit`, `backend/app/schemas/transactions/batch.py`) holds its rows so, as
+  `List[dict]`, and the service validates them one by one afterwards, each with its own model: a `SafeDecimal` there
+  refuses infinity and NaN.
 
 ### 📁 Uploaded Files: Common and Personal {: #upload-scope }
 
@@ -1689,13 +1730,22 @@ only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error
 
 | Route | What it does |
 |-------|--------------|
-| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)) |
+| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)). At its start (its folders, its first state), `POST /backup/restore/stage` answers `507` `no_space`, the check's own code, on a full disk or quota, logged as a warning, `A check of a backup archive could not start: not enough free space`, and `500` `stage_failed` on any other failure of the file system (permissions, a read-only disk, `EIO`), logged as an error, `A check of a backup archive could not start`, with the error's type and the system's reason; either way the upload stays, for another try (lot B-30) |
 | `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
-| `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable` |
+| `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable`. A full disk or quota anywhere in the confirmation (the `.restore` folder, the lock, the state's write) is `507` `backup_no_space`, logged as a warning, `A restore could not be confirmed: not enough free space`; any other failure of the file system is `500` `restore_confirm_failed`, logged as an error, `A restore could not be confirmed`, with the error's type and the system's reason. Either way nothing is confirmed, as the state is written last and atomically, and the check and its copy stay: the same confirmation answers `202` once the failure is gone (lot B-31) |
 | `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting |
-| `DELETE /backup/restore/pending` | Drops the restore waiting (`204`) with its checked copy and its check record, as `backup pending --cancel` does (B-17): confirming that check again answers `404` `restore_stage_not_found`. `404` `restore_not_pending` |
-| `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `202` `RestoreRestartAccepted`: the `RestoreStatus` and `outcome_ticket`, with `Cache-Control: no-store`. `409` `restore_not_pending`; `500` `restore_restart_failed` when the ticket cannot be written, or `restore_folder_unusable`: no restart then |
+| `DELETE /backup/restore/pending` | Drops the restore waiting (`204`) with its checked copy and its check record, as `backup pending --cancel` does (B-17): confirming that check again answers `404` `restore_stage_not_found`. `404` `restore_not_pending`. A failure of the file system before the restore is dropped (its lock, or removing its state) is `500` `restore_cancel_failed`, logged as an error, `A pending restore could not be cancelled`: the restore still waits. Once the state is dropped, `apply.cancel_restore(drop_copy=True)`, behind the route and the command alike, logs a copy it cannot remove as a warning, `The copy of a cancelled restore could not be removed: it goes when its check expires`, with `stage_id` and the error, and never raises: the route answers `204`, and `prune` removes the copy at its age (lot B-31) |
+| `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `202` `RestoreRestartAccepted`: the `RestoreStatus` and `outcome_ticket`, with `Cache-Control: no-store`. `409` `restore_not_pending`; `500` `restore_restart_failed` when the ticket cannot be written, a full disk included, logged as an error, `The ticket of the restore's outcome could not be written: no restart`, with the error's type and the system's reason, or `restore_folder_unusable`: no restart then, no ticket, and the restore still waits. Lot B-31 pins it, and gives `restore_restart_failed` its sentence on the card |
 | `GET /backup/restore/outcome` | No session: the ticket of the restart in the `X-Restore-Ticket` header. `200` `RestoreOutcome`, `state` (`pending`, `in_progress`, `committed` or `rolled_back`), `reason` and `waiting` only, with `Cache-Control: no-store`, as often as asked until the ticket expires, a final outcome included; the same `404` `restore_outcome_not_found` for every ticket that does not give it. See [The Outcome Ticket](#backup-restore-outcome) |
+
+A full disk or quota that a backup route meets before it answers is a `507` (lot B-30), recognised by
+`jobs.out_of_space()`: `ENOSPC` or `EDQUOT` in the error or one of its causes, or SQLite's `SQLITE_FULL`. Its code is
+`backup_no_space` for an upload, at the start of a backup and at the confirmation of a restore (lot B-31), and `no_space` at the start of a check, the code of a
+check that runs out of space. For the upload,
+`UploadWriter` (`restore_jobs.py`) maps one met anywhere from the creation of its folder, `.restore/upload/`, to the end
+of the file, its `fsync` and `close` included (a network file system or a quota may report it only there), to
+`UploadNoSpaceError`, and takes its descriptor before closing it, so that `abort()` never closes it twice: nothing of
+the upload is left.
 
 Every `RestoreStatus` carries `upload_limit_mb`, the largest archive `PUT /backup/restore/upload` accepts at the time of
 the answer, in megabytes: `0` for no limit, `null` when the limit cannot be read (the upload then answers `503`
@@ -2200,7 +2250,9 @@ on in the managed profile: see [Frame Protection and the Report-Only Policy](#ma
 The part of decision D5 meant for the [managed profile](../../admin/hosting_providers.md#managed-profile): two `bool`
 switches of `Settings`, `False` in the code and `True` in `PROFILE_DEFAULTS["managed"]` (see
 [Settings System](settings.md)). Each can be set on its own, in either profile, and a value set in the environment or in
-`.env` wins over the profile.
+`.env` wins over the profile. In the managed profile, a switch that is off shows in the
+[configuration checks](#configuration-checks): `platform.frame_protection`, a `warning`, and `platform.csp_report_only`,
+an `info` (H-39).
 
 | Switch | Header | Value | Sent on |
 |--------|--------|-------|---------|
@@ -2382,9 +2434,11 @@ the lesser harm: `forwarded_by_untrusted_proxy()` recognises them, and `rate_lim
   internet cannot make its connection come from a local address. A local client that sends such a header itself
   leaves only its own requests out of the limits per address, and the limits per account or per email address still
   count them. Where every visitor reaches LibreFolio from a local address (Docker Desktop's published ports, a
-  LAN-only or VPN-only install), any visitor can leave the limits per address this way, never those per account or
-  per email address; behind Docker Desktop's published ports, which give every visitor the same address, the limits
-  per address count every visitor together anyway.
+  LAN-only or VPN-only install, and, for IPv6 visitors, Docker Engine's `docker-proxy` when the container has no IPv6
+  address, connecting from the network's gateway: see «Limits» in
+  [Checking Connection Security](../../admin/connection_checks.md#limits)), any visitor can leave the limits per
+  address this way, never those per account or per email address; behind Docker Desktop's published ports, which give
+  every visitor the same address, the limits per address count every visitor together anyway.
 - **One home for "local".** Step 5 is `classify_ip()`, which the connection indicator and workstream E's SMTP check
   (`backend/app/services/email/checks.py`) already use: no second list of ranges. Step 4 likewise makes `parse_ip()`
   public rather than copy uvicorn's parsing.

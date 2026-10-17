@@ -6,9 +6,9 @@ panel's first request or at the first restore upload: a 503 and a line in the lo
 read the configuration, change nothing, never raise, and never put a secret in their result: never the token, never
 what a file holds. The i18n keys are ``backup.checks.*``.
 
-They are part of the platform's ``CONFIG_CHECKS``, right before E's email checks, which close it: the startup audit logs
-them. ``config_audit`` imports this module to build that list, so this module imports ``ConfigCheck`` only when a check
-runs.
+They are part of the platform's ``CONFIG_CHECKS``, right after the platform's own checks and before workstream A's and
+E's (E's close it): the startup audit logs them. ``config_audit`` imports this module to build that list, so this module
+imports ``ConfigCheck`` only when a check runs.
 """
 
 from __future__ import annotations

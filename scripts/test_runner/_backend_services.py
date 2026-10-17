@@ -200,6 +200,15 @@ def services_asset_source_refresh(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Asset source refresh smoke test", verbose=verbose)
 
 
+def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bool:
+    """X-R55 (N75): date ranges capped at tomorrow (UTC) and 100 years for asset prices, FX conversions and the sync walk."""
+    print_section("Services: Date Range Ceiling (X-R55)")
+    print_info("Testing: get_prices_bulk + _build_backward_filled_series, the POST /fx/currencies/convert handler, refresh._fetch_refresh_item")
+    print_info("Extreme ranges (0001-01-01 … 9999-12-31) bounded by the wall clock and by fuses inside the per-day loops")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_range_ceiling.py", test_names)
+    return run_command(cmd, "Date range ceiling tests", verbose=verbose)
+
+
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
     """Test registry dei provider (asset & fx)."""
     print_section("Services: Provider Registry")
@@ -956,6 +965,16 @@ def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) 
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_lone_transfer_legs.py", test_names)
     return run_command(cmd, "Lone transfer legs tests", verbose=verbose)
+
+
+def services_auto_cost_unreadable_pool(verbose: bool = False, test_names: list = None) -> bool:
+    """Test W-B69: an Auto cost is never computed over a pool holding a row it cannot read."""
+    print_section("Services: Auto Cost over an Unreadable Pool (W-B69)")
+    print_info("Testing: backend/app/services/transactions/auto_cost.py (_auto_cost, UnreadablePoolError) and BrokerService.delete_bulk with force")
+    print_info("Tests: the raise and its count (quantity, amount, stored cost basis), readable pool and rows outside the pool as guards, a broker deletion over such a pool failing whole")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_auto_cost_unreadable_pool.py", test_names)
+    return run_command(cmd, "Auto cost unreadable pool tests", verbose=verbose)
 
 
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
@@ -1742,6 +1761,17 @@ Note: No backend server required.
     )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
     add_test(cat, "asset-source-refresh", services_asset_source_refresh, name="Asset Source Refresh", desc="Bulk refresh orchestration smoke test")
+    add_test(
+        cat,
+        "range-ceiling",
+        services_range_ceiling,
+        name="Date Range Ceiling",
+        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 UTC, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses",
+        # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
+        # with create_all; the FX handler is called directly with convert_bulk replaced by an in-process converter; the
+        # sync step runs with an in-process provider double and stand-ins for the two core caches, all by monkeypatch.
+        isolation="pure",
+    )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
     add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
     add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
@@ -2161,6 +2191,14 @@ Note: No backend server required.
         # The category default (write-scoped), although every database is a private file under tmp_path built by the
         # real migrations: the startup wrapper's cases make such a file's engine the configured one, and a wrapper that
         # reached the lane's engine all the same would open a session there — through a double that writes nothing.
+    )
+    add_test(
+        cat,
+        "auto-cost-unreadable-pool",
+        services_auto_cost_unreadable_pool,
+        name="Auto Cost over an Unreadable Pool",
+        desc="W-B69: _auto_cost raises UnreadablePoolError(count) over a pool with a row whose quantity, amount or stored cost basis reads None; rows outside the pool and a readable pool as guards; a broker deletion over such a pool fails whole",
+        # Write-scoped: every test works in its own session on the lane's database, under a unique marker, rolled back.
     )
     add_test(
         cat,

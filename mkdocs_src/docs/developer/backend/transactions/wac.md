@@ -645,6 +645,8 @@ For each selected row:
   partner's outgoing leg and the row itself;
 - any other row — an incoming `ADJUSTMENT` — averages its own broker as of its
   own date, leaving itself out;
+- `_auto_cost()` averages that pool with `compute_wac_iterative()`, once it has
+  checked that every row of it can be read (see [Unreadable pool](#unreadable-pool));
 - a supplied `cost_basis_override.code` acts as the target-currency hint; and
 - a calculated `wac` is written to `cost_basis_override` and
   `cost_basis_currency` on the staged ORM row.
@@ -699,6 +701,42 @@ batch stage appends a `TXValidationIssue` with:
 
 The response may still include `wac_results`, but the issue makes
 `committed=False`; the route that owns the session then rolls back.
+
+### 🚫 Unreadable pool {: #unreadable-pool }
+
+Since W-B58, a stored decimal that is no number — a text, or a REAL ±inf that an
+older version or another tool left — reads back as `None` instead of raising
+(`RealDecimal`, see [Decimal Columns](../../architecture/database/index.md#decimal-columns)).
+The facade does not stop on such a row: `cost_movement_from_transaction()` skips a
+row whose quantity reads `None`, takes a `BUY` whose amount reads `None` for a free
+purchase, and an acquisition whose cost basis reads `None` for one of unknown cost,
+counted at zero. An Auto cost averaged from that pool would be written on the row,
+wrong for good.
+
+So `_auto_cost()` (`auto_cost.py`, W-B69) first counts the unreadable rows of the
+pool with `_unreadable_pool_rows()`: the rows `compute_wac_iterative()` loads — same
+broker and asset, a date up to the pool's date, a quantity not `NULL` and not zero —
+minus the excluded ids, whose quantity or amount reads `None`, or whose
+`cost_basis_override` is stored (not `NULL` in SQL) but reads `None`. A `NULL` cost
+basis is a row without one, such as a `BUY`, and is not counted. When there is any,
+`_auto_cost()` raises `UnreadablePoolError(count)` before averaging. The error
+carries the count only, never a transaction id: the pool can be another user's
+broker, since the receiving side of a `TRANSFER` averages its partner's.
+
+The guard is `_auto_cost()`'s, so it covers the costs written on rows — Auto rows,
+and the giving leg's `_handover_cost()`; `POST /portfolio/wac` and the PAC planner
+call `compute_wac_iterative()` directly, without it. Where it raises, nothing
+averaged from that pool is written:
+
+| Caller | On `UnreadablePoolError` |
+|--------|--------------------------|
+| `_compute_wac_for_auto_items(..., unreadable=None)` | With a list passed as `unreadable`, the item gets no cost and no `WACPreviewResultItem`, `(operation, index, count)` is appended to the list, and the other items go on. Without a list, the error raises |
+| `delete_by_broker()` | The deletion of that broker fails whole (see [Broker Deletion](service.md#broker-deletion)) |
+| `convert_lone_giving_legs()`, through `_handover_cost()` | That leg stays a `TRANSFER` without its partner, answered with the error's message as its reason; the other legs are converted (see [Lone giving legs](../../architecture/database/index.md#lone-transfer-legs)) |
+
+`compute_wac_and_fx_issues()` passes no list yet — the batch's own refusal is wired
+separately — so in a batch the error, like one from `_handover_cost()` on the giving
+leg of a split `TRANSFER`, propagates out of `execute_batch()`.
 
 ### 🔗 Promote boundary {: #promote-boundary }
 

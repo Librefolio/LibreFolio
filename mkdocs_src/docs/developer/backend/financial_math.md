@@ -162,7 +162,8 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
 5. computes the average cost of every position (`compute_average_costs()` over
    `build_cost_positions()`), one `AssetPriceSeries` per held asset
    (`build_asset_price_series()`) and the native cash (`compute_native_cash()`);
-6. runs `DailyStateBuilder` (`daily_state.py`) and stores its result in the cache.
+6. runs `DailyStateBuilder` (`daily_state.py`) in a worker thread, [off the event loop](#off-the-event-loop), and
+   stores its result in the cache.
 
 `position_states_start` holds the positions at the end of `calculate(period_start=…)` — the caller's period start, while
 the daily states run from `date_from` (t=0 for the Dashboard) — or of `date_from` when it is not named.
@@ -172,6 +173,41 @@ arrival and the cost the sender moved: the Performance table's transfer split (`
 Callers derive their views from the result with `DerivedViewsBuilder` (`derived_views.py`) —
 history, per-broker P&L, candles, acquisition funding, performance inputs, allocation — and the
 data-quality report with `build_data_quality_report()` (`data_quality.py`).
+
+#### 🧵 Off the Event Loop {: #off-the-event-loop }
+
+`DailyStateBuilder.build()` is pure CPU, and a wide range makes it long: run on the event loop, one user's wide
+report held every other request until it ended (finding R13-SEC7, lot J-45). `calculate()` hands it to a worker
+thread instead, `await loop.run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_context().run, builder.build)`:
+
+- **A dedicated executor.** `_ENGINE_EXECUTOR`, in `portfolio/engine.py`, is a module-level
+  `ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")`, not the default executor that every
+  `asyncio.to_thread()` call of the backend shares. Its two workers bound how many replays run at once; a third waits
+  in its queue. The GIL still runs one replay at a time, but the loop gets its turn in between: the interpreter
+  switches threads every 5 ms (`sys.getswitchinterval()`, which the backend leaves at its default).
+- **The copied context.** Unlike `asyncio.to_thread()`, `run_in_executor()` does not copy the context variables:
+  `copy_context().run` runs the replay in a copy of the request's context. Today that copy carries the secrets
+  `secrets_in_flight()` masks in log lines, and the `decimal` context, which `decimal` keeps in a context variable:
+  the replay computes with the precision and rounding of the request that started it. No code binds a structlog
+  context today (`merge_contextvars` in `logging_config.py` merges nothing); one bound later reaches the replay too.
+- **What crosses the thread.** The builder reads loaded data only: the maps the earlier steps built, and the column
+  attributes of the `Transaction` rows (`id`, `date`, `type`, `broker_id`, `asset_id`, `quantity`, `amount`,
+  `currency`, `cost_basis_currency`, `cost_basis_override`). It reads no relationship: `related_transaction` loads
+  lazily, and the builder never touches it. `Transaction` defers no column, and the builder reads only rows that
+  `calculate()`'s own queries loaded, which never commits, rolls back or expires: no attribute reloads. No session
+  enters the thread: every query of `calculate()` runs before the await, and no caller runs another task on the
+  engine's session meanwhile. The replay's modules hold no mutable state, only constants and a logger. The
+  `portfolio_blob` cache is written on the loop, after the await.
+- **Cancellation.** A thread cannot be cancelled. When the request is cancelled while its replay runs — its client
+  disconnected — the replay runs to its end and its result is dropped, since the cache write comes after the
+  await; a replay still waiting in the queue is cancelled before it starts. The range cap of step 2
+  (R13-SEC7-1) bounds the work.
+
+When you give the builder a new input, give it loaded data — a column already read, or a value an earlier step
+computed — never a lazy relationship or an expired attribute. The worker thread would try to load it outside the
+event loop, and the replay would fail with `MissingGreenlet`. `test_engine_off_the_loop.py`
+(`test_financial/test_portfolio_engine/`) pins the worker thread, the loop running meanwhile, the parity with a replay
+on the loop, the copied context, and a guard that fails on any lazy load during the replay.
 
 #### 📅 The Days the Engine Recomputes {: #recomputed-days }
 

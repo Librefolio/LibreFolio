@@ -9,7 +9,7 @@
  */
 
 import {expect, test} from '../fixtures/playwright';
-import type {Page} from '../fixtures/playwright';
+import type {Locator, Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
@@ -1112,5 +1112,140 @@ test.describe('Assets list — the sync dialog warns before replacing stored pri
         await modal.getByTestId('sync-modal-close').click();
         await expect(modal).toBeHidden();
         expect(syncRequests, 'no sync request left the page: no provider was called').toEqual([]);
+    });
+});
+
+// ============================================================================
+// The Δ columns are the backend's period changes (workstream X, lot X-R53)
+// ============================================================================
+
+/** The asset period changes, whatever their query string. */
+const ASSET_PERIOD_CHANGES = /\/api\/v1\/assets\/prices\/period-changes(\?.*)?$/;
+
+/** The backend's fixed periods, in display order: the `key` and `days` of `FAPeriodChange`. */
+const PERIOD_DAYS: ReadonlyArray<readonly [string, number]> = [
+    ['1D', 1],
+    ['1W', 7],
+    ['1M', 30],
+    ['3M', 91],
+    ['6M', 182],
+    ['1Y', 365],
+    ['2Y', 730],
+    ['3Y', 1095],
+    ['5Y', 1825],
+];
+
+/** What the stub answers for the own asset: +1.25 % over a day, −25 % over a week, null — no figure — over every longer period. */
+const STUBBED_RATIOS: Readonly<Record<string, string>> = {'1D': '0.0125', '1W': '-0.25'};
+
+/** One asset of a period-changes request (`FAPeriodChangesQueryItem`). */
+type AssetPeriodChangesQuery = {asset_id: number; as_of: string; target_currency?: string | null};
+
+/** A Δ cell of a table row, by the column id DataTable publishes on each cell. */
+function deltaCell(row: Locator, key: string): Locator {
+    return row.locator(`td[data-column-id="delta_${key}"]`);
+}
+
+/**
+ * A Δ cell's percentage as any of the four languages writes it, matched whole: `+1.25%` (English), `+1,25%`
+ * (Italian), `+1,25 %` (French, Spanish: a no-break space before the sign); a minus may be `-` or `−`. The figure is
+ * read, never a translation.
+ */
+function percentCell(figure: string): RegExp {
+    const parts = /^([+-])(\d+)\.(\d+)$/.exec(figure);
+    if (!parts) throw new Error(`percentCell: ${figure} is not a signed decimal such as +1.25`);
+    return new RegExp(`^\\s*${parts[1] === '+' ? '\\+' : '[-\\u2212]'}${parts[2]}[.,]${parts[3]}\\s?%\\s*$`);
+}
+
+/** The empty marker of a Δ cell: a change the backend could not compute (`null`). */
+const EMPTY_CELL = /^\s*—\s*$/;
+
+/**
+ * The Δ columns of the table — the fixed 1D, and the periods the range holds (1W … 5Y) — are the backend's (MF-P2):
+ * the list asks `POST /assets/prices/period-changes` for every asset it lists, up to the end of the range on screen
+ * (`as_of`), shows each `change_ratio` × 100, and the empty marker for a change the backend could not compute (`null`).
+ * The browser computes none of them.
+ *
+ * Observed through the network: the real answer is fetched and only this test's asset is changed in it, with figures
+ * its prices could never give — it has none, created here and deleted at the end — so a figure on screen comes from the
+ * answer or from nowhere. The range is about two months ending on a known day in the past: 1W and 1M fit it, 3M does
+ * not, and no live price is asked (that happens only on a range reaching today).
+ *
+ * Red today: the list never asks the endpoint — the route never fires — and computes its Δ from the prices it loaded,
+ * none for this asset.
+ */
+test.describe('Assets list — the Δ columns are the backend’s period changes (X-R53)', () => {
+    // A ceiling, never a delay: an asset is created, then the list loads its waves — rows, prices, period changes — and
+    // settles twice more, narrowed to the asset and then as a table.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('the own row shows each change ratio × 100 up to the end of the range, the empty marker where there is none', async ({page}) => {
+        const token = uniqueToken(6);
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const asked: AssetPeriodChangesQuery[] = [];
+        const failures: string[] = [];
+        let answered = 0;
+        let assetId: number | null = null;
+        try {
+            const createRes = await page.request.post('/api/v1/assets', {data: [{display_name: `E2E PeriodChanges ${token}`, currency: 'EUR', asset_type: 'STOCK'}]});
+            expect(createRes.ok(), `asset create must succeed: ${await createRes.text()}`).toBeTruthy();
+            const ownId = ((await createRes.json()) as {results: Array<{asset_id: number}>}).results[0].asset_id;
+            assetId = ownId;
+
+            await page.route(ASSET_PERIOD_CHANGES, async (route) => {
+                try {
+                    asked.push(...((route.request().postDataJSON() as AssetPeriodChangesQuery[] | null) ?? []));
+                    const response = await route.fetch();
+                    if (!response.ok()) {
+                        failures.push(`HTTP ${response.status()}: ${await response.text()}`);
+                        await route.fulfill({response});
+                        return;
+                    }
+                    const answer = (await response.json()) as {items?: Array<{asset_id: number}>};
+                    const periods = PERIOD_DAYS.map(([key, days]) => ({key, days, change_ratio: STUBBED_RATIOS[key] ?? null}));
+                    const items = (answer.items ?? []).map((item) => (item.asset_id === ownId ? {...item, periods, errors: []} : item));
+                    await route.fulfill({response, json: {...answer, items}});
+                } catch (error) {
+                    // Nobody awaits a route callback, so what it throws would land on whatever runs next: recorded, and
+                    // the request let through, for the test to fail on its own assertions.
+                    failures.push(String(error));
+                    await route.continue().catch(() => undefined);
+                } finally {
+                    answered += 1;
+                }
+            });
+
+            await goToAssetsPage(page, range);
+            const assetsPage = page.getByTestId('assets-page');
+            // The list narrowed to the own asset, then shown as a table.
+            await page.getByTestId('assets-search-input').fill(token);
+            await waitForSettled(assetsPage, 20_000);
+            await page.getByTestId('view-mode-list').click();
+            await waitForSettled(assetsPage, 20_000);
+            const row = page.locator(`tbody tr[data-row-id="${ownId}"]`);
+            await expect(row, 'the own asset is listed').toBeVisible({timeout: 10_000});
+
+            // Asked and answered — the page holds `data-busy` until the period changes are in; the poll is a deadline.
+            await expect.poll(() => answered, {message: 'the Assets list never asked POST /assets/prices/period-changes: its Δ columns are still computed in the browser', timeout: 10_000}).toBeGreaterThan(0);
+            expect(failures, 'the period changes reached the page').toEqual([]);
+            expect(asked, 'the own asset is asked up to the end of the range on screen').toContainEqual(expect.objectContaining({asset_id: ownId, as_of: range.end}));
+            expect([...new Set(asked.map((item) => item.as_of))], 'every asset is asked up to the end of the range on screen').toEqual([range.end]);
+
+            // The period columns of the range: about two months hold 1M (30 days), not 3M (91).
+            const table = page.getByTestId('dt-scroll').filter({has: row});
+            await expect(table.getByTestId('dt-header-delta_1M'), 'the 1M column, drawn from the periods of the answer').toHaveCount(1, {timeout: 10_000});
+            await expect(table.getByTestId('dt-header-delta_3M')).toHaveCount(0);
+
+            await expect(deltaCell(row, '1D'), '1D: change_ratio 0.0125').toHaveText(percentCell('+1.25'));
+            await expect(deltaCell(row, '1W'), '1W: change_ratio -0.25').toHaveText(percentCell('-25.00'));
+            await expect(deltaCell(row, '1M'), '1M: change_ratio null').toHaveText(EMPTY_CELL);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+            if (assetId != null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
+        }
     });
 });
