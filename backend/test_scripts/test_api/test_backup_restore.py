@@ -45,7 +45,11 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
 (e) ``backup_max_upload_mb()``: unset or blank, 0 self-hosted and 500 managed; a whole number of ASCII digits, spaces
     around allowed, wins over the profile; anything else raises ``BackupConfigError`` ``BACKUP_MAX_UPLOAD_MB_INVALID``,
     naming the variable. The managed value is the entry of H's profile table, read at each call (a guard of lot B4,
-    green from the start).
+    green from the start). An entry of that table of another type than the code's default (``"500"``, ``None``,
+    ``500.0``, ``True``), on which H's ``profile_default`` raises ``ProfileDefaultError`` (H-27), is a limit that cannot
+    be read, as a variable that cannot be (B-21, RED until the routes catch it; until then each answers a plain 500): the
+    upload 503 ``backup_upload_unavailable``, nothing written; ``GET /backup/restore/status`` (lot B3's route) 200 with
+    ``upload_limit_mb`` null; each with one error logged, the line of a limit that cannot be read, naming the variable.
 (f) Found while writing the second round, RED until the product changes, each with the fix it suggests: an upload whose
     file cannot be created (a folder that cannot be written) is a plain 500 without a code, not ``backup_upload_failed``;
     a drop follows a link in place of ``.restore`` or ``checks/`` and removes the state of a check in the link's target;
@@ -132,6 +136,10 @@ API = "/api/v1/backup/restore"
 UPLOAD = f"{API}/upload"
 STAGE = f"{API}/stage"
 STAGE_ITEM = f"{STAGE}/{{stage_id}}"
+#: Lot B3's route, read here for its ``upload_limit_mb`` alone (B-21): ``test_backup_restore_apply.py`` pins the rest.
+STATUS = f"{API}/status"
+#: What the upload and the status log, once each, when the limit cannot be read.
+LIMIT_ERROR = "The upload limit of a restore cannot be read"
 #: The variables of this lot, as .env.example and the deployments write them: spelled out here, so a rename shows.
 LIMIT_VARIABLE = "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"
 PROFILE_VARIABLE = "LIBREFOLIO_PROFILE"
@@ -1407,6 +1415,66 @@ def test_the_managed_limit_is_the_entry_of_the_profile_table_read_at_each_call(m
 
     assert written == 123, f"managed, {LIMIT_VARIABLE} unset, the table's managed entry at 123: the limit is the entry, got {written}"
     assert removed == 0, f"managed, {LIMIT_VARIABLE} unset, no entry in the table: the code's own fallback 0 (no limit), got {removed}"
+
+
+#: Entries of H's profile table for the upload limit, of another type than the code's default ``0`` (H-27):
+#: ``profile_default`` raises ``ProfileDefaultError`` on each. ``None``, read as it is, would mean no limit at all.
+WRONG_TABLE_LIMITS = [
+    pytest.param("500", id="the-text-500"),
+    pytest.param(None, id="null"),
+    pytest.param(500.0, id="a-float"),
+    pytest.param(True, id="true"),
+]
+
+
+def wrong_table_entry(monkeypatch: pytest.MonkeyPatch, value: object) -> None:
+    """The managed profile, the variable unset, and H's table giving the upload limit ``value``. Checked: the limit then
+    raises H's ``ProfileDefaultError`` (H-27), so the case is the one it names."""
+    monkeypatch.setenv(PROFILE_VARIABLE, "managed")
+    monkeypatch.delenv(LIMIT_VARIABLE, raising=False)
+    monkeypatch.setitem(config.ENVIRONMENT_PROFILE_DEFAULTS["managed"], backup_config.MAX_UPLOAD_VARIABLE, value)
+    try:
+        limit = backup_max_upload_mb()
+    except config.ProfileDefaultError:
+        return
+    pytest.fail(f"precondition: H's table giving {value!r}, backup_max_upload_mb() raises ProfileDefaultError (H-27), not {limit!r}")
+
+
+def limit_errors(events: list[dict]) -> list[tuple[object, bool]]:
+    """The errors logged, each as (its event, whether its ``error`` names the variable)."""
+    return [(event.get("event"), LIMIT_VARIABLE in str(event.get("error"))) for event in events if event.get("log_level") == "error"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", WRONG_TABLE_LIMITS)
+async def test_a_wrong_entry_in_the_profile_table_is_503_and_nothing_is_written(instance, monkeypatch, value):
+    """(e) B-21, RED until ``_upload_limit`` catches H's error: a limit that cannot be read, so the upload is refused as
+    for a variable that cannot be read, never taken without a limit: 503 ``backup_upload_unavailable``, nothing written,
+    one error logged, the same line, naming the variable. Until then H's ``ProfileDefaultError`` escapes the route: a
+    plain 500."""
+    wrong_table_entry(monkeypatch, value)
+    with capture_logs() as events:
+        response = await upload(b"an archive")
+    assert code(response) == (503, "backup_upload_unavailable"), f"H's table giving {value!r}: 503 backup_upload_unavailable, not {shown(response)}"
+    assert not restore_dir(instance.root).exists(), f"nothing written: {cases.listing(instance.root)}"
+    assert limit_errors(events) == [(LIMIT_ERROR, True)], f"one error in the log, the line of a limit that cannot be read, naming the variable: {limit_errors(events)}"
+    print_success(f"{value!r} in H's table: 503 backup_upload_unavailable, nothing written")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", WRONG_TABLE_LIMITS)
+async def test_a_wrong_entry_in_the_profile_table_leaves_the_status_answering_with_a_null_limit(instance, monkeypatch, value):
+    """(e) B-21, RED until ``_readable_limit_mb`` catches H's error: ``GET /backup/restore/status`` still answers, 200,
+    ``upload_limit_mb`` null, as for a variable that cannot be read; one error logged, the same line, naming the variable.
+    Until then H's ``ProfileDefaultError`` escapes the route: a plain 500."""
+    wrong_table_entry(monkeypatch, value)
+    with capture_logs() as events:
+        response = await call("GET", STATUS)
+    answer = response.json() if response.headers.get("content-type", "").startswith("application/json") else None
+    assert response.status_code == 200 and isinstance(answer, dict), f"H's table giving {value!r}: the status still answers, 200, not {shown(response)}"
+    assert (answer.get("state"), "upload_limit_mb" in answer, answer.get("upload_limit_mb")) == ("none", True, None), f"no restore, and the limit null: {answer}"
+    assert limit_errors(events) == [(LIMIT_ERROR, True)], f"one error in the log, the line of a limit that cannot be read, naming the variable: {limit_errors(events)}"
+    print_success(f"{value!r} in H's table: 200, upload_limit_mb null")
 
 
 @pytest.mark.parametrize(

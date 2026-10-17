@@ -41,7 +41,7 @@ from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup.archive import BackupNoSpaceError, build_archive
 from backend.app.services.platform.instance_backup.envelope import FILE_SUFFIX, EncryptedFile, encrypt_file
 from backend.app.services.platform.instance_backup.manifest import BackupOrigin
-from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, ensure_private_dir, is_job_id, job_dir, jobs_dir, lock_path, stages_dir
+from backend.app.services.platform.instance_backup.paths import STAGE_LOCK_FILE, STATE_FILE, backups_dir, ensure_private_dir, is_job_id, is_plain_dir, job_dir, jobs_dir, lock_path, stages_dir
 from backend.app.services.platform.instance_backup.secure import exportable_instance_key, generated_key_unusable
 
 logger = get_logger(__name__)
@@ -313,6 +313,15 @@ def _remove_work_files(folder: Path, keep: str | None) -> None:
             path.unlink(missing_ok=True)
 
 
+def _end_interrupted(folder: Path, job: BackupJob) -> BackupJob:
+    """A run that died with its process: failed, ``backup_interrupted``, and what it left in its folder removed (the
+    database's copy, a clear zip, a partial archive): only its state stays (lot B4b)."""
+    job = replace(job, status="failed", phase=None, finished_at=_now(), error_code="backup_interrupted")
+    _write_state(folder, job)
+    _remove_work_files(folder, keep=None)
+    return job
+
+
 def start_backup(*, origin: BackupOrigin = "ui", data_dir: Path | None = None, password: str | None = None) -> BackupJob:
     """Start a backup in a background thread and return its first state. ``BackupBusyError`` if one is running.
 
@@ -340,7 +349,8 @@ def run_backup(*, origin: BackupOrigin = "cli", data_dir: Path | None = None, pr
 
 
 def get_job(job_id: str, *, data_dir: Path | None = None) -> BackupJob:
-    """The state of a job; a run that died with its process reads as failed, ``backup_interrupted``."""
+    """The state of a job; a run that died with its process reads as failed, ``backup_interrupted``, its work files
+    removed."""
     data_dir = data_dir or get_data_dir()
     if not is_job_id(job_id):
         raise BackupJobNotFoundError("No such backup job")
@@ -352,8 +362,7 @@ def get_job(job_id: str, *, data_dir: Path | None = None) -> BackupJob:
     if job.status == "running" and not _run_lock_held(data_dir):
         job = _read_state(folder)
         if job.status == "running":
-            job = replace(job, status="failed", phase=None, finished_at=_now(), error_code="backup_interrupted")
-            _write_state(folder, job)
+            job = _end_interrupted(folder, job)
     return job
 
 
@@ -378,10 +387,33 @@ def delete_job(job_id: str, *, data_dir: Path | None = None) -> None:
     shutil.rmtree(job_dir(data_dir, job_id), ignore_errors=True)
 
 
-def remove_expired_jobs(data_dir: Path, *, now: datetime | None = None) -> int:
-    """Remove the jobs that finished more than ``JOB_RETENTION`` ago, or died that long ago; how many were removed."""
+def end_interrupted_jobs(data_dir: Path) -> int:
+    """End every run its process left running, as ``get_job`` ends one it reads, while no run holds the lock; how many
+    (at every start, lot B4b). A folder whose state cannot be read is left to ``remove_expired_jobs``."""
     folder = jobs_dir(data_dir)
-    if not folder.is_dir():
+    if not is_plain_dir(backups_dir(data_dir)) or not is_plain_dir(folder) or _run_lock_held(data_dir):
+        return 0
+    ended = 0
+    for path in folder.iterdir():
+        if not is_job_id(path.name) or not is_plain_dir(path):
+            continue
+        try:
+            job = _read_state(path)
+        except (BackupJobNotFoundError, ValueError, TypeError, KeyError):
+            continue
+        if job.status == "running" and not _run_lock_held(data_dir):
+            _end_interrupted(path, job)
+            ended += 1
+    return ended
+
+
+def remove_expired_jobs(data_dir: Path, *, now: datetime | None = None) -> int:
+    """Remove the jobs that finished more than ``JOB_RETENTION`` ago, or died that long ago; how many were removed.
+
+    Nothing through a link: a ``backups`` or ``.jobs`` that is not a plain folder is left alone (it runs at every start,
+    lot B4b)."""
+    folder = jobs_dir(data_dir)
+    if not is_plain_dir(backups_dir(data_dir)) or not is_plain_dir(folder):
         return 0
     now = now or _now()
     removed = 0
