@@ -39,7 +39,7 @@ from backend.app.schemas.signals import (
 )
 from backend.app.services.financial_math.returns import price_return
 from backend.app.services.provider_registry import register_plugin
-from backend.app.services.signal_plugins.base import SignalPlugin, SignalUnavailableError
+from backend.app.services.signals.base import SignalPlugin, SignalUnavailableError
 from backend.app.services.signals.registry import SignalPluginRegistry
 
 CalendarWindowDays = Annotated[int, Field(strict=True, ge=1)]

@@ -65,9 +65,16 @@ KEYS = sorted({key for _path, _line, call in CONSTRUCTIONS if (key := _literal_k
 
 
 def test_the_scan_reaches_the_warnings_of_both_packages():
-    # Presence barrier: a scan that found nothing would make every check below vacuous.
+    # Presence barrier: a scan that found nothing would make every check below vacuous. In the risk
+    # package the warnings are built by a result's data quality, its envelope and the scope.
     files = {path for path, _line, _call in CONSTRUCTIONS}
-    assert {"backend/app/services/risk/service.py", "backend/app/services/risk_plugins/stress/plugin.py", "backend/app/services/risk_plugins/correlation/plugin.py"} <= files
+    assert {
+        "backend/app/services/risk/data_quality.py",
+        "backend/app/services/risk/results.py",
+        "backend/app/services/risk/scope.py",
+        "backend/app/services/risk_plugins/stress/plugin.py",
+        "backend/app/services/risk_plugins/correlation/plugin.py",
+    } <= files
     assert {
         "risk.warnings.assets_excluded_missing_price",
         "risk.warnings.data_quality_stale_prices",

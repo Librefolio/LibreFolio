@@ -1733,6 +1733,274 @@ Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `planner/result/Or
 - `risk/lab-correlation`, `dashboard/risk-diversification`;
 - con S9, gli scatti dei segnali di asset e cambi.
 
+### B4 — I neutri dei grafici sui ruoli ✅ (notte 16→17/10/2026)
+
+Mandato del coordinatore (22:18), valgono D-T27 e D-T28; base `07700355f`. Fonte: l'inventario in sola lettura di L
+(`L-designerLab/audit-colori-fuori-metrica.md`, sul ramo di L): `lib/theme/chartTheme.ts` tiene 277 letterali della
+vecchia palette slate, letti da 33 file, e il ratchet m2 non li conta perché esclude `lib/theme/**`. In più ECharts usa
+i suoi predefiniti in 5 punti. Perimetro: i neutri (assi, linee e griglie, etichette, cornici e fondi dei tooltip,
+`axisPointer`), sui ruoli letti a runtime col ponte `roleColors.ts`; le serie e le categorie restano per la designer.
+
+**Analisi** (22:18–23:00, sola lettura; misure in `files/dv_b4_measure.py` della sessione, col risolutore del gate).
+- **Il piano di T per B4 è superato.** L'analisi di T del 14/10 voleva ruoli nuovi `--lf-chart-*` sulla palette della
+  designer; il mandato chiede invece i ruoli che l'interfaccia dà alle stesse cose. Il registro conta in B4 anche
+  guadagno e perdita: qui restano fuori, salvo una decisione (domanda 1).
+- **Come si ridisegnano oggi:** 17 grafici ridisegnano al cambio di tema (`onThemeClassChange`); solo 6 sentono anche
+  il Lab (`onChartColorsChange`, C4): `AllocationPieChart`, `AllocationHistoryChart`, `GrowthChart`, `SemiDonutChart`,
+  `CorrelationHeatmap`, `ExposureBars`. Gli altri 11 vedrebbero una modifica del Lab ai ruoli solo al prossimo cambio
+  di tema (domanda 2). Nessun grafico vive oggi in un sottoalbero a tema forzato.
+- **Regola della mappa,** voce per voce:
+  - testo, per tono legacy come la migrazione delle classi (W6): 800 e oltre `primary`, 600–700 `secondary`, 300–500
+    `muted`;
+  - il riquadro del tooltip è un popover (skill, regola 9): `card`, bordo `raised`, testo `primary` e `muted`. Non il
+    tooltip invertito di Q10, che è quello piccolo dell'interfaccia;
+  - le linee prendono, fra `subtle`, `input` e `muted`, il ruolo col contrasto più vicino al loro di oggi: la struttura
+    (assi, griglie, separatori, cornici) va su `subtle`; le linee di riferimento, i puntatori e le linee guida su
+    `input`; la linea dello zero di Performance su `muted`;
+  - i varchi e gli anelli «nel colore della card» su `card`; aloni e fondi delle etichette su `card` con l'alfa di
+    oggi; la banda al passaggio e l'ombra del puntatore su `muted` con l'alfa di oggi (il puntatore di ECharts sta a
+    `z: 50`, sopra le barre, quindi resta traslucido);
+  - il testo su un pieno di stato (i bottoni di stato del Gantt) su `on-status`.
+- **La mappa, per ruolo** (le voci tengono i nomi delle tabelle di oggi):
+
+  | Ruolo | Voci |
+  |---|---|
+  | `--lf-text-primary` | `tooltip.box.text`; `candlestickBox.text`, `heading`; `allocation.historyAreaLabel`; `semiDonut.label`; `geoMap.label`; `correlation.emphasisBorder`; `performance.zeroValue`, `axisName`; `lots.markerEmphasisRing`; Gantt `selectedSegmentBorder`, `segmentLabel`; Gantt `lineageConnector` al 45/48 % |
+  | `--lf-text-secondary` | `riskReturn.axisText`; `allocation.caption`; `correlation.axisLabel`, `tooltipBadge.text`; `performance.axisSection`; `treemap.groupLabel` |
+  | `--lf-text-muted` | `priceAxis.label`; `dashboard.text`; `secondaryAxisFallback`; `referenceLevelLabel`; `tooltip.box.muted`; `candlestickBox.muted`; `tooltip.aside`; `performance.axisSecondary`, `zeroLine`; `legendPageIconInactive` al 40 %; `performance.rowHighlight` 16/14 % e `axisPointerShadow` 14/12 %; l'ombra predefinita di `ExposureBars` al 20 % |
+  | `--lf-border-subtle` | `priceAxis.line`, `gridLine`; `dashboard.gridLine`; `riskReturn.axis`; `correlation.tooltipDivider`; `performance.sectionSeparator`; `treemap.groupBorder`, `tileBorder` |
+  | `--lf-border-raised` | `tooltip.box.border`; `candlestickBox.border` |
+  | `--lf-border-input` | `candlestickBox.crosshair`; `price.baseline`; `riskReturn.capitalMarketLine`; `semiDonut.labelLine`; `growth.pnlReference`, `bucketSeparator`; la linea zero del WAC; la linea predefinita del puntatore di storico e crescita |
+  | `--lf-surface-card` | `tooltip.box.background`; `price.pendingEditPointRing`; `allocation.sliceBorder`, `historyAreaLabelShadow`; `semiDonut.avatarBorder`, `sliceGap`; `geoMap.border`; `correlation.cellGap`; `lots.markerRing`; con alfa: `semiDonut.labelShadow` 80/60 %, `geoMap.labelBackground` 72/55 %, `correlation.emphasisHalo` 95 %, `treemap.groupLabelBackground` 80 %; il riquadro predefinito dei tooltip di correlazione e rischio/rendimento |
+  | `--lf-surface-panel` | `correlation.tooltipBadge.background` |
+  | `--lf-surface-neutral` | `semiDonut.available`, cioè una traccia |
+  | `--lf-on-status` | Gantt `stateChipText` |
+
+- **Restano,** serie, categorie, stati e segni: `PRICE_SERIES.line`, `pendingEditPoint`, `comparisonMarkerFallback`;
+  `CHART_GAIN_LOSS`; i punti di `RISK_RETURN_COLORS`; `ALLOCATION_CHART_COLORS.iconBubble`; `GEO_MAP_COLORS.land` e
+  `highlight`; `SIGNAL_COLORS`; `INCOME_EVENT_COLORS`; `GROWTH_SERIES`; le serie e i badge di `PERFORMANCE_COLORS`;
+  `TREEMAP_COLORS.noPnl`, `tileLabel`, `tileLabelShadow`; `RISK_OVERLAY_COLORS`; `LOT_STATE_COLORS`; serie, bande ed
+  eventi di Gantt, WAC e confronto; `CHART_TOOLTIP_COLORS.staleWarning` e `seriesFallback`.
+  - **⚠️ `GEO_MAP_COLORS.land` non va su un ruolo:** su `neutral` i paesi senza peso staranno a ΔE00 4,1/3,7 dal primo
+    gradino di `GEO_CHOROPLETH_SCALE` (oggi 7,8/17,9), cioè si confondono col peso più basso. È lo zero della scala
+    GR5.1: resta con la scala, per la designer.
+- **Effetto misurato** (contrasto sulla card, prima → dopo, chiaro/scuro):
+  - in chiaro quasi nulla cambia; in scuro assi e griglie si attenuano, da 1,93 a 1,21:1 (`subtle`, come i divisori
+    dell'interfaccia): da rivedere;
+  - le linee di riferimento e i puntatori si vedono di più in chiaro, da 2,54 a 3,49:1;
+  - le note dei tooltip in chiaro passano da 2,56 a 5,20:1 (oggi sotto AA);
+  - i riquadri dei tooltip perdono la tinta slate in scuro; quelli di correlazione e rischio/rendimento non sono più
+    bianchi in scuro (il badge dentro va su `panel`/`secondary`, 6,5:1);
+  - il testo dei bottoni di stato del Gantt su `on-status` resta come oggi, sotto 4,5:1 sui pieni ambra e cielo (3,07 e
+    3,95:1): è un difetto dei pieni di stato legacy, non di questo lotto.
+- **Architettura:** `chartNeutrals(dark, scope)` in `chartTheme.ts` legge i ruoli con `chartRoles(dark, scope)`, una
+  volta per disegno, sull'elemento del grafico, e restituisce gli stessi gruppi di oggi (`priceAxis`, `dashboard`,
+  `tooltip.box`, `semiDonut`…). Ogni lettura passa da `themed(CHART_NEUTRALS.x.y, dark)` a `neutrals.x.y`. Gli helper
+  condivisi (`buildTooltipTheme`, `buildGridColors`, `getChartColors`) tengono la firma, più uno `scope` facoltativo.
+  - I gate reggono senza modifiche: `chartTheme.test.ts` salta le funzioni; la parità di `roleColors.test.ts` vede le
+    chiamate letterali `.color('--lf-…')` di `chartNeutrals`. In `ChartRole` entrano 6 ruoli, coi ripieghi uguali a
+    `tokens.css`: `--lf-text-muted`, `--lf-border-subtle`, `--lf-border-raised`, `--lf-border-input`,
+    `--lf-surface-neutral`, `--lf-on-status`.
+  - Il commento di `themePair.ts` («il giorno che i colori diventano token, cambia questa funzione») va aggiornato.
+- **Test:** nessun test unitario né E2E legge i valori dei neutri, salvo due riparazioni per `test-author`:
+  - il controllo positivo di `chartTheme.test.ts` nomina `CHART_TOOLTIP_COLORS.box.background` e `.aside`;
+  - `chartCoreHelpers.test.ts`:4206 legge `GROWTH_CHART_COLORS.pnlReference`.
+  - Nuovo, sempre a `test-author`: un test di `chartNeutrals` (ogni voce è il suo ruolo, nei due temi, letta sullo
+    `scope`).
+  - Gli altri (`echartsTooltipHelpers`, `AllocationHistoryChart`, `ExposureBars`, i lettori iniettati di
+    `CorrelationHeatmap` e `SemiDonutChart`) passano dai ripieghi: da verificare.
+- **L:** il motore L3 del Lab (`engine/charts.ts`) rimappa i colori delle opzioni per valore; dopo B4 i neutri portano
+  i valori dei ruoli. Va detto a L.
+
+**Passi**
+- [x] ✅ (16/10/2026) B4-0, analisi e piano.
+  > **Decisioni del coordinatore** (23:05): `staleWarning` → `--lf-warning` nel lotto (fix di contrasto, 2,1:1 in
+  > chiaro); guadagno e perdita al lotto con la designer; C4 sugli 11 grafici che non lo sentono; la sezione «Charts»
+  > dello skill la aggiorno io, nel lotto (T tocca la regola 5 e la riga 59: hunk diversi); test a `test-author`. La 1.3
+  > libera i 25 path; FE2 è sospeso; Y-18 (`candlesLoading` in `GrowthChart`) partirà sopra B4, se il developer lo
+  > approva.
+- [x] ✅ (16/10/2026) B4-1 `roleColors.ts`, `chartTheme.ts`, `themePair.ts`.
+  > **Note implementazione:** `ChartRole` passa da 7 a 14 ruoli, scritti uno per riga; i 7 nuovi (`surface-neutral`,
+  > `text-muted`, `border-subtle`, `border-raised`, `border-input`, `on-status`, `warning`) hanno i ripieghi presi dal
+  > risolutore del gate. `chartNeutrals(dark, scope)` restituisce i gruppi della tabella del piano; i valori traslucidi
+  > passano da `toRgba` (`rgba()`, letto da zrender e dall'HTML dei tooltip). Escono dalle tabelle `CHART_NEUTRALS`,
+  > `SEMI_DONUT_COLORS`, `CORRELATION_COLORS`, `GROWTH_CHART_COLORS`, `LOT_CHART_COLORS` e le voci neutre delle altre;
+  > `CHART_TOOLTIP_COLORS` tiene solo `candlestickBox.seriesFallback`. `GEO_MAP_COLORS.land` resta, col motivo nel
+  > commento. Il commento di testa di `chartTheme.ts` e quello di `themePair.ts` dicono dove sono andati i neutri.
+- [x] ✅ (16/10/2026) B4-2 Gli helper condivisi.
+  > **Note implementazione:** `buildTooltipTheme`, `buildGridColors` e `getChartColors` leggono `chartNeutrals`, con
+  > uno `scope` facoltativo in coda; `buildSecondaryYAxes`, `buildSignalReferencePrimitives`, `buildScatterOption` e la
+  > serie di riferimento della crescita leggono il loro gruppo. **`buildStaleTooltipHtml` prende il colore come terzo
+  > parametro**, come `buildTooltipHeader(date, textColor)`: un helper puro non legge il tema. Le sue 5 chiamate in
+  > `priceChartHelpers.test.ts` vanno aggiornate: terza riparazione per `test-author`.
+- [x] ✅ (16/10/2026) B4-3 I componenti, coi 5 predefiniti e C4.
+  > **Note implementazione** (22:30–22:50). Le letture meccaniche (`themed(TABELLA.voce, dark)` →
+  > `neutrals.gruppo.voce`) le ha riscritte uno script (`files/dv_b4_rewrite.py` della sessione), 114 letture in 15
+  > componenti, col conteggio uguale alla tabella dell'analisi. Il `const neutrals = chartNeutrals(dark, contenitore)`
+  > l'ho messo a mano, dove il disegno ha il suo tema e il suo elemento:
+  > - in testa alla funzione che costruisce l'opzione (`LineChart`, `PriceChartFull`, `CandlestickChart`,
+  >   `AllocationPieChart`, `SemiDonutChart`, `GeographyMap`, `AllocationHistoryChart`, `ExposureTreemap`,
+  >   `GrowthChart`, le 4 funzioni di `PerformanceChart`, `ExposureMaps` sul riquadro delle due mappe, `ExposureBars`);
+  > - come `$derived` del componente dove le letture sono sparse o stanno nel markup (i 3 grafici dei lotti, i bottoni
+  >   di stato del Gantt; `CorrelationHeatmap`, accanto ai suoi `roles`), coi grilletti del tema e di C4.
+  > - **I 5 predefiniti:** i tooltip di `CorrelationHeatmap` e `ScatterChart` prendono il riquadro comune; le linee
+  >   del puntatore di `AllocationHistoryChart` e `GrowthChart` `neutrals.axisPointer.line` (resta tratteggiata, come
+  >   il predefinito); l'ombra di `ExposureBars` `neutrals.axisPointer.shadow`.
+  > - **C4 sugli 11 grafici:** lo stesso ridisegno del tema dove c'era una funzione di ridisegno; un contatore di
+  >   revisione dove il disegno parte da un `$derived` o da un `$effect` (`ScatterChart`, `ExposureMaps`, i lotti).
+  > - Gli helper condivisi ricevono lo scope dove il componente lo ha (`buildTooltipTheme`, `buildGridColors`,
+  >   `getChartColors`); i grafici dei lotti li chiamano ancora senza, cioè su `<html>`: oggi è lo stesso tema.
+  > - **Skill:** le righe di `chartTheme.ts` e `roleColors.ts` nella tabella dei file, e i due punti della sezione
+  >   «Charts» sui neutri (fuori area, col sì del coordinatore; T tocca altri hunk dello stesso file).
+  > - Controlli: nessun riferimento alle voci tolte nel codice di produzione; ogni file che legge `neutrals` lo
+  >   definisce; nessun import rimasto inutile; i 17 componenti compilano senza avvisi.
+- [x] ✅ (16/10/2026) B4-4 `test-author`: le tre riparazioni e il test nuovo.
+  > **Note implementazione** (22:35–23:00, `test-author`, log in `files/b4-tests/` della sessione).
+  > - `chartTheme.test.ts`: il controllo positivo nomina `LOT_WAC_COLORS.markers.buy` e `SIGNAL_COLORS.measure`; il
+  >   test delle funzioni saltate copre anche `chartNeutrals`. Un `describe` nuovo con 4 test: ogni neutro legge il suo
+  >   ruolo con la sua alfa, nei due temi; la tabella attesa e i neutri coincidono nei due sensi (67 foglie, 11 ruoli);
+  >   lo scope arriva al lettore, `null` senza scope; senza lettore i colori sono ben formati e dipendono dal tema.
+  >   Prova del rosso: rompendo la tabella attesa (ruolo sbagliato, alfa sbagliata, riga in più, riga mancante) due test
+  >   vanno rossi e nominano i 4 difetti; il file è tornato identico (stesso md5).
+  > - `chartCoreHelpers.test.ts`: solo l'import e la riga di `pnlReference`.
+  > - `priceChartHelpers.test.ts`: il colore come terzo argomento in ogni chiamata, più un test (ogni riga di avviso
+  >   porta il colore del chiamante).
+  > - Esiti: `chartTheme` 10/10, `priceChartHelpers` 158/158, `chartCoreHelpers` 287/287. La tabella del codice e quella
+  >   del piano coincidono voce per voce.
+  > - **⚠️ Fuori pista: una prova sopra il carico 50.** La prova del rosso è partita a 60,12: il carico era salito da 38
+  >   dopo la corsa precedente, e il ciclo d'attesa mancava. Le altre corse sono partite sotto 50.
+  > - **Tre osservazioni di `test-author`, verificate:**
+  >   - quattro helper puri leggono i ruoli senza scope, cioè su `<html>`: `buildSecondaryYAxes`,
+  >     `buildSignalReferencePrimitives`, `buildScatterOption`, `buildGrowthFullSeries` (come già `growthBrokerColor`,
+  >     TD-1b). Oggi nessun grafico sta in un sottoalbero a tema forzato, e il Lab cambia le regole `--lf-*` del foglio
+  >     di stile stesso (`engine/stylesheets.ts`), quindi anche su `<html>` le vede: nessun effetto. Resta annotato;
+  >   - `toRgba` sostituisce l'alfa del ruolo invece di moltiplicarla: tutti i ruoli letti sono opachi, e il gate di
+  >     parità di `roleColors.test.ts` diventa rosso se uno smette di esserlo;
+  >   - nessun test DOM di `chartNeutrals` con uno scope vero: delega a `chartRoles`, che `roleColors.dom.test.ts`
+  >     copre.
+  > - **Riparazione aggiunta, `ScatterChart.test.ts`** (dopo il rosso delle prove leggere, B4-5): il test «hands ECharts
+  >   exactly today's option» fissava il tooltip senza riquadro; ora lo aspetta col riquadro comune, letto da
+  >   `buildTooltipTheme` (nessun esadecimale). Due test nuovi: in scuro il riquadro è quello scuro, diverso dal chiaro;
+  >   il segnale del Lab (`notifyChartColorsChange`) ridisegna col ruolo della card cambiato. `test-author` non l'ha
+  >   lanciato: lo lancio io nel passaggio a carico controllato.
+  >   - Osservazione di `test-author`, verificata: con un solo punto e nessun `borderColor`, ECharts 6 dava al bordo
+  >     del tooltip il colore del punto; col riquadro comune il bordo è il neutro di tutti i tooltip. Va alla designer
+  >     (DV-10).
+- [x] ✅ (17/10/2026) B4-5 Prove leggere, checkpoint.
+  > **Note implementazione** (16/10 23:04 – 17/10 00:18, una cosa alla volta sotto `nice`, ognuna partita col carico
+  > sotto 50; script `files/dv_b4_light.sh` della sessione, log in `files/b4-light/`).
+  > - Prettier, compilatore (17 componenti, 0 avvisi), `--check` del ratchet (nessuna classe toccata), campi nativi (0
+  >   su 415 file), `git diff --check`: puliti.
+  > - **Vitest, 49 file** (i 6 gate e i 43 test che importano un modulo toccato): 1.959 test, 47 file verdi al primo
+  >   passaggio. Gate: `themeRoles` 80, `themeTokens` 21, `themeComponentTokens` 18, `themeModeReads` 24,
+  >   `htmlInterpolation` 26, `htmlSink` 7. Grafici, fra gli altri: `chartCoreHelpers` 287, `GrowthChart` 166,
+  >   `priceChartHelpers` 158, `lotComparisonChartHelpers` 162, `chartCategories` 95, `echartsTooltipHelpers` 47,
+  >   `AllocationHistoryChart` 38, `PriceChartFull` 36, `AllocationPieChart` 23, `PerformanceChart` 17, `ExposureBars`
+  >   12, `CorrelationHeatmap` 6, `chartTheme` 10, `roleColors.dom` 11.
+  > - **⚠️ Fuori pista, due rossi, tutti e due colpa del lotto e riparati da `test-author`:**
+  >   - `ScatterChart.test.ts`, 1 su 14: il test fissava l'opzione di oggi chiave per chiave, cioè il tooltip senza il
+  >     riquadro comune. Ripetuto dopo la riparazione: 16/16.
+  >   - `roleColors.test.ts`, 1 su 40: con 14 ruoli l'unione `ChartRole` supera la `printWidth` (300) e Prettier la
+  >     scrive un membro per riga dopo un `|` iniziale; il raschietto del gate (`split('|')`) leggeva il primo membro
+  >     vuoto. Il raschietto ora accetta un `|` iniziale e segnala ancora ogni membro illeggibile, con un controllo
+  >     positivo. Ripetuto: 41/41.
+  > - **⚠️ Fuori pista: `front check` rosso, 27 errori in 7 file di `features/backup/**`,** nessuno dei miei: il client
+  >   API generato era quello del mio `api sync` di W6-d, più vecchio della base (mancavano gli endpoint e i campi del
+  >   ripristino). `api sync` (esporta l'OpenAPI dentro il processo, nessun server; 0 file tracciati cambiati), poi
+  >   `front check`: 0 errori, 0 avvisi.
+  > - Lo script delle prove aveva un difetto: la variabile del ciclo d'attesa sovrascriveva il contatore dei file,
+  >   quindi le etichette `#NN` del riassunto sono sbagliate (l'ordine e i nomi no). Corretto per la prossima volta.
+- [x] ✅ (17/10/2026) B4-6 Slot pesante al via del coordinatore.
+  > **Note implementazione.** Commit `38e17c2a5` del coordinatore (00:19), base merge `f35fd9026` con la punta
+  > `3e5336a0a` (T: tabelle, i 23, lo skill, unito da solo coi miei hunk; AF: file e media); gate del coordinatore sul
+  > ramo unito 119/119. Via alle 00:40; slot dalle 00:40:41 alle 01:26:28, corsia 6156 e `/tmp/librefolio-r2-dv`, taglio
+  > alle 01:45 (galleria di G alle 02:01), carico da 38 a 68. Script e log in `files/b4-slot/` della sessione; i passi
+  > lunghi in testa, così dopo il taglio potevano partire solo quelli corti.
+  >
+  > | Passo | Esito | Tempo |
+  > |---|---|---|
+  > | `api sync` | verde, 0 file tracciati cambiati | 24 s |
+  > | `front-utility core-unit` | 195 file, 7.618 test | 104 s |
+  > | `front-utility component-unit` | 166 file, 4.373 test | 356 s |
+  > | E2E `front-portfolio dashboard` | 27 passed | 576 s, col build della base nuova (281 s) |
+  > | E2E `front-asset asset-detail` | 35 passed | 313 s |
+  > | E2E `front-portfolio risk-lab` | 44 passed | 323 s |
+  > | E2E `front-portfolio risk` | 38 passed | 392 s |
+  > | E2E `front-broker detail` | 38 passed | 302 s |
+  > | E2E `front-fx fx-detail` | 17 passed | 153 s |
+  > | E2E `front-utility pac-allocator-real` | 1 passed | 105 s |
+  > | E2E `front-portfolio allocation-negative-cash` | 4 passed | 97 s |
+  >
+  > - Le E2E a 1 worker, 204 test, nessun tentativo ripetuto. A fine slot la porta 6156 è libera, l'HEAD è
+  >   `f35fd9026` e il worktree non ha file tracciati cambiati.
+  > - La galleria filtrata dei grafici la fa G dopo le 02:00 (fra le 00:00 e le 02:00 non si cattura).
+
+### B4b — I ruoli che leggerà AF, e il ponte sempre in sRGB ✅ (17/10/2026)
+
+Richiesta del coordinatore per AF (17/10 00:20, decisioni alle 00:21 e alle 00:55): il prossimo lotto di AF porta
+sui ruoli `lib/theme/drawnColors.ts`, cioè i colori disegnati su canvas da cheetah-grid e quelli degli SVG dei
+segnaposto, letti con `chartRoles`. `roleColors.ts` ha un solo writer, DV; AF prepara le bozze sul contratto. Commit a
+parte, dopo lo slot di B4: solo `roleColors.ts` e i suoi test; nessun grafico cambia.
+
+- [x] ✅ (17/10/2026) B4b-1 Gli 8 ruoli e la correzione di `resolve()`.
+  > **Note implementazione** (01:26).
+  > - `ChartRole` passa da 14 a 22 ruoli: `--lf-surface-field`, `--lf-surface-hover`, `--lf-focus`, `--lf-selected`,
+  >   `--lf-checked`, `--lf-action`, `--lf-on-action`, `--lf-mark-bg` (`--lf-warning` c'era già, da B4). Gli stand-in
+  >   sono i valori del risolutore del gate. **`--lf-selected` è traslucido** (il verde del fuoco al 12 %,
+  >   `color-mix(in oklab, var(--lf-focus) 12%, transparent)`): il suo stand-in è un `rgba()`.
+  > - **⚠️ Fuori pista: un difetto del ponte, trovato da AF.** In Chromium 149 (quello di Playwright) il `fillStyle`
+  >   di un canvas riporta una `color-mix(in oklab, …)` come `oklab(…)`, anche opaca, e una `in srgb` come
+  >   `color(srgb …)`: `resolve()` la passava così, contro il commento del modulo («`#rrggbb` when opaque, `rgba()`
+  >   when translucent»), e né `parseRgba` né `toRgba` la leggono. Dei 14 ruoli di B4 nessuno è una miscela in nessun
+  >   blocco di `tokens.css` (verificato), quindi B4 non ne soffre; dei 22 solo `--lf-selected`.
+  > - **Correzione** (decisione del coordinatore: in `resolve()`, nello stesso commit; il modo a me): una funzione
+  >   privata `toSrgb` riporta in sRGB quello che il canvas restituisce. Esadecimali e `rgba()` passano come sono;
+  >   `oklab()`, `oklch()` e `color(srgb …)` sono convertiti (OKLab → sRGB con le matrici di Ottosson, come CSS Color 4,
+  >   tagliati alla gamma e arrotondati a 8 bit): `#rrggbb` se opachi, `rgba()` se traslucidi; un'altra notazione torna
+  >   allo stand-in. Scartata la lettura di un pixel 1×1 sopra il nero e il bianco: al 12 % d'alfa sbaglia i canali fino
+  >   a ±4.
+  > - Verifica a mano, in node su una copia: il campione di AF `oklab(0.474452 -0.0824938 0.0265417 / 0.12)` →
+  >   `rgba(35,107,77,0.12)`, cioè `#236b4d` al 12 %; la stessa opaca → `#236b4d`; in `oklch` → `#236b4d`;
+  >   `color(srgb …)`, `oklab(100% 0 0)`, `oklab(0 0 0 / 50%)` giusti; `color(display-p3 …)`, `hsl()` e una `oklab`
+  >   con due componenti → stand-in. 12 casi su 12.
+- [x] ✅ (17/10/2026) B4b-2 `test-author`: il gate di parità impara l'alfa; `PENDING_READERS` con gli 8 ruoli («AF,
+  `lib/theme/drawnColors.ts`»), che diventa rosso quando AF comincia a leggerli (AF ne toglie le righe nel suo lotto);
+  i casi `oklab`/`oklch`/`color(srgb)` nel test jsdom.
+  > **Note implementazione** (01:28–01:37, log in `files/b4-tests/` della sessione; ogni corsa partita col carico
+  > sotto 50, dopo un ciclo d'attesa).
+  > - `roleColors.test.ts`, 60/60 (erano 41): i ruoli opachi come prima; i traslucidi passano da un aiuto puro che
+  >   vuole un `rgba(r,g,b,a)` con le virgole, canali uguali e alfa entro 1e-3; una barriera mostra che `--lf-selected`
+  >   è traslucido nei due temi; un controllo positivo rifiuta un canale sbagliato, un'alfa sbagliata, un esadecimale,
+  >   un `rgb()` senza alfa, un `rgba()` senza virgole. `PENDING_READERS` con gli 8 ruoli; il controllo dei ruoli morti
+  >   accetta un ruolo letto o in attesa; un test nuovo diventa rosso per un nome che non è in `ChartRole` e per un
+  >   ruolo in attesa che la produzione legge già (prova del rosso: con `--lf-warning` in elenco, «remove --lf-warning
+  >   from PENDING_READERS: production code reads it now»; file tornato identico, stesso md5).
+  > - `roleColors.dom.test.ts`, 21/21 (erano 11): il campione di AF (`oklab(… / 0.12)` → `rgba(35,107,77,0.12)`, letto
+  >   da `parseRgba`), i 6 valori convertiti, e `color(display-p3 …)`, `hsl()` e una `oklab` con due componenti allo
+  >   stand-in, con la barriera che il canvas li ha riportati davvero.
+  > - **Tre osservazioni di `test-author`:**
+  >   - il passaggio di consegne vede solo le chiamate letterali `.color('--lf-…')`: AF deve leggere i ruoli così, come
+  >     `chartNeutrals`, o le righe di `PENDING_READERS` resterebbero per sempre;
+  >   - `lab()`, `lch()`, `color(display-p3 …)` e `color(srgb-linear …)` vanno allo stand-in senza segnale: oggi nessun
+  >     effetto, perché `tokens.css` mescola solo `in oklab`. Annotato in DV-10;
+  >   - zrender legge `rgba()` dividendo alle virgole, e disegna nero un `rgba()` senza virgole: lo stand-in le ha, e
+  >     anche quel che `toSrgb` produce (`toRgba`).
+- [x] ✅ (17/10/2026) B4b-3 Prove leggere sotto 50, checkpoint.
+  > **Note implementazione** (01:40–01:48, ognuna partita col carico sotto 50, sotto `nice`; script
+  > `files/dv_b4b_light.sh` della sessione, log in `files/b4b-light/`).
+  > - Prettier (i 4 file), `--check` del ratchet, `git diff --check`: puliti.
+  > - Vitest, 16 file e 765 test: i gate `themeRoles` 80 e `themeTokens` 21, e ogni test che importa `chartTheme` o
+  >   `roleColors`: `chartCoreHelpers` 287, `chartCategories` 95, `roleColors` 60, `allocationRings` 41,
+  >   `AllocationHistoryChart` 38, `exposureBarColours` 24, `AllocationPieChart` 23, `allocationHierarchy` 23,
+  >   `roleColors.dom` 21, `ScatterChart` 16, `ExposureBars` 12, `chartTheme` 10, `SemiDonutChart` 8,
+  >   `CorrelationHeatmap` 6.
+  > - **⚠️ Fuori pista: `front check` con 1 errore di tipo,** che Vitest non vede: `INJECTED_COLOURS` di
+  >   `chartTheme.test.ts`, un `Record<ChartRole, string>` completo, aveva i 14 ruoli di B4. `test-author` gli ha dato
+  >   gli 8 nuovi (`chartTheme` ripetuto, 10/10); di nuovo `front check`: 0 errori, 0 avvisi.
+  > - **Y-22/23 della 1.3** (due test del layout con molti `vi.mock`, sulla punta): nessuno finge un modulo dei grafici
+  >   o del tema, e il layout `(app)` non li importa; nessun test, nel worktree o sulla punta, finge `chartTheme`,
+  >   `roleColors` o gli helper dei grafici. Gli export nuovi non possono mancare sotto un mock.
+
 ## Definizione di fatto
 
 - **Un colore fisso per chiave:** ogni chiave ha un colore per tema, uguale in torta e storico, in dashboard, broker

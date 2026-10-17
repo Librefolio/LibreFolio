@@ -605,22 +605,23 @@ test.describe('Avatar - Profile Settings', () => {
 // Suite 6: Dark Mode - Image Crop Components
 // =============================================================================
 test.describe('Dark Mode - Image Crop Components', () => {
+    // The resolved theme is a class token of <html>: app.html sets it before first paint, themeStore.applyTheme() on a switch.
+    const HTML_DARK = /(?:^|\s)dark(?:\s|$)/;
+
     test.beforeEach(async ({page}) => {
+        // Login applies the user's server-side theme (light, dark or auto): the starting theme is read below, not assumed.
         await login(page, TEST_USER);
-        // Enable dark mode via settings
         await navigateTo(page, '/settings');
+        // The header mounts after the auth check and the bootstrap, later than navigateTo's hydration barrier.
         const themeToggle = page.getByTestId('theme-toggle');
-        if (await themeToggle.isVisible().catch(() => false)) {
-            // Check if already dark
-            const isDark = await page
-                .locator('html.dark, body.dark, [class*="dark"]')
-                .first()
-                .isVisible()
-                .catch(() => false);
-            if (!isDark) {
-                await themeToggle.click();
-            }
+        await expect(themeToggle).toBeVisible({timeout: 10_000});
+        const html = page.locator('html');
+        if (!HTML_DARK.test((await html.getAttribute('class')) ?? '')) {
+            await themeToggle.click();
         }
+        // The state every test below depends on. The toggle keeps it in this context's localStorage only (nothing to
+        // restore server-side), and app.html re-applies it on every later page load.
+        await expect(html, 'setup: the app is in the dark theme').toHaveClass(HTML_DARK);
     });
 
     test('F1: ImageEditModal renders in dark mode', async ({page}) => {
@@ -633,18 +634,8 @@ test.describe('Dark Mode - Image Crop Components', () => {
 
         // Modal should be visible
         await expect(page.getByTestId('image-edit-modal')).toBeVisible();
-        // Dark mode class should be active on html or body
-        const hasDark =
-            (await page
-                .locator('html.dark')
-                .isVisible()
-                .catch(() => false)) ||
-            (await page
-                .locator('[class*="dark"]')
-                .first()
-                .isVisible()
-                .catch(() => false));
-        expect(hasDark).toBeTruthy();
+        // Still dark after the navigation to /files and the upload, with the modal on screen.
+        await expect(page.locator('html'), 'the dark theme survives the navigation and the upload').toHaveClass(HTML_DARK);
     });
 
     test('F2: AssetPickerModal renders in dark mode', async ({page}) => {

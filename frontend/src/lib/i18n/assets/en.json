@@ -281,7 +281,8 @@
       "notTested": "Not tested",
       "totalTime": "Total",
       "copyErrorDetail": "Copy error detail",
-      "points": "{count, plural, one {{n} point} other {{n} points}}"
+      "points": "{count, plural, one {{n} point} other {{n} points}}",
+      "scopeNote": "The test reads only the last few days: a new asset gets its whole price history when it is created."
     },
     "identifiers": {
       "askProvider": "Ask Provider",
@@ -327,7 +328,20 @@
       "timeout": "Search timed out. Please try again.",
       "rankHint": "Web search rank (metasearch over several engines) — the first result is the most likely match",
       "notConfigured": "{provider} must be configured before it can search",
-      "crownLegend": "👑 the fund's own currency"
+      "crownLegend": "👑 the fund's own currency",
+      "premiumBadge": "Premium",
+      "premiumEmpty": "No results from the premium sources.",
+      "communitySection": "Non-premium sources (community) · {count, plural, one {# result} other {# results}}",
+      "communityWarning": "Third-party sources: LibreFolio does not vouch for their prices or data. Choosing one applies to this asset only.",
+      "reportQuestion": "Can't find it?",
+      "reportAction": "Let us know",
+      "reportVia": {
+        "mailto": "Opens your email app with the details of this search",
+        "page": "Opens the support page and copies the details of this search, to paste there",
+        "github": "Opens a public GitHub issue with the details of this search: review it before sending it"
+      },
+      "reportCopied": "Search details copied: paste them into the support page.",
+      "reportCopyFailed": "Could not copy the search details: describe your search on the support page."
     },
     "comparison": {
       "title": "Provider Data Comparison",
@@ -375,10 +389,17 @@
     "typeSelect": {
       "searchPlaceholder": "Search types",
       "noMatches": "No matching types"
+    },
+    "dataEditor": {
+      "saved": "Asset data: {details}",
+      "pricesSaved": "{count, plural, one {# price saved} other {# prices saved}}",
+      "pricesDeleted": "{count, plural, one {# price deleted} other {# prices deleted}}",
+      "pricesSkipped": "{count, plural, one {# row skipped (invalid)} other {# rows skipped (invalid)}}",
+      "eventsSaved": "{count, plural, one {# event saved} other {# events saved}}"
     }
   },
   "events": {
-    "deleteSuccess": "{n} event(s) deleted",
+    "deleteSuccess": "{n, plural, one {# event deleted} other {# events deleted}}",
     "fxBannerContext": "for dividend/cash events",
     "exists": {
       "title": "This event already exists",

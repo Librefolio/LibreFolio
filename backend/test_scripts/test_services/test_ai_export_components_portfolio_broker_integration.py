@@ -116,7 +116,7 @@ from backend.app.services.ai_export.dependencies import (
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.signal_service import SignalExecutionContext, SignalService
+from backend.app.services.signals.service import SignalExecutionContext, SignalService
 
 CURRENCY = "USD"
 

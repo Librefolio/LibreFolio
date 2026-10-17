@@ -13,8 +13,7 @@ import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS}
 import {toRgba} from '$lib/theme/colorAlpha';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
-import {themed} from '$lib/theme/themePair';
-import {CHART_NEUTRALS} from '$lib/theme/chartTheme';
+import {chartNeutrals} from '$lib/theme/chartTheme';
 
 // =============================================================================
 // Types
@@ -47,13 +46,15 @@ export interface ConfigurableAxisDescriptor {
 // Color palette for dark/light mode
 // =============================================================================
 
-export function getChartColors(dark: boolean): ChartColors {
+/** The price charts' colours: gain and loss, and the axes on their roles (`chartNeutrals().priceAxis`), read on `scope`. */
+export function getChartColors(dark: boolean, scope?: Element | null): ChartColors {
+    const {priceAxis} = chartNeutrals(dark, scope);
     return {
         green: dark ? COLORS.greenDark : COLORS.greenLight,
         red: dark ? COLORS.redDark : COLORS.redLight,
-        axis: themed(CHART_NEUTRALS.priceAxis.line, dark),
-        label: themed(CHART_NEUTRALS.priceAxis.label, dark),
-        gridLine: themed(CHART_NEUTRALS.priceAxis.gridLine, dark),
+        axis: priceAxis.line,
+        label: priceAxis.label,
+        gridLine: priceAxis.gridLine,
     };
 }
 
@@ -230,11 +231,12 @@ export function buildSecondaryYAxes(
     const activeIndexes = [...signalByIndex.keys()].sort((left, right) => left - right);
     const maxIndex = activeIndexes.at(-1) ?? 0;
     const axes: any[] = [];
+    const fallbackColor = chartNeutrals(dark).secondaryAxisFallback;
 
     for (let index = 1; index <= maxIndex; index++) {
         const signal = signalByIndex.get(index);
         const active = signal !== undefined;
-        const color = signal?.color ?? themed(CHART_NEUTRALS.secondaryAxisFallback, dark);
+        const color = signal?.color ?? fallbackColor;
         const label = signal?.axisLabel ?? (index === 1 ? 'RSI' : index === 2 ? 'MACD' : `AXIS ${index}`);
         const settingsKey = signal ? secondaryAxisSettingsKey(signal) : null;
         const scale = signal ? resolveSecondaryAxisScale(signalsByIndex.get(index) ?? [signal], settingsKey ? axisSettings[settingsKey] : undefined) : {min: 0, max: 1, scale: false};

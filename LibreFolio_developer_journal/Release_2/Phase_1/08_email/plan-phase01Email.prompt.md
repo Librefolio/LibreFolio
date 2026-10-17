@@ -3067,3 +3067,1027 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 >   `forgot-password-email`, più `auth` e `admin-users` di A, toccate dagli agganci;
 > - la galleria `settings/email`, con G, che la mette nello stesso giro di B5b e X;
 > - E-4, con l'ok di A.
+
+#### E6.12 — L'ingresso, il fast-forward, la build fuori dallo slot, l'E2E del dominio ed E-4 ✅ (2026-10-16, 21:20–22:06)
+> **E è entrato in `dev_release2`** (21:20): il merge `56759b2c8` porta dentro E4b, E6, E6.8, E4c-H, E6.9 ed E4c
+> (`devWiki/log.md` risolto per unione); il journal è `30c2459e6`. Il coordinatore ha aggiunto le tre righe salvate di
+> E4b al CHANGELOG.
+>
+> **Il CHANGELOG** (domanda del coordinatore, 21:2x): per E6, E6.8 ed E4c-H nessuna riga in più. Ho riletto le righe
+> email del capitolo in dev, e sono tutte ancora vere:
+> - la correzione di `RECIPIENT_REFUSED` sta dentro «Send by email», non ancora rilasciata;
+> - E6.8 tocca solo il finto dei test;
+> - E4c-H non cambia nessuna chiave, e la parte visibile è nella riga di P17 di H;
+> - per E4c, il cambio di sole maiuscole sta nelle righe di P18 di A.
+>
+> **Il fast-forward** (21:2x): il coordinatore ha portato il mio ramo alla punta di dev, **`102fa9ec1`** (l'ingresso, Y12b
+> e i registri), perché l'E2E del dominio controlli dev.
+>
+> **La build fuori dallo slot**, la lezione di E4b.6: `dev.py server --test --build-only`, carico sotto 50,
+> `files/tools/e6_build_e4.sh`. Fatta alle 21:31 in 359 s: frontend, documentazione e cache JS. Allo slot E2E, dopo Z
+> verso le 22:00, restano solo le spec (`files/tools/e6_e2e_slot.sh`).
+>
+> **E-4**, con il via del coordinatore (A non ha il file aperto):
+> - in `api/v1/settings.py`, le quattro righe 137, 165, 241 e 347 passano da `status.HTTP_422_UNPROCESSABLE_ENTITY` a
+>   `status.HTTP_422_UNPROCESSABLE_CONTENT`;
+> - in `backend/` non resta niente, né un filtro d'avviso, né un test che usi il nome vecchio;
+> - il backlog segna E-4 ✅.
+>
+> Prove: `ruff`, `black` e `api settings`.
+>
+> **L'E2E del dominio, come controllo su dev** (slot E2E del coordinatore, dopo Z, 21:47–22:02):
+> `files/tools/e6_e2e_slot.sh`, `--workers 2`, una spec alla volta, sulla punta di dev `102fa9ec1`. Nessuna
+> ricostruzione del frontend.
+>
+> | Spec | Esito |
+> |---|---|
+> | `front-utility email-tab` | 5 ✅ |
+> | `front-utility email-verification` | 5 ✅ |
+> | `front-utility email-send-link` | 4 ✅ |
+> | `front-utility forgot-password-email` | 3 ✅ |
+> | `front-utility auth-links` (di A) | 9 ✅ |
+> | `front-utility auth` (di A) | 34 ✅ |
+> | `front-utility admin-users` (di A) | 10 ✅ |
+> | **Totale** | **70 passati, 0 falliti** |
+>
+> La porta 6188 era libera alle 22:02:32, e l'ho detto subito al coordinatore.
+>
+> **⚠️ Fuori pista: un `.DS_Store` contava come sorgente.** Alle 21:35 il Finder ha creato `frontend/src/.DS_Store`,
+> più nuovo della build delle 21:31. Il controllo del runner (`scripts/cli_base.py:609`) passa tutti i file di
+> `frontend/src` tranne quelli generati, e allo slot avrebbe ricostruito il frontend per niente.
+> - Il file è ignorato da git e non è una sorgente: gli ho spostato indietro l'mtime (`touch -t 202610162130`), senza
+>   toccare il contenuto.
+> - L'ho segnalato al coordinatore: un filtro sui file nascosti nel runner spetta a chi tiene `cli_base.py`.
+>
+> **Le prove di E-4**: lo script si era fermato nell'attesa del carico, dopo la build-only, perché lo slot E2E non
+> condividesse la corsia. Si rifanno dopo lo slot.
+>
+> **Le prove di E-4** (`files/tools/e6_e4_checks.sh`, 22:03–22:06, carico sotto 50):
+> - `ruff` e `black` su `api/v1/settings.py`: puliti ✅;
+> - `api settings`: 98 passati ✅;
+> - nessun avviso con il nome vecchio;
+> - `git diff --check` pulito, porta 6188 libera.
+>
+> **Resta per E6**: lo scatto della galleria `settings/email`, che G mette nello stesso giro di B5b e X. Il dominio email
+> della 1.3 è così chiuso, salvo quello scatto e le decisioni del developer: il pulsante «Confirm», il messaggio
+> dell'email trattenuta, la revisione delle decisioni notturne.
+
+### E-10 — `/verify-email` su un'istanza bloccata (2026-10-16, sera)
+
+**Da dove viene** (la revisione di A7b fatta da H, 21:45, piano 01, punto 5, richiesta non bloccante (1)): su
+un'istanza bloccata, `POST /email/verification/confirm` è pubblico e fuori da `ALLOWED_WHEN_BLOCKED`, quindi
+`refuse_when_blocked` dà a un chiamante anonimo il 401 di `get_current_user`, e a uno con sessione il 423
+`instance_blocked`. A7b tiene le pagine anonime dei link sul 401 invece di mandarle al login (`zodios-client.ts`, non
+ancora in dev). Per `/verify-email`, però, quel 401 finisce nell'errore generico, con un «riprova» inutile.
+
+La richiesta: il 401 come testo del blocco. Il via del coordinatore (22:06): un lotto piccolo.
+
+#### E-10.0 — Analisi e disegno ✅ (2026-10-16, 22:10, base `56ed3587f`)
+> **Lo stato**:
+> - la pagina (`routes/verify-email/+page.svelte`) fa `status = readLinkRefusal(error) ?? 'error'`;
+> - `VerifyEmailCard.svelte` mostra `VERIFY_PAGE_KEYS[status]`, il «riprova» solo per `'error'` e il ritorno al login
+>   per ogni stato tranne `'checking'`;
+> - `readLinkRefusal()` (`verificationApi.ts`) legge solo il 400 `TOKEN_INVALID`.
+>
+> **Il disegno**, senza toccare nessun `.svelte` (quindi senza chiedere l'ok dei colori):
+> - uno stato nuovo, `'blocked'`, in `VerifyPageStatus` e in `VERIFY_PAGE_KEYS` (`emailText.ts`), con la chiave
+>   `email.verification.page.blocked` nei 4 cataloghi email. La card così mostra il testo e il ritorno al login, ma non
+>   il «riprova»;
+> - `readLinkRefusal()` restituisce `'blocked'` per un 401 (su questa rotta pubblica l'unico 401 è quello del blocco,
+>   come dice l'analisi di H) e per il 423 `instance_blocked`, quello di un browser con sessione. Il 423 lo riconosce
+>   `isInstanceBlockedError()` di H (`features/instance/instanceBlock.svelte.ts`), una casa sola, letto con
+>   `refusalBody()` di `emailApi.ts`;
+> - il testo dice che l'istanza è bloccata dal fornitore e che il link per ora non si può controllare. Il link non
+>   viene toccato, perché il blocco ferma la richiesta prima della rotta: si riapre a istanza sbloccata, e se intanto è
+>   scaduto si accede per averne uno nuovo, come per «expired».
+>
+> **Prima di A7b** un 401 manda ancora al login (l'intercettore di oggi). Lo stato `'blocked'` si vede già con il 423, e
+> con il 401 dopo A7b. Dopo A7b il commento di A cambia in «which the page receives», come ha chiesto H.
+>
+> **Prove**: Vitest (`verificationApi`, `emailText`, `VerifyEmailCard`, `routes/verify-email/page`), `i18n check`,
+> `front check`, `prettier`, `mkdocs build`. Nessuna E2E: il 401 arriva alla pagina solo con A7b.
+>
+> **Docs**: in `developer/backend/email.md`, il frontend della verifica e la tabella «Testing»; in `admin/email.en.md`,
+> l'istanza bloccata.
+
+#### E-10.1 — Test, codice, testi e docs ✅ (2026-10-16, 22:12–23:02)
+> **I test, scritti prima** dal `test-author`, in quattro file:
+> - `verificationApi.test.ts`, con VFA-19…22 nuovi:
+>   - VFA-19: ogni 401 è `blocked`, con tutti e due i portatori, AxiosError e ApiError;
+>   - VFA-20: il 423 `instance_blocked` è `blocked`;
+>   - VFA-21: gli altri 423, o il corpo del blocco sotto un altro status, danno `null`;
+>   - VFA-22: il 401 e il 423 passano dal client vero e dai suoi intercettori.
+> - `emailText.test.ts`: ETX-07 con otto stati;
+> - `VerifyEmailCard.test.ts`: `blocked` tra gli STATUSES di VEC-01, 03 e 06, più VEC-08;
+> - `routes/verify-email/page.test.ts`: VEP-11 (401 e 423 portano a `blocked`, senza riprova né navigazione) e VEP-12
+>   (dopo un errore di rete, il riprova incontra il blocco).
+>
+> Rossi attesi: 16 casi VFA, ETX-07, VEC-01/08 sul testo, e VEP-11/12.
+>
+> **Il codice**, solo `.ts`:
+> - `verificationApi.ts`: `readLinkRefusal()` dà `blocked` per un 401 e per il 423 di `isInstanceBlockedError()` di H;
+> - `emailText.ts`: lo stato `blocked` e la sua chiave.
+>
+> Nessun `.svelte` toccato.
+>
+> **Il testo** `email.verification.page.blocked` nelle 4 lingue: «This instance is blocked by its hosting provider, so
+> the link cannot be checked now. Open it again once the instance is unblocked; if the link has expired by then, sign
+> in to get a new one.»
+>
+> **Docs**:
+> - `developer/backend/email.md`: `readLinkRefusal()`, gli stati, la pagina, e nella tabella «Testing» VFA-01…22,
+>   VEC-01…08 e VEP-01…12;
+> - `admin/email.en.md`, nella verifica: un punto sull'istanza bloccata.
+>
+> **⚠️ Fuori pista: un difetto vicino, fuori dal lotto → E-11 nel backlog.**
+> - Lo stesso 401 del blocco arriva a «Send the link again» (`POST /email/verification/resend`, anche lei fuori lista),
+>   e `readResendFailure()` lo legge come `INVALID_CREDENTIALS`.
+> - I due 401 si distinguono solo dal testo di `detail`, e la configurazione pubblica non dice se l'istanza è bloccata.
+>   Le strade toccano H (`blocked` in `/system/instance`, oppure un codice nel rifiuto anonimo), quindi resta una
+>   decisione da prendere, non un pezzo di questo lotto.
+>
+> **Prove** (`files/tools/e10_checks.sh`, carico sotto 50):
+>
+> | Prova | Esito |
+> |---|---|
+> | `i18n build` e `i18n check` stretto | 4 789 chiavi ✅ |
+> | Vitest dei quattro file | 448 ✅ |
+> | `prettier` | pulito ✅ |
+> | `front check` | 0/0 ✅ |
+> | `mkdocs build` stretto | 0 ✅ (alle 23:00: il carico tra 70 e 200 l'ha fatta aspettare 25 minuti) |
+> | `check-links` | 97 ✅ |
+> | `git diff --check` | pulito ✅ |
+>
+> **E-10 committato** in tre commit, ed entrato in dev (`476da8470`). E-11 va ad H come proposta: un codice proprio nel
+> rifiuto anonimo del blocco, così il frontend non legge `detail`.
+> - Sulla nota incrociata del coordinatore (riusare `auth.instanceBlocked`, come fa `registrationErrors.ts` di A): quella
+>   chiave non c'è né in dev né nel ramo di A che vedo, quindi è ancora in A7b. E-10 usa la sua chiave,
+>   `email.verification.page.blocked`; dopo A7b si possono unire, se lo si vuole.
+
+### R13-SEC — Revisione di sicurezza dei lotti della sera su auth e dati (2026-10-16, 23:05–)
+> **Il compito del coordinatore** (23:05): una revisione `security-review` in sola lettura, fatta sui diff di
+> `dev_release2`. I lotti:
+> - il ripristino di B: B3 (`22c116679`, caricamento e controllo), B5b (`5f1543e81`, applicato al prossimo avvio) e
+>   B5c (`9137e1ef8`, l'esito con un biglietto monouso);
+> - P18 (`1fdeabaa4`) e A-27 (`cf6b03b8f`) di A;
+> - A7a (`a39b67944`), l'amministratore iniziale.
+>
+> Solo i reperti, con la gravità, al coordinatore, senza correzioni. Se non c'è niente sopra la soglia, lo scrivo qui e
+> basta.
+>
+> **La base**: `dev_release2` a `476da8470`, letto dagli oggetti git. Il mio ramo (`f788cc2eb`) non ha B5b e B5c.
+>
+> **⚠️ Fuori pista: la prima revisione, unica, ha superato il budget** («Request exceeds the model's prompt budget»: 280
+> mila token contro 128 mila), perché i lotti di B portano file di test da quasi 3 000 righe.
+> - Divisa in tre revisioni più strette, in parallelo: B3; B5b e B5c; A (P18, A-27, A7a).
+> - Ognuna legge solo il codice di produzione, a pezzi di al più 250 righe.
+>
+> **B3, caricamento e controllo del ripristino** (`security-review`, 23:07–23:18): **nessun reperto sopra la soglia.**
+> dev era già passato a `a621bf89e`. Nel perimetro è cambiato solo `config/backup.py`, dove il default dei 500 MB del
+> profilo `managed` si è spostato in `ENVIRONMENT_PROFILE_DEFAULTS`, con lo stesso comportamento.
+>
+> Note sotto la soglia:
+> 1. **Disco**: l'archivio spacchettato è limitato solo dallo spazio libero meno 64 MB (`staging.py:356-364`), non da
+>    `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`. I caricamenti contemporanei non si sommano, e ogni controllo finito tiene una
+>    copia per 24 ore: un DoS, fuori perimetro.
+> 2. **I trigger non fidati** del DB caricato girano nel processo del server, senza un limite di tempo, quando i fix
+>    post-migrazione aprono la copia in scrittura (`staging.py:464`, `post_migration/__init__.py:211`). Un CTE
+>    ricorsivo terrebbe `.stage.lock` fino al riavvio, e su `managed` l'istanza resterebbe sveglia. La direzione:
+>    `set_progress_handler` o un sottoprocesso con un limite.
+> 3. **Difesa in profondità**: nessuna connessione alla copia imposta `trusted_schema=OFF` né
+>    `SQLITE_DBCONFIG_DEFENSIVE`. Oggi non si sfrutta: nessuna funzione SQL dell'app, nessun `PickleType`, nessuna
+>    estensione.
+> 4. Il fix dell'autoincremento riesegue SQL di `sqlite_master`, e `_row_counts` cita i nomi senza raddoppiare le
+>    virgolette. Resta tutto dentro la copia dell'attaccante: SQLite carica solo DDL che comincia con `CREATE`, e
+>    `execute` rifiuta una seconda istruzione.
+> 5. **Memoria**: la directory centrale dello zip viene letta prima del limite `MAX_ENTRIES`, e il manifest può
+>    arrivare a 64 MB (DoS).
+> 6. Un descrittore riusato dopo una cancellazione forzata (`restore.py:91-92`), che un attaccante non può provocare.
+> 7. Fuori lotto: i POST senza corpo `/restore/stage/{id}/confirm` e `/restore/restart` contano solo su SameSite=Lax
+>    contro il CSRF.
+>
+> Sani: zip-slip e percorsi, solo `app.db` sotto `sqlite/`, niente link, device o FIFO, i duplicati (maiuscole e NFC
+> compresi), le bombe di decompressione (dimensione e SHA-256 per voce), il DB sempre una copia (integrità prima,
+> alembic in un sottoprocesso), il caricamento autenticato prima di leggere un byte, gli id uuid4 controllati, un
+> controllo alla volta, la pulizia, solo admin, CSRF (CORS chiuso, PUT e DELETE con preflight), nessun dettaglio negli
+> errori, il blocco.
+
+> **B5b e B5c, applicazione e biglietto** (`security-review`, 23:07–23:19): **nessun reperto sopra la soglia.**
+> I file del perimetro sono uguali in `476da8470` e in `a621bf89e`.
+>
+> Note sotto la soglia:
+> - **CSRF su `restart`** da un sottodominio fratello di un dominio condiviso, fuori dalla Public Suffix List: solo con
+>   un ripristino già confermato, impatto basso, e lo stesso schema vale per tutta l'app. `*.fly.dev` è nella lista. La
+>   direzione: un header proprio o il controllo di `Origin` sulle rotte che cambiano lo stato.
+> - **All'applicazione** si ricontrolla solo la struttura della copia, non il contenuto. Servirebbe poter scrivere in
+>   `.restore` (0700, solo l'utente del server).
+> - **Il DB ripristinato è dell'admin che conferma**: i suoi trigger potrebbero annullare `_close_the_way_in`
+>   (`apply.py:772-775`). Ma un admin può già creare un link di reset per ogni account: niente di nuovo.
+> - Corse benigne: cancellazione contro conferma, che fa un rollback sicuro; il biglietto scaduto tolto fuori dal
+>   lock.
+> - `_largest_session_version` vale 0 se il DB vecchio non si legge, e con un orologio tornato indietro la versione
+>   potrebbe coincidere: teorico.
+> - Scadenza e versione si controllano solo alla conferma; DoS, fuori perimetro.
+>
+> Sani: solo `confirm_restore` può innescare l'applicazione; si scambiano solo le quattro cartelle della copia;
+> symlink e permessi; il lock fra processi; il rollback dal giornale; la versione di sessione che rifiuta ogni
+> sessione di prima; ogni link monouso revocato; `secrets/` mai scambiato; il blocco; solo admin; il biglietto
+> (256 bit, SHA-256, confronto a tempo costante, un'ora, legato alla copia, solo in un header, mascherato nel log,
+> solo in memoria nel client); la CLI.
+
+> **A, cioè P18, A-27 e A7a** (`security-review`, 23:07–23:20): **nessun reperto sopra la soglia.** I file del
+> perimetro sono uguali in `476da8470` e in `a621bf89e`.
+>
+> Note sotto la soglia:
+> 1. **MEDIUM, confidenza 5/10 (A7a): un amministratore iniziale disattivato si riattiva con il suo vecchio link di
+>    setup.**
+>    - `complete_admin_setup` rifiuta il link solo se l'account è attivo (`bootstrap_admin_service.py:277`).
+>    - Le altre attivazioni non revocano i link `admin_setup`: il PATCH dell'admin (`user_service.py:351-354`),
+>      `user activate` (`:403-406`) e `user reset` (`:286`).
+>    - Lo scenario: l'admin in attesa viene attivato in un altro modo e poi disattivato entro le 72 ore. Chi ha il
+>      link, anche chi ha letto il log, lo riattiva con una password sua e da amministratore.
+>    - `pending_admin_filter` lo considera ancora «in attesa», quindi un token nuovo o `setup-link` lo riarmano.
+>    - La direzione: revocare `ADMIN_SETUP` a ogni attivazione o password impostata.
+> 2. **LOW, 5/10 (A7a)**: cambiare l'indirizzo dell'admin dalla variabile (`_follow_variables`, `:148-153`) non revoca il
+>    link già mandato al vecchio indirizzo, che resta valido per 72 ore.
+> 3. Il setup revoca solo i link `admin_setup`, non i `password_reset` vivi; su un account inattivo può crearli solo un
+>    admin o la CLI.
+> 4. **P18**: il cambio di sole maiuscole, che non chiede la password, scrive l'indirizzo letto all'accesso. Una
+>    richiesta in volo con un cookie che sta per chiudersi può riportare l'indirizzo vecchio sopra un cambio vero
+>    (aggiornamento perso). Non dà niente senza la vecchia casella. La direzione: un UPDATE condizionato.
+> 5. **`end_sessions`** incrementa una copia in memoria (`user_service.py:89`): due incrementi contemporanei ne fanno
+>    uno, e un cookie emesso nel mezzo sopravvive. La finestra è sotto il secondo. La direzione: l'incremento in SQL.
+> 6. **Nel mio dominio**, il «password dimenticata» (`email/flows.py:251→293`) manda il link all'indirizzo letto prima
+>    di creare il link: se un cambio d'indirizzo si chiude in quei millisecondi, il link va alla casella vecchia. Con 3
+>    all'ora, teorico.
+> 7. Mentre un admin aspetta, le variabili si applicano anche con altri account, contro la docstring
+>    (`bootstrap_admin_service.py:188-202`); può farlo solo il pannello o la CLI.
+> 8. Il token della variabile ha un minimo di lunghezza, non di entropia, e `/auth/setup` non ha un limite di
+>    frequenza: in pratica non conta, perché il token è del pannello e quelli generati sono di 256 bit.
+>
+> Sani:
+> - P18: una regola sola di piegatura (`same_email`, `lower()` delle ricerche, l'indice, `_FOLD` della migrazione), le
+>   corse che finiscono in un `IntegrityError`, la migrazione che si ferma senza fondere niente;
+> - A-27: completo su tutti i percorsi, con il consumo condizionato;
+> - A7a: i token, `/auth/setup` (prima le regole della password, poi le sessioni chiuse e il cookie nuovo), nessuna
+>   finestra per una registrazione pubblica, nessuna divulgazione, nessun riarmo di un admin attivo.
+>
+> **Esito della revisione**: in nessuno dei tre perimetri c'è un reperto sopra la soglia. Come chiesto dal
+> coordinatore, è scritto qui. Al coordinatore mando solo le note che chiedono un'azione (1, 2 e 5 per A, la 2 di B3
+> per B), come per la nota 3 di E6.9 che è diventata A-27.
+
+### R13-SEC2 — Revisione di sicurezza del resto di `ebe9eb346..dev_release2` (2026-10-16, 23:37 – 17/10, 00:05)
+> **Il compito del coordinatore** (23:3x): una revisione `security-review` in sola lettura, fatta sui diff, di ciò che è
+> entrato dall'ultimo push, fuori dai tre perimetri di R13-SEC. Senza correzioni; i reperti con gravità e confidenza a
+> lui; se non c'è niente, una riga qui. I lotti: C-97a/`RealDecimal` di W e il suo fix del costo automatico (input,
+> limiti, rifiuti); W-B53 (forkserver e precaricamento del pool BRIM); X-R28 (chiave della cache), C-66 e P20 (`mailto:`
+> in `LIBREFOLIO_SUPPORT_URL`) di X; H-21 e H-23 (runner, priorità bassa); J-27 (`ledger_totals`).
+>
+> **Mappa** (294 commit non di merge nell'intervallo):
+> - C-97a `5c4426e75` (= `bab52635d`, la stessa patch due volte) e D6 `0c3275057` (= `761786c9e`);
+> - il «fix del costo automatico» è **W-B30** `949da55f8`: un `null` esplicito toglie il costo manuale, ignorato in modo
+>   Auto (dal piano 04 di W);
+> - W-B53 `193412cdf`, più il cherry-pick `618d7208e` coi conflitti risolti da W: rivisto lo stato finale;
+> - X-R28 `8f3632d45`, C-66 `32c64bbd9`, P20 `62933bf46`, più il contesto CP13 sullo stesso percorso, non ancora rivisto
+>   (`25d4c75c7`, `9c1161ff2`, `7d80a1098`);
+> - H-21 `74b420db8`, H-23 `9541c0667`;
+> - J-27 `7336722ad`, coi suoi chiamanti di B-13 (`c374313c0`, `instance_backup/totals.py`).
+>
+> **Quattro revisioni in parallelo** (la lezione di R13-SEC), solo codice di produzione, a pezzi di al più 250 righe:
+> W-1 (C-97a sulle transazioni, D6, W-B30), W-2 (C-97a su prezzi, eventi e somme), X, e J-27 con W-B53 e H. Durante
+> la revisione dev è passato a `4bf824362`: i file del perimetro sono identici.
+
+> **Reperto 1 — MEDIUM, confidenza 8/10, C-97a (W)**: trovato **da tutte e due** le revisioni di W, ognuna per conto suo.
+> - **La lettura**: `RealDecimal.process_result_value` (`db/real_decimal.py:53-62`) solleva un'eccezione per un REAL salvato
+>   ±inf (`TypeError`: l'esponente `'F'` confrontato con un intero) e per ogni valore da 1e54 in su (`InvalidOperation`:
+>   completa a 6 decimali in un contesto di 60 cifre). Il vecchio `Numeric(18,6)` li leggeva senza errore.
+> - **Il limite**: nessuno ne limita la grandezza. `decimal_limit_issue` (`db/precision.py:157-170`) conta solo i decimali e le
+>   cifre significative: `1E+60` ha 1 cifra e 0 decimali, e passa.
+> - **(a) Transazioni, un utente qualsiasi**:
+>   - crea un suo broker con `allow_cash_overdraft` e `allow_asset_shorting`; con i due flag la validazione dei saldi
+>     esce prima della sua unica rilettura (`balances.py:49-50`);
+>   - salva con `POST /api/v1/transactions/commit` un BUY con quantità `"1E+60"`;
+>   - da lì `GET /api/v1/assets/all` e `/assets/query` danno 500 a **tutti gli utenti** dell'istanza, perché
+>     `assets/crud.py:284-285` legge le quantità di tutti;
+>   - dall'API la riga non si cancella (le cancellazioni la caricano): serve un intervento a mano sul DB;
+>   - lo stesso vale per un EDITOR di un broker condiviso coi due flag, e per un report BRIM preparato e confermato in un
+>     broker così.
+> - **(b) Prezzi correnti**:
+>   - il salvataggio del prezzo corrente (`assets/price_query.py:846-904`) scrive i valori del provider nelle colonne
+>     `RealDecimal` **senza** `truncate_priceHistory` e senza limite (`Decimal(str(item.value))`, `:861`), contro il
+>     punto 2 del contratto;
+>   - un provider che risponde `1e400` (salvato come REAL inf) o un numero di 60 cifre basta: per esempio lo scraper CSS,
+>     che ogni utente può puntare su una pagina sua (cambiare il provider di un asset condiviso è aperto a tutti,
+>     `providers.py:227-231`, già prima);
+>   - un qualsiasi `POST /assets/prices/current` salva la riga di oggi, e ogni lettura di quella riga fallisce per
+>     tutti i possessori: grafici, portafoglio, dashboard, AI Export;
+>   - resta così fino a `DELETE /assets/prices`;
+>   - il revisore l'ha riprodotto con sqlite3 della libreria standard e la stessa logica di lettura.
+> - **La direzione**:
+>   - una lettura che non solleva mai (un valore non finito o troppo grande diventa un errore controllato, o None, nel
+>     log; `quantize` solo se serve, con un contesto abbastanza preciso);
+>   - un limite di grandezza a ogni scrittore: cifre intere ≤ precisione − scala in `decimal_limit_issue`, un float che
+>     deve restare finito, il prezzo corrente attraverso `truncate_priceHistory`, e i `resolved_fields` della promozione.
+
+> **Note sotto la soglia**
+>
+> W, C-97a e W-B30:
+> 1. `1E+1000000` → `decimal.Overflow` in `normalize` (`precision.py:165`); da `1E+48` in su `InvalidOperation` nel
+>    troncamento (`:130`): un 500 al posto del rifiuto 4xx. I prezzi si salvano a blocchi, quindi una parte della
+>    richiesta può essere già scritta.
+> 2. La promozione: `resolved_fields.cost_basis_override` salta `check_decimal_limits` (`transaction_batch_stages.py:116`,
+>    `batch_creates.py:272,291`). Il REAL arrotonda in silenzio, contro «si rifiuta, mai arrotondare», e senza limite di
+>    grandezza (la stessa classe del reperto 1).
+> 3. Sui broker che validano i saldi il valore enorme si ferma solo perché la rilettura si rompe: torna come testo grezzo
+>    `Balance validation error: …InvalidOperation`, non come codice (`transaction_batch_stages.py:311`).
+> 4. `1E-2000000` va a 0 in `normalize`, passa il controllo e si salva come chiusura 0, contro la regola `close > 0`
+>    (`price_store.py:92`, `:208`). Prima di C-97a ogni valore sotto 1e-6 diventava già 0.
+> 5. **La stessa classe, già prima, fra utenti**: un evento con valore `"1E+400"` (`event_store.py:331-356`) e un `volume`
+>    `1E+400` (`price_store.py:27`, `:209`) si salvano come REAL inf e rompono ogni risposta di eventi o prezzi di
+>    quell'asset per tutti. I controlli nuovi sono il posto naturale per il limite.
+> 6. Già prima, la classe di J-27: il serializzatore JSON `format(v, "f")` (`schemas/common.py:47`) scrive per intero un
+>    valore del provider come `1E+50000000`: ~50 MB per ogni risposta di `/prices/current`, che la cache di 2 minuti
+>    riserve.
+> 7. **Voluto, confermato**: ogni utente collegato può scrivere o cancellare i prezzi e gli eventi manuali di qualunque
+>    asset, e cambiarne il provider (gli asset sono globali, `models.py:727`). C-97a non lo cambia; è la domanda D-SEC2-1
+>    qui sotto.
+> 8. Basso, già prima: `resolveValidationMessage.ts:254` mette davanti al messaggio di pydantic un'etichetta non escapata,
+>    che può essere una chiave in più mandata dall'utente. DOMPurify la contiene, e la vede solo lui.
+>
+> X:
+> 9. L'hash dei parametri nella chiave della cache è MD5 tagliato a 32 bit (`assets/core.py:81`, `:143-151`).
+>    - Una collisione costa secondi su una GPU, e la docstring «chiavi uguali, risposte uguali» non regge con
+>      parametri scelti apposta.
+>    - Oggi non dà niente in più: ogni utente cambia già provider e prezzi.
+>    - Diventa MEDIUM il giorno in cui gli asset hanno un proprietario.
+>    - La direzione: SHA-256 intero, o il JSON canonico come chiave.
+> 10. `env_url` accetta le credenziali nell'URL (`config/__init__.py:195`): `https://user:pass@host` uscirebbe com'è
+>     sull'anonimo `GET /system/instance`. Solo l'operatore può farlo. Rifiutare `username` e `password` copre anche
+>     `PUBLIC_URL` e `BILLING_URL`; il log di un valore non valido (`instance_links.py:19-22`, `!r`, una volta) le
+>     scriverebbe nel log dell'operatore.
+> 11. P20 lascia passare `&` e `=` in un `mailto:`, e i domini Unicode tornano in Unicode (omografi, solo via
+>     operatore). I valori http(s) non sono ri-serializzati. Per la UI di P20, non ancora in dev:
+>     - `href={url}`, mai `{@html}`;
+>     - protocollo fra https, http e mailto, altrimenti GitHub;
+>     - `target="_blank" rel="noopener noreferrer"` sugli http(s);
+>     - oggetto e corpo solo come `?` più `encodeURIComponent`;
+>     - niente aggiunto all'URL http(s) dell'operatore.
+>
+> J-27, W-B53, H:
+> 12. **W-B53, disponibilità con la configurazione di default** (difetto, non sicurezza, confidenza 9/10).
+>     - Il precaricamento si imposta anche con il prewarm spento (`brim_parse_pool.py:88`).
+>     - Su 3.13 il primo `run_in_executor` avvia il worker sul thread del loop e aspetta il suo pid
+>       (`popen_forkserver.py:59`), che il forkserver manda solo dopo il precaricamento.
+>     - Il primo parse dopo ogni avvio blocca quindi ogni richiesta per tutto l'import di BRIM e dei 33 plugin: ~4 s a
+>       riposo, 30–50 s sotto carico. Prima quell'import girava dentro il worker.
+>     - Va contro la regola della specifica: «il default lascia invariato il self-hosted».
+>     - **Provato** (00:03, carico 45,7): `files/sec2/wb53_stall.py` con `files/sec2/run_wb53.sh` (libreria standard,
+>       nessun import dell'app, venv del progetto, Python 3.13.16). Un modulo che dorme 3 s all'import:
+>       - senza precaricamento: primo parse 3,14 s, **stallo massimo del loop 0,18 s**;
+>       - col precaricamento e il prewarm spento: primo parse 3,15 s, **stallo massimo del loop 3,14 s**.
+>     - La direzione: il precaricamento solo col prewarm acceso, oppure il primo `submit` fuori dal thread del loop.
+> 13. J-27 e B-13: i totali correnti si leggono fuori dal `try` (`totals.py:127`). Un archivio preparato (un importo REAL
+>     ±Inf, o una somma oltre 60 cifre intere) chiude il controllo con `stage_failed` invece di `unreadable`. Il lock e
+>     la copia si liberano lo stesso; la CLI mostra un traceback. Solo admin: robustezza.
+> 14. H-21: ogni fallimento del controllo del riseme (eccezione, «illeggibile», lock oltre 5 s) lancia
+>     `db populate --force` sul DB della corsia (`_common.py:672-679`, `_backend_api.py:829-838`). Sbaglia verso il
+>     setup distruttivo, ma solo sulla corsia di test validata.
+
+> **Sani, in breve**:
+> - **W:**
+>   - NaN, Inf e sNaN rifiutati da pydantic (422); gli esponenti minuscoli rifiutati;
+>   - ogni scrittura di transazioni passa per `check_decimal_limits`, salvo la promozione (nota 2);
+>   - le divisioni di D6 restano limitate dai plugin;
+>   - i messaggi di rifiuto portano solo costanti;
+>   - W-B30 è dietro l'autorizzazione EDITOR del broker e lascia i costi scritti dal sistema;
+>   - le somme in Python hanno gli stessi filtri.
+> - **X:**
+>   - la chiave di X-R28 è esattamente l'input della chiamata: JSON canonico, una tupla, le impostazioni come impronta
+>     HMAC, nessuna chiave nei log;
+>   - C-66 è solo visualizzazione;
+>   - P20 rifiuta `?`, `#`, `%`, `,`, `;`, `<>`, `"`, `/`, gli spazi e gli schemi pericolosi, e pubblica `mailto:` più
+>     l'indirizzo normalizzato.
+> - **J-27:** limite su ogni input non fidato (regex, 60 cifre per lato); un rifiuto diventa `absent`; il controllo gira
+>   in un thread di fondo.
+> - **W-B53:**
+>   - default spento; un valore non valido diventa spento, con un avviso;
+>   - BRIM è l'unico utente del forkserver, e gli import non hanno effetti collaterali;
+>   - socket privato: cartella 0700, socket 0600;
+>   - il passo viene dopo i controlli di configurazione e non può sollevare.
+> - **H-21 e H-23:** la corsia è fissata e controllata contro la produzione; apertura `mode=ro`; le azioni non dichiarate
+>   sono `write-scoped`.
+
+> **Nell'intervallo ma fuori dalla lista, non rivisti** (al coordinatore, se li vuole):
+> - `77fbc8687` di W, l'elenco dei report senza broker (visibilità);
+> - `7ad5a8849` di W, gli update seguono la tabella dei tipi;
+> - `8f7e086e9`, H-17, il default del limite di caricamento;
+> - `465c27939` di H, l'esito del ripristino su un'istanza bloccata (`instance_block.py`);
+> - `aaff7df04` di X, le icone dei plugin nella scheda Plugin;
+> - `c85b7d8eb`, A-25, il cambio di sole maiuscole senza password (solo frontend, `emailCase.ts`).
+>
+> L'SSRF dello scraper CSS lo copre già F05 di X (piano 03, riga 657).
+
+> **Domanda per il developer** (regola della notte: scritta qui, mandata al coordinatore, e avanti):
+> - **D-SEC2-1**: in un'istanza con più utenti, ognuno può cambiare il provider, i prezzi e gli eventi di un asset che
+>   vedono tutti (nota 7).
+>   - È voluto anche per il profilo managed, dove un'istanza può essere una famiglia o un piccolo team?
+>   - Se no: ci vuole un permesso, admin o proprietario, prima di toccare dati condivisi, e la nota 9 diventa MEDIUM.
+
+> **Esito**: **un reperto sopra la soglia**, il reperto 1 (MEDIUM 8/10, C-97a, di W), mandato al coordinatore con:
+> - per W, le note 1–5 e 12 (con la prova);
+> - per X, le note 9–11;
+> - la 13 per J, la 14 per H;
+> - la domanda D-SEC2-1.
+>
+> Nessuna correzione da parte mia.
+
+### R13-SEC3 — Revisione di sicurezza: la UI di P20, i sei commit rimasti, A7b (2026-10-17, 00:07–)
+> **Il compito del coordinatore** (00:0x), in sola lettura e nel formato di prima:
+> 1. la UI di P20 di X, `2c6fa9cfb`, con le regole della nota 11 di R13-SEC2. Il commit non è ancora in dev: sta sul ramo
+>    di X `e-alfy-x-plugin-asset-e-ricerca`, un commit sopra `b3e2fae02`, e l'ho letto dagli oggetti git senza cambiare
+>    ramo;
+> 2. i sei commit fuori lista di R13-SEC2;
+> 3. A7b, quando entra: lo SHA me lo dà lui.
+>
+> **La base**: il journal è committato (`d0be286e6`) ed entrato in dev; il mio ramo è portato a `6cadaf427`, pulito. dev
+> è a `149157025`.
+>
+> **⚠️ Fuori pista: gli orari di R13-SEC2 erano sbagliati.** Avevo scritto «00:2x» quando non erano ancora le 00:05. Gli
+> orari veri, presi dai file della sessione, sono revisione 23:37–00:05 e prova 00:03; li ho corretti sopra.
+>
+> **Tre revisioni in parallelo** (00:07–00:15), sola lettura, nessuno snippet eseguito (carico 57–67):
+> - la UI di P20;
+> - i quattro commit di backend: W-B32 `77fbc8687`, P6 `7ad5a8849`, H-17 `8f7e086e9` e `465c27939`;
+> - le icone dei plugin `aaff7df04` e A-25 `c85b7d8eb`.
+
+> **UI di P20** (X, `2c6fa9cfb`): **nessun reperto sopra la soglia.** Le sei regole sono rispettate, la 2 con la nota 1.
+> - **Cosa esce**, sempre e solo con un clic:
+>   - l'oggetto, o il titolo GitHub, `LibreFolio: asset not found — <ricerca, al più 80 caratteri>`;
+>   - il corpo: la ricerca; una riga per provider con i soli codici (`N results`, `error <error_code>`, `error`,
+>     `no answer`); valuta, tipo e identificativi non vuoti del modulo; `LibreFolio <versione>, <profilo>, language
+>     <lingua>`.
+> - **Non esce**: utente, email, indirizzo dell'istanza, `support_url`, e soprattutto il testo libero `error` del backend,
+>   dove lo scraper CSS mette l'URL della sua richiesta (`css_scraper/plugin.py:254`).
+> - Nessun `fetch`, `sendBeacon` o `window.open` nuovo.
+>
+> Note sotto la soglia, per X:
+> 1. `assetSearchReport.ts:70-74`: il controllo legge il valore senza base, mentre l'`href` si risolve sulla pagina. Così
+>    `https:host` passa e diventa un link all'istanza stessa. È innocuo, e `env_url` lo rifiuta già; restituire `url.href`
+>    chiude il caso.
+> 2. Sul profilo `managed`, se `support_url` manca, non è valido o `/system/instance` è fallita, si ricade su una issue
+>    GitHub **pubblica**, con `managed`, i codici dei provider, la versione e gli identificativi. L'utente la vede e il
+>    tooltip dice «pubblica». Proposta: niente ricaduta su GitHub quando il profilo è `managed`.
+> 3. `AssetModal.svelte:393-396`: il rapporto porta anche valuta, tipo e identificativi del modulo. In modifica sono quelli
+>    dell'asset esistente (ISIN, ticker, UUID, OTHER). Si vedono nel corpo, ma il commit e la doc dicono «ricerca ed esito
+>    dei provider»: la doc utente (`create-edit.en.md`) dovrebbe elencarli.
+> 4. Un `support_url` http(s) con `user:pass@` ora è un link per tutti gli utenti. Era già pubblico con `/system/instance`
+>    (nota 10 di R13-SEC2, già girata a X); il frontend potrebbe ricadere su GitHub quando `url.username` o `url.password`
+>    ci sono.
+> 5. Minime: `error NOT_CONFIGURED` dice che l'utente non ha configurato quel plugin (nessun valore); nessun limite di
+>    lunghezza sulla ricerca e sul corpo (URL lunghi, nessun effetto sulla sicurezza).
+
+> **I quattro commit di backend**: **nessun reperto sopra la soglia.**
+> - **W-B32** (`77fbc8687`): l'esposizione si restringe.
+>   - Un report senza broker lo vedono solo chi l'ha caricato e gli admin.
+>   - I `broker_ids` chiesti si intersecano coi ruoli di chi chiama.
+>   - Ogni rotta del file passa da `_get_brim_file_with_access`; il parse e la cancellazione chiedono EDITOR.
+> - **P6** (`7ad5a8849`):
+>   - ogni update si confronta con la fotografia della riga presa prima del batch, quindi nessun aggiramento in due passi;
+>   - i controlli leggono la riga fusa, dopo `preload_and_authorize`;
+>   - `cashNonzero` ripete solo il tipo; non si salva niente a metà;
+>   - nota: una riga già fuori dalla tabella dei tipi tiene il suo difetto finché non cambiano cassa, quantità o tipo.
+>     Voluto.
+> - **H-17** (`8f7e086e9`):
+>   - il default self-hosted non cambia (0, cioè nessun limite, come prima); `managed` vale 500 MB;
+>   - un valore vuoto, negativo o illeggibile dà 503.
+>   - Nota per H: `profile_default` (`config/__init__.py:579`) restituisce il valore della tabella con `cast`, senza
+>     controllarne il tipo. Una voce `managed` tolta o messa a `None` vorrebbe dire «nessun limite». Può farlo solo il
+>     codice, e un test fissa i 500.
+> - **`465c27939`**:
+>   - l'elenco dei permessi confronta la funzione della rotta, non il percorso (`instance_block.py:92`);
+>   - l'esito vuole il biglietto (256 bit, solo in un header, `compare_digest`), con lo stesso 404 per ogni rifiuto;
+>   - nessun cambio di stato, salvo la rimozione di un biglietto scaduto.
+>   - Effetto collaterale buono: su un'istanza bloccata un anonimo riceve 404 invece del 401 del blocco, cioè un modo in
+>     meno per capire che è bloccata.
+
+> **Le icone dei plugin e A-25**: **nessun reperto sopra la soglia.**
+> - **Le icone** (`aaff7df04`):
+>   - l'icona è una costante nel sorgente del plugin: un URL di favicon remoto, o `generate_static_url`;
+>   - si mostra come `<img src>`, mai `{@html}`; l'icona della famiglia viene da una mappa statica di lucide;
+>   - nessuna lettura dal disco; sono le stesse costanti che pubblicano già `/assets/provider` e `/fx/providers`.
+>   - **Nota**: aprire Impostazioni › Plugin ora carica da soli i favicon di Borsa Italiana e justETF, quindi quei siti
+>     vedono l'IP di chi visita e sanno che l'istanza esiste.
+>     - `referrerpolicy="no-referrer"` limita il resto.
+>     - Le stesse icone si caricano già altrove, senza politica del referrer (`AssetSearchAutocomplete.svelte:456`).
+>     - La CSP ha `img-src … https:` ed è in sola segnalazione.
+>     - → domanda D-SEC3-1.
+> - **A-25** (`c85b7d8eb`):
+>   - il server decide da solo: `auth.py:389` confronta `request.email` con l'utente letto dal DB;
+>   - ogni cambio che non tocca solo le maiuscole chiede la password e la verifica, e il servizio ricontrolla
+>     (`user_service.py:499`);
+>   - le due pieghe coincidono: solo A–Z, da tutte e due le parti.
+>   - Note:
+>     1. **UX, per A.** Il client confronta le stringhe grezze, il server il valore normalizzato da `EmailStr`. Dove
+>        divergono (spazi, `Nome <indirizzo>`, NFC, IDNA, un indirizzo salvato e mai normalizzato), il server risponde
+>        `CURRENT_PASSWORD_REQUIRED` mentre il campo della password è nascosto. È un vicolo cieco, non un aggiramento.
+>     2. Teorica, P18 (decisione del developer): con la sola sessione si cambiano le maiuscole della parte locale senza
+>        password, e `email_verified_at` resta. Conta solo per un server di posta con la parte locale sensibile alle
+>        maiuscole (l'RFC 5321 lo permette, ma è raro). Nessuna azione.
+
+> **Domanda per il developer** (regola della notte):
+> - **D-SEC3-1**: nel profilo `managed` (UE), la UI deve continuare a caricare da sola le icone di terzi (i favicon di
+>   Borsa Italiana, justETF, Schwab… dai loro siti)?
+>   - Così l'IP di chi visita va a quei siti senza consenso: si pensi alla sentenza del LG München I del 2022 sui Google
+>     Fonts.
+>   - L'alternativa: le copie locali, come già per alcuni plugin con `generate_static_url` (M-7).
+>   - Il caricamento c'era già (e la decisione su Schwab resta); Impostazioni › Plugin (`aaff7df04`) ne aggiunge uno.
+
+> **Stato**: (1) e (2) fatti, (3) A7b aspetta lo SHA. Al coordinatore:
+> - per X, le note 1–4;
+> - per H, `profile_default`;
+> - per A, la UX di A-25;
+> - la domanda D-SEC3-1.
+
+> **Smistamento del coordinatore** (per tracciare dove sono andate le note):
+> - **R13-SEC2** (insieme al commit `d0be286e6`, 00:0x):
+>   - W-B58 (il reperto 1) e W-B59 (il precaricamento) a W, con priorità, prima di C-97b;
+>   - X-R35 e X-R36, con le regole della UI di P20, a X;
+>   - la nota di `totals.py` a B, perché il file è suo;
+>   - D-SEC2-1 fra le domande per il developer.
+> - **R13-SEC3** (00:19):
+>   - X-R37 (le mie quattro note per X), con **N61**: nessuna ricaduta su GitHub con `managed`;
+>   - H-27 (`profile_default`) ad H;
+>   - A-36 (la UX di A-25) ad A;
+>   - D-SEC3-1 fra le domande per il developer.
+>
+> Il piano resta fuori dal commit fino ad A7b (il coordinatore è d'accordo), che arriva con il suo SHA.
+
+> **Punto 3, A7b** (`f99edbf6b` per il codice, `8513677f1` per le docs; in dev `3e5336a0a`; `security-review` in
+> background, 00:25–00:33): **nessun reperto sopra la soglia.**
+>
+> Note:
+> 1. **A-31 chiuso solo in parte: MEDIUM 4/10, solo l'operatore.**
+>    - Il PATCH è chiuso (409 `PENDING_SETUP`, `users.py:190-194`).
+>    - Il `user activate` della CLI (`set_user_active`, `user_service.py:372-413`) non controlla `PENDING_SETUP` e revoca
+>      solo i link di verifica.
+>    - La disattivazione e `reset_password` lasciano vivo `admin_setup`, e `complete_admin_setup` guarda solo
+>      `is_active`.
+>    - Quindi un admin attivato da CLI e poi disattivato entro 72 ore torna in vita con il vecchio link, anche quello
+>      letto nel WARNING del log.
+>    - La direzione: revocare `admin_setup` a ogni attivazione, disattivazione e password impostata, oppure rifiutare
+>      `user activate` come fa il PATCH.
+> 2. **LOW**: `pending_admin_filter` (`registration_service.py:283-290`) conta come «in attesa» anche i link revocati o
+>    scaduti. Un admin disattivato apposta prende il badge «Waiting for setup» e il 409, e il suggerimento manda a
+>    `user setup-link`.
+> 3. **Solo `vite dev`**: `/setup` non è fra i percorsi pubblici di `hooks.server.ts`, quindi il frammento segue il
+>    redirect a `/?redirect=%2Fsetup`. Vale già per le altre pagine dei link; non si raggiunge in produzione.
+>
+> Sani:
+> - il token: letto solo dal frammento, tolto prima della chiamata, `no-referrer`, mai nel log né salvato;
+> - dopo il successo, `goto('/dashboard')` fisso;
+> - `isLinkPage` è un confronto esatto su `pathname`, e il redirect non porta il frammento;
+> - `pending_setup` solo in `AdminUserRead`, dietro `require_admin`;
+> - l'avviso della registrazione aperta non fa chiamate di rete;
+> - nessun `{@html}`; i controlli dei token invariati.
+>
+> **R13-SEC3 chiusa**: in nessuno dei tre punti c'è un reperto sopra la soglia. Le note di A7b vanno al coordinatore
+> (00:3x), con una domanda per E-9: la docstring di `update_profile` (`auth.py:381-382`, file di A) dice ancora «with the
+> new one masked».
+
+### E-9 — I limiti per casella e gli alias
+
+#### E-9.0 — Analisi ✅ (2026-10-17, 00:19–00:30)
+> **Il compito del coordinatore** (00:19), mentre aspetto A7b, nell'ordine analisi nel piano → rossi → codice, con un
+> checkpoint per lotto:
+> - **E-9**: «una chiave normalizzata solo per il budget, mai per l'indirizzo salvato: togliere il `+tag` ovunque, e i
+>   punti solo per i domini che li ignorano (gmail.com/googlemail.com)»;
+> - se un controllo sullo username nelle email è più efficace, glielo mostro qui.
+> - Dopo, **E-11**, quando A7b è entrato.
+> - E-7 ed E-8 restano nel backlog.
+>
+> Base: HEAD `6cadaf427`. Dev è a `3e5336a0a`, con A7b; non tocca i file dell'email.
+
+**Stato reale**
+- **Tre limiti per casella**, tutti con la chiave `strip().casefold()`:
+  - `FORGOT_BY_MAILBOX`, sull'indirizzo dell'account (`flows.py:270`);
+  - `EMAIL_CHANGE_NOTICES_BY_MAILBOX`, sul vecchio indirizzo (`flows.py:336`);
+  - `VERIFICATION_BY_MAILBOX`, sul destinatario (`verification.py:233`).
+
+  Ognuno vale 3 l'ora. I limiti per account (contati sui token nel DB), quelli per client (`client_rate_key` di H) e
+  `FORGOT_BY_IDENTIFIER` restano come sono.
+- **Lo username è testo libero** da 3 a 50 caratteri (`schemas/auth.py:30`), URL compresi. Il saluto
+  `common.greeting`, «Hello $username,», apre le email di reset, verifica, setup dell'admin, prova e avviso di cambio.
+  L'invito usa già `common.greeting_anonymous` («Hello,», «Ciao,», «Bonjour,», «Hola:»), tradotto nelle 4 lingue.
+  `$username` compare solo nel saluto.
+- **L'avviso di cambio** mostra anche `masked_address(new)` = `***@<dominio del nuovo indirizzo>`
+  (`messages.py:191-201`): un dominio che sceglie chi cambia l'indirizzo, e che non riceve niente.
+
+**Chi fa scrivere l'istanza a un indirizzo scelto da lui**
+
+| Email | Chi la provoca | A chi | Testo suo | Limiti di oggi |
+|---|---|---|---|---|
+| Verifica (registrazione, «rispedisci») | Un anonimo (registrazione aperta; con invito, una per invito) | L'indirizzo scritto alla registrazione | Lo username | 10/h per client (/64), 3/h per account, 3/h per casella, 50/h per istanza |
+| Password dimenticata | Un anonimo, per un account attivo: con la verifica spenta e la registrazione aperta, l'indirizzo è uno qualsiasi | L'indirizzo dell'account | Lo username | 10/15 min per client, 3/h per identificativo, 3/h per account, 3/h per casella, istanza |
+| Avviso di cambio | Ogni utente collegato: imposta l'indirizzo della vittima (senza verifica), poi lo cambia | Il vecchio indirizzo | Lo username e il dominio del nuovo indirizzo | 3/h per account, 3/h per casella, istanza |
+
+Gli invii dell'admin, il setup e la prova vengono da soggetti fidati.
+
+**Due abusi, che chiedono due cure diverse**
+- **(A) Inondare una casella sola.** Con `victim+1@…`, `victim+2@…` e i punti di Gmail ogni alias ha il suo budget,
+  quindi in una casella arriva fino al budget dell'istanza (50/h per processo). Lo stesso budget lo perdono gli altri
+  utenti, reset compresi.
+  - **Cura (a), la proposta del coordinatore**: la chiave normalizzata, solo per il budget.
+  - Effetto: al più 3/h per tipo e per casella, cioè 9/h sui tre tipi.
+- **(B) L'istanza come relay di spam.** Il testo di chi attacca (lo username, 50 caratteri, URL compresi) arriva a
+  **tante** caselle diverse, fino al budget dell'istanza. La normalizzazione non lo tocca.
+  - Nel cloud conta di più: le segnalazioni di spam colpiscono la chiave Brevo dell'istanza e il dominio
+    `mail.librefolio.eu`, che tutte le istanze condividono.
+  - **Cura (b), il «controllo sullo username nelle email»**: il saluto senza username, cioè il `greeting_anonymous` che
+    esiste già, nelle tre email che chi non è fidato può indirizzare: reset, verifica e avviso.
+  - Lo username resta dove chi scrive è fidato: il setup dell'admin (l'operatore) e la prova (l'admin a se stesso).
+  - Costo: il saluto perde il nome. Lo username si vede comunque sulle pagine dei link, dopo il clic: reset
+    (`TokenInspectResponse.username`) e verifica (la risposta della conferma, per riempire il login). Nessuna
+    traduzione nuova.
+  - **Validare lo username alla registrazione** sarebbe meno efficace:
+    - è codice di A, una scelta di prodotto, e tocca gli utenti esistenti;
+    - un alfabeto permesso scrive comunque dei domini (`www-pills-com`, o `cheap.pills` con i punti).
+  - Il controllo che funziona è **non mettere lo username nelle email che un estraneo può indirizzare**.
+- **(c) Il resto nell'avviso**: il dominio del nuovo indirizzo esce per intero. È un nome host scelto liberamente, fino a
+  253 caratteri, e i client lo rendono un link.
+  - Opzione: una maschera più stretta solo per l'avviso, per esempio `***@***.com` (solo il TLD).
+  - `masked_address` resta com'è per gli altri usi: i log e il rifiuto `RECIPIENT_REFUSED`.
+  - Con (b)+(c) vale un invariante semplice da provare: **nessuna email che un estraneo può indirizzare porta testo
+    scelto da lui**.
+
+**Proposta**: (a) subito, come chiesto. (b) e (c) cambiano ciò che l'utente vede nelle email: le consiglio tutte e due,
+nello stesso lotto se arriva il via, altrimenti in un lotto a sé, E-9b.
+
+**Disegno di (a)**
+- `delivery.mailbox_budget_key(address) -> str`, nel modulo del budget d'istanza, che `flows` e `verification` importano
+  già:
+  1. `strip().casefold()`;
+  2. divido all'ultima `@`;
+  3. la parte locale si taglia al primo `+`, se resta non vuota;
+  4. `googlemail.com` diventa `gmail.com`;
+  5. per `gmail.com` tolgo tutti i punti della parte locale.
+- La chiave non si salva, non si scrive nel log e non si spedisce: l'email va all'indirizzo salvato com'è, alias
+  compreso.
+- I tre punti di chiamata la usano; commenti e docstring dicono «aliases folded».
+- `FORGOT_BY_IDENTIFIER` resta sul testo scritto: limita chi chiede. È il limite per casella che protegge chi riceve.
+
+**Resti fuori da E-9**, da annotare:
+1. I domini catch-all e gli indirizzi a sottodominio di Fastmail (`x@victim.fastmail.com`): ogni parte locale è una
+   chiave nuova. Un limite per dominio colpirebbe i grandi provider condivisi; resta il budget d'istanza.
+2. Prosciugare il budget d'istanza con tante caselle diverse da tanti IP blocca i reset di tutti: un DoS che la
+   registrazione aperta espone. Le cure non sono di E: captcha o proof-of-work, limiti alla registrazione (A8/H).
+   → Nota per il coordinatore.
+3. Con N worker i budget sono N volte; è già documentato.
+
+**Rossi** (`test-author`, solo nei file esistenti, nessuna riga nuova nel catalogo)
+
+Per (a):
+- `services email-delivery`, da EMD-050: la tabella della chiave:
+  - i punti di Gmail, e `googlemail.com`;
+  - il `+tag` su ogni dominio, e la base vuota;
+  - i punti che restano fuori da Gmail;
+  - `casefold`, e un dominio IDN intatto.
+- `services email-flows`, da EMF-060: per «password dimenticata» e per l'avviso:
+  - tre alias passano, il quarto è soppresso in silenzio, con la sua riga `info`;
+  - l'email va all'indirizzo salvato con l'alias (`rcpt_tos`);
+  - due caselle vere diverse non condividono il budget.
+- `services email-verification`, da EMV-049: lo stesso per la verifica, dove il quarto riceve
+  `EmailRateLimitedError`.
+
+Se arriva il via a (b) e (c):
+- `services email-messages`, da EMM-039, e le attese di EMM-035:
+  - reset, verifica e avviso salutano senza username, e non contengono mai uno username preparato, né nell'oggetto né
+    nel testo né nell'HTML;
+  - nell'avviso il dominio preparato non compare;
+  - setup e prova tengono lo username.
+
+**Prove**
+- `services email-delivery`, `services email-flows`, `services email-verification`;
+- `services email-messages` con (b) e (c);
+- `api email`, `api email-verification`, `api email-change-notice`;
+- `ruff` e `black`; `mkdocs build` stretto e `check-links`.
+
+**Docs** (`docs-writer`)
+- `admin/email.en.md`: le righe «in capitals or not» (:397, :498, :526) e l'elenco di sicurezza (:684-690);
+- `developer/backend/email.md`: le chiavi «stripped and case-folded» (:595, :634, :768, :848), la tabella Testing e il
+  limite noto E-9 (:1332);
+- con (b) e (c), anche la tabella dei messaggi (:300-305) e la descrizione dell'avviso (:636).
+
+**Il resto**
+- devWiki `domains/email.md`: E-9 chiuso.
+- Backlog: E-9 ✅, e una riga per il resto 1.
+- CHANGELOG: il testo va al coordinatore.
+
+**Peso**: (a) piccolo; (b) e (c) piccoli, il grosso è nei test dei messaggi.
+
+#### E-9.1 — Decisione N62 e rossi ⏳ (2026-10-17, 00:31–)
+> **Il via del coordinatore** (00:3x): **(a), (b) e (c) nello stesso lotto**, decisione notturna **N62**, da rivedere
+> col developer.
+> - Le ragioni sono sue: il saluto anonimo esiste già nelle 4 lingue; la maschera vale solo per l'avviso; l'invariante
+>   protegge la chiave Brevo e `mail.librefolio.eu`, condivisi dal cloud.
+> - CHANGELOG: una riga 🔒 per tutto il lotto, che dice cosa cambia per chi legge e mai come si sfrutta.
+> - Catch-all e Fastmail vanno nel backlog come riga bassa.
+> - Il DoS sul budget d'istanza passa al developer, come domanda per il cloud.
+>
+> **⚠️ Fuori pista: la mia proposta (c) era sbagliata.** Senza un controllo DNS anche l'ultima etichetta è testo libero
+> (`x@y.buy-cheap-pills-now`, fino a 63 caratteri), quindi la maschera al TLD rompeva l'invariante. La correzione,
+> detta al coordinatore, dentro N62:
+> - **l'avviso non mostra più il nuovo indirizzo**, in nessuna forma;
+> - `intro` perde `$address` nelle 4 lingue (una frase ciascuna, scritta da me);
+> - `masked_address` sparisce: l'avviso era il suo unico uso. La redazione dei rifiuti SMTP in `delivery.py:158`
+>   resta.
+>
+> **Il contratto della cura**
+> - (a) `delivery.mailbox_budget_key()` (E-9.0) nei tre punti di chiamata.
+> - (b) `build_password_reset` e `build_verification` perdono `username`; salutano con `greeting_anonymous`.
+> - (c) `build_email_changed` perde `username` e `new_address`; `masked_address` viene tolto.
+> - `build_admin_setup` e `build_test_message` restano col nome. Il loro mittente è fidato: l'operatore, o l'admin
+>   che scrive a se stesso.
+> - Le chiamate da adeguare: `flows.py:181` (il reset spedito dall'admin), `:286` (il «dimenticata»), `:343`
+>   (l'avviso), `verification.py:264`.
+> - Con le firme nuove, i tre costruttori **non possono nemmeno ricevere** testo di un estraneo.
+>
+> **Rossi**: `test-author` in background (00:30, prima solo (a), poi esteso a (b) e (c)).
+> - (a): EMD-050…, EMF-060…, EMV-049…;
+> - (b) e (c): EMM-039…, più le riscritture di EMM-035…038 e delle asserzioni ECN e simili che fissano lo username o
+>   l'indirizzo mascherato.
+>
+> Li faccio girare io, a carico sotto 50.
+>
+> **Rossi scritti** (`test-author`, 00:31–00:56): sette file. L'agente ha eseguito solo `py_compile`, poi `ruff` e
+> `black` puliti a carico 40.
+> - **(a)**:
+>   - EMD-050 (15 righe) ed EMD-051;
+>   - EMF-060 («dimenticata») ed EMF-061 (avviso), che contano sotto `zqvictim@gmail.com`; EMF-062 è una guardia (due
+>     caselle vere di outlook);
+>   - EMV-049 (alias Gmail con l'email della registrazione) ed EMV-050 (`+tag` su example.com con «rispedisci»).
+> - **(b) e (c)**:
+>   - EMM-039 (3 tipi × 4 lingue: la firma senza `username`, il saluto anonimo, niente dello username preparato) ed
+>     EMM-041 (i cataloghi); EMM-040 è una guardia (setup e prova salutano col nome);
+>   - riscritti, con gli stessi ID: EMM-005, 010, 033…038; EMF-017, 025, 044, 045; EMV-012 e `_expected`; EMA-031 e
+>     038; EVA-005; ECN-001, che ora controlla nel messaggio ricevuto che non ci siano né il nuovo indirizzo né il suo
+>     dominio né lo username.
+> - Fuori dal suo perimetro, ha segnalato `scripts/test_runner/_backend_api.py:1131`: la descrizione di ECN dice «the new
+>   one masked», e il catalogo è condiviso, quindi chiedo al coordinatore. Ha segnalato anche
+>   `developer/backend/email.md:55`, `:315` e `:1266` per il docs-writer.
+>
+> **Rossi visti** ✅ (00:54–01:05, nel mio corridoio, una suite alla volta, carico 48–82 con l'attesa;
+> `files/tools/e9_suites.sh reds …`; log in `files/logs/e9_reds_*.log`):
+>
+> | Suite | Falliti / passati |
+> |---|---|
+> | `services email-delivery` | 16 / 108 |
+> | `services email-messages` | 143 / 186 |
+> | `services email-flows` | 13 / 136 |
+> | `services email-verification` | 8 / 119 |
+> | `api email` | 3 / 155 |
+> | `api email-verification` | 2 / 47 |
+> | `api email-change-notice` | 2 / 12 |
+>
+> **Ogni rosso fallisce per la ragione giusta.** Ho controllato le righe `E` dei log:
+> - «`delivery.mailbox_budget_key` does not exist»;
+> - «the 4th alias of one mailbox got its own budget», per reset, avviso e verifica;
+> - «a reset email greets nobody by name … (N62)»;
+> - «the notice shows ['example.org', 'zq_alice']»;
+> - «build_* still takes a username»;
+> - «email_changed.intro still has a place for the new address»;
+> - i `TypeError` delle firme nuove.
+>
+> Porta 6188 libera.
+
+
+#### E-9.2 — Cura, verdi, docs ✅ (2026-10-17, 01:05–01:33)
+> **Cura** (01:05, `files/e9/e9_cure.py --apply`: 23 modifiche in 9 file, dry run pulito prima):
+> - `delivery.mailbox_budget_key()` nei tre punti di chiamata;
+> - le tre firme senza `username` né `new_address`, con il saluto `greeting_anonymous`;
+> - `masked_address` tolto, e `intro` di `email_changed` senza `$address` nelle 4 lingue;
+> - commenti e docstring di `flows.py` e `verification.py`;
+> - la docstring di `update_profile` in `auth.py:381-382`, file di A, col via del coordinatore («which shows nothing of
+>   the new one (N62)»).
+>
+> **Col via del coordinatore, nel catalogo condiviso**: `scripts/test_runner/_backend_api.py`, la `desc` di
+> `email-change-notice` (:1131) e il `print_info` della stessa funzione (:787), che diceva la stessa cosa e me l'ha
+> segnalato il historian.
+>
+> **X-R35** (coordinatore, 01:2x, entrato in dev `67668f5ce`: `env_url` rifiuta lo user info). La docstring di
+> `links._usable_base` diceva che `public_url()` «controlla solo lo schema»: ora elenca ciò che `env_url` rifiuta già
+> (spazi, schema, host, e da X-R35 lo user info) e ciò che il controllo aggiunge (`?`, `#`, una porta non valida).
+> - Il controllo delle credenziali **resta, e la docstring lo dice**: è una seconda guardia, perché la base apre ogni
+>   link di ogni email.
+> - Toglierlo ora romperebbe i test dei link sul mio ramo, che non ha ancora X-R35.
+> - `_usable_base` ha un solo chiamante, `links_state()`, che legge `public_url()`.
+>
+> **⚠️ Fuori pista**: un `git fetch` lanciato per abitudine in una lettura su dev restava appeso. L'ho fermato: non
+> serve, `dev_release2` è locale e lo aggiorna il coordinatore. Nessun ref toccato.
+>
+> **Verdi** (01:06–01:27, `files/tools/e9_checks.sh`, nel mio corridoio, uno alla volta, carico 48–87 con l'attesa;
+> log `files/logs/e9_greens_*`):
+> - `ruff` e `black` sui 12 file: puliti;
+> - `services`:
+>   - `email-delivery` 124;
+>   - `email-messages` 329;
+>   - `email-flows` 149;
+>   - `email-verification` 127;
+>   - `email-verification-hooks` 32;
+>   - `email-links` 74;
+>   - `email-checks` 87;
+>   - `email-config` 144;
+>   - `email-case` 67;
+> - `api`:
+>   - `email` 158;
+>   - `email-verification` 49;
+>   - `email-verification-hooks` 16;
+>   - `email-change-notice` 14;
+>   - `profile` 28;
+> - `schemas openapi-client-text` 78;
+> - `api sync` (il client generato è ignorato da git);
+> - `lint --dead-code`: 49 reperti vecchi, nessuno nei file di E;
+> - `git diff --check` pulito; porta 6188 libera.
+>
+> **Docs** (`docs-writer`, 01:05–01:17):
+> - `admin/email.en.md`:
+>   - il paragrafo «One mailbox, however its address is written»;
+>   - le righe dei limiti;
+>   - l'avviso, «Nothing of the new address, and no username»;
+>   - la nota di sicurezza «No stranger's words in an email».
+> - `developer/backend/email.md`:
+>   - le sezioni nuove «The Key of a Mailbox» (`#mailbox-key`) e «No Stranger's Text» (`#no-strangers-text`);
+>   - la tabella dei tipi con la colonna Greeting;
+>   - i passi del flusso, la tabella «Testing» e i limiti noti (E-9 risolto, resta E-12).
+> - `developer/architecture/security.md`: la sola frase dell'avviso (:215).
+> - `user/settings/profile.en.md:42`: la riga è mia (E4b, `dfc7847fb`). Nessun timbro di traduzione: le versioni
+>   IT/FR/ES non hanno quel punto, quindi il debito è vero e resta.
+> - Il docs-writer ha corretto il brief in due punti:
+>   - la pagina di verifica mette lo username nel messaggio di successo del login, non nel campo;
+>   - un valore senza `@` viene anche spogliato degli spazi.
+>
+> **devWiki** (`project-historian`, 01:05–01:11):
+> - `domains/email.md`: l'avviso, i limiti per casella, N62, E-9 risolto con E-12 come resto, la domanda del cloud sul
+>   budget;
+> - una riga in `log.md`.
+>
+> **Prove delle docs** (01:26–01:33, `files/tools/e9_docs.sh`):
+> - `ruff` e `black` su `_backend_api.py` e `links.py`: puliti;
+> - `services email-links` di nuovo: 74;
+> - `mkdocs build` stretto: 0 WARNING, e gli URL relativi del sito risolvono tutti;
+> - `check-links`: 97 validi;
+> - `check_source_paths.py`: i 5 percorsi mancanti di sempre (le cartelle di coverage), nessuno in `email.md`.
+>
+> **Backlog**: E-9 ✅ (N62, 17/10; lo SHA dopo il commit) ed E-12 nuovo, basso (catch-all e Fastmail).
+>
+> **Conflitti previsti** con dev `67668f5ce`:
+> - `auth.py`: dev alle righe 294-297 (A7b), io a 381-382;
+> - `security.md`: dev a 170, 643, 808 e 995, io a 215;
+> - `BACKLOG`: gli hunk di dev sono fuori dalla sezione E;
+> - `devWiki/log.md`: due aggiunte in coda, da risolvere per unione.
+
+> **E-9 committato** (coordinatore, 01:34):
+> - `3dd23eaa4` (fix: codice, test, `auth.py`, `_backend_api.py` col `print_info`, approvato), `bb392de35` (docs),
+>   `7fc549fea` (journal);
+> - base aggiornata: merge di dev `b36e3873f`, con A7b e X-R35, pulito; HEAD `169a9d798`.
+>
+> **Validazione combinata** ✅ (01:35–01:50, `files/tools/e9_combined.sh`, carico sotto 50, una alla volta):
+> - `services email-*`: 124, 329, 149, 127, 32, 74, 87, 144, 67;
+> - `api`: `email` 158, `email-verification` 49, `email-verification-hooks` 16, `email-change-notice` 14, `profile` 28,
+>   `auth` 95;
+> - `schemas openapi-client-text` 78; `api sync`;
+> - `mkdocs build` stretto con 0 avvisi; `check-links` 97;
+> - worktree pulito, porta libera.
+>
+> **E-9 entrato in dev** (`49c07a95a`; la riga 🔒 del CHANGELOG in `3a5ff5194`). `_usable_base` resta com'è (OK del
+> coordinatore).
+
+### E-11 — «Send the link again» su un'istanza bloccata
+
+#### E-11.0 — Analisi ✅ (2026-10-17, 01:15–01:25, in sola lettura su `dev_release2` `3e5336a0a`)
+> **Il compito del coordinatore** (00:19): E-11 «dopo l'ingresso di A7b, perché A-13 cambia come `zodios-client` legge
+> il 401 di un'istanza bloccata. Prima verificare se A7b lo risolve già, poi chiuderlo o correggerlo sopra».
+
+**A7b non lo risolve**
+- **A-13 tocca solo il redirect.** In `zodios-client.ts`, `LINK_PAGES` tiene fuori dal redirect al login, su un 401,
+  solo `/setup`, `/invite`, `/reset-password` e `/verify-email`. «Send the link again» sta in `VerificationNotice`, sulla
+  pagina `/`, dove l'intercettore non ha mai rediretto.
+- **Il lettore è invariato.** `readResendFailure()` (`features/email/verificationApi.ts:48-53`) legge ancora ogni 401
+  come `INVALID_CREDENTIALS`.
+- **Il rifiuto anonimo del blocco** resta il 401 di `get_current_user`, senza codice (`instance_block.py:18-31` in dev).
+  La proposta ad H, un codice suo, non è entrata.
+- **A7b porta la chiave `auth.instanceBlocked`**: «This instance is blocked by its hosting provider: try again once it
+  is unblocked.». `registrationErrors.ts` legge con lei il 401 di `/auth/register`, con lo stesso ragionamento di E-10:
+  una rotta pubblica fuori dall'elenco dei permessi risponde 401 solo col blocco.
+
+**Perché «rispedisci» è diverso**: la sua rotta risponde 401 anche da sé, per le credenziali sbagliate
+(`api/v1/email.py:207`, `detail="Invalid credentials"`). Oggi tutti e due i 401 sono stringhe nude, e li distingue solo
+il testo inglese.
+
+**Proposta, tutta nei file di E**
+1. **Backend**: il 401 della rotta diventa strutturato come gli altri rifiuti di E,
+   `detail={"error_code": "INVALID_CREDENTIALS", "message": "Invalid credentials"}`. Lo stato non cambia.
+2. **Frontend**, `readResendFailure()`:
+   - un 401 con `error_code === 'INVALID_CREDENTIALS'` → `INVALID_CREDENTIALS`;
+   - **ogni altro 401 → `INSTANCE_BLOCKED`**: la rotta è fuori da `ALLOWED_WHEN_BLOCKED`, quindi l'unico altro 401
+     possibile è il blocco, l'invariante scritto in `instance_block.py`;
+   - un 423 che `isInstanceBlockedError()` riconosce → `INSTANCE_BLOCKED`, come in E-10.
+3. **L'avviso** mostra `auth.instanceBlocked`, la chiave di A7b: il testo ha una casa sola, nessuna chiave nuova. Il
+   pulsante resta, perché dopo lo sblocco il clic funziona.
+4. **Il resto**:
+   - la descrizione della rotta;
+   - EVA, che oggi legge la stringa;
+   - i Vitest di `verificationApi` e dell'avviso;
+   - la doc developer, «Testing» e il flusso «resend».
+- **Alternativa, di H**: un codice nel rifiuto anonimo del blocco. Sarebbe più pulita per tutte le rotte, ma la cura di
+  E non ne ha bisogno e resta giusta anche se il codice arriva dopo.
+
+**Serve**: un aggiornamento di base con A7b prima del codice, per `auth.instanceBlocked`; il mio ramo è a `6cadaf427`.
+
+**Peso**: minimo. Rossi (`test-author`):
+- EVA: il corpo del 401 è strutturato;
+- VFA: il 401 con codice, il 401 nudo e il 423;
+- l'avviso mostra la chiave del blocco.
+
+**Prove**:
+- `api email-verification`;
+- i Vitest di `features/email`;
+- `front check`, `i18n check`, `api sync`;
+- `mkdocs build` stretto.
+
+#### E-11.1 — Rossi ✅ (2026-10-17, 01:5x–02:07)
+> **Il via del coordinatore** (01:5x), sulla mia base `169a9d798`, che ha dentro A7b. Il `desc` di `email-verification`
+> nel catalogo condiviso (`_backend_api.py:1109`) va in questo lotto, col suo via; la nota su `instance_block.py`, che
+> non nomina `resend`, va ad H.
+>
+> **Rossi scritti** (`test-author`, 01:53–02:05; l'agente ha eseguito solo `py_compile`, `ruff`, `black` e `prettier`,
+> tutti puliti):
+> - `test_email_verification_api.py`:
+>   - EVA-006 riscritto: il 401 codificato, uguale per un account sconosciuto e una password sbagliata;
+>   - EVA-014: le due righe riscritte;
+>   - **EVA-017** nuovo, una guardia: `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`, con due controlli contro un
+>     verde a vuoto;
+>   - il contratto 6 dice che il modulo non monta la dipendenza del blocco.
+> - `verificationApi.test.ts`:
+>   - VFA-08 riscritto: il 401 codificato dà `INVALID_CREDENTIALS`;
+>   - **VFA-23**: ogni altro 401 dà `INSTANCE_BLOCKED`, su 12 corpi × 2 tipi d'errore;
+>   - **VFA-24**: il 423 `instance_blocked`;
+>   - **VFA-25**, una guardia: un 423 senza il codice, e il corpo del blocco su 403 o 500, danno `UNKNOWN`;
+>   - **VFA-26**: col client vero.
+> - `emailText.test.ts`: la riga `INSTANCE_BLOCKED` → `auth.instanceBlocked` (ETX-09 ed ETX-10).
+> - `VerificationNotice.test.ts`:
+>   - VNT-05 e VNT-06 usano il 401 codificato;
+>   - **VNT-08**: un 401 nudo mostra `auth.instanceBlocked`, l'evento porta `INSTANCE_BLOCKED` e il pulsante resta
+>     acceso.
+>
+> **Rossi visti** ✅ (02:06–02:07, `files/tools/e11_checks.sh reds`):
+> - `api email-verification`: **6 falliti** e 44 passati (EVA-006 ×4, EVA-014 ×2), perché la rotta risponde ancora
+>   con la stringa;
+> - Vitest sui 3 file: **32 falliti** e 427 passati (VFA-23 ×24, VFA-24 ×4, VFA-26 ×2, ETX-09, VNT-08).
+>
+> I 38 previsti dall'agente, tutti per la ragione giusta: il lettore dà `INVALID_CREDENTIALS` a ogni 401 e `UNKNOWN`
+> al 423, e il testo non ha il caso `INSTANCE_BLOCKED`.
+
+#### E-11.2 — Cura e docs ✅ (2026-10-17, 02:07–02:2x)
+> **Cura** (02:07, `files/e9/e11_cure.py --apply`, 5 modifiche in 3 file, dry run pulito prima):
+> - `api/v1/email.py`: il 401 della rotta diventa `{"error_code": "INVALID_CREDENTIALS", "message": "Invalid
+>   credentials"}`. La docstring lo dice, e dice che ogni altro 401 di questa rotta pubblica è del blocco (E-11).
+> - `features/email/verificationApi.ts`, `readResendFailure()`:
+>   - un 401 col codice dà `INVALID_CREDENTIALS`;
+>   - ogni altro 401, o il 423 che `isInstanceBlockedError()` riconosce, dà `INSTANCE_BLOCKED`, come oggetto
+>     `{errorCode}` esatto, senza `retryAfter`, come chiedono VFA-08 e VFA-23.
+> - `features/email/emailText.ts`: `INSTANCE_BLOCKED` → `auth.instanceBlocked`, la chiave di A7b; nessuna chiave nuova.
+> - Nessun `.svelte` toccato.
+>
+> **Col via del coordinatore**: il `desc` di `email-verification` nel catalogo condiviso
+> (`scripts/test_runner/_backend_api.py:1109`): «401 INVALID_CREDENTIALS (coded: any other 401 is the block's) and 403
+> byte for byte the login's».
+>
+> **Docs** (`docs-writer`, 02:12–02:20):
+> - `developer/backend/email.md`:
+>   - la tabella delle risposte di «resend», col 401 codificato e un paragrafo sul 401 del blocco;
+>   - la sezione frontend: `readResendFailure()`, `resendFailureMessage()` e `VerificationNotice` su un'istanza
+>     bloccata;
+>   - «Testing»: EVA-001…017, VFA-01…26, VNT-01…08.
+> - `admin/email.en.md`: il punto dell'istanza bloccata dice cosa mostra «Send the link again».
+> - Corretti per strada, perché la doc contraddiceva il codice:
+>   - la riga 502 di «resend» citava `smtp_code`, che la rotta non manda;
+>   - la pagina admin dava un testo vecchio per la registrazione su un'istanza bloccata, mentre il codice mostra
+>     `auth.instanceBlocked`, come dopo A-13.
+> - Fuori dai miei file, per H: la riga «Public routes outside the list» di `security.md` (Instance Block) non nomina
+>   le rotte email, come la docstring di `instance_block.py`.
+
+#### E-11.3 — Verdi ✅ (2026-10-17, 02:08–02:37)
+> **Verdi** (`files/tools/e11_checks.sh greens`, una alla volta, carico sotto 50; dalle 02:11 alle 02:29 in pausa per
+> il freeze della galleria, a carico 109–184):
+> - `api email-verification` 50; `api email` 158;
+> - Vitest sui 3 file 459, e su tutto `features/email` 837 in 12 file;
+> - `ruff`, `black` e `prettier` puliti;
+> - `api sync`; `schemas openapi-client-text` 78;
+> - `i18n check` stretto, 4938 chiavi;
+> - `front check`: 0 errori e 0 avvisi;
+> - `git diff --check` pulito, porta 6188 libera.
+>
+> **Docs** (`files/tools/e11_docs.sh`, 02:37–02:49, dopo l'attesa del carico): `mkdocs build` stretto con 0
+> WARNING; `check-links` 97 validi; `git diff --check` pulito; porta 6188 libera.
+>
+> **Checkpoint mandato al coordinatore** (02:5x). FROZEN.

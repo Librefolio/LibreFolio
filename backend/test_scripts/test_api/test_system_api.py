@@ -16,7 +16,8 @@ Covers:
 - GET /api/v1/system/instance: public, no session; {profile, accounts, email, support_url} live (the lane's default profile,
   no support address) and in-process (a profile set, a support address set); accounts.first_account_open a boolean,
   optional and false unless set (A6d); accounts.password_rules the backend's password rules, the same on every instance
-  (A6c, decision 37); support_url what support_link() publishes, null unless LIBREFOLIO_SUPPORT_URL is a valid address (CP13)
+  (A6c, decision 37); support_url what support_link() publishes, null unless LIBREFOLIO_SUPPORT_URL is an http(s) page
+  or mailto: and one address (CP13)
 - GET /api/v1/system/ready: public, no session; ready live (the lane's migrated database), 503 with the same body
   in-process, 200 and 503 in OpenAPI
 """
@@ -828,7 +829,7 @@ class TestConnectionSecurityInProcess:
 # no account yet (first_account_open, A6d: what the login page reads instead of the global settings, which now want a
 # session) and the password rules (password_rules, A6c: what the registration, invitation and reset pages show before
 # anyone signs in) —; email, whether the instance can send emails (workstream E); and support_url, where users ask for
-# help (LIBREFOLIO_SUPPORT_URL, workstream H, CP13), null unless set to a valid http(s) address.
+# help (LIBREFOLIO_SUPPORT_URL, workstream H, CP13), null unless set to an http(s) page or mailto: and one address.
 # Live on the lane's backend for the lane's default — the runner drops every LIBREFOLIO_* setting from a lane, so no
 # support address —, in-process for a profile or a support address set through the environment, which the lane's
 # server cannot be given from here. The lane's database is
@@ -913,7 +914,7 @@ class TestInstanceConfigLive:
         ), f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (the lane's database is shared: the mode and first_account_open are not pinned here) — and the password rules: {response.text}"
         assert _password_rule_pairs(accounts["password_rules"]) == PASSWORD_RULES, f"accounts.password_rules must be the backend's rules, the same on every instance (decision 37): expected {PASSWORD_RULES} as (code, value), got {accounts['password_rules']}"
         assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link (the lane's configuration, not pinned here): {response.text}"
-        assert body["support_url"] is None, f"support_url must be null on a lane that sets no {SUPPORT_URL_VARIABLE}, and the app then links to the project's GitHub issues: {response.text}"
+        assert body["support_url"] is None, f"support_url must be null on a lane that sets no {SUPPORT_URL_VARIABLE}, and the asset search then offers a new GitHub issue on a self-hosted instance, no report link on a managed one: {response.text}"
 
 
 def _instance_app() -> FastAPI:
@@ -965,10 +966,17 @@ class TestInstanceConfigInProcess:
         [
             pytest.param("https://help.example/", "https://help.example", id="set-without-its-trailing-slash"),
             pytest.param("ftp://help.example", None, id="invalid-is-null"),
+            pytest.param("mailto:Help@Example.ORG", "mailto:Help@example.org", id="mailto-domain-lowercased-local-part-kept"),
+            pytest.param("mailto:help?cc=x@example.org", None, id="mailto-with-a-header-is-null"),
         ],
     )
     async def test_the_configured_support_address_is_answered(self, monkeypatch, configured, published):
-        """CP13: support_url is what support_link() publishes for this process's LIBREFOLIO_SUPPORT_URL: the address without its trailing slash, or null for one that is not http(s), the answer still 200 — an invalid address never breaks what the app reads at startup."""
+        """CP13: support_url is what support_link() publishes for this process's LIBREFOLIO_SUPPORT_URL, the answer still 200 — an invalid address never breaks what the app reads at startup.
+
+        An http(s) page without its trailing slash; mailto: and one address as support_url() normalizes it, the local
+        part kept and the domain lowercased (CP13/P20); null for any other value, a mailto: the rule refuses included —
+        here a header smuggled in with ?, which EmailStr alone would take.
+        """
         monkeypatch.setenv(SUPPORT_URL_VARIABLE, configured)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=_instance_app()), base_url="http://test") as client:
             response = await client.get("/api/v1/system/instance")

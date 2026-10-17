@@ -230,3 +230,32 @@ Sono tutti locali: la push la fa il developer.
 | 140 | 16/10 21:42 | Y: Y12b (P19: la riga del recupero di L1 legge il campo del backend) + spec dei tooltip di L3 resa robusta; L4 lento sotto carico → Y-21 | `23f71e739` |
 | 141 | 16/10 21:36 | B: B3 ripristino (CLI e scheda Backup, B5b), P7 (mai applicato a istanza bloccata), B5c biglietto dell'esito (N53), B-17, B-13 totali di controllo, B6a-bis guida, ordine d'avvio N57; all-backend 7/7 | `0cd910a7e` |
 | 142 | 16/10 21:55 | W: decisione 47 (la metà che cede va al costo medio; gambe sole convertite all'avvio) provata con J-24; all-backend 7/7 su `6162dfc0f` | `ea72346b7` |
+| 143 | 16/10 22:08 | H: docstring di `instance_block.py` (rotte pubbliche fuori lista, pagine dei link) | `3f561e204` |
+| 144 | 16/10 22:10 | Y: Y-14 («Aggiorna» della lista dei broker ricalcola le schede) | `47ed8ebc4` |
+| — | 16/10 22:15 | E: E-4 (nome non deprecato del 422 in `settings.py`) | `07700355f` |
+| 145 | 16/10 22:25 | J: CP-7b (riferimento dei lotti aperti da un ADJUSTMENT dalla serie della casa, al cambio del giorno d'apertura; giorni al costo come il Dashboard; chiude J-28) | `48da9bf3c` |
+| 146 | 16/10 22:24 | Z: lotto B, Z-18 (la ricarica in sottofondo non svuota la pagina; `pageBusy`) | `30483ec38` |
+| 147 | 16/10 22:29 | X: C-90 (nota sull'ambito della sonda) | `cd617824e` |
+| 148 | 16/10 22:32 | Y: Y-19 (la durata della peggior caduta legge la fonte del backend) | `90b84ac9c` |
+| 149 | 16/10 22:45 | Y: Y-20 (riferimenti del laboratorio del rischio) | `b89985a8b` |
+| 150 | 16/10 23:03 | E: E-10 (la verifica dell'email su istanza bloccata) | `476da8470` |
+| 151 | 16/10 23:05 | B: H-17 e doc del ripristino | `b2c488a34` |
+| 152 | 16/10 23:12 | H: H-23 (l'azione `pure` singola tiene il DB della corsia) | `9eb934218` |
+| 153 | 16/10 23:15 | MF: MF-B (le schede dei broker leggono la fetta del motore) + MF-H (uno split non azzera la finestra di detenzione) | `bcc644491`, `a621bf89e` |
+| 154 | 16/10 23:24 | W: FE8b (il frontend delle transazioni in `features/`; congelamento annunciato e tolto) | `31335fe26` |
+| 155 | 16/10 23:28 | J: J-27 (`ledger_totals` legge solo decimali semplici) + ponte della sonda AI Export col plugin Svelte; J-26 chiusa | `e221a0544` |
+| 156 | 16/10 23:36 | X: P20 sotto-lotto 1 (indirizzo di supporto `mailto:`); conflitto su `hosting_providers.en.md` risolto unendo i due punti | `db506eb21` |
+| 157 | 16/10 23:41 | H: H-24 (file nascosti e di test non fanno ricostruire il frontend) | `4bf824362` |
+| 158 | 16/10 23:46 | W: C-97a seguito, il costo Auto non passa dal controllo dei decimali (trovato dagli E2E di FE8b) | `c91bd41b2` |
+| 159 | 16/10 23:51 | Z: lotto A, Z-3 (giorno dell'utente), Z-8 (niente poll senza fornitore), Z-19 (N58) | `0f55265a1`, `ac9671fd3` |
+| — | 16/10 23:24–23:46 | Colori: W FE8b in tandem; L audit fuori metrica `70e798a4e`; G `backup ready` `778156983`; T tabelle e 23 ruoli mancanti `9016f47c3` | — |
+| 160 | 16/10 23:55 | Z: wiki-file `utc-today-vs-user-calendar` (Z-3), Z-20 = disaccoppiare `zodios-client` da `instanceNotices`, vecchia Z-20 → Z-21 | `91d89bce6` |
+| 161 | 17/10 00:00 | E: revisioni di sicurezza R13-SEC e R13-SEC2 nel journal (W-B58 MEDIUM, W-B59, X-R35/36, A-32..35, B-19) | `6cadaf427` |
+| 162 | 17/10 00:05 | Y: Y-21 (scadenze reali dei test del rischio, blocco «functional integration» a 90 s), Y-5, sezione `pageBusy` | `149157025` |
+| 163 | 17/10 00:10 | H: H-25 (il passaggio parallelo solo per la categoria intera) | `9839ea00b` |
+| 164 | 17/10 00:15 | A: A7b (pagina `/setup`, avviso registrazione aperta, admin in attesa, A-13) + CHANGELOG A7a/A7b | `3e5336a0a`, `0e83e1cd5` |
+| 165 | 17/10 00:20 | X: F21 + P20 sotto-lotto 3 (fonti premium in testa, «Non lo trovi? Faccelo sapere») | `4469f37b6` |
+| 166 | 17/10 00:25 | J: CP-9a (servizio del rischio diviso per tema, T-R1 metà rischio); `devWiki/log.md` per unione; TODO_FUTURI allineato | `c4eeaef14`, `67e795edb` |
+| 167 | 17/10 00:35 | Y: Y-22 (scadenza dell'aiuto L3), Y-23 (mock `onNavigate`, rosso di dev da `ec018afdf`), riferimenti di riga | `d7f3a49c3` |
+| 168 | 17/10 00:38 | X: X-R22 (l'avviso del segreto illeggibile dice l'ordine: prima la chiave vecchia) | `618563949` |
+| — | 17/10 00:05–00:45 | Colori: AF file, media e menu `9d3607eb6`; T `CompactCashCell` `b58108665` | — |

@@ -4089,6 +4089,22 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
    - Il rapporto completo: 55 voci in molte aree (5 senza riferimenti, 50 usate solo dai test), quindi non è un
      cancello attivo. Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py
      lint --dead-code --scope backend`, carico 31; log in `files/runs/dead-code-backend.log`.
+5. ✅ **A7b / A-13** (21:45, worktree di A, `git --no-optional-locks`): in `zodios-client.ts`, un 401 sulle pagine
+   anonime dei link (`/setup`, `/invite`, `/reset-password`, `/verify-email`) non manda più al login. **OK, nessuna
+   modifica alla logica.**
+   - Il 423 è intatto; la corrispondenza è esatta, con al più una barra finale; la query non conta.
+   - Le quattro pagine coincidono con `_TOKEN_PATHS` di `token_service.py`. Il token sta nel frammento, che
+     `loginUrl(pathname + search)` perdeva.
+   - Quelle pagine non fanno chiamate legate alla sessione: `/auth/me` è solo in `(app)/+layout` e in `/`. Gli unici
+     401 sono quindi quelli del blocco, su `register`, `setup` ed `email/verification/confirm`.
+   - Il test ha controlli positivi e ripristina `localStorage`.
+   - **Due richieste non bloccanti**: (1) il commento «which the page says itself» è falso per `/verify-email` (E).
+     Un 401 di `confirm` finisce nell'errore generico, con un «riprova» inutile: una voce per E, il 401 come testo del
+     blocco; intanto A scriva «which the page receives». (2) `LINK_PAGES` ↔ `_TOKEN_PATHS`: un commento che rimandi
+     dall'una all'altra, e un test di confronto se A vuole.
+   - Da parte, esisteva già, solo `vite dev`: `hooks.server.ts` `PUBLIC_ROUTES` non elenca le pagine di link.
+   - **Dovuto a me**: A7 è su dev (`a39b67944`), quindi la riga della docstring di `instance_block.py` per `/auth/setup`,
+     più `/email/verification/confirm`, entra al prossimo lotto, dopo l'aggiornamento della base (368 commit indietro).
 
 ### Lotto «H-22: niente funzioni di produzione solo per i test in `client_address.py`» (N58, 2026-10-16, sera) — ✅ provato
 
@@ -4164,3 +4180,599 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
    l'ha dato a me. Ho applicato `files/h22/apply_backend_services_desc.py`: 4 sostituzioni, 3+/3−, coincide byte per
    byte con la prova a secco, ruff e black puliti. Prove a carico < 50: `services client-address` **122/122**, con la
    nuova riga «Testing: … (client_address, client_rate_key)»; `check-orphans` verde. Porta libera.
+
+### Mini-lotto «La docstring di `instance_block.py`: `/auth/setup` ed `/email/verification/confirm`» (2026-10-16, sera) — ✅ provato
+
+> **Via** del coordinatore (21:48), dopo la revisione di A7b. La base è portata in avanti (fast-forward) alla punta di
+> dev, `5b916aa28`, 368 commit, con A7 (`POST /auth/setup`, `a39b67944`). La nota non committata della revisione di
+> A7b è passata intatta nel fast-forward ed entra con questo checkpoint.
+
+1. ✅ **Analisi** (21:50, sola lettura).
+   - `setup_admin` (`auth.py`) e `confirm_email_verification` (`email.py:173`) non dipendono da `get_current_user` e
+     sono fuori da `ALLOWED_WHEN_BLOCKED`. Su un'istanza bloccata, quindi, `refuse_when_blocked` dà a un chiamante
+     anonimo il 401 di `get_current_user`, e a uno con sessione il 423.
+   - Il meccanismo generale, «una rotta pubblica fuori lista risponde 401 solo da bloccata», lo fissa già
+     `test_instance_block.py` con la registrazione e le letture pubbliche, e la lista è fissata: **nessun test nuovo**.
+   > **⚠️ Fuori pista**: in `test_admin_setup_api.py:31-32`, A scrive ancora che `/auth/setup` su un'istanza bloccata
+   > «aspetta una decisione del developer (A7)». La decisione P16(d) l'ha presa: resta fuori lista e risponde 401.
+   > Testo di A: lo giro al coordinatore.
+2. ✅ **Docstring** (21:51). Nel primo paragrafo: «Registration stays out, and so does the initial administrator's setup
+   (decision P16(d))». Nel secondo: `POST /auth/setup` e `POST /email/verification/confirm` tra le rotte pubbliche fuori
+   lista, e una frase sulle pagine anonime dei link (`/invite`, `/setup`, `/verify-email`): A7b le tiene sul 401
+   invece di mandarle al login (`frontend/src/lib/api/zodios-client.ts`), così la pagina può dire che l'istanza è
+   bloccata. Righe entro 120 colonne; la riga 8 da 121 c'era già. Ruff e black puliti; nessun test legge la docstring.
+3. ✅ **Prova leggera** (21:52–22:02, partita con carico 47; `files/runs/mini-docstring.sh`, log in
+   `files/runs/mini-docstring/`). `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py
+   test --test-port 6181 --data-dir /tmp/librefolio-r13-h api instance-block` → **62/62**; porta libera.
+   - Il passo build-only ha ricostruito frontend debug e sito in **472 s**, in primo piano e fuori dal limite d'avvio
+     (C-94).
+   - Il backend condiviso ha scritto in `.testLog/shared-backend.log` (H-12) e ha applicato la migrazione `009` senza
+     errori.
+   - **H-21 in pratica**: «⚙️ api: the test database … has no fixture user e2e_test_admin, e2e_test_user — running the
+     category setup before this action», poi il seed.
+   > **⚠️ Fuori pista**, la causa e **H-23** nel backlog. Le mie tre corse `services client-address` di H-22
+   > avevano svuotato il DB della corsia: ciascuna stampa «Removing existing test database» e `db create`.
+   > `_run_exclusive_setups()` esegue il setup esclusivo di `services` anche per una sola azione, perfino `pure`: è la
+   > causa iniziale delle corse perse da W e da J. Proposta: per una singola azione, il setup esclusivo solo se
+   > l'azione non è `pure`, oppure un `setup_needed` anche per `services`.
+
+### Lotto «H-23: un'azione `pure` da sola non ricrea il DB della corsia» (2026-10-16, sera) — ✅ provato
+
+> **Via** del coordinatore (22:08). H è scrittore del registro del runner per questo lotto, ma non tocca
+> `_frontend_transaction.py` e `_frontend_utility.py`, dove W (FE8b) cambia righe di percorso. La voce `.DS_Store`
+> che il coordinatore dice di avermi mandato diventa **H-24**, dopo H-23; il messaggio non mi è arrivato.
+
+1. ✅ **Analisi** (22:10, sola lettura; HEAD `3a482b478`, il mio commit di journal del mini-lotto, già in dev).
+   - `_run_exclusive_setups()` (`_cli.py`) gira per ogni invocazione: `_categories_in_scope()` restituisce la
+     categoria qualunque sia l'azione, e il setup esclusivo di `services` (`_services_setup` → `db_create`) parte
+     anche per un solo test `pure`.
+   - Le classi sono nel catalogo: `exclusive_because` → `write-global`, altrimenti `isolation` dell'azione,
+     altrimenti `default_isolation` della categoria (`build_inventory()` in `_inventory.py`). Senza nulla di
+     dichiarato decide `classify()` con la scansione statica.
+   - `services` ha `default_isolation="write-scoped"` e 73 azioni dichiarate `pure`: sono queste che smettono di
+     svuotare la corsia. `services` è l'unica categoria con un setup esclusivo.
+   - I test oggi nominano `_run_exclusive_setups` solo per sostituirlo o per l'ordine (`test_test_runner_cli.py:177`,
+     `test_runtime_isolation.py:1222`); la decisione del sollevamento non ha test.
+   - **Disegno**: `_inventory.declared_isolation(category, action)`, un'unica definizione della classe dichiarata,
+     usata da `build_inventory()` e dal sollevamento. In `_run_exclusive_setups()`, un'azione da sola dichiarata `pure`
+     salta il setup esclusivo, con una riga che lo dice; tutto il resto resta com'è: la categoria intera, `all`, un'azione
+     non `pure`, o non dichiarata (prudente, come `classify()`).
+   > **⚠️ Fuori pista** (fuori perimetro): il pre-passaggio parallelo (`--workers > 1`) non guarda l'azione.
+   > `_parallel_for_scope()` → `plan(scope)` pianifica tutta la categoria, a differenza dei pre-passaggi consolidati,
+   > che vogliono `action in (None, "all")`; con le classi server (READ, WRITE_SCOPED) chiama anche
+   > `run_category_setup("services")`. Quindi `--workers 2 services client-address` gira la categoria e ricrea il
+   > DB. Lo segnalo al coordinatore come voce a parte; H-23 copre il percorso normale.
+2. ✅ **Rossi, doc e cura a secco** (22:10–22:25, in parallelo).
+   - **Test** (test-author, solo `test_test_runner_cli.py`): 37 casi in 4 classi.
+     - `TestDeclaredIsolation`, 15: `exclusive_because` vince su un `pure` dichiarato; la classe propria vince sul
+       default; il default della categoria; nulla di dichiarato → `None`; categoria o azione sconosciute → `None`; il
+       registro letto al momento della chiamata.
+     - `TestBuildInventoryClassifiesThroughDeclaredIsolation`, 6: `collect_launches` sostituita da lanci finti;
+       `isolation` = `classify(engine, path, declared_isolation(…))`, e un caso in cui `declared_isolation` sostituita
+       viene davvero chiamata per nome.
+     - `TestRunExclusiveSetupsSparesASinglePureAction`, 13: dai casi (a)–(h) del contratto. Ognuno lancia prima l'azione
+       `pure` della stessa categoria, così il «gira ancora» non passa a vuoto oggi.
+     - `TestServicesClientAddressKeepsTheLaneDatabase`, 3: `client-address` è `pure` e non arriva al setup;
+       `asset-source` (default `write-scoped`) sì.
+
+     I setup veri falliscono se raggiunti: `_services_setup`, `db_create`, `subprocess.run`.
+   - **Doc** (docs-writer): la voce `setup_exclusive` di «Registry Entry Shape» in `runner_architecture.md`, con
+     l'eccezione e «with `--workers` above 1, the parallel pass may run it as well»: il passaggio parallelo non lo
+     chiama con `--no-shared-server` né con un piano di un gruppo o nessuno.
+   - **Cura** (`files/h23/apply_cure.py`): `_inventory.declared_isolation()`, che `build_inventory()` ora usa, e in
+     `_cli.py` `_single_pure_action()` più il salto con una riga. Ruff come a HEAD (4 `PLC0415` già esistenti in
+     `_inventory.py`; il mio import interno ha `noqa` con il motivo); black non tocca le righe nuove.
+   > **⚠️ Fuori pista**: il test-author ha seguito il contratto alla lettera, «un'azione sconosciuta → `None`». La mia
+   > prima cura per un'azione assente restituiva il default della categoria, perché leggeva `entry = {}`. Corretta:
+   > un'azione che il catalogo non ha non dichiara nulla, e anche `_meta` non è un'azione. Per `build_inventory()`
+   > non cambia nulla, perché i suoi lanci vengono sempre da azioni del registro.
+3. ✅ **Rossi → cura → verdi → prove reali → doc** (22:26–23:11, ogni passo a carico < 50: il carico è salito fino
+   a 204 per lavoro di altre corsie; `files/runs/h23-run.sh`, log in `files/runs/h23/`).
+   - **Rosso** (`utils test-runner-cli`): **37 failed / 66 passed**: 23 su «H-23: declared_isolation is missing», 14
+     su «H-23: the exclusive setup ran for a single pure action».
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi**: `utils test-runner-cli` **103/103**, `utils runtime-isolation` **200/200**, `utils coverage-combine`
+     **11/11** (usa `PURE` dell'inventario), `check-orphans` verde.
+   - **Prova reale, azione `pure`** (`services client-address`): **122/122**; il DB della corsia è **invariato**
+     (inode, mtime e dimensione uguali prima e dopo: `331446094 1792180946 1314816`); stampata la riga «services:
+     client-address is pure, it opens no database: the category's setup is skipped and the lane's database is left as
+     it is».
+   - **Prova reale, azione non `pure`** (`services asset-sync-counts`, default `write-scoped`): **1/1**; il DB è
+     **ricreato** («Removing existing test database», inode nuovo), come prima.
+   - **Doc**: `mkdocs build` **exit 0**, senza avvisi: la base nuova contiene `ed500643f` per `wac.md`.
+     `check-links`: 97. Porta 6181 libera.
+4. ✅ **Backlog**: **H-24** (`.DS_Store` e test nel controllo della build vecchia, da E via coordinatore) e **H-25**
+   (il pre-passaggio parallelo solo per la categoria intera), approvate dal coordinatore alle 22:14; si fanno in
+   quest'ordine dopo H-23.
+5. ✅ **Entrata** (23:12): commit `9541c0667` (fix), `d0a349cf3` (docs), `7ea30903e` (journal), entrati in dev.
+
+### Lotto «H-24: un file nascosto o un test non fanno ricostruire il frontend» (2026-10-16, notte) — ✅ provato
+
+> **Via** del coordinatore (23:12): prima H-24, da E (`.DS_Store`), poi H-25. Ci scrivo io: `scripts/cli_base.py`,
+> superficie condivisa, è il file della voce stessa.
+
+1. ✅ **Analisi** (23:15, sola lettura; HEAD `7ea30903e`, già in dev).
+   - `check_frontend_needs_build()` (`scripts/cli_base.py` ~584): `src_dir.rglob("*")`; ogni file più recente di
+     `build/index.html` che non sia in `_BUILD_GENERATED_SOURCES` → rebuild.
+   - **Misura reale prima della cura**: build `21:59:40`; l'unico file più recente in `frontend/src` è
+     `frontend/src/.DS_Store` (`22:01:48`, Finder, ignorato da git), e `check_frontend_needs_build()` risponde
+     **True**. Il prossimo run con server ricostruirebbe a vuoto: 472 s l'ultima volta.
+   - File nascosti in `src`: `.DS_Store`, `lib/api/.gitignore`, `lib/i18n/.generated` (lo stamp di
+     `scripts/i18n_catalog.py`: generato; i cataloghi `<lang>.json` restano nella scansione). Poi 504 file
+     `*.test.*`/`*.spec.*` di Vitest: Vite non li impacchetta e nessun codice dell'app li importa (verificato), ma
+     oggi una modifica a un test fa ricostruire il frontend.
+   - **Regola**: la scansione salta i percorsi con una parte nascosta, il nome che inizia con `.`, e i file di test,
+     `.test.` o `.spec.` nel nome. Tutto il resto conta come oggi: `.ts`, `.svelte`, `.json`, i `prefixes.txt` del
+     catalogo i18n, `.css`, `.html`… Una build creduta fresca a torto costa più di una ricostruzione in più.
+   - Test esistenti: `TestFrontendBuildStaleness` in `test_runtime_isolation.py` (~2300; radice finta sotto
+     `tmp_path`, mtime impostate a mano); selettore `utils runtime-isolation`. Doc: `test-walkthrough/front-overview.md:42`,
+     solo in inglese. `dev_workflow.en.md:132`, tradotta, resta vera («sources newer than…»): non la tocco, quindi
+     nessun debito di traduzione.
+   - Residuo (nel backlog): `_tool_contract_sources()` conta anche le mtime delle cartelle Python, per accorgersi di
+     un file tolto; un `.DS_Store` creato lì cambia la mtime della cartella.
+2. ✅ **Rossi** (test-author) e **doc** (docs-writer), in parallelo; la cura la preparo io, a secco
+   (`files/h24/apply_cure.py`: `_counts_for_the_build()` e `_TEST_ONLY_FOLDERS` accanto a
+   `_BUILD_GENERATED_SOURCES`, usate dalla scansione di `src`; ruff pulito, black non tocca le mie righe; la regola
+   provata a parte su 24 casi, `files/h24/check_rule.py`).
+   > **⚠️ Fuori pista** (23:25, dal docs-writer): restavano 33 file di supporto ai test senza `.test.` nel nome, in
+   > `src/__tests__/` (le imbracature dei test dei componenti, l'alias `$test` di `svelte.config.js`),
+   > `src/__mocks__/$app/` e le cartelle `__tests__/fixtures`. Ognuno avrebbe ancora fatto ricostruire la build.
+   > Nessun codice dell'app li importa, né per percorso né con `$test` (verificato), e `frontend/vitest.config.ts` li
+   > esclude già dalla copertura come codice non dell'app. **Regola estesa**: anche un file in una cartella, una parte
+   > genitrice e non il nome del file, che si chiama esattamente `__tests__` o `__mocks__`. Emendamento mandato al
+   > test-author prima che finisse, con controlli: `lib/my__tests__/x.ts` e il file `lib/__tests__.ts` contano
+   > ancora. La riga di doc va adeguata.
+   - **Test** (test-author, solo `test_runtime_isolation.py`): 32 casi in `TestFrontendBuildStaleness`.
+     - 14 rossi oggi: i nascosti (`.DS_Store` in `src` e in una sottocartella, `._App.svelte`, `lib/api/.gitignore`,
+       `lib/i18n/.generated`, file in `lib/.cache/`), i test (`x.test.ts`, `x.dom.test.ts`, `x.spec.ts`,
+       `routes/x/page.test.ts`), le cartelle `__tests__`/`__mocks__`.
+     - 13 controlli che devono restare True: tra cui `latest.ts`, `contest.svelte`, `x.testing.ts`, `testing/helpers.ts`,
+       `lib/tests/x.ts`, `lib/my__tests__/x.ts`, il file `lib/__tests__.ts`, un `prefixes.txt`.
+     - 3 casi «salta, non si ferma» e 2 «una cartella sopra `src`»: `.hidden-root` e `__tests__`.
+
+     Il fixture `frontend_project` è diventato `make_frontend_project(monkeypatch, root)`, uguale per i test esistenti.
+   - **Doc** (docs-writer): la parentesi in `front-overview.md:42`: «(under `frontend/src/`, hidden files and folders,
+     such as the macOS Finder's `.DS_Store`, do not count, nor do `*.test.*` / `*.spec.*` files and the `__tests__/` /
+     `__mocks__/` folders, which only the tests use)».
+3. ✅ **Rossi → cura → verdi → prova reale → doc** (23:24–23:40, carico < 50; `files/runs/h24-run.sh`, log in
+   `files/runs/h24/`).
+   - **Prova reale prima**: `check_frontend_needs_build()` → **True**, perché l'unico file più recente della build è
+     `frontend/src/.DS_Store`.
+   - **Rosso** (`utils runtime-isolation`): **14 failed / 218 passed**, i 14 casi nuovi su «H-24: …».
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi**: `utils runtime-isolation` **232/232**, `utils dev-cli-docker` **96/96**, `utils
+     test-server-preparation` **83/83**.
+   - **Prova reale dopo**: **False**, con lo stesso `.DS_Store` ancora l'unico file più recente: il caso di E è risolto.
+   - `mkdocs build` exit 0; `check-links` 97; porta libera.
+4. ✅ **Entrata** (23:45): commit `c53012fcb` (fix), `43ebc1a3f` (docs), `cf6e5e455` (journal), entrati in dev.
+
+### Lotto «H-25: il pre-passaggio parallelo solo per la categoria intera» (2026-10-16, notte) — ✅ provato
+
+> **Via** del coordinatore (23:45), più la regola di `-k` approvata (23:52). Base: fast-forward fatto dal
+> coordinatore a `4bf824362`; me l'aveva chiesto come compito mio, ma le mie regole mi vietano di muovere la storia, e
+> ho iniziato su `cf6e5e455` senza toccare `BACKLOG_POST_1.2.md`, l'unico mio file cambiato dai 99 commit in arrivo.
+> Notte: il developer dorme, quindi una domanda solo sua va nel piano e al coordinatore, e si va avanti.
+
+1. ✅ **Analisi** (23:50, sola lettura).
+   - `_run_parallel_prepass()` (`_cli.py` ~926): per una categoria del registro chiama
+     `_parallel_for_scope(args, category, …)` qualunque sia `args.action`. `plan(scope)` pianifica tutta la categoria;
+     con le classi server (READ, WRITE_SCOPED) c'è anche `run_category_setup(scope)`, cioè per `services` `db create`.
+   - I pre-passaggi consolidati invece (`_backend_consolidation_scope`, e il gemello del frontend) girano solo per la
+     categoria intera o la suite: con un'azione singola o con `-k` (`test_names`) tengono la forma 1:1.
+   - Quindi oggi `--workers 2 services client-address` fa girare i test parallelizzabili di tutto `services` e ricrea
+     il DB (contro H-23), e `--workers 4 services all -k foo` li fa girare tutti, ignorando il `-k`.
+   - **Cura**: `_parallel_prepass_applies(args)`, la stessa regola dei consolidati: niente con `test_names`, sì solo
+     con `action in (None, "all")`. `all` e `all-backend` restano come sono; le categorie frontend già non hanno
+     pre-passaggio.
+   - Test esistenti: `test_coverage_combine.py` chiama `_parallel_for_scope` direttamente, non toccato;
+     `test_runtime_isolation.py:1223` sostituisce `_apply_parallel`. Doc: la riga `--workers` di `index.md` e la
+     sezione «`--workers`» di `runner_architecture.md`. La clausola di H-23 «with `--workers` above 1, the parallel
+     pass may run it as well» diventa falsa e va tolta.
+2. ✅ **Rossi, doc e cura a secco** (23:52–00:10, in parallelo).
+   - **Test** (test-author, solo `test_test_runner_cli.py`): 35 casi in 4 classi, 26 rossi oggi.
+     - `TestParallelPrepassApplies`, 16 casi, la regola su tutte le forme di `args`: `action` e `test_names` assenti,
+       `None`, `[]`.
+     - `TestRunParallelPrepassRunsNothingForOneActionOrTestNames`, 8: anche `services asset-source`, `write-scoped`,
+       per mostrare che la regola non guarda la classe; due casi «sostituto» fissano che `_run_parallel_prepass`
+       chiami `_parallel_prepass_applies` una volta, per nome.
+     - `TestRunParallelPrepassStillServesTheWholeCategoryOrSuite`, 8 guardie verdi.
+     - `TestApplyParallelLeavesOneActionToTheSerialPass`, 3.
+
+     Un fixture fa fallire, se raggiunti, `run_category_setup`, `plan`, `run_groups` e `subprocess.run`.
+   - **Doc** (docs-writer):
+     - la riga `--workers` di `index.md`;
+     - una voce nella sezione «`--workers`» di `runner_architecture.md` («the same scope rule as the consolidated
+       pre-passes»);
+     - la clausola di H-23 su `setup_exclusive` sostituita da «The skip holds at any `--workers`, since the parallel
+       pass does not run for one action». Il docs-writer ha verificato tutti i punti da cui si raggiunge il setup di
+       `services` per un'azione singola.
+   - **Cura** (`files/h25/apply_cure.py`): `_parallel_prepass_applies()` prima di `_run_parallel_prepass()`, e un
+     ritorno subito all'inizio di quest'ultima. +16/−1; ruff e black puliti; complessità 7.
+   > **⚠️ Fuori pista** (dal test-author): l'azione `all` di ogni categoria è registrata con `test_names=False`, quindi
+   > il passaggio seriale **scarta i nomi**: `--workers 4 services all foo` li ignorava prima della cura e li ignora
+   > dopo. La regola di `-k` approvata stanotte non fa funzionare `-k` su `all`, toglie solo il pre-passaggio
+   > parallelo in quella combinazione, che costa velocità senza cambiare cosa gira. La tengo: il pre-passaggio non sa
+   > applicare i nomi, quindi con dei nomi si fa da parte, come i consolidati. Se un giorno `all` applicherà i nomi, la
+   > regola sarà già quella giusta. Lo scarto silenzioso dei nomi dopo `all` è un difetto a parte: **H-26** nel backlog.
+3. ✅ **Rossi → cura → verdi → prove reali → doc** (23:59–00:15, ogni passo a carico < 50; `files/runs/h25-run.sh`,
+   log in `files/runs/h25/`). Niente prova reale «prima» sull'azione singola: prima della cura,
+   `--workers 2 services client-address` avrebbe fatto girare tutto `services` in parallelo, una prova pesante.
+   - **Rosso** (`utils test-runner-cli`): **26 failed / 112 passed**: 16 su «H-25: _parallel_prepass_applies is
+     missing», 10 su «H-25: the parallel pre-pass ran for …».
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi**: `utils test-runner-cli` **138/138**, `utils runtime-isolation` **232/232**, `utils coverage-combine`
+     **11/11**, `check-orphans` verde.
+   - **Prova reale, azione singola** (`dev.py test --workers 2 … services client-address`): **122/122**, **nessun**
+     «Parallel pass», la riga di H-23, DB della corsia **invariato** (inode, mtime e dimensione).
+   - **Prova reale, categoria intera** (`--workers 2 … schemas all`): exit 0, «Parallel pass — 12 isolation-safe
+     unit(s) across 2 worker(s)», **166 + 1667 passed**, verde in 31,6 s.
+   - **Doc**: `mkdocs build` exit 0; `check-links` 97; porta libera.
+
+### Lotto «H-26: un'azione registrata senza nomi di test li rifiuta» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (00:20): «refuse», exit 2 con «name the action» quando dopo `all` seguono dei nomi. Alla mia
+> domanda di perimetro (00:24) ha risposto: **una regola sola per tutte le 36 azioni**, rifiuto prima di ogni effetto
+> collaterale, `--list` compreso. Base `9839ea00b`, cioè dev dopo H-25, fast-forward del coordinatore, verificata
+> pulita.
+
+1. ✅ **Analisi** (00:20–00:30, sola lettura).
+   - Ogni sottoparser di categoria ha il posizionale `test_names` (`nargs="*"`, in `create_subparser_from_registry`).
+     Le suite (`all`, `all-backend`, `all-frontend`) non l'hanno, e lì argparse rifiuta già i nomi con exit 2.
+   - `run_test_from_registry` inoltra i nomi solo alle azioni registrate con `test_names=True`; alle altre li perde in
+     silenzio, e l'azione gira intera.
+   - Il registro vivo ha **36** azioni senza nomi: le 16 `all`, `db create`, `db populate` e 18 unità Vitest (10 in
+     `front-portfolio`).
+   - Verificato col parser vero (`files/h26_parse.py`):
+     - `services all test_foo` esegue tutto `services`;
+     - `external all yfinance` esegue tutti i provider: sembra un filtro e non lo è;
+     - `db populate --force --clean extra` ripopola senza dire niente;
+     - `front-portfolio risk-unit nome` esegue tutta l'unità.
+   - Effetti collaterali prima del corpo, in entrambi gli ingressi: `_dispatch_test_command` (`dev.py test`) e
+     `main()` (`python -m scripts.test_runner`).
+     - `_common.tee_output` apre `--log-file`.
+     - `_activate_log_dir` archivia il `.testLog` precedente in `00_archive/`.
+     - `_timed_run` scrive il record della campagna.
+     - `_snapshot_log_dir_db` copia il DB nella cartella dei log.
+     - Il rifiuto va prima di tutti.
+   - Codice di uscita: `dev.py` fa `sys.exit(main())` con `args.func(args) or 0`, e `__main__` fa `sys.exit(main())`.
+     Quindi un `return 2` dei due ingressi arriva alla shell come exit 2.
+   - Doc: nessuna frase di H-25 parla dei nomi persi. Un solo comando documentato passa token dopo un'azione senza
+     nomi: `external all --exclude-providers yfinance broker_coinbase` (`external.md:54`). È un falso positivo: col
+     parser vero i due token vanno a `--exclude-providers` e `test_names=[]`.
+   - **Cura**: `_refused_test_names(args) -> str | None` in `_cli.py`. Una sola regola: nomi dati a un'azione del
+     registro con `test_names` falso.
+     - Il messaggio per `all` dice «name the action» e mostra l'esempio; quello per le altre azioni dice «takes no test
+       names: it runs whole».
+     - La chiamata sta in cima a `_dispatch_test_command` e `main()`: `print_error`, poi `return 2`.
+     - `run_test_from_registry` non cambia: nessun chiamante interno passa nomi a queste azioni.
+2. ✅ **Rossi, doc e cura a secco** (00:35–00:45, in parallelo).
+   - ✅ **Rossi** (test-author, solo `test_test_runner_cli.py`, +447 righe, 3 import): 533 casi in 4 classi.
+     - `TestRefusedTestNames`, 514 casi: uno per ogni azione del catalogo vivo, con id `categoria-azione`, più
+       questi:
+       - l'ancora (`services all`, `db populate`, `front-portfolio risk-unit` senza nomi, `services client-address` con
+         i nomi), senza contare le 36;
+       - nessun nome (attributo assente, `None`, `[]`);
+       - i 6 sottocomandi che non sono categorie;
+       - 4 casi fuori dal catalogo;
+       - purezza: la regola non stampa e non tocca `args`;
+       - il catalogo letto al momento della chiamata, con una categoria finta registrata dopo l'import.
+     - `TestDispatchTestCommandRefusesBeforeAnySideEffect` (9) e `TestMainRefusesBeforeAnySideEffect` (9): `args` dal
+       parser vero, 5 invocazioni rifiutate, un caso `--log-file`/`--log-dir` (nessun file scritto) e 3 guardie (nomi a
+       un'azione che li prende, `all` senza nomi, `--exclude-providers yfinance broker_coinbase`).
+     - `TestDevPyExitsWithTheRefusal` (1): `dev.main()` restituisce 2.
+     - Le prove rifiutate chiudono tutte le 11 cuciture (`tee_output`, `_activate_log_dir`, `_timed_run`,
+       `_snapshot_log_dir_db`, i due corpi, `_configure_runtime`, `run_test_from_registry`, `dispatch_to_category`,
+       `subprocess.run` e `subprocess.Popen`) con sostituti che falliscono se chiamati: nessun rosso arriva mai a una
+       corsa vera.
+     > **⚠️ Fuori pista** (dal test-author): `_cli` prende `print_error` da `_common`, non da `cli_base`; stampa allo
+     > stesso modo su stdout. A parte, non corretto: nel ramo `--log-file` di `main()`, `_snapshot_log_dir_db()` non ha
+     > `try/finally`, a differenza di `_dispatch_test_command`.
+   - ✅ **Doc** (docs-writer):
+     - `index.md`, «Running Tests»: i nomi vanno solo alle azioni che li prendono (`--help` le marca `[TEST_NAME]`);
+       `all`, `db create`/`populate` e la maggior parte delle unità Vitest li rifiutano, exit 2, anche con `--list`.
+     - `runner_architecture.md`, passo 2 di «Adding a Test Action»: un'azione con `test_names=False` li rifiuta.
+     - `runner_architecture.md` ~554: «`--test-names`» non era un flag, ed è stato tolto; ora «Neither `all` nor
+       `all-frontend` takes test names».
+     - La voce `--workers`: «pytest `-k`, which only a named action takes».
+     > **⚠️ Fuori pista** (dal docs-writer): non tutte le unità Vitest rifiutano i nomi. Le tre di `front-utility`
+     > (`core-unit`, `component-unit`, `onboarding-component-unit`) li passano a Vitest `-t`. Le 18 che ho contato
+     > erano già solo quelle senza nomi; la mia consegna al docs-writer diceva «the Vitest unit actions», ed era
+     > imprecisa. La doc dice «most».
+   - ✅ **Cura a secco** (`files/h26/apply_cure.py`, +26 righe): `_refused_test_names()` prima di
+     `_dispatch_test_command()`, più 4 righe in cima a `_dispatch_test_command()` e a `main()`. ruff e black puliti, con
+     il percorso vero via stdin.
+3. ✅ **Rosso → cura → verde → prova reale** (00:46–00:58, a carico < 50; `files/runs/h26-lib.sh`, log in
+   `files/runs/h26/`).
+   - **Rosso** (`utils test-runner-cli`): **526 failed / 145 passed**, la ripartizione prevista.
+     - 513 su «H-26: _refused_test_names is missing»;
+     - 13 sulla prima cucitura raggiunta: 11 `_activate_log_dir` e 2 `tee_output`, i due casi `--log-file`.
+     - Nessun rosso fuori dalle classi H-26; i 138 casi di prima e le 7 guardie sono verdi.
+   - **Cura** applicata, uguale byte per byte alla prova a secco (`cmp`).
+   - **Verde**: `utils test-runner-cli` **671/671** in 5,3 s. Il rosso aveva impiegato 92 s, quasi tutti per il
+     resoconto dei fallimenti.
+   - **Prova reale** (`files/runs/h26-refuse.sh`): exit **2** e il messaggio giusto per `services all h26_probe`,
+     `services all --list h26_probe`, `db populate --force --clean h26_extra`, `external all yfinance`,
+     `front-portfolio risk-unit h26_probe` e `python -m scripts.test_runner services all h26_probe`. **Nulla
+     cambiato**: l'archivio di `.testLog` (818 voci), `.run_cache.json`, `.campaign.json` e il DB della corsia (inode,
+     mtime, dimensione).
+   - Doc: nella riga `--workers` di `index.md` (la mia frase di H-25) la stessa precisazione del docs-writer, «pytest
+     `-k`, which only a named action takes».
+
+### Residuo di H-24 (`_tool_contract_sources()` e il `.DS_Store` nelle cartelle Python) e H-28 (2026-10-17, notte) — ✅ provato
+
+> Chiesto dal coordinatore dopo H-25, con il vincolo: ignorare le voci nascoste nella mtime di una cartella senza perdere
+> la rilevazione di un file tolto.
+
+- `_tool_contract_sources()` (`cli_base.py` ~580) mette fra gli ingressi della build le 3 cartelle (`schemas`,
+  `services/tools`, `tool_plugins`) e le loro sottocartelle, 8 in tutto, per la loro mtime. Serve ad accorgersi di un
+  `.py` tolto, rinominato o entrato con una mtime vecchia.
+- Verificato su questa macchina (`files/h26/mtime-demo`, poi cancellato):
+  - creare `.DS_Store` fa salire la mtime della cartella; riscriverlo sul posto no;
+  - creare `__pycache__` la fa salire: anche questo oggi fa ricostruire (in quelle cartelle ce ne sono 6);
+  - togliere un `.py` la fa salire.
+- **Conclusione: un filtro non può bastare.** Guardando solo le mtime, un `.DS_Store` e un file tolto sono lo stesso
+  evento. Serve un ricordo dell'ultima build.
+- **Proposta A**, inviata al coordinatore (00:45): un'impronta dell'elenco degli ingressi.
+  - `tool_contract_fingerprint()` in `cli_base` è lo sha256 dei percorsi relativi: i `.py` senza parti nascoste né
+    `__pycache__`, più i file fissi.
+  - `cmd_fe_build` (`dev.py`) calcola l'impronta prima di `api sync` e la scrive in
+    `frontend/build/.tool-contract-inputs` solo se la build riesce, accanto a `.build-debug`.
+  - `check_frontend_needs_build`:
+    - un file più nuovo della build → stale;
+    - un'impronta diversa dal marker → stale;
+    - senza marker vale la regola di oggi, con le mtime delle cartelle.
+  - I tre percorsi di build passano da `cmd_fe_build`: `dev.py`, il runner (`_frontend_common.py:92`, `build_func`) e
+    Docker (`_docker_ensure_frontend_built`).
+- **Alternativa B, scartata**: un euristico («una cartella più nuova non conta se un suo file nascosto è nuovo almeno
+  quanto lei»). Perde la rimozione appena il `.DS_Store` viene toccato dopo.
+- **Reperto a parte (basso, `static_site.py`, file mio)**: `frontend_catchall` serve qualunque file della radice di
+  `frontend/build/`, dotfile compresi. `GET /.build-debug` e `GET /.build-version` rispondono, anche dall'immagine.
+  Proposto come H-27, oppure in coda al lotto.
+- ✅ **Decisione** del coordinatore (00:50): disegno A approvato, OK da writer su `dev.py` (`cmd_fe_build` e
+  l'import) e su `scripts/cli_base.py`. Il reperto dei dotfile entra **in coda a questo lotto, come H-28**. H-27 è
+  un'altra voce: `profile_default` non controlla il tipo (da E, R13-SEC3). È registrata nel backlog e si fa dopo il
+  lotto.
+- ✅ **Cura a secco** (`files/h24r/apply_cure.py`, 107 righe cambiate su tre file).
+  - `cli_base.py`:
+    - `_TOOL_CONTRACT_FOLDERS`, `TOOL_CONTRACT_INPUTS_MARKER` e la versione dell'elenco;
+    - `_tool_contract_sources()`: stesso nome, ma ora dà solo file che esistono, senza parti nascoste né
+      `__pycache__`;
+    - `_tool_contract_folders()`, usata solo come ripiego;
+    - `tool_contract_fingerprint()` e `record_tool_contract_inputs()`, che scrive con `contextlib.suppress(OSError)`;
+    - `_tool_contracts_changed()` al posto del ciclo dentro `check_frontend_needs_build()`.
+  - `dev.py`: i due nomi nell'import da `cli_base`. In `cmd_fe_build`, `tool_inputs` si calcola prima di
+    `cmd_api_sync` e `record_tool_contract_inputs(PROJECT_ROOT, tool_inputs)` si chiama solo se la build riesce.
+  - `static_site.py`: `_hidden_in_build(target)` sulle parti del percorso risolto dentro la build, quindi
+    `/assets/../favicon.png` resta servito; più una frase nella docstring del modulo.
+    > **⚠️ Fuori pista** (01:00): `_hidden_in_build` risolve una seconda volta la cartella della build. Se la cartella
+    > viene sostituita fra le due risoluzioni, `relative_to` alzerebbe un errore, cioè un 500. Ora quel caso conta
+    > come nascosto e va al fallback (`not target.is_relative_to(build) or …`). Il percorso `/mkdocs` ha la stessa
+    > forma, ma il sito costruito non contiene dotfile (0): resta fuori da H-28, lo segnalo nell'handoff.
+  - Le mtime delle cartelle restano solo come ripiego, quando il marker manca.
+  - ruff con i percorsi veri via stdin: invariato (`dev.py` ha 10 reperti, gli stessi di prima). black: nessun
+    pezzo sulle righe nuove; `cli_base.py` passa da 15 a 14 pezzi, perché il vecchio generatore su più righe era uno
+    di quelli.
+- ✅ **Rossi** (secondo test-author, file diversi da H-26): 77 test, 67 rossi e 10 verdi previsti.
+  - `test_runtime_isolation.py`, 59 test:
+    - `TestToolContractListing` (19): l'elenco degli ingressi, l'impronta, il marker e la sua scrittura;
+    - `TestToolContractInputsRecorded` (33): i casi da a) a j) del brief, più il cambio vero in mezzo al rumore, il
+      marker vuoto e un checkout sotto una cartella nascosta;
+    - `TestToolContractInputsWithoutARecord` (7): la regola vecchia come ripiego, verdi prima e dopo.
+  - `test_test_server_preparation.py`, 8 test, «Contract 8»:
+    - `dev` usa le stesse funzioni di `cli_base`;
+    - l'impronta si prende prima di `cmd_api_sync` e si registra dopo la build npm;
+    - con 4 passi falliti non si registra niente, e nemmeno con un tool mancante.
+    - Ogni passo è sostituito dopo la barriera, e le due funzioni vere di `cli_base` sono vietate: niente scrive nella
+      vera `frontend/build/`.
+  - `test_static_route_confinement.py`, 10 test: 5 file nascosti, `/assets/../.build-debug`, il caso senza
+    `200.html`, più 3 guardie (`robots.txt`, un font, `fonts/v1.2/x.woff2`).
+  > **⚠️ Fuori pista** (dal test-author): il mio brief diceva «la cartella lasciata a adesso», ma `BUILD_MTIME` è
+  > 1 800 000 000, cioè gennaio 2027, quindi «adesso» è più vecchio della build finta. I test usano date esplicite
+  > (`NEWER_MTIME` e `OLDER_MTIME`) e non dipendono dall'orologio.
+- ✅ **Rosso → cura → verdi → prova reale** (01:02–01:32, ogni passo a carico < 50; `files/runs/h24r-red.sh`,
+  `h26-green.sh`, `h24r-slot.sh`, log in `files/runs/h26/`).
+  - **Rosso**:
+    - `utils runtime-isolation` **52/239**: 48 su `tool_contract_fingerprint` mancante, 1 su `_tool_contract_folders`, 1
+      sul marker, 2 sull'elenco di oggi, che conta le cartelle e i `.py` nascosti;
+    - `utils test-server-preparation` **8/83**, tutti sulla barriera;
+    - `utils static-route-confinement` **7/29**: il contenuto del file nascosto torna indietro.
+    - Nessun rosso fuori dalle classi nuove.
+  - **Cura** applicata, uguale byte per byte alla prova a secco (`cmp`, 3 file, +84/−19).
+    - Sonda sul vero albero: 69 ingressi, 8 cartelle, nessun nascosto.
+    - Un percorso radice che non esiste dà un elenco vuoto, senza errori.
+  - **Verdi**:
+
+    | Selettore | Risultato |
+    |---|---|
+    | `utils test-runner-cli` | 671/671 |
+    | `utils runtime-isolation` | 291/291 |
+    | `utils test-server-preparation` | 91/91 |
+    | `utils static-route-confinement` | 36/36 |
+    | `utils check-frontend-build` | 14 |
+    | `utils dev-cli-docker` | 96 |
+    | `services static-cache-policy` | 26 |
+    | `services security-headers` | 15 |
+    | `services managed-headers` | 169 |
+    | `services app-lifecycle` | 51 |
+    | `check-orphans` | verde |
+    | `utils nosniff-content-types` | 28/30, poi 30/30 dopo la riparazione |
+
+  > **⚠️ Fuori pista**: `utils nosniff-content-types` ha dato 2 rossi. Verdetto (`test-triage`): **assunzione**. Il
+  > campionatore del test sceglie un file per estensione nella vera `frontend/build` e aveva preso `.build-debug` per i
+  > file senza estensione; H-28 ora lo rifiuta di proposito. Il `.json` passava solo perché il file più piccolo non era
+  > `.cache_manifest.json`. Riparazione (test-author, +9/−2): il campione salta i file nascosti fuori da `_app/`, che
+  > il mount serve senza filtro. **30/30** sulla build ricostruita, che contiene tutti e tre i file nascosti.
+  - **Prova reale, slot 2 del coordinatore** (01:18–01:28, porta 6181):
+    - `api http-compression` **10/10**. Il runner ha ricostruito il frontend con il vero `cmd_fe_build` («Frontend
+      sources changed, rebuilding…», build debug come prima) e ha scritto `.tool-contract-inputs`, uguale all'impronta.
+    - Sul vero albero:
+
+      | Situazione | Regola nuova | Regola vecchia |
+      |---|---|---|
+      | subito dopo la build | fresca | fresca |
+      | `.DS_Store` creato in `backend/app/schemas` | fresca | stale |
+      | `.DS_Store` tolto | fresca | stale |
+      | un `.py` aggiunto con data più vecchia della build | stale (solo l'elenco lo vede) | — |
+      | quel file tolto | fresca | stale |
+
+    - Il server della corsia (`dev.py server --test`), avviato dopo, non ha ricostruito niente.
+    - `GET /.build-debug`, `/.tool-contract-inputs`, `/fonts/noto-color-emoji/.cache_manifest.json` e
+      `/assets/../.build-debug` (con `--path-as-is`) danno 200 `text/html` con la pagina della SPA (`200.html`,
+      confronto sha256). `/robots.txt` e `/manifest.json` danno il file, con `text/plain` e `application/json`.
+    - Server fermato con il gruppo di processi; la porta 6181 ha 0 processi in ascolto.
+  - **Statici**:
+    - ruff e black sui 5 file di test: 0 → 0, come a HEAD;
+    - produzione: `_cli.py` e `static_site.py` puliti; `cli_base.py` ruff pulito, black da 15 a 14 pezzi, e nessuno
+      sulle righe nuove; `dev.py` ha gli stessi 10 reperti ruff e gli stessi 41 pezzi black di prima.
+- ✅ **Doc** (docs-writer, 01:33–01:40; pagine per sviluppatori senza traduzioni):
+  - `test-walkthrough/front-overview.md`, il punto «Builds the frontend, when needed»: gli ingressi dei codec dei Tool
+    si confrontano con l'impronta che l'ultima build riuscita ha registrato. Contano un file aggiunto, tolto o
+    rinominato, anche con una data vecchia; non contano `.DS_Store`, i file nascosti e `__pycache__/`. Senza la
+    registrazione valgono le date delle cartelle.
+  - `architecture/overview.md`, «Server Startup»: il catch-all serve il file nominato dopo aver risolto i `..`; un
+    percorso fuori dalla build o con un nome nascosto riceve `200.html`.
+  - `architecture/security.md`: nel riassunto del test `nosniff-content-types`, i file nascosti fuori da `_app/` non
+    vengono campionati.
+  - `dev_workflow.en.md:132`: la ragione «missing or outdated» comprende ora un ingresso aggiunto, tolto o
+    rinominato.
+  - Il docs-writer segnala due imprecisioni di quella pagina che c'erano già prima del lotto: il catalogo i18n
+    mancante come motivo, e l'etichetta «built for another version». Restano come sono.
+  - **Prove**: `dev.py mkdocs build` exit 0 in 112 s (l'unica riga «Warning» è l'avviso del team di Material);
+    `check-links` exit 0, **97** link validi; `git diff --check` pulito.
+- **Residui per il backlog**:
+  - **H-29**: il mount di `/_app` e `/mkdocs` servono ancora i file nascosti. Nell'immagine non ce ne sono, ma su un
+    Mac di sviluppo un `.DS_Store` del Finder dentro `frontend/build/_app/` sarebbe servito.
+  - **H-30**: nel ramo `--log-file` di `main()` (`python -m scripts.test_runner`), `_snapshot_log_dir_db()` non ha il
+    `try/finally` che ha `_dispatch_test_command`. Lo ha notato il test-author di H-26.
+  - Dai test-author: le descrizioni del catalogo dei tre selettori (`_backend_utils.py`) non nominano i contratti
+    nuovi. Non le tocco, perché le descrizioni del catalogo non sono mie.
+
+### Revisioni della notte (2026-10-17) — su richiesta del coordinatore, sola lettura
+
+- **B4** (worktree `e-alfy-miniature-telegram`, non committato, letto con `git --no-optional-locks`), alle 00:55:
+  **OK sul codice, con 3 correzioni di doc.**
+  - `get_instance_backup_options` in `ALLOWED_WHEN_BLOCKED` rispetta le regole.
+    - Rientra nella decisione 12 (il backup completo di un amministratore).
+    - È una GET `require_admin` che non avvia niente e dà solo le regole della password.
+    - Sta in lista per funzione e il test la fissa.
+    - Il match regge con `NoInputEchoRoute`: la classe avvolge solo `get_route_handler`, quindi `scope["endpoint"]`
+      resta la funzione originale.
+  - `secure.py` legge solo con `instance_key_status()` e `read_secret_file`, e non crea mai la chiave.
+    - «Never raises» è vero: `read_secret_file` trasforma in `SecretFileError` ogni errore di lettura.
+    - Il testo esportato è quello da cui l'istanza deriva le sue chiavi: anche `_read_generated_key` passa da
+      `read_secret_file`.
+  - Da correggere:
+    - `backup/instance.py:15` dice «The four routes» (sono cinque);
+    - in `developer/architecture/security.md:751` alla tabella dell'allowlist manca la rotta delle opzioni;
+    - in `admin/hosting_providers.en.md:313` le rotte che chiama la card di blocco non nominano
+      `GET /backup/instance/options`.
+    - Nessuna delle due pagine ha traduzioni.
+  - Facoltativa: la docstring di `derive_key_from`. Anche un archivio protetto lascia fuori una chiave data
+    dall'ambiente.
+
+### Lotto «H-27: `profile_default` controlla il tipo del valore del profilo» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (01:50): «Next is H-27», dopo il commit del lotto H-26/H-24r/H-28 (`b34f5e990` …
+> `063d2aa42`, entrato in dev `40a76bf1a`; più la riga del CHANGELOG per H-28 in `5beecac3d`). Base: fast-forward del
+> coordinatore a `5beecac3d`, verificato pulito. Origine: E, R13-SEC3; il testo originale non è nel repo, solo le due
+> voci del backlog che ne derivano (H-27, X-R36).
+
+1. ✅ **Analisi** (01:50–02:00, sola lettura).
+   - `profile_default(name, fallback)` (`config/__init__.py` ~576) restituisce `cast(T, values[name])`: nessun
+     controllo. L'unico lettore è `backup_max_upload_mb()` (`config/backup.py:78`, di B), con ripiego `0` = nessun
+     limite.
+   - I suoi due chiamanti (`api/v1/backup/restore.py`) catturano solo `BackupConfigError`:
+     - `_upload_limit()` calcola `limit_mb * _MEGABYTE if limit_mb else None`, quindi con `None` nel profilo non
+       applica **nessun limite**: è il «fail-open» di E;
+     - `_readable_limit_mb()` lo mostrerebbe come limite illeggibile.
+   - **Cosa è già coperto quando girano i test**, per la voce di oggi:
+     - `test_managed_lists_the_decided_variables_with_their_types` (`services profile-defaults`) confronta
+       `ENVIRONMENT_PROFILE_DEFAULTS["managed"]` con la tabella decisa, valore e tipo esatto: una voce tolta o `None`
+       fa diventare rosso il test;
+     - le prove API di B (`test_backup_restore.py:535`, `test_backup_restore_apply.py:1162`) fissano «managed-unset →
+       500» attraverso l'endpoint.
+   - **Cosa non è coperto**:
+     - (1) quando l'app gira, niente impedisce a un valore del tipo sbagliato di passare;
+     - (2) per un lettore futuro, nessun test confronta il tipo del ripiego con quello della voce. La tabella decisa
+       del test fissa il valore che il lavoro dichiara, non il tipo che il lettore si aspetta: una voce `None` scritta
+       in entrambe le tabelle passerebbe.
+   - **Cura proposta**, solo file miei:
+     - `profile_default` controlla il tipo esatto: `type(value) is type(fallback)`, così `True` non vale come `int` e
+       `60` non vale come `60.0`, come già la regola stretta di `PROFILE_DEFAULTS`. Un tipo diverso alza
+       `ProfileDefaultError(TypeError)`, con un messaggio che nomina variabile, profilo, i due tipi e la tabella; il
+       lettore non lo legge mai. Il valore è una costante del codice, mai un segreto: si può citare.
+     - Un test statico generico: ogni chiamata `profile_default(NOME, <letterale>)` delle sezioni di `config/` ha un
+       ripiego dello stesso tipo esatto della voce di ogni profilo che elenca `NOME`.
+     - Più i casi a runtime: `None`, `"500"`, `500.0` e `True` per un ripiego `int`, eccetera; il valore giusto torna
+       così com'è; il self-hosted non cambia; più il caso di E, il lettore vero di B con `None` nel profilo, che alza
+       invece di dare «nessun limite».
+   - **Scelta, documentata**: nessun controllo all'avvio. La proposta del backlog diceva «un errore chiaro
+     all'avvio», ma il tipo atteso lo conosce solo il lettore, e i lettori girano quando servono (B ha scelto un 503
+     al momento dell'uso per i suoi errori dell'operatore). La tabella è codice: il test statico la ferma prima del
+     rilascio, e a runtime il lettore si ferma invece di ripiegare.
+     - Con la cura, un valore sbagliato fa rispondere 500 alle due rotte di B, non 503. Se B vuole il suo 503, gli
+       basta catturare `ProfileDefaultError` in `_upload_limit()` e in `_readable_limit_mb()`: lo segnalo, il file è
+       suo.
+   - `PROFILE_DEFAULTS` (i campi di `Settings`): la convalida stretta del test (d) già controlla ogni valore contro il
+     tipo del suo campo. A runtime niente, perché `get_settings()` ricostruisce `Settings` a ogni chiamata. Resta
+     così: E ha segnalato `profile_default`.
+   - Doc: `developer/architecture/settings.md` ~58 («`profile_default()` converts nothing (a `cast`)») e l'elenco
+     delle guardie lì vicino. Nessuna traduzione.
+   - Selettori: `services profile-defaults` e `services config-env-example`; `api backup-restore` e
+     `api backup-restore-apply` solo se la build della corsia è fresca, altrimenti in uno slot.
+2. ✅ **Rossi, doc e cura a secco** (02:00–02:08, in parallelo).
+   - **Rossi** (test-author, solo `test_profile_defaults.py`): da 52 a 88 casi; previsti 11 rossi e 77 verdi.
+     - `test_profile_default_error_is_a_type_error`;
+     - (g) 9 tipi sbagliati: `None`, `"500"`, `500.0`, `True` per un ripiego `int`; `1` e `None` per `bool`; `60`
+       per `float`; `None` e `0` per `str`. Ognuno deve alzare l'errore, con un messaggio che nomina variabile,
+       profilo, i due tipi e la tabella;
+     - (g) 18 casi self-hosted o con profilo non impostato, che restituiscono il ripiego stesso;
+     - 4 casi del tipo giusto, che restituiscono la voce;
+     - il caso di E con il lettore vero `backup_max_upload_mb()` e `None` nel profilo, più la sua guardia (500, un
+       `int`);
+     - (h) la guardia statica `type_mismatches()` e il suo autotest. Il test-author ha aggiunto anche il controllo
+       che ogni voce sia letta da una chiamata trovata.
+     - I tre test vecchi con ripiego `object()` per una variabile elencata ora usano `type(expected)()`.
+     > **⚠️ Fuori pista** (dal test-author): `None` passa se anche il ripiego è `None`, perché il controllo è sul
+     > tipo esatto. Il lettore di oggi usa `0`; la docstring del test lo dice. Inoltre la descrizione del catalogo di
+     > `services profile-defaults` nomina solo H-17: non è mia, non la tocco.
+   - **Doc** (docs-writer): `developer/architecture/settings.md`, al posto della frase sul `cast`, il controllo
+     (tipo esatto, `ProfileDefaultError`, il lettore si ferma; nessun controllo all'avvio, e perché). Nell'elenco
+     delle guardie i due controlli nuovi; nell'istruzione per aggiungere una variabile, «un ripiego letterale del tipo
+     della variabile».
+   - **Cura a secco** (`files/h27/apply_cure.py`): `ProfileDefaultError(TypeError)` e il controllo in
+     `profile_default`; ruff e black puliti.
+3. ✅ **Rosso → cura → verdi** (02:08–02:09; il resto è fermo per il congelamento della galleria, carico 160).
+   - **Rosso**: `services profile-defaults` **11 failed / 77 passed**, la previsione. 9 casi restituiscono il valore
+     sbagliato, il lettore restituisce `None` (il fail-open di E), e `ProfileDefaultError` manca.
+   - **Cura** applicata, uguale byte per byte alla prova a secco.
+   - **Verdi** (gli ultimi due a carico tornato sotto 50, alle 02:28):
+
+     | Selettore | Risultato |
+     |---|---|
+     | `services profile-defaults` | 88/88 |
+     | `services config-env-example` | 38/38 |
+     | `services config-misc` | 12/12 |
+     | `services config-package` | 843/843 |
+
+   - **Statici** (02:32–02:39, `files/runs/h27-finish.sh`): ruff e black 0 → 0 su `config/__init__.py`,
+     `instance_block.py` e `test_profile_defaults.py`; `mkdocs build` exit 0, senza avvisi oltre al banner del team di
+     Material; `check-links` **97**; `git diff --check` pulito.
+   - Non eseguiti, per scelta: `api backup-restore` e `api backup-restore-apply`. Farebbero ricostruire il frontend
+     della corsia, stantio dopo il fast-forward, e sono vietati fino alle 03:30. Il lettore vero è coperto dentro il
+     processo.
+
+### Mini-lotto «La docstring di `instance_block.py`: `POST /email/verification/resend`» (2026-10-17, notte) — ✅ provato
+
+> Da E, via coordinatore (02:06): E-11 si appoggia a `POST /email/verification/resend`, che EVA-017 fissa fuori da
+> `ALLOWED_WHEN_BLOCKED`, ma la docstring (:21-25) non lo nomina fra le rotte pubbliche che, a istanza bloccata,
+> rispondono 401.
+
+- ✅ Verificato: `resend_email_verification` (`email.py:190`) non ha dipendenze di sessione, quindi è pubblico e
+  fuori dalla lista. `security.md` non elenca queste rotte per nome; `developer/backend/email.md:935` dice già che
+  `/verification/resend` non vuole sessione. `EVA-017` non è ancora in questo albero (ramo di E).
+- ✅ Docstring: «the email verification ``POST /email/verification/confirm`` and its new link
+  ``POST /email/verification/resend``», con il resto del paragrafo riavvolto a 120 colonne. Uguale alla prova a
+  secco; ruff e black puliti. L'insieme delle righe lunghe è invariato.
+- ✅ Controllo d'import (02:32): il modulo si importa, `ALLOWED_WHEN_BLOCKED` ha 23 voci, `resend` è nella docstring.
+  `api instance-block` non l'ho eseguito: è un passo pesante, vietato fino alle 03:30, e per una docstring non serve.
