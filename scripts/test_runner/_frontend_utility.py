@@ -826,7 +826,7 @@ def front_forgot_password_email(verbose: bool = False, ui: bool = False, headed:
 
 
 def front_backup(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the Settings › Backup tab E2E (workstream B, lot B5a) on desktop: the tab for administrators only, a backup created, downloaded, deleted, picked up after a reload."""
+    """Run the Settings › Administration › Backup tab E2E (workstream B, lot B5a) on desktop: the tab for administrators only, a backup created, downloaded, deleted, picked up after a reload."""
     print_section("Frontend Backup Settings Tests")
     if not _ensure_frontend_build():
         return False
@@ -1109,7 +1109,7 @@ def populate_registry(registry: dict) -> None:
         "backup",
         front_backup,
         name="Backup Settings E2E",
-        desc="Settings › Backup (lot B5a), desktop: a regular user has no Backup tab and ?tab=backup opens the first tab, an administrator has it and it opens the card idle; from ?tab=backup a backup started and followed to done (backup.created with its 32-hex job id), the card naming the archive, a link to that job's file, the download a zip as large as the job reports under librefolio-backup-YYYYMMDD-HHMMSS.zip (backup.download.started); the delete back to idle (backup.deleted, GET of the job 404 backup_job_not_found); a reload picks the finished job up again without a second backup.created. Serial (one backup at a time per instance); every job deleted and the followed job id cleared after each test",
+        desc="Settings › Administration › Backup (lot B5a), desktop: a regular user has no Backup tab and ?tab=backup opens the first tab, an administrator has it and it opens the card idle; from ?tab=backup a backup started and followed to done (backup.created with its 32-hex job id), the card naming the archive, a link to that job's file, the download a zip as large as the job reports under librefolio-backup-YYYYMMDD-HHMMSS.zip (backup.download.started); the delete back to idle (backup.deleted, GET of the job 404 backup_job_not_found); a reload picks the finished job up again without a second backup.created. Serial (one backup at a time per instance); every job deleted and the followed job id cleared after each test",
         prereq="Admin user + populated DB",
         tests="settings/backup.spec.ts",
     )

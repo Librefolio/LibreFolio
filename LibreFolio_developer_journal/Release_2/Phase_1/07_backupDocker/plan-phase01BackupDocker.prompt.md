@@ -5366,6 +5366,140 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-32 — dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile (2026-10-17, 09:25-10:29) — ✅ 🧊 FROZEN (checkpoint delle 10:29)
+
+> **B-19 entrato** (coordinatore, 09:25): dev `e96158e9b`, CHANGELOG 🐛 `67dd18676`; HEAD portata in avanti a
+> **`67dd18676`**, pulita, con A8b dentro. La revisione di `backup.spec.ts` di A8b è presa per buona. Ordine: B-32 →
+> B-18 → B-20, ognuno col suo checkpoint. Lo spike B7a passa **alla mattina, col developer presente**: Docker non lo
+> avvio io.
+>
+> **Stato reale** (lettura, 09:25-09:35):
+>
+> - `restoreFlow.cancelPending()`: `state = 'pending'` seguito da `#fail(...)`, che mette subito `failed`. La riga è
+>   morta: un annullamento rifiutato finisce sulla schermata d'errore. Il riavvio rifiutato resta invece su `pending`
+>   con l'errore (`#setError`), e la scheda sa già mostrare il blocco in attesa con l'errore accanto.
+> - `cmd_pending --cancel` prende solo `RestoreNotPendingError`. `cancel_restore` rende lo stato, non `copy_dropped`
+>   (i test fissano `cancel_restore(...) == pending`).
+> - `_read_state` rende `None` per ogni `OSError`. Lo leggono in 10 punti:
+>   - stato, annullamento, riavvio, conferma;
+>   - i due passi d'avvio;
+>   - l'esito;
+>   - `protected_stage` (pulizia, `remove_check`);
+>   - la CLI (`pending` e il controllo prima di `restore`).
+>   Con `O_NOFOLLOW`, uno stato che è un link dà ELOOP: oggi «nessun ripristino», e §10 lo fissa (`UNTRUSTED`, la
+>   conferma che sostituisce un link). Il contenuto non valido (`ValidationError`) è lo «stato illeggibile» dei test
+>   esistenti: resta «none».
+>
+> **Contratto congelato** (`b32-contract.md` nella cartella della sessione, 09:38):
+>
+> 1. Un annullamento rifiutato (tranne il 404 `restore_not_pending`) resta su **`pending`**. L'errore sta accanto
+>    (`failure` `cancel`), con lo stato invariato e un solo evento `failed`, e si può annullare o riavviare di nuovo:
+>    come il riavvio rifiutato.
+> 2. Le uscite di `pending --cancel`:
+>    - un `OSError` → `❌ The restore could not be cancelled: <strerror>. It still waits for the next start
+>      (restore_cancel_failed)`, uscita 1, senza traceback;
+>    - copia rimasta → `✅ …dropped: the data stays as it is` + `⚠️  Its checked copy could not be removed: it goes
+>      when its check expires`, uscita 0. La CLI lo capisce dalla cartella della copia ancora presente.
+> 3. Nuovo `RestoreStateUnreadableError`, codice `restore_state_unreadable`, con `reason` (lo `strerror`, mai un
+>    percorso). `_read_state` fa prima un `lstat`:
+>    - nessun file → `None`;
+>    - non un file regolare (link, cartella) → `None` registrato, come oggi;
+>    - ogni altro `OSError` → registrato e sollevato;
+>    - il contenuto non valido resta `None`.
+>    **Rigidi**:
+>    - status, `DELETE /pending`, riavvio e conferma → 500. La conferma rifiuta invece di scrivere sopra: dietro può
+>      esserci un ripristino applicato a metà;
+>    - la CLI `pending`, `pending --cancel` e il controllo prima di `restore` → ❌, uscita 1.
+>    `cancel_restore` legge prima senza lock, come `prepare_restart`: un `.restore/` che il server non può
+>    attraversare non passa più per «nessuno stato».
+>    **Indulgenti, come oggi**: i due passi d'avvio (con un helper), l'esito, `protected_stage`.
+> 4. Una chiave × 4 lingue, più `ERROR_KEYS`.
+> 5. I commenti «Settings › Administration › Backup»:
+>    - in `BackupTab.svelte`, `apply.py`, `backup_cli.py`, `RestoreCard.test.ts`;
+>    - e due descrizioni del runner di B5a.
+>
+> - **Coordinatore** (09:40): nessun veto su 1-4. Il residuo (un avvio che trova uno stato illeggibile va avanti) va
+>   nella lista del developer. Slot 2 di ~12 min in coda dopo E → J → Y.
+> - **Rossi in scrittura** (09:38), file distinti:
+>   - TA-S `test_backup_apply.py`;
+>   - TA-B `test_backup_restore_apply.py`;
+>   - TA-E `test_backup_cli_restore.py`;
+>   - TA-F `restoreFlow.test.ts`, `RestoreCard.test.ts`, `restoreI18n.test.ts`.
+> - **Codice pronto** in `b32-wip/apply_b32.py` (09:41): 31 operazioni in 8 file + 4 cataloghi, `--part front|back`.
+>   Sulla copia emessa:
+>   - ruff (con la configurazione del repo, `--stdin-filename`) e black puliti. `_RESTART_NOT_PREPARED` è scritto
+>     nella forma di black: oltre 300 caratteri;
+>   - prettier pulito sui 4 file del frontend e sui 4 cataloghi.
+> - ✅ **Rossi scritti** (09:38-09:53), file distinti, nessuno lanciato dagli autori:
+>   - **TA-S**, sezione (o) di `test_backup_apply.py`: 7 funzioni, 24 casi (14 rossi, 10 guardie). Tre modi di
+>     rendere illeggibile: `os.open` che rifiuta EACCES o EIO, e un vero `chmod 000`, saltato da root.
+>   - **TA-B**, sezione (j) di `test_backup_restore_apply.py`: 6 test, 16 casi (13 rossi; la guardia dell'esito ×3).
+>   - **TA-E**, sezione (g) di `test_backup_cli_restore.py`: 8 funzioni, 15 casi (13 rossi, 2 guardie).
+>   - **TA-F**: 11 casi rossi fra `restoreFlow.test.ts`, `RestoreCard.test.ts` e `restoreI18n.test.ts`. Ha girato anche
+>     la vecchia tabella di B5b, che fissava `failed` per un annullamento rifiutato, e ha allineato l'intestazione di
+>     `RestoreCard.test.ts`.
+>   - **Docs-writer**:
+>     - `backup_restore.en.md`: la riga dell'annullamento e la nuova riga `restore_state_unreadable`;
+>     - `cli_tools.en.md` l.538, 555 e 581 (debito di traduzione, niente stamp);
+>     - `security.md`: quattro righe della tabella e il punto «What cannot be read is not none».
+> - **⚠️ Fuori pista — `lexists` (09:55)**, da TA-E: `os.path.lexists` inghiotte EACCES. Con `.restore/stage` non
+>   attraversabile, la CLI direbbe «with its copy» mentre la copia resta. E `rmtree(ignore_errors=True)` di
+>   `remove_stage` può lasciare una copia in sola lettura senza sollevare nulla: il `copy_dropped` di B-31 non basta.
+>   Contratto §2 e patch corretti: un helper `_copy_left` fa `os.lstat`. `FileNotFoundError` vuol dire sparita; ogni
+>   altro `OSError` conta come ancora lì. TA-E ha aggiunto il caso `stage-folder-not-searchable`.
+> - **Note degli autori, già nella patch**:
+>   - TA-B: la conferma ha bisogno del suo `except` prima di quello generico, altrimenti risponderebbe 409 con le
+>     parole del sistema; l'esito deve leggere in modo indulgente.
+>   - TA-S: il `lstat` prima toglie anche una perdita di descrittore (uno stato che è una cartella: `os.fdopen` solleva
+>     senza chiudere) e un blocco su una FIFO. La FIFO non ha test: oggi resterebbe appesa.
+> - ✅ **Rossi** (corsia 6187):
+>   - `services backup-apply` (09:48-09:49, carico 18): **14 falliti**, 241 passati. I 14 sono i casi rigidi, per i
+>     motivi attesi (`None`, `restore_not_pending`, una conferma che scrive sopra); le guardie verdi;
+>   - Vitest, i 3 file (09:49-09:50): **11 falliti**, 394 passati, gli 11 attesi;
+>   - `utils backup-cli-restore` (09:50-09:51): **13 falliti**, 79 passati, i 13 attesi.
+>   - `api backup-restore-apply` aspetta lo slot: lì rosso, poi la metà backend, poi verde.
+> - ✅ **Metà frontend applicata** (09:51:27): `--part front`, 5 operazioni in 4 file più i 4 cataloghi.
+>   - `i18n build` (5014 chiavi) e `i18n check` strict puliti;
+>   - Vitest (09:52) sui 3 file: **405 su 405**;
+>   - Vitest su tutta la cartella `features/backup` (09:53): **867 su 867**, 8 file.
+> - **⚠️ Fuori pista — una frase della doc (09:54)**: in `cli_tools.en.md`, «The log above them has the warning…» non
+>   è sempre vero. Una copia lasciata senza errore (`rmtree(ignore_errors=True)` davanti a una cartella in sola lettura)
+>   non registra nessun avviso, e la pulizia allora riprova soltanto. Corretto io stesso: l'avviso c'è quando la
+>   rimozione ha sollevato un errore; LibreFolio «tries again» alla prima partenza dopo 24 ore.
+> - ✅ **Doc** (09:55-09:56, carico 32): `mkdocs build` strict pulito (55 s), `check-links` pulito,
+>   `utils gate-docs-links` 63 passati; porta 6187 libera.
+> - **Coordinatore** (09:57):
+>   - B-18, D1: vince la chiave dell'archivio, con la riga ℹ️. D2: la riga ⚠️ quando la chiave data non legge nessun
+>     segreto;
+>   - B-18 parte dopo il checkpoint di B-32, solo run leggeri, con H in revisione al checkpoint (consuma
+>     `derive_key_from` e `read_secret_file`);
+>   - lo slot di B-32 viene dopo Y-27.
+>   Contratto di B-18 pronto nella cartella della sessione (`b18-contract.md`); lo script dello slot di B-32 è
+>   `b32-wip/slot_after_red.sh`.
+> - ✅ **Slot 2** (coordinatore, 10:04; accanto girava l'E2E di Y):
+>   - **Rosso** `api backup-restore-apply` (10:04:51-10:09:28; il build del frontend rifatto con la metà frontend
+>     dentro, svelte-check 0 errori): **13 falliti**, 157 passati. Sono i 13 di TA-B: 200 `none`, 404, 409, 202 e
+>     l'OpenAPI.
+>   - **Metà backend applicata** (10:09:39): `--part back`, 26 operazioni in 4 file. Ruff e black puliti sui file veri.
+>   - **Verdi**:
+>     - `api backup-restore-apply` (10:09-10:10): **170 passati**;
+>     - `api backup-restore`: 146; `api security-checks`: 3;
+>     - lo script ha aspettato il carico ≥ 50 dalle 10:11 alle 10:14 (picco 104).
+>   - `api sync` (10:16-10:17), uscita 0: `openapi.json` e `generated.ts`, ignorati da git, nominano
+>     `restore_state_unreadable`.
+>   - Slot liberato alle 10:17:47; porta 6187 libera.
+> - ✅ **Verdi leggeri** (10:19-10:26, nella mia corsia; attesa del carico dalle 10:21 alle 10:25):
+>   - `services backup-apply` 255, `services backup-outcome` 97, `services backup-leftovers` 44;
+>   - `utils backup-cli-restore` 92, `utils backup-cli` 102, `utils backup-cli-secure` 66.
+>   Porta 6187 libera.
+> - ✅ **Controlli statici** (10:27): ruff e black puliti su tutti i 10 file Python cambiati, prettier pulito su tutti i
+>   file del frontend cambiati, `git diff --check` pulito.
+> - Lasciato com'è: il messaggio del `throw` in `RestoreCard.test.ts:180`, «Settings › Backup has no restore card».
+>   È il messaggio rosso di B5b per una scheda che non può più mancare; non tocco un test dopo il verde.
+> - Non eseguiti: `e2e` (lo slot non lo chiedeva; la scheda è coperta dai casi Vitest della carta e del flusso),
+>   `front check` separato (lo svelte-check del build del rosso API era pulito, con la metà frontend dentro).
+> - **Backlog**: B-32 ✅; **B-33** nuovo, i residui dichiarati, con la decisione del developer sul fail closed.
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto

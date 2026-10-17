@@ -39,6 +39,22 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     was. Nothing pending: one ❌ line ending with ``(restore_not_pending)``, exit 1; without a state file nothing is
     created, not even ``.restore/apply.lock``; a restore being applied or finished keeps its state as it was.
 (f) ``python scripts/backup_cli.py pending`` end to end; the help names ``--yes`` and ``--cancel``.
+(g) B-32 (red until it lands; contract §2, §3): a state the file system cannot read is said, never taken for «no
+    restore». ``pending``, ``pending --cancel`` and ``restore ARCHIVE --yes`` print one line, verbatim,
+    ``❌ The state of the restore cannot be read: <reason> (restore_state_unreadable)`` — the system's reason, never a
+    path — and exit 1, no traceback; the state, and a pending restore's copy, kept; ``restore`` checks nothing (no
+    copy made), while its ``--dry-run``, which never reads the state, works as before (a guard). In this process the
+    state is a file ``os.open`` refuses (EACCES, EIO), every other open the real one; for the script the file system
+    refuses it for real (the state file of mode 000, or ``.restore`` without its search permission, which ``lexists``
+    used to read as «no state»), skipped as root. ``pending --cancel`` refused before the restore is dropped (the
+    state's removal refused, EPERM; or ``.restore`` read-only for real, EACCES): one line, verbatim, ``❌ The restore
+    could not be cancelled: <strerror>. It still waits for the next start (restore_cancel_failed)``, exit 1, the
+    restore and its copy kept. Dropped, its copy left (its removal raising, which B-31 logs as a WARNING; leaving it
+    without a word, the copy's folder read-only for real; or ``.restore/stage`` not searchable for real, where a look at
+    the copy is refused too and counts as the copy still there, §2 amended): exactly ``✅ The restore waiting for the
+    next start was dropped: the data stays as it is`` then ``⚠️  Its checked copy could not be removed: it goes when its
+    check expires``, exit 0, the copy still there; the usual drop keeps its «with its copy» line (a guard). A mode changed
+    for a test is given back when the command ends, failed or not.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -55,6 +71,7 @@ sets its own with ``monkeypatch``. POSIX-only (pty, modes).
 from __future__ import annotations
 
 import argparse
+import errno
 import importlib
 import json
 import os
@@ -71,7 +88,7 @@ from typing import Any
 import pytest
 
 from backend.app.config.platform import instance_blocked
-from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, restore_dir, stage_dir
+from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, restore_dir, stage_data_dir, stage_dir, stages_dir
 from backend.test_scripts.test_utilities import test_backup_cli as cli
 from backend.test_scripts.test_utils import print_section, print_success
 from scripts import backup_cli
@@ -676,3 +693,245 @@ def test_the_help_names_yes_and_cancel(monkeypatch, capsys):
     pending_help = cli.help_of(monkeypatch, capsys, "backup", "pending")
     assert "--cancel" in pending_help, f"pending --help: {pending_help}"
     print_success("--yes, --cancel")
+
+
+# =============================================================================
+# (g) B-32 — a state that cannot be read, a cancel refused or half done
+# =============================================================================
+
+
+#: (B-32, §2) What a cancel that dropped the restore says: with its copy (unchanged), or without it, then why.
+DROPPED_WITH_COPY = "✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is"
+DROPPED = "✅ The restore waiting for the next start was dropped: the data stays as it is"
+COPY_KEPT = "⚠️  Its checked copy could not be removed: it goes when its check expires"
+#: How the command line starts a line it says; whatever else reaches standard output (a log record) is not one.
+SIGNS = ("✅", "⚠️", "❌", "ℹ️", "⏳")
+
+
+def unreadable_line(error: int) -> str:
+    """(B-32, §3) The line of a state the file system cannot read, ``error``'s reason in it: verbatim, never a path."""
+    return f"❌ The state of the restore cannot be read: {os.strerror(error)} (restore_state_unreadable)"
+
+
+def cancel_failed_line(error: int) -> str:
+    """(B-32, §2) The line of a cancel refused before the restore is dropped, ``error``'s reason in it: verbatim."""
+    return f"❌ The restore could not be cancelled: {os.strerror(error)}. It still waits for the next start (restore_cancel_failed)"
+
+
+def said(out: str) -> list[str]:
+    """The lines the command line said in ``out``, in their order: those starting with one of its signs."""
+    return [line for line in out.splitlines() if line.startswith(SIGNS)]
+
+
+def refused_for(path: Path, error: int, real: Any) -> Any:
+    """``real`` (``os.open``, ``os.unlink``, ``os.remove``) refusing ``path`` with ``error``, the real one for any other
+    path; a name relative to a folder descriptor is matched by its name."""
+
+    def refusing(target: Any, *args: Any, dir_fd: int | None = None, **kwargs: Any) -> Any:
+        name = os.fspath(target)
+        if name == os.fspath(path) or (dir_fd is not None and name == path.name):
+            raise OSError(error, os.strerror(error), name)
+        return real(target, *args, dir_fd=dir_fd, **kwargs)
+
+    return refusing
+
+
+def unreadable_state(monkeypatch, root: Path, error: int = errno.EACCES) -> None:
+    """``.restore/restore.json`` a file the file system will not open (``error``: EACCES, as for a file of mode 000, or
+    EIO): ``os.open`` of that path refuses, every other open is the real one, and the file stays on disk as it was.
+    Checked before the command runs."""
+    path = state_path(root)
+    monkeypatch.setattr(os, "open", refused_for(path, error, os.open))
+    try:
+        os.close(os.open(path, os.O_RDONLY))
+    except OSError as exc:
+        assert exc.errno == error, f"precondition: the state is refused with {errno.errorcode[error]}, not {exc!r}"
+    else:
+        pytest.fail("precondition: the state of the restore must be a file the file system will not open")
+
+
+def state_removal_refused(monkeypatch, root: Path, error: int = errno.EPERM) -> None:
+    """The removal of ``.restore/restore.json`` refused (``error``: EPERM, as for a file the system will not let go),
+    every other removal the real one: the cancel fails before the restore is dropped."""
+    path = state_path(root)
+    for name in ("unlink", "remove"):
+        monkeypatch.setattr(os, name, refused_for(path, error, getattr(os, name)))
+
+
+def copy_removal_raises(monkeypatch) -> list[str]:
+    """The removal of the checked copy raising (EACCES) once the restore is dropped, as B-31 meets it: ``remove_stage``
+    as ``cancel_restore`` calls it (through ``_remove_leftovers``), the copy left whole. The stages it was asked for."""
+    asked: list[str] = []
+
+    def refuse(data_dir: Path, stage_id: str) -> None:
+        asked.append(stage_id)
+        raise OSError(errno.EACCES, os.strerror(errno.EACCES))
+
+    monkeypatch.setattr(apply_module(), "remove_stage", refuse)
+    return asked
+
+
+@contextmanager
+def mode_for_a_while(path: Path, mode: int) -> Iterator[None]:
+    """``path`` given ``mode`` while the command runs — a refusal of the file system itself — then its own mode again,
+    the command failed or not, so that the test reads the state back and ``tmp_path`` can be removed."""
+    own = stat.S_IMODE(path.lstat().st_mode)
+    path.chmod(mode)
+    try:
+        yield
+    finally:
+        path.chmod(own)
+
+
+@pytest.mark.parametrize("error", [errno.EACCES, errno.EIO], ids=["permission-denied", "input-output-error"])
+def test_pending_says_that_the_state_cannot_be_read_and_exits_1(tmp_path, monkeypatch, capsys, error):
+    """(g) §3: today a state the file system cannot read reads as «no restore» (ℹ️, exit 0) though a restore may wait.
+    One line, verbatim, the system's reason in it and never the path; exit 1, no traceback; the state as it was."""
+    print_section("B-32: a state that cannot be read")
+    root = instance(tmp_path, monkeypatch)
+    before = write_state(root, "pending")
+    unreadable_state(monkeypatch, root, error)
+    code = run("pending")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (1, [unreadable_line(error)]), f"exit 1 and one line, verbatim {unreadable_line(error)!r}, never «No restore waits»: exit {code}: {out}"
+    assert "Traceback" not in out and os.fspath(state_path(root)) not in out, f"no traceback, no path: {out}"
+    assert state_path(root).read_bytes() == before, "the state as it was"
+    print_success(f"{errno.errorcode[error]}: (restore_state_unreadable), exit 1")
+
+
+def test_cancel_of_a_state_that_cannot_be_read_says_so_and_keeps_the_restore(tmp_path, monkeypatch, capsys, head_database):
+    """(g) §2, §3: today ``(restore_not_pending)`` — the restore that may wait taken for none. The unreadable line,
+    exit 1; the state and the copy of the pending restore as they were."""
+    root = instance(tmp_path, monkeypatch)
+    stage = confirmed_with_yes(root, tmp_path, head_database, capsys)
+    before = (state_path(root).read_bytes(), cli.listing(stage_dir(root, stage)))
+    unreadable_state(monkeypatch, root)
+    code = run("pending", "--cancel")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (1, [unreadable_line(errno.EACCES)]), f"exit 1 and one line, verbatim {unreadable_line(errno.EACCES)!r}, never (restore_not_pending): exit {code}: {out}"
+    assert "Traceback" not in out, f"no traceback: {out}"
+    assert (state_path(root).read_bytes(), cli.listing(stage_dir(root, stage))) == before, "the pending restore and its copy as they were"
+    print_success("--cancel: (restore_state_unreadable), the restore kept")
+
+
+#: (B-32, §2) A cancel refused before the restore is dropped, and the system's reason: the state's removal refused
+#: (EPERM); or ``.restore`` read-only for real (EACCES; skipped as root), which refuses the removal all the same.
+CANCEL_REFUSED = [
+    pytest.param("state-removal-refused", errno.EPERM, id="state-removal-refused"),
+    pytest.param("restore-folder-read-only", errno.EACCES, id="restore-folder-read-only", marks=cli.needs_permission_checks),
+]
+
+
+@pytest.mark.parametrize(("fault", "error"), CANCEL_REFUSED)
+def test_a_cancel_refused_before_the_drop_says_so_and_the_restore_still_waits(tmp_path, monkeypatch, capsys, head_database, fault, error):
+    """(g) §2: today the ``OSError`` reaches the user as a traceback. One line, verbatim, its reason in it; exit 1; the
+    restore still waits, with its copy."""
+    root = instance(tmp_path, monkeypatch)
+    stage = confirmed_with_yes(root, tmp_path, head_database, capsys)
+    before = (state_path(root).read_bytes(), cli.listing(stage_dir(root, stage)))
+    if fault == "state-removal-refused":
+        state_removal_refused(monkeypatch, root, error)
+        code = run("pending", "--cancel")
+    else:
+        with mode_for_a_while(restore_dir(root), 0o500):
+            code = run("pending", "--cancel")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (1, [cancel_failed_line(error)]), f"{fault}: exit 1 and one line, verbatim {cancel_failed_line(error)!r}: exit {code}: {out}"
+    assert "Traceback" not in out, f"no traceback: {out}"
+    assert (state_path(root).read_bytes(), cli.listing(stage_dir(root, stage))) == before, f"{fault}: the restore still waits, with its copy"
+    print_success(f"{fault}: (restore_cancel_failed), the restore kept")
+
+
+#: (B-32, §2) How the copy's removal fails once the restore is dropped: raising (B-31 logs a WARNING), or leaving it
+#: without a word — ``remove_stage`` removes with its errors ignored — the copy's folder read-only for real (skipped as
+#: root); or ``.restore/stage`` without its search permission for real (skipped as root): ``remove_stage``'s lstat raises
+#: EACCES, and a look at the copy (§2 amended, ``os.lstat``) is refused too — an error other than «not found» counts as
+#: the copy still there. The command line tells each by the copy still there.
+COPY_LEFT = [
+    pytest.param("removal-raises", id="removal-raises"),
+    pytest.param("removal-leaves-it", id="removal-leaves-it", marks=cli.needs_permission_checks),
+    pytest.param("stage-folder-not-searchable", id="stage-folder-not-searchable", marks=cli.needs_permission_checks),
+]
+
+
+@pytest.mark.parametrize("fault", COPY_LEFT)
+def test_a_cancel_whose_copy_stays_says_the_restore_was_dropped_and_its_copy_was_not(tmp_path, monkeypatch, capsys, head_database, fault):
+    """(g) §2: today «dropped, with its copy» while the copy is still there. Exactly the dropped line without «with its
+    copy», then the ⚠️ line; exit 0; the restore dropped, its copy still there."""
+    root = instance(tmp_path, monkeypatch)
+    stage = confirmed_with_yes(root, tmp_path, head_database, capsys)
+    if fault == "removal-raises":
+        asked = copy_removal_raises(monkeypatch)
+        code = run("pending", "--cancel")
+        assert asked == [stage], f"precondition: the removal of this restore's copy was refused: {asked}"
+    else:
+        locked, mode = (stage_data_dir(root, stage), 0o500) if fault == "removal-leaves-it" else (stages_dir(root), 0o600)
+        with mode_for_a_while(locked, mode):
+            code = run("pending", "--cancel")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (0, [DROPPED, COPY_KEPT]), f"{fault}: exit 0 and exactly {[DROPPED, COPY_KEPT]}, never «with its copy»: exit {code}: {out}"
+    assert not state_path(root).exists() and os.path.lexists(stage_dir(root, stage)), f"{fault}: the restore dropped, its copy still there: {cli.stages_left(root)}"
+    print_success(f"{fault}: dropped, then ⚠️ its copy stays")
+
+
+def test_a_cancel_that_removes_the_copy_still_says_with_its_copy(tmp_path, monkeypatch, capsys, head_database):
+    """(g) §2, a guard (green before and after): the usual drop keeps its one line, «with its copy», and the copy goes."""
+    root = instance(tmp_path, monkeypatch)
+    stage = confirmed_with_yes(root, tmp_path, head_database, capsys)
+    code = run("pending", "--cancel")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (0, [DROPPED_WITH_COPY]), f"exit 0 and exactly {DROPPED_WITH_COPY!r}: exit {code}: {out}"
+    assert not os.path.lexists(stage_dir(root, stage)), "the copy is gone"
+    print_success("dropped, with its copy")
+
+
+def test_restore_with_yes_and_a_state_that_cannot_be_read_stops_before_its_check(tmp_path, monkeypatch, capsys, head_database):
+    """(g) §3: today the archive is checked and confirmed over a state nobody could read — a restore that may still
+    wait. The unreadable line, exit 1, before the check: no copy made, the state as it was."""
+    root = instance(tmp_path, monkeypatch)
+    archive = cli.restorable(tmp_path, head_database)
+    before = write_state(root, "pending")
+    unreadable_state(monkeypatch, root)
+    code = run("restore", str(archive), "--yes")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (1, [unreadable_line(errno.EACCES)]), f"exit 1 and one line, verbatim {unreadable_line(errno.EACCES)!r}: exit {code}: {out}"
+    assert "🔎" not in out and cli.stages_left(root) == [], f"nothing checked, no copy made: {cli.stages_left(root)}: {out}"
+    assert state_path(root).read_bytes() == before, "the state as it was, never replaced"
+    print_success("restore --yes: (restore_state_unreadable) before the check")
+
+
+def test_a_dry_run_never_reads_the_state_and_works_as_before(tmp_path, monkeypatch, capsys, head_database):
+    """(g) §3, a guard (green before and after): ``--dry-run`` never reads the state of the restore, so one that cannot
+    be read changes nothing: exit 0, restorable, the copy removed, the state as it was."""
+    root = instance(tmp_path, monkeypatch)
+    archive = cli.restorable(tmp_path, head_database)
+    before = write_state(root, "pending")
+    unreadable_state(monkeypatch, root)
+    code = run("restore", str(archive), "--dry-run")
+    out = capsys.readouterr().out
+    assert code == 0 and cli.RESTORABLE_LINE in out, f"the dry run as before: exit {code}: {out}"
+    assert cli.stages_left(root) == [] and state_path(root).read_bytes() == before, f"its copy removed, the state as it was: {cli.stages_left(root)}"
+    print_success("--dry-run: as before")
+
+
+#: (B-32, §3) A state the file system itself refuses, for the script: the state file of mode 000, or ``.restore``
+#: without its search permission — which ``lexists`` read as «no state» — (the path, and the mode it is given).
+REAL_REFUSALS = [pytest.param("state-file-000", id="state-file-000"), pytest.param("restore-folder-not-searchable", id="restore-folder-not-searchable")]
+
+
+@cli.needs_permission_checks
+@pytest.mark.parametrize("fault", REAL_REFUSALS)
+@pytest.mark.parametrize("argv", [("pending",), ("pending", "--cancel")], ids=["pending", "pending-cancel"])
+def test_the_script_says_that_a_state_the_file_system_refuses_cannot_be_read(tmp_path, argv, fault):
+    """(g) §3, end to end: a real refusal of the file system, in a process of its own. The unreadable line, exit 1, no
+    traceback, the state kept."""
+    data = cli.make_data_dir(tmp_path / "instance").resolve()
+    before = write_state(data, "pending")
+    locked, mode = (state_path(data), 0o000) if fault == "state-file-000" else (restore_dir(data), 0o600)
+    with mode_for_a_while(locked, mode):
+        done = cli.script(*argv, env=cli.child_env(data), cwd=tmp_path)
+    expected = unreadable_line(errno.EACCES)
+    assert (done.returncode, said(done.stdout)) == (1, [expected]), f"{' '.join(argv)}, {fault}: exit 1 and one line, verbatim {expected!r}: exit {done.returncode}\n{done.stdout[-cli.TAIL:]}{done.stderr[-cli.TAIL:]}"
+    assert "Traceback" not in done.stderr, f"no traceback: {done.stderr[-cli.TAIL:]}"
+    assert state_path(data).read_bytes() == before, "the state kept"
+    print_success(f"script {' '.join(argv)}, {fault}: (restore_state_unreadable)")
