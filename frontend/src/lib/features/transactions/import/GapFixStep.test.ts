@@ -52,8 +52,9 @@
  * correction's in the table (through `signedQuantity()`, which adds a `+`) — and that was
  * `formatDecimalForDisplay`: exact digits, cut at the eighth, but a dot and no grouping in every
  * language. The cure writes the same digits in the interface locale (`formatExactDecimal`). A
- * dedicated broker (10) carries quantities with a fraction, thousands and a ninth fraction digit:
- * the main fixture's quantities are integers below 1000, which read the same in every language.
+ * dedicated broker (10) carries quantities with a fraction, thousands and eight fraction digits
+ * (a ninth until C-97c-1, which moves the cut to the tenth: no cut is reached now, before or
+ * after that cure): the main fixture's quantities are integers below 1000, which read the same in every language.
  * The expected text is Intl's output for the interface locale, handed the step's digits as a
  * string; no localized literal is typed. jsdom's browser is en-US: an English UI is written en-US
  * (grouped from a thousand on: the new contract of English), an Italian one bare `it`. When the
@@ -252,10 +253,13 @@ const G10 = `${DECIMAL_BROKER}:${DANSKE}`;
 const CP_DECIMAL = `${G10}:cp:0`;
 const KEY_DECIMAL_ADJUSTMENT = `${CP_DECIMAL}:p:0`;
 const DECIMAL_DATE = '2021-05-05';
-/** Thousands and a ninth fraction digit, which the step cuts. */
-const BANK_QTY = '12345.678901234';
+/**
+ * Thousands and eight fraction digits. No cut is reached — the eighth decimal before C-97c-1, the tenth after — so the
+ * block reads the notation alone: how many decimals a quantity keeps is the C-97c-1 block's subject.
+ */
+const BANK_QTY = '12345.67890123';
 const LIBREFOLIO_QTY = '0.5';
-const DIFFERENCE_QTY = '12345.178901234';
+const DIFFERENCE_QTY = '12345.17890123';
 /** The cash LibreFolio lacks at that checkpoint: the in-component control of the details. */
 const DECIMAL_CASH = '12345.67';
 
@@ -783,9 +787,9 @@ describe('GapFixStep — the quantities in the interface language (M-18 CP3a)', 
     /** A string as `text()` reads an element: whitespace runs collapsed. */
     const squash = (value: string): string => value.replace(/\s+/g, ' ').trim();
 
-    /** A quantity as the step writes it in `locale`: the digits of its `quantity()` (cut at the eighth), handed to Intl as a string. */
+    /** A quantity as the step writes it in `locale`: the digits of its `quantity()`, up to the column's ten (C-97c-1), handed to Intl as a string. */
     function quantityIn(locale: string, value: string): string {
-        return squash(intlExact(locale, formatDecimalForDisplay(value, {minFrac: 0, maxFrac: 8})));
+        return squash(intlExact(locale, formatDecimalForDisplay(value, {minFrac: 0, maxFrac: 10})));
     }
 
     /** `signedQuantity()`'s form: a `+` before a positive quantity. */
@@ -867,9 +871,9 @@ describe('GapFixStep — the quantities in the interface language (M-18 CP3a)', 
         await uiLanguage('en');
     });
 
-    it('Italian UI: a position’s quantities and a correction’s quantity in Italian notation — quantity()’s digits, cut at the eighth', async () => {
+    it('Italian UI: a position’s quantities and a correction’s quantity in Italian notation — quantity()’s digits', async () => {
         await uiLanguage('it');
-        expect(formatDecimalForDisplay(BANK_QTY, {minFrac: 0, maxFrac: 8}), 'control: the step cuts at the eighth digit, it does not round').toBe('12345.67890123');
+        expect(formatDecimalForDisplay(BANK_QTY, {minFrac: 0, maxFrac: 8}), 'control: no cut is reached, at the eighth decimal (before C-97c-1) nor at the tenth (after)').toBe(BANK_QTY);
         const italian = quantitiesIn('it');
         expect(italian.exact.bank, 'control: Italian writes the quantity otherwise than English').not.toBe(quantitiesIn('en-US').exact.bank);
         expect(italian.exact.bank.replace(/\D/g, ''), 'control: and keeps its digits').toBe('1234567890123');
@@ -900,5 +904,86 @@ describe('GapFixStep — the quantities in the interface language (M-18 CP3a)', 
         expectControlsIn('back to English', 'en-US');
 
         expect(observedQuantities(), 'back to English in place').toEqual(quantitiesIn('en-US'));
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C-97c-1 — a quantity keeps every decimal of its column
+// ---------------------------------------------------------------------------
+
+/**
+ * D-C97c-1 (the coordinator, 17/10): a quantity on screen loses no digit the database keeps, and `Transaction.quantity`
+ * keeps ten decimals. Every quantity of the step goes through its `quantity()` — `formatExactDecimal` with
+ * `maxFrac: 8` — so 0.1234567891 is cut at the eighth decimal: the bank's figure of a position, its difference
+ * (through `signedQuantity()`, which adds a `+`) and the quantity of the correction that closes it. The contract: ten.
+ *
+ * A dedicated broker (11): one opening checkpoint, one exact position the bank holds 0.1234567891 of and LibreFolio
+ * none, and the correction carrying that difference. Its LibreFolio figure, `0`, is the control that a position row is
+ * read in its own columns. English UI, set through the store: jsdom's browser is en-US, so the expectations are typed.
+ */
+const TEN_DECIMAL_BROKER = 11;
+const G11 = `${TEN_DECIMAL_BROKER}:${DANSKE}`;
+const CP_TEN = `${G11}:cp:0`;
+const KEY_TEN_ADJUSTMENT = `${CP_TEN}:p:0`;
+const TEN_DECIMAL_DATE = '2021-06-07';
+const TEN_DECIMAL_ASSET = 46;
+/** Ten decimals, as `Transaction.quantity` keeps them. */
+const TEN_DECIMAL_QTY = '0.1234567891';
+
+const TEN_DECIMAL_OUTCOMES = [
+    {
+        brokerId: TEN_DECIMAL_BROKER,
+        pluginCode: DANSKE,
+        response: {
+            checkpoints: [
+                {
+                    as_of: TEN_DECIMAL_DATE,
+                    kind: 'opening',
+                    cash: [],
+                    positions: [{asset_id: TEN_DECIMAL_ASSET, exactness: 'exact', bank: TEN_DECIMAL_QTY, librefolio: '0', difference: TEN_DECIMAL_QTY}],
+                    proposals: [{broker_id: TEN_DECIMAL_BROKER, type: 'ADJUSTMENT', date: TEN_DECIMAL_DATE, asset_id: TEN_DECIMAL_ASSET, quantity: TEN_DECIMAL_QTY, tags: TAGS, description: `Gap-fix ${TEN_DECIMAL_DATE}`}],
+                    todos: [],
+                    explanation: {absorbed_count: 0, absorbed_missing_count: 0, absorbed_missing_cash: [], opening_cash: [], unexplained_cash: [], notes: []},
+                },
+            ],
+            verifications: [],
+        },
+    },
+];
+
+describe('GapFixStep — a quantity keeps every decimal of its column, up to ten (C-97c-1)', () => {
+    /** The English UI, set as LanguageSelector sets it: on jsdom's en-US browser it is written en-US. */
+    async function english(): Promise<void> {
+        currentLanguage.set('en');
+        await waitLocale('en');
+        flushSync();
+        await tick();
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    }
+
+    /** The cells of the open checkpoint's position row, in the template's order: name, LibreFolio, bank, difference. */
+    function positionCells(assetId: number): string[] {
+        const tr = the('gapfix-position-row', {'asset-id': String(assetId)});
+        if (!(tr instanceof HTMLTableRowElement) || tr.cells.length !== 4) throw new Error(`the position row of asset ${assetId} is not a row of four cells (name, LibreFolio, bank, difference): re-read the template`);
+        return [...tr.cells].map((cell) => text(cell));
+    }
+
+    /** The quantity cell of the correction's table row, by the column DataTable marks it with. */
+    function correctionQuantity(): string {
+        const cell = row(KEY_TEN_ADJUSTMENT, group(TEN_DECIMAL_BROKER)).querySelector('td[data-column-id="quantity"]');
+        if (!cell) throw new Error(`the table row of ${KEY_TEN_ADJUSTMENT} has no quantity cell`);
+        return text(cell);
+    }
+
+    it('0.1234567891 reads whole — the bank’s figure, the difference and the correction keep the ten decimals, not eight', async () => {
+        await english();
+        await mountStep(undefined, TEN_DECIMAL_OUTCOMES);
+        await fireEvent.click(card(CP_TEN));
+        the('gapfix-point-details', {key: CP_TEN});
+        await waitFor(() => expect(rowKeys(group(TEN_DECIMAL_BROKER))).toEqual([KEY_TEN_ADJUSTMENT]));
+        const [, librefolio, bank, difference] = positionCells(TEN_DECIMAL_ASSET);
+        expect(librefolio, 'control: the LibreFolio figure, read in its own column').toBe('0');
+
+        expect({bank, difference, correction: correctionQuantity()}).toEqual({bank: TEN_DECIMAL_QTY, difference: `+${TEN_DECIMAL_QTY}`, correction: `+${TEN_DECIMAL_QTY}`});
     });
 });

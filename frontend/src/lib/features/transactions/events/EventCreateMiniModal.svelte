@@ -20,7 +20,7 @@
     import EventExistsPanel from './EventExistsPanel.svelte';
     import {eventSaveErrorMessage, existingAmountText, existingEvents, type ExistingEvent} from './eventSaveError';
     import {X} from 'lucide-svelte';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatExactDecimal} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Props {
@@ -193,8 +193,9 @@
             const typeLabel = $t(`assetDetail.eventType.${eventType}`) || eventType;
             const emoji = typeOptions.find((o) => o.value === eventType)?.icon || '📋';
             const fmtDate = new Date(eventDate + 'T00:00:00').toLocaleDateString(uiLocale(), {day: 'numeric', month: 'short', year: 'numeric'});
-            const amt = parseFloat(normalizeDecimalInput(eventAmount));
-            const fmtAmt = !isNaN(amt) ? `${formatFixed(amt, 2)} ${assetCurrency}` : '';
+            // C-97c: the value as saved, exact, 2 to 6 decimals (an event value keeps 6), never through a float at 2.
+            const amountText = normalizeDecimalInput(eventAmount);
+            const fmtAmt = !isNaN(parseFloat(amountText)) ? `${formatExactDecimal(amountText, {minFrac: 2, maxFrac: 6})} ${assetCurrency}` : '';
             const toastMsg = `${emoji} ${typeLabel} · ${fmtDate}${fmtAmt ? ` · ${fmtAmt}` : ''}${eventNotes ? ` · 📝 ${eventNotes}` : ''}`;
             toasts.success(toastMsg);
             if (savedId) {
