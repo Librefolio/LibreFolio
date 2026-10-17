@@ -29,6 +29,17 @@ The Vite development server will run at **`http://localhost:5173`** and automati
 LibreFolio includes a central orchestration script, `dev.py`, which is your single entry point for all development tasks.
 Run `./dev.py --help` for the full command tree.
 
+### ⏹️ Stopping the Server
+
+`./dev.py server` runs uvicorn as its child process and waits for it (`run_server_live()` in `scripts/cli_base.py`). It lets the server finish its own shutdown, bounded by the shutdown budget (`LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, 8 s by default; see *Stopping the Server* in [Configuration](../admin/configuration.md)):
+
+- **Ctrl+C**: the terminal sends SIGINT to the whole foreground process group, so the server already has it. `dev.py` sends nothing more, since a second SIGINT would make uvicorn force its exit: it prints `Interrupted: waiting for the server to stop …` and waits.
+- **SIGTERM to `dev.py`**, for example from a process supervisor that signals only the main process: `dev.py` forwards it to the server, prints `SIGTERM: waiting for the server to stop …` and waits the same way. A server that gets the SIGTERM from its process group as well (the test runner signals the whole group, `scripts/test_runner/_server.py`) gets it twice and stops once.
+- **The wait** (`_server_stop_grace()` in `dev.py`) is the budget plus 2 s: 10 s by default, 7 s with `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=5`, 10 s with a value that cannot be used, and no limit with `0`.
+- **A second Ctrl+C or SIGTERM**, or the end of the wait: `dev.py` kills the server (SIGKILL).
+
+`dev.py` exits with `130` after a Ctrl+C and `143` after a SIGTERM. With `--coverage` no `dev.py` is left to wait: it replaces itself with `coverage run`, and the signals reach the server directly (see [Frontend Coverage Architecture](test-walkthrough/index.md#frontend-coverage-architecture)). The other `dev.py` commands still run through `run_command_live()`, whose `subprocess.run` kills the child 0.25 s after a Ctrl+C.
+
 ### 🖥️ Frontend Management
 
 | Command | Description | Details |

@@ -4706,3 +4706,438 @@ prossimo checkpoint.
   - Il coordinatore committa e aggiorna la base; poi via a CP-14a.
   - Fino alla conferma dell'aggiornamento non tocco il diario (piano, indice, `log.md`). Le note di CP-14a vanno
     intanto in `files/j/cp14a/`.
+- ✅ **CP-10c committato** (`539351fd9` refactor, `62b3305b4` diario). **Base aggiornata**: merge `db03321a3`
+  (genitori `62b3305b4` + dev `2818924b7`), pulito.
+  - Il coordinatore ha risolto `devWiki/log.md` per unione; `price_query.py` si è unito da solo con W-B58.
+  - Nell'albero unito nessun importatore prende i nomi spostati da `signals.service`.
+  - Restano nello slot 1, su questa revisione e prima dell'ingresso: le 3 `api` e la sonda MF-E1.
+  - Coordinatore: lettura della decisione 27 approvata (solo le rettifiche in entrata senza costo; il −q dello split
+    inverso resta come in A4).
+  - `eventSaveError.ts` è di W, e C-97b di W ci lavora adesso. Il mio `case` e la chiave nei 4 cataloghi `events`
+    entrano dopo C-97b, con la revisione di W; me lo dice il coordinatore.
+
+#### CP-14a — U10 (interessi nella casa, un solo cammino) e P-10 (17/10, dalle 02:54; base `db03321a3`)
+
+- Brief: `files/j/cp14a/brief.md`.
+- ✅ **Passo 0 — preparazione, senza toccare il codice (2026-10-17, 02:54–03:04)**.
+  > **Note implementazione**:
+  > - Test-author lanciato (in background, nessuna esecuzione):
+  >   - il rosso della guardia U10 in `test_layer_boundaries.py`;
+  >   - la rete dorata del cammino in `test_synthetic_yield.py` (meccanismo di `test_native_cash_guard.py`, variabile
+  >     `LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN`, fissaggio `fixtures/scheduled_investment/accrual_golden.json`);
+  >   - i rossi di P-10 in `test_asset_event_store.py`;
+  >   - A3 riscritto in `test_portfolio_wac.py`.
+  >   - Nessun file nuovo da registrare nel runner, che A ha aperto.
+  > - **Il codice, preparato nella sessione** (`files/j/cp14a/`):
+  >   - `interest.py`: le cinque primitive, corpi identici, con `date_type` → `date`;
+  >   - `walk.py`: il cammino unico. `_accrual_days` produce per ogni giorno il valore prima della cedola automatica, e
+  >     la cedola; lo leggono la curva storica e il valore di un giorno. Aiuti: `_active_period`,
+  >     `_apply_manual_events`, `_schedule_maturation_dates`, `_manual_events_by_date`, `_log_cache_lookup`. La mora
+  >     ha un solo ciclo COMPOUND e un solo cammino SIMPLE;
+  >   - `apply.py`: sostituzione per span AST. Si ferma se un corpo della casa differisce da quello del plugin.
+  > - **Prova a secco su una copia in `/tmp`**:
+  >   - plugin da 958 a 746 righe, casa 130 righe;
+  >   - ruff con tutte le regole (C901 compreso, senza più i due `noqa` «TODO(P2-refactor)») e black, con la
+  >     configurazione del progetto.
+  > - **Equivalenza** (`equivalence.py`, in memoria, cache disattivata da tutte e due le parti): vecchio cammino
+  >   contro nuovo, uguaglianza esatta dei Decimal.
+  >   - Identici: 33 496 frazioni di giorni, 220 calendari casuali più quello vuoto, 12 324 punti di valore e di mora.
+  >   - Il seme fisso è 20261017. Combinazioni: le 4 convenzioni, SIMPLE e COMPOUND, tutte le frequenze, cedole, eventi
+  >     manuali, 1–3 periodi con 0 o 1 giorno di salto, mora con grazia 0/5/30/400.
+  >
+  > **⚠️ Fuori pista**: due false partenze dello script d'equivalenza, nessuna sul codice.
+  > - `backend` non era sul percorso, perché lo script sta nella cartella di sessione: `PYTHONPATH` sul worktree.
+  > - Il modulo eseguito a mano non stava in `sys.modules`, e `@dataclass` lo cerca lì.
+  > - Nella prova a secco, black lanciato su `/tmp` non vede il `pyproject.toml` del progetto e taglia a 88 colonne:
+  >   rilanciato con `--config`.
+- ✅ **Slot 1 (03:07–03:17, su `db03321a3`)**, via del coordinatore alle 03:06 («the 3 `api` + the MF-E1 probe»).
+  > **Note implementazione**:
+  > - **CP-10c, cancelli rimasti**: `api signal-request-validation` 2, `signal-preview` 5, `asset-signals` 2, tutti
+  >   verdi. Il server ha ricostruito il frontend di debug e il sito della documentazione, vecchi dopo
+  >   l'aggiornamento della base. Nessuna migrazione nuova: il DB della corsia del 02:07 era valido.
+  >   **Passo 3 di CP-10c chiuso.** CP-10c è entrato in dev: `69e1c58e9`.
+  > - **Sonda MF-E1**: lanciata dal worktree a `db03321a3`, che contiene `f32a04f46`. L'albero di `/tmp` resta il
+  >   ripiego. Casi in modalità Data, utente alfy, 1Y, `standard`: `portfolio.overview_and_history` (all) e
+  >   `broker.overview_and_history` sul broker con più vendite.
+  >   - 2/2 prompt, 0 errori, scansione dei segreti pulita, sorgenti invariate, porte 6185/6195 libere.
+  >   - **Versione**: `portfolio.fifo_summary` e `broker.fifo_summary` hanno `component_version` 3 e `schema_version`
+  >     1 nello snapshot. L'intestazione del prompt è solo `COMPONENT <id>`; la versione sceglie il ramo di rendering.
+  >   - **Rendering compatto**: 0 «PAYLOAD YAML FALLBACK». I blocchi v3 sono identici byte per byte ai blocchi v2 di
+  >     J-26 per gli stessi ambiti (sha256 `c52a1134cd10`, 29 righe; `d6dae98d3804`, 19 righe): la voce compatta
+  >     `[1, 2, 3]` rende la v3 come la v2.
+  >   - **Equivalenza UI/sonda**: `renderAiExportPrompt` e `renderAiExportPromptDiagnostics` danno stringhe e byte
+  >     UTF-8 identici, in tutti e due i casi.
+  >   - **Valori**: i payload v3 sono identici, foglia per foglia, a quelli v2 di J-26. È atteso: i dati non hanno un
+  >     lotto con valore noto e P&L ignoto, l'unico caso in cui T-B8 cambia un numero.
+  >   - Analisi: `files/j/mfe1/analyze.py`, `analyze.log`.
+  >
+  > **⚠️ Fuori pista**: il primo lancio usava gli id dei dataset (`portfolio.fifo`, `broker.fifo`), che la sonda
+  > rifiuta in 9 s («absent from runtime catalog»): le selezioni pubbliche della modalità Data sono le
+  > `overview_and_history`. Rilanciato subito, dentro lo stesso slot.
+- Al coordinatore (03:21): l'analisi della sonda, e il via per portare la base in avanti veloce a `69e1c58e9`. Il delta
+  di dev non tocca i miei file aperti né i file di CP-14a. Dopo l'avanti veloce, J-37 (il testo del runner), perché
+  A7b-2 è entrato.
+- **Avanti veloce fatto** dal coordinatore (03:24): HEAD `69e1c58e9`, i miei file intatti. Sonda annotata: **MF-E1
+  chiusa senza reperti**. J-37 va dopo CP-14a, o dentro se è minima: scelta mia.
+- ✅ **J-37 — i testi del runner (2026-10-17, 03:25)**, dentro CP-14a come commit a parte (quattro stringhe di
+  `scripts/test_runner/_backend_services.py`; A7b-2 è entrato).
+  > **Note implementazione**:
+  > - `risk-oracle`: «metrics.py and signal_helpers.py» diventa «risk/metrics.py and signals/risk_adapters.py»
+  >   (residuo di CP-10b).
+  > - `lots-analysis-pure`: `print_info` e `desc` nominano anche il prezzo di riferimento e i giorni al costo.
+  > - Il commento di `isolation="pure"` dice anche i casi di CP-7b: `get_lots_analysis` su doppioni dei loader e una
+  >   sessione finta, tutto in EUR, così nessun cambio è chiesto e niente tocca un database.
+  > - Controllo: il catalogo si carica e `test services --help` mostra il testo nuovo.
+- ✅ **Passo 1 — rossi e rete dorata (test-author 02:55–03:25; corse 03:27–03:30, codice vecchio)**.
+  > **Note implementazione**:
+  > - **Test** (test-author, quattro file):
+  >   - `test_layer_boundaries.py`: `interest.py` in `KNOWN_MODULES`, più la regola (e): le cinque primitive definite
+  >     una volta sola, in `financial_math/interest.py`, con l'autotest della ricerca;
+  >   - `test_synthetic_yield.py`: rete dorata (`accrual_golden`) sul meccanismo di `test_native_cash_guard.py`. Sono 33
+  >     casi: 4 forme × 4 convenzioni × 2 tipi d'interesse, più il calendario vuoto. In più un controllo che i due
+  >     cammini danno le stesse cifre in ogni data di maturazione;
+  >   - `test_asset_event_store.py`: 3 rossi di P-10 (rifiuto con i dettagli, atomicità, la prima modifica colpevole e
+  >     solo le sue rettifiche in entrata senza costo) e 5 guardie (costo 12,5 e 0, split inverso −q, nessun legame,
+  >     tipo SPLIT tenuto);
+  >   - `test_portfolio_wac.py`: A3 riscritto. 409 con i `params` esatti e niente cambiato; poi un costo di 40 EUR e la
+  >     ritipizzazione passa, a WAC 70 su 30 quote. A4 invariato. Black ha riunito tre istruzioni vecchie del file:
+  >     solo forma.
+  > - **Rigenerazione** sul codice vecchio: `accrual_golden.json`, 83 749 byte.
+  > - **Corse**:
+  >   - `synthetic-yield` 18 verdi, la rete compresa;
+  >   - `financial-math` **2 rossi** (826 verdi): «missed layer modules: ['interest.py']» e le cinque «also defined at
+  >     …/scheduled_investment/plugin.py:74/108/114/154/174»;
+  >   - `asset-event-store` **3 rossi** (68 verdi), tutti «bulk_upsert_events accepted a request it must refuse»;
+  >   - `day-count` 31 verdi.
+  >   - `api portfolio-wac` (A3) gira nello slot.
+  >
+  > **⚠️ Fuori pista**: la guardia (d) del layer (`test_only_the_split_loader_names_the_split_event_type`) vieta di
+  > nominare `AssetEventType.SPLIT` fuori da `financial_math/splits.py` ed `event_suggestions.py`. Quindi la query di
+  > P-10 («le rettifiche in entrata senza costo legate a questi SPLIT») va in `splits.py`, il punto nominato dove la
+  > casa legge i legami degli split; `event_store.py` la chiama soltanto. Segnalato dal test-author.
+- ✅ **Passo 2 — il codice (2026-10-17, 03:30–03:35)**.
+  > **Note implementazione**:
+  > - **U10**: `files/j/cp14a/apply.py` sul worktree.
+  >   - `financial_math/interest.py` (130 righe): le cinque primitive, corpi identici.
+  >   - Il plugin passa da 958 a 745 righe e importa le primitive dalla casa; via `import calendar`.
+  >   - Il cammino unico (`_accrual_days` e i suoi aiuti); la mora con un ciclo COMPOUND e un cammino SIMPLE.
+  >   - Il risultato è identico alla prova a secco che ha passato l'equivalenza, salvo la posizione di un import
+  >     (in `/tmp` isort non sapeva che `backend` è del progetto).
+  >   - Lettori: `test_day_count_conventions.py` e `test_asset_source.py` importano dalla casa.
+  >   - `financial_math/__init__.py`: `interest` nella mappa dei moduli.
+  >   - `.github/instructions/backend.instructions.md`: una riga nella tabella «One Home» e la riga di `splits.py`.
+  > - **P-10**:
+  >   - `financial_math/splits.py::costless_incoming_split_adjustments(db, event_ids)`: rettifiche ADJUSTMENT +q senza
+  >     `cost_basis_override` legate agli SPLIT fra gli id dati; il punto nominato del docstring si estende agli
+  >     eventi.
+  >   - `event_store.py::_reject_split_retype_without_costs`, chiamata dopo `_reject_event_key_conflicts` e prima della
+  >     prima scrittura. Non nomina SPLIT: passa le modifiche che cambiano tipo, e la casa filtra gli SPLIT.
+  >   - `api/v1/assets/events.py`: `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` → 409, più la riga nel docstring
+  >     dell'endpoint.
+  >   - `_write_manual_item` aggiunge già `asset_id` e `item_index` ai dettagli.
+  > - **Runner** (insieme a J-37): le descrizioni di `synthetic-yield` (la rete dorata, con la variabile di
+  >   rigenerazione), `asset-event-store` (P-10) e `financial-math` (la casa unica delle primitive).
+  > - **DevWiki**: note datate in `decisions/scheduled-investment-redesign.md` (la riga storica resta) e
+  >   `decisions/financial-math-one-home.md`, righe «Source files», voce in `log.md`. `check_source_paths.py` resta a
+  >   7.
+  > - ruff (tutte le regole, C901 compreso) e black puliti; import dei moduli riuscito; `git diff --check` pulito.
+- ✅ **Passo 3 — verdi sul codice nuovo (03:32–03:38)**, corsia 6185, carico < 50:
+  > **Note implementazione**:
+  > - `synthetic-yield` 18 (la rete dorata verde: ogni numero identico), `synthetic-yield-integration` 15,
+  >   `asset-source` 61;
+  > - `financial-math` 829: i 2 rossi verdi, più il caso nuovo `[interest.py]` della guardia sugli import per modulo;
+  > - `asset-event-store` 71 (i 3 rossi verdi), `day-count` 31, `check-orphans`.
+  > - `api sync`: in `openapi.json` cambia solo il testo della descrizione dell'endpoint degli eventi. Le altre due
+  >   righe diverse sono la stringa di versione e una descrizione di A7b-2 arrivata con l'avanti veloce.
+  > - **Da fare nello slot**: `db populate`, `api portfolio-wac` (A3) e `api assets-events`.
+  > - **Dopo C-97b di W**: il `case` di `eventSaveError.ts` e la chiave nei 4 cataloghi, con la revisione di W.
+  > - **V-4**: E2 di `data-quality-real.spec.ts` diventa rosso con P-10. Decide il coordinatore chi lo ricostruisce
+  >   (lo spec è di V) e lo slot per l'E2E.
+- **Coordinatore (03:41–03:44)**:
+  - slot 1 dopo il blocco delle gallerie (~04:35) e dopo X (~20 min);
+  - **revisione di X su P-10: OK, nessun rilievo** (confronto dei tipi sui valori `StrEnum`, query solo se qualcosa
+    cambia tipo, filtri giusti, prima della prima scrittura, 409 coerente con `EVENT_IN_USE`);
+  - **V-4 lo faccio io dentro CP-14a**, con il test-author, per non mettere un rosso in dev. E2 deve arrivare a
+    `MISSING_COST_BASIS` per una strada ancora legittima. Se non ne resta nessuna, lo dico al coordinatore, e allora
+    il caso fissa il rifiuto.
+  - E2 gira nello slot insieme alle 2 `api`.
+- ✅ **Doc di CP-14a** (docs-writer, 03:37–03:47; io la frase in 4 lingue).
+  > **Note implementazione**:
+  > - `developer/backend/financial_math.md`:
+  >   - `interest.py` nell'albero dei moduli; la riga di `splits.py` con P-10;
+  >   - la regola 1 (dove il layer legge il database) con la funzione nuova;
+  >   - un paragrafo U10 nella sezione Layer Guard (regola (e)).
+  >   - Poi, su mia richiesta: la riga dei selettori per `utils day-count`, la riga delle pagine profonde per
+  >     `interest.py`, la frase d'apertura della guardia (le regole (d) ed (e) leggono tutto `backend/app`) e un punto
+  >     per la regola (d).
+  > - `developer/backend/assets/provider_scheduled_investment.md`:
+  >   - sezione nuova «👣 The Accrual Walk» (`#accrual-walk`): i quattro passi del giorno, il valore prima della cedola,
+  >     i due lettori, la rete dorata;
+  >   - la formula COMPOUND descritta com'è nel codice, `(P₀ + accrued_interest) × r × Δt`, senza gli eventi manuali
+  >     nella base: è la domanda aperta al developer;
+  >   - corretti l'elenco della cedola automatica, la tabella degli stati e l'esempio, inesatti già prima di U10;
+  >   - la nota tecnica dice la casa nuova.
+  > - `financial-theory/fundamentals/day-count`: la frase della funzione dice la casa nuova, in EN dal docs-writer; IT,
+  >   FR, ES li ho scritti io: «casa», e «couche»/«capa» come il «layer» delle pagine per sviluppatori. Timbro della
+  >   cache di traduzione: `mkdocs translate-stamp --file financial-theory/fundamentals/day-count.en.md` (it, fr, es).
+  > - Io: `.github/instructions/financial-math.instructions.md`, la tabella dei moduli con `interest.py` e la funzione
+  >   di P-10 su `splits.py`; `scripts/test_runner/_backend_utils.py:48`, il testo di `day-count` sulla casa nuova.
+  >
+  > **⚠️ Fuori pista — J-39** (trovata dal docs-writer leggendo i valori fissati dalla rete dorata, verificata da me in
+  > memoria):
+  > - Un titolo da 10 000 al 5 % con cedola annuale a scadenza dà INTEREST 498,63 **e** MATURITY_SETTLEMENT
+  >   10 498,63: l'ultima cedola è contata due volte.
+  > - Con mora SIMPLE al 10 %, il giorno dopo la scadenza dà 10 501,37 invece di 10 002,74.
+  > - Preesistente, da I-bis #26: il valore prima della cedola, giusto per il grafico, finisce in liquidazione e mora.
+  > - Nell'indice come J-39. La domanda di modellazione (con la mora, la cedola di scadenza è pagata o no?) va al
+  >   developer tramite il coordinatore. La rete dorata fissa i valori di oggi: la cura li cambierà, dichiarati.
+- **Coordinatore (03:54), J-39**:
+  - la cura della liquidazione senza mora va in **CP-14b** (valori dichiarati, rosso prima, riga 🐛);
+  - la mora aspetta il developer: la domanda è nella lista del mattino;
+  - nell'analisi di CP-14b anche `get_current_value` contro `get_history_value` dopo la scadenza.
+  - CP-14b è quindi ACT/ACT + T-D9 + la liquidazione di J-39.
+- **V-4, analisi del test-author (sola lettura, 03:45–03:54)**: dopo P-10 **nessuna strada legittima** porta a
+  `MISSING_COST_BASIS` su dati nuovi.
+  - Rettifica +q in Auto: pool vuoto → 0; cambio mancante → `WAC_FX_UNAVAILABLE`; senza Auto →
+    `COST_BASIS_REQUIRED`.
+  - Staccare dallo SPLIT una riga legata senza costo, via API delle transazioni: rifiutato (il legame è un campo del
+    costo).
+  - Le gambe di TRANSFER di oggi hanno sempre un costo; BRIM passa dagli stessi controlli.
+  - Quindi E2 fissa il rifiuto (ripiego approvato in anticipo dal coordinatore). Le due prove che esistono solo in E2
+    passano a `data-quality-legacy.spec.ts`: i trattini sulla pagina del broker, e «un costo di 0 a unità lo toglie».
+    Reperti F1–F4 nell'indice come J-40…J-42.
+- **Coordinatore (03:58)**: V-4 così va bene.
+  - Reperti assegnati: F1/F2/F4 → X, F3 → W, F5 dopo C-97b (lo scrivo io, rivede W).
+  - **F1 deciso**: un rifiuto come P-10 (lo svuotamento risponde 409 coi dettagli), coerente con la decisione 27 A.
+- ✅ **Controlli della doc (03:54–04:02)**: `ONLY="mkdocs" files/j/cp14a/runs.sh docs`.
+  - `mkdocs build` rigoroso: esito 0, nessun avviso, 145,7 s.
+  - `check-links`: esito 0, 97 collegamenti validi.
+  - Partiti dopo le ultime modifiche della doc (03:50).
+- **Preparazione di CP-14b** (sola lettura, 04:05): `files/j/cp14b/brief.md`.
+  - `get_current_value` contro `get_history_value` dopo la scadenza, come chiesto dal coordinatore:
+    - **senza mora concordano**: leggono tutte e due la liquidazione, e la cura di J-39 le corregge insieme;
+    - **con la mora** la liquidazione nasce solo nella storia, all'ultima data di maturazione della mora ≤ la
+      `end_date` della richiesta, quindi si sposta con la finestra, mentre il valore corrente matura senza fine;
+    - **le cedole della mora non azzerano**: ogni pagamento `value − principal` riconta i precedenti.
+    - Aggiunto a J-39, parte del developer.
+- ✅ **V-4 — E2 riscritto (test-author, 03:58–04:12; io i testi del runner e un'intestazione)**.
+  > **Note implementazione**:
+  > - `data-quality-real.spec.ts`, **E2** («a SPLIT whose incoming adjustment has no cost cannot be retyped, so no
+  >   unknown cost reaches the dashboard — with a cost of 0 it can»), stesso seme, guidato dall'API:
+  >   - la ritipizzazione risponde 409 con `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` e i `params` esatti; l'evento resta lo
+  >     SPLIT (stesso id), la riga legata e senza costo;
+  >   - nessun costo sconosciuto su Dashboard, pannello dei lotti e pagina del broker: 20 quote a costo medio 50, P&L
+  >     100, +10 %, con cifre e non trattini (`expectNoUnknownCost`). Prima le cifre, poi l'assenza;
+  >   - con un costo di 0 a unità la ritipizzazione passa: PRICE_ADJUSTMENT con lo stesso id, legame tenuto, e ancora
+  >     nessun costo sconosciuto.
+  >   - Prima di ogni Dashboard la pagina va a `about:blank`, così un rapporto rimasto dalla pagina prima non si
+  >     confonde col nuovo.
+  > - `data-quality-legacy.spec.ts` riceve le due prove che c'erano solo in E2:
+  >   - passo 6: i trattini sulla pagina del broker;
+  >   - passo 7: un costo di 0 a unità toglie la rettifica dall'avviso. Resta il solo asset trasferito: 5 quote a costo
+  >     medio 0, P&L 200, P&L % «—».
+  >   - Tempo 150 → 180 s.
+  >   - Il P&L % «—» con costo 0 lo tengo: niente percentuale su una base zero è la regola della casa
+  >     (`gain_loss_ratio`), coerente con N65.
+  > - Intestazioni allineate: il P-10 è chiuso e fissato da E2. Io ho corretto in quella di legacy anche dove nasce
+  >   `COST_BASIS_REQUIRED` (`transactions/batch_costs.py`).
+  > - Runner (`_frontend_portfolio.py`): le descrizioni di `data-quality-real` e `data-quality-legacy`.
+  > - Controlli: Prettier e `tsc` (opzioni di `tsconfig.e2e.json`, i due file) puliti. ruff e black su
+  >   `_frontend_portfolio.py` danno 28 errori e una riformattazione, **gli stessi del file committato**: preesistenti,
+  >   non toccati.
+  > - Nello slot: `front-portfolio data-quality-real` e `data-quality-legacy`, dopo le 2 `api`.
+- **Checkpoint CP-14a consegnato (17/10 04:12)**, su richiesta del coordinatore («hand off now … marking as not
+  run»).
+  - **Non girati**: `api portfolio-wac`, `api assets-events`, `front-portfolio data-quality-real` e
+    `data-quality-legacy`. Girano nello slot 1 (~04:35, dopo X), sulla revisione combinata, prima dell'ingresso.
+  - Il coordinatore committa e unisce dev; poi CP-14b, rossi prima.
+  - Fino alla conferma non tocco il worktree: i file di CP-14b, tranne quelli di T-D9, sono nel delta di CP-14a.
+- ✅ **CP-14a committato** in tre commit:
+  - `ec8a0b31e` (U10, con `_backend_services.py` intero, J-37 compresa);
+  - `475bb9270` (P-10 + V-4);
+  - `0dab94d14` (diario).
+  - **Base aggiornata**: dev `22d46da6e` unito senza conflitti, HEAD `d340dbc80`, pulito.
+  - Lo slot 1 (~04:35, dopo X) prova la revisione combinata con `files/j/cp14a/slot.sh`, prima dell'ingresso.
+  - **CHANGELOG di P-10**: subito, all'ingresso, con la mia riga.
+
+#### CP-14b — ACT/ACT (ISDA), T-D9 con N65, la liquidazione di J-39 (17/10, dalle 04:13; base `d340dbc80`)
+
+- Brief: `files/j/cp14b/brief.md`. Ognuno ha il rosso prima, i valori dichiarati e una riga 🐛.
+- **Ordine, per non sporcare lo slot di CP-14a** (che gira dal worktree):
+  - prima i rossi (test-author) e i valori dichiarati;
+  - il codice del backend e del frontend solo dopo lo slot, così le prove di CP-14a girano sulla revisione
+    committata.
+- ✅ **Passo 0 — valori dichiarati prima del codice (2026-10-17, 04:13–04:16)**, `files/j/cp14b/declare_values.py`.
+  Le due cure applicate in memoria su `_golden_cases()` della rete, con la cache spenta, e confrontate col fissaggio. Il
+  codice di oggi riproduce il fissaggio esattamente.
+  > **Note implementazione**:
+  > - **ACT/ACT (ISDA)**: cambiano **3 punti** della rete, tutti valori della mora SIMPLE in forma chiusa su un
+  >   intervallo che passa un capodanno. Ognuno è un giorno di mora in più:
+  >   - `s1_one_period_monthly-actact-compound` a 2025-05-15: 14 103,23 → 14 107,28;
+  >   - `s1_one_period_monthly-actact-simple` a 2025-05-15: 14 099,77 → 14 103,82;
+  >   - `s3_daily_coupons-actact-simple` a 2025-03-20: 13 483,40 → 13 486,44.
+  >   - Più le 3 attese sbagliate di `test_day_count_conventions.py`. Il cammino giornaliero non cambia: un passo di un
+  >     giorno attraverso il capodanno era già giusto.
+  > - **J-39, liquidazione dopo la cedola**: cambiano **8 punti**, la `MATURITY_SETTLEMENT` di `s4_annual_settlement`
+  >   per tutte e 4 le convenzioni × 2 tipi d'interesse. Scende da 12 777,77–12 792,86 al capitale, 12 345,67: l'ultima
+  >   cedola, già pagata quel giorno come INTEREST, non vi è più contata.
+  >   - Cambiano con lei `get_current_value` e `get_history_value` dopo la scadenza, che leggono la liquidazione.
+  >   - La liquidazione è il capitale quando la cedola è pagata, altrimenti il valore del giorno.
+  >
+  > **⚠️ Fuori pista**: la prima corsa dava 0 punti per J-39, perché il modulo della rete importa
+  > `_generate_schedule_values` per nome e la toppa sul modulo del plugin non gli arrivava. Toppa messa anche lì.
+- **J-43 (MF-J4)**, assegnata dal coordinatore (04:29), dopo CP-14b: in `portfolio/classifier.py:131-149` l'avviso
+  delle quote diverse fra due gambe collegate tace se cadono lo stesso giorno. Nell'indice.
+- **MF → J (04:32), MF-D**:
+  - **D1**: `observed_annualization` passa tale e quale in `financial_math/returns.py`, `_price_return_value`
+    diventa `float_price_return`; i chiamanti passano alla casa.
+  - **D2**: nei due validatori dell'AI Export, `remaining_to_peak_ratio` può essere null solo con
+    `current_drawdown_ratio <= -1`. I 4 componenti del drawdown passano da 1 a 2.
+  - **Risposta (04:36): tutto va bene.**
+    - Elenco dei chiamanti di D1 verificato completo: `risk/results.py`, `risk_plugins/comparison/plugin.py`, il test
+      di `series_preparation`.
+    - `signals/` legge da `series_preparation` solo aiuti d'allineamento (`date_is_within_range`, `distance_slots`,
+      `gap_slots`).
+    - D2 è coerente col contratto di CP-13a: il guadagno che recupera è None solo sulla perdita totale.
+    - **Ordine: entra prima D1, poi CP-10d**, che sposta `series_preparation.py` → `services/market_series.py` con
+      soli import e `applyTo`.
+    - Unica richiesta: non rinominare `_MIN_ANNUALIZATION_DAYS`, che il test di parità di CP-14b legge dal testo di
+      `returns.py`.
+- ✅ **Passo 1 — rossi (test-author 04:17–04:35; corsa 04:37–04:40, codice vecchio, carico ~24)**.
+  > **Note implementazione**:
+  > - **ACT/ACT** (`test_day_count_conventions.py`): le 3 attese sbagliate corrette, col perché ISDA nel commento, più
+  >   la classe nuova `TestACTACTYearEnds` (un capodanno, un capodanno bisestile, due capodanni, uno span diviso il
+  >   1° gennaio, e le guardie dei passi di un giorno e degli span dentro un anno).
+  >   - `utils day-count`: **7 rossi**, 36 verdi.
+  > - **J-39** (`test_synthetic_yield.py`, una sezione nuova prima della rete). Titolo da 10 000 al 5 % ACT/365,
+  >   annuale 2024, con cedola, senza mora:
+  >   - eventi esatti [INTEREST 500,00000000000000000001, MATURITY_SETTLEMENT 10 000]. Il 2024 è bisestile: 365 passi
+  >     da 1/365, cioè un anno intero, più l'arrotondamento a 28 cifre;
+  >   - `get_current_value` = 10 000; la storia dopo la scadenza si ancora a 10 000.
+  >   - Guardie: senza cedole nessun evento; con una svalutazione la liquidazione resta il valore del giorno; con la
+  >     mora nessuna liquidazione.
+  >   - `services synthetic-yield`: **3 rossi**, 21 verdi (la rete compresa).
+  > - **T-D9 + N65** (`measureSignal.test.ts`):
+  >   - il giorno zero, l'inizio a zero (anche oltre 30 giorni), 29 giorni, la sovrapposizione sugli altri segnali;
+  >   - due test vecchi che fissavano i valori di oggi;
+  >   - il test di parità che legge `_MIN_ANNUALIZATION_DAYS` dal testo di `returns.py`, come già fanno
+  >     `assetTypeTables.test.ts` e `allocationTypeEmoji.test.ts` con `models.py`.
+  >   - `front-utility core-unit MeasureSignal`: **9 rossi**, 28 verdi.
+  >   - Nessun valore cambiato nelle E2E della misura: guardano solo le intestazioni e la visibilità del pannello.
+  > - Fuori pista minimo: la prima corsa dei rossi partì in parallelo alla scrittura dello script e non lo trovò
+  >   (esito 127, niente lanciato); rilanciata.
+  > - In corso (test-author): un rosso per il risultato non finito (una linea che passa lo zero dà NaN → null), e la
+  >   guardia che una caduta a 0 tiene il −100 %. La regola «≤ −100 %» della casa non la prendo: D-9 parla solo della
+  >   soglia.
+- **Contratto della misura, precisato (17/10 ~04:47)**, su segnalazione del test-author. `annualizedPct` è null:
+  - quando Δ% è null (inizio a zero, N65);
+  - sotto 30 giorni (D-9);
+  - quando il fattore di crescita 1 + Δ%/100 è **< 0**: una linea che cambia segno non ha un tasso composto, e su 73
+    giorni la formula di oggi darebbe un −103 % finito e senza senso;
+  - quando il risultato non è finito (traboccamento).
+  - Una caduta esatta a 0 tiene il −100 % (fattore 0): la regola «≤ −100 %» della casa non la prendo, D-9 parla solo
+    della soglia.
+  - Rossi aggiunti dal test-author: non finito (NaN, Infinity), fattore < 0 su 73 e 365 giorni; guardia: la caduta a 0.
+- ✅ **Rossi della misura, secondo giro (test-author fino alle 04:46; corsa 04:47–04:48, codice vecchio, carico 27)**.
+  > **Note implementazione**:
+  > - Intestazione del file riscritta col contratto in elenco; rossi nuovi a l.268 (grafico) e l.421 (sovrapposizione):
+  >   100 → −50 su 73 e 365 giorni, Δ% −150, `annualizedPct` null (oggi −103,125 e −150).
+  > - `front-utility core-unit MeasureSignal`: **13 rossi**, 30 verdi (le 4 guardie comprese: 30 giorni inclusi sul
+  >   grafico e sulla sovrapposizione, caduta a 0 sui due). Log: `files/j/cp14b/red2_measure-unit.log`.
+  > - Il test-author ha provato il contratto con un'implementazione di riferimento in Node sui 20 casi del file: nessuna
+  >   attesa ne contraddice un'altra.
+- ✅ **Slot 1 di CP-14a (04:49–05:00, su `d340dbc80`)**, via del coordinatore alle 04:49, con
+  `files/j/cp14a/slot.sh`.
+  > **Note implementazione**:
+  > - `db populate --force` exit 0; `api portfolio-wac` **12 passati**; `api assets-events` **45 passati**;
+  >   E2E `front-portfolio data-quality-real` **3 passati** (E2 di V-4 fissa il rifiuto),
+  >   `data-quality-legacy` **1 passato**.
+  > - Nel worktree solo i file di test e del diario di CP-14b, fuori da queste suite e dalla build.
+  > - Porta 6185 libera alle 05:00 (lsof); avvisato il coordinatore, con la riga di CHANGELOG di P-10.
+- ✅ **Passo 2 — codice (2026-10-17, 05:01–05:04, dopo lo slot)**.
+  > **Note implementazione**:
+  > - `financial_math/interest.py::_calculate_act_act`: ISDA, anno per anno, [max(inizio, 1/1 Y), min(fine, 1/1 Y+1))
+  >   sui giorni di Y, pezzi vuoti saltati; stesso ordine dei `Decimal` di `declare_values.py::act_act_isda`. Docstring
+  >   della funzione e della lista delle convenzioni.
+  > - `scheduled_investment/plugin.py::_generate_schedule_values`: il cammino ricorda il giorno dell'ultima cedola; la
+  >   liquidazione è il capitale se l'ultima cedola cade il giorno della scadenza, altrimenti `values[last_end]` come
+  >   prima. `values[last_end]` (il picco del grafico) non cambia. Docstring con la regola.
+  > - `MeasureSignal.ts`: `export const MIN_ANNUALIZATION_DAYS = 30`, `changePct` (null su un inizio a 0, N65) e
+  >   `annualizedChangePct` (null sotto 30 giorni, senza Δ%, fattore < 0, non finito; la caduta a 0 tiene −100 %), usati
+  >   dalle due copie; `deltaPct`/`annualizedPct` `number | null` nei due tipi. Stesso ordine delle operazioni di prima:
+  >   i valori fuori dalle nuove regole restano identici.
+  > - `MeasurePanel.svelte`: `MeasureSummaryRow.deltaPct` nullable; cella Δ% come quella annua (`—` attenuato, ordinamento
+  >   `?? 0`); `compactDelta` con etichetta `—`; `colorClass(null)` → `text-lf-muted` per le due etichette compatte
+  >   (`null >= 0` è vero in JS: senza, il `—` sarebbe verde).
+- ✅ **Passo 3 — rete d'oro rigenerata (05:04, carico 43)**: `ONLY="regen" runs.sh green`. Il diff del fissaggio è
+  **esattamente gli 11 punti dichiarati**, stessi percorsi e valori (`files/j/cp14b/golden_check.py`, `.log`; 11 righe ±):
+  i 3 della mora ACT/ACT e le 8 liquidazioni di `s4_annual_settlement` a 12345.67 (la stringa del capitale, non
+  `12345.67000…` come nel calcolo in memoria: stesso numero).
+- **Passo 4 — verdi (dalle 05:06)**: `day-count` **43**, `synthetic-yield-integration` **15**, `asset-source` **61**.
+  > **⚠️ Fuori pista**: `synthetic-yield` 2 rossi anche col codice nuovo, alla premessa. Il letterale della cedola nel
+  > test era `500.00000000000000000001` (1e-20), il valore vero è `500.00000000000000000000001` (1e-23, come diceva il
+  > commento stesso). Quindi alla corsa dei rossi due dei tre test J-39 fallivano sulla premessa e non sulla
+  > liquidazione: il conteggio «3 rossi» era giusto, il motivo no. Non avevo letto il motivo di ogni rosso.
+  > - Riparato dal test-author (solo letterali: l.565–566, 571, 594, 595, 614, 629).
+  > - Prova in memoria con la regola vecchia (`files/j/cp14b/j39_red_proof.py`, `.log`): i tre falliscono a l.604
+  >   (eventi), 621 (valore), 637 (storia, solo l'ancora dopo la scadenza differisce); col codice di oggi passano tutti.
+  > - Lezione: alla corsa dei rossi leggere la riga e il messaggio di ogni fallimento, non solo il conteggio.
+- **Doc (05:10–05:25)**:
+  - utente, 4 lingue: misure degli asset (Δ % `—` su un inizio a 0; Δ%/anno da 30 giorni, `—` sotto, senza Δ %, o
+    se la linea finisce dall'altra parte dello zero), misure FX (lo stesso dopo la formula; il ⚠️ dei 7 giorni ≈ 68 %
+    riscritto: ora spiega perché si aspettano 30 giorni), fornitore SI (la liquidazione chiude al valore che resta dopo
+    l'ultima cedola, il Valore Iniziale). Script `files/j/cp14b/docs_edit.py`, ogni sostituzione esattamente una volta.
+  - sviluppatore (solo EN): `provider_scheduled_investment.md` (l'importo della liquidazione; ACT/ACT ISDA),
+    `financial_math.md` regola 6 (la soglia del righello e il test di parità).
+- **Reperto fuori perimetro → J-44**: `components/charts/priceChartHelpers.ts::buildDeltaHtml` (il Δ del tooltip dal
+  primo valore del grafico) dà 0 % su un primo valore 0, per scelta scritta nel suo JSDoc: lo stesso numero sbagliato
+  che N65 toglie al righello, in una seconda copia del Δ%. Nell'indice, da instradare (il file ha storia dei colori e di
+  X).
+- **Passo 4, seguito (05:12–05:17, carico 42–48 alla partenza di ogni passo)**: `financial-math` **829**;
+  `front-utility core-unit MeasureSignal` **43** (i 13 rossi verdi); `core-unit` **7953** in 200 file (le guardie dei
+  colori comprese); `component-unit` **4449** in 166 file (`MeasurePanel.test.ts` compreso). Statici: prettier, ruff,
+  black puliti; `git diff --check` pulito.
+  > Nessuna E2E o API legge i valori cambiati: le configurazioni SI di API ed E2E sono ACT/365, gli importi delle
+  > liquidazioni vi sono solo contati; le E2E della misura guardano visibilità e intestazioni; la galleria misura tutto
+  > l'intervallo (Δ%/anno resta un numero).
+  > **⚠️ Fuori pista**: ho modificato `files/j/cp14b/runs.sh` (il passo `chart-safety`) mentre girava. Bash rilegge il
+  > file a offset: l'inserimento cadeva dopo la riga in esecuzione e il passo nuovo era fuori da `ONLY`, quindi nessun
+  > effetto (il log prosegue regolare). Da non rifare.
+- **J-39 nell'indice** aggiornata: liquidazione senza mora curata in CP-14b; resta la parte della mora (developer).
+- **T-D9** (sezione T, l.719) è chiusa da CP-14b: da segnare al coordinatore, la sezione non è mia.
+- ✅ **Passo 4 chiuso (05:22–05:27)**: `check-orphans` exit 0; `synthetic-yield` **24** (dopo la riparazione del
+  letterale); `front-portfolio chart-safety-unit` **86** in 8 file (la guardia delle eccezioni della matematica
+  finanziaria compresa); `dev.py front check` **0 errori, 0 avvisi**; `mkdocs build` stretto exit 0; `check-links`
+  **97** validi; `translate-validate` sulle 3 pagine: 9 file, 0 errori, 0 avvisi (3 differenze localizzate
+  preesistenti, intenzionali). Porta 6185 libera.
+- ✅ **Doc e diario**: timbri di traduzione delle 3 pagine utente (la cache coincideva con l'MD5 di HEAD: nessun debito
+  nascosto); devWiki: `problems/act-act-lost-a-day-per-year-end`, `problems/maturity-settlement-counted-the-final-
+  coupon-twice` (con la lezione sul rosso letto per il motivo), `features/F-045` aggiornata, indice e `log.md`;
+  `check_source_paths.py`: 7 percorsi mancanti, tutti di altre pagine (preesistenti), nessuno dei miei.
+- **Checkpoint CP-14b consegnato (17/10 ~05:30)**: FROZEN. Bozza: `files/j/cp14b/handoff_draft.md`. Dopo
+  l'aggiornamento della base (≥ `aca75c7ca`): la sonda MF-D2 nello slot, poi F5 (W rivede), poi J-43.
+- ✅ **CP-14b committato e base aggiornata** (coordinatore): `69cc2faac` (SI), `35f8495ff` (misura), `a61119172`
+  (diario); merge `c387f2054` = CP-14b + dev `a3662b3ef` (MF-D1/D2, X-R52, Y R17). Unico conflitto `devWiki/index.md`,
+  per unione. Nessuna migrazione nuova.
+- ✅ **Slot 1 di CP-14b (05:29–05:40, su `c387f2054`)**, `files/j/cp14b/slot.sh`.
+  > **Note implementazione**:
+  > - Leggeri: `services financial-math` **851** (dev ha aggiunto i test di MF-D1), `utils day-count` **43**,
+  >   `services synthetic-yield` **24**, `synthetic-yield-integration` **15**, `front-utility core-unit MeasureSignal`
+  >   **43**, `dev.py front check` **0 errori, 0 avvisi**.
+  > - Fumo: `api parametric-provider-semantics` **2**, E2E `front-asset asset-modal` **21**.
+  > - **Sonda MF-D2** (`files/j/mfd2/`: `probe.sh`, `analyze.py`, `snapshot_detail.py`, `blocks.py` e i log; copia
+  >   privata, utente alfy, Data, i due casi di MF-E1 `portfolio/broker.overview_and_history` 1Y standard): 2/2 misurati,
+  >   0 fallimenti, scansione dei segreti passata, copia invariata.
+  >   - Versioni: `portfolio.drawdown_summary` 2, `portfolio.asset_drawdown_snapshot` 2, `broker.drawdown_summary` 2
+  >     (`asset.drawdown_summary` non è in questi casi).
+  >   - Resa compatta: 0 YAML di ripiego. Equivalenza UI/sonda: stringa e byte UTF-8 esatti.
+  >   - **I due prompt sono identici byte per byte a quelli di MF-E1** (v1, stessa copia, stesso giorno): il salto di
+  >     versione non cambia nessun byte copiato.
+  >   - Canonico: i due `drawdown_summary` identici a v1; `asset_drawdown_snapshot` 18 foglie diverse, tutte rumore di
+  >     virgola mobile (|Δ| ≤ 1,1e-15, relativo ≤ 3,8e-14): più di «un ulp» sul valore finale, perché l'ulp del
+  >     rendimento giornaliero si accumula sulla serie di un anno e la sottrazione del drawdown lo amplifica; sotto la
+  >     precisione resa.
+  >   - I 2 `remaining_to_peak_ratio` null sono righe `status: unavailable` (tutti e tre i rapporti null, uguali in v1);
+  >     nessuna riga reale arriva alla perdita totale, quindi il ramo nuovo di D2 lo provano solo i test di MF.
+  >   - **MF-D2 chiusa senza reperti.**
+  > - Porte 6185 e 6195 libere alle 05:40.

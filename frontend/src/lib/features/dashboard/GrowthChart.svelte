@@ -972,6 +972,11 @@
     // candles submode and no data has arrived yet. Re-fires harmlessly if pnlCandles is
     // still null next time this effect runs (e.g. after a broker/date-range refetch reset
     // it) — the caller's own report cache makes a repeat request cheap.
+    // The callback runs TRACKED on purpose (Y-16): what the caller reads synchronously inside
+    // it becomes a dependency of this effect. The Dashboard's loader reads `canAsk` there, so a
+    // saved Candles view on a fresh page asks again once the brokers are known; an `untrack`
+    // around the call would leave it empty (pinned in e2e/portfolio/page-busy.spec.ts). The same
+    // tracking re-arms the request after a failed one (backlog Y-24, a decision with Y-18).
     $effect(() => {
         if (viewMode === 'pnl' && pnlSubmode === 'candles' && pnlCandles == null) {
             onRequestPnlCandles?.();

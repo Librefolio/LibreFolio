@@ -15,8 +15,11 @@ import hashlib
 import os
 import re
 import secrets
+import signal
 import socket
 import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -483,6 +486,97 @@ def run_command_live(cmd: list, cwd: Optional[Path] = None, env: Optional[dict] 
     except Exception as e:
         print(Colors.error(f"Error: {e}"))
         return 1
+
+
+def run_server_live(cmd: list, env: Optional[dict] = None, grace_seconds: Optional[float] = None) -> int:
+    """
+    Run the server with live output, and let it finish its own shutdown when it is asked to stop (Z-10).
+
+    - Ctrl+C: the terminal sends SIGINT to the whole foreground group, so the server already has it. Nothing is
+      forwarded (a second SIGINT makes uvicorn force its exit): this waits for the server, up to ``grace_seconds``.
+      ``subprocess.run``, as in ``run_command_live``, would kill it 0.25 s later, in the middle of its shutdown.
+    - SIGTERM to this process: forwarded to the server, since a process supervisor may signal this process alone,
+      then the same wait. A server that also got it from its group gets it twice, and stops once.
+    - A second Ctrl+C or SIGTERM, or the grace running out: the server is killed.
+
+    The handlers record the signals instead of raising: an exception raised inside ``Popen.poll()``, between its lock
+    and its ``try``, would leave the lock taken, and every later poll would answer that the server still runs.
+
+    Args:
+        cmd: Command as list of strings
+        env: Environment variables to add
+        grace_seconds: How long to wait for the server once it is asked to stop; None for no limit
+
+    Returns:
+        The server's exit code; 130 after a Ctrl+C, 143 after a SIGTERM; 1 when it cannot start
+    """
+    full_env = os.environ.copy()
+    if env:
+        full_env.update(env)
+
+    received: list[str] = []
+    replaced = _record_stop_signals(received)
+    try:
+        try:
+            process = subprocess.Popen(cmd, cwd=get_project_root(), env=full_env)
+        except Exception as e:
+            print(Colors.error(f"Error: {e}"))
+            return 1
+        return _supervise_server(process, grace_seconds, received, early=len(received))
+    finally:
+        for signum, handler in replaced.items():
+            signal.signal(signum, handler)
+
+
+def _record_stop_signals(received: list) -> dict:
+    """Append ``interrupt`` (Ctrl+C) or ``terminate`` (SIGTERM) to ``received`` when they arrive, instead of their usual effect.
+
+    Only a signal with its usual handler (``default_int_handler``, ``SIG_DFL``) is taken: one the launcher ignores or
+    handles stays as it was. Only from the main thread, the one where handlers can be set. Returns the handlers it
+    replaced, by signal, for the caller to put back.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        return {}
+    replaced = {}
+    for signum, kind, usual in ((signal.SIGINT, "interrupt", signal.default_int_handler), (signal.SIGTERM, "terminate", signal.SIG_DFL)):
+        if signal.getsignal(signum) is usual:
+            replaced[signum] = signal.signal(signum, lambda _signum, _frame, kind=kind: received.append(kind))
+    return replaced
+
+
+def _supervise_server(process: subprocess.Popen, grace_seconds: Optional[float], received: list, early: int) -> int:
+    """Wait for the server; after the first stop signal let it finish within the grace, after a second one kill it.
+
+    The first ``early`` signals came while the server was starting: it may have missed them, so they are forwarded.
+    """
+    handled = 0
+    exit_code: Optional[int] = None
+    deadline: Optional[float] = None
+    while process.poll() is None:
+        while handled < len(received):
+            kind = received[handled]
+            forward = kind == "terminate" or handled < early
+            handled += 1
+            if exit_code is not None:
+                print(Colors.warning("Forced: killing the server"), flush=True)
+                process.kill()
+                deadline = None
+                continue
+            exit_code = 130 if kind == "interrupt" else 143
+            if forward:
+                process.send_signal(signal.SIGINT if kind == "interrupt" else signal.SIGTERM)
+            deadline = None if grace_seconds is None else time.monotonic() + grace_seconds
+            label, again = ("Interrupted", "Ctrl+C") if kind == "interrupt" else ("SIGTERM", "SIGTERM")
+            limit = "no time limit" if grace_seconds is None else f"up to {grace_seconds:g} s"
+            print("\n" + Colors.warning(f"{label}: waiting for the server to stop ({limit}; {again} again to force)"), flush=True)
+        if deadline is not None and time.monotonic() >= deadline:
+            print(Colors.warning(f"The server did not stop within {grace_seconds:g} s: killing it"), flush=True)
+            process.kill()
+            deadline = None
+        time.sleep(0.05)
+    if exit_code is None and received:
+        exit_code = 130 if received[0] == "interrupt" else 143
+    return process.returncode if exit_code is None else exit_code
 
 
 def _is_docker() -> bool:

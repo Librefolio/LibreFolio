@@ -84,8 +84,8 @@ pair name to its detail page (`fxPairHtml(…, {linkToDetail: true})`).
 
 `convert_bulk()` (`backend/app/services/fx/conversion.py`) is the shared conversion function:
 `POST /api/v1/fx/currencies/convert`, the portfolio engine and service, lots analysis, Yield on Cost,
-asset price queries, risk eligibility and AI Export components call it with a list of
-`(Currency, to_currency, date)` items. For each item:
+asset price queries, the [fixed-period changes](#fixed-period-changes) of the Assets and FX tables, risk eligibility
+and AI Export components call it with a list of `(Currency, to_currency, date)` items. For each item:
 
 1. **Identity**: same currency in and out — the amount is returned as is, with no lookup.
 2. **Stored pair**: the pair is normalized alphabetically, the way rates are stored. The amount is
@@ -139,6 +139,26 @@ skipped it as unusable.
 Apart from the unusable rates left out, return values and errors are those of the full-history version
 this replaced, which loaded every pair's whole history up to the latest requested date and scanned it
 linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
+
+### 📅 Fixed-Period Changes {: #fixed-period-changes }
+
+`POST /api/v1/fx/currencies/period-changes` returns the fixed-period changes of the FX table: 1D, 1W, 1M, 3M, 6M,
+1Y, 2Y, 3Y and 5Y (developer decision D-MF6 b). `get_fx_period_changes_bulk()` in
+`backend/app/services/fx/period_changes.py` values the days. The change itself is the house's
+`fixed_period_changes()` ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
+
+- **Request**: a list of `{base, quote, as_of}`. `base` and `quote` must differ, or the request is refused (422).
+- **Rate on a day**: the conversion of 1 `base` into `quote` on that day by `convert_bulk()`, with its unlimited
+  backward fill. It is the rate `POST /api/v1/fx/currencies/convert` returns for that day. One `convert_bulk()` batch
+  serves every pair and day of the request.
+- **Response**: `items[]`, in request order, of `{base, quote, as_of, periods[], errors[]}`. Each period is
+  `{key, days, change_ratio, inverse_change_ratio}`.
+- **`change_ratio`**: `rate(as_of) / rate(as_of − days) − 1`, the pair as asked (quote per base).
+- **`inverse_change_ratio`**: `rate(as_of − days) / rate(as_of) − 1`, the change of the inverted pair (base per
+  quote).
+
+Both are fractions, null when either rate is missing. A day without a rate adds *No B/Q rate on or before D* to
+`errors`.
 
 ## 🧹 Rate writes clear the portfolio caches {: #portfolio-cache-invalidation }
 

@@ -77,7 +77,7 @@ values the new type forbids.
 | `cash` | `{code, amount} \| null` | ISO 4217 code and decimal string, edited with `CompactCashCell` |
 | `tags` | `string[]` | Free tags, with suggestions from `availableTags` |
 | `description` | `string` | Free-text memo |
-| `asset_event_id` | `number \| null` | Linked asset event (**Linked Event**, `AssetEventPicker`), for the event-linkable types (`DIVIDEND`, `INTEREST`, `ADJUSTMENT`); the picker shows once an asset and a date are set (`canShowAssetEvent`). **+ New event** in the picker (not in `view` mode) opens a stacked `EventCreateMiniModal` (`zIndex + 10`), which sends the new event with `mode: "create"`. On `EVENT_EXISTS` it shows `EventExistsPanel`: **Use this** (writes nothing), **Edit this** for manual events only (the form then saves that event by its `id`, `mode: "upsert"`), **Cancel**. The field then holds the id the response names (`results[0].event_ids[0]`), or the id of the event chosen with **Use this** |
+| `asset_event_id` | `number \| null` | Linked asset event (**Linked Event**, `AssetEventPicker`), for the event-linkable types (`DIVIDEND`, `INTEREST`, `ADJUSTMENT`); the picker shows once an asset and a date are set (`canShowAssetEvent`). **+ New event** in the picker (not in `view` mode) opens a stacked `EventCreateMiniModal` (`zIndex + 10`), which sends the new event with `mode: "create"`. Its amount is handled as a decimal string: the suggestion (the form's cash) is prefilled whole (`0.2345` stays `0.2345`), blur pads it to two decimals at least and keeps the typed ones, the event is sent with that string, and past the 6 decimals an event value keeps (trailing zeros not counted, as the backend counts them) the field is `aria-invalid`, `event-create-amount-digits-error` (`data-max="6"`, `common.decimalPlacesExceeded`) shows under it and the submit button (`event-create-submit`) is disabled. On `EVENT_EXISTS` it shows `EventExistsPanel`: **Use this** (writes nothing), **Edit this** for manual events only (the form then saves that event by its `id`, `mode: "upsert"`), **Cancel**. The field then holds the id the response names (`results[0].event_ids[0]`), or the id of the event chosen with **Use this**. Any refusal other than `EVENT_EXISTS` shows as one sentence in the modal's error banner (`eventSaveErrorMessage()`, `lib/features/transactions/events/eventSaveError.ts`); a 400 `EVENT_TOO_MANY_DIGITS` has its own, `events.saveError.tooManyDigits`, which names the first event at fault (date and type), how many more there are, and the three maxima of its `params`: decimal places, significant digits and digits before the decimal point (`max_decimal_places`, `max_significant_digits`, `max_integer_digits`) |
 | `cost_basis_override` | `{code, amount} \| null` | Manual cost basis (see [WAC State](#wac-state)) |
 | `link_uuid` | `string \| null` | Pairing UUID; shown read-only when set |
 
@@ -88,7 +88,7 @@ Shown when the type's rules allow them:
 | Field | Type | Description |
 |-------|------|-------------|
 | `asset_id` | `number \| null` | Selected asset (`AssetSelect`); **New asset** opens a stacked `AssetModal` |
-| `quantity` | `string` | Exact decimal string, edited with `ExactQuantityInput` (built on `ExactDecimalInput`; at most 12 integer and 6 fraction digits); `'0'` when the type forbids a quantity |
+| `quantity` | `string` | Exact decimal string, edited with `ExactQuantityInput` (built on `ExactDecimalInput`; at most 12 integer and 10 fraction digits); `'0'` when the type forbids a quantity |
 
 ---
 
@@ -182,9 +182,11 @@ The form checks locally only what it can know without the ledger:
   quantity unless the type forbids it; the form also needs a date, and for a pair the destination
   side ([Pair validation](#pair-validation)). Until then there is no automatic validation and
   **⚡ Validate now** stays disabled.
-- **Quantity** — `ExactQuantityInput` checks the syntax, the 12 + 6 digit budget and the type's
-  sign rule, and reports its validity (`onvaliditychange`); an invalid quantity disables the
-  footer button.
+- **Quantity** — `ExactQuantityInput` checks the syntax, the 12 + 10 digit budget (the 10 decimals
+  the backend keeps for a quantity) and the type's sign rule, and reports its validity
+  (`onvaliditychange`); an invalid quantity disables the footer button. A fraction past 10 digits
+  is also said under the field (`tx-form-quantity-digits-error`, `common.decimalPlacesExceeded`),
+  and the value stays as typed.
 - **Cash sign** — for a type whose cash rule is `negative` the user types a magnitude and the
   payload builder negates it (`applySignRules`). An amount that still breaks the rule
   (`computeSignHint`) disables the footer button.

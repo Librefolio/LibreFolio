@@ -6,7 +6,8 @@ checks of workstream E, written whole so the i18n audit sees it), the parameters
 for the log. A check changes nothing, never raises and never puts a secret value in its result.
 
 At startup, ``log_configuration_audit()`` first stops on a configured secret that cannot be used, then logs every check
-that is not ``ok``. The «Security» tab of the admin settings will evaluate the same checks on demand.
+that is not ``ok``. The «Security» tab of the admin settings will evaluate the same checks on demand. A check may report
+what the server has met since it started, as ``platform.client_address`` does: at startup it has met nothing yet.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from backend.app.config.platform import configured_jwt_secret, configured_jwt_se
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
+from backend.app.services.platform.client_address import PUBLIC_FORWARDING_SUMMARY, UNTRUSTED_PROXY_SUMMARY, untrusted_forwarding_seen
 from backend.app.services.platform.instance_key import InstanceKeyError, instance_key_status
 
 logger = get_logger(__name__)
@@ -121,6 +123,24 @@ def check_session_cookie() -> ConfigCheck:
     return ConfigCheck(check_id, "ok", "instance.checks.sessionCookie.ok")
 
 
+def check_client_address() -> ConfigCheck:
+    """Forwarding headers from peers nobody trusts, met since the start (decision N70, ``client_address.py``).
+
+    From a local peer they come from a reverse proxy LibreFolio does not trust, whose address every visitor shares: the
+    limits per client address skip those requests, a warning. From public peers only, a client or a proxy on a public
+    address sent them, and they were ignored: info. Nothing met, as at startup, is ok. The names of the headers only,
+    never an address (N58).
+    """
+    check_id = "platform.client_address"
+    local = untrusted_forwarding_seen("local")
+    if local:
+        return ConfigCheck(check_id, "warning", "instance.checks.clientAddress.untrustedProxy", {"headers": ", ".join(local)}, UNTRUSTED_PROXY_SUMMARY)
+    public = untrusted_forwarding_seen("public")
+    if public:
+        return ConfigCheck(check_id, "info", "instance.checks.clientAddress.publicForwarding", {"headers": ", ".join(public)}, PUBLIC_FORWARDING_SUMMARY)
+    return ConfigCheck(check_id, "ok", "instance.checks.clientAddress.ok")
+
+
 def check_log_level() -> ConfigCheck:
     """A ``DEBUG`` or ``TRACE`` log records operational detail that a production log does not need."""
     check_id = "platform.log_level"
@@ -141,6 +161,7 @@ CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (
     check_secrets_set_twice,
     check_instance_key,
     check_session_cookie,
+    check_client_address,
     check_log_level,
     # Workstream A: the limit on failed sign-ins (services/accounts/checks.py)
     *ACCOUNTS_CONFIG_CHECKS,

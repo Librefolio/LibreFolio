@@ -36,6 +36,11 @@
  * the period's own report is back. Each cascaded request is held by its body (the section it asks alone, no history),
  * and its sameness with the one on screen is checked.
  *
+ * And what the N55 case on the Dashboard takes for granted, pinned on its own (Y-16): a saved candles view loaded from
+ * scratch asks its candles as the chart mounts, before the owned brokers are known, and is refused (F2). The ask is
+ * re-armed by the brokers themselves: with their list held no candles are asked, and once it is let through they are
+ * asked, and drawn.
+ *
  * And the asset pages, the last lot of Y11. An asset's detail page (`asset-detail-refresh-btn`): Refresh and a period
  * change hold its button until the chart's prices they asked are back; the reload that follows the page's own Sync does
  * not (P3) — from the chart's prices to the asset's metadata, every value of the button recorded as above, with a period
@@ -121,6 +126,12 @@ function isReportOf(request: Request, section: 'include_pnl_candles' | 'include_
 /** The P&L candles the growth chart asks in its candles view (`loadPnlCandles` on the Dashboard). */
 function isPnlCandles(request: Request): boolean {
     return isReportOf(request, 'include_pnl_candles');
+}
+
+/** Any report that asks the P&L candles, whatever else it asks: the lazy load of `isPnlCandles`, or one that would carry them beside the history. */
+function asksPnlCandles(request: Request): boolean {
+    if (request.method() !== 'POST' || new URL(request.url()).pathname !== REPORT_PATH) return false;
+    return (request.postDataJSON() as ReportBody | null)?.include_pnl_candles === true;
 }
 
 /** The contribution the positions panel of broker `brokerId` asks in its Performance view (`loadContribution` on its page), for that broker alone. */
@@ -841,6 +852,54 @@ test.describe('Page busy: the Refresh button waits for the big requests of its o
         } finally {
             for (const gate of holds) await gate.dispose();
             await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+
+    /**
+     * Y-16, the explicit pin of what the N55 case above takes only as a precondition («the saved candles view asked its
+     * candles at load»). On a saved candles view the chart asks for its candles as it mounts (GrowthChart's request
+     * `$effect`), before the Dashboard knows the owned brokers, and `loadPnlCandles` refuses while `canAsk` is false (F2).
+     * The ask is re-armed by the brokers themselves: `loadPnlCandles` reads `canAsk` synchronously inside that effect, so
+     * the effect depends on it and runs again when the brokers land. Read untracked, nothing would ask again: no candles
+     * request, and a chart of empty candles. The list of brokers is held from before the page loads, so that the refused
+     * ask is certainly the chart's first, and the one that goes out the re-armed one.
+     */
+    test('Dashboard loaded from scratch on a saved P&L candles view: the candles are asked, and drawn, once the brokers are known, though the chart first asks for them before (Y-16)', async ({page}) => {
+        test.setTimeout(CASCADE_TEST_MS);
+        await saveCandlesView(page);
+        // The visit that saved the view is closed first: every report recorded below belongs to the document under test,
+        // never a late one of that visit (its own candles, or those a reload in background there cascades into).
+        await page.goto('about:blank');
+        const candles = recordMainReports(page, asksPnlCandles);
+        // Held from before the page loads: the list of brokers the Dashboard asks as it mounts (`ensureBrokersLoaded`), and
+        // with it `brokersReady` — F2: nothing is asked before the owned brokers are known.
+        const brokers = await hold(page, BROKERS_PATH, isBrokerList);
+        try {
+            await navigateTo(page, '/dashboard?tab=panoramica');
+            const chart = page.getByTestId('growth-chart');
+            const brokerList = await heldRequest(brokers, 'the list of brokers the Dashboard asks as it mounts');
+            await expectBusy(page.getByTestId('sync-button'), 'precondition: the first load of the Dashboard does not wait for the held list of brokers');
+            // The chart asks for its candles in the flush that mounts it: once its toggles show the saved view, that ask has
+            // been made — and, the brokers unknown, refused. «No candles asked» below is the refusal, not a chart that has
+            // not asked yet.
+            await expect(chart.getByTestId('growth-toggle-pnl'), 'precondition: the Dashboard opened on the saved P&L mode').toHaveAttribute('aria-pressed', 'true');
+            await expect(chart.getByTestId('growth-pnl-submode-candles'), 'precondition: the Dashboard opened on the saved candles submode').toHaveAttribute('aria-pressed', 'true');
+            // Read with the list of brokers still held, and still alive in the page: the brokers are not known yet.
+            expect(brokers.pending(), 'the list of brokers was let through before the reading').toBeGreaterThan(0);
+            expect(brokerList.failure(), 'the list of brokers failed before the reading').toBeNull();
+            expect(
+                candles.map((request) => request.postDataJSON() as ReportBody | null),
+                'F2: the Dashboard asked its candles before it knew the owned brokers',
+            ).toEqual([]);
+
+            await brokers.release();
+            await expect.poll(() => candles.length, {message: 'Y-16: the brokers are known, and the candles the chart asked before them are never asked — the refused ask was not re-armed when the brokers landed', timeout: ROUND_TRIP_MS}).toBeGreaterThan(0);
+            const asked = candles[0].postDataJSON() as ReportBody | null;
+            expect(asked?.broker_ids?.length ?? 0, 'F2: the candles were asked without the owned brokers, a scope the backend widens to every broker the user can see').toBeGreaterThan(0);
+            await waitForSettled(page.getByTestId('dashboard-page'), ROUND_TRIP_MS);
+            await expect.poll(() => candleBodies(chart), {message: 'the candles asked once the brokers were known never reached the chart', timeout: ROUND_TRIP_MS}).toBeGreaterThan(0);
+        } finally {
+            await brokers.dispose();
         }
     });
 

@@ -45,6 +45,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
 # the shared DB) so the unit can honestly declare PURE isolation and run beside
 # anything.
 AI_EXPORT_PURE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_components_drawdown_total_loss.py",
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_int_validation.py",
@@ -262,7 +263,7 @@ def services_risk_workers(verbose: bool = False, test_names: list = None) -> boo
 def services_risk_oracle(verbose: bool = False, test_names: list = None) -> bool:
     """Pin hand-written risk mathematics against riskfolio, NumPy and SciPy."""
     print_section("Services: Risk Metrics Oracle")
-    print_info("Testing: metrics.py and signal_helpers.py against independent references")
+    print_info("Testing: risk/metrics.py and signals/risk_adapters.py against independent references")
     print_info("Guards: the four name traps, undefined-window semantics, matrix/scalar consistency")
     print_info("Note: riskfolio is imported here and only here — never in the web process")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_risk_metrics_oracle.py", test_names)
@@ -375,6 +376,15 @@ def services_asset_signals(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Asset signal service tests", verbose=verbose)
 
 
+def services_period_changes(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the MF-P2 fixed-period changes of asset prices and FX rates."""
+    print_section("Services: Period Changes (MF-P2)")
+    print_info("Testing: assets/period_changes.py (get_period_changes_bulk), fx/period_changes.py (get_fx_period_changes_bulk)")
+    print_info("Parity: the Assets page's computePeriodDelta on the price query's series, the FX page's on per-day conversions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_period_changes.py", test_names)
+    return run_command(cmd, "Period changes service tests", verbose=verbose)
+
+
 def services_provider_contracts(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider interface contracts (FX, Asset, BRIM)."""
     print_section("Services: Provider Contract Tests")
@@ -395,7 +405,7 @@ def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> 
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
     print_info("Testing: SCHEDULED_YIELD asset valuation (ACT/365 SIMPLE interest)")
-    print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration")
+    print_info("Covers: Rate lookup, accrued interest, full valuation, DB integration, the accrual golden (33 schedules, every number)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_synthetic_yield.py", test_names)
     return run_command(cmd, "Synthetic yield tests", verbose=verbose)
 
@@ -941,7 +951,7 @@ def services_lots_analysis_pure(verbose: bool = False, test_names: list = None) 
     """Run the pure lots-analysis builders (no DB, no server, no network)."""
     print_section("Services: Lots Analysis Pure Builders")
     print_info("Testing: backend/app/services/financial_math/lots/ and lots_analysis_service.py (sync, argument-driven builders)")
-    print_info("Tests: SHORT lots, estimated_mode, price-series gaps, ADJUSTMENT cost basis, transfer scope")
+    print_info("Tests: SHORT lots, estimated_mode, price-series gaps, ADJUSTMENT cost basis, transfer scope, the reference price and the days at cost")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_lots_analysis_pure.py", test_names)
     return run_command(cmd, "Lots Analysis pure builder tests", verbose=verbose)
 
@@ -986,7 +996,7 @@ def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = No
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
     print_info("Testing: backend/app/services/financial_math/portfolio/daily_state.py (DailyStateBuilder)")
-    print_info("Tests: inline WAC, last_buy_price fallback, 3-pool K/R/W, position snapshots, period accumulators, pre-frame/frame")
+    print_info("Tests: inline WAC, last_buy_price fallback, 3-pool K/R/W, position snapshots, period accumulators, one replay with states from date_from")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_portfolio_engine_vnext.py", test_names)
     return run_command(cmd, "Portfolio Engine vNext tests", verbose=verbose)
@@ -1035,6 +1045,26 @@ def services_scheduler_leader(verbose: bool = False, test_names: list = None) ->
     print_info("Tests: SL-001..007 — single/multi-worker, zombie, PID1, --reload, exception safe")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_leader.py", test_names)
     return run_command(cmd, "Scheduler leader election tests", verbose=verbose)
+
+
+def services_scheduler_run_lock(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's lock across processes: scheduler_run_lock, a flock on the data directory's .scheduler.lock (Z-11, N71)."""
+    print_section("Services: Scheduler Lock Across Processes")
+    print_info("Testing: backend/app/services/platform/scheduler/run_lock.py (scheduler_run_lock, cross_process_lock_available, run_lock_path), against real child processes")
+    print_info(
+        "Tests: RL-001..009 — the block waits while another process holds the lock (LOCK_EX | LOCK_NB, POLL_SECONDS apart) and runs once it lets go or is killed; a cancelled wait, even with an attempt in flight, leaves no descriptor nor lock; released on an exception; 0o600 file kept, symlink refused; open/flock/close off the loop; constants, availability, path; without fcntl"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_run_lock.py", test_names)
+    return run_command(cmd, "Scheduler lock across processes tests", verbose=verbose)
+
+
+def services_scheduler_multiprocess(verbose: bool = False, test_names: list = None) -> bool:
+    """Test two real processes running the scheduler's due jobs at once: each job once, behind the lock across processes (Z-11, N71)."""
+    print_section("Services: Scheduler Across Two Processes")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs) with run_lock.py, in two child processes on one data directory")
+    print_info("Tests: MP-001..002 — each due job once across the two, one report ok, the other not_due, never not_leader nor am_i_leader; the state written once per job and re-read inside the lock; the data directory's .scheduler.lock")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_multiprocess.py", test_names)
+    return run_command(cmd, "Scheduler across processes tests", verbose=verbose)
 
 
 def services_scheduler_loop(verbose: bool = False, test_names: list = None) -> bool:
@@ -1686,6 +1716,9 @@ Note: No backend server required.
     add_test(cat, "signal-plugins-volume", services_signal_plugins_volume, name="Volume Signal Plugins", desc="OBV rebasing and MFI zero/missing volume, levels and TA-Lib delegation")
     add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
+    # Write-scoped (the category default): unique-name assets deleted with their prices; FX rows only on AMD/BDT, AMD/SZL,
+    # AMD/LSL, BBD/BZD (MVR/SCR never seeded), pairs no other test uses, dated 1980-1987, wiped before and after.
+    add_test(cat, "period-changes", services_period_changes, name="Period Changes", desc="MF-P2: 1D … 5Y asset and FX changes from stored data, equal to the Assets/FX pages' numbers; order, weekend 1D = 0, gaps")
     add_test(cat, "provider-contracts", services_provider_contracts, name="Provider Contracts", desc="ABC compliance for ALL registered providers")
     add_test(
         cat,
@@ -1697,7 +1730,7 @@ Note: No backend server required.
         # provider_policy sees and core.configured_provider are replaced by stand-ins; each search runs a query of its own.
         isolation="pure",
     )
-    add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
+    add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(
@@ -2044,7 +2077,7 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost, native cash, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer",
+        desc="Average cost, native cash, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home",
         # PURE: each module's only I/O is convert_bulk, which every test replaces on its
         # module with a double; the session handed to it is None or a sentinel, or, for the
         # ledger control totals, one on a private SQLite file under tmp_path that no other
@@ -2085,12 +2118,13 @@ Note: No backend server required.
         "lots-analysis-pure",
         services_lots_analysis_pure,
         name="Lots Analysis Pure Builders",
-        desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver",
-        # PURE: every helper under test is a sync method that takes all of its
-        # inputs as arguments and never touches self.db, so the service is built
-        # with db=None. The two async cases stub convert_bulk instead of opening a
-        # session. Kept out of the DB-backed lots units on purpose: folding it in
-        # would declass it to the category default (write-scoped).
+        desc="SHORT lots, estimated_mode, price gaps, ADJUSTMENT cost basis, transfer scope, FX resolver, reference price and days at cost",
+        # PURE: no database, server or network. The builders under test are sync methods that take all
+        # of their inputs as arguments, so the service is built with db=None; the async cases stub
+        # convert_bulk, and the reference-price and at-cost cases drive get_lots_analysis on loader
+        # doubles and a session double, all in EUR, so no rate is asked and nothing reaches a database.
+        # Kept out of the DB-backed lots units on purpose: folding it in would declass it to the
+        # category default (write-scoped).
         isolation="pure",
     )
     add_test(
@@ -2110,7 +2144,7 @@ Note: No backend server required.
         "asset-event-store",
         services_asset_event_store,
         name="Asset Event Store",
-        desc="Manual events: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset",
+        desc="Manual events: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset, a SPLIT retype refused while a linked incoming adjustment has no cost (P-10)",
         # WRITE_GLOBAL: Asset and AssetEvent carry no user_id (nor do the AssetProviderAssignment,
         # Broker and Transaction written beside them), so the two assets this unit creates and
         # every event and transaction written against them are visible to all concurrent tests.
@@ -2139,7 +2173,7 @@ Note: No backend server required.
         # log-once keys are the test's own; the cache's set is patched for one test only (monkeypatch).
         # Nothing here counts or reads a row it did not write.
     )
-    add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
+    add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, one replay from the first movement")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
     add_test(
@@ -2152,6 +2186,31 @@ Note: No backend server required.
     add_test(cat, "scheduler-settings", services_scheduler_settings, name="Scheduler Settings", desc="_parse_times, _parse_days pure functions")
     add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases; a missed slot of a configured day in the last 7 days is due once a run exists (D-Z3-1)")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
+    add_test(
+        cat,
+        "scheduler-run-lock",
+        services_scheduler_run_lock,
+        name="Scheduler Lock Across Processes",
+        desc="Z-11 (N71), run_lock.py: scheduler_run_lock(path) waits while another process holds the lock (each attempt LOCK_EX | LOCK_NB in a thread, POLL_SECONDS apart) and runs the block once it lets go or is SIGKILLed; a cancelled wait goes through, never runs the block, and leaves no descriptor nor lock, an attempt in flight that took it included; released on an exception (another process takes it at once); the file created 0o600 with its folder and never deleted; a symbolic link refused at once with OSError, nothing behind it created or locked; open/flock/close never on the event loop's thread; LOCK_FILE_NAME .scheduler.lock, POLL_SECONDS 0.2, cross_process_lock_available() with fcntl (false with fcntl None or not importable), run_lock_path() the data directory's, read at the call",
+        # PURE: no DB, no server, no lane port, no network. Every lock file lives under the test's tmp_path, and an autouse
+        # fixture points the data directory (LIBREFOLIO_TEST_DATA_DIR) there too, for the test and its children: no
+        # .scheduler.lock reaches the lane's. The other processes are real child interpreters the test starts (a holder of the
+        # lock, a one-shot probe), coordinated by files under tmp_path against deadlines of their own; each holder gives up
+        # by itself, and every child is killed and reaped in a finally.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "scheduler-multiprocess",
+        services_scheduler_multiprocess,
+        name="Scheduler Across Two Processes",
+        desc="Z-11 (N71): two real processes call run_due_jobs('wake') at once on one data directory, both jobs due and am_i_leader answering yes: each job runs once across the two, in the process that took the lock first (both ok), the other finds both not_due; neither reports not_leader, neither asks am_i_leader; the state file holds each last_run_at written once, the second process loaded it inside the lock; the lock file is the data directory's .scheduler.lock",
+        # PURE: no DB, no server, no lane port, no network. The two processes are child interpreters the test starts, their
+        # LIBREFOLIO_DATA_DIR a folder of tmp_path (test mode off, no switch nor coverage variable inherited): the state file
+        # and the lock file are real, both under tmp_path. Settings, jobs and the leader are patched in each child's memory;
+        # both are killed and reaped in a finally.
+        isolation="pure",
+    )
     add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
     add_test(
         cat,
@@ -2331,7 +2390,7 @@ Note: No backend server required.
         "backup-staging",
         services_backup_staging,
         name="Instance Backup Staging",
-        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy",
         # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
         # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
         # directory of the test configured (which must stay absent). No lane DB, no server, no network.
@@ -2450,7 +2509,7 @@ Note: No backend server required.
         "provider-errors",
         services_provider_errors,
         name="Provider Error Paths",
-        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE and FED when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50)",
+        desc="justETF, Borsa Italiana, Yahoo Finance, SNB, BOE, FED and ECB when the source misbehaves or refuses for too many requests (every client doubled); a value that is no number skips its line only (X-R50, X-R52)",
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")

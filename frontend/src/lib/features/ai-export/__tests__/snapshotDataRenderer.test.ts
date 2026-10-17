@@ -1461,6 +1461,201 @@ describe('AI Export compact Snapshot Data renderer', () => {
         });
     });
 
+    /**
+     * MF-D2: the 4 drawdown components 1 → 2: a total loss keeps the section with `remaining_to_peak_ratio` null.
+     * `portfolio.drawdown_summary`/`broker.drawdown_summary`/`asset.drawdown_summary` and
+     * `portfolio.asset_drawdown_snapshot` used to fail validation on a total loss (a drawdown of -1, from which no
+     * finite gain climbs back); v2 builds the section and leaves only that gain null, with the same schema-1 payload
+     * shape. So v2 renders compactly — the very same text as its v1 — and the missing gain stays the literal `null` the
+     * format preamble declares (`null=explicitly unavailable`): never `0`, never YAML. Versions the renderer does not
+     * know keep falling back to YAML. No prompt wording is frozen: texts are placeholders and cells are read by field
+     * name.
+     */
+    describe('drawdown total loss (MF-D2)', () => {
+        type DrawdownSummaryId = 'portfolio.drawdown_summary' | 'broker.drawdown_summary' | 'asset.drawdown_summary';
+        type DrawdownComponentId = DrawdownSummaryId | 'portfolio.asset_drawdown_snapshot';
+        const directory = {
+            assets: [
+                {asset_id: 42, display_name: 'First Asset'},
+                {asset_id: 43, display_name: 'Second Asset'},
+            ],
+            brokers: [{broker_id: 5, display_name: 'Named Broker'}],
+            fx_pairs: [],
+        };
+        const TOTAL_LOSS_WARNING = 'total_loss_no_recovery: total loss warning placeholder';
+        const PERCENT = /^-?\d+(?:\.\d+)?%$/;
+
+        // A drawdown summary as the backend serializes it after a total loss: one open episode down to nothing. Only
+        // the gain that would recover it is null, and the Risk warning travels in `warnings`.
+        function drawdownSummaryPayload() {
+            return {
+                status: 'ok',
+                reason_code: null,
+                message: null,
+                warnings: [TOTAL_LOSS_WARNING],
+                calculation_basis: 'price_only_close',
+                return_basis: 'price_only',
+                calculation_currency: 'EUR',
+                data_quality_status: 'ok',
+                current_drawdown_ratio: -1,
+                current_peak_date: '2024-03-01',
+                current_drawdown_duration_days: 305,
+                maximum_drawdown_ratio: -1,
+                maximum_drawdown_peak_date: '2024-03-01',
+                maximum_drawdown_trough_date: '2024-09-02',
+                maximum_drawdown_recovery_status: 'open',
+                maximum_drawdown_recovery_date: null,
+                maximum_drawdown_duration_days: 305,
+                maximum_drawdown_recovered_ratio: 0,
+                remaining_to_peak_ratio: null,
+                available_start: '2024-01-01',
+                available_end: '2024-12-31',
+                n_observations: 250,
+                coverage_ratio: 0.95,
+            };
+        }
+
+        // Per-asset rows: First Asset lost everything, so its gain is null; Second Asset is 10% under its peak, so its
+        // gain is a number — the gain column stays in the table and the null is a cell of it.
+        function assetDrawdownSnapshotPayload() {
+            const row = (assetId: number, current: number, maximum: number, remaining: number | null) => ({
+                asset_id: assetId,
+                status: 'ok',
+                reason_code: null,
+                calculation_basis: 'observed_native_price_only_close',
+                calculation_currency: 'EUR',
+                data_quality_status: 'ok',
+                current_drawdown_ratio: current,
+                maximum_drawdown_ratio: maximum,
+                maximum_drawdown_recovery_status: 'open',
+                remaining_to_peak_ratio: remaining,
+                available_start: '2024-06-03',
+                available_end: '2024-12-31',
+                n_observations: 3,
+                coverage_ratio: 1,
+            });
+            return {policy_code: 'observed_price_drawdown_snapshot_v1', rows: [row(42, -1, -1, null), row(43, -0.1, -0.2, 0.1111111111111111)]};
+        }
+
+        function drawdownSection(componentId: DrawdownComponentId, componentVersion: number, schemaVersion = 1) {
+            return {
+                component_id: componentId,
+                component_version: componentVersion,
+                schema_id: componentId,
+                schema_version: schemaVersion,
+                payload: componentId === 'portfolio.asset_drawdown_snapshot' ? assetDrawdownSnapshotPayload() : drawdownSummaryPayload(),
+            };
+        }
+
+        function render(componentId: DrawdownComponentId, componentVersion: number, schemaVersion = 1) {
+            const target = componentId.startsWith('broker.') ? {kind: 'broker', broker_id: 5} : componentId.startsWith('asset.') ? {kind: 'asset', asset_id: 42} : {kind: 'portfolio'};
+            return renderSnapshotDataText([drawdownSection(componentId, componentVersion, schemaVersion)], target, directory);
+        }
+
+        /** The pipe table on the lines right after `marker`: one header-keyed map per data row. */
+        function tableAfter(content: string, marker: string): Map<string, string>[] {
+            const lines = content.split('\n');
+            const start = lines.indexOf(marker);
+            expect(start, `a "${marker}" line`).toBeGreaterThanOrEqual(0);
+            const table: string[][] = [];
+            for (const line of lines.slice(start + 1)) {
+                if (!line.startsWith('|')) break;
+                table.push(line.slice(1, -1).split(/(?<!\\)\|/));
+            }
+            const [header = [], ...rows] = table;
+            return rows.map((cells) => new Map(header.map((column, index): [string, string] => [column, cells[index]])));
+        }
+
+        /** The one row whose `column` reads `value`: rows are found by what they hold, never by position. */
+        function rowWhere(rows: readonly Map<string, string>[], column: string, value: string): Map<string, string> {
+            const matches = rows.filter((row) => row.get(column) === value);
+            expect(matches, `rows whose ${column} is ${value}`).toHaveLength(1);
+            return matches[0];
+        }
+
+        /** The value cell of the SUMMARY row for `field`, the row found by its field name. */
+        function summaryValue(content: string, field: string): string | undefined {
+            return rowWhere(tableAfter(content, 'SUMMARY'), 'field', field).get('value');
+        }
+
+        /** An asset's prompt ref, resolved through the ENTITY DIRECTORY as a reader of the prompt would. */
+        function assetRef(entityDirectory: string, displayName: string): string {
+            const ref = rowWhere(tableAfter(entityDirectory, 'ASSETS'), 'display_name', displayName).get('ref');
+            if (ref === undefined) throw new Error(`the ENTITY DIRECTORY has no ref for ${displayName}`);
+            return ref;
+        }
+
+        it.each([
+            ['portfolio.drawdown_summary', 2],
+            ['broker.drawdown_summary', 2],
+            ['asset.drawdown_summary', 2],
+            ['portfolio.asset_drawdown_snapshot', 2],
+        ] as const)('renders %s v%i (schema 1) as the very same text as its v1', (componentId, version) => {
+            const v1 = render(componentId, 1).content;
+            const bumped = render(componentId, version).content;
+
+            // Control: v1 is today's compact generic rendering of this payload.
+            expect(v1).toContain(`COMPONENT ${componentId}`);
+            expect(v1).not.toContain('PAYLOAD YAML FALLBACK');
+            // Subject: the bumped version goes through the same generic renderer — the same text, line for line.
+            expect(bumped).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(bumped).toBe(v1);
+        });
+
+        it.each([
+            ['portfolio.drawdown_summary v3', 'portfolio.drawdown_summary', 3, 1],
+            ['broker.drawdown_summary v3', 'broker.drawdown_summary', 3, 1],
+            ['asset.drawdown_summary v3', 'asset.drawdown_summary', 3, 1],
+            ['portfolio.asset_drawdown_snapshot v3', 'portfolio.asset_drawdown_snapshot', 3, 1],
+            ['portfolio.drawdown_summary v2 with schema 2', 'portfolio.drawdown_summary', 2, 2],
+        ] as const)('still falls back to YAML for %s', (_label, componentId, version, schemaVersion) => {
+            const rendered = render(componentId, version, schemaVersion).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).toContain('PAYLOAD YAML FALLBACK');
+        });
+
+        /*
+         * What the prompt says: the drawdown it knows (-100%) beside the gain it cannot know (null), and the Risk
+         * warning that explains it. The v1 rows are the renderer's control: it prints this very payload compactly
+         * either way — v1 just never received one, the backend failed before building it.
+         */
+        it.each([
+            ['portfolio.drawdown_summary', 1],
+            ['portfolio.drawdown_summary', 2],
+            ['broker.drawdown_summary', 1],
+            ['broker.drawdown_summary', 2],
+            ['asset.drawdown_summary', 1],
+            ['asset.drawdown_summary', 2],
+        ] as const)('renders %s v%i with a total loss: remaining_to_peak_percent reads null beside a drawdown of -100%%', (componentId, version) => {
+            const rendered = render(componentId, version).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            // Presence barrier: the section is there, with the drawdown it does know ...
+            expect(summaryValue(rendered, 'current_drawdown_percent')).toBe('-100%');
+            expect(summaryValue(rendered, 'maximum_drawdown_percent')).toBe('-100%');
+            // ... and the gain no finite number expresses reads null: never 0, never a removed row.
+            expect(summaryValue(rendered, 'remaining_to_peak_percent')).toBe('null');
+            // The Risk warning travels with the section.
+            expect(tableAfter(rendered, 'TABLE warnings').map((row) => row.get('value'))).toContain(TOTAL_LOSS_WARNING);
+        });
+
+        it.each([1, 2])('renders portfolio.asset_drawdown_snapshot v%i with a total-loss row: its remaining_to_peak_percent reads null, the other row keeps its gain', (version) => {
+            const rendered = render('portfolio.asset_drawdown_snapshot', version);
+
+            expect(rendered.content).toContain('COMPONENT portfolio.asset_drawdown_snapshot');
+            expect(rendered.content).not.toContain('PAYLOAD YAML FALLBACK');
+            const rows = tableAfter(rendered.content, 'TABLE rows');
+            const lost = rowWhere(rows, 'asset_ref', assetRef(rendered.entityDirectory, 'First Asset'));
+            const underwater = rowWhere(rows, 'asset_ref', assetRef(rendered.entityDirectory, 'Second Asset'));
+            expect(lost.get('current_drawdown_percent')).toBe('-100%');
+            expect(lost.get('remaining_to_peak_percent')).toBe('null');
+            // Control: the column is there because the other row has a gain — a number, not null.
+            expect(underwater.get('remaining_to_peak_percent')).toMatch(PERCENT);
+        });
+    });
+
     it('normalizes decimal presentation without collapsing tiny nonzero values', () => {
         expect(formatPromptNumber('15000.000000000000')).toBe('15000');
         expect(formatPromptNumber('91.30339554862304')).toBe('91.3034');

@@ -44,6 +44,14 @@ the raw value from the cache for 2 minutes without asking the provider. The cure
 * guard: a quote that already fits is served in its own form (101.5 stays 101.5, 100 stays 100, not padded to the 12
   decimals ``storable_price`` gives them): only a quote the truncation changes is served truncated.
 
+X-R51 (17/10, the follow-up of X-R40): a refresh whose current value is refused names the refusal. Measured on the
+X-R40 + W-B62 checkpoint: the value ``storable_price`` refuses no longer reaches the upsert, whose «rejected 1 date(s)
+with a value no price column can keep» made the result PARTIAL with that message; it is only logged, once. A refresh
+with history answers OK with no message, one of the current value alone FAILED with «No price data available from
+provider». The cure's contract: the result names the refused value (1E+60) and the limit it breaks (12 digits before
+the decimal point) — PARTIAL with the history, its message the first of its errors; FAILED without, in its one
+error — and the rest stays as X-R40 left it (the history stored, today absent from ``changed_points``).
+
 The doubles and fixtures are W-B58's and W-B62's, copied from ``test_asset_digit_limits.py`` (workstream W): the two
 assets of the unit (``owned``), ``_QuoteDouble`` and the ``assigned`` fixture, ``_current_price``, ``_falling_back``,
 ``_seed_closes`` and ``_record_current_cache``. W-B62's tests are W's, unchanged; the X-R40 tests follow them.
@@ -87,7 +95,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Asset, AssetEvent, AssetProviderAssignment, AssetType, PriceHistory, ProviderInputType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint, FAUpsert
-from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel
+from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
 from backend.app.services.assets import core, price_query
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.manager import AssetSourceManager
@@ -672,6 +680,96 @@ async def test_a_refresh_caches_a_valid_current_value_as_the_database_keeps_it(o
     served = (item.source, item.value)
     assert served == (f"provider:{assigned.code}", expected), f"X-R40: after {story}, the current price served {served}: expected {expected} from the cache, the close the database keeps"
     assert assigned.current_calls == 1, f"X-R40: after {story}, the current price asked the provider again ({assigned.current_calls} calls in all): the value the refresh cached was not served"
+
+
+# --------------------------------------------------------------------------- #
+# X-R51: a refresh whose current value is refused names the refusal
+# --------------------------------------------------------------------------- #
+
+
+def _xr51_whole_numbers(text: str, asset_id: int, *quoted: str) -> set[str]:
+    """The whole numbers ``text`` states, its ``quoted`` values, its ISO dates and its naming of the asset (``asset 12``,
+    ``asset_id=12``) taken out first: none of them can stand in for a limit, nor can the digits of a provider code, an
+    identifier, a decimal or an exponent (a number touching a letter, ``_``, ``.``, ``+`` or ``-`` before it, or a letter,
+    ``_`` or decimals after it)."""
+    for value in quoted:
+        text = text.replace(value, " ")
+    text = re.sub(r"\d{4}-\d{2}-\d{2}", " ", text)
+    text = re.sub(rf"(?i)\basset\w*\W{{0,4}}{asset_id}(?!\w|\.\d)", " ", text)
+    return set(re.findall(r"(?<![\w.+-])\d+(?!\w|\.\d)", text))
+
+
+def _xr51_assert_names_the_refusal(text: str | None, refused: str, asset_id: int, story: str) -> None:
+    """X-R51: ``text`` names the refused current value, ``refused`` as written, and the limit it breaks, 12 digits before
+    the decimal point: the whole number 12 (``_xr51_whole_numbers``)."""
+    named = text is not None and refused in text and "12" in _xr51_whole_numbers(text, asset_id, refused)
+    assert named, f"X-R51: {story} reports {text!r}: expected it to name the refused value, {refused}, and the limit it breaks, 12 digits before the decimal point — the user is not told why today's price is missing"
+
+
+async def _xr51_refresh(owned: _Owned, assigned: _Assigned, start: date, story: str):
+    """``bulk_refresh_prices`` of the PEPE asset from ``start`` to today, a range that reaches today, so the refresh asks the
+    current value: its one result. An exception fails the test, naming it. Barrier: one result, from the double, which was
+    asked once for the current value, and once for the history when the range starts before today, never when it starts
+    today."""
+    request = FARefreshItem(asset_id=owned.asset_id, date_range=SyncDateRangeModel(start=start, end=date.today()))
+    try:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            response = await AssetSourceManager.bulk_refresh_prices([request], session)
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        pytest.fail(f"{story}: bulk_refresh_prices raised {exc!r}")
+    results = response.results
+    expected = (1, assigned.code, 1 if start < date.today() else 0, 1)
+    fetched = (len(results), results[0].provider_used if results else None, assigned.history_calls, assigned.current_calls)
+    assert fetched == expected, f"barrier: {story} answered (results, provider, history calls, current-value calls) = {fetched}, not {expected}: {results!r}"
+    return results[0]
+
+
+@pytest.mark.asyncio
+async def test_a_refresh_with_history_names_a_refused_current_value(owned, assigned):
+    """Red today: a refresh up to today stores the history of days 0 to 2 and answers OK, with no message: the current
+    value of 1E+60 is refused before it becomes today's point and only logged, once (X-R40), so the user who asked for
+    today sees a refresh that went well and no price for today. Before X-R40 the refused point reached the upsert, whose
+    «rejected 1 date(s) with a value no price column can keep» made the result PARTIAL with that message.
+
+    Contract (X-R51): the result names the refusal — PARTIAL, its message the first of its errors, naming the refused
+    value, 1E+60, and the limit it breaks, 12 digits before the decimal point (a whole number: the dates and the value
+    taken out first) — and the rest stays as X-R40 left it: days 0, 1 and 2 stored, today absent from ``changed_points``.
+    """
+    assigned.history = [_point(0, "1.5"), _point(1, "2"), _point(2, "2.5")]
+    assigned.quote = Decimal("1E+60")
+    story = "a refresh up to today whose provider answers a history of days 0 to 2 and a current value of 1E+60 EUR"
+
+    result = await _xr51_refresh(owned, assigned, _day(0), story)
+
+    answered = {"status": result.status, "message": result.message, "errors": result.errors}
+    assert result.status == SyncStatus.PARTIAL and result.errors and result.message == result.errors[0], f"X-R51: {story} answered {answered}: expected PARTIAL, its message the first of its errors, naming the refused current value — the user sees a refresh that went well, and no price for today"
+    _xr51_assert_names_the_refusal(result.message, "1E+60", owned.asset_id, story)
+    stored = sorted(day for (_asset_id, day) in await _stored(owned))
+    assert stored == [_day(0), _day(1), _day(2)], f"X-R51: {story} stored the days {stored}: expected days 0, 1 and 2, and not today, whose value no column keeps"
+    delta = sorted(point.date for point in result.changed_points or [])
+    assert date.today() not in delta and {_day(0), _day(1), _day(2)} <= set(delta), f"X-R51: {story} announces {delta} in changed_points: expected days 0, 1 and 2, and not today, whose value no column keeps"
+
+
+@pytest.mark.asyncio
+async def test_a_refresh_of_the_current_value_alone_names_a_refused_one(owned, assigned):
+    """Red today: a refresh of today alone asks the provider for the current value only; its 1E+60 is refused and only
+    logged, once (X-R40), and the result is FAILED with the generic «No price data available from provider»: the user is
+    told the provider had nothing, when it answered a value no price column keeps.
+
+    Contract (X-R51): FAILED, with one error naming the refused value, 1E+60, and the limit it breaks, 12 digits before
+    the decimal point — not «No price data available from provider». No history is asked, the range starting today: the
+    double would serve an empty one and count the call, which the barrier would see (a history left None is no barrier:
+    the double raises before it counts, and the refresh swallows the raise).
+    """
+    assigned.history = []
+    assigned.quote = Decimal("1E+60")
+    story = "a refresh of today alone whose provider answers a current value of 1E+60 EUR"
+
+    result = await _xr51_refresh(owned, assigned, date.today(), story)
+
+    answered = {"status": result.status, "message": result.message, "errors": result.errors}
+    assert result.status == SyncStatus.FAILED and len(result.errors) == 1, f"X-R51: {story} answered {answered}: expected FAILED, with one error naming the refused current value"
+    _xr51_assert_names_the_refusal(result.errors[0], "1E+60", owned.asset_id, f"{story} (not «No price data available from provider»)")
 
 
 @pytest.mark.asyncio

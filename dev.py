@@ -70,6 +70,7 @@ from scripts.cli_base import (
     run_command,
     run_command_live,
     run_pipenv,
+    run_server_live,
     tool_contract_fingerprint,
 )
 from scripts.cli_tree_parser import TreeParser, format_help
@@ -158,6 +159,26 @@ def _ensure_shared_jwt_secret(env: dict) -> None:
     if env.get("JWT_SECRET", "").strip() or env.get("JWT_SECRET_FILE", "").strip():
         return
     env["JWT_SECRET"] = secrets.token_urlsafe(64)
+
+
+#: What ``dev.py server`` waits beyond the server's shutdown budget, for the process to exit (Z-10).
+SERVER_STOP_MARGIN_SECONDS = 2
+
+
+def _server_stop_grace(env: dict) -> Optional[float]:
+    """How long ``dev.py server`` waits for the server once Ctrl+C or a SIGTERM asked it to stop (Z-10).
+
+    The server's shutdown budget, ``LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`` in the environment it starts with (the
+    default when the value cannot be used: the server logs that itself), plus ``SERVER_STOP_MARGIN_SECONDS``. None
+    with no limit (budget 0): then only a second Ctrl+C or SIGTERM stops the wait.
+    """
+    from backend.app.config.sleep_wake import DEFAULT_SHUTDOWN_TIMEOUT_SECONDS, SleepWakeConfigError, shutdown_timeout_seconds  # noqa: PLC0415 — CLI-only import
+
+    try:
+        budget = shutdown_timeout_seconds(env)
+    except SleepWakeConfigError:
+        budget = DEFAULT_SHUTDOWN_TIMEOUT_SECONDS
+    return None if budget == 0 else float(budget + SERVER_STOP_MARGIN_SECONDS)
 
 
 def cmd_server(args):
@@ -449,7 +470,8 @@ def cmd_server(args):
                       f"(StatReload ignores --reload-exclude and can reload-loop).{Colors.NC}")
 
         uvicorn_cmd.extend(keepalive_args)
-        return run_command_live(uvicorn_cmd, env=env)
+        # Ctrl+C and SIGTERM let the server finish its shutdown within its budget (Z-10).
+        return run_server_live(uvicorn_cmd, env=env, grace_seconds=_server_stop_grace(env))
 
 
 # =============================================================================

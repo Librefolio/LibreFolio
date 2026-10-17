@@ -282,9 +282,12 @@ def storable_fx_rate(value: Decimal) -> Optional[Decimal]:
 
 
 def fx_rate_limits_text() -> str:
-    """``fx_rates.rate``'s limits in words, read from the model, for a refusal or a warning (X-R38)."""
+    """``fx_rates.rate``'s limits in words, read from the model, for a refusal or a warning (X-R38). The bound below
+    ``1E+14`` is said too (X-R51): a rate of 14 digits within about 0.008 of it is refused (X-R50), and «at most 14
+    digits» alone did not say why."""
     _precision, scale = get_model_column_precision(FxRate, "rate")
-    return f"an exchange rate keeps at most {max_integer_digits(FxRate, 'rate')} digits before the decimal point and {scale} decimal places, and must stay above 0 once cut to them"
+    first_refused = usable_fx_rate_bounds()[1]
+    return f"an exchange rate keeps at most {max_integer_digits(FxRate, 'rate')} digits before the decimal point and {scale} decimal places, stays below {first_refused:f} (as the database stores it), and must stay above 0 once cut to them"
 
 
 def usable_fx_rate_bounds() -> Tuple[Decimal, Decimal]:

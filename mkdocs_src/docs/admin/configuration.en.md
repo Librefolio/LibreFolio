@@ -431,6 +431,9 @@ The budget is spent in this order:
 
     Otherwise Docker kills the server after 10 seconds, whatever its budget.
 
+`./dev.py server` keeps that margin by itself: after a Ctrl+C it waits up to the budget plus 2 seconds
+for this stop, then ends the server ([Start the Server](cli_tools.md#start-the-server)).
+
 ---
 
 ## 💻 Parameters Set by the Tools

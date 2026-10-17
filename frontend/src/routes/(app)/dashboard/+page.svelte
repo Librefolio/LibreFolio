@@ -669,7 +669,10 @@
 
     /** Lazy-load the synthetic P&L candle series (G1b — called by GrowthChart's
      *  onRequestPnlCandles when the user first activates the candles submode; caller
-     *  policy per plan §4.1: "expensive OHLC work stays off ordinary reports"). */
+     *  policy per plan §4.1: "expensive OHLC work stays off ordinary reports").
+     *  The guard's reads run synchronously inside GrowthChart's effect, so they are its
+     *  dependencies: `canAsk` turning true is what makes a saved Candles view on a fresh
+     *  page ask again once the brokers are known (Y-16). Keep them before the first await. */
     async function loadPnlCandles() {
         if (!canAsk || pnlCandles || pnlCandlesLoading) return;
         pnlCandlesLoading = true;

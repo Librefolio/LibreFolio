@@ -43,6 +43,9 @@ $$
 \Delta\%_{yr} = \left(\frac{P_{end}}{P_{start}}\right)^{365/d} - 1
 $$
 
+It appears from 30 days on: a shorter span shows `—`, as everywhere in LibreFolio. A line that starts at 0
+shows `—` for **Δ %** and **Δ%/yr**.
+
 See [Returns & Growth Rates — Financial Theory](../../../financial-theory/fundamentals/returns.md)
 for log returns and compounding.
 
@@ -59,5 +62,5 @@ you leave the page.
 
 - 🔍 **Zoom in** before clicking, to hit the exact points.
 - 📰 Compare the move **before and after an event**, such as a central bank announcement.
-- ⚠️ Read **Δ%/yr** with care on short periods: a 1 % move in 7 days compounds to about 68 % a year.
-  It means most over 30 days or more.
+- ⚠️ **Δ%/yr** waits for 30 days because compounding inflates short moves: 1 % in 7 days would
+  read as about 68 % a year.
