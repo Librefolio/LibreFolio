@@ -7959,7 +7959,8 @@ punto di partenza, l'audit dello stesso giorno:
   `period_annualized` ricade sulla regola generale, |StartValue| su t₀→t₁: una posizione tenuta a t₀ e venduta dopo 10
   giorni d'un periodo d'un anno è annualizzata sull'anno. Documentato com'è (`net-annualized-return` «Positions Closed
   in the Period»). Scelte: (a) com'è; (b) «—» quando la regola chiusa non vale. Dettagli: piano MF, «MF-A2».
-- **MF-A4 · Doc: il «non realizzato» della card punta alla pagina sbagliata** — minimo, doc; docs-writer di MF, 17/10.
+- ✅ **MF-A4 · Doc: il «non realizzato» della card punta alla pagina sbagliata** — minimo, doc; docs-writer di MF, 17/10.
+  **Chiusa il 17/10**: il collegamento a `period-pnl` nelle quattro lingue e le descrizioni API, dev `a228b9d30`.
   `book-value.en.md` definisce il non realizzato come NAV − Book; `user/dashboard/kpi-cards.en.md:31` collega la card
   **Unrealized change** (che mostra la cifra di periodo, valore di mercato − costo aperto) a quella pagina; le
   descrizioni API di `period_unrealized_gain_loss_*` non dicono MV − OCB. Cura: il collegamento a
@@ -8006,7 +8007,8 @@ punto di partenza, l'audit dello stesso giorno:
   `_ENGINE_EXECUTOR` (`financial_math/portfolio/engine.py`) non è nella sequenza di spegnimento dell'app: una
   ricostruzione in corso tiene il processo fino alla fine, come l'esecutore predefinito di `asyncio.to_thread`.
   Proposta, se serve: `shutdown(wait=False, cancel_futures=True)` nel lifespan. Dettagli: piano MF, sezione «J-45».
-- **MF-J45b · Nessun single-flight sulla cache del motore** — basso, carico; J, 17/10 (revisione di J-45). Tra la
+- ✅ **MF-J45b · Nessun single-flight sulla cache del motore** — basso, carico; J, 17/10 (revisione di J-45). **Chiusa il
+  17/10**: `_IN_FLIGHT` per chiave e intervallo in `calculate`, dev `a228b9d30`. Tra la
   lettura della cache `portfolio_blob` (`portfolio/engine.py` ~:316) e la sua scrittura (~:457) nessun lucchetto: due
   richieste identiche concorrenti ricostruiscono entrambe (con J-45 occupano i due worker). Nessuna azione ora; cura
   possibile: un `asyncio.Future` per chiave in volo. Dettagli: piano MF, sezione «J-45».
@@ -8053,6 +8055,26 @@ punto di partenza, l'audit dello stesso giorno:
   query al tetto `MAX_BULK_WRITE_ITEMS`. Lento, non blocca il ciclo degli eventi. Cura possibile: contare dalle righe
   lette a blocchi (id per asset), che rende esatti anche gli intervalli sovrapposti (oggi contati due volte).
   Dettagli: piano MF, sezione «MF-SEC9a».
+- **MF-SEC9g · La classificazione dei candidati BRIM ferma il ciclo degli eventi** — medio, carico; E, 17/10 (revisione
+  del resto di MF-SEC9a). In `search_asset_candidates_bulk` (`brim_provider.py` ~2073) la catena di priorità in memoria
+  scorre l'universo più volte per titolo, con 8 `_contains` per nome: O(titoli × universo) in Python sul ciclo. Misure di
+  E con 5 000 asset: dati realistici 1 000 titoli 0,5 s, 3 000 4,5 s; nomi generici 90 titoli 7,9 s, 1 000 104 s. Prima
+  dei blocchi il parse falliva oltre 91; ora gira, e il fermo arriva più in là. Cura: la classificazione in
+  `asyncio.to_thread` (gli oggetti ORM sono già caricati) più indici per ISIN e ticker esatti; i test di parità
+  guardano la riscrittura. Revisore W. Sonde in `files/mfsec9a_rest/probe/` di E. Dettagli: piano MF, «MF-SEC9g».
+- **MF-A5 · Un trasferimento in uscita parziale falsa la regola delle posizioni chiuse** — basso-medio, numeri, nella
+  1.3; J, 17/10 (revisione di MF-A2). La base è il costo delle unità vendute, ma il numeratore porta anche il P&L delle
+  unità uscite per trasferimento (ΔUGL e il ritocco del tratto). Esempio: 10 unità, costo 1 000, valore iniziale 1 100;
+  vendute 5 a 625, 5 trasferite a un broker del perimetro che valgono 600 all'arrivo: P&L di riga +125, la regola dà
+  25 %, il giusto ~12,5 %. Cura: la regola chiusa solo se ogni unità è uscita con una cessione che il Realizzato conta,
+  altrimenti la ricaduta (o il costo uscito nella base). Rossi prima. Con la nota di doc di `net-annualized-return`
+  («scesa alla soglia della polvere o sotto»). Dettagli: piano MF, «MF-A5».
+- **MF-A6 · La polvere rompe l'identità del §7** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di MF-A2). Lo stato
+  giornaliero valuta ogni quantità > 0, le righe considerano ≤ 1e-5 come non tenuta: la stessa soglia dai due lati, o il
+  §7 dice «polvere a parte». Dettagli: piano MF, «MF-A5».
+- **MF-A7 · `oldest_open_lot_date` senza soglia della polvere** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di
+  MF-A2). Un residuo di polvere può spostare l'inizio della finestra di ricaduta dell'annualizzato. Dettagli: piano MF,
+  «MF-A5».
 - **MF-SEC9f · Altri OR per elemento, censiti da E** — minimo, informazione; E, 17/10 (revisione di MF-SEC9a).
   `scheduler/jobs.py:100` costruisce un termine per coppia configurata: rifiutato solo con ~1 000 coppie, improbabile.
   `portfolio/engine.py:133` è sicuro. Nessuna azione ora. Dettagli: piano 08 di E, «MF-SEC9a».

@@ -2962,3 +2962,34 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
   `api portfolio`, `api portfolio-wac`).
 - ✅ **Slot** (16:22–16:27, GO del coordinatore, carico 22; HEAD `98b364b45`): `api portfolio` **52**, `api portfolio-wac`
   **12**. Porta libera. CHANGELOG: 🔄 (prestazioni), non 🐛 (coordinatore). **CHECKPOINT READY** inviato, FROZEN.
+
+#### J45b + A4 entrati (dev `a228b9d30`); MF-SEC9g — la classificazione BRIM fuori dal ciclo (17/10, 16:3x)
+- Coordinatore: J45b + A4 **entrati** (dev `a228b9d30`, 🔄 `633e30ca9`); worktree a `633e30ca9`. Coda: **SEC9g**, poi
+  **MF-A5** (+ nota di doc), dalla revisione di J di MF-A2 (le tre pagine coincidono col motore). Backlog: chiuse MF-J45b,
+  MF-A4; nuove MF-SEC9g, MF-A5, MF-A6 (polvere e identità del §7, dopo la 1.3), MF-A7 (`oldest_open_lot_date` senza
+  soglia, dopo la 1.3).
+- **MF-SEC9g** ✅ codice `brim_provider.py`: `_candidate_view` legge una volta dall'oggetto ORM ciò che serve
+  (`_CandidateView`: id, nome, ISIN, ticker, `other_text` serializzato una volta, i campi del nome);
+  `_classify_candidates(unique, views)` pura — stesse cinque priorità, ISIN e ticker esatti da un indice che tiene
+  l'ordine dell'universo, un pattern LIKE compilato una volta per ago (`_contains_matcher`, `_contains` tolto) —
+  chiamata con `await asyncio.to_thread(...)`; via il `noqa: C901` della funzione di massa (ora semplice). Docstring e
+  `brim/architecture.md` («Candidate search»). Suite esistenti col codice: `bulk-reads-chunked` 10, `db brim-bulk` 7,
+  `brim-provider-base` 39 (⚠️ **Fuori pista**: partite col carico a 1 minuto 54,8, soglia non attesa).
+- In corso: test-author `sec9g-tests`.
+- ✅ **Test SEC9g** (test-author `sec9g-tests`, in `test_bulk_reads_chunked.py`): classificazione fuori dal ciclo (thread di
+  ogni compilazione LIKE registrato + il ciclo risponde a una coroutine a metà classificazione; HEAD: 150 000 compilazioni
+  su 150 000 sul thread del ciclo); lavoro limitato contato (≤ una compilazione per ago, ≤ un dump di `identifier_other`
+  per asset; HEAD 150 000 e 60 000); guardie: parità a taglia (300 estrazioni su 1 011 asset, jolly, codici in minuscolo,
+  titolari doppi) e ordine dei colpi esatti. 6 mutanti presi. Il percorso per asset confronta i codici in modo sensibile
+  alle maiuscole (SQLite `=`): un ISIN salvato in minuscolo non è mai EXACT — preservato dall'indice. **Corsia** (16:45;
+  prodotto tolto `brim_provider.py`, sha `780769b3…` uguale dopo): rosso **2** / 14; verdi `bulk-reads-chunked` 14,
+  `db brim-bulk` 7, `brim-provider-base` 39, `utils gate-event-loop-io` 14. Testi del runner aggiornati. ruff/black,
+  diff-check, `mkdocs build` stretto, `check-links`. Slot chiesto (`files/sec9g.sh slot`: `api brim`, `api brim-scalable`).
+- ✅ **Slot** (in coda; partito 16:53 col carico a 5 minuti < 50, HEAD `633e30ca9`): `api brim` **118**, `api brim-scalable`
+  **2**. Porta libera. **CHECKPOINT READY** inviato, FROZEN.
+- **MF-A5 — analisi** (sola lettura, durante l'attesa dello slot): la riga del mittente nell'esempio di J fa +125 =
+  ΔUGL −100 + Realizzato +125 + ritocco del tratto +100; `closed_position_annualized` divide per il solo costo venduto
+  (500) → 25 %. **Decisione del coordinatore: (1) + (2)**, un predicato condiviso: (1) il `cost_moved` dei trasferimenti
+  interni il cui tratto la riga conta (la condizione di `transfer_tract_adjustments`) entra nella base → 12,5 %; (2) se
+  un'unità è uscita altrimenti (fuori perimetro, in transito alla fine, valore o costo ignoto, ADJUSTMENT senza costo)
+  → la regola generale. CHANGELOG 🐛 con i numeri che cambiano. Dopo il checkpoint di SEC9g, rossi prima.
