@@ -125,9 +125,10 @@ describe('TabBar — label visibility and accessible names', () => {
  *     its tabs, never narrower than the scroller, so `sm:ml-auto` still pushes the right-hand group when there is room;
  *   - the active tab is kept whole in view — when it changes, when the scroller is resized, when the labels change (a
  *     language switch). In a `requestAnimationFrame` after the change the bar reads the scroller's box and the active
- *     button's with `getBoundingClientRect()`, and moves the scroller's own `scrollLeft` — never the page — by exactly
- *     what is hidden: `scrollLeft -= scroller.left − tab.left` when the tab starts left of the scroller,
- *     `scrollLeft += tab.right − scroller.right` when it ends right of it, nothing when it is inside;
+ *     button's with `getBoundingClientRect()`, and moves the scroller's own `scrollLeft` — never the page. G-15 moved it
+ *     by exactly what is hidden: `scrollLeft -= scroller.left − tab.left` when the tab starts left of the scroller,
+ *     `scrollLeft += tab.right − scroller.right` when it ends right of it, nothing when it is inside; point 33, below,
+ *     adds the fade's 24 px;
  *   - without it the markup is exactly today's — no scroller, the tablist is the root — and nothing ever scrolls: the
  *     five other places that draw a TabBar keep their bar.
  *
@@ -137,9 +138,25 @@ describe('TabBar — label visibility and accessible names', () => {
  * notifications are owned too — a frame is delivered, a resize announced, only when a case says so. Overflow on the
  * real page, in a real language, is the E2E's (`e2e/settings.spec.ts`, «G-15»).
  *
- * Red today: TabBar has no `scrollable` prop, never draws `tab-bar-scroller`, and every case that needs the scroller
- * fails on its absence. The two guards — today's markup without the prop, nothing scrolled without it — are green
- * now and must stay green.
+ * Red until G-15: TabBar had no `scrollable` prop, never drew `tab-bar-scroller`, and every case that needs the
+ * scroller failed on its absence. The two guards — today's markup without the prop, nothing scrolled without it — were
+ * green then and must stay green.
+ *
+ * A8b, the designer's point 33 (the colour coordinator, 17/10): a tab the user picks, or the bar reveals — on mount
+ * too — must not lie under an active fade: `data-fade`, below, a 1.5rem mask (`mask-…-from-[calc(100%-1.5rem)]`) on
+ * each side that hides tabs. «Exactly what is hidden» became «what is hidden, and the fade's 24 px». With `M` the
+ * fade's width (1.5 × the root font size, as the mask: 24 px at jsdom's 16 px, which these cases keep — how the size is
+ * read is not pinned), the tab's edges in the row's own coordinates (`tabStart`, `tabEnd`: its box from the scroller's
+ * left edge, plus `scrollLeft`) and `maxScroll = scrollWidth − clientWidth`, a window `[target, target + clientWidth]`
+ * shows the tab clear of the fades when `tabStart ≥ target + (target > 1 ? M : 0)` and
+ * `tabEnd ≤ target + clientWidth − (target < maxScroll − 1 ? M : 0)`: at an end of the row no fade is drawn, so no
+ * margin is owed. If the current `scrollLeft` already shows it so, nothing moves — the user's scroll stands. Otherwise a
+ * tab too far left brings `target = max(0, tabStart − M)`, one too far right
+ * `target = min(maxScroll, tabEnd + M − clientWidth)` — unless that target would hide the tab's start under the left
+ * fade: then the start wins, `target = max(0, tabStart − M)`, and a tab wider than the window less its fades shows its
+ * start and loses its end. In the layout below the mount on tab three moves too: its last 4 px lie under the right
+ * fade, so the bar opens at 4. Red until A8b (point 33): every case whose reveal now ends elsewhere. A reveal that stops
+ * at an end of the row, or a tab already clear of the fades, moves as before: green, and they stay green.
  */
 const G15_IDS = ['one', 'two', 'three', 'four', 'five'] as const;
 type G15Id = (typeof G15_IDS)[number];
@@ -162,7 +179,8 @@ interface G15Geometry {
 
 /**
  * A 300 px scroller over 480 px of tabs — one 0–70 · two 70–160 · three 160–280 · four 280–380 · five 380–480 — so at
- * `scrollLeft` 0 the first three are inside, four ends 80 px past the right edge and five lies wholly past it.
+ * `scrollLeft` 0 the first three are inside, four ends 80 px past the right edge and five lies wholly past it. The right
+ * fade covers 276–300 there: three is whole in view, but its last 4 px lie under it.
  */
 function g15Layout(): G15Geometry {
     return {
@@ -310,6 +328,13 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
         return {left, right};
     }
 
+    /** The user scrolls the bar, as a browser delivers it: the position moves, then `scroll` fires on the scroller. */
+    async function userScrollsTo(scroller: HTMLElement, left: number): Promise<void> {
+        scroller.scrollLeft = left;
+        await fireEvent.scroll(scroller);
+        await g15DeliverFrames();
+    }
+
     describe('markup', () => {
         it('without `scrollable` (the default): no scroller, and the tablist is the root, as today — the other TabBars keep their markup', async () => {
             const {container} = await mountBar({activeTab: 'one'});
@@ -348,7 +373,7 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
         });
     });
 
-    describe('the active tab is kept whole in view (a 300 px scroller over 480 px of tabs, modelled)', () => {
+    describe('the active tab is kept whole in view, clear of the fade (a 300 px scroller over 480 px of tabs, modelled)', () => {
         it('without `scrollable`, a tab past the edge scrolls nothing: not the bar, not its container, not the page', async () => {
             const {container, rerender} = await mountBar({activeTab: 'one'});
             const tablist = screen.getByRole('tablist');
@@ -363,45 +388,48 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
             expect(pageScrolls, 'the page is not scrolled').toEqual([]);
         });
 
-        it('on mount, as ?tab= opens the page: an active tab 80 px past the right edge (280–380 in 0–300) brings scrollLeft from 0 to 80', async () => {
+        // red until A8b (point 33)
+        it("on mount, as ?tab= opens the page: an active tab 80 px past the right edge (280–380 in 0–300) brings scrollLeft from 0 to 104 — the hidden 80 px and the fade's 24 px", async () => {
             await mountBar({activeTab: 'four', scrollable: true});
             const scroller = scrollerOf();
 
-            expect(scroller.scrollLeft, 'the hidden 80 px, and no more').toBe(80);
-            expect(edges('four'), 'whole in view, flush with the right edge').toEqual({left: 200, right: 300});
+            expect(scroller.scrollLeft, "the hidden 80 px and the fade's 24 px: 380 + 24 − 300").toBe(104);
+            expect(edges('four'), 'whole in view, ending where the right fade begins (276 of 300)').toEqual({left: 176, right: 276});
             expect(pageScrolls, 'the page is never scrolled').toEqual([]);
         });
 
-        it('when activeTab changes to a tab 80 px past the right edge (280–380 in 0–300): scrollLeft grows by exactly 80', async () => {
+        // red until A8b (point 33)
+        it("when activeTab changes to a tab 80 px past the right edge (280–380 in 0–300): scrollLeft grows by 104 — the hidden 80 px and the fade's 24 px", async () => {
             const {rerender} = await mountBar({activeTab: 'one', scrollable: true});
             const scroller = scrollerOf();
-            expect(scroller.scrollLeft, 'precondition: an active tab already inside moved nothing').toBe(0);
+            expect(scroller.scrollLeft, 'precondition: an active tab already inside, and clear of the fade, moved nothing').toBe(0);
             expect(edges('four'), 'precondition: tab four ends 80 px past the scroller').toEqual({left: 280, right: 380});
 
             await rerender({activeTab: 'four'});
             await g15DeliverFrames();
 
-            expect(scroller.scrollLeft, 'the hidden 80 px, and no more').toBe(80);
-            expect(edges('four'), 'whole in view, flush with the right edge').toEqual({left: 200, right: 300});
+            expect(scroller.scrollLeft, "the hidden 80 px and the fade's 24 px: 380 + 24 − 300").toBe(104);
+            expect(edges('four'), 'whole in view, ending where the right fade begins (276 of 300)').toEqual({left: 176, right: 276});
             expect(pageScrolls, 'the page is never scrolled').toEqual([]);
         });
 
-        it('when activeTab changes to a tab already inside (120–240 at scrollLeft 40): scrollLeft stays 40', async () => {
+        it('when activeTab changes to a tab already inside and clear of both fades (120–240 at scrollLeft 40; the fades cover 0–24 and 276–300): scrollLeft stays 40', async () => {
             const {rerender} = await mountBar({activeTab: 'one', scrollable: true});
             const scroller = scrollerOf();
             // The user scrolled the bar a little.
             scroller.scrollLeft = 40;
-            expect(edges('three'), 'precondition: tab three lies inside the scroller').toEqual({left: 120, right: 240});
+            expect(edges('three'), 'precondition: tab three lies inside the scroller, clear of both fades').toEqual({left: 120, right: 240});
 
             await rerender({activeTab: 'three'});
             await g15DeliverFrames();
 
             expect(screen.getByTestId(g15TestId('three'))).toHaveAttribute('aria-selected', 'true');
-            expect(scroller.scrollLeft, 'a tab already whole in view moves nothing').toBe(40);
+            expect(scroller.scrollLeft, 'a tab already whole in view and clear of the fades moves nothing').toBe(40);
             expect(pageScrolls, 'the page is never scrolled').toEqual([]);
         });
 
-        it('when activeTab changes to a tab 50 px past the left edge (−50–40 at scrollLeft 120): scrollLeft comes back to 70', async () => {
+        // red until A8b (point 33)
+        it("when activeTab changes to a tab 50 px past the left edge (−50–40 at scrollLeft 120): scrollLeft comes back to 46 — the hidden 50 px and the fade's 24 px", async () => {
             const {rerender} = await mountBar({activeTab: 'four', scrollable: true});
             const scroller = scrollerOf();
             // The bar is scrolled right, as after the last tabs were opened.
@@ -411,12 +439,12 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
             await rerender({activeTab: 'two'});
             await g15DeliverFrames();
 
-            expect(scroller.scrollLeft, 'back by the hidden 50 px, and no more').toBe(70);
-            expect(edges('two'), 'whole in view, flush with the left edge').toEqual({left: 0, right: 90});
+            expect(scroller.scrollLeft, "back by the hidden 50 px and the fade's 24 px: 70 − 24").toBe(46);
+            expect(edges('two'), 'whole in view, starting where the left fade ends (24)').toEqual({left: 24, right: 114});
             expect(pageScrolls, 'the page is never scrolled').toEqual([]);
         });
 
-        it('on a click, the user picking a tab wholly past the right edge (380–480 in 0–300): scrollLeft goes to 180', async () => {
+        it("on a click, the user picking a tab wholly past the right edge (380–480 in 0–300): scrollLeft goes to 180, the end of the row — where no fade is drawn, so the fade's 24 px are not added", async () => {
             await mountBar({activeTab: 'one', scrollable: true});
             const scroller = scrollerOf();
             expect(edges('five'), 'precondition: tab five lies wholly past the scroller').toEqual({left: 380, right: 480});
@@ -425,30 +453,32 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
             await g15DeliverFrames();
 
             expect(screen.getByTestId(g15TestId('five'))).toHaveAttribute('aria-selected', 'true');
-            expect(scroller.scrollLeft, 'the hidden 180 px, and no more').toBe(180);
-            expect(edges('five'), 'whole in view, flush with the right edge').toEqual({left: 200, right: 300});
+            expect(scroller.scrollLeft, 'the hidden 180 px: the end of the row, which the reveal never passes').toBe(180);
+            expect(edges('five'), 'whole in view, flush with the right edge: nothing lies past it, so no fade covers it').toEqual({left: 200, right: 300});
             expect(pageScrolls, 'the page is never scrolled').toEqual([]);
         });
 
-        it('when the scroller is resized (300 → 250 px) and the active tab (160–280) now ends 30 px past it: scrollLeft goes to 30', async () => {
+        // red until A8b (point 33)
+        it("when the scroller is resized (300 → 250 px) and the active tab (160–280) now ends 26 px past it: scrollLeft goes to 54 — the hidden part and the fade's 24 px", async () => {
             await mountBar({activeTab: 'three', scrollable: true});
             const scroller = scrollerOf();
-            expect(scroller.scrollLeft, 'precondition: tab three fits a 300 px scroller').toBe(0);
+            expect(scroller.scrollLeft, 'precondition: tab three is in view — its last 4 px lay under the right fade (276–300), so the mount moved the bar 4 px').toBe(4);
 
             // The window narrowed.
             geometry.scroller.width = 250;
             expect(g15Resized(scroller), 'a ResizeObserver watches the scroller').toBeGreaterThan(0);
             await g15DeliverFrames();
 
-            expect(scroller.scrollLeft, 'the hidden 30 px, and no more').toBe(30);
-            expect(edges('three'), 'whole in view, flush with the right edge').toEqual({left: 130, right: 250});
+            expect(scroller.scrollLeft, "the hidden part and the fade's 24 px: 280 + 24 − 250").toBe(54);
+            expect(edges('three'), 'whole in view, ending where the right fade begins (226 of 250)').toEqual({left: 106, right: 226});
             expect(pageScrolls, 'the page is never scrolled').toEqual([]);
         });
 
-        it('when the labels change (a language switch) and the active tab grows to 160–340: scrollLeft goes to 40', async () => {
+        // red until A8b (point 33)
+        it("when the labels change (a language switch) and the active tab grows to 160–340: scrollLeft goes to 64 — the hidden part and the fade's 24 px", async () => {
             const {rerender} = await mountBar({activeTab: 'three', scrollable: true});
             const scroller = scrollerOf();
-            expect(scroller.scrollLeft, 'precondition: tab three (160–280) fits a 300 px scroller').toBe(0);
+            expect(scroller.scrollLeft, 'precondition: tab three (160–280) is in view — its last 4 px lay under the right fade (276–300), so the mount moved the bar 4 px').toBe(4);
 
             // Another language's longer labels: tab three grows by 60 px, and the tabs after it move along.
             geometry.tabs.three.width += 60;
@@ -458,8 +488,72 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
             await g15DeliverFrames();
 
             expect(within(screen.getByTestId(g15TestId('three'))).getByText('Label three (longer)'), 'presence: the new label is drawn').toBeInTheDocument();
-            expect(scroller.scrollLeft, 'the hidden 40 px, and no more').toBe(40);
-            expect(edges('three'), 'whole in view, flush with the right edge').toEqual({left: 120, right: 300});
+            expect(scroller.scrollLeft, "the hidden part and the fade's 24 px: 340 + 24 − 300").toBe(64);
+            expect(edges('three'), 'whole in view, ending where the right fade begins (276 of 300)').toEqual({left: 96, right: 276});
+            expect(pageScrolls, 'the page is never scrolled').toEqual([]);
+        });
+
+        // Point 33's margin, pinned on its own: owed where a fade is drawn, and only there.
+
+        // red until A8b (point 33)
+        it('on a click, a tab whole in view but ending under the right fade, with tabs past it (three, 160–280 in 0–300; the fade covers 276–300): scrollLeft goes to 4, just clear of the fade', async () => {
+            await mountBar({activeTab: 'one', scrollable: true});
+            const scroller = scrollerOf();
+            expect(edges('three'), 'precondition: tab three is whole in view, its end 20 px from the right edge').toEqual({left: 160, right: 280});
+            expect(scroller, 'precondition: the right fade is on — tabs four and five lie past the edge').toHaveAttribute('data-fade', 'end');
+
+            await fireEvent.click(screen.getByTestId(g15TestId('three')));
+            await g15DeliverFrames();
+
+            expect(screen.getByTestId(g15TestId('three'))).toHaveAttribute('aria-selected', 'true');
+            expect(scroller.scrollLeft, 'just enough to clear the fade: 280 + 24 − 300').toBe(4);
+            expect(edges('three'), 'ends where the right fade begins (276 of 300)').toEqual({left: 156, right: 276});
+            expect(scroller, 'the bar left its start, so the left fade is on too — 0–24, far from the tab').toHaveAttribute('data-fade', 'both');
+            expect(pageScrolls, 'the page is never scrolled').toEqual([]);
+        });
+
+        // Guard — green today, and it stays green: at the end of the row no fade is drawn, so no margin is owed there.
+        it('on a click, at the end of the row (scrollLeft 180 of 180): the last tab (380–480), flush with the right edge where no fade is drawn, moves nothing', async () => {
+            await mountBar({activeTab: 'one', scrollable: true});
+            const scroller = scrollerOf();
+            await userScrollsTo(scroller, 180);
+            expect(scroller.scrollLeft, 'precondition: the user scrolled the bar to its end (480 − 300)').toBe(180);
+            expect(scroller, 'precondition: nothing lies past the right edge, so no fade is drawn there').toHaveAttribute('data-fade', 'start');
+            expect(edges('five'), 'precondition: tab five is whole in view, flush with the right edge').toEqual({left: 200, right: 300});
+
+            await fireEvent.click(screen.getByTestId(g15TestId('five')));
+            await g15DeliverFrames();
+
+            expect(screen.getByTestId(g15TestId('five'))).toHaveAttribute('aria-selected', 'true');
+            expect(scroller.scrollLeft, 'no fade on the right, no margin: the bar stays — and never runs past its end').toBe(180);
+            expect(edges('five'), 'still flush with the right edge').toEqual({left: 200, right: 300});
+            expect(scroller, 'still no fade on the right').toHaveAttribute('data-fade', 'start');
+            expect(pageScrolls, 'the page is never scrolled').toEqual([]);
+        });
+
+        // red until A8b (point 33)
+        it('on a click, a tab wider than the window less its fades (three, 100–380: 280 px in 0–300): the start wins — scrollLeft goes to 76, the tab starts where the left fade ends and loses its end', async () => {
+            // A layout of its own: the same 480 px of tabs, tab three 280 px wide.
+            geometry.tabs = {
+                one: {offset: 0, width: 50},
+                two: {offset: 50, width: 50},
+                three: {offset: 100, width: 280},
+                four: {offset: 380, width: 50},
+                five: {offset: 430, width: 50},
+            };
+            await mountBar({activeTab: 'one', scrollable: true});
+            const scroller = scrollerOf();
+            expect(scroller.scrollLeft, 'precondition: an active tab already inside, and clear of the fade, moved nothing').toBe(0);
+            expect(edges('three'), 'precondition: tab three ends 80 px past the right edge').toEqual({left: 100, right: 380});
+
+            await fireEvent.click(screen.getByTestId(g15TestId('three')));
+            await g15DeliverFrames();
+
+            expect(screen.getByTestId(g15TestId('three'))).toHaveAttribute('aria-selected', 'true');
+            // Clearing the right fade (380 + 24 − 300 = 104) would put the start under the left one (100 < 104 + 24).
+            expect(scroller.scrollLeft, 'the start wins: 100 − 24').toBe(76);
+            expect(edges('three'), 'starts where the left fade ends (24); its end runs past the right edge (304 of 300)').toEqual({left: 24, right: 304});
+            expect(scroller, 'tabs hidden on both sides').toHaveAttribute('data-fade', 'both');
             expect(pageScrolls, 'the page is never scrolled').toEqual([]);
         });
     });
@@ -487,18 +581,14 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
      * loads no Tailwind, so the mask is read from the class tokens — the family (`mask-l-`, `mask-r-`), never the exact
      * utility or its size.
      *
-     * Red today: TabBar publishes no `data-fade` and draws no mask. The guard without `scrollable` is green and must stay
-     * green.
+     * Red until A8b: TabBar published no `data-fade` and drew no mask. The guard without `scrollable` was green and must
+     * stay green. Point 33 (the G-15 note above) then moved every reveal that ended under a fade: the cases here that go
+     * through one are red until A8b (point 33). The two that opened on tab three now open in a 320 px scroller — at 300
+     * the mount itself moves the bar 4 px off the fade, and `data-fade` would read `both` before and after the change it
+     * is there to follow.
      */
     describe('the edge fade (A8b, P13 a): data-fade names the sides where the bar hides tabs', () => {
         type Fade = 'none' | 'start' | 'end' | 'both';
-
-        /** The user scrolls the bar, as a browser delivers it: the position moves, then `scroll` fires on the scroller. */
-        async function userScrollsTo(scroller: HTMLElement, left: number): Promise<void> {
-            scroller.scrollLeft = left;
-            await fireEvent.scroll(scroller);
-            await g15DeliverFrames();
-        }
 
         /** The sides the scroller masks. jsdom loads no Tailwind, so the class token is what can be observed: its family. */
         function maskedSides(scroller: HTMLElement): {start: boolean; end: boolean} {
@@ -618,32 +708,35 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
             expect(scroller, '540 px of tabs in 500: hidden past the right edge').toHaveAttribute('data-fade', 'end');
         });
 
-        // red until A8b
-        it('a resize that makes the bar reveal its active tab (300 → 250 px; tab three, 160–280, brought in at scrollLeft 30): end → both, read after the reveal', async () => {
+        // red until A8b (point 33)
+        it("a resize that makes the bar reveal its active tab (320 → 250 px; tab three, 160–280, brought in at scrollLeft 54 — the hidden part and the fade's 24 px): end → both, read after the reveal", async () => {
+            // 320 px, not 300: tab three ends 40 px before the edge, clear of the fade, so the bar opens at 0 and reads `end`.
+            geometry.scroller.width = 320;
             await mountBar({activeTab: 'three', scrollable: true});
             const scroller = scrollerOf();
+            expect(scroller.scrollLeft, 'precondition: tab three (160–280) is whole in view and clear of the fade (296–320): nothing scrolled').toBe(0);
             expect(scroller, 'precondition: at scrollLeft 0, tabs hidden past the right edge').toHaveAttribute('data-fade', 'end');
 
             geometry.scroller.width = 250;
             g15Resized(scroller);
             await g15DeliverFrames();
 
-            expect(scroller.scrollLeft, 'precondition: the reveal brought tab three whole into view').toBe(30);
-            expect(scroller, '30 px hidden before the left edge, 200 past the right one').toHaveAttribute('data-fade', 'both');
+            expect(scroller.scrollLeft, 'precondition: the reveal brought tab three whole into view, clear of the fade: 280 + 24 − 250').toBe(54);
+            expect(scroller, '54 px hidden before the left edge, 176 past the right one').toHaveAttribute('data-fade', 'both');
         });
 
-        // red until A8b
-        it('once mounted on a tab past the edge (?tab= opening tab four, 280–380 in 0–300): data-fade follows the reveal to scrollLeft 80 — both', async () => {
+        // red until A8b (point 33)
+        it("once mounted on a tab past the edge (?tab= opening tab four, 280–380 in 0–300): data-fade follows the reveal to scrollLeft 104 — the hidden 80 px and the fade's 24 px — both", async () => {
             await mountBar({activeTab: 'four', scrollable: true});
             const scroller = scrollerOf();
 
-            expect(scroller.scrollLeft, 'precondition: the reveal ran').toBe(80);
-            expect(scroller, '80 px hidden before the left edge, 100 past the right one').toHaveAttribute('data-fade', 'both');
+            expect(scroller.scrollLeft, 'precondition: the reveal ran').toBe(104);
+            expect(scroller, '104 px hidden before the left edge, 76 past the right one').toHaveAttribute('data-fade', 'both');
         });
 
-        // red until A8b
+        // red until A8b (point 33): one → four, whose reveal now ends 24 px further (80 → 104). The two others stop at an end of the row, where no fade is drawn: unchanged.
         it.each([
-            ['one', 'four', 80, 'both'],
+            ['one', 'four', 104, 'both'],
             ['one', 'five', 180, 'start'],
             ['five', 'one', 0, 'end'],
         ] as const)('when activeTab changes from %s to %s, off-screen: the reveal ends at scrollLeft %s and data-fade="%s" matches it', async (from, to, left, fade) => {
@@ -658,10 +751,13 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
             expect(scroller, `scrollLeft ${left} of 180`).toHaveAttribute('data-fade', fade);
         });
 
-        // red until A8b
-        it('when the labels change (a language switch) and the active tab grows to 160–340: the reveal ends at scrollLeft 40 and data-fade follows, end → both', async () => {
+        // red until A8b (point 33)
+        it("when the labels change (a language switch) and the active tab grows to 160–340 in a 320 px scroller: the reveal ends at scrollLeft 44 — the hidden part and the fade's 24 px — and data-fade follows, end → both", async () => {
+            // 320 px, not 300, as in the resize case above: the bar must open at 0 for data-fade to have somewhere to go.
+            geometry.scroller.width = 320;
             const {rerender} = await mountBar({activeTab: 'three', scrollable: true});
             const scroller = scrollerOf();
+            expect(scroller.scrollLeft, 'precondition: tab three (160–280) is whole in view and clear of the fade (296–320): nothing scrolled').toBe(0);
             expect(scroller, 'precondition: at scrollLeft 0, tabs hidden past the right edge').toHaveAttribute('data-fade', 'end');
 
             // Another language's longer labels: tab three grows by 60 px, the tabs after it move along, the row is 540 px.
@@ -672,8 +768,8 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
             await g15DeliverFrames();
 
             expect(within(screen.getByTestId(g15TestId('three'))).getByText('Label three (longer)'), 'presence: the new label is drawn').toBeInTheDocument();
-            expect(scroller.scrollLeft, 'precondition: the reveal brought tab three whole into view').toBe(40);
-            expect(scroller, '40 px hidden before the left edge, 200 past the right one').toHaveAttribute('data-fade', 'both');
+            expect(scroller.scrollLeft, 'precondition: the reveal brought tab three whole into view, clear of the fade: 340 + 24 − 320').toBe(44);
+            expect(scroller, '44 px hidden before the left edge, 176 past the right one').toHaveAttribute('data-fade', 'both');
         });
 
         // red until A8b
@@ -742,5 +838,78 @@ describe('TabBar — scrollable (G-15: the Settings tab bar clips its last tab)'
             expectMaskFor('none');
             expect(tokens(), 'back to "none": the scroller wears the classes it started with').toEqual(unfaded);
         });
+    });
+});
+
+/*
+ * A8b (badge hook) — a tab's badge publishes a test hook.
+ *
+ * The Settings bar now carries badges that count — the Administration group shows the sum of its members', the
+ * Security tab the checks that ask for attention — and the tests of that page must read one without a class or a
+ * position. Contract: when a tab's `badge` is a number > 0, the badge element inside that tab's button carries
+ * `data-testid="tab-badge"` and `data-badge="<the number>"`, its visible text staying the number; no badge (undefined,
+ * null, 0) → no `tab-badge` element in that button. `tab-badge` names a kind, not an instance: a hook is always reached
+ * through its own tab's button, never by an index.
+ *
+ * `null` is not exercised: `TabItem.badge` is `number | undefined`, and the Settings page always passes a number (0 for
+ * none) — a null would need a cast to reach the bar.
+ *
+ * Red until A8b (badge hook): the badge is a bare <span> with neither attribute. The absence case is red as well, on its
+ * presence barrier — in a bar that draws no hook at all, «none here» would hold for the wrong reason.
+ */
+describe('TabBar — the badge hook (A8b): data-testid="tab-badge" and data-badge, inside its own tab', () => {
+    /** Four tabs, labelled and counted by this file: badges 3 and 12, one at 0, one without. */
+    const BADGE_TABS: TabItem[] = [
+        {id: 'alerts', label: 'Alerts', badge: 3, testId: 'tab-alerts'},
+        {id: 'quiet', label: 'Quiet', badge: 0, testId: 'tab-quiet'},
+        {id: 'plain', label: 'Plain', testId: 'tab-plain'},
+        {id: 'queue', label: 'Queue', badge: 12, testId: 'tab-queue'},
+    ];
+
+    /** The hook inside the button of `tabTestId`, reached through that button; null when it holds none. */
+    function badgeIn(tabTestId: string): HTMLElement | null {
+        return within(screen.getByTestId(tabTestId)).queryByTestId('tab-badge');
+    }
+
+    // red until A8b (badge hook)
+    it('badge 3: the badge inside that tab button carries data-testid="tab-badge" and data-badge="3", and still reads 3', () => {
+        render(TabBar, {tabs: BADGE_TABS, activeTab: 'quiet'});
+
+        const badge = badgeIn('tab-alerts');
+        expect(badge, 'a tab with badge 3 holds [data-testid="tab-badge"] inside its own button').not.toBeNull();
+        expect(badge, 'the number, for a test to read').toHaveAttribute('data-badge', '3');
+        expect(badge, 'and the visible text stays the number').toHaveTextContent(/^3$/);
+    });
+
+    // red until A8b (badge hook) — on its presence barrier
+    it('badge 0, and no badge at all: no tab-badge inside those buttons — beside a tab whose badge 3 has its hook', () => {
+        render(TabBar, {tabs: BADGE_TABS, activeTab: 'quiet'});
+
+        // Presence first: this bar draws hooks, so each absence below is about its own tab.
+        expect(badgeIn('tab-alerts'), 'presence barrier: the badged tab beside them carries its hook').not.toBeNull();
+        for (const [testId, why] of [
+            ['tab-quiet', 'badge 0'],
+            ['tab-plain', 'no badge (undefined)'],
+        ] as const) {
+            expect(badgeIn(testId), `${why}: no [data-testid="tab-badge"] inside ${testId}`).toBeNull();
+        }
+    });
+
+    // red until A8b (badge hook)
+    it('two badges, 3 and 12: each hook is reached through its own tab button and carries its own number — every hook in the bar belongs to a badged tab', () => {
+        render(TabBar, {tabs: BADGE_TABS, activeTab: 'quiet'});
+
+        for (const [testId, count] of [
+            ['tab-alerts', '3'],
+            ['tab-queue', '12'],
+        ] as const) {
+            const badge = badgeIn(testId);
+            expect(badge, `${testId}: the hook sits inside its own button`).not.toBeNull();
+            expect(badge, `${testId}: its own number, not a neighbour's`).toHaveAttribute('data-badge', count);
+            expect(badge, `${testId}: the visible text stays the number`).toHaveTextContent(new RegExp(`^${count}$`));
+        }
+        // Every hook in the bar, traced to the tab that holds it — by ownership, not by order.
+        const owners = screen.queryAllByTestId('tab-badge').map((badge) => badge.closest('[role="tab"]')?.getAttribute('data-testid'));
+        expect(owners.sort(), 'one hook per badged tab, none in the others').toEqual(['tab-alerts', 'tab-queue']);
     });
 });

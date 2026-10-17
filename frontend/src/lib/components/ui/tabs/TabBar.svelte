@@ -115,15 +115,37 @@
         fade = start && end ? 'both' : start ? 'start' : end ? 'end' : 'none';
     }
 
-    /** Scrolls the bar — never the page — just enough to show the active tab whole. */
+    /** The width of the fade in px — `FADE_CLASSES` draws it over 1.5rem: a revealed tab keeps that much from a side that fades. */
+    function fadeWidth(): number {
+        const root = parseFloat(getComputedStyle(document.documentElement).fontSize);
+        return 1.5 * (Number.isFinite(root) && root > 0 ? root : 16);
+    }
+
+    /**
+     * Scrolls the bar — never the page — just enough to show the active tab whole and clear of the fade (the designer's
+     * point 33): at least the fade's width from a side where more tabs stay hidden, nothing from a side the bar cannot
+     * scroll any further. A position that already shows it so stays as the user left it. A tab wider than the bar
+     * keeps its start in view.
+     */
     function revealActiveTab() {
         const scroller = scrollerRef;
         const button = buttonRefs[activeTab];
         if (!scroller || !button) return;
         const bar = scroller.getBoundingClientRect();
         const tab = button.getBoundingClientRect();
-        if (tab.left < bar.left) scroller.scrollLeft -= bar.left - tab.left;
-        else if (tab.right > bar.right) scroller.scrollLeft += tab.right - bar.right;
+        const margin = fadeWidth();
+        const current = scroller.scrollLeft;
+        const width = scroller.clientWidth;
+        const maxScroll = scroller.scrollWidth - width;
+        // The tab's edges in the row's own coordinates, whatever the bar shows of it now
+        const start = tab.left - bar.left + current;
+        const end = tab.right - bar.left + current;
+        const leftClear = (target: number) => start >= target + (target > 1 ? margin : 0);
+        const rightClear = (target: number) => end <= target + width - (target < maxScroll - 1 ? margin : 0);
+        if (leftClear(current) && rightClear(current)) return;
+        let target = leftClear(current) ? Math.min(maxScroll, end + margin - width) : Math.max(0, start - margin);
+        if (!leftClear(target)) target = Math.max(0, start - margin);
+        scroller.scrollLeft = target;
     }
 
     $effect(() => {
@@ -176,7 +198,7 @@
                 <!-- Only a tab with an icon may lose its label: an icon-less tab would be left empty. -->
                 <span bind:this={labelRefs[tab.id]} class={!tab.icon ? '' : showLabels === false ? 'hidden' : showLabels === true ? '' : hideLabelOnMobile ? 'hidden sm:inline' : ''}>{tab.label}</span>
                 {#if tab.badge != null && tab.badge > 0}
-                    <span class="text-[10px] px-1.5 py-0.5 bg-lf-warning-soft text-lf-warning-on-soft rounded-full">
+                    <span class="text-[10px] px-1.5 py-0.5 bg-lf-warning-soft text-lf-warning-on-soft rounded-full" data-badge={tab.badge} data-testid="tab-badge">
                         {tab.badge}
                     </span>
                 {/if}
