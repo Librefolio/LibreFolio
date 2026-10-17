@@ -6225,11 +6225,16 @@ sulla base `23f6578f3`.
   dal cloud) potrebbe darla alla CLI, che la usa per il rekey come quella di un backup sicuro (`derive_key_from`, la
   strada già descritta nella docstring di H). Solo CLI, mai un upload della chiave dalla UI. Dettagli: piano 07, «B4 —
   analisi sulla base nuova».
-- **B-19 · `backup decrypt` lanciato da root scrive uno zip di root** — minimo; B, 17/10 (docs-writer, B4). Gli altri
+- ✅ **B-19 · `backup decrypt` lanciato da root scrive uno zip di root** — minimo; B, 17/10 (docs-writer, B4). Gli altri
   comandi di `dev.py backup` lavorano come il proprietario della cartella dei dati (`_drop_root_privileges`); `decrypt`
   non legge la cartella dei dati, quindi con `docker compose exec` lo zip appartiene a root. La guida lo dice. Proposta:
   se la cartella dei dati esiste, `decrypt` passa al suo proprietario come gli altri; senza, resta l'utente che lo
   lancia (per decifrare su un portatile). Dettagli: piano 07, «B4 — analisi sulla base nuova» e seguenti.
+
+  ✅ **Fatto il 17/10** (checkpoint delle 09:23). Da root, con una cartella dei dati, `decrypt` passa al suo
+  proprietario come gli altri comandi, prima di toccare l'archivio, `-o` o di fare domande; legge prima
+  `--password-file` (un segreto di root funziona, come per `create`, `inspect`, `restore`). Senza essere root non legge
+  l'impostazione della cartella dei dati. Un archivio illeggibile dà `archive_unreadable`, non più `not_an_envelope`.
 - **B-20 · knip segnala `RESTORE_TICKET_HEADER` come export inutilizzato** — minimo; B, 17/10 (controlli statici di
   B4). L'export è di B5c (`frontend/src/lib/features/backup/backupApi.ts`). Il suo test lo legge con un cast sul modulo,
   scritto quando era ancora rosso, e knip non lo conta come uso. Correzione: il test lo importa per nome. Non è un
