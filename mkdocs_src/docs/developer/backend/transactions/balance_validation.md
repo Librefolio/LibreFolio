@@ -62,7 +62,7 @@ row for a date before checking either balance dimension:
 ```text
 balances = SUM(all rows before from_date)
 
-for each date through the final transaction date:
+for from_date, then each later date that holds a transaction, in order:
     apply every cash and quantity delta dated that day
     validate all cash balances unless overdraft is allowed
     validate all asset balances unless shorting is allowed
@@ -70,8 +70,23 @@ for each date through the final transaction date:
 
 The invariant is therefore **end-of-day**, not per-row or intraday. Opposing
 movements on the same date are netted before validation. A later date cannot
-repair an earlier negative close because each date is checked before replay
-advances.
+repair an earlier negative close because each visited date is checked before
+replay advances.
+
+The replay visits only those dates (R13-SEC7-3): the days that hold a
+transaction, and `from_date`, because the balances carried into it may already be
+negative. No balance changes on a day without transactions, so the first negative
+close always falls on one of them, and the result is the one a walk over every
+calendar day gives. Without a `from_date` — the full replay `BrokerService` runs
+when an update turns `allow_cash_overdraft` or `allow_asset_shorting` off — the
+visited dates are the transaction days alone, from the broker's first row. The
+cost grows with the number of days that hold a transaction, not with the calendar
+span between them. Before, the replay stepped through every calendar day from its
+start to the broker's last row, on the event loop: about 740 000 days for a replay
+starting at a row dated `0001-01-01`, while a row dated `9999-12-31` made every
+later replay of its broker walk up to it, then fail on the date's overflow (a
+*Balance validation error* without a code). Such dates can no longer be written
+(see [Transaction dates](service.md#transaction-dates)).
 
 Starting at the earliest affected date preserves correctness for backdated
 creates, deletes, splits, promotions, and updates without replaying the broker's

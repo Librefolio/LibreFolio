@@ -286,7 +286,10 @@ untick a row yourself.
 
 If a broker has an **opening date**, rows dated before it cannot be imported; the opening day
 itself is fine. If the date is wrong, correct it from the
-[Review](how-to.md#opening-date) step and the rows are checked again.
+[Review](how-to.md#opening-date) step and the rows are checked again. Whatever the opening date,
+transaction dates go from 1 January 1900 to one year from today: a row dated outside that range is
+refused when you save the imported rows, with a message such as *Date: Between 1900-01-01 and
+2027-10-17*, when today is 17 October 2026.
 
 ---
 

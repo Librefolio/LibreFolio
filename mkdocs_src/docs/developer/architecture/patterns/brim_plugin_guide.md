@@ -216,6 +216,12 @@ and any of them at most 15 significant digits.
   refuses a value past them with `integerDigitsExceeded`. `broker_intesa/plugin.py` calls
   it on the patrimonio seed's per-unit cost, `broker_credit_agricole/plugin.py` on the
   per-unit cost of a bond received by succession, its price divided by 100.
+- **An exponent past ±100: refused while parsing.** `Currency` itself refuses an amount
+  whose exponent (`Decimal.adjusted()`) is outside ±100, whoever builds it
+  (`check_decimal_exponent()` in `backend/app/schemas/common.py`, R13-SEC7-3): a plugin
+  that builds such a `Currency` fails while it parses the file (pydantic's
+  `ValidationError`, a `ValueError`), not at confirmation. No real report comes near it:
+  no column takes more than 24 digits before the decimal point, or 12 after.
 
 ---
 
@@ -1108,6 +1114,8 @@ return info !== null && txDate !== '' && txDate < info.openedAt;
 ```
 
 Rows before the broker opening date are deselected and non-importable; rows on the opening day remain importable. The wizard offers **Edit broker date** and re-checks after broker data refresh.
+
+Do not filter a date range either: the import confirms through the transaction batch, which checks every row's date (`check_dates()`, night decision N74): from 1900-01-01 to today (UTC) one year on. A row outside it gets `dateOutOfRange` on `date` and the batch is not saved (see [Transaction dates](../../backend/transactions/service.md#transaction-dates)). Emit the date the report states, even one a few days ahead, such as a settlement date.
 
 ## 🔀 One plugin, several export formats
 

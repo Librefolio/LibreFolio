@@ -704,10 +704,12 @@ The response may still include `wac_results`, but the issue makes
 
 `TXPromoteBatchItem` has no `cost_basis_mode`, and `apply_promotes()` no longer
 performs an automatic WAC calculation. A promote-specific resolved value arrives
-as `resolved_fields.cost_basis_override` from the frontend merge flow (or another
-API client). The promote stage applies it to the positive-quantity transfer leg
-and clears it from the sender; without that key, the receiver keeps the cost basis
-it already has. Either way the sender ends without one: before it applies
+as `resolved_fields.cost_basis_override` from an API client: the merge dialogs send
+`description` and `tags` only (see
+[Request shape](split_promote.md#promote-request-shape)). The promote stage
+applies it to the positive-quantity transfer leg and clears it from the sender;
+without that key, the receiver keeps the cost basis it already has. Either way the
+sender ends without one: before it applies
 `resolved_fields`, `apply_promotes()` clears `cost_basis_override` and
 `cost_basis_currency` on a side whose new type takes none (`cost_basis_allowed()`),
 such as an `ADJUSTMENT` taking units out that a split left with a cost (decision
