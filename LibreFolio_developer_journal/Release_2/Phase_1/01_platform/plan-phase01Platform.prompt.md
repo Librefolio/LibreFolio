@@ -5586,3 +5586,114 @@ backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check
    - Documenti: il paragrafo di `security.md#request-numbers` arriva con H-39 (deciso dal coordinatore).
    - Backlog: la nota della cura in H-34; nuove **H-40** (IPv6 su Docker Engine, la frase di E) e **H-41**
      (`resolved_fields`, W).
+4. ✅ **Ingresso** (17/10, 07:43): H-34 è entrato in dev `75bfac237`, con la riga 🔒 della CHANGELOG `27f948ccd`. Il mio
+   HEAD è avanzato a `27f948ccd`, che contiene già B-9 e A8a. X e J rivedono a posteriori; H-41 va a W, dentro SEC7-3.
+
+### Review di B-9 sulle righe nei miei file (2026-10-17, 07:45) — ✅ OK, due note
+
+- Ho letto, solo in lettura, `git diff 45f9c5406 997dc7ecf` di `config_audit.py`, `test_config_audit.py`,
+  `security.md` e `settings.md`, più il modulo di B `instance_backup/checks.py`.
+- **OK**:
+  - in `config_audit.py`, `*BACKUP_CONFIG_CHECKS` sta dopo `check_log_level` e prima di A, con la docstring delle chiavi
+    A/B/E. Nessun ciclo: `checks.py` importa `ConfigCheck` solo quando un controllo gira;
+  - il test della tupla intera separa `backup` da `platform`, nell'ordine platform → B → A → E;
+  - il blocco «Workstream B» di `_configure`: il `_FILE` è coperto dal ciclo che c'era già;
+  - in `security.md`, le due righe `backup.*` fra `platform.log_level` e `accounts.login_limit`, e la frase
+    sull'ordine.
+- **Note**:
+  1. la docstring di `checks.py` dice «right before E's email checks», ma in mezzo ci sono quelli di A (è di B);
+  2. l'import con i sostituti di B-9 in `test_config_audit.py` ora è impalcatura vecchia: la tolgo in H-35.
+
+### Lotto «H-39: un profilo managed senza protezione dai frame si vede» (decisione di E, 2026-10-17, mattina) — in corso
+
+> Dalla review di H-37 fatta da E: per `PROFILE_DEFAULTS` nessuna chiusura a runtime, ma un controllo che si veda.
+> Approvato dal coordinatore (06:52):
+> - nel profilo managed, `LIBREFOLIO_FRAME_PROTECTION` spenta è un **warning** e `LIBREFOLIO_CSP_REPORT_ONLY` spenta è
+>   un **info**;
+> - nel self-hosted sono sempre ok;
+> - la regola di review (in `backend.instructions.md`, già entrata) e la riga accanto a C-99, del coordinatore.
+>
+> Rimandato fino a B-9 (07:43, «go»): i controlli, i test e le chiavi i18n, e un solo giro di documenti con il paragrafo
+> di H-34 e la frase di H-40.
+
+**Progetto** (la cura in prova `files/h39/apply.py` si applica pulita sulla base nuova `27f948ccd`):
+- `config_audit.py`:
+  - `check_frame_protection()` (`platform.frame_protection`) e `check_csp_report_only()` (`platform.csp_report_only`),
+    in `CONFIG_CHECKS` dopo `check_client_address` e prima di `check_log_level`;
+  - leggono `get_settings()`; l'aspettativa di managed sta nel codice (`MANAGED_PROFILE`), non nella tabella, perché
+    una voce persa cambierebbe l'aspettativa insieme al valore;
+  - stati: acceso → ok `…on`; spento e self-hosted → ok `…offSelfHosted`; spento e managed → warning
+    `frameProtection.offManaged`, oppure info `cspReportOnly.offManaged`, con il suo summary.
+- i18n: 6 chiavi `instance.checks.frameProtection.*` e `.cspReportOnly.*`, in 4 lingue. I messaggi di
+  `instance.checks` passano da 18 a 24.
+- Test (test-author, `test_config_audit.py`): ogni stato, i summary, l'avvio in managed con la protezione spenta (un
+  warning e un info nel log), `CHECK_IDS` e l'ordine. In `_configure`, tolte le due variabili.
+- Documenti (docs-writer, solo inglese):
+  - `security.md`: le righe della tabella d'ordine, «18» che diventa «24», il paragrafo di H-34 in `#request-numbers`;
+  - `admin/configuration.en.md#startup-checks`: due righe;
+  - `admin/hosting_providers.en.md#managed-profile`: una frase;
+  - `settings.md`: una frase, per `PROFILE_DEFAULTS`;
+  - `admin/connection_checks.en.md#limits`: la frase di H-40 (IPv6 attraverso `docker-proxy`), da verificare su un host
+    Linux come H-38.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina), in `test_config_audit.py`:
+   - il paragrafo (g) e la riga d'ordine di (c);
+   - `CHECK_IDS` con le due voci dopo `check_client_address`;
+   - in `_configure`, le due variabili tolte;
+   - 6 test e 53 casi: gli stati, con 5 modi di scrivere il profilo e 6 valori; una voce tolta da
+     `PROFILE_DEFAULTS["managed"]` deve risultare ancora `offManaged`; «non cambia nulla», compreso `PROFILE_DEFAULTS`;
+     l'ordine dopo il controllo degli indirizzi; all'avvio, in managed, il warning e poi l'info, e la partenza va
+     avanti; in self-hosted, niente nel log;
+   - un test di H-36 adattato: prima voleva `check_log_level` subito dopo il controllo degli indirizzi.
+   - Comando: `files/runs/h39-red.sh`. Esito: **rosso alla raccolta**, «ImportError: cannot import name
+     'check_csp_report_only'». Ruff e black puliti sul file di test.
+2. ✅ **Cura** (`files/h39/apply.py --apply`, identica alle copie di prova): i due controlli e `MANAGED_PROFILE` in
+   `config_audit.py`, più 6 chiavi in `instance/{en,it,fr,es}.json` dopo `clientAddress`.
+3. ✅ **Documenti** (docs-writer, solo inglese, due giri):
+   - `security.md`:
+     - la tabella d'ordine e «24 messages»;
+     - un paragrafo con gli stati `ok` e il perché dell'aspettativa scritta nel controllo;
+     - la riga «Tests:» con l'ordine platform → B → A → E (ci mancava B);
+     - una frase in `#managed-headers`;
+     - **il paragrafo di H-34** in `#request-numbers`, con i contenitori nudi non coperti, e la clausola IPv6 in «Why
+       only a local peer»;
+   - `settings.md`: la frase su `PROFILE_DEFAULTS` e la regola di review;
+   - `configuration.en.md`, «Startup Checks»: due righe;
+   - `hosting_providers.en.md`: una frase;
+   - `connection_checks.en.md`, «Limits»: la frase di **H-40** (IPv4 sì, IPv6 attraverso `docker-proxy` dal gateway),
+     scritta come cautela, più una clausola IPv6 nel punto «To fix it» di «The Visitor's Address».
+   - In più, il test-author di H-34 ha aggiornato le docstring vecchie di `test_request_float_inputs.py`: (d), (e),
+     (g), `FixedValueBody`, `PlainValueBody` e «How to fix a red». Sono solo testo.
+   > **⚠️ Fuori pista**: la build rigorosa falliva su un link. `hosting_providers.en.md` non ha traduzioni, quindi il
+   > sito IT usa la pagina inglese, e il suo link `configuration.md#startup-checks` cercava l'ancora in
+   > `configuration.it.md`, che oggi ha solo `#session-cookie-secure`. Ora il link punta alla pagina,
+   > «Startup Checks» in [Configuration].
+4. ✅ **Controlli leggeri** (`files/runs/h39-green.sh`, `h39-final.sh`, `h39-docs2.sh`):
+
+   | Comando | Esito |
+   |---------|-------|
+   | `services config-audit` | 155 passed |
+   | `services email-checks` | 87 passed |
+   | `services backup-checks` | 57 passed |
+   | `services accounts-checks` | 76 passed |
+   | `services security-headers` | 15 passed |
+   | `services profile-defaults` | 112 passed |
+   | `services config-package` | 862 passed |
+   | `services request-float-inputs` | 95 passed |
+   | `i18n check` | strict, 4995 chiavi |
+   | `utils gate-i18n-catalog` | 176 passed |
+   | `utils gate-i18n-usage` | 195 passed |
+   | `i18n audit` | le 6 chiavi nuove non compaiono: sono usate |
+   | ruff, black (3 file) | puliti |
+   | `mkdocs build` (rigoroso) | 0 avvisi, dopo il link |
+   | `check-links` | 97 |
+   | `git diff --check` | pulito |
+
+   - `git merge-file` dei 14 file contro dev `f4dab3db7`: 0 conflitti.
+   - Non eseguito: `api security-checks` di A (passo pesante, va nel cancello). L'elenco della scheda Sicurezza avrà due
+     controlli in più.
+   - Backlog:
+     - H-39 chiusa, con il resto: un controllo letto a richiesta dopo una modifica di `.env` senza riavvio può non
+       coincidere con gli header;
+     - H-40 scritta e da verificare su Linux;
+     - H-5, il debito di traduzione di `configuration` e `connection_checks`.
