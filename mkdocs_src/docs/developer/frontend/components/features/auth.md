@@ -139,17 +139,24 @@ The `RegisterCard` handles new user registration with client-side validation.
 ## 🗝️ ForgotPasswordCard {: #forgotpasswordcard }
 
 The sign-in's **Forgot Password?** card, `lib/features/auth/ForgotPasswordCard.svelte` (`forgot-modal`). It calls
-`instanceConfig.load()` on mount, sharing the sign-in page's request, then shows:
+`instanceConfig.load()` on mount, sharing the sign-in page's request. Until the server has answered
+(`instanceConfig.loaded`), and if it never does, the card shows **Back to Login** alone: the default configuration
+has no `email` and says `selfhosted`, and a managed instance must never show the server commands. Then:
 
-- while `email.links` of `GET /system/instance` is true, workstream E's
-  [«forgot password» form](../../../backend/email.md#forgot-form), `ForgotPasswordEmailForm`;
-- otherwise the warning `auth.emailRecoveryNotAvailable` (`forgot-email-unavailable`).
+| `profile` | `email.links` of `GET /system/instance` true | `email.links` false |
+|---|---|---|
+| `selfhosted` | Workstream E's [«forgot password» form](../../../backend/email.md#forgot-form), `ForgotPasswordEmailForm`, then the server commands in a native `<details>` closed by default (`forgot-commands-panel`, its `<summary>` `forgot-commands-toggle` with the `auth.serverTerminalInstructions` title and a chevron): the developer's decision P1, 16/10 | The warning `auth.emailRecoveryNotAvailable` (`forgot-email-unavailable`), then the server commands, open, under the same title |
+| `managed` | E's form, unchanged, then `forgot-ask-admin` in place of the panel | `forgot-ask-admin` alone: no warning, no command |
 
-The box of server commands stays in both cases (`forgot-reset-commands`: `user reset` for Docker and for a host
-installation, then `auth.contactAdministrator`), written once as a snippet. Under the form it sits in a native
-`<details>` closed by default (`forgot-commands-panel`, its `<summary>` `forgot-commands-toggle` with the
-`auth.serverTerminalInstructions` title and a chevron): the developer's decision P1, 16/10. Under the warning it stays
-open, as before. **Back to Login** dispatches `gotoLogin`.
+- **The server commands** (`forgot-reset-commands`: `user reset` for Docker and for a host installation, then
+  `auth.contactAdministrator`) are written once, as a snippet.
+- **`forgot-ask-admin`** (F05, workstream A) says `auth.askAdminToResetPassword`, *Ask your administrator for a
+  password-reset link: they can create one for your account.*: a managed instance's users have no terminal, and its
+  administrator creates the link in the Users tab ([UsersTab](settings.md#userstab)).
+- **Back to Login** dispatches `gotoLogin`.
+- Tests: `ForgotPasswordCard.managed.test.ts` (FPM-01…07: both profiles, with and without `email.links`, before
+  the answer and once it lands; CAT-01…02: the key a sentence in the four catalogues, naming no command), with
+  `./dev.py test front-utility component-unit`.
 
 ## 🔗 Account Link Pages {: #link-pages }
 
@@ -235,12 +242,22 @@ itself: `SetupCard` shows `setup-blocked`, `RegisterCard` on `/invite` shows `au
 
 ### 🧱 AuthPageFrame and AuthCard {: #authpageframe-and-authcard }
 
-- **`AuthPageFrame.svelte`** is the page around an access card: the bar at the top right (the
-  Buy Me a Coffee link, `ThemeToggle`, `LanguageSelector`, `HelpMenu`) and the container that
-  centres the card. Props: `testId`, put on the container, and the `children` snippet. The login
-  page (`login-page`), `/invite` (`invite-page`), `/reset-password` (`reset-password-page`) and
-  `/setup` (`setup-page`) use it. The page itself renders `AnimatedBackground`, outside the frame, so the background does not
+- **`AuthPageFrame.svelte`** is the page around an access card: the bar at the top right, the
+  container that centres the card in a column, and the compact legal notice under the card. Props:
+  `testId`, put on the container, and the `children` snippet. The login page (`login-page`, which
+  also holds the registration and **Forgot Password?**), `/invite` (`invite-page`),
+  `/reset-password` (`reset-password-page`), `/setup` (`setup-page`) and `/verify-email`
+  (`verify-email-page`) use it. The page itself renders `AnimatedBackground`, outside the frame, so the background does not
   restart when the page swaps its loading state for the card.
+    - **It loads the instance configuration**: `instanceConfig.load()` on mount, not forced, so the
+      pages that load it already share the request, and `/verify-email`, which does not, gets it too.
+    - **The bar** (`auth-page-controls`): the Buy Me a Coffee link (`auth-donate-link`) only while
+      [`donationsVisible()`](../../state/app-state.md#instance-config) is true, once the server
+      answered and said `selfhosted` (F05); then `ThemeToggle`, `LanguageSelector` and `HelpMenu`,
+      whose own coffee item follows the same rule.
+    - **The legal line** (`auth-legal-links`, F09): [`LegalLinks`](settings.md#legal-notice), centred
+      under the card: the short disclaimer, then the instance's terms of service and privacy policy
+      when it sets them.
 - **`AuthCard.svelte`** is the card: the brand header (logo and name), then the body. Props:
   `testId` and `children`; any other attribute lands on the card, such as the `data-status` of
   `LinkStatusCard`. `LinkStatusCard`, `ResetPasswordCard` and `SetupCard` are built on it; `LoginCard`,
@@ -369,6 +386,9 @@ its `detail` as below. Otherwise:
   [Open-Registration Warning](#open-registration-notice)), and, in `lib/api/zodios-client.test.ts`,
   the describe of the [401 on a link page](#link-page-401).
 - `./dev.py test front-utility component-unit`: `AuthCard.test.ts`, `AuthPageFrame.test.ts`,
+  `AuthPageFrame.managed.test.ts` (APM-01…05: the coffee link only once the answer says `selfhosted`),
+  `AuthPageFrame.legal.test.ts` (APL: the legal line on every frame, its links, colour roles only),
+  `ForgotPasswordCard.managed.test.ts`,
   `LinkStatusCard.test.ts` (with `hintKey`), `ResetPasswordCard.test.ts`, `SetupCard.test.ts`,
   `LoginCard.test.ts`, `RegisterCard.test.ts`, and the pages: `routes/page.authFlash.test.ts`,
   `routes/invite/page.test.ts`, `routes/reset-password/page.test.ts`, `routes/setup/page.test.ts`.

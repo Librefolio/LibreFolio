@@ -104,6 +104,15 @@ class ConnectionSecurityResponse(StrictModel):
 InstanceProfile = Literal["selfhosted", "managed"]
 
 
+class LegalInstanceConfig(StrictModel):
+    """The legal part of ``GET /system/instance`` (F09, workstream A): the instance's own legal pages, public."""
+
+    # One-line docstring on purpose (see EmailInstanceConfig). Both null: the instance links no page of its own, and the
+    # legal notice shows alone.
+    terms_url: str | None = Field(default=None, description="The terms of service of the instance (LIBREFOLIO_TOS_URL): an http(s) page; null when it is not set or not valid")
+    privacy_url: str | None = Field(default=None, description="The privacy policy of the instance (LIBREFOLIO_PRIVACY_URL): an http(s) page; null when it is not set or not valid")
+
+
 class InstanceConfigResponse(StrictModel):
     """``GET /system/instance``: what the app needs to know about this instance before anyone signs in.
 
@@ -119,6 +128,7 @@ class InstanceConfigResponse(StrictModel):
         default=None,
         description="Where users ask for help, such as an asset the search does not find (LIBREFOLIO_SUPPORT_URL, workstream H): an http(s) page or mailto: and one email address; null when it is not set or not valid, and the asset search then offers a new issue on the project's GitHub on a self-hosted instance, and no report link on a managed one",
     )
+    legal: LegalInstanceConfig = Field(default_factory=LegalInstanceConfig, description="The legal pages of the instance, linked by the legal notice (workstream A)")
 
 
 class InstanceBlockResponse(StrictModel):
