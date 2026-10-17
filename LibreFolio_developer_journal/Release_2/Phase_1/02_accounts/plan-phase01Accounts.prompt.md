@@ -6132,3 +6132,38 @@ nome esatto. Nessuna ricerca indifferente alle maiuscole prima dell'indice di A-
   `email-tab.spec.ts` (E), `scheduler.spec.ts` (Z), `gallery.spec.ts` (G, `openGlobalSettings`).
 - **Slot 1** riservato dal coordinatore (08:00) sulla revisione combinata: prima CHECKPOINT con tre liste, poi il merge
   di dev (E-14, B-30, B-9, X-R43, Y-8, MF-D4), poi E2E + API.
+
+## Checkpoint, due aggiornamenti di base e slot 1 (17/10, 08:05–)
+
+- **Committato** dal coordinatore nell'ordine 2→1→3→diario: `607932c86` (barra delle schede: punto 33 e gancio del
+  distintivo), `e9fd90fef` (E2E di A8b), `5da71d037` (A-21a), `db157e297` (diario); 45 file, i 17 di A9 fuori.
+- **Merge 1, dev `f4dab3db7`** (E-14, B-30, B-9, X-R43, Y-8, MF-D4) → `ff1c8ddcc`. Un conflitto, `security.md`, la riga
+  `i18n_key` di «Configuration Checks»: la riga di dev con la clausola nuova di B (`backup.checks.*`, nove messaggi,
+  verificati) e la frase di A8b, ora «all four subsystems'» (verificato: `CONFIG_CHECKS` include
+  `BACKUP_CONFIG_CHECKS`, `/security/checks` restituisce `run_config_checks()`, la scheda mostra ogni `i18n_key`). In
+  più, frasi di B rese false dal merge: `security.md:1030` («no page shows them until the «Security» tab» → la scheda
+  li mostra) e `admin/configuration.en.md` («Settings › Backup» → «Settings › Administration › Backup», incluso dal
+  coordinatore nel merge). Strict mkdocs e `check-links` (97) verdi.
+- **Merge 2, dev `7f8e69be6`** (H-39: `platform.frame_protection`, `platform.csp_report_only`) → `36ab58445`. Un
+  conflitto, la stessa riga: quella di H-39 («24 messages», verificati nel codice e nel catalogo) con la frase di A8b.
+  Le spec e i test di `/security/checks` non fissano insiemi esatti: due controlli `ok` in più non li toccano. Strict
+  mkdocs e `check-links` verdi.
+> **⚠️ Fuori pista (per B)**: `security.md` «Tests: … the order of `CONFIG_CHECKS` included: the platform's checks,
+> A's, then E's three» non nomina i due controlli di B: vecchio su dev, non causato dai merge; segnalato.
+- **A-21a — Revisione di E** (08:10): **chiusa**, il MEDIO è curato; `_follow_variables` innocuo. Una nota LOW:
+  `auth.py` riconosce `USERNAME_INVALID` dal testo del messaggio → **A-47** nel backlog.
+- **Revisione di E-14** fatta (sopra, A-21a.4).
+- **Slot 1** (08:22–), su `36ab58445`, corsia 6182, un'invocazione alla volta, carico a 5 minuti < 50:
+  `work/slot1/slot.sh` — E2E `front-utility` security-tab, settings, admin-users, backup, email-tab, scheduler,
+  email-send-link, email-verification, plugin-settings; poi API username-rules, login-throttle, security-checks, auth,
+  registration, admin-setup, users-admin, validation-errors, email, email-verification, email-verification-hooks,
+  system, instance-block.
+- **Slot 1 — E2E ✅** (08:28–08:54, `36ab58445`, il frontend ricostruito dal runner all'inizio): `security-tab` 3,
+  `settings` 56 (G-15 sulle due barre col controllo della sfumatura incluso), `admin-users` 10, `backup` 14,
+  `email-tab` 5, `scheduler` 17, `email-send-link` 4, `email-verification` 5, `plugin-settings` 5 → **119 passati,
+  0 rossi**. API: `username-rules` 39/39 (il resto in corso).
+- **Slot 1 — API ✅** (08:55–09:10): `username-rules` 39, `login-throttle` 55, `security-checks` 3, `auth` 95,
+  `registration` 102, `admin-setup` 50, `users-admin` 100, `validation-errors` 53, `email` 168, `email-verification` 60,
+  `email-verification-hooks` 26, `system` 122, `instance-block` 62 → **935 passati, 0 rossi**. Albero invariato
+  (`post-run dirty: 0`), porta 6182 libera. Log: `work/slot1/logs/`.
+- **A8b (E2E e seguiti della barra) e A-21a: definizione di fatto ✅** sulla revisione combinata `36ab58445`.
