@@ -5891,7 +5891,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   `scheduler/run_lock.py`. Un modulo comune li unirebbe; tocca file di più sessioni (fra cui B per il backup).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra
   processi: analisi».
-- **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — minimo, facoltativo; Z, 17/10
+- ✅ **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — **chiusa il 17/10 da H** (dev `36a487e84`): `managed_paths` di `validate_test_data_dir()` + test di symlink e hardlink. Era: minimo, facoltativo; Z, 17/10
   (Z-11, segnalato da test-author). `validate_test_data_dir` (`backend/app/config/__init__.py`, file di H) elenca i
   percorsi gestiti che una cartella di test non può condividere con la produzione: c'è `scheduler_state.json`, non
   il nuovo `.scheduler.lock`. Rischio basso: un symlink al suo posto è già rifiutato (`O_NOFOLLOW`), e un hardlink al
