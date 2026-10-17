@@ -1120,12 +1120,14 @@ async def test_a_failure_never_echoes_its_error(monkeypatch, arrange, module):
 
 @pytest.mark.asyncio
 async def test_guard_post_prices_value_error_keeps_its_domain_message(monkeypatch):
-    """``POST /assets/prices``: a ``ValueError`` of the service (a currency mismatch) answers 400 with its own message.
+    """``POST /assets/prices``: a ``ValueError`` of the service (the digits refusal of a manual upsert, C-97) answers 400
+    with its own message.
 
-    Green on HEAD 04955c498 too: only the 500 lost its echo.
+    A currency mismatch is no ``ValueError`` of a manual upsert since X-R71: it answers 422 ``price_currency_mismatch``
+    (``api prices-currency-coherence``). Green on HEAD 04955c498 too: only the 500 lost its echo.
     """
     print_section("MF-SEC9a guard: POST /assets/prices, a domain error")
-    message = "Currency mismatch for asset 1: the price is in USD, the asset in EUR"
+    message = "Too many digits in the prices of asset 1: 1 value(s): 1990-01-01 (close)"
 
     async def refuse(*_args: Any, **_kwargs: Any) -> Any:
         raise ValueError(message)

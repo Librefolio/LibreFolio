@@ -79,8 +79,9 @@ Asset only:
 - **Two tabs**, **Prices** and **Events**, whose badges count the dirty rows, share one
   **Save (n)** / **Cancel** bar. The chart jump picks the Events tab when the date has an event
   marker, the Prices tab otherwise.
-- **No currency column.** The backend rejects a price or event in a currency other than the
-  asset's (HTTP 400); the editor sends no currency with prices, and a label beside the tabs reads
+- **No currency column.** The backend rejects a price in a currency other than the asset's (HTTP
+  422 `price_currency_mismatch`, the whole request) and such an event (HTTP 400); the editor sends
+  no currency with prices, and a label beside the tabs reads
   *Prices in USD* / *Events in USD*. An event goes with its row's `currency` when it has one, the
   value an imported CSV line brought, and with the asset's otherwise: a line in another currency is
   refused with its row (`EVENT_CURRENCY_MISMATCH`), not relabelled with an amount that would be
