@@ -3788,4 +3788,11 @@ between brokers owned at different shares made P&L with no explanation: now an I
 unbounded date range (`end: 9999-12-30`) froze the instance through the portfolio, lots, risk and AI Export routes:
 every range now ends by tomorrow and starts at the first transaction, with a test seam for the far-future suites.
 Filed: [[problems/share-mismatch-warning-never-left-the-classifier]], [[problems/unbounded-date-range-froze-the-instance]].
+## [2026-10-17] file | Y-8: the arrow markers are re-aimed once a zoom settles, not on every tick
+`updateArrowRotations()` read `getOption()`, a deep clone of the whole option, and wrote every series back on each
+`dataZoom` tick of `LineChart`, `CandlestickChart` and `PriceChartFull`. The arrows are now re-aimed in the debounce
+that re-spaces the labels, reading the option afresh each time: a cached option would paint pre-rebuild colours back
+after a theme or Designer Lab rebuild, which a light → dark → zoom unit test pins. A full render of `LineChart` now
+restores the saved zoom before it re-aims, as `CandlestickChart` did: the restore's event only schedules the settle (Y-8b).
+Updated: [[concepts/echarts-chart-gotchas]].
 Graph: not updated; graphify is not available in this worktree.
