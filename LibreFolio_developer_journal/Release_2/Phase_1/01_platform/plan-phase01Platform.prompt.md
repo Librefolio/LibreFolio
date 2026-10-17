@@ -5697,3 +5697,84 @@ backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check
        coincidere con gli header;
      - H-40 scritta e da verificare su Linux;
      - H-5, il debito di traduzione di `configuration` e `connection_checks`.
+5. ✅ **Ingresso** (comunicato alle 09:08): H-39 è entrato in dev `0403b5eb7`, con la riga 🔒 della CHANGELOG
+   `7f8e69be6`. Il mio HEAD è avanzato a `7f8e69be6`, pulito.
+   - E ha chiuso H-39 senza reperti.
+   - Ha suggerito, LOW, **H-42** (dopo H-35): imporre già, nello stesso header di `frame-ancestors`, `object-src
+     'none'; base-uri 'self'; form-action 'self'`, da verificare con gli E2E che aprono i documenti e il visore PDF.
+   > **Nota su H-40**: la frase su IPv6 non è verificata su un host Linux (il demone Docker è spento). Viene dalla
+   > documentazione di Docker sulla pubblicazione delle porte, come ha riferito il docs-writer. La prova su Linux resta
+   > con H-38.
+
+### Lotto «H-35: dopo A8a e B-9, la docstring dell'avvio e la pulizia di `test_config_audit.py`» (2026-10-17, mattina) — in corso
+
+> Dalla review di A8a (coordinatore, notte), con B-9 aggiunto dalla mia review (07:45) e la pulizia di `_configure` di
+> H-36 (punto 10 del test-author). Base `7f8e69be6`: A8a e B-9 sono dentro.
+
+**Analisi** (sola lettura):
+
+1. `log_configuration_audit()` (`config_audit.py`) chiama `admin_bootstrap_config()` (F02) e `login_limit_enabled()`
+   (F15), che possono sollevare:
+   - `AdminBootstrapConfigError`, un `ValueError` che nomina la variabile;
+   - `ValueError`, per un `LIBREFOLIO_LOGIN_LIMIT` diverso da `on` e da `off`.
+
+   La docstring non lo dice. La docstring del modulo dice ancora che l'avvio si ferma solo su «un segreto configurato»,
+   e che la scheda «Security» valuterà i controlli. Ma `GET /api/v1/security/checks` (A8a, `api/v1/security.py`) li
+   valuta già.
+2. `test_config_audit.py` ha ancora l'impalcatura di quando A8a e B-9 non c'erano:
+   - 9 segni «updated in A8a (accounts check, H reviews)»;
+   - `importlib` e `ModuleType`;
+   - `ACCOUNTS_CHECKS_MODULE`, `ACCOUNTS_CHECK_IDS` e `_accounts_checks()`, con i rossi «red until A8a»;
+   - l'import protetto di B-9, con due sostituti che dicono «B-9 is not written»;
+   - la parentesi di (c) che spiega l'impalcatura;
+   - in (a), «Everything else is ok», che dopo (f) e (g) non è più vero alla lettera.
+3. `_configure` non svuota le note di H-36: se un altro test nello stesso processo lascia una nota (`_untrusted_
+   forwarding`), `platform.client_address` diventa un warning, e i test che vogliono tutti i controlli ok, o il log
+   vuoto, falliscono.
+
+**Progetto**:
+- La cura in `config_audit.py`: le due docstring (della funzione e del modulo). Nessun cambio di comportamento.
+- Il test-author, in `test_config_audit.py`:
+  - import diretti di `ACCOUNTS_CONFIG_CHECKS`, `check_login_limit`, `BACKUP_CONFIG_CHECKS`, `check_panel_token` e
+    `check_upload_limit`;
+  - `CHECK_IDS` nell'ordine di `CONFIG_CHECKS`, con l'id di A;
+  - via l'impalcatura e i segni;
+  - il test della tupla intera sui gruppi importati;
+  - `_configure` svuota le note, con `monkeypatch.setitem`;
+  - un rosso: una nota lasciata prima di `_configure` non deve arrivare all'audit.
+- Selettori: `services config-audit`, `accounts-checks`, `backup-checks`, `email-checks` e `client-address`.
+
+1. ✅ **Test** (test-author, che non ha lanciato nulla; 17/10, mattina), solo in `test_config_audit.py`:
+   - import diretti dei gruppi di A, B ed E; `CHECK_IDS` nell'ordine di `CONFIG_CHECKS`, con `accounts.login_limit`;
+   - via `importlib`, `ModuleType`, `ACCOUNTS_CHECKS_MODULE`, `ACCOUNTS_CHECK_IDS` e `_accounts_checks()`, l'import
+     protetto di B-9 con i due sostituti, e i 9 segni «updated in A8a». Il grep di `A8a`, `B-9`, `red until`,
+     `importlib`, `ModuleType` e `ACCOUNTS_CHECK` non trova più nulla;
+   - il test della tupla intera sui gruppi importati, più `tuple(CONFIG_CHECKS) == tuple(CHECK_IDS)`, che ora fissa
+     anche l'ordine dentro il gruppo di ogni workstream;
+   - `_configure` svuota le note di H-36 (`monkeypatch.setitem`, due righe), con un test nuovo in (f);
+   - le docstring (a), (c) e (f).
+   - Io ho corretto un commento: «its two checks» di E diventa «three», per `email.links`.
+2. ✅ **Rosso e verde** (`files/runs/h35-redgreen.sh`):
+   - **Rosso**: una copia temporanea con le due righe del reset commentate. `services config-audit` dà **1 failed /
+     155 passed**: il test nuovo, «check_client_address() must be (…, 'ok', …), not (…, 'warning', …untrustedProxy,
+     {'headers': 'X-Forwarded-For'})». Poi il file è ripristinato (`cmp` uguale).
+   - I 155 test di prima ci sono tutti: la pulizia non ne ha perso nessuno.
+   - **Cura** (`files/h35/apply.py --apply`, identica alla copia di prova): le due docstring di `config_audit.py`.
+     - Il modulo: l'avvio si ferma su una configurazione con cui il server non deve partire, e `GET
+       /api/v1/security/checks` li valuta già.
+     - La funzione: `AdminBootstrapConfigError` (F02) e il `ValueError` di `LIBREFOLIO_LOGIN_LIMIT` (F15), più i
+       controlli del backup fra quelli che si limitano a scrivere nel log.
+   - **Verde**:
+
+     | Comando | Esito |
+     |---------|-------|
+     | `services config-audit` | 156 passed |
+     | `services accounts-checks` | 76 passed |
+     | `services backup-checks` | 57 passed |
+     | `services email-checks` | 87 passed |
+     | `services client-address` | 360 passed |
+     | ruff, black | puliti |
+     | `git diff --check` | pulito |
+
+   - Nessun documento dice ancora che la scheda «valuterà» i controlli.
+   - `git merge-file` contro dev `67dd18676`: 0 conflitti. Porta libera.
