@@ -1676,18 +1676,22 @@ class TestFifoComponentVersion:
     """B3b made the FIFO lot and summary money figures nullable (null = unavailable): each FIFO component moved from
     version 1 to 2, on the real spec and on the frozen catalog placeholder together. MF-E1 (T-B8) moves the two FIFO
     summaries on to 3 -- an asset's open value and unrealized P&L sum the same lots, those valued in full -- with the
-    same payload shape; the FIFO lots stay at 2. The catalog is imported in the test rather than at module level, so a
-    parity failure on import reds these tests only."""
+    same payload shape. J-12 (N81) declares an asset whose lot reconstruction FAILED (`failed_reconstruction_asset_count`,
+    `failed_lot_reconstructions`) instead of exporting its wrong lots: the FIFO lots move 2 -> 3, the summaries stay at 3
+    (already moved in this cycle; at most +1 over the released v1.2.1). The catalog is imported in the test rather than
+    at module level, so a parity failure on import reds these tests only."""
 
     @pytest.mark.parametrize(
         ("component_id", "components", "version"),
         [
             # Before MF-E1: 2.
             pytest.param("portfolio.fifo_summary", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, 3, id="portfolio-fifo-summary"),
-            pytest.param("portfolio.fifo_lots", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, 2, id="portfolio-fifo-lots"),
+            # Before J-12: 2.
+            pytest.param("portfolio.fifo_lots", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, 3, id="portfolio-fifo-lots"),
             # Before MF-E1: 2.
             pytest.param("broker.fifo_summary", broker_financial.BROKER_FINANCIAL_COMPONENTS, 3, id="broker-fifo-summary"),
-            pytest.param("broker.fifo_lots", broker_financial.BROKER_FINANCIAL_COMPONENTS, 2, id="broker-fifo-lots"),
+            # Before J-12: 2.
+            pytest.param("broker.fifo_lots", broker_financial.BROKER_FINANCIAL_COMPONENTS, 3, id="broker-fifo-lots"),
         ],
     )
     def test_fifo_component_version_in_registry_and_placeholder(self, component_id, components, version):

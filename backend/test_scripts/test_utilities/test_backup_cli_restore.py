@@ -71,6 +71,16 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     own key cannot be used, so nothing was re-encrypted with the key given: <problem>`` in its place, the right key
     given all the same. As root (B-19's fake identity, ``test_backup_cli_secure.py``), the file is read before the
     switch to the owner: a file root alone could read works. No key text ever reaches standard output or error.
+(i) B-35 (red until it lands; contract §3, CLI): ``restore`` honours ``LIBREFOLIO_BACKUP_MAX_RESTORE_MB``, the largest
+    total a check unpacks (what the manifest declares; MB of 1024², ``0`` no limit; unset, no limit self-hosted and 8
+    times the upload limit in any other profile). Over it: exactly one ❌ line ending in ``(unpacked_too_large)``, exit 1,
+    after the 🔎 line (the limit is checked inside the check), no copy left. A limit that cannot be read — not a whole
+    number, or, managed, an upload limit whose profile entry is of the wrong type — exactly one ❌ line naming the
+    variable at fault and ending in ``(backup_restore_unavailable)``, exit 1, before the 🔎 line, no copy. ``0`` lifts
+    the profile's limit for one command: the archive is checked as today, after the barrier that, unset, the same
+    archive is refused. Managed, unset, an upload limit of 1 MB: a limit of 8 MB, an archive declaring more refused, one
+    declaring less checked as today. The archives are the staging tests' data directory (its files 2.5 MiB and a bit),
+    plus, for the one over 8 MB, a file of zeros that deflate shrinks a thousandfold: small to upload, big to unpack.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -81,8 +91,8 @@ and ``os.kill`` as ``restart`` sees it record, and must stay unused. States only
 (``waiting_for``), whatever the models accept, so that what ``pending`` prints is what fails. The block is
 ``LIBREFOLIO_BLOCKED`` in this process's environment, which ``config.platform.instance_blocked()`` reads at each call:
 the one a developer's shell may carry is removed before every test (``no_inherited_block``), and a test of the block
-sets its own with ``monkeypatch``; the instance key it may carry is removed too (``no_inherited_instance_key``).
-POSIX-only (pty, modes).
+sets its own with ``monkeypatch``; the instance key it may carry is removed too (``no_inherited_instance_key``), and the
+restore limit (``no_inherited_restore_limit``). POSIX-only (pty, modes).
 """
 
 from __future__ import annotations
@@ -95,6 +105,7 @@ import os
 import pty
 import stat
 import sys
+import zipfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -104,8 +115,10 @@ from typing import Any
 
 import pytest
 
-from backend.app.config import SecretFileError, read_secret_file
+from backend.app.config import ENVIRONMENT_PROFILE_DEFAULTS, SecretFileError, read_secret_file
+from backend.app.config.backup import MAX_UPLOAD_VARIABLE
 from backend.app.config.platform import instance_blocked
+from backend.app.services.platform.instance_backup.archive import read_manifest
 from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, restore_dir, stage_data_dir, stage_dir, stages_dir
 from backend.app.services.platform.instance_backup.staging import read_report
 from backend.app.services.platform.instance_key import instance_key_status
@@ -139,6 +152,9 @@ CONFIRM_ERRORS = {
 #: (§11, P7) The hosting provider's block, which ``config.platform.instance_blocked()`` reads from this process's
 #: environment at each call.
 BLOCKED_VARIABLE = "LIBREFOLIO_BLOCKED"
+#: (B-35) The largest total a restore unpacks, in megabytes (``0``: no limit), which every ``restore`` reads; lot B-35
+#: brings its reader, ``config.backup.MAX_RESTORE_VARIABLE``.
+RESTORE_LIMIT_VARIABLE = "LIBREFOLIO_BACKUP_MAX_RESTORE_MB"
 #: (§11, P7) The line saying that a restore waits for the hosting provider's block to end, which the developer decided
 #: word for word: ``pending`` prints it for a pending restore the last start found blocked, or on an instance blocked
 #: now; a confirmation on a blocked instance prints it after its usual lines. Pinned whole.
@@ -209,6 +225,13 @@ def no_inherited_block(monkeypatch) -> None:
     this process's environment at each call. The ``LIBREFOLIO_BLOCKED`` a developer's shell may carry is removed for
     every test: a test sees only the block it sets itself."""
     monkeypatch.delenv(BLOCKED_VARIABLE, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def no_inherited_restore_limit(monkeypatch) -> None:
+    """B-35: every ``restore`` reads ``LIBREFOLIO_BACKUP_MAX_RESTORE_MB``. The one a developer's shell may carry is removed
+    for every test: a test of the limit sets its own (``limits``)."""
+    monkeypatch.delenv(RESTORE_LIMIT_VARIABLE, raising=False)
 
 
 def block_as_read() -> str:
@@ -1190,3 +1213,137 @@ def test_the_key_file_is_read_before_the_switch_to_the_owner_of_the_data_directo
     assert code == 0 and KEY_GIVEN_LINE in lines and rekeyed_line(SAVED_KEYS) in lines, f"the key file read before the switch (nobody can read it after), K1 used: exit {code}: {lines}"
     no_key_shown(text, source.key, THIS_KEY)
     print_success("root: the key file read before the switch")
+
+
+# =============================================================================
+# (i) B-35 — the restore limit
+# =============================================================================
+
+
+#: (B-35, §1) A megabyte of the limits (1024²), and K: unset, a profile other than selfhosted limits a restore to K times
+#: its upload limit.
+MIB = 1024 * 1024
+RESTORE_TO_UPLOAD = 8
+#: The file of zeros of the archive over 8 MB: deflate shrinks it a thousandfold, small to upload and big to unpack.
+ZEROS = "custom-uploads/b35-zeros.bin"
+#: (B-35, §3) A limit that cannot be read, and the variable its ❌ line names: a value that is not a whole number; or, in
+#: the managed profile with neither limit set, an upload limit whose profile entry is of the wrong type — the restore
+#: limit fails closed through it (``ProfileDefaultError``).
+UNREADABLE_LIMITS = [
+    pytest.param("not-a-number", RESTORE_LIMIT_VARIABLE, id="not-a-number"),
+    pytest.param("upload-entry-of-the-wrong-type", MAX_UPLOAD_VARIABLE, id="managed-upload-entry-of-the-wrong-type"),
+]
+
+
+def limits(monkeypatch, *, profile: str = "selfhosted", upload: str | None = None, restore: str | None = None) -> None:
+    """The profile, ``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`` and ``LIBREFOLIO_BACKUP_MAX_RESTORE_MB`` (``None``: unset) the
+    command runs with, whatever this process inherited; read at each call."""
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", profile)
+    for variable, value in ((MAX_UPLOAD_VARIABLE, upload), (RESTORE_LIMIT_VARIABLE, restore)):
+        if value is None:
+            monkeypatch.delenv(variable, raising=False)
+        else:
+            monkeypatch.setenv(variable, value)
+
+
+def a_backup_of(tmp_path: Path, monkeypatch, database: Path, name: str, *, zeros: int = 0) -> Path:
+    """A clear archive of a source at the head, ``tmp_path/name``: the staging tests' data directory
+    (``secure_cases.source_dir`` on this module's database), plus ``zeros`` bytes of zeros. The source is configured as
+    this process's data directory while it is backed up: the live instance is configured after."""
+    files = {ZEROS: bytes(zeros)} if zeros else None
+    data = secure_cases.source_dir(tmp_path / name, secure_cases.cases.Databases(head=database, older=database), monkeypatch, files=files)
+    return secure_cases.clear_backup(data)
+
+
+def declared(archive: Path) -> int:
+    """The total the manifest of ``archive`` declares, in bytes: what a check would unpack."""
+    with zipfile.ZipFile(archive) as zf:
+        return sum(entry.size for entry in read_manifest(zf).files)
+
+
+def dry_run(capsys, archive: Path) -> tuple[int, list[str]]:
+    """``restore ARCHIVE --dry-run``: its exit code and the lines of its standard output."""
+    code = run("restore", str(archive), "--dry-run")
+    return code, capsys.readouterr().out.splitlines()
+
+
+def refusals(lines: list[str]) -> list[str]:
+    """The ❌ lines of ``lines``."""
+    return [line.rstrip() for line in lines if line.startswith("❌")]
+
+
+def checking(lines: list[str]) -> bool:
+    """Whether the check started: its 🔎 line was printed."""
+    return any(line.startswith("🔎 Checking") for line in lines)
+
+
+def refused_as_too_large(code: int, lines: list[str]) -> bool:
+    """Exit 1 and exactly one ❌ line, ending in ``(unpacked_too_large)``, after the 🔎 line."""
+    found = refusals(lines)
+    return code == 1 and len(found) == 1 and found[0].endswith("(unpacked_too_large)") and checking(lines)
+
+
+def test_a_dry_run_over_the_restore_limit_is_refused_inside_the_check(tmp_path, monkeypatch, capsys, head_database):
+    """(i) B-35, u1: ``LIBREFOLIO_BACKUP_MAX_RESTORE_MB`` below the total the archive declares: refused by the check —
+    after its 🔎 line — with ``unpacked_too_large``; exit 1, no copy left."""
+    print_section("B-35: the restore limit")
+    archive = a_backup_of(tmp_path, monkeypatch, head_database, "source")
+    root = instance(tmp_path, monkeypatch)
+    limits(monkeypatch, restore="1")
+    assert declared(archive) > MIB, f"precondition: the archive declares more than 1 MB: {declared(archive)} bytes"
+    code, lines = dry_run(capsys, archive)
+    assert refused_as_too_large(code, lines), f"exit 1, exactly one ❌ line ending in (unpacked_too_large), after the 🔎 line: exit {code}: {lines}"
+    assert cli.stages_left(root) == [], f"no copy left: {cli.stages_left(root)}"
+    print_success("over the limit → (unpacked_too_large), inside the check")
+
+
+@pytest.mark.parametrize(("case", "named"), UNREADABLE_LIMITS)
+def test_a_restore_limit_that_cannot_be_read_stops_before_the_check(tmp_path, monkeypatch, capsys, head_database, case, named):
+    """(i) B-35, u2: a limit that cannot be read is said before anything is checked: exactly one ❌ line naming the
+    variable at fault and ending in ``(backup_restore_unavailable)``, exit 1, no 🔎 line, no copy."""
+    archive = cli.restorable(tmp_path, head_database)
+    root = instance(tmp_path, monkeypatch)
+    if case == "not-a-number":
+        limits(monkeypatch, restore="abc")
+    else:
+        limits(monkeypatch, profile="managed")
+        monkeypatch.setitem(ENVIRONMENT_PROFILE_DEFAULTS["managed"], MAX_UPLOAD_VARIABLE, "500")
+    code, lines = dry_run(capsys, archive)
+    found = refusals(lines)
+    assert code == 1 and len(found) == 1 and named in found[0] and found[0].endswith("(backup_restore_unavailable)"), f"{case}: exit 1, exactly one ❌ line naming {named} and ending in (backup_restore_unavailable): exit {code}: {lines}"
+    assert not checking(lines) and cli.stages_left(root) == [], f"{case}: before the check, no copy: {cli.stages_left(root)}: {lines}"
+    print_success(f"{case} → (backup_restore_unavailable), before the check")
+
+
+def test_a_restore_limit_of_0_lifts_the_profile_s_for_one_command(tmp_path, monkeypatch, capsys, head_database):
+    """(i) B-35, u3: ``0`` is no limit, and an explicit value always wins: the operator lifts the profile's limit for
+    one command, and the archive is checked as today. The barrier first: managed, unset, an upload limit of 1 MB, the
+    same archive is refused — so that «as today» never holds only because there is no limit at all (as before B-35)."""
+    over = a_backup_of(tmp_path, monkeypatch, head_database, "over", zeros=RESTORE_TO_UPLOAD * MIB)
+    root = instance(tmp_path, monkeypatch)
+    assert declared(over) > RESTORE_TO_UPLOAD * MIB, f"precondition: the archive declares more than 8 MB: {declared(over)} bytes"
+    limits(monkeypatch, profile="managed", upload="1")
+    code, lines = dry_run(capsys, over)
+    assert refused_as_too_large(code, lines), f"the barrier: managed, unset, an upload limit of 1 MB → refused (unpacked_too_large): exit {code}: {lines}"
+    limits(monkeypatch, profile="managed", upload="1", restore="0")
+    code, lines = dry_run(capsys, over)
+    assert code == 0 and cli.RESTORABLE_LINE in lines and refusals(lines) == [], f"LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0: no limit, checked as today: exit {code}: {lines}"
+    assert cli.stages_left(root) == [], f"the dry run's copy removed: {cli.stages_left(root)}"
+    print_success("=0 → no limit, for one command")
+
+
+def test_the_managed_profile_limits_a_restore_to_8_times_its_upload_limit(tmp_path, monkeypatch, capsys, head_database):
+    """(i) B-35, u4: managed, the restore limit unset, an upload limit of 1 MB: a limit of 8 MB (K = 8). An archive
+    declaring more is refused inside the check; one declaring less is checked as today."""
+    over = a_backup_of(tmp_path, monkeypatch, head_database, "over", zeros=RESTORE_TO_UPLOAD * MIB)
+    under = a_backup_of(tmp_path, monkeypatch, head_database, "under")
+    root = instance(tmp_path, monkeypatch)
+    assert declared(under) < RESTORE_TO_UPLOAD * MIB < declared(over), f"precondition: one archive under 8 MB declared, one over: {declared(under)}, {declared(over)} bytes"
+    limits(monkeypatch, profile="managed", upload="1")
+    code, lines = dry_run(capsys, over)
+    assert refused_as_too_large(code, lines), f"over 8 MB: exit 1, exactly one ❌ line ending in (unpacked_too_large), after the 🔎 line: exit {code}: {lines}"
+    assert cli.stages_left(root) == [], f"no copy left: {cli.stages_left(root)}"
+    code, lines = dry_run(capsys, under)
+    assert code == 0 and cli.RESTORABLE_LINE in lines and refusals(lines) == [], f"under 8 MB: checked as today: exit {code}: {lines}"
+    assert cli.stages_left(root) == [], f"the dry run's copy removed: {cli.stages_left(root)}"
+    print_success("managed, upload 1 MB → a limit of 8 MB: over refused, under checked")

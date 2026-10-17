@@ -10,11 +10,15 @@ answer 404, as if they did not exist.
 ``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`` is the largest archive a restore accepts (decision 43): the hosting provider sets
 it, since in the cloud the customer is the administrator. Unset, there is no limit on a self-hosted instance, and the
 managed profile's value (500 MB) comes from ``ENVIRONMENT_PROFILE_DEFAULTS`` of ``config/__init__.py`` (H-17).
+
+``LIBREFOLIO_BACKUP_MAX_RESTORE_MB`` is the most an archive may unpack to in a restore's check (B-35): the upload limit
+bounds only the compressed archive. Unset, there is no limit on a self-hosted instance; in any other profile it is
+``RESTORE_TO_UPLOAD_RATIO`` times the upload limit (decision N82), so it follows the provider's own upload limit.
 """
 
 import os
 
-from backend.app.config import env_secret, profile_default
+from backend.app.config import env_secret, get_settings, profile_default
 
 #: The variable of the hosting panel's token; ``env_secret`` also reads it from ``<name>_FILE``.
 PANEL_TOKEN_VARIABLE = "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN"
@@ -80,4 +84,32 @@ def backup_max_upload_mb() -> int:
         return profile_default(MAX_UPLOAD_VARIABLE, 0)
     if not (raw.isascii() and raw.isdigit()):
         raise BackupConfigError(MAX_UPLOAD_VARIABLE, "BACKUP_MAX_UPLOAD_MB_INVALID", "expected a whole number of megabytes, 0 for no limit")
+    return int(raw)
+
+
+#: The variable of the most an archive may unpack to in a restore's check, in megabytes; 0 is no limit (B-35).
+MAX_RESTORE_VARIABLE = "LIBREFOLIO_BACKUP_MAX_RESTORE_MB"
+#: Outside the self-hosted profile, an unset restore limit is this many times the upload limit (B-35, decision N82).
+#: LibreFolio's SQLite databases deflate about 4:1 (measured on 17/10: the test database 4.1, a synthetic price history
+#: 3.9) and the uploaded files barely: 8 leaves twice the densest measured, and still cuts deflate's worst case, about
+#: 1000:1, by more than a hundred.
+RESTORE_TO_UPLOAD_RATIO = 8
+
+
+def backup_max_restore_mb() -> int:
+    """``LIBREFOLIO_BACKUP_MAX_RESTORE_MB``: the most an archive may unpack to in a restore's check, in megabytes; ``0``
+    is no limit.
+
+    Unset or blank: ``0`` in the ``selfhosted`` profile, as before 1.3; in any other profile ``RESTORE_TO_UPLOAD_RATIO``
+    times the upload limit (``backup_max_upload_mb()``, ``0`` when that is none), raising what that raises
+    (``BackupConfigError``, ``ProfileDefaultError``: fail closed). An explicit value always wins, ``0`` included.
+    Anything but a whole number of ASCII digits raises ``BackupConfigError``.
+    """
+    raw = os.environ.get(MAX_RESTORE_VARIABLE, "").strip()
+    if not raw:
+        if get_settings().LIBREFOLIO_PROFILE == "selfhosted":
+            return 0
+        return RESTORE_TO_UPLOAD_RATIO * backup_max_upload_mb()
+    if not (raw.isascii() and raw.isdigit()):
+        raise BackupConfigError(MAX_RESTORE_VARIABLE, "BACKUP_MAX_RESTORE_MB_INVALID", "expected a whole number of megabytes, 0 for no limit")
     return int(raw)

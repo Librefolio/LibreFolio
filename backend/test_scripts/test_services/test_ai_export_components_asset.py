@@ -1099,8 +1099,10 @@ class TestLotDetail:
             AssetLotDetailPayload.model_validate({**payload, "unavailable_amount_lot_count": -1})
 
     @pytest.mark.asyncio
-    async def test_lot_detail_component_is_versioned_v3_in_registry_and_placeholder(self):
+    async def test_lot_detail_component_is_versioned_v4_in_registry_and_placeholder(self):
         """B3b bumped asset.lot_detail to version 3 (F6 had made it 2): seven of its money fields became nullable.
+        J-12 (N81) bumps it to 4: it states `lot_reconstruction_status` and `failure_codes`, and a FAILED
+        reconstruction exports no lot (before J-12: 3).
         The real spec and the frozen catalog placeholder must move together -- the catalog checks their parity on
         import; this pins the number itself on both sides, so a revert, or a bump on one side only, cannot stay
         green. The catalog is imported here rather than at module level, so a parity failure on import reds this
@@ -1109,7 +1111,7 @@ class TestLotDetail:
 
         real = next(spec for spec in asset_core.ASSET_CORE_COMPONENTS if spec.component_id == "asset.lot_detail")
         placeholder = next(spec for spec in catalog.ALL_FOUNDATION_COMPONENTS if spec.component_id == "asset.lot_detail")
-        assert (real.version, placeholder.version) == (3, 3)
+        assert (real.version, placeholder.version) == (4, 4)
 
 
 # =============================================================================

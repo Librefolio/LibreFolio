@@ -43,7 +43,8 @@ class TXTransferPromoteRequest(StrictModel):
     asset_id: Optional[int] = Field(default=None, gt=0)
     quantity: Optional[SafeDecimal] = Field(default=None, description="Asset quantity for TRANSFER")
     # Optional override for cost_basis_override propagated on the TRANSFER
-    # destination item; if None the service will not set it.
+    # destination item; if None the service will not set it. Refused on an
+    # FX_CONVERSION, whose cash legs take none (N78, W-B72).
     # Object {code, amount} — e.g. {"code": "EUR", "amount": "42.50"}
     cost_basis_override: Optional[Currency] = None
 
