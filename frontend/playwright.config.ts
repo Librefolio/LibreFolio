@@ -33,6 +33,8 @@ const WEB_SERVER_ENV: Record<string, string> = {
     LIBREFOLIO_TEST_DATA_DIR: TEST_DATA_DIR,
     LIBREFOLIO_TEST_LANE_ID: TEST_LANE_ID,
     PIPENV_DONT_LOAD_ENV: '1',
+    // A lane's own settings (H-43, `--lane-setting`): `dev.py server --test` applies them again after its own clean-up.
+    ...(process.env.LIBREFOLIO_TEST_LANE_SETTINGS ? {LIBREFOLIO_TEST_LANE_SETTINGS: process.env.LIBREFOLIO_TEST_LANE_SETTINGS} : {}),
 };
 if (process.env.COVERAGE_JS === '1') {
     WEB_SERVER_ENV.COVERAGE_INSTRUMENT = '1';

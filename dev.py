@@ -200,11 +200,17 @@ def cmd_server(args):
     no_scheduler = getattr(args, 'no_scheduler', False)
     no_reload = getattr(args, 'no_reload', False)
 
+    lane_settings = getattr(args, 'lane_settings', None)
+    if lane_settings and not test_mode:
+        print_error("--lane-setting works only with --test: it sets the instance of a test lane")
+        return 1
+
     if test_mode:
         try:
             port, _ = configure_test_runtime(
                 port=port_override,
                 data_dir=data_dir_override,
+                lane_settings=lane_settings,
             )
         except ValueError as exc:
             print_error(str(exc))
@@ -2664,6 +2670,8 @@ Examples:
                    help="Disable the market data scheduler (no background sync jobs)")
     p.add_argument("--no-reload", action="store_true", dest="no_reload",
                    help="Never enable uvicorn --reload (the reloader adds a supervisor process that outlives SIGTERM)")
+    p.add_argument("--lane-setting", dest="lane_settings", action="append", metavar="NAME=VALUE", default=None,
+                   help="With --test: a setting of the lane's instance, repeatable (H-43): LIBREFOLIO_PROFILE, LIBREFOLIO_FRAME_PROTECTION or LIBREFOLIO_CSP_REPORT_ONLY")
     p.set_defaults(func=cmd_server)
 
     # Database
