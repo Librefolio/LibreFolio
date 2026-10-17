@@ -28,6 +28,16 @@
         "untrustedProxy": "Requests come through a reverse proxy that LibreFolio does not trust ({headers}): the limits per visitor's address do not apply to them. List the proxy in FORWARDED_ALLOW_IPS, or name the header it sets in LIBREFOLIO_CLIENT_IP_HEADER.",
         "publicForwarding": "Forwarding headers from a public address were ignored ({headers}). If a proxy on a public address forwards the requests, list it in FORWARDED_ALLOW_IPS; otherwise there is nothing to do."
       },
+      "frameProtection": {
+        "on": "Only LibreFolio's own pages can show it in a frame.",
+        "offSelfHosted": "Pages at another address, such as your dashboards, can show LibreFolio in a frame: the default of an install of your own.",
+        "offManaged": "Frame protection is off in the managed profile: any site can show LibreFolio in a frame. Turn LIBREFOLIO_FRAME_PROTECTION on, as the managed profile does by default."
+      },
+      "cspReportOnly": {
+        "on": "The pages of the web app carry a report-only Content-Security-Policy: the browser lists in its console what it would block, and blocks nothing.",
+        "offSelfHosted": "No report-only Content-Security-Policy: the default of an install of your own.",
+        "offManaged": "The report-only Content-Security-Policy is off in the managed profile: browsers list nothing it would block. Turn LIBREFOLIO_CSP_REPORT_ONLY on, as the managed profile does by default."
+      },
       "logLevel": {
         "ok": "The log level suits production.",
         "verbose": "The log level is {log_level}: the log records operational detail; INFO is enough in production."

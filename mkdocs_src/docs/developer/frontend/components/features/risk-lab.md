@@ -23,7 +23,7 @@ amount of money: a selection has no weights.
 
 | Source | Responsibility |
 |---|---|
-| `frontend/src/routes/(app)/assets/+page.svelte` | Mounts the lab on the Correlation tab with the page's full asset list; hides the list filters there (l.1310); its toolbar's **Sync selection** and **Reload All** call the lab's `openSync()` and `reload()` (l.1509, l.1524); `onfitperiod` moves the toolbar range (l.1609-1614); `targetCurrency` is the instance default currency (l.1618). |
+| `frontend/src/routes/(app)/assets/+page.svelte` | Mounts the lab on the Correlation tab with the page's full asset list; hides the list filters there (l.1405); its toolbar's **Sync selection** and **Reload All** call the lab's `openSync()` and `reload()` (l.1604, l.1619); `onfitperiod` moves the toolbar range (l.1704-1709); `targetCurrency` is the instance default currency (l.1713). |
 | `AssetSetRiskPanel.svelte` | The lab: selection card, eligibility, holdings command, benchmark picker snippet, banner and notice, and the four sections (l.847-864). |
 | `assetSetSelection.ts` | Opening selection, persistence, bulk actions, `labBenchmarkId()`, `labL3Waits()`. |
 | `eligibility.ts` | Reads and words the engine's verdicts; batches; `fitPeriodOffer()`. |

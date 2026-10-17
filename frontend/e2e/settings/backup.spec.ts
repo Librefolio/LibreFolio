@@ -93,6 +93,7 @@ import {schemas} from '../../src/lib/api/generated';
 import {expect, test, type APIRequestContext, type Locator, type Page, type Request as PageRequest} from '../fixtures/playwright';
 import {eventSeq, waitForEvent} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {openSettingsTab} from '../fixtures/settings-tabs';
 import {TEST_ADMIN, TEST_USER} from '../fixtures/test-users';
 
 const BACKUP_API = '/api/v1/backup/instance';
@@ -260,11 +261,13 @@ test.describe('Settings › Backup — who gets the tab', () => {
         await navigateTo(page, '/settings?tab=backup');
 
         // Presence first: the bar is drawn up to its last tab everyone sees, and the page has chosen the tab it opens...
-        await expect(page.getByTestId('settings-tab-admin')).toBeVisible({timeout: PAGE_MS});
+        await expect(page.getByTestId('settings-tab-administration')).toBeVisible({timeout: PAGE_MS});
         await expect(page.getByTestId('settings-tab-profile'), '?tab=backup names no tab of this user: the first one opens').toHaveAttribute('aria-selected', 'true');
         await expect(page.getByTestId('profile-tab')).toBeVisible();
 
         // ...then the absence: the tab is left out of the bar, not hidden in it, and no backup body is drawn.
+        // «Administration» stands for Global Settings alone here (decision P13 b): no second bar, no member tab at all.
+        await expect(page.getByTestId('settings-tab-admin')).toHaveCount(0);
         await expect(page.getByTestId('settings-tab-backup')).toHaveCount(0);
         await expect(page.getByTestId('backup-tab')).toHaveCount(0);
     });
@@ -273,11 +276,11 @@ test.describe('Settings › Backup — who gets the tab', () => {
         await login(page, TEST_ADMIN);
         await navigateTo(page, '/settings');
 
-        const tab = page.getByTestId('settings-tab-backup');
-        await expect(tab).toBeVisible({timeout: PAGE_MS});
-        await expect(tab, 'precondition: /settings opens on its first tab').toHaveAttribute('aria-selected', 'false');
+        await expect(page.getByTestId('settings-tab-profile'), 'precondition: /settings opens on its first tab').toHaveAttribute('aria-selected', 'true', {timeout: PAGE_MS});
 
-        await tab.click();
+        // Backup is a member of «Administration» (decision P13 b): opened through the group, in its second bar.
+        await openSettingsTab(page, 'backup');
+        const tab = page.getByTestId('settings-tab-backup');
         await expect(tab).toHaveAttribute('aria-selected', 'true');
         await expect(page.getByTestId('backup-tab')).toBeVisible();
         await expect(page.getByTestId('backup-download-card'), 'a new tab follows no backup').toHaveAttribute('data-state', 'idle');

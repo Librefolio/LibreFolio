@@ -21,6 +21,8 @@ const REFUSAL_KEYS: Record<string, string> = {
     PASSWORD_TOO_WEAK: 'auth.validation.passwordTooWeak',
     // Email verification is required and no email with a link can go out now (workstream E)
     EMAIL_VERIFICATION_UNAVAILABLE: 'email.verification.signUpUnavailable',
+    // A new username holding an @ (A-21a): the sign-in would read it as an email address
+    USERNAME_INVALID: 'auth.validation.usernameNoAt',
 };
 
 function describeFieldErrors(errors: unknown[]): RegistrationErrorText {

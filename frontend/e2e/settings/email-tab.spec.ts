@@ -164,10 +164,12 @@ test.describe('Settings › Email — on the lane’s backend', () => {
 
         // Presence first: the bar is drawn, its right-hand group included, and the first tab a user sees (profile: the
         // registry's order, pinned by settingsTabs.test.ts) is the one open.
-        await expect(page.getByTestId('settings-tab-admin'), 'the right-hand group, where Email would stand, is drawn').toBeVisible({timeout: 10_000});
+        await expect(page.getByTestId('settings-tab-administration'), 'the right-hand group, where Email would stand, is drawn').toBeVisible({timeout: 10_000});
         await expect(page.getByTestId('settings-tab-profile'), '?tab=email names no tab of a user: the first one opens').toHaveAttribute('aria-selected', 'true');
         await expect(page.getByTestId('profile-tab')).toBeVisible();
-        // Then the absence: no Email tab in the bar, and its body never mounted.
+        // Then the absence: no Email tab in the bar, and its body never mounted. «Administration» stands for Global
+        // Settings alone here (decision P13 b): no second bar, no member tab at all.
+        await expect(page.getByTestId('settings-tab-admin')).toHaveCount(0);
         await expect(page.getByTestId('settings-tab-email')).toHaveCount(0);
         await expect(page.getByTestId('email-tab')).toHaveCount(0);
     });

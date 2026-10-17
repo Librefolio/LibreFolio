@@ -414,13 +414,18 @@ Two neighbouring labels never read the same (pinned in `chartCoreHelpers.test.ts
   count the visible window too. Time axes need none of it: ECharts spreads their `splitNumber` ticks
   over the visible extent.
 - **Arrow markers** (category axis): an overlay signal may end in an arrow
-  (`markerStart`/`markerEnd: 'arrow'`), aimed along the line's on-screen slope, which a zoom or a
-  pan can change. The settle that re-spaces the labels also re-aims the arrows, through
-  `updateArrowRotations()` (`lineChartHelpers.ts`), never on each tick, since the call reads
-  `getOption()` and writes every series back: during the gesture an arrow keeps its angle (full
-  renders and resizes still call it at once). It reads the option afresh on every call, so its
-  write-back, which carries every series' colours, never brings back those from before a theme
-  switch or a chart-colour change (pinned in `LineChart.test.ts` and `PriceChartFull.test.ts`).
+  (`markerStart`/`markerEnd: 'arrow'`), aimed along the line's on-screen slope, which a zoom, a pan
+  or a resize can change. `updateArrowRotations()` (`lineChartHelpers.ts`) reads `getOption()`, so
+  it re-aims them once a gesture or a resize pauses, in the settle that re-spaces the labels, which
+  a `dataZoom` event or a `ResizeObserver` callback re-arms instead; a full render re-aims them at
+  once, after restoring the zoom. It writes the series back only when an arrow turns by more than
+  `ARROW_ROTATE_EPSILON_DEG` (0.01°), so the stability pass after a first draw and the settle after
+  a redraw write nothing if no arrow moved. `noteArrowMarkers()`, called right after each full
+  render (`setOption(option, true)`), records whether that option draws an arrow: on a chart without
+  one (most charts), `updateArrowRotations()` returns before `getOption()`. It reads the option
+  afresh on every call, so its write-back, which carries every series' colours, never brings back
+  those from before a theme switch or a chart-colour change (pinned in `LineChart.test.ts`,
+  `PriceChartFull.test.ts`, `lineChartHelpers.test.ts` and `chartCoreHelpers.test.ts`).
 - **Right inset** (time axis, compact or wide): the axis ends on the last day of the data or of the
   zoom, and ECharts centres that day's label on its tick, so half of it overhangs the plot's right
   edge. `grid.containLabel: true` reserves the labels' height, never that overhang, so on a phone

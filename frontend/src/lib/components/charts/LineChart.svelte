@@ -23,7 +23,7 @@
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
-    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, noteArrowMarkers, updateArrowRotations} from './lineChartHelpers';
     import {toRgba} from '$lib/theme/colorAlpha';
     import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
@@ -322,7 +322,9 @@
                     renderChart();
                 }
             }
-            if (chartInstance) updateArrowRotations(chartInstance);
+            // Re-aimed once the resize settles, by the settle that re-spaces the labels, never on each callback: a re-aim
+            // deep-copies the whole option (Y-25)
+            scheduleZoomedAxisLabels(lastZoomEvent);
         } catch (_) {
             /* ignore coord errors during resize */
         }
@@ -855,6 +857,7 @@
         // (baseline coloring is handled by segmented series above)
 
         chartInstance.setOption(option, true);
+        noteArrowMarkers(chartInstance, option);
         chartOptionSet = true;
 
         // Restore zoom position if the user had zoomed/panned

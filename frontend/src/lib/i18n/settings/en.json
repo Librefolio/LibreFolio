@@ -3,7 +3,6 @@
     "profile": "Profile",
     "preferences": "Preferences",
     "about": "About",
-    "admin": "Admin",
     "profileInfo": "Profile Information",
     "profileDescription": "Manage your account details",
     "enableEditing": "Enable editing",
@@ -378,6 +377,24 @@
         "OWNER": "Owner",
         "EDITOR": "Editor",
         "VIEWER": "Viewer"
+      }
+    },
+    "administration": "Administration",
+    "tooManyPasswordAttempts": "Too many wrong passwords: wait a few minutes and try again.",
+    "securityTab": {
+      "title": "Security checks",
+      "description": "How this instance is configured, checked when Settings opens: what needs your attention comes first. «Check again» reads it anew.",
+      "allClear": "Nothing needs your attention.",
+      "passed": "{count, plural, one {# check passed} other {# checks passed}}",
+      "loadError": "The security checks could not be loaded.",
+      "retry": "Try again",
+      "refresh": "Check again",
+      "openEmail": "Open the Email tab",
+      "openPlugins": "Open the plugin settings",
+      "severity": {
+        "error": "Error",
+        "warning": "Warning",
+        "info": "Information"
       }
     }
   }

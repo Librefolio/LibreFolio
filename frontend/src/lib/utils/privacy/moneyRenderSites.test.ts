@@ -89,7 +89,21 @@ const SAFE_CALL = /formatCurrencyAmountPlain|formatCurrencyAmountHtml|formatCurr
 const FORM_A = /style\s*:\s*['"]currency['"]/;
 const TEMPLATE_LITERAL = /`[^`]*`/g;
 const INTERPOLATION = /\$\{([^}]*)\}/g;
-const I18N_CALL = /\$_\(|\$t\(|label\(/;
+/**
+ * A translation call. An interpolation holding one is not counted as a numeric token: a message key is
+ * words, and `t('dashboard.totalPnl')` would otherwise pass for an amount through `total` and `pnl`.
+ *
+ * `$_(` and `$t(` are the components' translators, `t(` the one a helper receives as a parameter
+ * (`growthChartTooltip.ts`, Y-3), `label(` the `label(key, fallback)` some components wrap around them.
+ * `\bt\(` serves `$t(` too (`$` is not a word character), so `$t(` has no alternative of its own: one
+ * beside it would be dead, and deleting it would change nothing. The `\b` keeps out the calls whose name
+ * merely ends in `t` — `format(`, `fmt(`, `parseInt(`, `split(` — which, taken for translations, would
+ * blind the gate to the very formatters it looks for.
+ *
+ * The blind spot `t(` shares with `$_(` and the others: the token is set aside whole, so a translation
+ * call carrying an amount in its `values` is not counted either.
+ */
+const I18N_CALL = /\$_\(|\bt\(|label\(/;
 /**
  * What makes a number *money* rather than a percentage or a quantity.
  *
@@ -317,6 +331,33 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
             .map((h) => h.snippet);
 
         expect(branches).toEqual(['`${sign}${symbol}${compact}`', '`${sign}${compact} ${currency}`']);
+    });
+
+    it('reads a key translated with t( as words, and still reads fmt( and format( as numbers', () => {
+        // A regression test for the gate itself, not for the product (Y-3).
+        //
+        // A helper that receives the translator as a parameter calls it `t` (`growthChartTooltip.ts`), and
+        // I18N_CALL used to know only `$_(`, `$t(` and `label(`: a key like `t('dashboard.totalPnl')` passed
+        // for an amount through `total` and `pnl`. That error made the gate stricter, never blinder, but a
+        // form that miscounts its tokens no longer says what it means. The `\b` is the other half, and the
+        // one that matters for privacy: without it every call whose name ends in `t` (`fmt(`, `format(`)
+        // would pass for a translation, and the gate would go quiet on the formatters it exists to see.
+        // Dropping the `\b` leaves all eight real hits standing (measured 17/10), so this case is the only
+        // thing that would notice it gone.
+        //
+        // Synthetic lines through the real `scanLine`, as in the two-branch case above: no file owned by
+        // another workstream decides whether this still means anything.
+        const formB = (line: string): string[] =>
+            scanLine('fixture', line, 0)
+                .filter((h) => h.form === 'B')
+                .map((h) => h.snippet);
+        const keyBesideCurrency = "return `${t('dashboard.totalPnl')}: ${currency}`;";
+        const keyBesideAmount = "return `${t('dashboard.totalPnl')}: ${formatFixed(amount, 2)} ${currency}`;";
+        const namesEndingInT = 'const a = `${fmt(value)} ${currency}`, b = `${format(value)} ${currency}`;';
+
+        expect(formB(keyBesideCurrency), 'a translation key counted as an amount: I18N_CALL does not know t( as a translation call').toEqual([]);
+        expect(formB(keyBesideAmount), 'the amount beside a translated key went unseen: the exclusion reaches past the translation call').toEqual(["`${t('dashboard.totalPnl')}: ${formatFixed(amount, 2)} ${currency}`"]);
+        expect(formB(namesEndingInT), 'fmt( and format( taken for translators: I18N_CALL lost the \\b before t(').toEqual(['`${fmt(value)} ${currency}`', '`${format(value)} ${currency}`']);
     });
 
     it('gives every registered site a reason', () => {
