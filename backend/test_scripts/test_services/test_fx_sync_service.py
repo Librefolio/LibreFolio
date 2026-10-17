@@ -6,6 +6,7 @@ Focus: pair-sync orchestration branches in services/fx/sync.py
 - sync_pairs_bulk._process_route
 - sync_pairs_bulk._compute_multi_step
 - X-R38: a rate no column can keep, in sync_pairs_bulk and ensure_rates_multi_source (see its block at the end)
+- X-R50 (E's review R13-SEC5 on X-R38): a rate whose double is 1E+14, in sync_pairs_bulk (in the X-R38 block)
 """
 
 import asyncio
@@ -344,6 +345,11 @@ class TestSyncPairsBulk:
 # raising, and logged once per sync: one warning naming the pair for all its skipped dates. Every other observation of
 # the same sync is stored. A legacy stored rate no column can keep compares as a change, so the new rate overwrites it.
 #
+# X-R50 (E's review R13-SEC5 on X-R38), measured before its cure: 99999999999999.995 has the 14 digits before the decimal
+# point X-R38 lets through, so storable_fx_rate keeps it and the sync stores it; SQLite keeps it as its double, 1E+14,
+# which every conversion skips (convert_bulk reads only 1E-10 <= rate < 1E+14). Contract (X-R50): a rate whose double is
+# 1E+14 or more is one no column can keep, skipped and logged as above.
+#
 # The pairs are this block's own (no seed and no other test uses UGX, BIF, RWF or TZS): their rates in the window and
 # their routes are wiped before and after each test. The provider is the file's MOCKFX double, a MockFXProvider whose
 # fetch answers the test's rates, behind a fetch cache of the test's own.
@@ -524,6 +530,35 @@ async def test_xr38_sync_skips_a_rate_no_column_can_keep_and_stores_the_others(m
     assert result.status != SyncStatus.FAILED, f"{story}: the pair failed, {result.errors}"
     warnings = _xr38_warnings(events, quoted)
     assert len(warnings) == 1, f"{story} logged {len(warnings)} warning(s) naming {quoted}: expected one for both skipped days (X-R38: logged once per sync): {warnings}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_pairs")
+@pytest.mark.parametrize(("pair", "delivered"), [pytest.param(XR38_DIRECT, "99999999999999.995", id="EUR-UGX-double-1E+14")])
+async def test_xr50_sync_skips_a_rate_whose_double_is_1E14_and_stores_the_others(monkeypatch, pair, delivered):
+    """Red today: EUR → UGX 99999999999999.995 has the 14 digits before the decimal point X-R38 lets through, so days 1
+    and 3 are stored, and SQLite keeps them as the double ``1E+14``: the sync reports them stored, while every conversion
+    skips them as unusable (``convert_bulk`` reads only ``1E-10 <= rate < 1E+14``) and finds no rate for those days.
+
+    Contract (X-R50), the X-R38 one for a rate no column can keep: days 1 and 3 are skipped; days 0, 2 and 4 are stored as
+    delivered; the pair does not fail; one warning, naming the pair, for both skipped days.
+    """
+    base, quote = pair
+    quoted = _xr38_quoted(pair)
+    integer_digits, double = Decimal(delivered).adjusted() + 1, float(Decimal(delivered))
+    assert integer_digits == 14 and double >= 1e14, f"barrier: {delivered} has {integer_digits} digits before the decimal point and the double {double!r}: expected the 14 X-R38 lets through and a double of 1E+14"
+    deliveries, expected = _xr38_around(pair, delivered)
+    _xr38_provider(monkeypatch, {quoted: deliveries})
+    await _xr38_route(base, quote, [(base, quote)])
+    story = f"a MOCKFX sync of {base}/{quote} delivering EUR → {quoted} {delivered} (its double {double!r}) on {XR38_DAYS[1]} and {XR38_DAYS[3]}"
+
+    result, events = await _xr38_sync(base, quote, story)
+
+    stored = await _xr38_stored(base, quote)
+    assert stored == expected, f"{story} stored {stored}: expected the three other days alone, {expected} (X-R50: skip the rate whose double is 1E+14, store the others); the pair: {result.status} {result.errors}"
+    assert result.status != SyncStatus.FAILED, f"{story}: the pair failed, {result.errors}"
+    warnings = _xr38_warnings(events, quoted)
+    assert len(warnings) == 1, f"{story} logged {len(warnings)} warning(s) naming {quoted}: expected one for both skipped days (X-R50, as X-R38: logged once per sync): {warnings}"
 
 
 @pytest.mark.asyncio

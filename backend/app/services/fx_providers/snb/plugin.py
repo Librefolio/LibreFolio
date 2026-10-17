@@ -343,7 +343,7 @@ class SNBProvider(FXRateProvider):
                     rate_per_unit = raw_rate / Decimal(str(multiplier))
                     rates.append((rate_date, iso_code, "CHF", rate_per_unit))
 
-                except (ValueError, ZeroDivisionError) as e:
+                except (ValueError, ArithmeticError) as e:  # ArithmeticError: a value that is no number, a quotient past the context, a zero multiplier: the point only (X-R50)
                     logger.debug(f"SNB: skipping invalid value {raw_value} for {date_str}: {e}")
                     continue
 

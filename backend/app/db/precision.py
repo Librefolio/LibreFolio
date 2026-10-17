@@ -271,12 +271,12 @@ def storable_fx_rate(value: Decimal) -> Optional[Decimal]:
     or 0 once truncated to its 10 decimal places (a rate is never 0: its inverse and the conversions divide by it).
     Never raises; a negative rate is the caller's business (``upsert_rates_bulk`` refuses it).
 
-    The limit is on the digits. SQLite keeps the rate as a double, so a rate a few thousandths below ``1E+14`` with more
-    digits than a double holds (``99999999999999.999``) is stored as ``1E+14``, which the reads then skip as unusable
-    (``usable_fx_rate_bounds``).
+    The double SQLite keeps must stay below ``1E+14`` too (X-R50): a rate within about 0.008 of it, with more digits than
+    a double holds (``99999999999999.995``), has 14 digits before the point but is written as ``1E+14``, which every
+    read skips as unusable (``usable_fx_rate_bounds``); it is refused here, never answered «inserted».
     """
     stored = storable_value(value, FxRate, "rate")
-    if stored is None or stored == 0:
+    if stored is None or stored == 0 or float(stored) >= float(usable_fx_rate_bounds()[1]):
         return None
     return stored
 

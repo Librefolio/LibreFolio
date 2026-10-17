@@ -63,6 +63,15 @@ value as ``truncate_fx_rate`` gives it, or None when it is not finite, has more 
 ``max_integer_digits`` gives for ``FxRate.rate`` (14), or is 0 once truncated to the 10 decimal places; a negative rate
 is the caller's business (``upsert_rates_bulk`` refuses it), not refused here; it never raises.
 
+X-R50 (E's review R13-SEC5 on X-R38): the double limit. SQLite keeps an exchange rate as a double, so a rate of 14 digits
+before the decimal point a few thousandths below ``1E+14`` is stored as ``1E+14``. Measured before the cure:
+``storable_fx_rate`` keeps it as ``truncate_fx_rate`` gives it (``float(Decimal("99999999999999.995")) == 1e14``, while
+``99999999999999.992`` is ``99999999999999.98``): a manual rate is answered «inserted» and a synced one stored, and every
+conversion then skips it (``convert_bulk`` reads only ``1E-10 <= rate < 1E+14``). The cure's contract: ``storable_fx_rate``
+also answers None when the double of the truncated rate, ``float(truncate_fx_rate(value))``, is ``1E+14`` or more; a rate
+whose double stays below it is kept as before. X-R50 reverses the X-R38 case ``14-integer-digits-cut-at-10-decimals``
+(``99999999999999.99999999999``, kept as ``99999999999999.9999999999``, whose double is ``1E+14``): it moved to the X-R50 reds.
+
 Reds fail at run time, never at collection: the column types are read from the models when a test
 runs (``Transaction.__table__.c.quantity.type``), and ``decimal_limit_issue``, ``round_computed_value``,
 ``max_integer_digits``, ``integer_digits_issue``, ``storable_value``, ``storable_fx_rate`` and ``INTEGER_DIGITS_EXCEEDED``
@@ -910,7 +919,6 @@ def test_xr38_storable_fx_rate_answers_none_for_a_rate_no_column_can_keep(typed)
         pytest.param("1.0850123456", "1.0850123456", id="10-decimals"),
         pytest.param("1.08501234567890", "1.0850123456", id="cut-at-10-decimals-round-down"),
         pytest.param("99999999999999", "99999999999999", id="14-integer-digits"),
-        pytest.param("99999999999999.99999999999", "99999999999999.9999999999", id="14-integer-digits-cut-at-10-decimals"),
         pytest.param("1E+13", "10000000000000", id="1E+13-14-integer-digits"),
         pytest.param("1E-10", "0.0000000001", id="1E-10-the-smallest-rate-kept"),
         pytest.param("0.00000000019", "0.0000000001", id="cut-to-1E-10"),
@@ -924,9 +932,73 @@ def test_xr38_storable_fx_rate_keeps_a_rate_as_truncate_fx_rate_gives_it(typed, 
     Contract (X-R38): a rate the column can keep comes back as ``truncate_fx_rate`` gives it, 10 decimal places
     ``ROUND_DOWN``, its form included. 14 digits before the decimal point and ``1E-10`` are the limits, not past them. A
     negative rate is not refused here: that is the caller's business (``upsert_rates_bulk`` refuses a rate of 0 or less).
+    X-R50 adds the double: the case ``14-integer-digits-cut-at-10-decimals`` (``99999999999999.99999999999``), whose
+    double is ``1E+14``, moved to ``test_xr50_storable_fx_rate_answers_none_for_a_rate_whose_double_is_1E14``.
     """
     found = _storable_fx_rate_never_raising(typed)
 
     truncated = precision.truncate_fx_rate(Decimal(typed))
     assert found == Decimal(expected), f"storable_fx_rate({typed}) = {found!r}: expected {expected}"
+    assert isinstance(found, Decimal) and found.as_tuple() == truncated.as_tuple(), f"storable_fx_rate({typed}) = {found!r}: expected the value as truncate_fx_rate gives it, {truncated!r}"
+
+
+# --------------------------------------------------------------------------- #
+# X-R50 (E's review R13-SEC5 on X-R38): storable_fx_rate and the double SQLite keeps
+# --------------------------------------------------------------------------- #
+
+
+def _xr50_double(typed: str) -> float:
+    """The double SQLite keeps for the rate as ``truncate_fx_rate`` gives it: ``fx_rates.rate`` is a REAL in the file."""
+    return float(precision.truncate_fx_rate(Decimal(typed)))
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        pytest.param("99999999999999.995", id="14-integer-digits-double-1E+14"),
+        pytest.param("99999999999999.9999999999", id="14-integer-digits-10-decimals-double-1E+14"),
+        pytest.param("99999999999999.99999999999", id="14-integer-digits-cut-at-10-decimals-double-1E+14-kept-by-X-R38"),
+        pytest.param("99999999999999.9921875", id="derived-halfway-below-1E+14-rounds-to-1E+14"),
+    ],
+)
+def test_xr50_storable_fx_rate_answers_none_for_a_rate_whose_double_is_1E14(typed):
+    """Red today: kept, as ``truncate_fx_rate`` gives it (``99999999999999.9950000000``): 14 digits before the decimal
+    point are the X-R38 limit, not past it. SQLite keeps the rate as a double, ``1E+14``: a manual rate is answered
+    «inserted» and a synced one stored, and every conversion then skips it as unusable (``convert_bulk`` reads only
+    ``1E-10 <= rate < 1E+14``). The case ``…-kept-by-X-R38`` is the X-R38 case ``14-integer-digits-cut-at-10-decimals``,
+    moved here from the test that keeps a rate: X-R50 reverses it.
+
+    Contract (X-R50): None, never an exception, also when the double of the truncated rate is ``1E+14`` or more. The
+    ``derived-`` case reads the same rule at its edge: halfway between the double below ``1E+14``
+    (``99999999999999.984375``) and ``1E+14``, the rate rounds to ``1E+14`` (to even).
+    """
+    integer_digits = Decimal(typed).adjusted() + 1
+    assert integer_digits == precision.max_integer_digits(FxRate, "rate"), f"barrier: {typed} has {integer_digits} digits before the decimal point, not the 14 X-R38 lets through: the digits would refuse it, not the double"
+    double = _xr50_double(typed)
+    assert double >= 1e14, f"barrier: the double of {typed}, cut to 10 decimal places, is {double!r}, below 1E+14"
+
+    found = _storable_fx_rate_never_raising(typed)
+
+    assert found is None, f"storable_fx_rate({typed}) = {found!r}: expected None, SQLite keeps it as {double!r}, a rate every conversion skips (X-R50)"
+
+
+@pytest.mark.parametrize(
+    ("typed", "expected"),
+    [
+        pytest.param("99999999999999.99", "99999999999999.99", id="14-integer-digits-double-99999999999999.98"),
+        pytest.param("99999999999999.9921874999", "99999999999999.9921874999", id="derived-just-below-halfway-double-99999999999999.98"),
+    ],
+)
+def test_xr50_guard_storable_fx_rate_keeps_a_rate_whose_double_stays_below_1E14(typed, expected):
+    """Guard: green today and after. A rate of 14 digits before the decimal point whose double stays below ``1E+14``
+    (``99999999999999.99`` is the double ``99999999999999.98``) comes back as ``truncate_fx_rate`` gives it, its form
+    included: X-R50 refuses from the double ``1E+14``, never a margin below it. The function alone, no round trip. The
+    ``derived-`` case reads the same rule at its edge, just below halfway."""
+    double = _xr50_double(typed)
+    assert double < 1e14, f"barrier: the double of {typed}, cut to 10 decimal places, is {double!r}, not below 1E+14"
+
+    found = _storable_fx_rate_never_raising(typed)
+
+    truncated = precision.truncate_fx_rate(Decimal(typed))
+    assert found == Decimal(expected), f"storable_fx_rate({typed}) = {found!r}: expected {expected}, its double {double!r} is below 1E+14 (X-R50 refuses from 1E+14 only)"
     assert isinstance(found, Decimal) and found.as_tuple() == truncated.as_tuple(), f"storable_fx_rate({typed}) = {found!r}: expected the value as truncate_fx_rate gives it, {truncated!r}"

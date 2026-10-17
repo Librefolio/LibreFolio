@@ -119,7 +119,9 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   (X-R38, the FX side of W-B58). `storable_fx_rate()` gives a rate as the column keeps it
   (`truncate_fx_rate()`, rounded down), or `None` when it is not finite, has more than 14 digits
   before the point, or is 0 once truncated (below `1E-10`): a rate is never 0, since its inverse
-  and the conversions divide by it. It counts the digits as `decimal_limit_issue()` does, so
+  and the conversions divide by it. It also refuses a rate whose double, once truncated, reaches
+  `1E+14` (X-R50): `99999999999999.995` has 14 digits before the point, but SQLite would store it
+  as `1E+14`, which the reads skip. It counts the digits as `decimal_limit_issue()` does, so
   `1E+1000000` and `1E-2000000` are refused, never an overflow or a zero; decimals are never
   refused. A manual rate (`POST /api/v1/fx/currencies/rate`) is checked as it will be stored, its
   pair in alphabetical order and the rate inverted when needed, and refused naming its pair, date

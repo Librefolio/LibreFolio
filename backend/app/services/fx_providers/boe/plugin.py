@@ -269,7 +269,7 @@ class BOEProvider(FXRateProvider):
 
                 observations.append((rate_date, self.base_currency, currency, rate))
 
-            except (ValueError, IndexError) as e:
+            except (ValueError, IndexError, ArithmeticError) as e:  # ArithmeticError: a value that is no number, the line only (X-R50)
                 logger.debug(f"Skipping invalid line in BOE response: {line[:50]}... ({e})")
                 continue
 

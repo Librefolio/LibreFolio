@@ -128,9 +128,13 @@ use, in one query for all pairs:
 - it selects plain columns (`base`, `quote`, `date`, `rate`), not ORM objects;
 - each item finds its rate with `bisect_right` over the pair's ascending dates.
 
-The limit is on the digits, as for W-B58: SQLite keeps the rate as a double, so a rate a few
-thousandths below `1E+14` with more digits than a double holds (`99999999999999.999`, accepted by the
-writers) is stored as `1E+14`, which these bounds then skip as unusable.
+The writers keep to the same upper bound (X-R50). SQLite keeps the rate as a double, so a rate within
+about 0.008 of `1E+14` with more digits than a double holds (`99999999999999.995`) has 14 digits
+before the point but would be stored as `1E+14`: `storable_fx_rate()` refuses it too, so a manual one
+is refused and a provider's skipped, as for any rate the column cannot keep (`99999999999999.99`
+stays the double `99999999999999.98` and is kept). Before, the limit was on the digits alone, as for
+W-B58: the writers accepted `99999999999999.999`, stored it as `1E+14`, and these bounds then
+skipped it as unusable.
 
 Apart from the unusable rates left out, return values and errors are those of the full-history version
 this replaced, which loaded every pair's whole history up to the latest requested date and scanned it
