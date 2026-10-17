@@ -20,6 +20,7 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
     RiskWarning,
 )
+from backend.app.services.financial_math.returns import observed_annualization
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
@@ -45,7 +46,6 @@ from backend.app.services.risk.metrics import (
     pearson_correlation,
 )
 from backend.app.services.risk.registry import RiskAnalyticRegistry
-from backend.app.services.series_preparation import observed_annualization
 
 
 @dataclass(frozen=True)

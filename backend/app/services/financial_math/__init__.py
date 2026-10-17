@@ -34,7 +34,8 @@ Modules:
   ``period_mwrr`` and ``period_mwrr_series``), the conversion between cumulative and annualized returns, a period's start (rebasing), the
   net return of a holding, a gain or loss as a fraction of its base (of one holding or a
   group), a change as a fraction of its base, the timing effect (MWRR − TWRR), the gain or loss a
-  disposal realizes, the return between two prices, and the gain that recovers a drawdown.
+  disposal realizes, the return between two prices (also as a float for a return series), the
+  observed annualization factor of a return series, and the gain that recovers a drawdown.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.
 * ``price_marks`` — the daily mark of an asset for valuation: the market quote, the
   same-day trade average, or the last observation carried forward.
