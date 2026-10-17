@@ -63,6 +63,10 @@ Modules under test: ``services/plugin_settings/resolver.py`` and ``runtime.py``,
    (patched with ``monkeypatch``) putting a secret in the URL gives ``provider_url`` ``None``, the rest of the probe
    answering.
 
+**X-R43** (workstream X): an integer past the double range no longer breaks a resolution: a variable holding one for an
+integer field is ``invalid_env`` («too large», logged without the value), a stored row holding one, for an integer or a
+number field, ``invalid_stored``. «Red today» is the state before the cure; a guard passes before and after.
+
 Pure: the rows live in a private SQLite file under ``tmp_path`` (``create_all``), reached through a private engine put
 in place of ``runtime.get_async_engine``; the instance key is a test key set with ``monkeypatch`` and the data
 directory points into ``tmp_path``; every variable a test sets goes through ``monkeypatch``; a search asks a query of
@@ -76,8 +80,11 @@ import asyncio
 import hashlib
 import hmac
 import json
+import random
+import sys
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote, quote_plus
@@ -855,6 +862,147 @@ def test_without_a_usable_key_the_fingerprint_takes_the_secret_names_never_their
     assert two == two_reversed, "the names are sorted"
     assert len({first, *others.values()}) == len(others) + 1, f"each of these must differ from the others and from {first}: {others}"
     assert len(first) == 32 and "first-secret-value" not in first
+
+
+# -----------------------------------------------------------------------------
+# X-R43: an integer past what a double holds, from a variable or a row
+# -----------------------------------------------------------------------------
+
+#: MOCKFX's integer field: ``decimals``, system, default 6, between 0 and 10.
+MOCKFX_DECIMALS = next(field for field in MockFXProvider.settings_fields if field.key == "decimals")
+#: The warning of a variable that cannot give its field a value (``resolver._warn_invalid_env``).
+INVALID_VARIABLE_EVENT = "Plugin setting variable invalid: the plugin is not configured until it is fixed"
+
+
+def _digits(count: int) -> str:
+    """``count`` random decimal digits, the first not 0: a number no message or log line can show by chance."""
+    return random.choice("123456789") + "".join(random.choices("0123456789", k=count - 1))
+
+
+def _shows_a_run_of(digits: str, text: str, width: int = 20) -> bool:
+    """Whether ``text`` holds ``width`` consecutive digits of ``digits``: the value whole, or any long piece of it."""
+    return any(digits[start : start + width] in text for start in range(len(digits) - width + 1))
+
+
+@contextmanager
+def _no_overflow(story: str) -> Iterator[None]:
+    """An ``OverflowError`` inside fails the test, naming it and what the operator then faces."""
+    try:
+        yield
+    except OverflowError as error:
+        pytest.fail(f"{story}: the resolution raised OverflowError ({error}) (X-R43): the plugin's catalogue entry and every call of it fail, where the field should be refused «too large» like any value it refuses")
+
+
+def _mockfx_decimals_variable() -> str:
+    (variable,) = env_variables("fx", "MOCKFX", MOCKFX_DECIMALS)
+    return variable
+
+
+def _mockfx_decimals(*, decrypt: bool) -> FieldState:
+    """MOCKFX's ``decimals`` as the catalogue (``decrypt=False``) or a call resolves it, without a row."""
+    states = resolve_plugin_fields("fx", "MOCKFX", MockFXProvider.settings_fields, {}, None, user_id=None, decrypt=decrypt)
+    return next(state for state in states if state.field.key == "decimals")
+
+
+def _invalid_variable_warnings(logs: list[dict]) -> list[dict]:
+    return [entry for entry in logs if entry["event"] == INVALID_VARIABLE_EVENT]
+
+
+@pytest.mark.parametrize("sign", ["", "-"], ids=["positive", "negative"])
+def test_an_integer_variable_past_the_double_range_is_invalid_env_not_an_overflow(sign: str, monkeypatch: pytest.MonkeyPatch):
+    """Red today (X-R43): ``OverflowError``. ``int()`` reads the 401 digits, the finiteness check of ``validate_value``
+    cannot convert them to a double, and ``_from_environment`` catches ``SettingValueError`` only: an operator who puts
+    such a number in MOCKFX's ``decimals`` variable breaks MOCKFX — its catalogue entry and every call of it raise.
+
+    Contract: as any invalid value of a variable: ``invalid_env`` — ``source`` env, locked, no value —, MOCKFX not
+    configured (its default never stands in), one warning naming the variable and the reason «too large», never the value."""
+    print_section(f"X-R43: MOCKFX decimals set by its variable to {'minus ' if sign else ''}401 digits")
+    variable, digits = _mockfx_decimals_variable(), _digits(401)
+    monkeypatch.setenv(variable, sign + digits)
+
+    with capture_logs() as logs, _no_overflow(f"{variable} holding {sign}<401 digits>"):
+        for_the_catalogue = _mockfx_decimals(decrypt=False)
+        for_a_call = build_bound_settings("fx", "MOCKFX", MockFXProvider.settings_fields, {}, None, user_id=None)
+
+    assert _summary(for_the_catalogue) == ("env", None, True, True, variable, "invalid_env"), _summary(for_the_catalogue)
+    assert for_a_call.missing == ("decimals",) and "decimals" not in for_a_call.plain_values(), "MOCKFX is not configured until the variable is fixed: its default never stands in"
+    warnings = _invalid_variable_warnings(logs)
+    assert [(entry["variable"], entry["family"], entry["plugin"], entry["field"]) for entry in warnings] == [(variable, "fx", "MOCKFX", "decimals")], f"one warning, naming the variable: {warnings}"
+    assert "too large" in warnings[0]["reason"], f"the warning must say why: {warnings[0]}"
+    assert not _shows_a_run_of(digits, repr(logs)), "a log line shows the variable's value"
+    print_success(f"invalid_env, MOCKFX not configured, the warning says {warnings[0]['reason']!r}")
+
+
+def test_an_integer_variable_longer_than_int_reads_is_already_invalid_env(monkeypatch: pytest.MonkeyPatch):
+    """Guard: green today and after (X-R43). Past ``sys.get_int_max_str_digits()`` digits — 4300 by default, so 4301
+    here — ``int()`` refuses the text itself: «expected a whole number», ``invalid_env``, the value in no log line."""
+    limit = sys.get_int_max_str_digits()
+    assert limit > 0, "barrier: this process puts no limit on int(), so no text is too long for it"
+    variable, digits = _mockfx_decimals_variable(), _digits(limit + 1)
+    monkeypatch.setenv(variable, digits)
+
+    with capture_logs() as logs:
+        state = _mockfx_decimals(decrypt=False)
+
+    assert _summary(state) == ("env", None, True, True, variable, "invalid_env"), _summary(state)
+    assert [entry["reason"] for entry in _invalid_variable_warnings(logs)] == ["expected a whole number"]
+    assert not _shows_a_run_of(digits, repr(logs)), "a log line shows the variable's value"
+
+
+def test_a_number_variable_of_401_digits_is_already_not_finite(monkeypatch: pytest.MonkeyPatch):
+    """Guard: green today and after (X-R43). A number field reads its variable with ``float()``: 401 digits give
+    ``inf``, refused «expected a finite number» — ``invalid_env``, the value in no log line. X-R43 changes nothing here."""
+    variable, digits = "LIBREFOLIO_PLUGIN_ASSET_LAB_TOLERANCE", _digits(401)
+    monkeypatch.setenv(variable, digits)
+
+    with capture_logs() as logs:
+        state = _resolve(decrypt=False)["tolerance"]
+
+    assert _summary(state) == ("env", None, True, True, variable, "invalid_env"), _summary(state)
+    assert [entry["reason"] for entry in _invalid_variable_warnings(logs)] == ["expected a finite number"]
+    assert not _shows_a_run_of(digits, repr(logs)), "a log line shows the variable's value"
+
+
+@pytest.mark.parametrize(
+    ("key", "sign", "default"),
+    [
+        pytest.param("limit", "", 10, id="a-users-integer"),
+        pytest.param("tolerance", "-", 0.5, id="the-instances-number-negative"),
+    ],
+)
+def test_a_row_holding_an_integer_past_the_double_range_counts_as_unset(key: str, sign: str, default: object):
+    """Red today (X-R43): ``OverflowError``. ``json.loads`` reads the 401 digits whole, the finiteness check of
+    ``validate_value`` cannot convert them to a double, and ``_from_row`` catches ``ValueError`` and ``SettingValueError``
+    only: the catalogue and every call of the plugin raise. Only a write behind the API's back stores such a row (an
+    edit of the database, a restore); a number field is reached too, since JSON gives it an int.
+
+    Contract: like any row the field refuses now: unset, ``invalid_stored``, the default standing in, the row's date
+    kept — for the catalogue and for a call."""
+    print_section(f"X-R43: a stored {key} of {'minus ' if sign else ''}401 digits")
+    scope = next(field.scope for field in LAB_FIELDS if field.key == key)
+    row = _plain(int(sign + _digits(401)))
+    system, user = ({key: row}, {}) if scope is SYSTEM else ({}, {key: row})
+
+    with _no_overflow(f"a stored {key} of {sign}<401 digits>"):
+        for_the_catalogue = _resolve(system, user, decrypt=False)[key]
+        for_a_call = build_bound_settings("asset", "lab", LAB_FIELDS, system, user, user_id=1)
+
+    assert _summary(for_the_catalogue) == ("default", default, False, False, None, "invalid_stored"), _summary(for_the_catalogue)
+    assert for_the_catalogue.updated_at == STAMP, "the row's date is kept for the interface"
+    assert for_a_call.plain_values()[key] == default, "a call gets the default in place of the row"
+    print_success(f"{key}: invalid_stored, the default {default} standing in")
+
+
+def test_a_row_holding_more_digits_than_json_reads_already_counts_as_unset():
+    """Guard: green today and after (X-R43). Past ``sys.get_int_max_str_digits()`` digits ``json.loads`` refuses the
+    row with a ``ValueError``, which ``_from_row`` catches: ``invalid_stored``, the default standing in."""
+    limit = sys.get_int_max_str_digits()
+    assert limit > 0, "barrier: this process puts no limit on int(), so no row is too long for json.loads"
+    row = StoredValue(_digits(limit + 1), None, None, STAMP)
+
+    state = _resolve(user={"limit": row})["limit"]
+
+    assert _summary(state) == ("default", 10, False, False, None, "invalid_stored"), _summary(state)
 
 
 # =============================================================================
