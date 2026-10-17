@@ -86,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- AI Export: when a value is unavailable in every row of a table, the prompt now names that column right after the table instead of leaving it out silently, so the AI can tell missing data from data that isn't part of the export.
 - A user's base currency is saved only as an ISO 4217 code, and a refused currency now names the ISO code it stands for (`'840'`: USD).
 - Requests that save a currency accept only ISO 4217 alphabetic codes; names such as "Euro" or numeric codes such as "978" are refused (422). Stored data is read as before.
 - After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
