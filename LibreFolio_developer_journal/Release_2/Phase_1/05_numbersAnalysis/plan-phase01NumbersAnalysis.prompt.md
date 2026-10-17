@@ -5116,3 +5116,28 @@ prossimo checkpoint.
   `check_source_paths.py`: 7 percorsi mancanti, tutti di altre pagine (preesistenti), nessuno dei miei.
 - **Checkpoint CP-14b consegnato (17/10 ~05:30)**: FROZEN. Bozza: `files/j/cp14b/handoff_draft.md`. Dopo
   l'aggiornamento della base (≥ `aca75c7ca`): la sonda MF-D2 nello slot, poi F5 (W rivede), poi J-43.
+- ✅ **CP-14b committato e base aggiornata** (coordinatore): `69cc2faac` (SI), `35f8495ff` (misura), `a61119172`
+  (diario); merge `c387f2054` = CP-14b + dev `a3662b3ef` (MF-D1/D2, X-R52, Y R17). Unico conflitto `devWiki/index.md`,
+  per unione. Nessuna migrazione nuova.
+- ✅ **Slot 1 di CP-14b (05:29–05:40, su `c387f2054`)**, `files/j/cp14b/slot.sh`.
+  > **Note implementazione**:
+  > - Leggeri: `services financial-math` **851** (dev ha aggiunto i test di MF-D1), `utils day-count` **43**,
+  >   `services synthetic-yield` **24**, `synthetic-yield-integration` **15**, `front-utility core-unit MeasureSignal`
+  >   **43**, `dev.py front check` **0 errori, 0 avvisi**.
+  > - Fumo: `api parametric-provider-semantics` **2**, E2E `front-asset asset-modal` **21**.
+  > - **Sonda MF-D2** (`files/j/mfd2/`: `probe.sh`, `analyze.py`, `snapshot_detail.py`, `blocks.py` e i log; copia
+  >   privata, utente alfy, Data, i due casi di MF-E1 `portfolio/broker.overview_and_history` 1Y standard): 2/2 misurati,
+  >   0 fallimenti, scansione dei segreti passata, copia invariata.
+  >   - Versioni: `portfolio.drawdown_summary` 2, `portfolio.asset_drawdown_snapshot` 2, `broker.drawdown_summary` 2
+  >     (`asset.drawdown_summary` non è in questi casi).
+  >   - Resa compatta: 0 YAML di ripiego. Equivalenza UI/sonda: stringa e byte UTF-8 esatti.
+  >   - **I due prompt sono identici byte per byte a quelli di MF-E1** (v1, stessa copia, stesso giorno): il salto di
+  >     versione non cambia nessun byte copiato.
+  >   - Canonico: i due `drawdown_summary` identici a v1; `asset_drawdown_snapshot` 18 foglie diverse, tutte rumore di
+  >     virgola mobile (|Δ| ≤ 1,1e-15, relativo ≤ 3,8e-14): più di «un ulp» sul valore finale, perché l'ulp del
+  >     rendimento giornaliero si accumula sulla serie di un anno e la sottrazione del drawdown lo amplifica; sotto la
+  >     precisione resa.
+  >   - I 2 `remaining_to_peak_ratio` null sono righe `status: unavailable` (tutti e tre i rapporti null, uguali in v1);
+  >     nessuna riga reale arriva alla perdita totale, quindi il ramo nuovo di D2 lo provano solo i test di MF.
+  >   - **MF-D2 chiusa senza reperti.**
+  > - Porte 6185 e 6195 libere alle 05:40.
