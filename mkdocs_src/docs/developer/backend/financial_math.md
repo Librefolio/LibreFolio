@@ -293,7 +293,7 @@ version are not comparable, which is not the same as a difference.
 - **Why:** a manifest written by hand, or damaged, could otherwise make `_canonical()` write an
   exponent out in full; `"1E+50000000"` alone costs about 121 MB.
 - **Round trip:** it holds for every total within that bound, and every ledger the database can
-  hold stays within it (amounts `Numeric(18, 6)`, quantities `RealDecimal(22, 10)`).
+  hold stays within it (amounts `RealDecimal(18, 6)`, quantities `RealDecimal(22, 10)`).
 
 What the totals promise their caller:
 

@@ -4522,7 +4522,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Deciso (coordinatore, 05:00)**: N67 ritirato, **P8 resta**. B-27 è chiuso come «non da fare, P8» (nel backlog con
 > ✅ e la nota) e va nell'elenco del developer solo come nota. Si procede con (a), l'analisi di B-28.
 
-### B-28 — i trigger del DB caricato durante il controllo (2026-10-17, 05:00-05:50) ✅ — 🧊 FROZEN, checkpoint pronto
+### B-28 — i trigger del DB caricato durante il controllo (2026-10-17, 05:00-05:50) ✅ — entrato in dev `01f36e79d`
 
 > Sola lettura, HEAD `8b15a6c6c` pulita.
 >
@@ -4659,6 +4659,139 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Verdi della doc (05:46-05:48)**: build rigorosa exit 0, check-links valido, `gate-docs-links` 63.
 >
 > **Backlog**: B-28 chiuso con ✅. **Checkpoint (05:50)**, col blocco del CHANGELOG. 🧊 FROZEN.
+
+### B-29 — un totale della copia che J non rilegge (2026-10-17, 05:50-06:10) ✅ — 🧊 FROZEN, checkpoint pronto
+
+> **B-28 entrato (coordinatore, 05:49)**: commit `9403ecda0`, `fe1183750` e `910e185b6`; dev `01f36e79d`; il CHANGELOG
+> 🔒 in `1c2bac918`. HEAD portata in avanti a **`1c2bac918`**, pulita. Il via è per **B-29**: prima il rosso, poi
+> `current` letto dentro un `try` che risponde `unreadable`, con run leggeri nella corsia. Poi **B-16** (l'overlay che
+> aspetta per sempre dopo «Restore and restart»), salvo una decisione del developer, altrimenti **B-9**. Un checkpoint
+> per lotto.
+>
+> **Il difetto** (E, R13-SEC2; nel backlog come B-29): in `compare_totals`, `ControlTotals.from_json(current)` sta fuori
+> dal `try`. `to_json` di J scrive testo semplice: un importo esatto ma enorme, come 1E+70, diventa 71 cifre, oltre le
+> 60 che `from_json` accetta (J-27). Il `ValueError` esce, e il controllo finisce `stage_failed`.
+>
+> **Il contratto** (al test-author TA-B, 05:52):
+>
+> - `current` rifiutato da J → `unreadable`, senza differenze, conteggio 0, nessuna eccezione;
+> - un WARNING «The control totals of the copy cannot be read: they are not compared», senza valori;
+> - l'ordine delle decisioni resta: assente → `absent`; `other_version`; registrato rifiutato da J → `absent`; `current`
+>   None → `unreadable`; **`current` rifiutato da J → `unreadable`** (nuovo); poi `same` o `changed`.
+>
+> I test vanno in `test_backup_totals.py`. Facoltativo, se semplice: un caso di staging con un registro che J scrive
+> oltre 60 cifre.
+>
+> **Rossi (TA-B, 05:58)**:
+>
+> - `test_backup_totals.py`: 4 casi di `current` rifiutato da J (61 cifre, un esponente, una riga che non è un oggetto,
+>   una riga senza importo), più una riga in `DECISIONS`; più due guardie che `absent` vince;
+> - `test_backup_staging.py`: il caso facoltativo, un registro con una quantità esatta 1e70 che J scrive in 71 cifre.
+>
+> Eseguiti alle 06:00: totali 5 falliti e 86 passati, staging 1 fallito e 160 passati.
+>
+> **Gravità, da TA-B**: il crollo richiedeva totali registrati che J legge accanto a una copia che J non rilegge, cioè
+> un manifesto riscritto. Il manifesto non è nella sua lista di checksum, e un backup vero registra la stessa riga: lì
+> vince `absent`. La sorgente realistica è `transactions.quantity` (`RealDecimal`, rilegge esatto un double) di un DB
+> 1.2 o modificato a mano.
+>
+> **Codice (06:02)**: `apply_b29.py`; ruff e black puliti. **Verdi**: `backup-totals` 91, `backup-staging` 161,
+> `backup-apply` 228.
+>
+> **Doc (06:05)**: una frase in `security.md`, nel paragrafo dei totali (la copia passa dallo stesso lettore, e diventa
+> `unreadable`). In `backup_restore.en.md` gli esiti elencano già «unreadable». Build rigorosa exit 0, check-links
+> valido, `gate-docs-links` 63.
+>
+> **Backlog**: B-29 chiuso con ✅. **Checkpoint (06:10)**. 🧊 FROZEN. Il prossimo è B-16, con l'analisi prima.
+
+### B-16 — l'overlay che aspetta per sempre (2026-10-17, 06:10-06:35) ✅ — 🧊 FROZEN, checkpoint pronto
+
+> **B-29 entrato (coordinatore, 06:09)**: il fix è `c96861834`; dev `006773c99`; nessuna riga nel CHANGELOG. HEAD
+> portata in avanti a **`abf8391fb`**, pulita. Via all'analisi di B-16.
+>
+> **Stato reale** (`restoreFlow.svelte.ts`, `RestartOverlay.svelte`):
+>
+> - dopo «Restore and restart» le sonde girano ogni `pollMs`;
+> - con il server sempre su, l'esito si legge dopo `fastRestartMs` (30 s). Se lo stato è ancora `pending`, `#settle`
+>   risponde «non ancora» a ogni sonda, all'infinito;
+> - `slow` scatta solo col server **giù** da `slowAfterMs` (60 s), e l'overlay mostra `restart-slow` («has not come
+>   back yet»);
+> - con il server che non scende mai, l'overlay dice «LibreFolio is restarting» per sempre, senza un suggerimento e
+>   senza un modo di uscire, se non ricaricare la pagina. Il pulsante `restart-back` («Back to Backup», che chiama
+>   `controller.load()`) c'è solo negli esiti falliti.
+> - Il test fissato «up all along, the restore still pending at the fast read: keep waiting and probing»
+>   (`restoreFlow.test.ts:1754`) chiede solo `waiting` e le sonde che continuano: un segnale in più lo estende, non lo
+>   cambia.
+>
+> **La decisione da prendere** (sul comportamento; P8 non la tocca: è un fallimento, che P8 vuole sulla stessa
+> schermata e col motivo):
+>
+> - **(A)** solo un suggerimento: un flag `notStopping`, vero se il server non è mai sceso e lo stato è ancora
+>   `pending` oltre `slowAfterMs` dalla richiesta di riavvio. L'overlay mostra un avviso (`restart-not-stopped`): «LibreFolio
+>   has not stopped. If it does not restart by itself, restart it yourself: the restore is applied at that start.» Le
+>   sonde continuano, e quando il server scende e risale tutto va come oggi;
+> - **(B)**, la mia proposta: (A) più `restart-back` in quello stato. «Back to Backup» porta alla scheda col ripristino
+>   in attesa, dove ci sono già «Restart now» e «Cancel the restore»: una via d'uscita senza ricaricare. Le sonde si
+>   fermano solo quando si preme;
+> - **(C)** chiudere come `still_pending` (un motivo nuovo, `not_stopped`) e smettere di sondare. Cambia il test fissato,
+>   e perde un arresto lento che arriva dopo.
+>
+> **Superfici (B)**, tutte di B:
+>
+> - `restoreFlow.svelte.ts`: il flag, azzerato da `load()` e dal server visto giù;
+> - `RestartOverlay.svelte`: l'avviso, `data-not-stopping`, il pulsante;
+> - `RestoreCard.svelte`, per passare il flag;
+> - una chiave i18n in 4 lingue;
+> - i test: Vitest su `restoreFlow` (flag, sonde, back) e su `RestartOverlay` (avviso e pulsante);
+> - la guida: la riga dei problemi «resta su "is restarting"» (oggi «riavvialo a mano»), che ora la pagina dice da sé.
+>
+> Niente E2E (servirebbe l'orologio finto di Playwright per 60 s): bastano i Vitest con i timer finti. Quindi niente
+> slot. Costo piccolo.
+>
+> **Decisione (coordinatore, 06:11)**: **(B)**, col mio testo per l'avviso. Le sonde continuano finché non si preme il
+> pulsante, e un arresto tardivo procede come oggi. Si usano i ruoli e il pulsante che esistono già: nessuna classe di
+> colore nuova, e `theme-roles --check` deve restare pulito. Prima i rossi (Vitest coi timer finti), solo run leggeri,
+> poi il checkpoint. Nel CHANGELOG una riga 🐛 breve.
+>
+> **Rossi in scrittura (06:15)**: il contratto congelato è in `files/b16-test-brief.md`; TA-F scrive §4.
+>
+> Il codice è pronto fuori dal worktree: `files/b16-wip/apply_b16.py`, 19 operazioni, `--check` verde.
+>
+> - Il flag `notStopping` si azzera dove si azzera `slow`: `load()`, `#restart` e ogni esito di `#settle`. Si azzera
+>   anche quando una sonda trova il server giù.
+> - Diventa vero solo in fondo al ramo «su» di `#probe`, quando l'attesa continua: il server mai visto giù, e
+>   `slowAfterMs` passato dalla richiesta.
+> - Nell'overlay, l'avviso è copiato da `restart-slow` (stessi ruoli warning) e il pulsante è identico a quello degli
+>   esiti falliti. Nessuna classe nuova.
+> - La chiave i18n è in 4 lingue, nel tono dell'avviso `slow` di ciascuna.
+>
+> **Rossi (TA-F, 06:17; eseguiti alle 06:19)**:
+>
+> - `restoreFlow.test.ts`: 9 test e 12 casi, coi tempi del file: sonda ogni 200 ms, lettura veloce da 3 s,
+>   `slowAfterMs` 6 s;
+> - `RestartOverlay.test.ts`: 5 test;
+> - `RestoreCard.test.ts`: 1 test, che passa dal vero controller con l'API finta;
+> - `restoreI18n.test.ts`: 1 test.
+>
+> Esito: 18 falliti e 336 passati, più 1 fallito e 53 passati sulla card. Il caso fissato è intatto.
+>
+> **⚠️ Fuori pista, da TA-F**: se `slowAfterMs` fosse minore di `fastRestartMs` (non con i valori di default), la mia
+> condizione accenderebbe l'avviso prima di aver letto un esito. Corretta prima di applicare: `fast && …` (la lettura
+> veloce c'è stata, e il server non è mai sceso). Il conteggio parte dalla risposta che accetta il riavvio, non
+> dall'invio: lo dice anche la nota del backlog.
+>
+> **Codice (06:21)**: `apply_b16.py`, 19 operazioni. Prettier pulito; `i18n build` e `i18n check` (4971 chiavi,
+> rigoroso); `theme-roles --check` pulito.
+>
+> **Verdi (06:22-06:26)**: Vitest 354 sui tre file e 54 sulla card; gate dei colori 215; `front check` 0 errori e 0
+> avvisi.
+>
+> **Doc (06:27)**: in `backup_restore.en.md` il punto «It takes long» e la riga dei problemi ora citano l'avviso nuovo e
+> **Back to Backup** (che porta a **Restart now and restore** e **Cancel the restore**). Build rigorosa exit 0,
+> check-links valido, `gate-docs-links` 63.
+>
+> **Backlog**: B-16 chiuso con ✅. Aggiunti gli SHA ai chiusi di oggi: B-21..B-26 `964ecf434`, B-28 `9403ecda0`, B-29
+> `c96861834`.
 
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 

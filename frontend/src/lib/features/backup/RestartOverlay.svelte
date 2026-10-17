@@ -15,13 +15,15 @@
         outcome: RestartOutcome;
         /** The server has been away for a while: say how to start it again. */
         slow?: boolean;
+        /** The server never stopped, and the restore still waits (B-16): say how to restart it, and offer the way back. */
+        notStopping?: boolean;
         /** The status read once the server came back: its `reason` (rolled back) or `waiting` (not applied). */
         status?: RestoreStatus | null;
         /** Back to the Backup tab, with the status read again. */
         onBack: () => void;
     }
 
-    let {outcome, slow = false, status = null, onBack}: Props = $props();
+    let {outcome, slow = false, notStopping = false, status = null, onBack}: Props = $props();
 
     const reason = $derived(status?.reason ?? null);
     const waiting = $derived(status?.waiting ?? null);
@@ -30,7 +32,7 @@
 </script>
 
 <ModalBase open zIndex={80} maxWidth="md" closeOnBackdropClick={false} closeOnEscape={false} labelledBy="restart-overlay-title" trapFocus>
-    <div class="space-y-4 p-5 text-lf-primary" data-testid="restart-overlay" data-outcome={outcome} data-slow={slow ? 'true' : 'false'} data-reason={reason ?? ''} data-waiting={waiting ?? ''}>
+    <div class="space-y-4 p-5 text-lf-primary" data-testid="restart-overlay" data-outcome={outcome} data-slow={slow ? 'true' : 'false'} data-not-stopping={notStopping ? 'true' : 'false'} data-reason={reason ?? ''} data-waiting={waiting ?? ''}>
         {#if failed}
             <h2 id="restart-overlay-title" class="flex items-center gap-2 text-base font-semibold">
                 <TriangleAlert class="shrink-0 text-lf-warning" size={20} aria-hidden="true" />
@@ -54,6 +56,15 @@
                     <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
                     <span>{$_('backup.restore.restart.slow')}</span>
                 </p>
+            {/if}
+            {#if notStopping}
+                <p class="flex items-start gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" data-testid="restart-not-stopped">
+                    <TriangleAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
+                    <span>{$_('backup.restore.restart.notStopped')}</span>
+                </p>
+                <button class="inline-flex items-center gap-2 rounded-lg border border-lf-subtle px-4 py-2 text-sm text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" type="button" data-testid="restart-back" onclick={onBack}>
+                    {$_('backup.restore.restart.back')}
+                </button>
             {/if}
         {/if}
     </div>
