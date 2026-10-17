@@ -6382,6 +6382,16 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - **Proposta**: registrare nel log, e nelle metriche dell'elemento, il codice d'uscita del figlio (negativo = il
     segnale) e il picco di memoria osservato. Alla prossima caduta, il triage con la skill `test-triage`. Il file è dei
     Tools: lotto piccolo, d'accordo col proprietario del runtime.
+  - ✅ 17/10, **strumentazione fatta** (J; via del coordinatore, `schemas/tools.py` ed `executor.py` a J per il lotto).
+    - `ToolItemMetrics.worker_exit_code`: lo stato d'uscita del worker caduto, letto prima della pulizia che lo
+      segnalerebbe (attesa di raccolta 0,5 s): il codice, o il segnale in negativo (−9 = SIGKILL, come l'OOM killer
+      del kernel). È null per ogni altro esito, e per una caduta vista col figlio ancora vivo.
+    - Il padre scarta un valore mandato dal worker.
+    - Una riga `Tool worker crashed` (identificativi, stato d'uscita, memoria, tempo; mai input né risultato).
+    - Il picco di memoria era già nelle metriche (`resources.memory`).
+    - 7 test in `tools-lifecycle`: 23, −9, figlio vivo → null, la riga di log, più i controlli.
+    - **Resta aperta la causa**: alla prossima caduta, il triage con questi dati (skill `test-triage`). Dettagli:
+      piano 05, §10 «J-42 e J-19».
 - ✅ **J-20 · `AllocationItem.value` si dice «0-100» ma con la liquidità negativa esce da quei limiti** — minimo,
   chiarezza (contratto dell'API); segnalata da Y (Y10, decisione 49) tramite il coordinatore, 16/10.
   `backend/app/schemas/portfolio.py:79` descrive `value` come «Percentage share (0-100)»: con la liquidità negativa le
@@ -6667,10 +6677,19 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     average_before_the_other` e `test_auto_then_manual_on_one_key_each_row_keeps_its_own_cost`
     (`services transaction-cost-basis-rule`). La variante del modale bulk non può più accadere: nessuna riga resta
     senza costo. Nessun codice da J. Vicina ma diversa: **J-57**. Dettagli: piano 05, §10 «J-41».
-- **J-42 · Il rapporto di uno SPLIT non è mai validato** — basso, numeri; test-author di J, 17/10, letto nel codice.
+- ✅ **J-42 · Il rapporto di uno SPLIT non è mai validato** — basso, numeri; test-author di J, 17/10, letto nel codice.
   Area di X. Un rapporto 0 o negativo si salva (P-10 lascia passare la modifica, il tipo non cambia). Quando una
   transazione lo lega, il motore solleva `ValueError` (`engine.py:226-227`) e il rapporto della Dashboard risponde
   500. `is_valid_split_ratio` della casa (`splits.py`) esiste già. **→ X** (coordinatore, 17/10).
+  - ✅ 17/10: già fatta, nessun codice da J (tornata da X a J il 17/10, verificata).
+    - La scrittura è **X-R47** (`5f68a8db0`): `bulk_upsert_events` → `_reject_invalid_split_ratios` con
+      `is_valid_split_ratio`. Copre ogni modo di scrivere uno SPLIT a mano, anche una modifica che tiene il tipo e
+      che P-10 lascia passare, con un 400 `EVENT_INVALID_SPLIT_RATIO` tradotto in 4 lingue; un aggiornamento del
+      provider lo scarta.
+    - La lettura è **MF-D4**: un rapporto salvato non valido conta come mancante e non fa più rispondere 500, con
+      l'avviso `INVALID_SPLIT_RATIO`.
+    - Verdi su HEAD: `services event-split-ratio` 78, `roi-fifo-utils -k invalid_split` 69. Dettagli: piano 05, §10
+      «J-42 e J-19».
 - ✅ **J-43 · L'avviso delle quote diverse fra le due gambe di un trasferimento tace se cadono lo stesso giorno** —
   minimo, qualità dei dati; MF (MF-J4), assegnata a J dal coordinatore il 17/10, dopo CP-14b.
   - In `financial_math/portfolio/classifier.py:131-149` l'avviso `share mismatch` sta dentro il ramo
