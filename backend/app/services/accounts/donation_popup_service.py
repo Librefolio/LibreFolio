@@ -22,6 +22,7 @@ API response and must never be added to .env.example or the docs.
 from datetime import datetime
 from typing import Optional
 
+from backend.app.config import get_settings
 from backend.app.config.accounts import donation_popup_disabled
 from backend.app.db.models import User
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
@@ -33,10 +34,11 @@ MAX_DAYS_WITHOUT_PROMPT = 60
 
 def is_donation_popup_disabled() -> bool:
     """
-    Hidden switch — LIBREFOLIO_DISABLE_DONATION_POPUP, read in backend.app.config.accounts
-    (never part of Settings/.env.example).
+    Whether the popup never shows: always on a managed instance (F05, D-A8: a hosting provider's customers get no
+    invitation to donate, whatever the hidden switch says); on a self-hosted one, the hidden switch
+    LIBREFOLIO_DISABLE_DONATION_POPUP, read in backend.app.config.accounts (never part of Settings/.env.example, D-A7).
     """
-    return donation_popup_disabled()
+    return get_settings().LIBREFOLIO_PROFILE == "managed" or donation_popup_disabled()
 
 
 def should_show_donation_popup(

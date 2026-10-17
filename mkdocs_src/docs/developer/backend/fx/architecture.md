@@ -137,7 +137,9 @@ included, that each would build; a conversion that starts after the cut counts z
 signals still run on an empty series. At the end of a conversion, a running total over
 `MAX_BULK_ITEM_DAYS` (5,000,000) gets a 422
 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`, `item_days` being the
-count through that conversion: more than the budget, a lower bound of the request's total. No item
+count through that conversion: more than the budget, a lower bound of the request's total. The
+`message` says so, «this one would build at least N» (`bulk_too_many_days_detail()` with
+`at_least=True`), where the price route's says «would build N»: its count is exact. No item
 is built or converted until the whole request is within the budget; only then are the planned
 blocks expanded day by day, in request order and each conversion's daily items before its signal
 items, and converted in one `convert_bulk()` call. A refused request costs its planning, not its

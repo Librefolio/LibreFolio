@@ -5,19 +5,26 @@
  *
  * `backend/app/services/financial_math/` is the one home of LibreFolio's financial calculations (developer decision of
  * 2026-10-11, decision 10). The frontend shows the fields the backend computes — cost, P&L, capital, NAV, returns, FX
- * value, yields — and computes none of them. The only exceptions are the interactive measures, which work on what the
- * user does on the chart and so have no backend field to read:
+ * value, yields — and computes none of them. The only exceptions are the interactive measures, which the user shapes on
+ * a chart or a table and so have no backend field to read:
  *   - the measuring tool (R18, `MeasureSignal.ts`): Δ, Δ% and annualized between the two points the user picks;
  *   - the what-if curves of the synthetic benchmarks (R19, `CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`),
- *     drawn from the parameters the user sets.
+ *     drawn from the parameters the user sets;
+ *   - the lot aggregates of developer decision D-MF6(b) (`plan-phase01FinancialMath.prompt.md:381`), over the lots the
+ *     user chooses: the footer of the lots table — a table, not a chart — over the rows the user selects, else those the
+ *     filters leave visible (`unifiedLotsTableHelpers.ts`, fed by `DataTable.svelte`); the aggregate of the lots
+ *     selected in the comparison chart (`lotComparisonChartHelpers.ts`); and the WAC chart's percentage view, its value
+ *     series rebased on the first known value (`lotWacPriceChartHelpers.ts`).
  *
  * Each exception must be declared where it lives. The documentation named the four files while the code declared none
  * of them (plan 43, `plan-phase00FinancialMathHome.prompt.md:1494`): this gate was written red against that state, and
- * keeps the declarations and the code in step from then on.
+ * keeps the declarations and the code in step from then on. The three lot modules joined the list the same way (Y12b,
+ * P5): red while they computed their aggregates undeclared. (C) cannot find them — a sum, a weighted average or a
+ * rebase raises nothing to 365 — so the list alone holds them to their declaration.
  *
  * The rule lives in `.github/instructions/frontend.instructions.md` («Financial numbers»),
  * `.github/instructions/financial-math.instructions.md` (rule 6) and `mkdocs_src/docs/developer/backend/financial_math.md`
- * (rule 6, which names the four files).
+ * (rule 6, which names every declared file).
  *
  * ## The rule, as this file checks it
  *
@@ -33,27 +40,37 @@
  * (B) Marked → declared. No other source contains the string `@financial-math-exception`, in a comment, a string or
  *     code. The tag is not self-service: an exception is added on purpose, by extending DECLARED_EXCEPTIONS.
  * (C) Annualization by exponent only where declared. A power whose exponent holds the number 365 — `Math.pow(base, e)`,
- *     `base ** e`, `x **= e` — appears in declared files only: raising a growth factor to 365/days, or a daily one to
- *     365, annualizes a return, and returns are the backend's (`financial_math/returns.py`). The powers are found on the
- *     syntax tree — TypeScript's for a module, Svelte's for a component (module script, instance script and every
- *     expression of the markup) — so a comment, a string or a KaTeX formula (`MeasurePanel`'s `^{\frac{365}{d}}`) is
- *     never taken for one, and a base never lends its commas or its 365 to the exponent. 365 counts as a number of its
- *     own: `365 / d`, `1 / 365` and `365.25` hold it, `3650` does not.
+ *     `base ** e`, `x **= e` — appears only in the declared files whose entry says `annualizes: true`: raising a growth
+ *     factor to 365/days, or a daily one to 365, annualizes a return, and returns are the backend's
+ *     (`financial_math/returns.py`). A declaration is no licence to annualize (Y-29): an exception that annualizes says
+ *     so on purpose — today `MeasureSignal` (the ruler's Δ%/yr) and `CompoundSignal` (the compound curve's daily factor)
+ *     — and a declared file that does not stays under (C), as the lot modules do: they sum, average and rebase. The
+ *     powers are found on the syntax tree — TypeScript's for a module, Svelte's for a component (module script, instance
+ *     script and every expression of the markup) — so a comment, a string or a KaTeX formula (`MeasurePanel`'s
+ *     `^{\frac{365}{d}}`) is never taken for one, and a base never lends its commas or its 365 to the exponent. 365
+ *     counts as a number of its own: `365 / d`, `1 / 365` and `365.25` hold it, `3650` does not.
  * (D) Positive controls. "Nothing undeclared" is also what a scanner that reads nothing would report. Each detector runs
- *     on synthetic sources it must flag and on look-alikes it must not; the walk must reach both kinds of file; and the
- *     scan of the real tree must find the daily factor `CompoundSignal` computes today (`Math.pow(1 + rate, 1 / 365)`),
- *     and none in the files whose 365 is no exponent (`CellDateRange`'s `Math.floor(total / 365)`,
- *     `ScheduledInvestmentEditor`'s `'ACT/365'`, `LinearSignal`'s `days / 365`). `MeasureSignal`'s annualizations are no
- *     anchor: T-D9 may rewrite them, and the file stays declared whatever expression it ends up with.
+ *     on synthetic sources it must flag and on look-alikes it must not; (C)'s verdict flags a synthetic power in a file
+ *     that does not annualize, a declared lot module included, and spares one in each file that does; the walk must
+ *     reach both kinds of file; and the scan of the real tree must find the daily factor `CompoundSignal` computes today
+ *     (`Math.pow(1 + rate, 1 / 365)`), a power in each file declared to annualize — `MeasureSignal`'s Δ%/yr
+ *     (`Math.pow(growth, 365 / days)`) too — and none in the files whose 365 is no exponent (`CellDateRange`'s
+ *     `Math.floor(total / 365)`, `ScheduledInvestmentEditor`'s `'ACT/365'`, `LinearSignal`'s `days / 365`). A file
+ *     declared to annualize that stops raising to 365 keeps its entry, with `annualizes: false`: it stays declared, and
+ *     falls back under (C).
  *
  * ## Adding an exception
  *
- * Only an interactive measure qualifies: a value the user produces on the chart, which no backend field can hold.
- * Anything else shows the backend's field. To add one, in the same change: the tag and its description in the module's
- * leading JSDoc block, the file in DECLARED_EXCEPTIONS below, and the file named in rule 6 of `financial_math.md`. A tag
- * without an entry fails (B); an entry without a tag fails (A), and so does an entry whose file is gone. The form is
- * defined for modules: a component (`.svelte`) has no leading JSDoc block, so a measure computed in a component moves
- * into a module — or the form for components is decided first, and taught to this gate.
+ * Only an interactive measure qualifies: a value the user shapes on a chart or a table (the points picked, the
+ * parameters set, the lots chosen), which no backend field can hold. Anything else shows the backend's field. To add
+ * one, in the same change: the tag and its description in the module's leading JSDoc block, the file in
+ * DECLARED_EXCEPTIONS below, and the file named in rule 6 of `financial_math.md`. A tag without an entry fails (B); an
+ * entry without a tag fails (A), and so does an entry whose file is gone. Every entry also says whether its measure
+ * annualizes (`annualizes`, required): a declaration lets a file compute its measure, not annualize it. An exception
+ * that annualizes says so on purpose, `annualizes: true`, and (D) then wants the scan to find its power; a declared file
+ * that does not, `annualizes: false`, stays under (C) like any other source. The form is defined for modules: a
+ * component (`.svelte`) has no leading JSDoc block, so a measure computed in a component moves into a module — or the
+ * form for components is decided first, and taught to this gate.
  *
  * ## Completeness, stated honestly
  *
@@ -61,9 +78,10 @@
  * `const YEAR = 365; Math.pow(1 + r, YEAR / d)`, `const {pow} = Math`, a `.pow()` of another object (a decimal library —
  * none in the frontend today), `Math.exp(Math.log(1 + r) * 365 / d)` and an annualization that is not a power
  * (`r * 365 / d`) all pass; so does every financial quantity computed without annualizing — a P&L, a weight, a rebase.
- * The forms are a floor: when the rule grows, grow them with it. (A) checks that a description is there and long enough,
- * never what it says: a declaration is a human decision recorded once, which a reviewer re-checks when the file changes.
- * Only `.ts` and `.svelte` are read: `src/lib/dev/designer-lab/color.js`, the one `.js` file of `src`, is not.
+ * The forms are a floor: when the rule grows, grow them with it. `annualizes: true` is granted to a file, not to a power:
+ * a second annualization in `MeasureSignal` or `CompoundSignal` passes. (A) checks that a description is there and long
+ * enough, never what it says: a declaration is a human decision recorded once, which a reviewer re-checks when the file
+ * changes. Only `.ts` and `.svelte` are read: `src/lib/dev/designer-lab/color.js`, the one `.js` file of `src`, is not.
  *
  * Registered in `chart-safety-unit` (`scripts/test_runner/_frontend_portfolio.py`).
  */
@@ -86,10 +104,19 @@ const MEASURE = 'src/lib/charts/signals/MeasureSignal.ts';
 const COMPOUND = 'src/lib/charts/signals/CompoundSignal.ts';
 const LINEAR = 'src/lib/charts/signals/LinearSignal.ts';
 const SINE = 'src/lib/charts/signals/SineSignal.ts';
+const LOTS_TABLE = 'src/lib/features/brokers/lots/unifiedLotsTableHelpers.ts';
+const LOT_COMPARISON = 'src/lib/features/brokers/lots/lotComparisonChartHelpers.ts';
+const LOT_WAC = 'src/lib/features/brokers/lots/lotWacPriceChartHelpers.ts';
 
 interface DeclaredException {
     /** Relative to `frontend/`. */
     file: string;
+    /**
+     * Whether the measure annualizes by exponent — a change compounded to a year, an annual rate taken to its daily
+     * factor — and so may raise to an exponent holding 365 (rule (C)). Required: an exception that annualizes says so on
+     * purpose, and a declared file that does not stays under (C) (Y-29).
+     */
+    annualizes: boolean;
     /** The interactive measure the file computes, as rule 6 of `financial_math.md` counts it. */
     measure: string;
 }
@@ -99,13 +126,19 @@ interface DeclaredException {
  * in the change that writes the tag into the file: see «Adding an exception» above.
  */
 const DECLARED_EXCEPTIONS: readonly DeclaredException[] = [
-    {file: MEASURE, measure: 'R18, the measuring tool: Δ, Δ% and annualized between the two points the user picks'},
-    {file: COMPOUND, measure: 'R19, a what-if curve: compound growth at the annual rate the user sets'},
-    {file: LINEAR, measure: 'R19, a what-if curve: linear growth at the annual rate the user sets'},
-    {file: SINE, measure: 'R19, a what-if curve: a sine wave of the amplitude and period the user sets'},
+    {file: MEASURE, annualizes: true, measure: 'R18, the measuring tool: Δ, Δ% and annualized between the two points the user picks'},
+    {file: COMPOUND, annualizes: true, measure: 'R19, a what-if curve: compound growth at the annual rate the user sets'},
+    {file: LINEAR, annualizes: false, measure: 'R19, a what-if curve: linear growth at the annual rate the user sets'},
+    {file: SINE, annualizes: false, measure: 'R19, a what-if curve: a sine wave of the amplitude and period the user sets'},
+    {file: LOTS_TABLE, annualizes: false, measure: 'D-MF6(b), the lots table footer: sums, weighted averages and returns over the rows the user selects, else those left visible'},
+    {file: LOT_COMPARISON, annualizes: false, measure: 'D-MF6(b), the lot comparison aggregate: value and return of the lots the user selects'},
+    {file: LOT_WAC, annualizes: false, measure: "D-MF6(b), the WAC chart's percentage view: the value series rebased on its first known value"},
 ];
 
 const DECLARED_FILES: ReadonlySet<string> = new Set(DECLARED_EXCEPTIONS.map((entry) => entry.file));
+
+/** The files (C) lets raise to an exponent holding 365: those whose entry says the measure annualizes, on purpose. */
+const ANNUALIZING_FILES: ReadonlySet<string> = new Set(DECLARED_EXCEPTIONS.filter((entry) => entry.annualizes).map((entry) => entry.file));
 
 /** Real files whose 365 is no exponent — a divisor, a remainder, day-count labels — read by the live control of (D). */
 const CELL_DATE_RANGE = 'src/lib/components/assets/CellDateRange.svelte';
@@ -436,6 +469,11 @@ function scanSvelte(file: string, text: string): Scan {
  */
 const scanSource = (file: string, text: string): Scan => (file.endsWith('.svelte') ? scanSvelte(file, text) : scanScript(file, text));
 
+/** (C)'s verdict: `file:line  power` of every power whose exponent holds 365, in a file not allowed to raise to one. */
+function annualizationOffenders(hits: readonly Hit[], allowedFiles: ReadonlySet<string>): string[] {
+    return hits.filter((hit) => !allowedFiles.has(hit.file)).map((hit) => `${hit.file}:${hit.line}  ${clip(hit.expr)}`);
+}
+
 /** `line  exponent` of every power a synthetic source raises to an exponent holding 365. */
 function caught(file: string, text: string): string[] {
     const scan = scanSource(file, text);
@@ -506,7 +544,7 @@ const inScript = (rows: readonly string[]): string => ['<script lang="ts">', ...
 /** What (A) prints when a listed file does not declare its measure: the form, and where the rule lives. */
 const HOW_TO_DECLARE = [
     '',
-    'The frontend computes no financial quantity; an interactive measure (the measuring tool, a what-if curve) is the only exception,',
+    'The frontend computes no financial quantity; an interactive measure (the measuring tool, a what-if curve, an aggregate of the lots the user chooses) is the only exception,',
     'and it is declared where it lives (frontend.instructions.md «Financial numbers»; financial-math.instructions.md, rule 6):',
     "a line of the module's leading JSDoc block — its first /** comment, before any code — opens with the tag, then describes the measure:",
     '',
@@ -552,14 +590,15 @@ describe('Financial math exceptions: the browser computes only the interactive m
             expect(parseErrors, ['', 'These sources could not be parsed, so (C) cannot vouch for them:', '', ...parseErrors, ''].join('\n  ')).toEqual([]);
         });
 
-        it('raises to an exponent holding 365 in declared files only', () => {
-            const offenders = hits.filter((hit) => !DECLARED_FILES.has(hit.file)).map((hit) => `${hit.file}:${hit.line}  ${clip(hit.expr)}`);
+        it('raises to an exponent holding 365 only in the files declared to annualize (annualizes: true)', () => {
+            const offenders = annualizationOffenders(hits, ANNUALIZING_FILES);
             const rule = [
                 'The frontend computes no financial quantity (frontend.instructions.md «Financial numbers»; financial-math.instructions.md, rule 6).',
                 "A power whose exponent holds 365 annualizes a return, and returns are the backend's (backend/app/services/financial_math/returns.py): call the field the backend computes instead.",
-                `Or, if this is an interactive measure (the measuring tool, a what-if curve), declare the file: ${TAG} in its leading JSDoc block, and an entry in DECLARED_EXCEPTIONS of src/financialMathExceptions.gate.test.ts.`,
+                'A declaration is no licence to annualize (Y-29): a file of DECLARED_EXCEPTIONS whose entry says annualizes: false stays under this rule, like any other source.',
+                `Or, if annualizing is part of an interactive measure (the measuring tool, a what-if curve, an aggregate of the lots the user chooses), say so on purpose: an entry in DECLARED_EXCEPTIONS of src/financialMathExceptions.gate.test.ts with annualizes: true, and ${TAG} in the file's leading JSDoc block.`,
             ];
-            expect(offenders, ['', ...rule, `${offenders.length} power(s) outside the declared files:`, '', ...offenders, ''].join('\n  ')).toEqual([]);
+            expect(offenders, ['', ...rule, `${offenders.length} power(s) outside the files declared to annualize:`, '', ...offenders, ''].join('\n  ')).toEqual([]);
         });
     });
 
@@ -599,6 +638,29 @@ describe('Financial math exceptions: the browser computes only the interactive m
         it('takes no other 365 for an exponent: a divisor, a base, a label, a formula, a comment, 3650', () => {
             expect(caught('src/lib/a.ts', LOOK_ALIKES.join('\n'))).toEqual([]);
             expect(caught('src/lib/A.svelte', inScript(LOOK_ALIKES))).toEqual([]);
+        });
+
+        it('flags a power holding 365 in a file that does not annualize, declared or not — a lot module of D-MF6(b) too — and spares MeasureSignal and CompoundSignal', () => {
+            // The positive control of (C)'s verdict, on the very set (C) applies: the real tree raises to 365 in no file (C)
+            // forbids, so (C) alone would pass as well with a verdict that flags nothing. And a declaration is no licence to
+            // annualize: the lot modules sum, average and rebase, so an annualization added to one of them one day is
+            // reported like any other. The hits come from the scanner itself, one power per file.
+            const powerIn = (file: string, power: string): Hit[] => scanSource(file, `export const x = ${power};`).hits;
+            const undeclared = 'src/lib/utils/returns.ts';
+            const synthetic = [
+                ...powerIn(undeclared, 'Math.pow(growth, 365 / days)'),
+                ...powerIn(LOTS_TABLE, 'Math.pow(growth, 365 / days)'),
+                ...powerIn(LOT_COMPARISON, '(1 + r) ** (365 / days)'),
+                ...powerIn(LOT_WAC, 'Math.pow(1 + rate, 1 / 365)'),
+                ...powerIn(MEASURE, 'Math.pow(growth, 365 / days)'),
+                ...powerIn(COMPOUND, 'Math.pow(1 + rate, 1 / 365)'),
+            ];
+            // A verdict on hits the scanner never produced would prove nothing.
+            expect(synthetic.map((hit) => hit.file)).toEqual([undeclared, LOTS_TABLE, LOT_COMPARISON, LOT_WAC, MEASURE, COMPOUND]);
+            expect(
+                annualizationOffenders(synthetic, ANNUALIZING_FILES),
+                "Y-29: being declared does not exempt a file from (C). The lot modules of D-MF6(b) sum, average and rebase, they never annualize: a power holding 365 in one of them is an offender like any other. Only MeasureSignal (the ruler's Δ%/yr) and CompoundSignal (the compound curve's daily factor) raise to 365 by design",
+            ).toEqual([`${undeclared}:1  Math.pow(growth, 365 / days)`, `${LOTS_TABLE}:1  Math.pow(growth, 365 / days)`, `${LOT_COMPARISON}:1  (1 + r) ** (365 / days)`, `${LOT_WAC}:1  Math.pow(1 + rate, 1 / 365)`]);
         });
 
         it('reads the declaration in the leading JSDoc block only, as a block tag followed by its description', () => {
@@ -679,8 +741,7 @@ describe('Financial math exceptions: the browser computes only the interactive m
 
         it('finds the power CompoundSignal computes today, and none in the real files whose 365 is no exponent', () => {
             // Presence: CompoundSignal draws its curve with a daily factor (1 + rate)^(1/365), so the scan of the real tree
-            // must see it. MeasureSignal is no anchor: its annualizations (T-D9) may be rewritten, and the file stays
-            // declared whatever expression it ends up with.
+            // must see it. MeasureSignal's power is held by the next control, with every file declared to annualize.
             expect(
                 hits.some((hit) => hit.file === COMPOUND),
                 `${COMPOUND} raises to an exponent holding 365 today: if it stopped, anchor this control on another known power, and ask whether the file still needs its exception`,
@@ -693,6 +754,19 @@ describe('Financial math exceptions: the browser computes only the interactive m
                     `${file}: its 365 is a divisor, a remainder or a label, never an exponent`,
                 ).toEqual([]);
             }
+        });
+
+        it('finds a power in each file declared to annualize, MeasureSignal and CompoundSignal alike', () => {
+            // Non-vacuity of (C), which asserts that every power of the real tree lies in ANNUALIZING_FILES. A scan that saw
+            // no power would pass (C) all the same; and a file declared to annualize that no longer does would hold a licence
+            // for the next annualization added to it — Y-29 again. So each file declared to annualize must show its power:
+            // MeasureSignal's Δ%/yr, `Math.pow(growth, 365 / days)`, as well as CompoundSignal's daily factor.
+            const annualizing = [...ANNUALIZING_FILES];
+            expect(annualizing, "MeasureSignal (the ruler's Δ%/yr) and CompoundSignal (the compound curve's daily factor) annualize by design: their entries say annualizes: true").toEqual(expect.arrayContaining([MEASURE, COMPOUND]));
+            expect(
+                annualizing.filter((file) => !hits.some((hit) => hit.file === file)),
+                'declared to annualize (annualizes: true), yet the scan finds no power holding 365 there: a file that stopped annualizing says annualizes: false — it stays declared, and falls back under (C); otherwise the scan no longer sees its power',
+            ).toEqual([]);
         });
     });
 });

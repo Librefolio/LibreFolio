@@ -35,6 +35,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_components_technical.py",
     "backend/test_scripts/test_services/test_ai_export_composer.py",
     "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",
+    "backend/test_scripts/test_services/test_ai_export_portfolio_fifo_summary_in_transit.py",
     "backend/test_scripts/test_services/test_ai_export_runtime_service.py",
     "backend/test_scripts/test_services/test_ai_export_structural_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_telemetry.py",
@@ -1066,6 +1067,15 @@ def services_current_price_storable(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Current price storable tests", verbose=verbose)
 
 
+def services_test_only_providers(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R44: outside test mode a test-only provider (mockprov, MOCKFX) is not served by its registry."""
+    print_section("Services: Test-Only Providers")
+    print_info("Testing: backend/app/services/provider_registry.py (get_plugin, list_plugin_codes, list_providers), assets/core.configured_provider, fx/runtime, schemas/provider.py")
+    print_info("Tests: outside test mode mockprov/MOCKFX found by no lookup or list and refused as an unknown provider; in test mode, and for real providers or families without the flag, nothing changes")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_test_only_providers.py", test_names)
+    return run_command(cmd, "Test-only provider tests", verbose=verbose)
+
+
 def services_market_data_wipe_split_guard(verbose: bool = False, test_names: list = None) -> bool:
     """Run X-R48: the market-data wipe refuses while a SPLIT of the asset has incoming adjustments without a purchase cost."""
     print_section("Services: Market Data Wipe Split Guard")
@@ -1144,7 +1154,7 @@ def services_scheduler_run_lock(verbose: bool = False, test_names: list = None) 
     print_section("Services: Scheduler Lock Across Processes")
     print_info("Testing: backend/app/services/platform/scheduler/run_lock.py (scheduler_run_lock, cross_process_lock_available, run_lock_path), against real child processes")
     print_info(
-        "Tests: RL-001..009 — the block waits while another process holds the lock (LOCK_EX | LOCK_NB, POLL_SECONDS apart) and runs once it lets go or is killed; a cancelled wait, even with an attempt in flight, leaves no descriptor nor lock; released on an exception; 0o600 file kept, symlink refused; open/flock/close off the loop; constants, availability, path; without fcntl"
+        "Tests: RL-001..016 — the block waits while another process holds the lock (LOCK_EX | LOCK_NB, POLL_SECONDS apart) and runs once it lets go or is killed; a cancelled wait, even with an attempt in flight, leaves no descriptor nor lock; released on an exception; 0o600 file kept, symlink refused; open/flock/close off the loop; constants, availability, path; without fcntl; Z-26 (N79): LOCK_WAIT_SECONDS, SchedulerRunLockTimeout, the deadline keyword — gives up at it, never before, nothing in flight nor left; a free lock taken past it, a held one tried once; a holder letting go before it; an attempt in flight awaited across it; the wait cut to it"
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_run_lock.py", test_names)
     return run_command(cmd, "Scheduler lock across processes tests", verbose=verbose)
@@ -1173,7 +1183,7 @@ def services_scheduler_catchup(verbose: bool = False, test_names: list = None) -
     print_section("Services: Scheduler Catch-up and Lock")
     print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs, scheduler_loop), with sleep_wake/activity.py")
     print_info(
-        "Tests: SCU-001..034 — constants, types, busy span, settle before clock and lock, a lock per event loop, short circuits in order, the lock across processes or the leader without fcntl (Z-11), off-loop I/O, jobs and outcomes, failures by class name, cancellation, status, blocked then caught up, the loop: listener, nudges, shutdown"
+        "Tests: SCU-001..039 — constants, types, busy span, settle before clock and lock, a lock per event loop, short circuits in order, the lock across processes or the leader without fcntl (Z-11), off-loop I/O, jobs and outcomes, failures by class name, cancellation, status, blocked then caught up, the loop: listener, nudges, shutdown; Z-26 (N79): one deadline after the settle for both waits, a give-up at either lock answers not_leader, the jobs never bounded"
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_catchup.py", test_names)
     return run_command(cmd, "Scheduler catch-up tests", verbose=verbose)
@@ -1497,6 +1507,22 @@ def services_donation_popup(verbose: bool = False, test_names: list = None) -> b
     print_info("Testing: backend/app/services/accounts/donation_popup_service.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_donation_popup_service.py", test_names)
     return run_command(cmd, "Donation popup service tests", verbose=verbose)
+
+
+def services_donation_managed(verbose: bool = False, test_names: list = None) -> bool:
+    """Test F05 (A9): no donation popup on a managed instance, the counters still kept."""
+    print_section("Services: Donation Popup on a Managed Instance (A9)")
+    print_info("Testing: donation_popup_service.is_donation_popup_disabled/record_login_and_maybe_show_popup under LIBREFOLIO_PROFILE")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_donation_managed_profile.py", test_names)
+    return run_command(cmd, "Donation popup on a managed instance tests", verbose=verbose)
+
+
+def services_legal_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test F09 (A9): LIBREFOLIO_TOS_URL and LIBREFOLIO_PRIVACY_URL, read and published."""
+    print_section("Services: Legal Links (A9)")
+    print_info("Testing: config/platform.py tos_url/privacy_url, services/platform/instance_links.py terms_link/privacy_link")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_legal_links.py", test_names)
+    return run_command(cmd, "Legal links tests", verbose=verbose)
 
 
 def services_date_sentinel(verbose: bool = False, test_names: list = None) -> bool:
@@ -2330,6 +2356,15 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "test-only-providers",
+        services_test_only_providers,
+        name="Test-Only Providers",
+        desc="X-R44: outside test mode (LIBREFOLIO_TEST_MODE off, simulated in process) a plugin flagged test_only — mockprov, MOCKFX, MOCKFX_FAIL — is found by no registry lookup or list, configured by no runtime, and an assignment or probe naming it is refused as an unknown provider; in test mode, for real providers (yfinance, justetf, ECB) and for a family without the flag (signals) nothing changes",
+        # PURE: nothing is written; production is simulated with monkeypatch inside a block, and the settings step
+        # (configure_instance) is replaced by a recorder, so no database, server or network is touched.
+    )
+    add_test(
+        cat,
         "market-data-wipe-split-guard",
         services_market_data_wipe_split_guard,
         name="Market Data Wipe Split Guard",
@@ -2369,7 +2404,7 @@ Note: No backend server required.
         "scheduler-run-lock",
         services_scheduler_run_lock,
         name="Scheduler Lock Across Processes",
-        desc="Z-11 (N71), run_lock.py: scheduler_run_lock(path) waits while another process holds the lock (each attempt LOCK_EX | LOCK_NB in a thread, POLL_SECONDS apart) and runs the block once it lets go or is SIGKILLed; a cancelled wait goes through, never runs the block, and leaves no descriptor nor lock, an attempt in flight that took it included; released on an exception (another process takes it at once); the file created 0o600 with its folder and never deleted; a symbolic link refused at once with OSError, nothing behind it created or locked; open/flock/close never on the event loop's thread; LOCK_FILE_NAME .scheduler.lock, POLL_SECONDS 0.2, cross_process_lock_available() with fcntl (false with fcntl None or not importable), run_lock_path() the data directory's, read at the call",
+        desc="Z-11 (N71), run_lock.py: scheduler_run_lock(path) waits while another process holds the lock (each attempt LOCK_EX | LOCK_NB in a thread, POLL_SECONDS apart) and runs the block once it lets go or is SIGKILLed; a cancelled wait goes through, never runs the block, and leaves no descriptor nor lock, an attempt in flight that took it included; released on an exception (another process takes it at once); the file created 0o600 with its folder and never deleted; a symbolic link refused at once with OSError, nothing behind it created or locked; open/flock/close never on the event loop's thread; LOCK_FILE_NAME .scheduler.lock, POLL_SECONDS 0.2, cross_process_lock_available() with fcntl (false with fcntl None or not importable), run_lock_path() the data directory's, read at the call; Z-26 (N79): LOCK_WAIT_SECONDS 600.0, SchedulerRunLockTimeout (a TimeoutError), scheduler_run_lock(path=None, *, deadline=None): with a deadline, after an attempt refused at or past it SchedulerRunLockTimeout (no attempt in flight, its descriptor closed, the block never run, the holder untouched), else the next attempt min(POLL_SECONDS, time left) later; an attempt in flight across the deadline awaited, none after it; a free lock taken even with the deadline past",
         # PURE: no DB, no server, no lane port, no network. Every lock file lives under the test's tmp_path, and an autouse
         # fixture points the data directory (LIBREFOLIO_TEST_DATA_DIR) there too, for the test and its children: no
         # .scheduler.lock reaches the lane's. The other processes are real child interpreters the test starts (a holder of the
@@ -2395,11 +2430,14 @@ Note: No backend server required.
         "scheduler-catchup",
         services_scheduler_catchup,
         name="Scheduler Catch-up and Lock",
-        desc="run_due_jobs: an unknown reason refused before anything; busy 'scheduler' from start to end (settle and lock wait included, also on an exception or a cancellation); return/wake settle the clock before the due checks and before the lock; one asyncio.Lock per event loop (no overlap, the second run loads what the first saved, two loops in a row); under the lock disabled, blocked, setting off, in order, without loading the state; with fcntl the lock across processes (Z-11, N71) entered after the setting, the leader never asked, the state and the clock read inside it, a lock that cannot be taken raising before the state loads; without fcntl the leader instead (not_leader); the lock or am_i_leader, load_state and save_state off the loop; one now for both due checks; jobs in order, each saved, outcomes copied from JobState; a job or a save raising is an error outcome by class name only, logged, the next job runs; report status ok/partial/error; blocked runs nothing, then the missed slot is caught up (D-Z3-4, D-Z3-1). scheduler_loop: disabled registers nothing; listener scheduler-catch-up at 60 s; startup after the first delay or a nudge; tick or return; a nudge from any thread; two nudges, one run; a failing run logged; shutdown ends it and removes the listener",
+        desc="run_due_jobs: an unknown reason refused before anything; busy 'scheduler' from start to end (settle and lock wait included, also on an exception or a cancellation); return/wake settle the clock before the due checks and before the lock; one asyncio.Lock per event loop (no overlap, the second run loads what the first saved, two loops in a row); under the lock disabled, blocked, setting off, in order, without loading the state; with fcntl the lock across processes (Z-11, N71) entered after the setting, the leader never asked, the state and the clock read inside it, a lock that cannot be taken raising before the state loads; without fcntl the leader instead (not_leader); the lock or am_i_leader, load_state and save_state off the loop; one now for both due checks; jobs in order, each saved, outcomes copied from JobState; a job or a save raising is an error outcome by class name only, logged, the next job runs; report status ok/partial/error; blocked runs nothing, then the missed slot is caught up (D-Z3-4, D-Z3-1). scheduler_loop: disabled registers nothing; listener scheduler-catch-up at 60 s; startup after the first delay or a nudge; tick or return; a nudge from any thread; two nudges, one run; a failing run logged; shutdown ends it and removes the listener; Z-26 (N79): LOCK_WAIT_SECONDS and SchedulerRunLockTimeout imported by name from run_lock; one deadline, time_module.monotonic() + LOCK_WAIT_SECONDS fixed after the settle, bounds the wait for the asyncio.Lock then scheduler_run_lock(deadline=…); either wait reaching it gives up: not_leader with no job, the state neither loaded nor saved, one WARNING (reason, lock process|data_dir, waited_s, limit_s), the span ended, a catch-up's PRICE_REFRESH finished, the lock free for the next run; the run holding the locks untouched, its jobs never bounded; without fcntl only the process's lock",
         # PURE: no DB, no server, no lane port, no network. Every collaborator of run_due_jobs (switches, leader, settings, state
         # store, jobs, due functions, utc_now, settle_clock) is a fake set with monkeypatch; the process's ACTIVITY is replaced
         # only through monkeypatch by an Activity on a fake clock. The loop runs as a task of the test's own event loop, against
         # a recorder in place of run_due_jobs, and is stopped and awaited within a deadline; its worker threads are asyncio's.
+        # The Z-26 cases also replace PRICE_REFRESH by a counting tracker and, in one case, scheduler.time_module by a fake
+        # monotonic clock, through monkeypatch only; two cases wait out a LOCK_WAIT_SECONDS lowered to 1 s or less on the
+        # real clock.
         isolation="pure",
     )
     add_test(
@@ -2621,7 +2659,7 @@ Note: No backend server required.
         "backup-secure",
         services_backup_secure,
         name="Secure Backup",
-        desc="A secure backup through the services (lot B4): run_backup with a password writes an .lfbk (encrypting phase; no clear zip, part or password left; the envelope's size and hash), the generated instance key inside (never a configured, missing or unusable one: instance_key_unusable), its failures (backup_no_space, backup_failed); the check of an envelope (decrypting first, the same report as its zip's, no archive.zip or secrets/ left), password_required and envelope_damaged, start_check keeping the upload on a missing or wrong password; the key entry's rules; the plugin secrets re-encrypted with this instance's key, or counted unreadable",
+        desc="A secure backup through the services (lot B4): run_backup with a password writes an .lfbk (encrypting phase; no clear zip, part or password left; the envelope's size and hash), the generated instance key inside (never a configured, missing or unusable one: instance_key_unusable), its failures (backup_no_space, backup_failed); the check of an envelope (decrypting first, the same report as its zip's, no archive.zip or secrets/ left), password_required and envelope_damaged, start_check keeping the upload on a missing or wrong password; the key entry's rules; the plugin secrets re-encrypted with this instance's key, or counted unreadable; B-18 (i): stage_archive(instance_key=) re-encrypting a clear archive's secrets from the old key given, none from a wrong 32-character key (no error), instance_key_invalid for a key under 32 characters before the lock or any folder (neither the key nor its length in the message or the log), a secure archive's own key winning over the one given",
         # PURE: data directories, databases and archives under tmp_path. No lane DB, no server, no network.
         isolation="pure",
     )
@@ -2668,6 +2706,10 @@ Note: No backend server required.
         isolation="pure",
     )
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
+    # PURE: in-memory users, never persisted; the profile and the hidden variable set with monkeypatch. No DB, no server.
+    add_test(cat, "donation-managed", services_donation_managed, name="Donation Popup on a Managed Instance (A9)", desc="Managed: never shown, whatever the hidden variable, the counters still grow; self-hosted: unchanged", isolation="pure")
+    # PURE: the variables set with monkeypatch, the once-per-process log cache emptied around each case. No DB, no server.
+    add_test(cat, "legal-links", services_legal_links, name="Legal Links (A9)", desc="LIBREFOLIO_TOS_URL/PRIVACY_URL by the rule of env_url, published never raising, an invalid one logged once without its secret", isolation="pure")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")
     add_test(
