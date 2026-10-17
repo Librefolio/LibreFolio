@@ -7960,13 +7960,16 @@ da Y il 15/10.
     `asset-list.spec.ts`) non vedono più la richiesta con la query, perché in Playwright la glob è ancorata alla fine. Vanno
     allargate con un `*` finale, come il lotto B ha fatto per le spec che aprono la pagina dell'asset.
   - Dettagli: piano di Y, «X-R59».
-- **Y-33 · `asset-detail.spec.ts`: 10 s per una navigazione a freddo sotto carico** — minimo, stabilità dei test; Y, 17/10
+- ✅ **Y-33 · `asset-detail.spec.ts`: 10 s per una navigazione a freddo sotto carico** — minimo, stabilità dei test; Y, 17/10
   (slot E2E di X-R59, 16:05). `goToSeededAssetDetail()` (`frontend/e2e/assets/asset-detail.spec.ts:107-114`) clicca la card
   di Apple e dà 10 s alla radice `asset-detail-page`. Al picco di carico dopo la build (carico a 1 minuto 93 alle 15:24) un
   contesto nuovo importa a freddo il bundle grosso della pagina, e «edit button opens asset modal» (`:240`) è caduto lì,
   ancora sulla lista; da solo, a carico normale, passa in 4,1 s, e gli altri test con lo stesso aiuto sono passati. La cura,
   come Y-22: più tempo alla navigazione, oppure aspettare prima l'URL e poi la radice. Spec dell'area degli asset: a chi
   la tocca. Dettagli: piano di Y, «X-R59».
+  - ✅ 17/10: dopo il clic, prima l'URL (tetto 30 s), poi la radice (10 s), nell'aiuto e nella copia in riga del test della
+    cache degli eventi; commento di `:332` senza totali (`test-author`). E2E `front-asset asset-detail` 39/39. Review di X.
+    Dettagli: piano di Y, «Y-33».
 
 ## MF · Matematica finanziaria (fase 01)
 
