@@ -32,7 +32,7 @@ from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.period_changes import get_period_changes_bulk
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
-from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, BulkTooManyDaysError, bulk_too_many_days_detail, bulk_too_many_items_detail
+from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, BulkTooManyDaysError, DateOutOfRangeError, bulk_too_many_days_detail, bulk_too_many_items_detail, date_out_of_range_detail
 
 logger = get_logger(__name__)
 
@@ -50,7 +50,11 @@ async def upsert_prices_bulk(
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
-    """Bulk upsert prices manually (PRIMARY bulk endpoint)."""
+    """Bulk upsert prices manually (PRIMARY bulk endpoint).
+
+    A date outside ``stored_date_bounds()`` (1900-01-01 to tomorrow) refuses the whole request with 422
+    ``date_out_of_range``, before anything is written (X-R65, N83).
+    """
     try:
         # Pass FAUpsert objects directly to service
         result = await AssetSourceManager.bulk_upsert_prices(assets, session)
@@ -64,6 +68,8 @@ async def upsert_prices_bulk(
             results=results_list,
             success_count=success_count,
         )
+    except DateOutOfRangeError as e:
+        raise HTTPException(status_code=422, detail=date_out_of_range_detail(e.items, e.count, e.earliest, e.latest)) from e
     except ValueError as e:
         # I.2 — currency mismatch (or other domain validation errors from the service)
         # surface as 400 Bad Request, with the structured message the service produced.

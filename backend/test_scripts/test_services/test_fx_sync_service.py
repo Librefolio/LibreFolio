@@ -7,6 +7,8 @@ Focus: pair-sync orchestration branches in services/fx/sync.py
 - sync_pairs_bulk._compute_multi_step
 - X-R38: a rate no column can keep, in sync_pairs_bulk and ensure_rates_multi_source (see its block at the end)
 - X-R50 (E's review R13-SEC5 on X-R38): a rate whose double is 1E+14, in sync_pairs_bulk (in the X-R38 block)
+- X-R65 (N83): no provider rate stored before 1900-01-01, whatever the start ("min" included), in
+  _is_date_within_sync_range and sync_pairs_bulk (its block at the end)
 """
 
 import asyncio
@@ -710,3 +712,110 @@ async def test_xr38_ensure_rates_multi_source_overwrites_a_legacy_rate_no_column
     stored = await _xr38_stored(base, quote)
     assert stored == {XR38_DAYS[0]: Decimal("1.5")}, f"{story} left {stored}: expected 1.5, the new rate overwriting the legacy one"
     assert summary["total_changed"] == 1, f"{story} counts {summary['total_changed']} change(s): expected 1"
+
+
+# ============================================================================
+# X-R65 (N83): the provider sync stores no rate dated before 1900-01-01
+# ============================================================================
+#
+# Measured before the cure: sync_pairs_bulk keeps a provider's observation when _is_date_within_sync_range says it lies in
+# the requested range, and with the start "min" that range has no floor: an observation dated 1899-12-31, or 0001-01-01,
+# is stored, and a backward fill or a replay then walks from it (J's SEC8-1b: about 740 000 days from year one). An
+# explicit start before 1900 lets it through the same way.
+#
+# Contract (X-R65, coordinator decisions 17/10): _is_date_within_sync_range(target, start, end) is False for every target
+# before EARLIEST_RANGE_START (1900-01-01), whatever the start, "min" included; 1900-01-01 itself is in; the end bounds
+# the range as before. ensure_rates_multi_source has no production caller: out of scope.
+#
+# The pair is this block's own (no seed and no other test uses SOS): MOCKFX quotes EUR → SOS, stored EUR/SOS as it comes.
+# Its rates in the window and its route are wiped before and after each test; the provider is a MockFXProvider whose
+# fetch answers the block's days whatever the range asked, behind a fetch cache of the test's own.
+
+XR65_FLOOR = date(1900, 1, 1)  # EARLIEST_RANGE_START: the contract's floor, written here and not read from the code
+XR65_PAIR = ("EUR", "SOS")
+XR65_END = date(1900, 1, 2)
+#: What MOCKFX delivers for SOS, by day: two days before the floor (year one among them), the floor, the day after it.
+XR65_DELIVERED = {date(1, 1, 1): "2.5", date(1899, 12, 31): "2.75", XR65_FLOOR: "3", XR65_END: "3.25"}
+
+
+async def _xr65_wipe() -> None:
+    """Drop this block's rates in its window, and its routes."""
+    base, quote = XR65_PAIR
+    async with AsyncSession(get_async_engine()) as session:
+        await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote, FxRate.date >= min(XR65_DELIVERED), FxRate.date <= max(XR65_DELIVERED)))
+        await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
+        await session.commit()
+
+
+@pytest.fixture
+def xr65_pair():
+    """X-R65: this block's pair without a rate in the window nor a route, before and after the test."""
+    asyncio.run(_xr65_wipe())
+    yield
+    asyncio.run(_xr65_wipe())
+
+
+def _xr65_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MOCKFX handed out as a MockFXProvider whose fetch answers ``XR65_DELIVERED`` for each currency asked, quoted
+    EUR → currency, whatever the range; the fetch cache is the test's own."""
+    provider = MockFXProvider()
+
+    async def fetch_rates(date_range, currencies, base_currency=None):
+        return {currency: [(day, "EUR", currency, Decimal(rate)) for day, rate in XR65_DELIVERED.items()] for currency in currencies}
+
+    cached = {}
+    cache = Mock()
+    cache.get.side_effect = lambda key: (cached.get(key), key in cached)
+    cache.set.side_effect = cached.__setitem__
+    monkeypatch.setattr(provider, "fetch_rates", fetch_rates)
+    monkeypatch.setattr(fx_service.FXProviderRegistry, "get_provider_instance", lambda code: provider if code == "MOCKFX" else None)
+    monkeypatch.setattr(fx_service, "_fx_fetch_cache", cache)
+
+
+def test_xr65_sync_range_has_a_floor_at_1900_whatever_the_start():
+    """Red today: with the start "min" every day up to the end is in range, 1899-12-31 and 0001-01-01 included; with an
+    explicit start before 1900, every day from it.
+
+    Contract (X-R65): a day before 1900-01-01 is out of range whatever the start; 1900-01-01 is in, with "min" as with an
+    earlier start; a day after the end stays out.
+    """
+    cases = [
+        (date(1899, 12, 31), "min", date(1900, 1, 3), False),
+        (date(1, 1, 1), "min", date(2025, 1, 1), False),
+        (date(1899, 12, 31), date(1899, 12, 1), date(1900, 1, 3), False),
+        (date.min, date.min, date.max, False),
+        (XR65_FLOOR, "min", date(1900, 1, 3), True),
+        (XR65_FLOOR, date(1899, 12, 1), date(1900, 1, 3), True),
+        (date(1900, 1, 4), "min", date(1900, 1, 3), False),
+    ]
+    wrong = []
+    for target, start, end, expected in cases:
+        answer = _is_date_within_sync_range(target, start, end)
+        if answer is not expected:
+            wrong.append(f"{target} with start {start!r} and end {end}: {answer}, expected {expected}")
+    assert not wrong, f"_is_date_within_sync_range answered {wrong}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr65_pair")
+@pytest.mark.parametrize("start", [pytest.param("min", id="start-min"), pytest.param(date(1899, 12, 31), id="start-1899-12-31")])
+async def test_xr65_sync_stores_no_rate_before_1900(monkeypatch, start):
+    """Red today: MOCKFX delivers EUR → SOS on 0001-01-01, 1899-12-31, 1900-01-01 and 1900-01-02; synced up to 1900-01-02,
+    the four days are stored from "min", and the three from 1899-12-31 on from that start.
+
+    Contract (X-R65): whatever the start, the pair stores 1900-01-01 and 1900-01-02 alone, as delivered, and its result
+    is ``ok``.
+    """
+    base, quote = XR65_PAIR
+    _xr65_provider(monkeypatch)
+    await _xr38_route(base, quote, [(base, quote)])
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        response = await sync_pairs_bulk(session, pairs=[f"{base}-{quote}"], date_range=(start, XR65_END))
+
+    result = next(item for item in response.results if item.pair == f"{base}-{quote}")
+    async with AsyncSession(get_async_engine()) as session:
+        rows = (await session.execute(select(FxRate.date, FxRate.rate).where(FxRate.base == base, FxRate.quote == quote, FxRate.date <= XR65_END))).all()
+    stored = {row.date: row.rate for row in rows}
+    assert stored == {XR65_FLOOR: Decimal("3"), XR65_END: Decimal("3.25")}, f"synced from {start!r} up to {XR65_END}, EUR/SOS stored {stored}"
+    assert result.status == "ok", result

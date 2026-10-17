@@ -35,6 +35,21 @@ currency.**
 
 This ensures that we only need to store one rate per pair, and we can easily calculate the inverse if needed.
 
+Rate writes keep to the [stored-date bounds](../assets/architecture.md#stored-date-bounds) of the
+prices: from 1900-01-01 to tomorrow by the server's calendar (`stored_date_bounds()`; X-R65, night
+decision N83). `POST /api/v1/fx/currencies/rate` (`upsert_rates_endpoint()`) checks every item's
+`date` before its loop: a single date outside refuses the whole request with the same 422
+`date_out_of_range` (`date_out_of_range_detail()`), its `items` `{"index", "date"}` (the item's
+0-based index; at most ten), its `count` all of them. Nothing is written, not even the valid
+items, unlike the endpoint's [per-item errors](configuration.md#chain-dates-writes-and-counters).
+The provider sync never stores a rate dated before 1900-01-01, whatever its start: in
+`sync_pairs_bulk()`, the live sync path, `_is_date_within_sync_range()`
+(`backend/app/services/fx/sync.py`), which keeps the dates of the requested range, is false before
+`EARLIEST_RANGE_START`, so neither `start: "min"` nor an older start reaches past it; its end stays
+the requested one, today at the latest. `ensure_rates_multi_source()`, which has no production
+caller, is left without that floor.
+{: #stored-rate-dates }
+
 ## 🔢 Priority System
 
 When converting currency, the system needs to decide which rate to use if multiple providers have data for the same pair and date.
