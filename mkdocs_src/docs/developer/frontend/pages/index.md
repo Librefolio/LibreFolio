@@ -138,7 +138,9 @@ frontend/src/routes/
       broker detail page; the Period view's Status filter is a hidden-by-default enum column of
       `ContributionTable`, not a panel toggle, and `PerformanceChart` shows an Open / Closed badge
     - `positions_contribution` is fetched apart, on demand: `PositionsPanel` asks for it the first
-      time the Period view is shown; a cached copy shows at once and is refreshed when stale
+      time the Period view is shown; a cached copy shows at once and is refreshed when stale; a
+      failed request is asked again at most three times, 2, 4 and 8 s later
+      ([Lazy sections after a failure](../state/domain-state.md#lazy-report-retry))
     - `ExposureTreemap`'s type and broker tooltips take their G/L and G/L % from
       `summary.holding_groups`, passed by `PositionsPanel` as `holdingGroups` (only holdings with a
       known value and G/L count): the group of the same `(broker_id, asset_type)`, `asset_type`
