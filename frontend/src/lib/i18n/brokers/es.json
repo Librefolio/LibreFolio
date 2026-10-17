@@ -234,7 +234,7 @@
           "splitRatio": "Ratio de desdoblamiento",
           "sourceBroker": "Desde",
           "destinationBroker": "Hacia",
-          "handedOverAtCost": "Valor cedido al coste"
+          "handedOver": "Valor cedido"
         },
         "openingValue": "Valor de apertura",
         "cumulativeProceeds": "Ingresos acumulados"

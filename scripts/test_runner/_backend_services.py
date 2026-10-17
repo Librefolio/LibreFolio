@@ -22,6 +22,7 @@ from ._common import (
 )
 
 AI_EXPORT_SERVICE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_broker_fifo_summary_scope_boundary.py",
     "backend/test_scripts/test_services/test_ai_export_component_runtime.py",
     "backend/test_scripts/test_services/test_ai_export_components_asset.py",
     "backend/test_scripts/test_services/test_ai_export_components_asset_fx_integration.py",

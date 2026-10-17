@@ -5994,6 +5994,49 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Decisione del coordinatore (17/10): nell'indice, non in SEC7-1. **→ MF** (coordinatore, 17/10 07:00: `run_in_executor` con un
   pool dedicato, `max_workers=2`, insieme a MF-D4 dopo l'ingresso di J-43/SEC7-1; J rivede). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «R13-SEC7-1».
+- **J-47 · Un trasferimento ancora in viaggio alla fine dell'intervallo manda i lotti in `FAILED`** — medio, numeri;
+  J, 17/10, letto nel codice durante l'analisi di J-10, non ancora riprodotto. Con partenza ≤ `date_to` < arrivo,
+  `LotsAnalysisService._load_transactions` taglia a `date_to` e la gamba d'arrivo manca: `TRANSFER_PAIR_MISSING`
+  anche col perimetro intero (periodi dell'AI Export, intervalli della Dashboard che finiscono durante il viaggio).
+  Coordinatore (17/10 08:05): subito dopo J-10, prima di J-12. Prima il rosso, poi la lettura al confine del tempo,
+  coerente col transito della Dashboard (`in_transit_intervals`). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+- **J-48 · Le gambe di un trasferimento lette al confine del perimetro si vedono come «rettifiche» nei lotti** —
+  basso, chiarezza; J, 17/10, da J-10 (N76). Nella modale della custodia, nel Gantt e nel grafico WAC una gamba che
+  attraversa il perimetro compare come «Adjustment In/Out». La sistemazione: etichette esplicite di trasferimento,
+  cioè un campo del backend sulle righe della cronologia, le 3 viste e l'i18n. In J-10 solo l'etichetta neutra della
+  modale (scelta (a') del coordinatore, 17/10 08:05). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+- **SEC8-1b (da R13-SEC8 di E) · Il rigioco storico del rischio cammina un intervallo senza limiti** — alto,
+  sicurezza (disponibilità); assegnata a J dal coordinatore (17/10 08:22), dopo J-10 e J-47. `replay_range` di
+  `/risk/query` non ha limiti (`DateRangeModel` controlla solo `end >= start`) e arriva al caricamento dei prezzi e
+  alla preparazione delle serie (`risk/replay.py`). Lo stesso clamp di SEC7-1, cioè `latest_range_end()` e un
+  pavimento per l'inizio; l'ambito degli asset lo chiude X-R55 di Z. Prima i rossi, E rivede. Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+- **J-49 · Un controllo statico per i lettori di `latest_range_end`** — basso, test; proposta del test-author di Z
+  con X-R55, girata dal coordinatore (17/10 08:30), non ora. La cucitura di SEC7-1
+  (`test_scripts/test_services/_range_bounds.py`, `RANGE_BOUND_CONSUMERS`) toglie il limite solo nei moduli della
+  sua lista. Z ci ha aggiunto `price_query` e `currencies` a mano, e SEC8-1b porterà un altro lettore. Un modulo di
+  `backend/app` che legge `latest_range_end` e manca dalla lista fa fallire gli scenari 2032–2091 dei file che
+  tolgono il limite. Il test: una lettura `ast` di `backend/app`, per cui l'insieme dei moduli che legano il nome
+  (`from …datetime_utils import latest_range_end`) è uguale alla lista. Prima un rilevatore che vede un modulo finto,
+  come le regole di `test_layer_boundaries.py`. Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «R13-SEC7-1».
+- **J-50 · Il rifiuto dei troppi giorni di `get_prices_bulk` diventa un 500 nel rischio e nell'AI Export** — basso,
+  chiarezza (è già un rifiuto, non un DoS); dal coordinatore (17/10 08:34), dopo SEC8-1b. Con Z-25 (N77)
+  `get_prices_bulk` alza `BulkTooManyDaysError` (il nome lo darà Z all'ingresso di Z-25) oltre 5 M giorni-asset per
+  richiesta. Il rischio (l'ambito degli asset) e l'AI Export lo chiamano dall'interno: senza traduzione l'utente vede
+  un 500. Va tradotto in un rifiuto con codice, dalla parte del rischio (`RiskUnavailableError` con un `RiskErrorCode`)
+  e dell'AI Export. Prima i rossi. Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+- **J-51 · Lo YoC di un co-proprietario manca sulle unità ricevute da un broker che non vede** — medio, numeri;
+  J, 17/10, letto nel codice durante J-10, non riprodotto. `yield_on_cost._include_external_transfer_legs` aggiunge
+  al rigioco la sola gamba della compagna. Se quel broker non è visibile, il componente {A, B} parte da un A senza
+  storia: `FIFO_SOURCE_QUANTITY_MISSING` → `FAILED`, YoC «non disponibile» per la posizione in B. Il lato del
+  mittente funziona; il filtro dei broker del proprietario non c'entra (lo YoC carica tutti i broker visibili).
+  La cura naturale è la lettura al confine di J-10 (`financial_math/lots/scope_boundary.py`), applicata ai broker
+  visibili al posto della gamba aggiunta. Prima un rosso. Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
 
 ## Z · Sospensione e risveglio (fase 01)
 

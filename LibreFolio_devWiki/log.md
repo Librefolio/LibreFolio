@@ -3816,3 +3816,10 @@ write-back happens only when an arrow turns by more than 0.01°; and `noteArrowM
 render, lets charts without arrows skip `getOption()` altogether.
 Updated: [[concepts/echarts-chart-gotchas]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | J-10: the lots failed whenever a transfer crossed the broker scope
+A lots analysis gets only its scope's rows, so a TRANSFER whose partner sat at another broker could not pair and failed the whole asset:
+on a broker's page, on a filtered Dashboard, for a co-owner, and in AI Export `broker.fifo_summary`. The leg is now read at the scope's
+edge, in at its own cost and out at the market value of its day, from detached copies and the partner's pairing columns only (N76).
+Filed: [[problems/lots-failed-when-a-transfer-crossed-the-broker-scope]].
+Graph: not updated; graphify is not available in this worktree.

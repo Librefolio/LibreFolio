@@ -234,7 +234,7 @@
           "splitRatio": "Split ratio",
           "sourceBroker": "From",
           "destinationBroker": "To",
-          "handedOverAtCost": "Value handed over at cost"
+          "handedOver": "Value handed over"
         },
         "openingValue": "Opening Value",
         "cumulativeProceeds": "Cumulative proceeds"
