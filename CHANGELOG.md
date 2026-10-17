@@ -130,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PAC result:** the real exposure bars take their category colour, the ideal ones a neutral grey. **Growth chart:** each broker line takes the colour of an asset type.
 - **Sign-in pages, new look:** icons in the fields, a highlighted border under the pointer and in focus, the password requirements in a box of their own, no subtitle under the logo, and the recovery commands in a dark terminal box.
 - **Charts: every asset type and sector keeps one colour everywhere:** the same in the allocation pie and in its history, in every portfolio, broker and period. Liquidity has a colour of its own, subtypes are shades of their family, and the maps, the sharing semi-donut and the correlation matrix follow the light and dark theme.
+- **Several server processes (`--workers`): any of them runs the scheduled jobs**, one at a time through a lock file in the data directory: a scheduled wake-up and a user's return no longer depend on the leader process (Windows keeps the leader).
 
 ### 🧹 Repository cleanup
 
@@ -243,6 +244,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scheduled investments: the maturity settlement no longer includes the last coupon, already paid the same day as interest; after maturity the asset is worth its principal.
 - Measure tool: the yearly rate (Δ%/yr) appears from 30 days, as in the rest of the app (`—` below); a measure that starts from 0 shows `—` instead of 0 % for Δ% and Δ%/yr, and a line that ends on the other side of zero has no yearly rate.
 - Growth chart: in the weekly and monthly views, a broker line that stops in the middle of a week or month keeps its last value for that period instead of leaving a gap.
+- **A restore whose restart never happens says so** — if LibreFolio does not stop after **Restore and restart**, the page no longer waits forever: after a minute it says to restart LibreFolio yourself, and offers **Back to Backup**, where the waiting restore can be restarted or cancelled.
 
 #### 🔒 Security
 
