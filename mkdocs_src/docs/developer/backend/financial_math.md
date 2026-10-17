@@ -347,6 +347,9 @@ flowchart LR
    [synthetic benchmarks](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md)
    (`CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`), all in
    `frontend/src/lib/charts/signals/` — and each exception must be declared where it lives.
+   The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in
+   `MeasureSignal.ts` is held to `_MIN_ANNUALIZATION_DAYS` of `returns.py` by a parity test in
+   `measureSignal.test.ts`, so changing one without the other fails that test.
    The declaration is the tag `@financial-math-exception` in the file's leading JSDoc block,
    followed by what the exception computes and why it stays in the browser. The [gate](#frontend-exceptions-gate)
    (`frontend/src/financialMathExceptions.gate.test.ts`) holds the list of declared files and
