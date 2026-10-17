@@ -498,7 +498,8 @@ The facade:
    cache, keyed together with the broker, asset, date, asset currency, override and
    excluded ids; `use_cache=False` bypasses the cache;
 4. drops the excluded ids and sorts the rest by `(date, id)`; with no rows left it
-   returns a zero WAC in the asset currency;
+   returns a zero WAC in the asset currency — which the batch's Auto step refuses
+   (see [Nothing to average](#nothing-to-average));
 5. maps the rows with `cost_movement_from_transaction()`;
 6. chooses the target currency: `target_currency_override`, or
    `determine_target_currency()` — the currency of the last acquisition;
@@ -712,8 +713,9 @@ in date order. Three cases follow from it:
   pool, and it gets no cost (see
   [Split-linked adjustment skip](#split-linked-adjustment-skip));
 - a row whose cost could not be written — an unreadable pool, a missing
-  conversion — stays out of the later pools, never counted at zero, and the batch
-  refuses it anyway (`autoCostUnreadable`, `wacFxUnavailable`); and
+  conversion, a pool with nothing to average — stays out of the later pools, never
+  counted at zero, and the batch refuses it anyway (`autoCostUnreadable`,
+  `wacFxUnavailable`, `autoCostEmptyPool`, `autoCostUnknownPool`); and
 - an update in Auto counts as not costed yet: the cost its row holds is the one
   the Auto step replaces.
 
@@ -814,6 +816,34 @@ the issue `autoCostUnreadable` on its row — field `cost_basis_override`, `para
 `{"count": N}`, no transaction id, since the pool can be another user's — and the giving
 leg of a split `TRANSFER` whose `_handover_cost()` raises gets the same issue on its
 split, with the leg's id as `ref_id`. The batch is not saved.
+
+### 🈳 Nothing to average {: #nothing-to-average }
+
+An average of 0 is not always a cost. The facade gives 0 for a pool that holds no
+units on its date — the broker never held the asset, or sold all of it before, and
+the engine resets a pool that empties — and for a pool whose units all entered at an
+unknown cost, which the engine counts at zero (`ADD_UNKNOWN_COST`) while marking the
+cost incomplete. Written on an incoming row, either 0 would make it a free
+acquisition, silently: the form starts in Auto.
+
+So when the average it gets is 0, `_compute_wac_for_auto_items()` asks
+`_nothing_to_average()` why (N88, J-57). It reads the engine's own state through
+`wac_pool_holding()` (`portfolio_service.py`): the quantity and the cost completeness
+of the pool `compute_wac_iterative()` averaged, same rows, same exclusions, uncached.
+Holding no units, the item is refused with `autoCostEmptyPool`; holding units none of
+which has a known cost, with `autoCostUnknownPool`. A pool of free units — units at a
+known cost of 0 — holds units with a complete cost: its average of 0 stands.
+
+A refused item gets no cost and no `WACPreviewResultItem`; `(operation, index, code)`
+is appended to the list passed as `nothing_to_average` (without a list,
+`NothingToAverageError` raises), and `compute_wac_and_fx_issues()` turns each into the
+issue `code` on its row — field `cost_basis_override`, no `params`, no transaction id,
+since the pool can be another user's. The batch is not saved. The user can still
+enter 0 by hand, for units that really came free. Only the batch's Auto rows are
+checked: `_handover_cost()`, `delete_by_broker()`, `POST /portfolio/wac` and the PAC
+planner keep the facade's 0. A pool whose cost is only partly unknown gives an
+understated average, written as before (J-58, a decision of the developer). Tests:
+`./dev.py test services transaction-cost-basis-rule N88`.
 
 ### 🔗 Promote boundary {: #promote-boundary }
 
