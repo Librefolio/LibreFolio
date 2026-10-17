@@ -100,7 +100,7 @@ graph TD
 | `multi_unit_currencies` | `set()` | Currencies quoted per 100 units (e.g., JPY, SEK). Plugin must normalize ÷100. |
 | `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/fx/{path}` |
 | `settings_fields` | `()` | The values the provider needs from the instance: an API key, an account. Read with `self.settings` in `fetch_rates()` and `get_supported_currencies()`, never in `__init__`: see [Settings](#settings) |
-| `test_only` | `False` | `True` for a provider that exists for the tests: hidden from `GET /fx/providers` and from the settings catalogue |
+| `test_only` | `False` | `True` for a provider that exists for the tests: hidden from `GET /fx/providers` and from the settings catalogue and, outside test mode, not served at all ([Test-Only Plugins](plugin_settings.md#test-only)) |
 
 ---
 

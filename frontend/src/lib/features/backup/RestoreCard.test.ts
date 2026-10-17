@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
- * RestoreCard — the restore card of Settings › Backup, under the download card (component test, Vitest + jsdom;
- * workstream B, lot B5b). Written red first against `b5b-contract.md` §0 (P8 and P7, which override the rest), §2, §2b,
- * §2c, §3 and §4: the card does not exist yet. Lot B5c (the outcome read with the restart's one-time ticket, and B-17)
- * was written red first in its turn, against its approved contract.
+ * RestoreCard — the restore card of Settings › Administration › Backup, under the download card (component test,
+ * Vitest + jsdom; workstream B, lot B5b). Written red first against `b5b-contract.md` §0 (P8 and P7, which override the
+ * rest), §2, §2b, §2c, §3 and §4: the card does not exist yet. Lot B5c (the outcome read with the restart's one-time
+ * ticket, and B-17) was written red first in its turn, against its approved contract.
  *
  * The card is the face of `RestoreFlowController` (pinned on its own in restoreFlow.test.ts). What it adds, and what this
  * file pins, is what the user sees and what the machine reads:
@@ -1274,5 +1274,43 @@ describe('B-16 — RestoreCard: a server that never stops', () => {
         expect(card()).toHaveAttribute('data-state', 'pending');
         expect(screen.getByTestId('restore-restart')).toBeInTheDocument();
         expect(screen.getByTestId('restore-cancel-pending')).toBeInTheDocument();
+    });
+});
+
+// =====================================================================================================================
+// B-32 — a refused cancel of a pending restore keeps the pending block (written red first)
+// =====================================================================================================================
+
+/*
+ * The contract (B-32 §1): a refused `DELETE /restore/pending`, other than 404 `restore_not_pending`, leaves the
+ * controller `pending` with the error, as a refused restart does; the card keeps its pending block, `restore-error`
+ * with the code beside it, and both actions on offer again. Red today: the controller ends `failed`, so the card shows
+ * the failed screen, with `restore-retry` and `restore-choose` — an archive whose confirmation the server would refuse
+ * with `restore_already_pending`, since the restore still waits.
+ */
+describe('B-32 — RestoreCard: a refused cancel of a pending restore', () => {
+    it('500 restore_cancel_failed: restore-pending and restore-error together, restore-restart and restore-cancel-pending enabled, no restore-retry, no restore-choose; the status not read again, no deleteRestoreCheck, failed told once with an error toast', async () => {
+        await mount(pending());
+        api.cancelPendingRestore.mockRejectedValueOnce(refusal(500, 'restore_cancel_failed'));
+
+        await fireEvent.click(screen.getByTestId('restore-cancel-pending'));
+        await settle();
+
+        expect(api.cancelPendingRestore).toHaveBeenCalledTimes(1);
+        expect(card()).toHaveAttribute('data-error-code', 'restore_cancel_failed');
+        expect(card(), 'the restore still waits: the pending block, with the error').toHaveAttribute('data-state', 'pending');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+        expect(screen.getByTestId('restore-pending')).toBeInTheDocument();
+        expect(screen.getByTestId('restore-error')).toHaveAttribute('data-error-code', 'restore_cancel_failed');
+        expect(screen.getByTestId('restore-restart')).toBeEnabled();
+        expect(screen.getByTestId('restore-cancel-pending')).toBeEnabled();
+        expect(screen.queryByTestId('restore-retry'), "the failed screen's retry, while the restore still waits").toBeNull();
+        notOffered('restore-choose', 'while a restore waits for the next start');
+        expect(api.getRestoreStatus, 'the status is not read again').toHaveBeenCalledTimes(1);
+        expect(api.deleteRestoreCheck, 'the copy of a restore still pending was dropped').not.toHaveBeenCalled();
+        const failed = events('backup.restore.failed');
+        expect(failed).toHaveLength(1);
+        expect(failed[0].detail).toEqual({code: 'restore_cancel_failed', what: 'cancel'});
+        expect(failed[0].toast?.variant).toBe('error');
     });
 });

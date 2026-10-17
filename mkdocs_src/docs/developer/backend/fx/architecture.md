@@ -126,6 +126,26 @@ there, with no points. Before, nothing bounded the expansion: from 0001-01-01 to
 the endpoint's: `convert_bulk()` itself, which the other callers use directly, has none.
 {: #convert-range-ceiling }
 
+The endpoint also caps each request (Z-25, night decision N77), as `POST /assets/prices/query`
+does ([bulk request limits](../assets/architecture.md#bulk-request-limits)): X-R55 bounds each
+conversion, not how many one request holds, and 1,000 conversions of 100 years would build about
+36.5 million daily items. More than `MAX_BULK_ITEMS` (1,000) conversions get a 422
+`{"code": "bulk_too_many_items", "message", "max_items", "items"}` before any work, nothing
+converted; exactly 1,000 pass. The handler then plans the conversions one by one — each one's cut
+range, signal plan and warm-up — and counts the daily items and the one-unit signal items, warm-up
+included, that each would build; a conversion that starts after the cut counts zero, and its
+signals still run on an empty series. At the end of a conversion, a running total over
+`MAX_BULK_ITEM_DAYS` (5,000,000) gets a 422
+`{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`, `item_days` being the
+count through that conversion: more than the budget, a lower bound of the request's total. The
+`message` says so, «this one would build at least N» (`bulk_too_many_days_detail()` with
+`at_least=True`), where the price route's says «would build N»: its count is exact. No item
+is built or converted until the whole request is within the budget; only then are the planned
+blocks expanded day by day, in request order and each conversion's daily items before its signal
+items, and converted in one `convert_bulk()` call. A refused request costs its planning, not its
+items. Like the ceiling, the caps are the endpoint's: `convert_bulk()` has none.
+{: #convert-request-limits }
+
 ### 🪟 Loading only the usable rate window {: #convert-bulk-window }
 
 Portfolio reports call `convert_bulk()` with thousands of items: the engine preloads a rate for every
@@ -164,6 +184,9 @@ linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
 `fixed_period_changes()` ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
 
 - **Request**: a list of `{base, quote, as_of}`. `base` and `quote` must differ, or the request is refused (422).
+  The limits (MF-P2b, finding R13-SEC8): at most `PERIOD_CHANGES_MAX_PAIRS` (1 000) pairs, at most
+  `PERIOD_CHANGES_MAX_AS_OF_DAYS` (5) distinct `as_of` days, and each `as_of` on or after `EARLIEST_RANGE_START`
+  (1 January 1900; up to 0005-12-30 the 5Y day fell before year 1, a 500): 422 otherwise.
 - **Rate on a day**: the conversion of 1 `base` into `quote` on that day by `convert_bulk()`, with its unlimited
   backward fill. It is the rate `POST /api/v1/fx/currencies/convert` returns for that day, up to that endpoint's
   [ceiling](#convert-range-ceiling): `as_of` has none. One `convert_bulk()` batch serves every pair and day of the

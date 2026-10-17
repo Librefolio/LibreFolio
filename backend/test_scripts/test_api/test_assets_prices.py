@@ -1078,3 +1078,37 @@ async def test_query_extreme_end_is_bounded(test_server):
             print_success(f"  ✓ empty item in {elapsed:.2f} s")
         finally:
             await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+# ============================================================
+# Z-25 (N77): a bulk price query has a cap on its items
+# ============================================================
+#
+# POST /assets/prices/query refuses more than MAX_BULK_ITEMS (1 000) items before reading anything: a 422 with a coded
+# detail. Its item-day budget (5 million, bulk_too_many_days) is pinned at service level only (services range-ceiling,
+# BL-A01…A07): over the real budget through the route, code without it would make the lane's shared backend fill
+# millions of points, the cost the cap exists to refuse.
+
+BULK_MAX_ITEMS = 1_000  # the contract's number (N77), written here and not read from the code under test
+
+
+@pytest.mark.asyncio
+async def test_query_more_than_1000_items_is_refused(test_server):
+    """BL-API-01 (Z-25, N77): 1 001 one-day items answer 422 ``{"code": "bulk_too_many_items", "message",
+    "max_items": 1000, "items": 1001}``.
+
+    The refusal comes before any read, so the asset id is never looked up, and nothing is written.
+    Red before Z-25: 200, the 1 001 items queried.
+    """
+    print_section("BL-API-01: price query of 1 001 items refused")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        query = [{"asset_id": 1, "date_range": {"start": "2025-06-18", "end": "2025-06-18"}} for _ in range(BULK_MAX_ITEMS + 1)]
+        resp = await client.post(f"{API_BASE}/assets/prices/query", json=query, timeout=TIMEOUT)
+        assert resp.status_code == 422, f"{resp.status_code}: {resp.text[:300]}"
+        detail = resp.json()["detail"]
+        assert isinstance(detail, dict) and detail.get("code") == "bulk_too_many_items", detail
+        assert isinstance(detail.get("message"), str) and detail["message"].strip(), detail
+        assert {key: value for key, value in detail.items() if key not in ("code", "message")} == {"max_items": BULK_MAX_ITEMS, "items": BULK_MAX_ITEMS + 1}
+        print_success(f"  ✓ 422 {detail['code']}: {detail['items']} items, at most {detail['max_items']}")

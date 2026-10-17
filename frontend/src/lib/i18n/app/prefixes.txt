@@ -6,3 +6,4 @@ updateCheck
 donationPopup
 help
 connectionSecurity
+legal

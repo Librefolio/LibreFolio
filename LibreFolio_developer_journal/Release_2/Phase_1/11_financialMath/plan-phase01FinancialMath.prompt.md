@@ -2196,3 +2196,178 @@ batch, `autoCostUnreadable`, la prende W dopo SEC7-3 tramite la cucitura). Revis
   paragrafo di `#unreadable-pool` dice che oggi il batch propaga l'errore (`batch_costs.py:32-36`, e il `_handover_cost`
   della separazione a `:44`).
 - Non eseguito: `api transactions-wac`/`portfolio-wac` (pesanti: slot).
+- ✅ **W-B69 entrato** (08:5x): dev `c61a2db4d`, CHANGELOG 🐛 `94e170ae1`, HEAD ff **`94e170ae1`**. W rivede a posteriori.
+
+#### MF-SEC8-2 — la ricostruzione da una data remota (R13-SEC8 di E, MEDIUM 7/10) — analisi (17/10, 09:0x)
+Richiesta (coordinatore, 08:3x): una transazione già salvata con data `0001-01-01` fa camminare ogni ricostruzione per
+~740 000 giorni, e con J-45 occupa i due worker. W mette il pavimento in scrittura (N74: 1900 ≤ data ≤ oggi+1 anno, in
+SEC7-3); a MF il pavimento in lettura per le righe vecchie: motore, `lots_analysis_service.py:135,233` (J rivede),
+`native_cash._unit_requests` (`:485-501`). Rossi prima.
+
+**Stato reale (HEAD `94e170ae1`)** — le camminate giorno per giorno che partono dalla prima transazione:
+1. `engine.py:265-266` `actual_from = first_tx_date` senza `date_from` (o il sentinella «min» →
+   `platform/date_sentinel.py`): il builder **emette** uno stato per giorno da `0001` (740 k `DailyPortfolioState`).
+2. `daily_state.py:300` `_replay_from = min(date_from, *movement_days)`: il giro (`:305-627`) visita ogni giorno, i giorni
+   fermi con un `replace()` e la copia dei contenitori.
+3. `daily_state.py:907/913` `_calendar(_replay_from − 1, date_to)`: un calendario di ogni giorno per le valute di prezzi e
+   asset e per la cassa in transito. ⚠️ Con una riga datata **esattamente `0001-01-01`** `date.min − 1 giorno` solleva
+   `OverflowError` → 500 (non una camminata).
+4. `native_cash.py:485-501` `_unit_requests`: una richiesta `(valuta, giorno)` per ogni giorno dal primo movimento estero →
+   740 k richieste a `convert_bulk`.
+5. `engine.py:574-579` `_preload_fx_rates`: ogni giorno di ogni intervallo di cassa in transito da `interval.start_date`.
+6. `lots_analysis_service.py:135` `computed_from = transactions[0].date` → `_load_prices(date_from=…)`,
+   `lots/conversions.py:183-186` (bisogni FX di ogni giorno da `computed_from`), `:233` `history_dates`.
+Fuori dalla camminata ma stessa classe (`date.min − 1`): `classifier.py:217` (coppia con arrivo `0001-01-01`),
+`yield_on_cost.py:631` (provento `0001-01-01`): **non** nel lotto, riga di backlog.
+
+**Scelta: saltare, non ripiegare.** Spostare le righe pre-pavimento al 1900-01-01 (ripiegare le mappe per giorno) cambierebbe
+l'ordine dei movimenti dentro un giorno (aggiunte prima delle riduzioni) contro il cursore dei passi di costo medio
+(`_next_cost_step`, ordine `(date, id)`): rischio. Invece:
+- (a) **emissione e richieste da ≥ 1900**: `actual_from = max(REPLAY_FLOOR, …)` nel motore e nell'analisi lotti
+  (`computed_from`, `display_from`); nessuno stato, prezzo, calendario o richiesta di cambio prima del pavimento;
+- (b) **il giro salta i giorni fermi prima di `date_from`** (nessuno stato emesso lì): da un giorno sporco al successivo
+  (`bisect` sui giorni sporchi ordinati). Le righe pre-pavimento si rigiocano **nel loro ordine e con le loro date**,
+  identiche a oggi; il costo diventa O(giorni sporchi). Uscita identica anche per i dati normali (un `replace()` di uno
+  stato fermo cambia solo la data e azzera flusso esterno e funding: idempotente), che ne guadagnano quando `date_from` è
+  dopo la prima transazione;
+- (c) **calendari dei cambi e richieste dal pavimento**: `daily_state.py:907/913`, `native_cash._unit_requests`,
+  `engine._preload_fx_rates` (transito) partono da `max(…, REPLAY_FLOOR)`. Prima del 1900 nessun fornitore ha storia
+  (`FX_HISTORY_MIN_FALLBACK`, `ASSET_HISTORY_MIN_FALLBACK` = 1900-01-01): uscita identica salvo un cambio manuale datato
+  prima del 1900, che non conta più come variazione.
+- **Il pavimento**: una costante sola con N74 di W. Proposta: `REPLAY_FLOOR`/`EARLIEST_RANGE_START = date(1900, 1, 1)` in
+  `backend/app/utils/datetime_utils.py`, accanto a `latest_range_end()` (R13-SEC7-1); SEC7-3 la importa (o la rinomina
+  all'ingresso). Da accordare con W.
+
+**Numeri visibili**: nessuno per dati dal 1900 (golden invariato). Con righe pre-1900 (dati corrotti): la storia del
+Cruscotto/report e quella dei lotti partono dal 1900-01-01 invece che dalla prima riga; quantità, cassa, costi e pool
+includono le righe vecchie come oggi. Il 500 di `0001-01-01` sparisce.
+
+**Superfici**: `utils/datetime_utils.py` (costante); `financial_math/portfolio/engine.py` (`actual_from`, transito in
+`_preload_fx_rates`); `financial_math/portfolio/daily_state.py` (salto, calendari); `financial_math/native_cash.py`
+(`_unit_requests`); `services/lots_analysis_service.py` (`computed_from`, `display_from`; J rivede);
+`financial_math/lots/conversions.py` (solo se il giro non parte da `computed_from` già limitato: parte da lì → nessuna
+modifica). Docs: `financial_math.md` «The Days the Engine Recomputes» + `lots_analysis_service.md`. Conflitti: nessuno
+aperto (engine/daily_state miei; lots_analysis di J ma J è sul frontend).
+
+**Prova** (test-author, rossi prima; data pre-pavimento **1800-01-01** per rossi rapidi, più un caso `0001-01-01`):
+- motore: libro con un BUY 1800 in USD, report in EUR, `calculate(date_from=None)`: primo stato emesso 1900-01-01 (oggi
+  1800 → rosso); quantità e cassa del primo stato includono la riga 1800 (verde prima e dopo); `_calendar` mai più lungo di
+  `date_to − 1900 + 2` giorni (spia: rosso); i `replace()` dei giorni fermi prima di `date_from` = 0 (spia: rosso);
+- `0001-01-01` con un asset non in valuta di report: `calculate` non solleva (oggi `OverflowError` → rosso);
+- `native_cash._unit_requests` (puro): un movimento estero del 1800 → la prima richiesta è del 1900 (rosso);
+- lotti: BUY 1800 + quotazioni: `computed_date_from` 1900, storie dal 1900, il lotto c'è (rosso sulle date);
+- equivalenza: golden `roi-fifo-utils` (1251), `portfolio-engine`, `financial-math`, `lots-analysis-pure`, `api
+  portfolio` + `api lots-analysis` nello slot.
+**CHANGELOG 🐛 proposto**: «Una transazione con una data remota (p. es. l'anno 1) non fa più ricalcolare a ogni report
+centinaia di migliaia di giorni: le storie partono al più presto dal 1° gennaio 1900.»
+**Stima**: media (~1 h codice, ~1 h test-author, prove leggere + uno slot). **Rischio**: il giro principale del builder
+(salto) → golden + suite come prova d'uscita identica.
+**Domande chiuse** (raccomandazione in grassetto):
+1. Salto (righe pre-pavimento rigiocate esatte) **(raccomandato)** o ripiego al 1900-01-01?
+2. Avviso di qualità dati per righe pre-1900: **no ora, riga di backlog** (N74 impedisce le nuove) / sì in questo lotto?
+3. Le altre `date.min − 1` (`classifier.py:217`, `yield_on_cost.py:631`): **backlog** / dentro il lotto?
+- ✅ **Decisioni** (coordinatore, 08:5x): 1 salto; 2 nessun avviso ora → backlog **MF-SEC8-2a**; 3 le altre `date.min − 1`
+  → backlog **MF-SEC8-2b**; 4 `EARLIEST_RANGE_START = date(1900, 1, 1)` in `utils/datetime_utils.py`. W (N74, SEC7-3,
+  `TRANSACTION_DATE_MIN` in `transaction_batch_stages.py`) si allinea alla mia costante nel suo lotto successivo: io non
+  importo la sua. Prima dell'ingresso: golden 1251 + `api portfolio` nello slot. J rivede `lots_analysis_service.py`.
+  ⚠️ **Fuori pista**: non esiste un'azione `api lots-analysis`; l'analisi lotti è coperta da
+  `test_financial/test_lots_analysis_service.py` e `test_date_range_bounds.py` (`roi-fifo-utils`) e l'endpoint da `api
+  portfolio`.
+- ✅ **Codice** (09:0x):
+  - `utils/datetime_utils.py`: `EARLIEST_RANGE_START` con il perché.
+  - `portfolio/engine.py`: `actual_from = max(date_from, first_tx_date, EARLIEST_RANGE_START)` (o senza `date_from`);
+    `_preload_fx_rates`: transito di cassa da `max(interval.start_date, EARLIEST_RANGE_START)`.
+  - `portfolio/daily_state.py`: `ordered_dirty_days = sorted(dirty_days)`; nel ramo del giorno fermo, prima di `date_from`
+    salto al giorno sporco successivo (`bisect_right`; oltre l'ultimo → `date_to + 1`); `_valuation_rate_change_days`:
+    i due calendari da `max(_replay_from, EARLIEST_RANGE_START)`.
+  - `native_cash._unit_requests`: `day = max(first[currency], EARLIEST_RANGE_START)` (docstring del modulo e funzione).
+  - `lots_analysis_service.py`: `computed_from = max(transactions[0].date, EARLIEST_RANGE_START)`, `display_from` idem.
+  - ruff/black puliti, import freschi ok.
+- ✅ **Suite esistenti col codice** (`files/sec82.sh base`): `roi-fifo-utils` **1251** (golden identico), `portfolio-engine`
+  41, `financial-math` 1111, `lots-analysis-pure` 177.
+- ✅ **Test** (test-author `sec82-tests`, 09:0x–09:2x; nessuna riga di runner: i due file nuovi in `test_financial/` →
+  `roi-fifo-utils`, gli altri in file registrati):
+  - NUOVO `test_portfolio_engine/test_replay_floor.py` (puro, 12): il pavimento è `EARLIEST_RANGE_START`; nessun
+    `replace()` prima di `date_from` (HEAD 49 301); calendari dal 1899-12-31 al più presto (HEAD 1889-12-31); un movimento
+    `0001-01-01` non solleva (HEAD `OverflowError` a `:907`/`:913`); guardie: le righe 1890 rigiocate esatte (cassa 800,
+    costo 1075, capitale 1700, NAV 2040; K 1075, R 15 a fine), un `date_from` prima del primo movimento, `period_start`
+    prima del pavimento fotografato.
+  - NUOVO `test_portfolio_engine/test_engine_replay_floor.py` (SQLite privato in memoria, 6): `calculate` con `date_from`
+    None / `0001-01-01` / 1899-06-01 → primo stato 1900-01-01; `_preload_fx_rates` col doppio di `convert_bulk`: il
+    transito dal 1900-01-01 esatto.
+  - `test_native_cash.py` classe `TestUnitRequestsStartAtTheFloor` (+5): giorno proprio del movimento pre-pavimento + dal
+    1900; due movimenti pre-pavimento; guardia GBP/USD; **nessun `ValueError`** per un saldo contato prima del pavimento.
+  - `test_lots_analysis_pure.py` classe `TestALotOpenedBeforeTheFloor` (+4): `computed_date_from` 1900, prezzi, storie e
+    marcatori dal 1900, cambi giornalieri dal 1900; guardia: il lotto 1890 intero.
+  ⚠️ **Fuori pista — un 500 nuovo evitato**: il test-author ha trovato che il solo pavimento in `_unit_requests` rompeva
+  l'invariante «un saldo estero contato ha un cambio a ogni giorno successivo»: con un cambio salvato prima del 1900,
+  `NativeCash.value_at(d)`/`exchange_results(d, …)` per `d` tra il movimento e il pavimento sollevavano `ValueError`
+  (raggiungibile col sentinella «min» via `portfolio_service`). Cura: prima del pavimento si chiedono anche i giorni
+  propri dei movimenti (costo limitato dai movimenti). Mutazioni colte: pavimento senza giorni propri, solo il primo
+  giorno, pavimento tolto.
+  ⚠️ **Fuori pista — commenti che dicevano troppo** (docs-writer): «nessun prezzo o cambio prima del 1900» → solo le
+  richieste per giorno; la conversione di ogni movimento resta alla sua data. Corretti `datetime_utils.py`, `engine.py`,
+  `lots_analysis_service.py`.
+- ✅ **Docs** (docs-writer `sec82-docs` + mio ritocco): `financial_math.md` (passo 2 del motore, «Off the Event Loop»
+  annullamento, `#recomputed-days` salto + riquadro «Why: R13-SEC8», calendari), `lots_analysis_service.md` (il pavimento
+  di `computed_from`/`display_from`), `wac.md` (richieste dei cambi unitari, giorni propri prima del pavimento). Nessuna
+  traduzione. mkdocs build strict exit 0, check-links exit 0.
+- ✅ **Istruzioni**: `.github/instructions/financial-math.instructions.md` regola 7 «solo `localcontext()`, mai
+  `getcontext()`» (richiesta del coordinatore). Verificato in Python: sotto `copy_context().run` il worker ha lo stesso
+  oggetto `Context` della richiesta, e un `prec` cambiato là cambia la richiesta.
+- ✅ **Rossi** (`files/sec82.sh red`, prodotto invertito, sha `a89d0f68…` uguale dopo): `replay_floor` **11 failed, 7
+  passed**; `financial-math native_cash` **2 failed**, 140 passed; `lots-analysis-pure` **3 failed**, 178 passed (16).
+- ✅ **Verdi** (`files/sec82.sh green`): `replay_floor` 18, `roi-fifo-utils` **1269** (golden invariato + 18),
+  `portfolio-engine` 41, `financial-math` **1116**, `lots-analysis-pure` **181**, `portfolio-allocation-source` 98;
+  `check-orphans` exit 0; ruff/black puliti; `git diff --check` pulito; porta 6190 libera.
+- Da fare: slot `api portfolio` prima dell'ingresso; J rivede `lots_analysis_service.py`.
+- ✅ **MF-SEC8-2 committed** (fix + journal, tip `c233ac717`); **base** `fddeb819a` = mio + dev `d28a6d7df`, pulito.
+  Revisione J: **OK**; un LOW di doc (la gamba di trasferimento non si riporta al primo NAV: le serve il prezzo del suo
+  giorno) → applicato in `lots_analysis_service.md` dentro MF-P2b. Slot `api portfolio`: in coda dal coordinatore.
+
+#### MF-P2b — i limiti degli endpoint dei cambi a periodo fisso (17/10, 09:4x; nota di E, R13-SEC8)
+- **Difetto**: le liste di `POST /assets/prices/period-changes` e `POST /fx/currencies/period-changes` non hanno un
+  massimo; il servizio degli asset fa **una query raggruppata per giorno distinto** (10 per `as_of` distinto), quindi N
+  voci con `as_of` tutti diversi sono 10·N query; `as_of` prima di ~0006-01-01 fa sollevare `OverflowError` a
+  `fixed_period_dates` (`as_of − 1826 giorni`) → 500.
+- **Decisione** (coordinatore, 09:4x, sulla mia proposta): tetto alla lista (asset **10 000**: la lista degli asset non è
+  paginata e il frontend manda tutti gli asset elencati; FX **1 000** coppie), **≤ 5 `as_of` distinti** per richiesta,
+  `as_of ≥ EARLIEST_RANGE_START`; nessun tetto superiore (un `as_of` futuro è innocuo). X rivede le rotte.
+- ✅ **Codice**:
+  - `schemas/common.py`: `PERIOD_CHANGES_MAX_AS_OF_DAYS = 5`, `period_changes_as_of()` e il tipo
+    `PeriodChangesAsOf = Annotated[date, AfterValidator(period_changes_as_of)]`.
+  - `schemas/prices.py`: `PERIOD_CHANGES_MAX_ASSETS = 10_000`; `FAPeriodChangesQueryItem.as_of: PeriodChangesAsOf`;
+    descrizione di `change_ratio` resa univoca («(prezzo su as_of ÷ prezzo su as_of − days) − 1», il nit di X-R53).
+  - `schemas/fx.py`: `PERIOD_CHANGES_MAX_PAIRS = 1_000`; `FXPeriodChangesRequest.as_of: PeriodChangesAsOf`; le due
+    descrizioni rese univoche.
+  - rotte `api/v1/assets/prices.py` e `api/v1/fx/currencies.py`: `Annotated[List[…], Body(max_length=…)]` (→ `maxItems`
+    nell'OpenAPI) e il controllo degli `as_of` distinti → `HTTPException(422)`.
+  ⚠️ **Fuori pista**: il validatore riusabile `_as_of_bound = field_validator("as_of")(…)` scartato (in pydantic v2 un
+  nome con `_` rischia di diventare attributo privato): tipo `Annotated` con `AfterValidator`. Sonda in-process
+  (`TestClient` su un'app di prova): 3 voci 200, 4 voci 422, `maxItems` 3 nell'OpenAPI; 1899-12-31 e 0005-12-31
+  rifiutati, 1900-01-01 accettato, entrambi gli schemi.
+  - Docs: `assets/architecture.md` e `fx/architecture.md`, punto **Request** di «Fixed-Period Changes» (EN-only).
+- ✅ **Test** (test-author `p2b-tests`, 09:4x–09:5x):
+  - NUOVO `test_schemas/test_period_changes_bounds.py` (puro, 12): i due schemi rifiutano 1899-12-31, 0005-12-31,
+    0005-12-30, 0001-01-01 (8 rossi su HEAD: accettati), accettano 1900-01-01 e 9999-12-31 (nessun tetto superiore).
+    Registrato: `schemas period-changes-bounds` in `scripts/test_runner/_backend_schemas.py` (funzione + `add_test`,
+    `isolation="pure"`; righe del test-author).
+  - `test_api/test_period_changes_api.py` sezione «BOUNDS OF A REQUEST» (18 casi `[assets|fx]`): al tetto 200, oltre 422
+    (il `detail` porta il numero); 5 `as_of` distinti 200, 6 → 422 (il `detail` nomina `as_of`); prima del 1900 → 422 con
+    `loc ["body", 0, "as_of"]`; dal 1900 → 200. Asset: l'id `2**62 − 1` ripetuto (10 query vuote, nessuna scrittura);
+    FX: AWG/TMT, sola lettura. Rossi su HEAD (dal codice): oltre il tetto 200; il sesto `as_of` 200; 1899-12-31 e
+    0005-12-31 200, 0005-12-30 e 0001-01-01 500.
+  - Descrizione di `api period-changes` in `_backend_api.py` estesa (MF-P2b).
+  ⚠️ **Fuori pista — 1825, non 1826**: il 5Y di `FIXED_PERIODS` è 1825 giorni; l'ultimo `as_of` che va in
+  `OverflowError` è **0005-12-30** (0005-12-31 dà 200 oggi). Corretti docstring e docs.
+- ✅ **Rossi leggeri** (`files/p2b.sh red`, prodotto invertito, sha `cb4da187…` uguale dopo): `schemas
+  period-changes-bounds` **8 failed, 4 passed**; `services period-changes` 20 (invariato).
+- ✅ **Verdi leggeri** (`files/p2b.sh green`): `period-changes-bounds` 12, `services period-changes` 20, `schemas
+  scheduled-investment-bounds` 18, `financial-math returns` 141. `api sync` exit 0 (client generato non tracciato:
+  `.max(10000)`, `.max(1000)`). ruff/black puliti, mkdocs build strict 0 e check-links 0, `check-orphans` 0, `git diff
+  --check` pulito.
+- ✅ **Slot** (`files/p2b.sh slot`, via del coordinatore 09:5x, carico a 5 min 28; insieme allo slot J-10 di J e a un
+  giro API breve di H): P2b invertito (sha `def2eac8…`, uguale dopo) → la revisione `fddeb819a` = SEC8-2 pura:
+  **SEC8-2 `api portfolio` 51**; P2b **rossi `api period-changes` 12 failed, 12 passed** (oltre il tetto ×2 e sesto
+  `as_of` ×2: 200 invece di 422; prima del 1900 ×8: 200, o 500 per 0005-12-30 e 0001-01-01); P2b rimesso → **verdi
+  `api period-changes` 24/24**; porta 6190 libera.

@@ -75,14 +75,49 @@ Why here: these are rules about where a batch writes or removes a cost basis —
 deletion's side of decision 47 is pinned in ``test_broker_service.py`` (BR-U-073, 076, 078, 086–088), the lone legs a
 1.2 deletion left in ``test_lone_transfer_legs.py``.
 
+W-B69 (release 1.3; it blocks the release) — an Auto cost computed while skipping an unreadable row, the ``TestWB69…``
+classes: W's half of it, RED until its cure but for the guards. A regression of W-B58: ``RealDecimal``
+(``db/real_decimal.py``) reads a stored value that is no number — a text such as 'n/a', a REAL ±inf — as None instead of
+raising. ``compute_wac_iterative`` (``portfolio_service.py``) still selects such a row — in SQLite 'n/a' is not NULL and
+differs from 0 —, and ``cost_movement_from_transaction`` (``financial_math/average_cost.py``) skips it when its quantity
+reads None, or takes a BUY whose amount reads None as a free acquisition: the Auto cost is computed without the row, or
+lower, and saved for good. The cure (approved design): ``_auto_cost`` (``auto_cost.py``) raises
+``UnreadablePoolError(count)`` when a row of its pool — the facade's filters, minus the rows left out — reads None in its
+quantity, its amount, or a cost basis it stores (``cost_basis_override`` not NULL in SQL: the contract's addition of
+17/10; a BUY's NULL cost basis is legitimate), ``count`` the number of such rows — a row unreadable in two columns counts
+once —; and each caller refuses. That core — the guard in ``_auto_cost``, ``UnreadablePoolError``, the broker deletion
+(``delete_by_broker``) and the lone legs — is the MF workstream's (the coordinator's assignment, 17/10), pinned in MF's own
+``test_auto_cost_unreadable_pool.py``. W's half, the batch's, is pinned here:
+
+- a batch's Auto row (a create or an update in ``auto`` or ``auto-detail``), on /commit and on /validate: one issue
+  ``autoCostUnreadable`` on its operation and index, ``field`` ``cost_basis_override``, ``params`` ``{"count": N}``, and no
+  transaction id anywhere in it (the pool may be another user's broker); nothing committed, nothing saved, nothing raised;
+- the split of a TRANSFER pair whose giving leg's handover pool holds such a row: one ``autoCostUnreadable`` on the split's
+  index, ``ref_id`` the giving leg (as ``wacFxUnavailable`` on a split); not committed, the pair intact;
+- ``TXValidationCode.AUTO_COST_UNREADABLE`` exists and ``GET /transactions/types`` lists it; a gate, green today, holds
+  every code to its ``transactions.errors.<code>`` message in EN, IT, FR and ES.
+
+The pool is ``source``'s: the ``world``'s BUY (10 units for 1 000 EUR) and the row ``_plant`` adds a week later — a BUY of
+10 units for 3 000 EUR, or an incoming row that takes a cost basis, an ADJUSTMENT +10 or a receiving TRANSFER +10 (its
+giving leg on a third broker of the test's), stored at 300 EUR a unit —, its quantity, its amount or its cost basis then
+overwritten with 'n/a' by raw SQL. Readable, either averages (1 000 + 3 000) / 20 = 200 EUR; today, with the quantity
+unreadable the average is 1 000 / 10 = 100, with the BUY's amount or the stored cost basis unreadable 1 000 / 20 = 50 (a
+free acquisition, or one of unknown cost entering at zero). The planted row lies before the move, so a batch's balance
+replay reads it among the balances before its first day, which skip a None, and never in its day-by-day loop, which adds
+the quantity and the amount as they read: there a None raises, and the replay refuses the batch for a reason of its own
+(an uncoded "Balance validation error"), not W-B69's. That is why the guard with a row dated after the move recomputes the
+receiving leg alone: that batch replays no day of ``source``.
+
 Ownership. Every test builds its own asset and brokers under a unique marker, in a session rolled back at the end:
 ``execute_batch`` never commits (its caller does), so nothing reaches the lane's database. The two scaffolds that
 change module state — an entry of ``TX_TYPE_METADATA``, ``SWAP_GROUPS`` — go through ``monkeypatch``, which puts
-them back.
+them back. W-B69's plants are raw SQL in the same session, rolled back with it.
 
-Run: ``./dev.py test services transaction-cost-basis-rule`` (the action ``services_transaction_cost_basis_rule``).
+Run: ``./dev.py test services transaction-cost-basis-rule`` (the action ``services_transaction_cost_basis_rule``); W-B69's
+cases alone: ``./dev.py test services transaction-cost-basis-rule WB69``.
 """
 
+import re
 import sys
 import uuid
 from dataclasses import dataclass
@@ -101,7 +136,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, bindparam, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.schemas.transactions.transactions as transaction_schemas
@@ -110,10 +145,11 @@ from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, 
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode, TXValidationIssue
-from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA, cost_basis_allowed
+from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse, cost_basis_allowed
 from backend.app.services.portfolio_service import compute_wac_iterative
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
+from scripts.i18n_catalog import flatten, load_catalog
 
 EUR = "EUR"
 BUY_DAY = date(2025, 1, 6)
@@ -1216,3 +1252,489 @@ class TestDecision47TheGivingLegOfATransfer:
             "giving": (TransactionType.TRANSFER, -TRANSFER_QUANTITY, receiving.id, None, None),
             "receiving": (TransactionType.TRANSFER, TRANSFER_QUANTITY, giving.id, STORED_COST.amount, STORED_COST.code),
         }
+
+
+# ============================================================================
+# RED AND GUARDS — W-B69: AN AUTO COST OVER A POOL WITH AN UNREADABLE ROW
+# ============================================================================
+
+# The cure's TXValidationCode.AUTO_COST_UNREADABLE, as a literal: the member does not exist before it.
+AUTO_COST_UNREADABLE = "autoCostUnreadable"
+# The two columns (a) and (d) plant 'n/a' in: RealDecimal reads either as None since W-B58.
+UNREADABLE_COLUMNS = ("quantity", "amount")
+# Every column a plant may overwrite: those two, and a stored cost basis (the contract's addition of 17/10).
+PLANTABLE_COLUMNS = (*UNREADABLE_COLUMNS, "cost_basis_override")
+AUTO_OPERATIONS = ("create", "update")
+ENDPOINTS = (pytest.param(True, id="commit"), pytest.param(False, id="validate"))
+# The incoming rows that take a cost basis, and the per-unit cost they are stored with: the 3 000 EUR the planted BUY pays
+# for its 10 units, so that every readable plant averages the same.
+INCOMING_KINDS = ("adjustment", "receiving-transfer")
+PLANTED_COST = -LATER_BUY_PAID / BUY_QUANTITY
+PLANT_LABELS = {
+    "buy": f"BUY +{BUY_QUANTITY} for {-LATER_BUY_PAID} EUR",
+    "adjustment": f"ADJUSTMENT +{BUY_QUANTITY} stored at {PLANTED_COST} EUR a unit",
+    "receiving-transfer": f"receiving TRANSFER +{BUY_QUANTITY} stored at {PLANTED_COST} EUR a unit",
+}
+# source's pool with the planted row readable: (1 000 + 3 000) / 20.
+READABLE_POOL_COST = (BUY_QUANTITY * UNIT_COST - LATER_BUY_PAID) / (2 * BUY_QUANTITY)
+# What today's average makes of that pool with one column of the planted row unreadable: the defect, for the red messages.
+TODAY_OVER_AN_UNREADABLE = {
+    "quantity": "the average skips the row whose quantity reads None: 1 000 / 10 = 100, where the readable pool gives 200",
+    "amount": "the average takes the BUY whose amount reads None as a free acquisition: 1 000 / 20 = 50, where the readable pool gives 200",
+    "cost_basis_override": "the average takes the row whose cost basis reads None as an acquisition of unknown cost, entering at zero: 1 000 / 20 = 50, where the readable pool gives 200",
+}
+UI_LANGUAGES = ("en", "it", "fr", "es")
+# What _raw_rows reads of a row: its raw values, and the storage class of the three columns a plant may overwrite.
+_RAW_KINDS = ", ".join(f"typeof({column}) AS {column}_kind" for column in ("quantity", "amount", "cost_basis_override"))
+_RAW_COLUMNS = f"id, type, date, quantity, amount, currency, related_transaction_id, cost_basis_override, cost_basis_currency, description, tags, {_RAW_KINDS}"
+# A plant takes an id this far past every id in use, and the rows written after it the ids that follow: a number this large
+# in an issue's text can only be one of them (``_ids_named``). Below it a number may be anything — the count, a day, an
+# amount, or an id the lane reuses: each test rolls back, the AUTOINCREMENT counter with it, so the ``world``'s BUY is id 1
+# in a fresh lane, as the count of an issue may be.
+_ID_GAP = 1_000_000
+
+
+async def _plant(world: World, *, kind: str = "buy", unreadable: tuple[str, ...] = (), day: date = LATER_BUY_DAY, asset_id: int | None = None) -> int:
+    """A row of 10 units on ``source`` on ``day`` — of the ``world``'s asset, or ``asset_id`` — stored like any row, then
+    each column of ``unreadable`` overwritten with 'n/a' through the same session; its id.
+
+    ``kind``: ``buy``, a BUY paying 3 000 EUR, its cost basis NULL as a BUY's is; or an incoming row that takes a cost
+    basis, stored at 300 EUR a unit (``PLANTED_COST``): ``adjustment``, an ADJUSTMENT +10, or ``receiving-transfer``, a
+    TRANSFER +10 linked both ways to its giving leg on a third broker of the test's own, which no batch here touches.
+    Readable, any of them is the second acquisition of ``source``'s pool, worth 3 000 EUR. Its id is ``_ID_GAP`` past every
+    id in use, so that it, and every row written after it, can be told from any small number in an issue's text. Unreadable,
+    what the case rests on is checked here, so no test refuses or accepts a row it only assumes unreadable: SQLite keeps the
+    text (``typeof`` 'text', so not NULL: the cure's test for a stored cost basis); the facade's filters —
+    ``compute_wac_iterative``: quantity not NULL and not 0 — still select the row; and its ORM copy, expired so that every
+    later load re-reads it, loads with None in each overwritten column (``RealDecimal``, W-B58).
+    """
+    session = world.session
+    now = utcnow()
+    description = f"{world.marker} W-B69 planted {kind}"
+    planted_id = ((await session.execute(select(func.max(Transaction.id)))).scalar_one() or 0) + _ID_GAP
+    common = {"id": planted_id, "broker_id": world.source.id, "asset_id": asset_id or world.asset.id, "date": day, "quantity": BUY_QUANTITY, "description": description, "created_at": now, "updated_at": now}
+    if kind == "buy":
+        row = Transaction(type=TransactionType.BUY, amount=LATER_BUY_PAID, currency=EUR, **common)
+    elif kind in INCOMING_KINDS:
+        incoming_type = TransactionType.ADJUSTMENT if kind == "adjustment" else TransactionType.TRANSFER
+        row = Transaction(type=incoming_type, amount=Decimal("0"), currency=None, cost_basis_override=PLANTED_COST, cost_basis_currency=EUR, **common)
+    else:
+        raise ValueError(f"unknown plant kind {kind!r}")
+    session.add(row)
+    await session.flush()
+    row_id = row.id
+    if kind == "receiving-transfer":
+        # Its giving leg's broker allows shorting: it holds none of the units it gave, and none of these batches replays it.
+        sender = Broker(name=f"{world.marker} W-B69 sender", description="W-B69: the broker the planted TRANSFER came from", allow_cash_overdraft=True, allow_asset_shorting=True, created_at=now, updated_at=now)
+        session.add(sender)
+        await session.flush()
+        giving = Transaction(broker_id=sender.id, asset_id=row.asset_id, type=TransactionType.TRANSFER, date=day, quantity=-BUY_QUANTITY, amount=Decimal("0"), description=description, created_at=now, updated_at=now)
+        session.add(giving)
+        await session.flush()
+        giving.related_transaction_id, row.related_transaction_id = row_id, giving.id
+        await session.flush()
+    if not unreadable:
+        return row_id
+    for column in unreadable:
+        assert column in PLANTABLE_COLUMNS, f"scaffold: a plant overwrites {PLANTABLE_COLUMNS}, not {column!r}"
+        await session.execute(text(f"UPDATE transactions SET {column} = 'n/a' WHERE id = :id"), {"id": row_id})
+    kinds = (await session.execute(text(f"SELECT {', '.join(f'typeof({column}) AS {column}' for column in PLANTABLE_COLUMNS)} FROM transactions WHERE id = :id"), {"id": row_id})).one()._asdict()
+    assert {column: kinds[column] for column in unreadable} == dict.fromkeys(unreadable, "text"), f"setup: the planted {kind} id={row_id} must hold 'n/a' as text in {unreadable}; typeof = {kinds}"
+    selected = (await session.execute(select(func.count()).select_from(Transaction).where(Transaction.id == row_id, Transaction.quantity.is_not(None), Transaction.quantity != 0))).scalar_one()
+    assert selected == 1, f"setup: the facade's filters (quantity IS NOT NULL, quantity != 0) must still select the planted {kind} id={row_id}, or it is not in the pool"
+    session.expire(row)
+    loaded = (await session.execute(select(Transaction).where(Transaction.id == row_id).execution_options(populate_existing=True))).scalar_one()
+    read = {column: getattr(loaded, column) for column in PLANTABLE_COLUMNS}
+    assert {column: read[column] for column in unreadable} == dict.fromkeys(unreadable), f"setup: RealDecimal must read the 'n/a' of id={row_id} as None (W-B58); the row loads {read}"
+    return row_id
+
+
+async def _world_brokers(world: World) -> list[int]:
+    """Every broker of the test's own, by its marker: ``source``, ``dest``, and the one a ``receiving-transfer`` plant adds."""
+    statement = select(Broker.id).where(Broker.name.startswith(world.marker, autoescape=True)).order_by(Broker.id)
+    return list((await world.session.execute(statement)).scalars())
+
+
+async def _other_asset(world: World) -> int:
+    """A second asset of the test's own, in EUR: its rows lie outside every pool of the ``world``'s asset."""
+    now = utcnow()
+    other = Asset(display_name=f"{world.marker} other asset", asset_type=AssetType.STOCK, currency=EUR, created_at=now, updated_at=now)
+    world.session.add(other)
+    await world.session.flush()
+    return other.id
+
+
+@dataclass
+class AutoBatch:
+    """A batch whose row ``operation`` ``index`` asks for an Auto cost over ``source``'s pool (``_auto_batch``)."""
+
+    operation: str
+    index: int
+    creates: list[dict]
+    updates: list[dict]
+    #: The stored row an update recomputes; None for a create, whose id the batch's results give (``_created_id``).
+    row_id: int | None
+
+
+async def _auto_batch(world: World, operation: str, mode: str, *, alone: bool = False) -> AutoBatch:
+    """The Auto row, in ``mode``, and the rows its batch sends: the receiving leg of a TRANSFER pair source → dest, whose
+    pool is its partner's broker, ``source``, up to the move, without the two legs (``_auto_cost_source``).
+
+    ``create``: the pair (``_created_pair``), the receiving leg at index 1. ``update``: the stored pair (``_store``, the
+    receiving leg at 42 EUR), both legs given the same new notes — a pair keeps one description — and the receiving leg
+    the mode, at index 1. ``alone``: the receiving leg's update alone, at index 0 — the one batch that replays no day of
+    ``source`` (the balance replay covers the brokers of the updated rows, ``earliest_date_by_broker``).
+    """
+    if operation == "create":
+        assert not alone, "scaffold: a receiving leg is created with its giving leg"
+        return AutoBatch(operation="create", index=1, creates=_created_pair(world, cost_basis_mode=mode), updates=[], row_id=None)
+    stored = await _store(world, "transfer_in", cost=STORED_COST)
+    giving, receiving = stored.rows
+    if alone:
+        return AutoBatch(operation="update", index=0, creates=[], updates=[{"id": receiving.id, "cost_basis_mode": mode}], row_id=receiving.id)
+    notes = f"{world.marker} notes edited with the Auto cost"
+    return AutoBatch(operation="update", index=1, creates=[], updates=[{"id": giving.id, "description": notes}, {"id": receiving.id, "description": notes, "cost_basis_mode": mode}], row_id=receiving.id)
+
+
+async def _as_the_endpoint(world: World, *, commit: bool, creates: list[dict] | None = None, updates: list[dict] | None = None, splits: list[dict] | None = None) -> TXBatchResponse:
+    """The batch as ``POST /transactions/commit`` (``commit=True``) or ``/validate`` runs it, its transaction included:
+    /commit keeps what the service answers committed and rolls back the rest, /validate always rolls back
+    (``api/v1/transactions.py``). A savepoint stands in for the request's transaction, as in ``_commit_as_the_endpoint``;
+    the session fixture still rolls everything back. Read the rows back by id afterwards (``_raw_rows``, ``_rows_by_id``),
+    never through a copy the rollback expired. A batch refuses with issues: one that raises fails the test.
+    """
+    savepoint = await world.session.begin_nested()
+    try:
+        response = await _run_batch(world, commit=commit, creates=creates, updates=updates, splits=splits)
+    except Exception as error:  # the contract: a refusal is an issue, nothing raises
+        pytest.fail(f"W-B69: the batch must answer with its issues, never raise; it raised {type(error).__name__}: {error!r}")
+    if commit and response.committed:
+        await savepoint.commit()
+    else:
+        await savepoint.rollback()
+    return response
+
+
+async def _raw_rows(world: World, broker_ids: list[int]) -> dict[int, dict]:
+    """Every row of ``broker_ids`` as SQLite holds it in the session's transaction, by id: raw values, and the storage class
+    of the three columns a plant may overwrite — what the user finds once the request is over, the 'n/a' included."""
+    statement = text(f"SELECT {_RAW_COLUMNS} FROM transactions WHERE broker_id IN :brokers ORDER BY id").bindparams(bindparam("brokers", expanding=True))
+    return {row.id: row._asdict() for row in (await world.session.execute(statement, {"brokers": broker_ids})).all()}
+
+
+def _changed(before: dict[int, dict], after: dict[int, dict]) -> dict[int, tuple]:
+    """The rows two ``_raw_rows`` reads disagree on, by id: ``(before, after)``, None for a row absent on one side."""
+    return {tx_id: (before.get(tx_id), after.get(tx_id)) for tx_id in sorted(set(before) | set(after)) if before.get(tx_id) != after.get(tx_id)}
+
+
+async def _rows_by_id(world: World, ids: list[int]) -> dict[int, tuple]:
+    """``(type, quantity, related_transaction_id, cost_basis_override, cost_basis_currency)`` of each row of ``ids`` the
+    database still holds, re-read (``populate_existing``): a deleted row is absent."""
+    statement = select(Transaction).where(Transaction.id.in_(ids)).execution_options(populate_existing=True)
+    return {row.id: (row.type, row.quantity, row.related_transaction_id, row.cost_basis_override, row.cost_basis_currency) for row in (await world.session.execute(statement)).scalars()}
+
+
+def _answered(response: TXBatchResponse, operation: str, index: int) -> tuple[Decimal, str] | None:
+    """The Auto cost the batch answered for row ``operation`` ``index`` (``wac_results``), or None."""
+    for item in response.wac_results or []:
+        if item.operation == operation and item.index == index and item.wac is not None:
+            return item.wac.amount, item.wac.code
+    return None
+
+
+def _created_id(response: TXBatchResponse, index: int) -> int:
+    """The id of create ``index``, from the batch's results."""
+    return next(result.ids[0] for result in response.results if result.operation == "create" and result.index == index)
+
+
+def _endpoint(commit: bool) -> str:
+    return "/commit" if commit else "/validate"
+
+
+def _verdict(response: TXBatchResponse, operation: str, index: int) -> str:
+    """What a batch did, for a failure message: committed, and with which Auto cost on row ``operation`` ``index``;
+    validated clean with it; or refused, and for what."""
+    cost = _show(_answered(response, operation, index) or (None, None))
+    if response.committed:
+        return f"the batch committed, saving an Auto cost of {cost} on {operation} {index}"
+    if not response.issues:
+        return f"the batch validated clean, answering an Auto cost of {cost} on {operation} {index}, the cost /commit saves"
+    return f"the batch was refused with [{_render(response.issues)}] (Auto cost answered on {operation} {index}: {cost})"
+
+
+async def _assert_refused_unreadable(world: World, response: TXBatchResponse, batch: AutoBatch, *, count: int, pool: str, mode: str, today: str, commit: bool, brokers: list[int], before: dict[int, dict]) -> None:
+    """(a)'s assertions: exactly one issue, ``autoCostUnreadable`` ``{"count": count}`` on the Auto row's operation and
+    index, ``ref_id`` None, ``field`` ``cost_basis_override`` — so no id in its ``ref_id`` or its ``params`` —; not
+    committed; no transaction id in its text either (the pool may be another user's broker: ``_ids_named``); and every row
+    of ``brokers`` as it was, the planted 'n/a' included. ``pool`` says what the pool holds, ``today`` what today's average
+    makes of it."""
+    expected = _unreadable_issue(batch.operation, batch.index, ref_id=None, count=count)
+    views = [_issue_view(issue) for issue in response.issues]
+    where = f"{batch.operation} {batch.index} ({mode}, {_endpoint(commit)})"
+    assert (response.committed, views) == (False, [expected]), f"W-B69: an Auto cost over a pool with {pool} must be refused with {AUTO_COST_UNREADABLE} {{count: {count}}} on {where}; today {_verdict(response, batch.operation, batch.index)} — {today}"
+    named = _ids_named(response.issues[0], set(before) | {tx_id for result in response.results for tx_id in result.ids})
+    assert named == [], f"W-B69: the pool may be another user's broker, so {AUTO_COST_UNREADABLE} names no transaction; it names {named}: {_render(response.issues)}"
+    changed = _changed(before, await _raw_rows(world, brokers))
+    assert changed == {}, f"W-B69: the refused batch changed rows of the test's brokers (before, after): {changed}"
+
+
+async def _assert_takes(world: World, response: TXBatchResponse, batch: AutoBatch, *, cost: Decimal, commit: bool, what: str) -> None:
+    """A guard's assertions: no issue, committed on /commit; the Auto row answered ``cost`` EUR; and /commit saved it."""
+    assert (response.committed, response.issues) == (commit, []), f"{what} was refused ({_endpoint(commit)}): {_render(response.issues)}"
+    assert _answered(response, batch.operation, batch.index) == (cost, EUR), f"{what}: expected an Auto cost of {cost} {EUR}; {_verdict(response, batch.operation, batch.index)}"
+    if commit:
+        row_id = batch.row_id if batch.row_id is not None else _created_id(response, batch.index)
+        stored = await _stored_cost(world, row_id)
+        assert stored == (cost, EUR), f"{what}: the Auto row id={row_id} was committed with {_show(stored)}, not {cost} {EUR}"
+
+
+def _leg_shown(raw: dict | None) -> str:
+    """A row as ``_raw_rows`` reads it, for a failure message."""
+    if raw is None:
+        return "gone"
+    return f"{raw['type']} {raw['quantity']} with cost {raw['cost_basis_override']} {raw['cost_basis_currency']}, linked to {raw['related_transaction_id']}"
+
+
+def _unreadable_issue(operation: str, index: int, *, ref_id: int | None, count: int) -> dict:
+    """The issue of W-B69's cure, as ``_issue_view`` shows it."""
+    return {"operation": operation, "index": index, "ref_id": ref_id, "code": AUTO_COST_UNREADABLE, "field": "cost_basis_override", "params": {"count": count}}
+
+
+def _ids_named(issue: TXValidationIssue, ids: set[int]) -> list[int]:
+    """The ids of ``ids`` from ``_ID_GAP`` on — the planted rows and every row written after them — that the text of
+    ``issue`` names. Its ``ref_id`` and its ``params`` the caller pins whole; below the gap a number of the text may be the
+    count, a day or an amount, so the rows written before the plant (the ``world``'s) are not looked for."""
+    named = {int(number) for number in re.findall(r"\d+", issue.error)}
+    return sorted(named & {tx_id for tx_id in ids if tx_id >= _ID_GAP})
+
+
+class TestWB69AnAutoRowOverAnUnreadablePool:
+    """RED until W-B69 — cases (a), (d), the stored cost basis (the contract's addition of 17/10) and the count: an Auto
+    row whose pool holds a row that reads None in its quantity, its amount or a cost basis it stores is refused on its own
+    coordinates, and its batch saves nothing.
+
+    The Auto row is the receiving leg of a TRANSFER pair source → dest, at index 1 (``_auto_batch``): created, or stored at
+    42 EUR and recomputed by an update that also gives both legs new notes. Either way its pool is ``source`` up to the
+    move without the pair's two legs: the ``world``'s BUY and the planted row. Today the batch commits (or validates) with
+    the average of what reads: 100 EUR without the row of quantity 'n/a'; 50 with the BUY of amount 'n/a' taken as free, or
+    with the row whose stored cost basis is 'n/a' taken at an unknown cost, entering at zero.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("mode", AUTO_MODES)
+    @pytest.mark.parametrize("operation", AUTO_OPERATIONS)
+    @pytest.mark.parametrize("column", UNREADABLE_COLUMNS)
+    async def test_auto_row_over_a_pool_with_an_unreadable_row_is_refused(self, world, column, operation, mode, commit):
+        """RED until W-B69 (a) — and (d) with ``column`` amount: exactly one issue, ``autoCostUnreadable`` on the Auto row's
+        operation and index, ``ref_id`` None, ``field`` ``cost_basis_override``, ``params`` ``{"count": 1}``; not committed;
+        no transaction id in the issue, its params or its text (the pool may be another user's broker); and every row of
+        the test's brokers as it was, the planted 'n/a' included: refused, nothing repaired (``_assert_refused_unreadable``)."""
+        await _plant(world, unreadable=(column,))
+        batch = await _auto_batch(world, operation, mode)
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _as_the_endpoint(world, commit=commit, creates=batch.creates, updates=batch.updates)
+
+        pool = f"an unreadable row (a {PLANT_LABELS['buy']} of source whose {column} is 'n/a')"
+        await _assert_refused_unreadable(world, response, batch, count=1, pool=pool, mode=mode, today=TODAY_OVER_AN_UNREADABLE[column], commit=commit, brokers=brokers, before=before)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("operation", AUTO_OPERATIONS)
+    @pytest.mark.parametrize("kind", INCOMING_KINDS)
+    async def test_auto_row_over_a_pool_with_an_unreadable_stored_cost_basis_is_refused(self, world, kind, operation, commit):
+        """RED until W-B69, the contract's addition of 17/10: a pool row that stores a cost basis — ``cost_basis_override``
+        not NULL in SQL — which reads None is unreadable like a quantity or an amount. (a)'s assertions, ``{"count": 1}``.
+
+        The row is an incoming one that takes a cost basis, dated before the move: an ADJUSTMENT +10, or a receiving
+        TRANSFER +10 (its giving leg on a third broker of the test's), stored at 300 EUR a unit, then 'n/a'; its quantity
+        and its amount read. Today the average takes it as an acquisition of unknown cost, entering at zero: the Auto row
+        gets 1 000 / 20 = 50 EUR, saved by /commit and answered by /validate. A BUY's NULL cost basis is legitimate and
+        refuses nothing: the readable guards hold that.
+        """
+        await _plant(world, kind=kind, unreadable=("cost_basis_override",))
+        batch = await _auto_batch(world, operation, "auto")
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _as_the_endpoint(world, commit=commit, creates=batch.creates, updates=batch.updates)
+
+        pool = f"an unreadable stored cost basis (a {PLANT_LABELS[kind]} on source, its cost_basis_override then 'n/a')"
+        await _assert_refused_unreadable(world, response, batch, count=1, pool=pool, mode="auto", today=TODAY_OVER_AN_UNREADABLE["cost_basis_override"], commit=commit, brokers=brokers, before=before)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("plants", "count", "today"),
+        [
+            pytest.param((("buy", ("quantity",)), ("buy", ("amount",))), 2, "the average skips the first row and takes the second as a free acquisition: 1 000 / 20 = 50", id="two-rows"),
+            pytest.param((("buy", ("quantity", "amount")),), 1, "the average skips the row: 1 000 / 10 = 100", id="one-row-quantity-and-amount"),
+            pytest.param((("adjustment", ("quantity", "cost_basis_override")),), 1, "the average skips the row: 1 000 / 10 = 100", id="one-row-quantity-and-cost-basis"),
+        ],
+    )
+    async def test_count_is_the_number_of_unreadable_rows(self, world, plants, count, today):
+        """RED until W-B69: ``count`` counts rows, not values. Two rows of the pool unreadable — a BUY by its quantity, the
+        next day's BUY by its amount — give ``{"count": 2}``; one row unreadable in two columns gives ``{"count": 1}``: a
+        BUY by its quantity and its amount, DERIVED from «the number of such rows», or an ADJUSTMENT +10 by its quantity and
+        its stored cost basis, as the contract's addition of 17/10 says. (a)'s assertions, on the create of the pair on
+        /commit. Today the batch commits: at 50 EUR for the two rows (the first skipped, the second free: 1 000 / 20), at
+        100 for the one (skipped: 1 000 / 10)."""
+        for offset, (kind, columns) in enumerate(plants):
+            await _plant(world, kind=kind, unreadable=columns, day=LATER_BUY_DAY + timedelta(days=offset))
+        batch = await _auto_batch(world, "create", "auto")
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _as_the_endpoint(world, commit=True, creates=batch.creates)
+
+        shape = " and ".join(f"a {PLANT_LABELS[kind]} whose {' and '.join(columns)} read 'n/a'" for kind, columns in plants)
+        await _assert_refused_unreadable(world, response, batch, count=count, pool=f"{len(plants)} unreadable row(s) — {shape}", mode="auto", today=today, commit=True, brokers=brokers, before=before)
+
+
+class TestWB69TheSplitOfATransferOverAnUnreadablePool:
+    """W-B69 (b): the split of a TRANSFER pair hands its giving leg over at the Auto cost of ``source`` up to the move,
+    without the leg (decision 47: ``_handover_cost``, in the batch's WAC stage). RED until the cure when that pool holds an
+    unreadable row; a guard with every row readable."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("column", UNREADABLE_COLUMNS)
+    async def test_split_whose_handover_pool_holds_an_unreadable_row_is_refused(self, world, column, commit):
+        """RED until W-B69 (b): exactly one issue, ``autoCostUnreadable`` on split 1 — index 0 is the split of an
+        FX_CONVERSION pair, which needs no cost —, ``ref_id`` the giving leg (as ``wacFxUnavailable`` on a split), ``field``
+        ``cost_basis_override``, ``params`` ``{"count": 1}``; not committed; the pair intact — two TRANSFER legs linked both
+        ways, the receiving one at its 42 EUR — and every other row as it was. Today the split goes through and hands the
+        giving leg over at the average of what reads."""
+        await _plant(world, unreadable=(column,))
+        sold, bought = await _fx_conversion_pair(world)
+        stored = await _store(world, "transfer_in", cost=STORED_COST)
+        giving, receiving = stored.rows
+        giving_id, brokers = giving.id, [world.source.id, world.dest.id]
+        before = await _raw_rows(world, brokers)
+
+        response = await _as_the_endpoint(world, commit=commit, splits=[{"id_a": sold.id, "id_b": bought.id}, {"id_a": giving.id, "id_b": receiving.id}])
+
+        after = await _raw_rows(world, brokers)
+        expected = _unreadable_issue("split", 1, ref_id=giving_id, count=1)
+        assert (response.committed, [_issue_view(issue) for issue in response.issues]) == (False, [expected]), (
+            f"W-B69: the split of a TRANSFER pair whose giving leg's handover pool holds an unreadable row (a BUY of source whose {column} is 'n/a') must be refused with "
+            f"{AUTO_COST_UNREADABLE} {{count: 1}} on split 1, ref_id the giving leg id={giving_id} ({_endpoint(commit)}); today the batch answers committed={response.committed}, "
+            f"issues [{_render(response.issues)}], and leaves the giving leg {_leg_shown(after.get(giving_id))} — {TODAY_OVER_AN_UNREADABLE[column]}"
+        )
+        changed = _changed(before, after)
+        assert changed == {}, f"W-B69: the refused split changed rows of source and dest (before, after): {changed}"
+
+    @pytest.mark.asyncio
+    async def test_split_over_a_readable_pool_hands_the_giving_leg_over_at_its_average(self, world):
+        """Guard, green today and after W-B69: with the planted BUY readable the split commits; the giving leg leaves as an
+        ADJUSTMENT −4 at ``source``'s average, (1 000 + 3 000) / 20 = 200 EUR, and the receiving leg becomes an ADJUSTMENT
+        +4 that keeps its 42 EUR."""
+        await _plant(world)
+        stored = await _store(world, "transfer_in", cost=STORED_COST)
+        giving_id, receiving_id = stored.rows[0].id, stored.rows[1].id
+
+        response = await _as_the_endpoint(world, commit=True, splits=[{"id_a": giving_id, "id_b": receiving_id}])
+
+        assert response.committed is True and response.issues == [], f"The split of a TRANSFER pair over a readable pool was refused: {_render(response.issues)}"
+        assert await _rows_by_id(world, [giving_id, receiving_id]) == {
+            giving_id: (TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY, None, READABLE_POOL_COST, EUR),
+            receiving_id: (TransactionType.ADJUSTMENT, TRANSFER_QUANTITY, None, STORED_COST.amount, STORED_COST.code),
+        }
+
+
+class TestWB69GuardsReadablePoolsAndRowsOutsideThePool:
+    """Guards, green today and after W-B69: an Auto row over a readable pool takes its average, and an unreadable row the
+    pool does not hold refuses nothing."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("mode", AUTO_MODES)
+    @pytest.mark.parametrize("operation", AUTO_OPERATIONS)
+    async def test_auto_row_over_a_readable_pool_takes_its_average(self, world, operation, mode, commit):
+        """Guard: (a)'s batches with the planted BUY readable — its cost basis NULL, as a BUY's is: no issue, and the Auto
+        row's cost is ``source``'s average, (1 000 + 3 000) / 20 = 200 EUR — answered on /validate, answered and saved on
+        /commit."""
+        await _plant(world)
+        batch = await _auto_batch(world, operation, mode)
+
+        response = await _as_the_endpoint(world, commit=commit, creates=batch.creates, updates=batch.updates)
+
+        await _assert_takes(world, response, batch, cost=READABLE_POOL_COST, commit=commit, what=f"An Auto {operation} ({mode}) over a readable pool")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("operation", AUTO_OPERATIONS)
+    @pytest.mark.parametrize("kind", INCOMING_KINDS)
+    async def test_auto_row_over_a_readable_stored_cost_basis_takes_its_average(self, world, kind, operation, commit):
+        """Guard: the stored-cost-basis case with the planted row readable — an ADJUSTMENT +10 or a receiving TRANSFER +10
+        at 300 EUR a unit: no issue, and the Auto row's cost is ``source``'s average, (1 000 + 10 × 300) / 20 = 200 EUR —
+        answered on /validate, answered and saved on /commit. A cure that counted every stored cost basis, not only one that
+        reads None, turns it red."""
+        await _plant(world, kind=kind)
+        batch = await _auto_batch(world, operation, "auto")
+
+        response = await _as_the_endpoint(world, commit=commit, creates=batch.creates, updates=batch.updates)
+
+        await _assert_takes(world, response, batch, cost=READABLE_POOL_COST, commit=commit, what=f"An Auto {operation} over a pool holding a readable {PLANT_LABELS[kind]}")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("where", "operation"),
+        [
+            pytest.param("another-asset", "create", id="another-asset-create"),
+            pytest.param("another-asset", "update", id="another-asset-update"),
+            pytest.param("after-the-move", "update", id="after-the-move-update"),
+        ],
+    )
+    async def test_unreadable_row_outside_the_pool_refuses_nothing(self, world, where, operation):
+        """Guard: a BUY of quantity 'n/a' on ``source`` that the pool does not hold — of another asset, or dated a week
+        after the move, past the pool's date — refuses nothing: the batch commits, and the Auto row takes the ``world``'s
+        BUY alone, 100 EUR.
+
+        The update recomputes the receiving leg alone (index 0): a row dated after the move lies on a day the balance replay
+        of ``source`` would read in its day-by-day loop, which fails on a quantity that reads None for a reason of its own
+        (module docstring); this batch replays no day of ``source``.
+        """
+        if where == "another-asset":
+            await _plant(world, unreadable=("quantity",), asset_id=await _other_asset(world))
+        else:
+            await _plant(world, unreadable=("quantity",), day=MOVE_DAY + timedelta(days=7))
+        batch = await _auto_batch(world, operation, "auto", alone=operation == "update")
+
+        response = await _as_the_endpoint(world, commit=True, creates=batch.creates, updates=batch.updates)
+
+        await _assert_takes(world, response, batch, cost=UNIT_COST, commit=True, what=f"An Auto {operation} beside an unreadable row outside the pool ({where}), its average the world's BUY alone,")
+
+
+class TestWB69TheCodeAndItsMessages:
+    """W-B69's code: RED until the cure lists ``autoCostUnreadable``. And the gate that holds every code to its message in
+    the app's four languages: green today (``dateOutOfRange`` included) and after the cure, which it then covers too — it
+    reads the enum."""
+
+    def test_tx_validation_code_has_auto_cost_unreadable(self):
+        """RED until W-B69: ``TXValidationCode.AUTO_COST_UNREADABLE == "autoCostUnreadable"`` — the app maps a refusal's code
+        to ``transactions.errors.<code>``."""
+        member = getattr(TXValidationCode, "AUTO_COST_UNREADABLE", None)
+
+        assert member is not None and member.value == AUTO_COST_UNREADABLE, f"W-B69: TXValidationCode.AUTO_COST_UNREADABLE is {member!r}: expected a member of value {AUTO_COST_UNREADABLE!r}"
+
+    def test_transaction_types_lists_auto_cost_unreadable(self):
+        """RED until W-B69: the response ``GET /transactions/types`` builds (``get_transaction_types``) lists
+        ``autoCostUnreadable`` in ``validation_codes`` (``VALIDATION_CODE_METADATA``)."""
+        response = TXTypesResponse(transaction_types=list(TX_TYPE_METADATA.values()), event_types=EVENT_TYPE_METADATA)
+
+        listed = sorted(info.code for info in response.validation_codes)
+
+        assert AUTO_COST_UNREADABLE in listed, f"W-B69: GET /transactions/types does not list {AUTO_COST_UNREADABLE!r} in validation_codes: {listed}"
+
+    @pytest.mark.parametrize("language", UI_LANGUAGES)
+    def test_every_code_has_its_message_in_every_language(self, language):
+        """Gate, green today and after W-B69: every ``TXValidationCode`` has a non-empty ``transactions.errors.<code>`` in
+        ``language``, read without the English fallback (``load_catalog(language, fallback=False)``). A code without one is
+        a refusal the app cannot put in the user's words."""
+        messages = flatten(load_catalog(language, fallback=False))
+
+        missing = [code.value for code in TXValidationCode if not str(messages.get(f"transactions.errors.{code.value}") or "").strip()]
+
+        assert missing == [], f"transactions.errors has no {language} message for {missing}"

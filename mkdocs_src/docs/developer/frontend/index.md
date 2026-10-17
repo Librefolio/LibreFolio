@@ -50,12 +50,13 @@ frontend/
 │       │   ├── email/           # Email tab, address verification, password-reset and shared-link emails
 │       │   ├── files/           # Files table and grid, preview modal and file-set badges
 │       │   ├── instance/        # Instance config, notices and blocked-instance page
+│       │   ├── legal/           # Legal notice of the instance: LegalNotice (full) and LegalLinks (one line)
 │       │   ├── live-updates/    # Activity-aware polling of live prices and its "Updates paused" pill
 │       │   ├── onboarding/      # Welcome setup, intro tour and contextual guides
 │       │   ├── plugin-settings/ # Plugins tab, Configure dialog and form for plugin-declared settings
 │       │   ├── risk/            # Risk panels, levels, stores and request logic
 │       │   ├── settings/        # Settings tab registry and tabs (Profile, Preferences, Global Settings, About, Users, Security)
-│       │   ├── support/         # Donation popup, social share and support links
+│       │   ├── support/         # Donation popup, social share, support links and donationsVisible()
 │       │   ├── tools/           # Tools hub, tool host and registry, PAC allocator tool
 │       │   └── update-check/    # New-release check and its modals (update available, ask an admin)
 │       ├── i18n/         # Internationalization (EN, IT, FR, ES)

@@ -732,7 +732,8 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
             const detail = ((await refused.json()) as EventRefusalBody).detail;
             expect({error_code: detail?.error_code, params: detail?.params}, 'the refusal says why, and where').toEqual({
                 error_code: 'EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST',
-                params: {asset_id: assetId, item_index: 0, event_id: eventId, date: d2, transaction_ids: [adjustmentId]},
+                // R13-SEC7: the caller owns the broker and sees every adjustment, so none is hidden.
+                params: {asset_id: assetId, item_index: 0, event_id: eventId, date: d2, transaction_ids: [adjustmentId], hidden_transactions_count: 0},
             });
             expect(await eventsOn(page, assetId, d2), 'the event is still the SPLIT, under its id').toEqual([{id: eventId, type: 'SPLIT'}]);
             const kept = await readTransaction(page, adjustmentId);

@@ -25,7 +25,7 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
 | `holding_window.py` | how long a position has been held at its broker, from its quantity stream: the oldest lot still open (`oldest_open_lot_date`), a closed position's flight time (`closed_position_window`); a split rescales the open lots, never opens or consumes one |
 | `fifo/` | FIFO lots: `models`, `eligibility`, `engine` (`run_fifo_lot_engine`) |
 | `portfolio/` | daily portfolio state: `models`, `classifier`, `daily_state`, `derived_views`, `data_quality`, `period` (a period's boundary states, P&L and identity; the day's change of the total P&L, `day_change`), `contributions` (a position's figures in the Performance table: P22 transfer split, return on the start value, annualized window, closed positions), `engine` |
-| `lots/` | lots analysis math: `prices`, `conversions` (`convert_closure`: a closure's legs, each in its currency at its date), `economic_events`, `histories`, `summary` (a lot's figures: `residual_cost`, `lot_value`, `lot_summary_figures`), `average_cost_lines` |
+| `lots/` | lots analysis math: `prices`, `conversions` (`convert_closure`: a closure's legs, each in its currency at its date), `economic_events`, `histories`, `summary` (a lot's figures: `residual_cost`, `lot_value`, `lot_summary_figures`), `average_cost_lines`, `scope_boundary` (a transfer leg whose partner sits outside the scope, read at its edge: `read_transfers_at_scope_boundary`) |
 
 ## Rules
 
@@ -45,8 +45,12 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
    make the patch mute.
 5. **One implementation.** Before writing a calculation, search the layer; if it exists, call it, with parameters when
    your case differs. Never keep a local or partial copy elsewhere, and report any copy you find.
-6. **The frontend computes none of these quantities.** Interactive measures (the measuring tool, what-if) are the only
-   exceptions, and each must be declared where it lives.
+6. **The frontend computes none of these quantities.** Interactive measures (the measuring tool, what-if, and the
+   aggregates of the lots the user chooses, D-MF6(b)) are the only exceptions, and each must be declared where it lives.
+7. **Change Decimal precision or rounding only inside `decimal.localcontext()`**, never by mutating `getcontext()`.
+   The portfolio replay runs in a worker thread under a copy of the request's context (J-45, `portfolio/engine.py`),
+   and that copy shares the same `decimal.Context` object: a `getcontext().prec = …` in the replay would change the
+   request's precision too, and the other way round.
 
 ## Adding a calculation
 

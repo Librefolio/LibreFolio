@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import replace
@@ -40,6 +41,7 @@ from backend.app.services.financial_math.portfolio.models import (
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 logger = structlog.get_logger(__name__)
 
@@ -300,6 +302,7 @@ class DailyStateBuilder:
         self._replay_from = min([self.date_from, *movement_days])
         frame_fx_days = set(self.native_cash.rate_change_days(self._replay_from, self.date_to))
         dirty_days = self._collect_dirty_days(set(cash_deltas) | set(position_txs_by_date) | set(ecf_by_date) | internal_flow_dates, set(position_txs_by_date), frame_fx_days)
+        ordered_dirty_days = sorted(dirty_days)
 
         previous_state: DailyPortfolioState | None = None
         current = self._replay_from
@@ -307,6 +310,12 @@ class DailyStateBuilder:
             # Day skipping: if this day is stationary (no tx, ecf, price change, or
             # in-transit boundary), reuse the previous state with updated date.
             if current not in dirty_days and previous_state is not None:
+                if current < self.date_from:
+                    # R13-SEC8: nothing is emitted before date_from, and a quiet day only carries the state: on to the
+                    # next dirty day (date_from is one). A row stored centuries back costs its dirty days, not a walk.
+                    position = bisect.bisect_right(ordered_dirty_days, current)
+                    current = ordered_dirty_days[position] if position < len(ordered_dirty_days) else self.date_to + timedelta(days=1)
+                    continue
                 # The containers are copied, never shared between two days' states.
                 previous_state = replace(
                     previous_state,
@@ -903,11 +912,14 @@ class DailyStateBuilder:
         currencies = {currency for prices in self.price_map.values() for _day, _close, currency in prices if currency}
         currencies.update(currency for currency in self.asset_currencies.values() if currency)
         currencies.discard(self.target_currency)
+        # R13-SEC8: no rate is read before EARLIEST_RANGE_START (none is loaded there), so the calendars start there at
+        # the earliest: a row stored centuries back never makes a calendar of every day since.
+        replay_from = max(self._replay_from, EARLIEST_RANGE_START)
         if currencies:
-            changed.update(day for day in change_days(self._read_rate, currencies, _calendar(self._replay_from - timedelta(days=1), self.date_to)) if day >= self._replay_from)
+            changed.update(day for day in change_days(self._read_rate, currencies, _calendar(replay_from - timedelta(days=1), self.date_to)) if day >= replay_from)
         for interval in self.in_transit_intervals:
             currency = interval.departure_leg.currency
-            start, end = max(interval.start_date, self._replay_from), min(interval.end_date, self.date_to)
+            start, end = max(interval.start_date, replay_from), min(interval.end_date, self.date_to)
             if interval.tx_type != "cash" or not currency or currency == self.target_currency or start > end:
                 continue
             changed.update(day for day in change_days(self._read_rate, {currency}, _calendar(start - timedelta(days=1), end)) if day >= start)

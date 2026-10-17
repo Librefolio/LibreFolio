@@ -4162,3 +4162,407 @@ corsia.
   (`bulk_too_many_items`, `bulk_too_many_days`). L'uso reale (2,7 milioni) passa senza toccare il web app; 1 000 voci
   di cambi su 100 anni (36,5 milioni) no. Il lotto nel web app resta un seguito, se un portafoglio vero arriva vicino
   al budget.
+
+> **Via** (coordinatore, 17/10 ~08:30): «X-R55 entered: dev `ab7711f04`, CHANGELOG 🔒 `eed325d99`. Your HEAD is ff'd
+> to `eed325d99`. Z-25: option C (`max_length` 1,000 items + a budget of 5 M item-days per request, with codes
+> `bulk_too_many_items` / `bulk_too_many_days`), as night decision N77, for review. Add a docstring/doc line on what
+> the web app does if an instance goes over 1,000 assets (an explicit error, not a silent half page) and log the web
+> app's batching as a follow-up for Y/X. Reds first; X reviews.»
+
+**Fatti trovati dopo il via** (17/10 ~08:33):
+- «All» nella lista asset parte da `2000-01-01` (`resolveDateSentinel`), poi si stringe al primo dato. 300 asset fanno
+  circa 2,9 milioni di voci-giorno.
+- **Contare i giorni chiesti non basta, per gli asset.** Un segnale a storia intera porta il riscaldamento fino a
+  `date.min`, e il riempimento emette dal primo prezzo salvato fino alla fine, anche se l'intervallo visibile è di un
+  giorno. Un budget sui giorni visibili si aggira; uno su 100 anni per voce boccia viste legittime (300 asset con il
+  drawdown sarebbero 11 milioni). Il conto onesto è lo span che il riempimento emetterà davvero, che si conosce solo
+  dopo la lettura del DB.
+- Non c'è un gestore globale che trasformi un'eccezione di dominio in un 422.
+- **Il web app, su un errore di `prices/query`, oggi tace.** La lista asset lo scrive nella console, toglie il
+  caricamento e mostra le carte senza prezzi, con quelli in cache (`assets/+page.svelte`, il `catch` di
+  `fetchAllPriceData`). È proprio la «mezza pagina silenziosa»: domandato al coordinatore.
+
+**Contratto** (N77):
+- In `utils/date_range_limits.py`:
+  - `MAX_BULK_ITEMS = 1_000` e `MAX_BULK_ITEM_DAYS = 5_000_000`;
+  - `BulkTooManyDaysError(item_days, max_item_days)`, un'eccezione di dominio.
+- **Voci.** Ognuno dei due endpoint, prima di qualunque lavoro: più di 1 000 voci danno 422, con `detail` =
+  `{"code": "bulk_too_many_items", "message", "max_items": 1000, "items": n}`.
+- **Giorni, asset.** `get_prices_bulk`, dopo la lettura del DB e dei semi e prima del ciclo del riempimento, somma per
+  ogni voce lo span che il riempimento emetterà: da `max(inizio del caricamento, primo prezzo o seme)` alla fine
+  tagliata, confronti compresi, 0 senza dati. Oltre il budget solleva `BulkTooManyDaysError`, e `prices.py` lo
+  traduce in 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
+  - Rischio e AI Export lo chiamano dall'interno: senza traduzione darebbe un 500, comunque un rifiuto. Lo lascio come
+    residuo per Y e J.
+- **Giorni, cambi.** Il gestore conta le voci giornaliere e quelle dei segnali che sta per costruire. Appena il totale
+  supera il budget, risponde 422 con lo stesso `detail`; `item_days` è il conto a quel punto, «almeno».
+
+> **Decisione** (coordinatore, 17/10 ~08:36): «Z-25: **(b)** for you: document honestly that today it's silent (the
+> `fetchAllPriceData` catch). **The explicit error goes to X**, which is already in `assets/+page.svelte`/
+> `fx/+page.svelte` with X-R53: two writers on those files aren't allowed. I'll tell X now. The design with
+> `BulkTooManyDaysError` counted after the read: OK. For the risk/AI Export residual (500 instead of a coded refusal)
+> I'll give J a line.»
+
+**Passi.**
+1. ✅ 17/10 08:35–~09:09 — Rossi di test-author, su HEAD `eed325d99`; nessun codice di prodotto toccato.
+   - Nuovo `backend/test_scripts/test_services/test_bulk_limits.py` (17 casi, PURE: SQLite privato sotto
+     `tmp_path`, o una sessione finta che conta le istruzioni; il gestore dei cambi chiamato direttamente).
+   - API: BL-API-01 in `test_assets_prices.py`; BL-API-02/03 in `test_fx_api.py`.
+   - Runner: l'azione `range-ceiling` ora lancia i due file (nessuna azione nuova: test-author non poteva
+     verificarla). Ho corretto io la dicitura «tomorrow (UTC)»: dall'allineamento a J il tetto segue il calendario
+     del server.
+   - Rossi per la ragione giusta: `services range-ceiling` 35 passati (33 di X-R55, più BL-I04 e BL-A02, verdi per
+     costruzione) e 15 falliti, tutti suoi; `api assets-price` 20 + 1 rosso; `api fx` 23 + 2 rossi.
+     `fx-conversion` 44, `asset-source` 61, `api fx-signals` 8 verdi.
+   - BL-API-03 non manda i 7,3 milioni di voci-giorno a un backend che non legge il budget: fallisce subito.
+2. ✅ 17/10 08:36–08:45 — Bozza fuori dal repo (`files/z25-draft/apply_z25.py`), provata su una copia:
+   applicazione, compilazione, black pulito, inverso esatto.
+   - `date_range_limits.py`: le costanti, `BulkTooManyDaysError`, i due `detail` dei 422.
+   - `price_query.py`: `_fill_span` (conta senza costruire), e il conto dopo la lettura di prezzi e semi, prima di
+     eventi e riempimenti.
+   - `prices.py`: il controllo delle voci e la traduzione dell'errore. La docstring dice, onestamente, che oggi la
+     lista asset tace (decisione b).
+   - `currencies.py`: il controllo delle voci, il budget, la docstring.
+   - Le costanti sono importate per nome dove vengono lette, così i test le abbassano lì: lo stesso seam di J.
+   - Backlog: Z-27, il seguito del web app per Y e X.
+
+   > **⚠️ Fuori pista** (~09:10): test-author ha notato che la bozza contava «prima di ogni blocco»: una richiesta
+   > rifiutata avrebbe costruito prima ~4,97 milioni di voci (secondi, ~2 GB), e la docstring diceva il contrario.
+   > Rifatto il ciclo dei cambi in due tempi: prima ogni blocco di giorni (giornaliero e segnale) è pianificato e
+   > contato, `day_blocks`; il 422 parte alla fine della conversione che passa il budget; solo poi i blocchi sono
+   > espansi, nello stesso ordine di prima. Riprovata sulla copia (compilazione, black, inverso esatto).
+3. ✅ 17/10 ~09:12 — Applicata al repo (13 sostituzioni). `ruff` ha trovato un I001 in `prices.py`: l'import nuovo
+   stava sopra i due di `services.signals`. Ho spostato l'ancora nella bozza (dopo `SignalPluginRegistry`),
+   annullato e riapplicato: `ruff` e `black --check` puliti su prodotto, test e runner. Impronta in
+   `files/z25-draft/z25_applied.md5`. Diff: 4 file, +122 −42.
+4. ✅ 17/10 09:13–09:44 — Controlli leggeri, corsia 6186, uno alla volta col cancello del carico (< 50):
+   `files/z25_light.sh green`, log in `files/logs/z_z25_green_*.log`.
+   - `services range-ceiling` 50 (33 di X-R55 + 17 di Z-25: i 15 rossi ora verdi), `fx-conversion` 44,
+     `asset-source` 61, `asset-signals` 30, `risk-all` 902, `schemas openapi-client-text` 78.
+   - `api assets-price` 21 (20 + BL-API-01), `api fx` 25 (23 + BL-API-02/03), `api fx-signals` 8. BL-API-03: 7,3
+     milioni di voci-giorno rifiutate in 0,01 s, a 5 004 062. Porta 6186 libera alla fine.
+   - `services ai-export`: 864 passati, nessun fallimento, poi il tempo massimo del runner (600 s; con X-R55 1 064 in
+     341 s). Il carico è salito a 63 durante il giro, e il test in corso, `TestFreshImportCompatibility`, lancia un
+     processo Python nuovo per caso (`-B`, con e senza `-O`): CPU, non prezzi. I componenti che chiamano
+     `get_prices_bulk()` erano già passati. Rilancio dietro un cancello più stretto (< 30): `files/z25_aiexport.sh`.
+   - 09:47–09:55, rilancio (carico 19 alla partenza): `services ai-export` 1 064 passati in 452 s, rc 0. Porta 6186
+     libera.
+
+   > **⚠️ Fuori pista**: il primo giro di `ai-export` è scaduto per il carico, non per un rosso (vedi sopra).
+5. ✅ 17/10 ~09:25–09:34 — Documentazione (docs-writer, solo inglese, nessuno stamp: pagine developer senza
+   traduzioni), con ogni affermazione verificata sul codice (file:riga nella sua risposta).
+   - `developer/backend/assets/architecture.md`, «📊 Data Flow: Price Query», dopo il paragrafo di X-R55: i due
+     tetti, `_fill_span()`, il conto che segue il riempimento, l'àncora nuova `#bulk-request-limits`; e la nota
+     onesta sul web app (decisione b), più precisa della bozza: la cache dei prezzi è condivisa col dettaglio, quindi
+     restano senza prezzo solo gli asset chiesti; l'errore va alla console, e con segnali del backend la finestra
+     delle impostazioni del grafico mostra il suo avviso generico.
+   - `developer/backend/fx/architecture.md`, «🔄 Conversion Logic», dopo `#convert-range-ceiling`: i due tetti, il
+     ciclo in due tempi (pianificare e contare, poi espandere), àncora `#convert-request-limits`.
+   - Una frase dice che rischio e AI Export, che chiamano `get_prices_bulk()` direttamente, ricevono
+     `BulkTooManyDaysError` così com'è: il residuo che il coordinatore dà a J, che dovrà aggiornarla.
+   - 09:44–09:46: `mkdocs build` stretto rc 0, nessun avviso (carico 41); `check-links` 97 validi
+     (`files/z25_build.sh`).
+6. ✅ 17/10 ~09:50 — Backlog, nella mia sezione: Z-25 chiusa (✅, commit del coordinatore), con i due residui; Z-27
+   aggiunta (il seguito del web app per Y e X).
+7. ✅ 17/10 ~09:57 — Il coordinatore ha committato Z-25 sul mio ramo: `4b711e803` (fix) e `036007e99` (diario).
+   HEAD verificato: `036007e99` su `4b711e803` su `eed325d99`, albero pulito, impronte dei quattro file di prodotto
+   uguali a quelle provate. Ingresso dopo la revisione di X del ciclo dei cambi; riga del CHANGELOG come proposta.
+   Revisione di A8b (`scheduler.spec.ts`, una riga: `openSettingsTab(page, 'admin')`): OK, nessuna osservazione.
+
+### Z-26 — l'attesa del lock fra processi senza tempo massimo: analisi (17/10 ~10:00, sola lettura)
+
+Voce Z-26 del backlog (basso; E, R13-SEC8, via coordinatore). HEAD `036007e99`.
+
+**Stato reale.**
+- `scheduler_run_lock()` (`scheduler/run_lock.py:74`) riprova ogni `POLL_SECONDS` (0,2 s) finché il lock è libero,
+  senza limite (`:83`–`:91`). Chi aspetta tiene il lock del suo processo (`_run_lock()`, `scheduler.py:522`) e la
+  ragione `scheduler` dell'attività (`:519`): il suo ciclo non batte. Un `wake-sync` arrivato in quel processo aspetta
+  (uno spazio ogni 15 s), e quelli dopo rispondono 409 `wake_in_progress` (`api/v1/system/wake.py:136`).
+- Prima di Z-11 gli altri worker rispondevano subito `not_leader`; anche allora, fuori dal leader, nessun job girava.
+- Né lo scheduler né i job hanno un tempo massimo: `await job.run(state, settings)` (`scheduler.py:419`) aspetta
+  quanto serve. Un job fermo (un `await` che non torna) blocca prima di tutto il suo processo; Z-26 ne è la faccia
+  fra processi.
+- Portata: l'immagine Docker, quindi anche Fly, ha un solo processo (`Dockerfile:164`, nessun `--workers`): lì il lock
+  non ha mai concorrenti. Riguarda solo chi lancia più worker (`dev.py server --workers`, o un comando suo).
+- Le pagine dicono `not_leader` «solo su Windows»: `admin/sleep_wake.en.md:346` e `:378`,
+  `developer/backend/scheduler.md:65`, `:218` e `:237`. La pagina admin non ha traduzioni.
+
+**Proposta.**
+1. **Quanto.** Al più `LOCK_WAIT_SECONDS` di attesa, costante in `run_lock.py` (proposta: 600 s; nessuna variabile
+   d'ambiente). La scadenza parte all'inizio del giro (`run_due_jobs`) e copre le due attese, quella del lock del
+   processo e quella fra processi: una sveglia che arriva dietro un giro fermo dello stesso processo non aspetta il
+   doppio.
+   - Perché 600 s: più di un giro normale (minuti, con molti asset), e un giro che rinuncia non perde nulla: i job li
+     esegue l'altro processo, e il giro dopo (ogni `TICK_SECONDS`, 60 s) riprova.
+   - Non un solo tentativo con risposta immediata: Z-11 (N71) aspetta apposta, perché la risposta di un `wake-sync`
+     dica i job finiti (chi arriva secondo rilegge lo stato e li trova `not_due`).
+2. **Cosa risponde.** Il giro rinuncia senza eseguire nulla, con un avviso nel log (l'attesa e la ragione del giro):
+   è lì che un operatore vede il caso anomalo. Per lo stato, due strade:
+   - (a) `not_leader`, consigliata: il significato che pannello e cron già conoscono, «un altro worker esegue i job,
+     qui non è girato nulla»; nessun valore nuovo nell'API. Da correggere il «solo su Windows» delle due pagine.
+   - (b) uno stato nuovo (`busy`): più preciso, ma un valore che il pannello deve imparare, la descrizione del campo
+     in `schemas/sleep_wake.py:36` cambia (`api sync`), e una riga nuova nella tabella admin.
+3. La cancellazione resta com'è. Alla scadenza non c'è un tentativo in volo: la scadenza si guarda dopo un tentativo
+   fallito.
+
+**Superfici.** Tutte di Z (Z-11).
+- Prodotto: `run_lock.py` (la scadenza e un'eccezione, `SchedulerRunLockTimeout`), `scheduler.py` (la scadenza in
+  `run_due_jobs`, l'attesa del lock del processo limitata, l'eccezione tradotta nello stato).
+- Test (test-author): `test_scheduler_run_lock.py` (il detentore in un processo figlio: la rinuncia entro il limite,
+  senza descrittori né lock lasciati; un rilascio prima della scadenza, e il blocco gira); un giro `tick` e uno
+  `wake` col lock tenuto altrove e la scadenza abbassata: lo stato scelto, nessun job, stato su disco intatto,
+  `PRICE_REFRESH` chiuso. Non a livello API: il server di test ha `LIBREFOLIO_NO_SCHEDULER`, e risponde `disabled`
+  prima del lock.
+- Documentazione (inglese): `developer/backend/scheduler.md`, `admin/sleep_wake.en.md`.
+- Runner: le azioni esistenti (`scheduler-run-lock`, `scheduler-multiprocess`), al più una parola nelle descrizioni.
+- Peso: S (una ventina di righe di prodotto, quattro o cinque casi).
+
+**Decisioni chieste.** D-Z26-1: 600 s, o un altro tetto. D-Z26-2: (a) `not_leader` o (b) uno stato nuovo.
+
+> **Decisione** (coordinatore, 17/10 ~10:01): «Z-26: **D-Z26-1** = 600 s `LOCK_WAIT_SECONDS` constant, a single
+> deadline covering both waits, no env var. **D-Z26-2** = (a) `not_leader` plus the warning log, with the «only on
+> Windows» wording fixed in both pages. I'm recording both as night decision N79 for the developer's review. Go:
+> implement, reds first, light runs, then a FROZEN checkpoint. Z-24 was entered by H (`36a487e84`): close its line in
+> your section with this lot.»
+
+**Contratto (N79).**
+- `run_lock.py`: `LOCK_WAIT_SECONDS = 600.0`; `SchedulerRunLockTimeout(TimeoutError)`;
+  `scheduler_run_lock(path=None, *, deadline=None)`, `deadline` un istante di `time.monotonic()`. `None`: aspetta
+  quanto serve, come oggi. Con una scadenza: dopo un tentativo che trova il lock tenuto, se l'istante è passato
+  solleva `SchedulerRunLockTimeout` (nessun tentativo in volo, il descrittore già chiuso); altrimenti aspetta
+  `min(POLL_SECONDS, tempo che resta)` e riprova. Almeno un tentativo sempre: un lock libero si prende anche a
+  scadenza passata. La cancellazione resta com'è.
+- `scheduler.py` importa per nome `LOCK_WAIT_SECONDS` e `SchedulerRunLockTimeout`. `run_due_jobs`, dopo
+  l'assestamento dell'orologio, fissa una sola scadenza, `monotonic() + LOCK_WAIT_SECONDS`, che limita l'attesa del
+  lock del processo (`_run_lock()`) e poi quella del lock fra processi (`scheduler_run_lock(deadline=…)`). I job non
+  hanno limite: un giro che ha preso i due lock li esegue fino in fondo.
+- A scadenza, nell'una o nell'altra attesa: nessun job, lo stato su disco né letto né scritto, un avviso nel log
+  («Scheduler run gave up waiting for another run», con `reason`, `lock` = `process` o `data_dir`, `waited_s`,
+  `limit_s`), e il giro risponde `not_leader` senza job. Ragione `scheduler` dell'attività, tracciatore del recupero
+  (`PRICE_REFRESH`) e lock del processo si chiudono come per ogni giro; il giro che tiene i lock non è toccato.
+- Senza `fcntl` vale solo l'attesa del lock del processo. Il `wake-sync` non cambia: trasmette `not_leader`, il suo
+  task finisce, e la sveglia dopo è accettata (non 409).
+- Lo schema (`schemas/sleep_wake.py:36`, «`not_leader` (another worker runs the jobs)») non cambia, per non toccare
+  il client generato: la pagina admin dice i due casi.
+
+**Passi.**
+1. ✅ 17/10 ~10:05–10:40 — Rossi di test-author, nei file che esistono; nessun codice di prodotto toccato.
+   - `test_scheduler_run_lock.py`, clausole (g)(h): RL-010…016 (limite, eccezione e firma; la rinuncia senza nulla
+     lasciato; un lock libero preso a scadenza passata; uno tenuto, provato una volta; il detentore che lascia prima;
+     un tentativo in volo attraverso la scadenza; l'attesa tagliata alla scadenza con `POLL_SECONDS` a 3600).
+   - `test_scheduler_catchup.py`, clausole (p)(q): SCU-035…039 (nomi importati; rinuncia al lock fra processi per le
+     quattro ragioni; una sola scadenza, fissata dopo l'assestamento, su un orologio finto; rinuncia al lock del
+     processo, con e senza `fcntl`; i job mai limitati).
+   - Rossi per la ragione giusta: `scheduler-run-lock` 9 + 7 rossi, `scheduler-catchup` 93 + 10 rossi;
+     `scheduler-multiprocess` 2, `-backoff` 79, `-price-refresh` 44 verdi. Provati anche contro un'implementazione
+     di riferimento iniettata solo coi monkeypatch (16/16, 103/103) e tre mutanti (ognuno preso dai casi mirati),
+     poi rimossa: i file sono quelli lintati.
+2. ✅ 17/10 ~10:10–10:20 — Bozza fuori dal repo (`files/z26-draft/apply_z26.py`, 10 sostituzioni esatte in
+   `run_lock.py` e `scheduler.py`), provata su una copia: applicazione, compilazione, black pulito, inverso esatto.
+   Il I001 di ruff sulla copia è falso: lo dà anche il file intatto fuori dal repo (si ricontrolla sul repo).
+   - `run_lock.py`: `LOCK_WAIT_SECONDS`, `SchedulerRunLockTimeout(TimeoutError)`, `deadline` nell'attesa.
+   - `scheduler.py`: `_run_within_deadline()` (la scadenza unica, dopo l'assestamento; il lock del processo preso
+     con `asyncio.timeout`), `_log_gave_up()`, `_run_locked(reason, deadline)` che traduce il timeout in
+     `not_leader`. Gli stand-in del lock nei test accettano `*args, **kwargs`: la parola chiave `deadline` non li
+     rompe; nessun test tocca `_run_lock()` né `time_module`.
+3. ✅ 17/10 ~10:29–10:35 — Il coordinatore ha fatto entrare Z-25 (dev `d0bc7a547`, CHANGELOG `282c583b5`) e ha
+   portato il mio ramo a `282c583b5`; dev non ha toccato `run_lock.py` né `scheduler.py`. Il punto basso di X su
+   Z-25 entra in questo checkpoint: «The FX 422's `item_days` is the running count at the conversion that crossed
+   the budget, so it's a lower bound: say «at least {item_days}» in the FX message (or note it in
+   `#convert-request-limits`), without counting on (that would change the precedence).»
+   - `bulk_too_many_days_detail(…, *, at_least=False)`; i cambi passano `at_least=True`, e il messaggio dice
+     «would build at least 101». I prezzi no: il loro conto è esatto. Bozza `files/z25low-draft/apply_z25low.py`,
+     provata su una copia e applicata (2 sostituzioni, +8 −4); `ruff` e `black` puliti sul repo. Nessun test fissa
+     la frase: i casi BL guardano codice e numeri.
+4. ✅ 17/10 ~10:42 — Bozza applicata al repo (10 sostituzioni, +65 −10): `ruff` e `black` puliti su prodotto e
+   test, e il I001 della copia non c'è. Impronta in `files/z26-draft/applied.md5`. Nel caso SCU-038 il giro che
+   rinuncia non deve chiamare nulla dopo l'assestamento: la mia `utc_now()` del rapporto non conta, l'orologio
+   finto non scrive nella cronologia.
+5. ✅ 17/10 ~10:49 — Runner, col via del coordinatore («the text of your two entries only»): i testi di
+   test-author nelle voci `scheduler-run-lock` e `scheduler-catchup` (numerazioni RL-001..016 e SCU-001..039, una
+   clausola Z-26 in `print_info` e `desc`, una riga nel commento PURE). Solo quelle righe (+7 −4); `ruff` e `black`
+   puliti.
+
+6. ✅ 17/10 10:44–10:55 — Controlli leggeri, corsia 6186, uno alla volta (carico 27–38): `files/z26_light.sh
+   green`, log in `files/logs/z_z26_green_*.log`.
+   - `services`: `scheduler-run-lock` 16 (9 + 7), `scheduler-catchup` 103 (93 + 10): i 17 rossi ora verdi;
+     `scheduler-multiprocess` 2, `-backoff` 79, `-price-refresh` 44, `-leader` 8, `-state` 14, `-settings` 14,
+     `-settings-misc` 2, `-due` 25, `-loop` 5, `-jobs` 73, `-joblog-builders` 16, `-joblog-misc` 2.
+   - `api system-wake` 76 (prima ricostruzione del frontend, per l'avanzamento del ramo).
+   - Il punto basso di X su Z-25: `services range-ceiling` 50, `api fx` 25.
+   - Porta 6186 libera alla fine.
+7. ✅ 17/10 ~10:43–11:04 — Documentazione (docs-writer, solo inglese; le tre pagine non hanno traduzioni, nessuno
+   stamp), ogni affermazione verificata sul codice.
+   - `admin/sleep_wake.en.md`: la riga `not_leader` dice i due casi (dieci minuti di attesa, nello stesso processo
+     o in un altro; Windows con più processi); «Several Workers» con i dieci minuti, la rinuncia e il `409` dopo; il
+     consiglio a chi chiama («`not_leader`: nessun job per questa chiamata, riprovare»); «What a Wake-up Runs».
+   - `developer/backend/scheduler.md`: due archi nel diagramma; «Run lock», «Inside a Run», `RunReport`, il
+     tracciatore con più worker; in `#cross-process-lock` due punti nuovi, «The wait limit.» e «Giving up.». La
+     scadenza dello spegnimento ora si chiama «shutdown deadline», per non confonderla col limite dell'attesa.
+   - `developer/backend/fx/architecture.md`, `#convert-request-limits`: il messaggio dice «at least» (punto di X).
+   - 10:58–11:04: `mkdocs build` stretto rc 0, nessun avviso (carico 38); `check-links` 97 validi
+     (`files/z26_build.sh`). Nessuna àncora nuova.
+   - Lo schema resta com'è (`schemas/sleep_wake.py:36`, «another worker runs the jobs»): ora incompleto, per scelta.
+8. ✅ 17/10 ~10:57 — Backlog, nella mia sezione: Z-26 chiusa (✅, commit del coordinatore). Z-24 era già chiusa da
+   H (dev `36a487e84`), arrivata col mio avanzamento: nulla da fare.
+9. ✅ 17/10 ~11:05 — Il coordinatore ha fatto entrare Z-26: `e9999a11a`, `74f04d4eb`, `a2b8cc75d` → dev
+   `8c362c1f3`, CHANGELOG 🐛 `8850fe814`; il mio ramo è avanzato lì (verificato, albero pulito). La descrizione di
+   `schemas/sleep_wake.py:36` resta com'è (sua decisione).
+
+### Dopo Z-26: cosa resta di Z senza decisioni del developer (17/10 ~11:10, sola lettura)
+
+- Aperte nella mia sezione: Z-4 (un campo per asset, decisione di prodotto D-19), Z-7 (rimandata dal developer,
+  decisione 33), Z-14b e Z-15 (D1–D3), Z-27 (di Y e X). Resta solo Z-23, scritta «dopo la 1.3».
+- Z-23, i cinque lock su file, sono più diversi di quanto dice la riga:
+  - modi: esclusivo bloccante (`db/post_migration/__init__.py:193`, `brim/brim_provider.py:706`,
+    `instance_backup/apply.py:314`), tentativo senza attesa (`instance_backup/jobs.py:146`, `apply.py:582`),
+    condiviso (`apply.py:609`/`:612`), attesa asincrona con scadenza (`scheduler/run_lock.py`);
+  - senza `fcntl`: nessuna serializzazione (`post_migration:188`), un `threading.Lock` per processo (`jobs.py:138`,
+    `apply.py:306`, il lock in memoria di `brim_provider`), l'elezione del leader (scheduler);
+  - apertura: `os.open` con `O_NOFOLLOW` e `0o600` (`jobs.py:144`, `apply.py:312`, `run_lock.py`) contro
+    `open(…, "a+")` (`post_migration:189`, `brim_provider.py:705`), che segue un symlink e prende il modo dall'umask.
+- Un aiuto comune dovrebbe coprire tutto questo, senza nulla di visibile per l'utente, toccando il ripristino di B
+  (percorso critico) e file di altri tre proprietari: resta dopo la 1.3.
+- Il solo scarto concreto: i due `open()` che seguono un symlink. Rischio basso (serve già scrivere nella cartella
+  dati; un symlink pendente crea un file vuoto altrove, nulla viene scritto). Una riga per sito, dei loro
+  proprietari: proposta al coordinatore come voce piccola, separata da Z-23.
+
+### Z-28 — due file di lock aperti con `open()` (17/10 ~11:08)
+
+> **Decisione** (coordinatore, 17/10 ~11:08): «Agreed: Z-23 after 1.3. Do the hardening as **Z-28**, in your
+> section: `backend/app/db/post_migration/__init__.py:191` and `backend/app/services/brim/brim_provider.py:704`, with
+> `os.open(..., O_NOFOLLOW | O_CREAT | O_RDWR, 0o600)` + `fdopen` (or the backup/scheduler pattern); no worktree
+> touches either. Reds first (a symlinked lock path is refused, the mode is 0o600), light runs, then FROZEN.
+> Reviewers: W (BRIM) and H (post-migration). After that, a read-only analysis of **Z-27** (web-app batching over
+> 1,000 items for prices, period-changes and FX convert). X is on X-R49, so you own the analysis; the implementation
+> gets assigned after, coordinated with X-R58/X-R60.»
+
+**Stato reale.**
+- `_exclusive_run(db_path)` (`db/post_migration/__init__.py:182`): `open(<db>.post-migration.lock, "a+")` (`:189`),
+  `flock(LOCK_EX)` bloccante, preso prima di aprire il database; senza `fcntl` nessun lock. Il modulo non importa `os`.
+- `_acquire_file_lock(key)` (`services/brim/brim_provider.py:700`): `open(.locks/<key>.lock, "a+")` (`:705`),
+  `flock(LOCK_EX)` bloccante; il «handle» resta nello stato del thread (`_broker_metadata_lock`, `held`) e
+  `_release_file_lock` lo chiude. Nemmeno qui `os` è importato.
+- I test esistenti (`test_post_migration.py` contratto 12; `test_brim_parse_race.py`; `test_brim_api.py`) provano il
+  lock con descrittori propri: nessuno usa il tipo del handle.
+
+**Contratto.** Il modello del backup e dello scheduler: un descrittore, non un oggetto file.
+- I due lock si aprono con `os.open(path, O_RDWR | O_CREAT | O_NOFOLLOW, 0o600)`; `flock` sul descrittore, bloccante
+  come oggi; `LOCK_UN` e `os.close` nel `finally`.
+- Un symlink al posto del file di lock: `OSError`, prima di ogni altra cosa. Post-migrazione: nessuna correzione, il
+  database non aperto. BRIM: il blocco non gira, lo stato del thread resta pulito (un lock dopo funziona). Nulla
+  creato dietro il link, il link intatto.
+- Un file di lock nuovo nasce `0o600` (l'umask può solo stringere). Uno che esiste tiene il suo modo (è vuoto), come
+  nei siti del backup e dello scheduler. Senza `fcntl` nulla cambia.
+- Il solo ultimo componente è protetto: una cartella `.locks` che sia un symlink resta seguita, come negli altri siti.
+
+**Passi.**
+1. ✅ 17/10 ~11:10–11:24 — Rossi di test-author; nessun codice di prodotto toccato.
+   - `test_db/test_post_migration.py`, contratto 16: un symlink al file di lock (pendente, o verso un file che c'è)
+     rifiutato con `OSError` prima che il database si apra (nessun `sqlite3.connect`; il database, una 1.1 portata a
+     head che la corsa convertirebbe, resta identico); il file dietro il link mai creato o toccato; un lock nuovo
+     senza bit di gruppo e altri.
+   - `test_services/test_brim_parse_race.py`: lo stesso per `broker_metadata_lock(1)` (il blocco non gira); tolto il
+     link, lo stesso thread e un altro riprendono il lock normalmente; un lock nuovo senza bit di gruppo e altri.
+   - Rossi per la ragione giusta: `db post-migration` 41 + 3 rossi, `services brim-parse-race` 42 + 3 rossi. I casi
+     del modo dipendono dall'umask (rossi con `0022`, verdi anche oggi con `0077`: lo dicono le docstring).
+   - Da test-author: all'avvio un rifiuto è già preso dal gancio («could not run; starting normally»); lo script
+     offline non lo prende ed esce con 1 e lo stack. Non fissato da un test.
+   - Testi proposti per il runner (voci non mie: `_backend_db.py` post-migration, `_backend_services.py`
+     brim-parse-race): nel checkpoint, non applicati.
+2. ✅ 17/10 ~11:10–11:20 — Bozza fuori dal repo (`files/z28-draft/apply_z28.py`, 4 sostituzioni), provata su una
+   copia (compilazione, black, inverso esatto). Il descrittore al posto dell'oggetto file, come backup e scheduler;
+   `import os` in tutti e due i moduli.
+3. ✅ 17/10 ~11:24 — Applicata al repo (+23 −14): `ruff` e `black` puliti su prodotto e test. Impronta in
+   `files/z28-draft/applied.md5`.
+
+### Z-27 — il web app e i tetti delle richieste di massa: analisi (17/10 ~11:20, sola lettura)
+
+Richiesta del coordinatore (17/10 ~11:08, nella decisione di Z-28): «a read-only analysis of **Z-27** (web-app
+batching over 1,000 items for prices, period-changes and FX convert). X is on X-R49, so you own the analysis; the
+implementation gets assigned after, coordinated with X-R58/X-R60.» Fatti raccolti da un agente explore, i due decisivi
+riletti da me. Percorsi sotto `frontend/src/`.
+
+**I tetti, oggi.**
+- `POST /assets/prices/query` e `POST /fx/currencies/convert`: 1 000 voci (422 `bulk_too_many_items`) e 5 milioni di
+  voci-giorno (422 `bulk_too_many_days`), Z-25.
+- `POST /fx/currencies/period-changes`: 1 000 coppie (`PERIOD_CHANGES_MAX_PAIRS`, `Body(max_length)`: un 422 di
+  Pydantic, senza codice). `POST /assets/prices/period-changes`: 10 000 asset (`PERIOD_CHANGES_MAX_ASSETS`). Entrambi:
+  al più 5 giorni `as_of` distinti (422 con un `detail` stringa). MF-P2b.
+- Il web app non conosce nessuno di questi numeri; un 422 arriva al `catch` di ogni chiamante come `AxiosError` grezzo
+  (`lib/api/zodios-client.ts:136-157`).
+
+**Chi cresce con l'istanza.** Nessun chiamante divide la sua richiesta.
+- A. Lista asset, prezzi: `routes/(app)/assets/+page.svelte:751` (`fetchPriceSeries`, da `fetchAllPriceData`), axios
+  grezzo. Una voce per asset della lista che ha buchi nell'intervallo o segnali del backend; ogni voce copre tutto
+  l'intervallo (su «All» dal 2000-01-01, `resolveDateSentinel('min')`), con i segnali scelti nelle impostazioni del
+  grafico. Risposta elaborata dal pool di worker (`lib/workers/priceProcessingPool.ts:66`, divisa con `splitBalanced`).
+  Errore: solo console (`:797-805`). Il commento a `:742-750` tiene apposta una sola richiesta: il backend fa una sola
+  query SQL per tutti gli asset.
+- C. Lista cambi, tassi e segnali: `lib/stores/fxStoreRegistry.ts:429` (`loadFxRatesAndSignalsBulk`, da
+  `routes/(app)/fx/+page.svelte:508`). Una voce sull'intero intervallo per coppia con segnali, una per buco per le
+  altre; al primo carico su «All» circa una voce per coppia, di ~9 400 giorni. I segnali tornano con `request_index`,
+  letto come `entries[group.request_index]` (`:448-453`). Errore: console, dati in cache.
+- D. Lista cambi, colonne Δ: `lib/utils/periodChanges.ts:117` (`fetchFxPeriodChanges`), tutte le coppie in un POST.
+- B. Lista asset, colonne Δ: `periodChanges.ts:100` (`fetchAssetPeriodChanges`): un solo `as_of`, tetto a 10 000.
+- Limitati dalla UI: una coppia (`ensureFxRangeLoaded`, il dettaglio di un cambio), un giorno (`lookupFxRate`, il
+  prezzo dal vivo), un asset più i suoi confronti (dettaglio asset, `loadComparisonData.ts`). Senza chiamanti:
+  `ensureFxRangeLoadedBulk` (`fxStoreRegistry.ts:302`) e `ensureAssetPriceRangeLoaded`
+  (`assetPriceStoreRegistry.ts:99`), fuori dai test.
+
+**Dove si rompe davvero.** Prima il budget dei giorni che il numero di voci.
+- A su «All»: ~9 400 giorni per asset, quindi oltre ~530 asset il 422 è `bulk_too_many_days`, molto prima di
+  1 000. Con segnali di più: il riscaldamento si aggiunge, e un segnale su tutta la storia riempie dal primo prezzo
+  salvato.
+- C su «All»: ~530 coppie senza segnali; con segnali circa la metà (le voci dei segnali si sommano alle giornaliere).
+- D oltre 1 000 coppie; B mai in pratica.
+- Il peso, a parte: 300 asset su «All» sono ~2,8 milioni di punti, centinaia di MB di JSON. Le richieste divise ne
+  limitano il picco per risposta, non il totale. È un problema di progetto della lista (uno storico intero per una
+  scheda), fuori da Z-27.
+
+**Proposta.**
+1. Un aiuto comune, `lib/api/bulkBatches.ts`: dato l'elenco delle voci, una stima dei giorni di ciascuna e i tetti,
+   restituisce i lotti in ordine; una sola richiesta quando tutto sta sotto i tetti, come oggi (la query SQL unica del
+   commento resta per il caso comune). Lotti in sequenza o con poca concorrenza (`mapWithConcurrency`,
+   `lib/utils/core/requestConcurrency.ts:67`): il backend in produzione ha un solo processo.
+2. Tetti nel web app come costanti, con margine: 1 000 voci e un budget di ~4 milioni di voci-giorno (l'80 % di 5).
+   Stima: i giorni dell'intervallo (tagliato a domani e a 100 anni), più un margine per i segnali. La stima non può
+   essere esatta: il primo prezzo salvato e il riscaldamento li conosce solo il backend.
+3. Rete di sicurezza: a un 422 `bulk_too_many_days`, il lotto si divide secondo `item_days / max_item_days` e si
+   riprova, con un limite di profondità. `bulk_too_many_items` non deve mai arrivare.
+4. Ogni lotto si elabora con le sue voci: i `request_index` dei segnali dei cambi sono locali al lotto, e il pool di
+   worker riceve un lotto alla volta (picco di memoria più basso). Un lotto fallito segna come non caricate solo le
+   sue voci; il messaggio esplicito è quello di X-R58.
+5. Colonne Δ: lo stesso aiuto, con 1 000 coppie e 10 000 asset; priorità bassa.
+6. Contorno: le due funzioni senza chiamanti vanno tolte o usate (N58); il commento di `:742-750` va riscritto.
+
+**Superfici e sovrapposizioni.**
+- Nuovo: `lib/api/bulkBatches.ts` e i suoi test Vitest (lotti, ordine, `request_index`, divisione dopo un 422).
+- Da toccare: `routes/(app)/assets/+page.svelte` (`fetchPriceSeries`), `lib/stores/fxStoreRegistry.ts`
+  (`loadFxRatesAndSignalsBulk`), `lib/utils/periodChanges.ts`.
+- X-R58 (il messaggio, negli stessi `catch` delle due liste) e X-R60 (colonne Δ: `loadPairPeriodChanges`, i
+  rifacimenti, l'errore che svuota Δ) toccano le stesse funzioni: un solo scrittore, in fila o nello stesso lotto.
+- Peso: M. L'aiuto è S; tre chiamanti S ciascuno; i test.
+
+**Decisioni chieste.**
+- D-Z27-1: tetti come costanti con margine più la divisione dopo un 422 (consigliata), o una rotta che li espone
+  (backend condiviso).
+- D-Z27-2: lotti in sequenza (consigliata) o 2–3 in parallelo.
+- D-Z27-3: le schede si riempiono lotto per lotto, o tutte alla fine (più semplice, come oggi).
+- D-Z27-4: chi lo fa, e in che ordine rispetto a X-R58 e X-R60.
+4. ✅ 17/10 11:25–11:35 — Controlli leggeri, corsia 6186, uno alla volta (carico 23–30): `files/z28_light.sh green`,
+   log in `files/logs/z_z28_green_*.log`.
+   - `db post-migration` 44 (41 + 3), `post-migration-event-types` 36, `post-migration-orphan-pairs` 47.
+   - `services brim-parse-race` 45 (42 + 3), `backup-staging` 161 (la preparazione di un ripristino corre la
+     post-migrazione); `utils gate-event-loop-io` 14.
+   - `api brim` 118 (il lock del broker a ogni scrittura dei metadati, sul backend della corsia).
+   - Porta 6186 libera alla fine.
+5. ✅ 17/10 ~11:36–11:46 — Documentazione (docs-writer, solo inglese; le due pagine non hanno traduzioni, nessuno
+   stamp), ogni affermazione verificata sul codice.
+   - `developer/architecture/database/index.md`: la voce 1 delle correzioni post-migrazione (`O_NOFOLLOW`, `0600`, il
+     symlink rifiutato prima di aprire il database; all'avvio un WARNING e l'avvio prosegue senza le correzioni,
+     `database_bootstrap.py:158`; lo script offline esce con 1) e la riga della tabella dei file.
+   - `developer/backend/brim/architecture.md`, riga «Sidecar writes»: `O_NOFOLLOW`, `0600`, il symlink rifiutato.
+   - 11:44–11:46: `mkdocs build` stretto rc 0, nessun avviso (carico 47, dopo tre minuti sopra 50); `check-links`
+     97 validi (`files/z28_build.sh`).
+6. ✅ 17/10 ~11:40 — Backlog: Z-28 chiusa (✅, commit del coordinatore).

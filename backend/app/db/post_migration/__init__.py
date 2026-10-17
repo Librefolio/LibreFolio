@@ -26,6 +26,7 @@ the server stopped. Plan ``34_accountAndIdReuse`` §2.3.
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -183,20 +184,22 @@ def _exclusive_run(db_path: Path) -> Iterator[None]:
     """Hold an exclusive lock on ``<db file name>.post-migration.lock`` until the block ends; wait for it if another run holds it.
 
     Taken before the database is opened, so a waiting run holds no SQLite lock. The file stays on
-    disk: deleting it while another run waits on it would let a third lock a new file at once.
+    disk: deleting it while another run waits on it would let a third lock a new file at once. It is
+    opened with ``O_NOFOLLOW`` and created ``0o600`` (Z-28): a symbolic link in its place raises
+    ``OSError`` before anything runs, and nothing behind the link is created or locked.
     """
     if fcntl is None:  # pragma: no cover - not POSIX
         yield
         return
-    handle = open(db_path.with_name(f"{db_path.name}.post-migration.lock"), "a+")  # noqa: SIM115 — held for the whole run, closed below
+    fd = os.open(db_path.with_name(f"{db_path.name}.post-migration.lock"), os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        fcntl.flock(fd, fcntl.LOCK_EX)
         try:
             yield
         finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            fcntl.flock(fd, fcntl.LOCK_UN)
     finally:
-        handle.close()
+        os.close(fd)
 
 
 def run_post_migration_fixes(db_path: Path, data_dir: Optional[Path] = None, *, dry_run: bool = False) -> PostMigrationReport:

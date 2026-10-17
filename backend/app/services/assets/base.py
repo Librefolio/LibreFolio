@@ -252,7 +252,8 @@ class AssetSourceProvider(PluginSettingsMixin, ABC):
 
     Optional overrides:
     - settings_fields: the settings the plugin needs (plugin_settings/fields.py), read with self.settings
-    - test_only: True for a provider that exists for the tests, never listed to users
+    - test_only: True for a provider that exists for the tests, never listed to users and, outside test mode, not
+      found by the registry at all (X-R44)
     - tier, search_priority: where the provider stands in the asset search (F21; see below)
     - get_icon(): Provider icon URL
     - supports_history: False if provider cannot fetch historical data

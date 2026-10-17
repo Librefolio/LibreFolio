@@ -214,6 +214,7 @@
         "restore_confirm_failed": "La restauration n'a pas pu être confirmée : le journal du serveur donne la cause. Rien n'a changé.",
         "restore_cancel_failed": "La restauration n'a pas pu être annulée : le journal du serveur donne la cause. Elle attend toujours le prochain démarrage.",
         "restore_restart_failed": "LibreFolio n'a pas pu être redémarré : le journal du serveur donne la cause. La restauration attend toujours le prochain démarrage.",
+        "restore_state_unreadable": "L'état de la restauration ne peut pas être lu : le journal du serveur donne la cause. Une restauration attend peut-être encore le prochain démarrage.",
         "network": "Le serveur ne répond pas : vérifiez la connexion et réessayez.",
         "unexpected": "Le serveur a répondu par une erreur : le journal du serveur donne la cause.",
         "wrong_password": "Mot de passe erroné, ou le fichier a été modifié : saisissez à nouveau le mot de passe.",

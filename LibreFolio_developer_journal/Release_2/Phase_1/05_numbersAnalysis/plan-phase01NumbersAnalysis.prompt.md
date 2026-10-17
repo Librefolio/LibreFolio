@@ -5389,3 +5389,399 @@ prossimo checkpoint.
 - **J-44 → Y?** Il coordinatore (07:38) l'ha passata a Y mentre era già fatta e verde qui: gliel'ho detto, scelta **(a)**
   (07:41): resta nel checkpoint di F5, **Y rivede** (riusa `changePct`). Indice: J-44 ✅ con la nota.
 - **Checkpoint F5 + J-44 consegnato (17/10 ~07:45)**: FROZEN.
+
+#### J-10 — i lotti con un trasferimento che attraversa il perimetro dei broker (17/10, dalle 07:42; base `ba63b7b24`)
+
+- **Analisi (07:42–07:47, sola lettura)**, inviata al coordinatore alle 07:47. Con `broker_ids`, ogni coppia TRANSFER che
+  attraversa il perimetro manda l'asset in `FAILED` (`TRANSFER_PAIR_MISSING`), in entrata e in uscita. Il motivo: la
+  FIFO riceve solo le righe del perimetro (`lots_analysis_service.py:118`), e `_resolve_transfer_pair`
+  (`fifo/engine.py:239-268`) non trova l'altra gamba.
+  - Dove colpisce: il pannello dei lotti della pagina broker (anche per il proprietario); la Dashboard filtrata per
+    broker (`LotsAnalysisPanel.svelte:225`); l'AI Export, perché `broker.fifo_summary` chiede i lotti col perimetro di
+    un broker (`payloads/portfolio_broker.py:901`).
+  - Solo `PERFORMANCE_HISTORY` rigioca i broker accessibili (`:247-270`).
+- **Decisione N76 (coordinatore 07:47, notturna, da rivedere)**: opzione 2, la lettura al confine del perimetro,
+  coerente con la Dashboard per broker (lotto 41, D2/D5). Vincoli:
+  - copie staccate, mai le righe ORM;
+  - una coppia davvero mancante resta `FAILED` (J-12);
+  - nell'AI Export il contratto non cambia, solo i valori (`FAILED` → `COMPLETE`): sonda sulla copia privata;
+  - prima i rossi; slot a richiesta.
+- **Regole** (casa: `financial_math/lots/scope_boundary.py`, nuovo).
+  - **Quando si applica.** Una gamba TRANSFER del perimetro si legge come la vede il perimetro quando la sua compagna
+    esiste nel DB, sta a un broker fuori dal perimetro e la richiama. I controlli sono quelli di
+    `_resolve_transfer_pair`: tipo TRANSFER, legame reciproco, stesso asset, segni opposti, stessa quantità assoluta.
+    Altrimenti la riga non cambia e il motore dice `TRANSFER_PAIR_MISSING`.
+  - **Entrata** = un ADJUSTMENT-in al suo costo, cioè il costo Auto, obbligatorio sulla gamba che riceve
+    (`required_qty_pos`).
+    - Senza costo (dati vecchi) resta un ADJUSTMENT-in senza costo: `MISSING_COST_BASIS` e `DEGRADED`, come le metà
+      orfane della V-3.
+  - **Uscita** = un ADJUSTMENT-out al valore di mercato della sua data: la marca del risolutore unico
+    (`price_series.resolve`), portata all'unità con `quote_base_quantity`, nella sua valuta. Il perimetro realizza
+    mercato − costo FIFO, come il mittente della Dashboard (D2).
+    - Un giorno senza nessuna osservazione, su di esso o prima, vale al costo (J-17). Lì le unità escono ciascuna al
+      suo costo FIFO (realizzato 0), col campo nuovo `FifoInputTransaction.hands_over_at_own_cost`.
+    - Quel caso nasce solo da unità entrate senza osservazione (una rettifica, o un trasferimento dal confine, senza
+      prezzo). Il loro lotto porta già `REFERENCE_PRICE_UNAVAILABLE` (`DEGRADED`), e l'avviso J-17
+      (`currentPriceAssumedAtCostRange`) copre quel giorno per costruzione (`last_day_without_observation`). Così il
+      «DEGRADED» promesso nell'analisi c'è già, senza un codice nuovo.
+  - **Della compagna** si leggono solo i campi dell'abbinamento (id, broker, asset, tipo, quantità, legame), mai importi
+    o costi: niente dell'altro broker entra nei numeri, per il proprietario come per il co-proprietario.
+  - **Le copie** sono `FifoInputTransaction` di tipo ADJUSTMENT, senza legame, importo 0.
+    - Sostituiscono le gambe nella lista che leggono **tutti** i consumatori del servizio: il motore, le storie, i
+      cambi, il contesto della performance.
+    - La lista si costruisce dopo la serie dei prezzi. Un TRANSFER e un ADJUSTMENT non sono mai osservazioni, quindi
+      la serie non cambia.
+    - `FifoInputTransaction.from_transaction` restituisce la copia così com'è, e il campo nuovo non si perde in
+      `build_engine_transactions`.
+  - **Nella `PERFORMANCE_HISTORY`** una gamba del confine muove il suo **valore di mercato** del giorno, in entrata e
+    in uscita: come il ramo dei trasferimenti esterni del rigioco (`histories.py:113-137`) e come il capitale della
+    Dashboard (D2).
+    - Senza prezzo, la serie si ferma da quel giorno, come in quel ramo.
+    - Così il co-proprietario che vede solo B ottiene la stessa serie del proprietario che filtra B.
+    - Il rigioco sui broker accessibili legge il confine di quel perimetro (una compagna in un broker non accessibile).
+- **Valori che cambiano (dichiarati prima del codice)**:
+  - con `broker_ids` e un trasferimento che attraversa il perimetro: `FAILED` → `COMPLETE`, o `DEGRADED` per le cause
+    di sempre. Il lotto del destinatario nasce alla data d'arrivo, al costo della gamba; quello del mittente si chiude
+    alla data di partenza, col realizzato mercato − costo;
+  - lo stesso per chi non vede l'altro broker, anche senza `broker_ids`;
+  - AI Export: cambiano i valori di quegli asset in `broker.fifo_summary`, e in `portfolio.fifo_summary` quando la
+    compagna sta in un broker non accessibile. Contratto e versione invariati;
+  - senza `broker_ids`, con le due gambe accessibili, non cambia nulla (guardia).
+- **Fuori dal lotto (scoperte, per l'indice; J-46 non esiste, vedi SEC7-1)**:
+  - **J-47** · un trasferimento ancora in viaggio a `date_to` (partenza ≤ `date_to` < arrivo) manda i lotti in
+    `FAILED` anche col perimetro intero, perché `_load_transactions` taglia a `date_to` e la gamba d'arrivo manca.
+    Letto nel codice, non riprodotto.
+  - **J-48** · le gambe del confine compaiono come «Adjustment In/Out» nei tre disegni dei lotti (modale della
+    custodia, Gantt, grafico WAC). La modale scrive «Value handed over at cost» anche per un'uscita al mercato, che è
+    falso. Proposta al coordinatore: in J-10 l'etichetta neutra; le etichette esplicite di trasferimento in un lotto a
+    parte.
+- **Coordinatore (08:05)**: **(a') sì**, l'etichetta neutra nel lotto; J-48 (b) nell'indice. **J-47** subito dopo
+  J-10 e prima di J-12: prima il rosso che la riproduce, poi la lettura al confine del tempo, coerente con il
+  transito della Dashboard (`in_transit_intervals`); una scelta, se serve, si registra e si va avanti.
+- ✅ **Rossi (test-author 08:05–08:41; motivi riletti da me 08:42)**: **34 rossi, 8 guardie verdi**, nessun errore
+  di preparazione. Ogni azione intera, senza filtri: nessun rosso oltre ai nuovi.
+  - `test_financial_math/test_lots_scope_boundary.py`: 20 rossi (18 della lettura con `ModuleNotFoundError`, 2 con
+    `TypeError` sul campo nuovo) e 1 guardia. I 19 casi della lettura sono stati provati su un'implementazione usa e
+    getta: togliendo uno alla volta i controlli sulla compagna, almeno un caso cade ogni volta.
+  - `test_financial/test_lots_transfer_scope_boundary.py`: R1, R2, R4, R5, R6 ×2, R7, R7b, R11, R12 rossi; R3,
+    R8 ×3, R9, R10 guardie. Motivi letti: `FAILED` con `TRANSFER_PAIR_MISSING` (R1/R2/R4/R5/R7/R7b/R11/R12).
+    In R6 il destinatario ha la serie tutta `None`; il mittente 0.3/0.4/0.5 contro roi 0 / twrr 0.3 dal 12/1.
+  - `test_ai_export_broker_fifo_summary_scope_boundary.py`: R13 rosso (lotti di B `FAILED`, riga dell'asset `None`).
+  - Scelte del test-author: R12 chiede anche le storie WAC, perché `MISSING_COST_BASIS` nasce solo lì. R4/R5
+    confrontano coi valori espliciti di R1/R2, perché oggi sono `FAILED` tutti e due. File d'appoggio
+    `test_services/_scope_boundary_books.py`. Una riga nel runner (`AI_EXPORT_SERVICE_TEST_PATHS`, superficie
+    condivisa, solo aggiunta).
+- ✅ **Codice backend (08:42–08:47)**:
+  > - `fifo/models.py`: `FifoInputTransaction.hands_over_at_own_cost` (falso di default); `from_transaction`
+  >   restituisce così com'è un `FifoInputTransaction`.
+  > - `fifo/engine.py`: `_consume_broker_fragments(close_unit_price_of=…)`. Con il campo, `_apply_adjustment_out`
+  >   chiude ogni frammento al suo costo FIFO (`_own_fifo_cost`), nella valuta del lotto.
+  > - `lots/scope_boundary.py` (nuovo): `TransferPartner`, `BoundaryLeg`, `ScopeBoundaryReading`,
+  >   `partner_ids_to_load`, `read_transfers_at_scope_boundary`.
+  > - `lots/histories.py`: `PerformanceSourceContext.boundary_legs`. In `build_performance_history` una gamba letta
+  >   al confine muove il suo valore di mercato del giorno; senza prezzo la serie si ferma, come nel ramo dei
+  >   trasferimenti esterni.
+  > - `lots_analysis_service.py`: `_read_at_scope_boundary` carica solo le colonne dell'abbinamento della compagna;
+  >   la lettura si applica dopo la serie dei prezzi, nel rigioco principale e in quello sui broker accessibili.
+  > - Annotazioni allargate a `Transaction | FifoInputTransaction` dove arriva la lista letta (`conversions`,
+  >   `economic_events`, `histories`, `_compute_average_cost_lines`).
+  > - Verifiche: `services financial-math test_lots_scope_boundary` **21 verdi**; ruff e black puliti sui 7 file.
+- ✅ **Documentazione (08:48–08:55)**:
+  > - Sviluppatori: `lots_analysis_service.md`, sezione nuova «Transfers Across the Scope's Edge» e il passo 2 della
+  >   pipeline; `fifo_lot_engine.md`, la riga `ADJUSTMENT_OUT` col campo e la regola dell'abbinamento;
+  >   `financial_math.md`, la mappa del pacchetto.
+  > - Istruzioni: le tabelle della casa in `financial-math.instructions.md` e `backend.instructions.md`.
+  > - Utente: `user/dashboard/positions.en.md`, un punto in «How to read it». Solo EN: IT/FR/ES hanno già 5 righe
+  >   in meno, debito preesistente; nessun timbro.
+- ✅ **Etichetta (a') (08:50–08:55)**: rossi del test-author in `lotCustodyModalHelpers.closureValueLabel.test.ts`:
+  2 rossi (la chiave nuova, e la guardia che la vecchia non torni per nessun tipo, letta da
+  `schemas.LotTimelineEventKind.options`) e 2 guardie. Codice: `closureValueLabelKey` → `…historyDetail.handedOver`;
+  la chiave con `dev.py i18n add` e la vecchia con `remove` (una riga per lingua: «Value handed over», «Valore
+  ceduto», «Valeur cédée», «Valor cedido»); la pagina sviluppatori `lots-analysis.md`.
+  > `front-utility core-unit closureValueLabelKey` **4 verdi**.
+- ✅ **Mirati (08:58)**: `services roi-fifo-utils test_lots_transfer_scope_boundary` **16 verdi** (i 10 rossi e le 6
+  guardie); `services ai-export test_r13_broker_fifo_summary` **1 verde**.
+- **La sonda dell'AI Export sulla copia privata non può vedere J-10.** La copia (`/tmp/librefolio-r2-j-realdata`) non
+  ha nessuna riga TRANSFER né ADJUSTMENT (conteggi in sola lettura: 0 e 0; 1 utente, 2 broker). Per costruzione la
+  lettura restituisce gli stessi oggetti e non interroga nemmeno le compagne. I valori dell'AI Export li fissa R13 su
+  un libro sintetico. Proposta al coordinatore: niente sonda, oppure una prova di non regressione nello slot.
+- **Scoperta (per l'indice): J-51**, lo YoC di un co-proprietario sulle unità ricevute da un broker che non vede.
+  `_include_external_transfer_legs` aggiunge la sola gamba della compagna → `FIFO_SOURCE_QUANTITY_MISSING`. Letto
+  nel codice, non riprodotto; fuori da J-10.
+- ✅ **Verdi interi (08:59–09:25, `files/j/j10/runs.sh full`, uno alla volta, carico < 50)**:
+  - backend: `services financial-math` **1133**, `roi-fifo-utils` **1194**, `lots-analysis-pure` **177**,
+    `portfolio-engine` **41**, AI Export in tre parti **351 + 431 + 283 = 1065** (i 1064 di prima più R13);
+  - frontend: `front-utility core-unit` **8021**, `component-unit` **4506**, `gate-i18n-catalog` **176**,
+    `gate-i18n-usage` **195**, `front check` **0 errori, 0 avvisi**;
+  - resto: `check-orphans` ok (434 raggiungibili); `mkdocs build` stretto ok; `check-links` **97**.
+  - `git diff --check` pulito; porta 6185 libera; nessuna modifica all'API, quindi niente `api sync`.
+- ✅ **devWiki**: `problems/lots-failed-when-a-transfer-crossed-the-broker-scope.md`, la riga dell'indice e il log;
+  `check_source_paths.py`: nessun percorso rotto nella pagina nuova (i 7 segnalati sono di pagine vecchie). Il grafo
+  non è aggiornato: graphify non c'è in questo worktree.
+- ⏳ **Slot da chiedere**: `api portfolio`, `api portfolio-wac`, E2E `front-broker detail` (blocco «FIFO lots analysis
+  panel») e `front-portfolio data-quality-real`. La sonda resta decisione del coordinatore (la copia non ha
+  trasferimenti).
+- **Checkpoint J-10 consegnato (17/10 ~09:27)**: FROZEN.
+- ✅ **Commit e merge (coordinatore)**: `fix(lots)…` + `docs(journal)…`, punta `229495c3c`. Merge di dev `d28a6d7df`
+  aperto con 2 conflitti, risolti da me e messi in stage (09:27–09:37):
+  - `LibreFolio_devWiki/log.md`: unione, prima la voce Y-25 di dev e poi la mia, ognuna con la sua riga `Graph:`;
+  - `lots_analysis_service.md`: tutte e due le parti, la frase di MF-D4 al passo 1 e la mia al passo 2.
+  Rivisti i file uniti in automatico (`fifo/engine.py`: lo SPLIT invalido di MF-D4 è ortogonale alla consegna
+  `ADJUSTMENT_OUT`). Sulla revisione combinata: mirati 16 + 1, `financial-math` 1133, `roi-fifo-utils` 1267,
+  `lots-analysis-pure` 177, `mkdocs build` stretto ok, `check-links` 97. Commit del merge `497aaa07c`.
+- ✅ **Slot di J-10 sul commit di merge `497aaa07c` (via 09:48, 09:49–10:04, corsia 6185; il test-author fermo)**:
+  `api portfolio` **51**, `api portfolio-wac` **12**, E2E `front-broker detail` **38**. Nessuna sonda (decisione del
+  coordinatore: la copia non ha trasferimenti).
+  - **`front-portfolio data-quality-real`: 2 verdi, 1 rosso (E2, P-10).** Motivo letto, non J-10: i parametri del 409
+    `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` portano ora `hidden_transactions_count: 0`.
+    - Il campo arriva da `5f68a8db0` di X (R13-SEC7, X-R47b). X aveva aggiornato i test backend, non l'attesa E2E di
+      `data-quality-real.spec.ts:735` (ultima modifica in `475bb9270`, il mio lotto P-10).
+    - È deterministico: la differenza è solo quella chiave. Dev è rossa su E2 da X-R47b.
+  - ⚠️ **Fuori pista**: il test-author aggiunge `hidden_transactions_count: 0` all'attesa, con un commento
+    (R13-SEC7: chi chiama possiede il broker e non c'è nulla di nascosto). Rilanciata nello slot
+    `front-portfolio data-quality-real`: **3 verdi**. Porta 6185 libera.
+  - Coordinatore (10:02): la riga entra con J-10, come checkpoint a sé (solo quel file) sopra `497aaa07c`.
+- **Checkpoint della riga E2 consegnato (10:04)**: FROZEN.
+- ✅ **J-10 entrata (coordinatore 10:04)**: `c21ea4b10` (la riga E2) → dev `ba612882a`; CHANGELOG 🐛 `4529ce9ad`.
+  Il worktree non è stato portato avanti, perché dev ha cambiato due miei file sporchi (`BACKLOG_POST_1.2.md`,
+  `wac.md`). Al checkpoint di J-47 il coordinatore committa e poi unisce dev nel mio ramo: i conflitti li risolvo io.
+  Ripreso J-47 alle 10:05.
+- **Domanda di A (09:38), `legal_notice` nei prompt di analisi**: risposto **(b)**, subito prima di «Response
+  Language». È l'unica istruzione fidata dopo le note utente (non fidate) e l'unica di cui si misura il rispetto;
+  in `data_only` l'avviso resta l'ultima sezione. Per A: aggiornare le due liste d'ordine di
+  `ai_export_composition.md` e un test «ultima sezione».
+- **Revisione di MF-SEC8-2 `ee440a5db` (09:45, sola lettura)**: OK.
+  - I due clamp a `EARLIEST_RANGE_START` (`computed_from`, `display_from`) sono giusti: una riga prima del pavimento
+    entra nel motore alla sua data.
+  - Il salto dei giorni quieti in `daily_state` (bisezione) atterra sul giorno sporco seguente.
+  - Nessun conflitto testuale con J-10: `git merge-tree`, 0 marcatori.
+  - Nota bassa: una gamba di trasferimento prima del pavimento non ha prezzo, quindi ferma la serie della
+    performance (comportamento di prima, solo righe vecchie N74); la frase del documento di MF va precisata.
+- **Revisione dopo l'ingresso di X-R48 (dev `2ea54ff76`, 09:50, sola lettura)**: OK. È la J-40 dell'indice, fatta da X.
+  - Il rifiuto `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST` (409) arriva prima di ogni scrittura e usa
+    `costless_incoming_split_adjustments`, quindi la regola (d) non si rompe.
+  - La visibilità è quella di P-10. In `events.md` del docs-writer i fatti sono giusti; verificato «un costo 0 è un
+    costo»: `cost_basis_override IS NULL`.
+  - Nota bassa: la prova a vuoto non rifiuta mai, quindi il pannello di conferma non avvisa e l'utente vede il 409
+    solo dopo aver confermato.
+  - Il parente minore (`provider_management.py`) è X-R49, aperto. J-40 chiusa nell'indice.
+- ✅ **Allineamento dei documenti su P-10 (richiesta del coordinatore 09:43, fatto 09:52)**:
+  - `developer/frontend/data-quality-banner.md`: la riga `MISSING_COST_BASIS` (P-10 chiusa: retype 409, svuotamento
+    409, cancellazione `EVENT_IN_USE`; restano solo le righe vecchie) e la voce E2 (com'è oggi il test);
+  - `developer/backend/transactions/wac.md`: il secondo punto delle acquisizioni di costo sconosciuto;
+  - il test citato è ora `test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`.
+    Il vecchio nome resta in un commento di `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts:55`: è un
+    file di test fuori dal mio incarico, segnalato al coordinatore.
+  - Coordinatore (09:47): tutte e due OK. Il commento di `tx-bulk-promote-cost-basis.spec.ts:55` va al mio
+    test-author ed entra con J-47 (solo commento, nessuna corsa); affidato alle 09:48, con la verifica della frase
+    accanto («an update cannot clear a cost basis»), forse vecchia dalla decisione P5. La nota sulla prova a vuoto
+    va a X come **X-R48b**.
+
+#### J-47 — un trasferimento in viaggio alla fine dell'intervallo (analisi 17/10 ~09:05, sola lettura)
+
+- **Lo stato reale.** `LotsAnalysisService._load_transactions` taglia a `date_to`. Con partenza ≤ `date_to` < arrivo,
+  la gamba d'arrivo manca e il motore dice `TRANSFER_PAIR_MISSING`: l'asset va in `FAILED` anche col perimetro intero.
+  Vale anche l'ordine inverso: l'arrivo prima della partenza, e la finestra del motore è comunque [min, max). Lo
+  stesso succede nel rigioco sui broker accessibili di `PERFORMANCE_HISTORY`.
+- **La Dashboard.** `PortfolioCalculationEngine` carica tutte le transazioni del perimetro senza tagliare la data
+  (`portfolio/engine.py:208`), e le compagne fuori dal perimetro per id (`:239-245`). La coppia resta intera:
+  `_build_in_transit_interval` (`classifier.py:200`) mette le unità in viaggio da [partenza, arrivo), quindi fino a
+  `date_to` compreso.
+- **La lettura al confine del tempo (nessuna scelta da fare).**
+  - Si caricano le gambe compagne, nel perimetro, datate dopo `date_to` (per id, riga intera: sono del perimetro).
+    Vanno solo al motore, non alla lista che leggono gli altri: storie, linee WAC e cambi non devono vedere una riga
+    oltre `date_to`.
+  - Il motore prende `replay_until=date_to` e non applica né restituisce gli eventi dopo quella data, cioè l'arrivo.
+    Il frammento resta `IN_TRANSIT` a `date_to`: la custodia «in viaggio», la barra tratteggiata del Gantt, il valore
+    di mercato del lotto aperto.
+  - Nella performance il frammento in viaggio conta solo se partenza e arrivo stanno nel perimetro
+    (`_fragment_in_scope`), come il valore in viaggio della Dashboard nella vista combinata.
+  - Con il perimetro di un solo broker e la compagna fuori resta J-10 (R11: uscita al mercato alla sua data).
+- **Rossi da chiedere**:
+  - perimetro intero con `date_to` durante il viaggio: `COMPLETE`, il lotto aperto, la custodia `IN_TRANSIT`, nessun
+    evento dopo `date_to`;
+  - l'ordine inverso delle date;
+  - `PERFORMANCE_HISTORY` del rigioco;
+  - guardia: con `date_to` dopo l'arrivo non cambia niente;
+  - guardia: una riga dopo `date_to` non arriva alle linee WAC;
+  - il modulo puro: `replay_until` nel motore.
+- ✅ **Rossi (test-author 09:40–10:25, fermato durante lo slot di J-10 09:48–10:05; motivi riletti da me 10:26)**:
+  **12 rossi e 5 guardie verdi**; nessun errore di preparazione. Ogni azione intera, senza filtri: nessun rosso oltre
+  ai nuovi.
+  - `test_financial_math/test_fifo_replay_until.py`: 7 rossi (`TypeError` su `replay_until`). Comprendono le guardie
+    None / ultimo giorno / dopo, che confrontano il risultato campo per campo; una versione che toglie anche gli
+    eventi del giorno stesso viene presa.
+  - `test_financial/test_lots_transfer_in_transit_at_date_to.py`: T1, T2, T3, T4 rossi; T5, T6 ×2, T7 ×2 guardie.
+    Motivi letti: `FAILED` con `TRANSFER_PAIR_MISSING`, il lotto fermo in A, nessuna partenza. In T4 U `[A]` ha roi
+    0.2 / 0.25 / 0.3 contro lo 0 / 0 / 0 di W.
+  - `test_ai_export_portfolio_fifo_summary_in_transit.py`: T8 rosso (riga presente, `has_in_transit_custody`
+    falso, custodia BROKER). Una riga nel runner (`AI_EXPORT_SERVICE_TEST_PATHS`).
+  - ⚠️ **Fuori pista (trovato dal test-author)**: togliere l'arrivo nel motore non basta. `_build_transfer_rows`
+    scriveva un `TRANSFER_ARRIVE` datato alla partenza per ogni frammento in viaggio senza fine. Va nel lotto.
+  - Il commento di `tx-bulk-promote-cost-basis.spec.ts` è corretto: il nome del test, e la frase
+    «an update cannot clear a cost basis», vecchia da P5 (oggi `null` toglie il costo e `costBasisRequired` lo
+    rifiuta).
+- ✅ **Codice (10:27–10:30)**:
+  > - `fifo/engine.py`: `replay_until` (costruttore e `run_fifo_lot_engine`). `classify_events` tiene solo gli
+  >   eventi fino a quel giorno; l'abbinamento legge comunque le due gambe.
+  > - `lots_analysis_service.py`:
+  >   - `_load_late_transfer_legs` carica le compagne nel perimetro datate dopo `date_to` (stesso asset, TRANSFER,
+  >     quantità ≠ 0) come copie staccate, e solo per il motore, nel rigioco principale e in quello sui broker
+  >     accessibili;
+  >   - `replay_until=actual_to` in tutte e due;
+  >   - `_build_transfer_rows` non scrive l'arrivo di un frammento ancora in viaggio;
+  >   - il commento di J-10 sul rigioco ora dice «a partner at a broker the user cannot see».
+  > - Mirati: service **25** (J-47 + J-10), AI Export **2**, puri **28**; ruff e black puliti.
+- ✅ **Documentazione**:
+  > - `lots_analysis_service.md`, sezione nuova «Transfers In Transit at the End»;
+  > - `fifo_lot_engine.md`, la firma e la riga di `replay_until`;
+  > - `positions.en.md`, una frase (solo EN, nessun timbro).
+- ✅ **Verdi interi (10:31–10:42, `files/j/j47/runs.sh full`)**:
+  - `services financial-math` **1140** (1133 + 7), `roi-fifo-utils` **1276** (1267 + 9), `lots-analysis-pure` **177**,
+    `portfolio-engine` **41**, AI Export **351 + 432 + 283 = 1066** (1065 + T8);
+  - `check-orphans` ok, `mkdocs build` stretto ok, `check-links` **97**; `git diff --check` pulito; porta 6185 libera.
+  - Nessun codice frontend cambiato (solo il commento della spec E2E): niente corse frontend.
+- **Checkpoint J-47 consegnato (17/10 ~10:44)**: FROZEN. Dopo il commit, il coordinatore unisce dev (che ha cambiato
+  `BACKLOG_POST_1.2.md` e `wac.md`): i conflitti sono miei.
+- ✅ **J-47 entrata (coordinatore 10:43)**: `f40c598ba`, `469e9f6b8`, `9bbc220fc` → dev `647efcc28`, senza conflitti;
+  CHANGELOG 🐛 `d67ac4603`; worktree portato avanti a `d67ac4603`. Nessuno slot API. Prossimi: J-12, J-50 (se piccola,
+  prima di SEC8-1b), SEC8-1b.
+
+#### J-12 — il pannello dei lotti con l'analisi `FAILED` (analisi 17/10 ~10:50, sola lettura; base `d67ac4603`)
+
+- **Cosa resta `FAILED` dopo J-10 e J-47**: dati davvero rotti.
+  - `FIFO_SOURCE_QUANTITY_MISSING`: una vendita oltre il posseduto. È il caso comune con gli import parziali.
+  - `TRANSFER_PAIR_MISSING`: una gamba sola, per esempio un'uscita rimasta TRANSFER perché le mancava un cambio (V-3).
+  - I due `SHORT_*_NOT_SUPPORTED`.
+  - `_QUANTITATIVE_FAILURE_CODES` dice già che la ricostruzione intera non è affidabile.
+- **Oggi**:
+  - il pannello (`LotsAnalysisPanel.svelte:476-480`) mostra l'avviso rosso e poi disegna lo stesso grafici, tabella e
+    confronti;
+  - il banner dei lotti scrive «(broker 7)», un id: nessun nome, nessuna data, nessun collegamento alla transazione;
+  - l'AI Export (`broker.fifo_summary`/`fifo_lots`, `portfolio.fifo_summary`/`fifo_lots`) passa all'AI le righe di un
+    asset `FAILED` con cifre sbagliate e nessuno stato (T8 di J-47 l'ha visto: riga presente, cifre del lotto fermo).
+- **Il precedente**: lo YoC, sullo stesso rigioco FIFO, quando fallisce non dà il numero («non disponibile», motivo
+  «failed»: `yield_on_cost._component_replay_failure`). Ed è la regola del progetto: un dato che manca si dichiara,
+  non si mostra sbagliato (E1: un cambio mancante non vale zero).
+- **Opzione A (consigliata), un solo punto nel backend.**
+  - Con `FAILED` la risposta dei lotti tiene stato, problemi, metadati, la storia dei prezzi e le linee WAC (che non
+    vengono dalla FIFO). Non dà le sezioni che vengono dai lotti: `lots`, Gantt, eventi, custodia, valori, rendimenti,
+    performance, eventi di reddito (vuote).
+  - **AI Export**: nei 4 componenti FIFO l'asset `FAILED` resta come riga con `reconstruction_status: "FAILED"` e le
+    cifre nulle, o in una lista a parte con il motivo. È un cambio di contratto: +1 di versione ai 4 componenti, la
+    documentazione, i test di contratto e una sonda di resa (la copia privata non ha casi `FAILED`).
+  - **Pannello**: niente grafici né tabelle dei lotti con `FAILED`. Al loro posto una spiegazione per chi non è
+    esperto e, per ogni problema, nome del broker, data e collegamento alla transazione da correggere.
+  - Rischio: chi è esperto perde il quadro parziale che aiutava a capire. I problemi nominano comunque la transazione.
+- **Opzione B, solo il pannello**: nasconde e spiega. L'AI Export continua a dare cifre sbagliate senza segnale.
+- **Opzione C, tutte e due ma le cifre restano nell'API** per la diagnosi: il pannello nasconde, l'AI Export marca.
+  Costa come A, e un consumatore futuro può ancora mostrare le cifre.
+- **Rossi da chiedere** (con A): il servizio con `FAILED` (una vendita oltre il posseduto, una gamba sola) dà le
+  sezioni vuote; guardia: prezzi e WAC restano; guardia `DEGRADED`: niente cambia. Poi l'AI Export con lo stato nei 4
+  componenti. Poi in Vitest: il pannello non disegna e spiega, con nome del broker, data e collegamento.
+- Decisione: al coordinatore (o al developer); in attesa preparo J-50.
+- **Decisione N81 (coordinatore 10:55, per il developer)**: **A**. È la regola del progetto (un dato che manca si
+  dichiara, non si mostra sbagliato) e il precedente dello YoC. Nel lotto entrano anche l'AI Export (+1 di versione
+  ai 4 componenti FIFO), i suoi test di contratto e la documentazione. La sonda di resa gira nella mia corsia con le
+  fixture; ciò che chiede gli account del developer va nella lista dopo l'ingresso. Ordine: prima J-50, poi J-12.
+
+#### J-50 — `BulkTooManyDaysError` (Z-25) diventa un rifiuto con codice nel rischio e nell'AI Export (17/10, dalle 10:58)
+
+- **Stato reale (base `d67ac4603`)**: `get_prices_bulk` alza `BulkTooManyDaysError` oltre `MAX_BULK_ITEM_DAYS`
+  (5 M giorni-asset, `utils/date_range_limits.py`). L'API dei prezzi la traduce in 422; i chiamanti interni no.
+  - **Rischio**: `risk/scope.py:339` (`prepare_asset_series`).
+    - Nel percorso principale di `RiskService.execute` (`service.py:120`) la chiamata sta fuori dal `try` di ogni
+      analitica, e la route mappa solo 403/404: quindi un **500**.
+    - Nel rigioco storico (`replay.py:98`) la chiamata sta dentro il `try`, ma l'errore non è un
+      `RiskUnavailableError`: anche lì un 500.
+  - **AI Export**: `asset_resources.py:268`, `technical_shared.py:399` e `:578`. Un componente richiesto che fallisce
+    diventa `RequiredComponentBuildError` → **503** `snapshot_source_failure`, senza `reason_code`.
+- **Scelte (registrate, si va avanti)**:
+  - **Rischio: la convenzione D379, non un 422.** Ogni analitica risulta `unavailable` con `RESOURCE_LIMIT` e
+    `details = {metric: "price_item_days", actual, limit, remedy: "period_or_assets"}`; la richiesta risponde 200 come
+    per ogni altro limite di dimensione.
+    - Così il frontend la scrive già con una frase precisa (`errorDisplayCode.ts`), con il rimedio nuovo
+      `period_or_assets` e la chiave `risk.errors.resource_limit_period_or_assets` in 4 lingue.
+    - Un 422 a livello di richiesta finirebbe nello stato d'errore generico del pannello.
+  - **AI Export: 422 `selection_not_applicable` con `reason_code: "too_many_price_days"`**, invece del 503. Nessun
+    modello nuovo nell'API, quindi niente `api sync`. In `ui.ts` una frase propria (`aiExport.tooManyPriceDays`, 4 lingue).
+- **Rossi da chiedere**:
+  - il servizio del rischio: percorso principale e rigioco;
+  - il servizio dell'AI Export: 422 al posto del 503; guardia sui componenti facoltativi;
+  - in Vitest, `errorDisplayCode` e `getAiExportErrorMessage`;
+  - il tetto si abbassa in modo locale ai test, con monkeypatch di `price_query.MAX_BULK_ITEM_DAYS`.
+- ✅ **Rossi (test-author 10:59–11:15; motivi riletti da me 11:16)**: **18 rossi, 10 guardie verdi**. Le corse
+  backend usano un SQLite privato sotto `tmp_path`, come Z-25.
+  - `test_services/test_risk_price_day_budget.py`: 2 rossi (`BulkTooManyDaysError(item_days=31, max_item_days=30)`
+    sale da `RiskService.execute`; per il rigioco 305 su 100, da `service.py:170 → replay.py:98 → scope.py:339`) e 4
+    guardie (senza tetto e al tetto esatto).
+  - `test_services/test_ai_export_price_day_budget.py`: 3 rossi (`AiExportSnapshotSourceError` senza `reason_code`
+    su `asset.market_history` con tetto 10 e 100, e su `asset.position_review` che vuole il codice di applicabilità
+    dell'analisi stessa, `requires_position`) e una guardia: un componente facoltativo oltre il tetto viene tolto e
+    lo snapshot si costruisce.
+  - Frontend: `risk/levels/levelHelpers.test.ts` esteso, 7 rossi (il rimedio nella lista, `errorDisplayCode`,
+    `translateErrorCode`, le 4 chiavi); `ai-export/__tests__/aiExportTooManyPriceDays.test.ts` nuovo, 6 rossi e 5
+    guardie.
+  - Registrati: una riga ciascuno in `RISK_SERVICE_TEST_PATHS`, `AI_EXPORT_SERVICE_TEST_PATHS` (backend) e
+    `AI_EXPORT_UNIT_TEST_PATHS` (frontend).
+- ✅ **Codice (11:16–11:20)**:
+  > - `risk/scope.py::prepare_asset_series`: `BulkTooManyDaysError` → `RiskUnavailableError(RESOURCE_LIMIT,
+  >   {metric: "price_item_days", actual, limit, remedy: "period_or_assets"})`.
+  > - `risk/service.py::execute`: alla preparazione principale ogni analitica pianificata riceve quel rifiuto (una
+  >   già rifiutata tiene il suo); la coda della risposta sta in `_response`, condivisa.
+  > - `ai_export/runtime_service.py`: radice `BulkTooManyDaysError` → `AiExportSelectionNotApplicableError(<codice
+  >   di applicabilità>, "too_many_price_days")`, quindi 422.
+  > - Frontend: `errorDisplayCode.ts` (rimedio `period_or_assets`, commento in testa); `ai-export/ui.ts::problemMessage`
+  >   (`aiExport.tooManyPriceDays` per quel motivo).
+  > - i18n con `dev.py i18n add`: `risk.errors.resource_limit_period_or_assets` e `aiExport.tooManyPriceDays` in 4
+  >   lingue.
+  > - Documenti: `risk/architecture.md` (riga della tabella dei limiti, paragrafo dei rimedi), `ai_export_composition.md`
+  >   (la mappatura e la tabella dei fallimenti), `ai_export_snapshot.md` (la riga del 422).
+  > - Mirati: rischio **6**, AI Export **4**, `risk-levels-unit` **515**, `front-ai-export unit` **608**; ruff, black e
+  >   Prettier puliti.
+- **J-12: contratto con Y (metà pannello, dal coordinatore), 11:30**. Y ha proposto, io ho risposto sì con correzioni:
+  - con `FAILED` sono `null` (il default, come `_empty_response`) `lots`, `gantt_segments`, `custody_history`,
+    `lot_events`, `value_history`, `return_history`, `performance_history`, `income_events`,
+    `economic_allocation_groups`, e anche `price_history`, che è per lotto (`LotPriceHistoryPoint.lot_id`, dalla vita
+    di ogni lotto). Gli orfani (`asset_orphan_*`) sono `null`, cioè sconosciuti. Restano le linee WAC (costo medio),
+    `quote_base_quantity`, i metadati e la qualità dei dati con tutte le issue;
+  - sulle issue dei codici di `_QUANTITATIVE_FAILURE_CODES`, `message_params` porta in più `transaction_date` (ISO) e
+    `fails_analysis: true`;
+  - il nome del broker lo risolve Y dalla lista del pannello; i tre testi «(broker {broker_id})» li riscrive Y;
+    `message_i18n_key` invariata;
+  - documenti: io `lots_analysis_service.md` e l'AI Export, Y `lots-analysis.md` e `positions.en.md`;
+  - (a) `transaction_id` è sempre una riga vera del perimetro. Correzione mia, con un rosso: un trasferimento che parte
+    oltre il posseduto (e `SHORT_TRANSFER_NOT_SUPPORTED`) nomina la gamba che dà, non l'id più basso della coppia. Mai
+    collegare `related_transaction_id`;
+  - (b) di regola una issue per riga e codice.
+- **Scoperta per J-12**: l'AI Export legge i lotti in **cinque** componenti, non quattro. C'è anche `asset.lot_detail`
+  (v3, facoltativo, `asset_resources.load_asset_lots`): anche lui avrà +1 di versione e lo stato.
+- ✅ **Verdi interi (11:22–11:45)**:
+  - backend: `services risk-all` **908** (906 + 2), AI Export **351 + 436 + 283 = 1070** (1067 + 3);
+  - frontend: `front-portfolio risk-levels-unit` **515**, `front-ai-export unit` **608**, `front-utility core-unit`
+    **8181**, `component-unit` **4638**, `gate-i18n-catalog` **176**, `gate-i18n-usage` **195**, `front check` **0/0**;
+  - resto: `check-orphans` ok, `mkdocs build` stretto ok, `check-links` **97**; `git diff --check` pulito; porta 6185
+    libera.
+- **Checkpoint J-50 consegnato (17/10 ~11:46)**: FROZEN.
+- **Revisione di MF, J-45 `43a7f0156` (08:20, sola lettura; `ae4f41297` è il merge di dev)**: OK. Verificati:
+  `run_in_executor` + `copy_context().run` su un pool dedicato; la chiusura della sessione dell'API fa solo `close()`
+  (niente rollback, niente scadenze), quindi una richiesta annullata non crea gare; nessun `gather`, `wait_for` o
+  `TaskGroup` fra i chiamanti del motore; nessuna colonna differita, nessuna relazione letta da `daily_state`.
+  - Nota bassa sulla documentazione (la pagina «Off the Event Loop» e la docstring del test): il contesto di
+    structlog non esiste (nessun `bind_contextvars`); l'argomento del «niente ricarica» è che `calculate()` legge solo
+    righe caricate dalle sue query e non fa commit, non `expire_on_commit=False`.
+  - Facoltative: la copia porta anche il contesto `decimal`, che è una ContextVar; la finestra delle
+    rigiocate doppie di richieste uguali e contemporanee (nessun single-flight su `blob_key`) si allarga.
+- **Assegnata (coordinatore 08:22), da R13-SEC8 di E: SEC8-1b**, dopo J-10 e J-47. Prima i rossi; E rivede.
+  - Il problema: il rigioco storico del rischio (`/risk/query`, qualunque utente) cammina un `replay_range` senza
+    limiti. `DateRangeModel` (`schemas/common.py:445`) controlla solo `end >= start`. Il rigioco porta l'intervallo a
+    `load_price_window_facts`, `verified_replay_range` e `prepare_asset_series(date_range=replay_range)`
+    (`risk/replay.py`). Il clamp di SEC7-1 in `risk/scope.py` copre l'intervallo principale, non questo.
+  - Da fare: lo stesso clamp, cioè `latest_range_end()` per la fine e un pavimento per l'inizio (come i 100 anni
+    dell'AI Export in SEC7-1). L'ambito degli asset via `get_prices_bulk` lo chiude X-R55 di Z.
+- **Informazione del coordinatore (08:30)**: X-R55 è entrata (`ab7711f04`). Z ha aggiunto `price_query` e
+  `currencies` a `RANGE_BOUND_CONSUMERS` (solo aggiunte). Il controllo statico proposto dal suo test-author va
+  nell'indice come **J-49** (basso), non ora. SEC8-1b dovrà aggiungere alla lista il suo lettore, se ne ha uno.
+- **Coordinatore (08:34)**: **J-50** (basso, dopo SEC8-1b). Con Z-25 (N77) `get_prices_bulk` alza
+  `BulkTooManyDaysError` oltre 5 M giorni-asset; nel rischio e nell'AI Export diventa un 500. Va tradotto in un
+  rifiuto con codice. Z darà il nome della classe all'ingresso di Z-25.

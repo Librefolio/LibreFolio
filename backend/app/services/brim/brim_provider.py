@@ -32,6 +32,7 @@ import csv
 import hashlib
 import io
 import json
+import os
 import re
 import threading
 import uuid
@@ -696,27 +697,32 @@ def _broker_metadata_lock(broker_id: Optional[int]) -> Iterator[None]:
 broker_metadata_lock = _broker_metadata_lock
 
 
-def _acquire_file_lock(key: str) -> Any:
+def _acquire_file_lock(key: str) -> Optional[int]:
+    """Open ``.locks/<key>.lock`` and wait for its exclusive ``flock``: the descriptor, closed by ``_release_file_lock``.
+
+    ``O_NOFOLLOW`` and ``0o600`` (Z-28): a symbolic link in the file's place raises ``OSError``, and nothing behind it
+    is created or locked. None without ``fcntl``.
+    """
     if fcntl is None:  # pragma: no cover - not POSIX
         return None
     lock_dir = get_broker_reports_dir() / ".locks"
     lock_dir.mkdir(parents=True, exist_ok=True)
-    handle = open(lock_dir / f"{key}.lock", "a+")  # noqa: SIM115 — held across the with-block, closed by _release_file_lock
+    fd = os.open(lock_dir / f"{key}.lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        fcntl.flock(fd, fcntl.LOCK_EX)
     except BaseException:
-        handle.close()
+        os.close(fd)
         raise
-    return handle
+    return fd
 
 
-def _release_file_lock(handle: Any) -> None:
-    if handle is None:
+def _release_file_lock(fd: Optional[int]) -> None:
+    if fd is None:
         return
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        fcntl.flock(fd, fcntl.LOCK_UN)
     finally:
-        handle.close()
+        os.close(fd)
 
 
 def _broker_id_of(meta_path: Path) -> Optional[int]:
