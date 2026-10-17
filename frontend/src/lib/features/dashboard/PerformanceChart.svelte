@@ -45,6 +45,10 @@
         period_fees_taxes?: string | (string | null)[] | null;
         period_pnl?: string | (string | null)[] | null;
         period_pnl_percent?: string | (string | null)[] | null;
+        period_unrealized_delta_percent?: string | (string | null)[] | null;
+        period_realized_gain_loss_percent?: string | (string | null)[] | null;
+        period_income_percent?: string | (string | null)[] | null;
+        period_fees_taxes_percent?: string | (string | null)[] | null;
         start_value?: string | (string | null)[] | null;
         end_value?: string | (string | null)[] | null;
         is_fully_sold?: boolean;
@@ -79,8 +83,12 @@
         startValue: number;
         endValue: number;
         net: number;
+        /** The net's return over the start value, as the backend gives it (`period_pnl_percent`, a fraction): null shows none. */
+        netPct: number | null;
         isFullySold: boolean;
         components: Record<ComponentKey, number>;
+        /** Each component's return over the start value, as the backend gives it (`period_*_percent`, fractions): null shows none. */
+        componentPcts: Record<ComponentKey, number | null>;
     }
 
     interface OtherRow {
@@ -197,26 +205,19 @@
         return formatPercent(value, {digits: 1});
     }
 
-    function openingPctSuffix(value: number, openingValue: number): string {
-        if (!(openingValue > 0)) return '';
-        const pct = (value / openingValue) * 100;
-        if (!Number.isFinite(pct)) return '';
-        return ` <span style="font-size:10px;opacity:0.75">(${escapeHtml(formatSignedPercent(pct))})</span>`;
+    /** A return beside an amount, from the backend's fraction (P4): ×100 for display only; null shows none. */
+    function returnSuffix(fraction: number | null): string {
+        if (fraction == null || !Number.isFinite(fraction)) return '';
+        return ` <span style="font-size:10px;opacity:0.75">(${escapeHtml(formatSignedPercent(fraction * 100))})</span>`;
     }
 
-    function openingPctPlainSuffix(value: number, openingValue: number): string {
-        if (!(openingValue > 0)) return '';
-        const pct = (value / openingValue) * 100;
-        if (!Number.isFinite(pct)) return '';
-        return ` (${formatSignedPercent(pct)})`;
+    function returnPlainSuffix(fraction: number | null): string {
+        if (fraction == null || !Number.isFinite(fraction)) return '';
+        return ` (${formatSignedPercent(fraction * 100)})`;
     }
 
-    function signedMoneyWithOpeningPct(value: number, openingValue: number): string {
-        return `${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency, {showSign: true}))}${openingPctSuffix(value, openingValue)}`;
-    }
-
-    function signedMoneyWithOpeningPctHtml(value: number, openingValue: number, themeDark: boolean): string {
-        return `<span style="color:${signValueColor(value, themeDark)}">${signedMoneyWithOpeningPct(value, openingValue)}</span>`;
+    function signedMoneyWithReturnHtml(value: number, fraction: number | null, themeDark: boolean): string {
+        return `<span style="color:${signValueColor(value, themeDark)}">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency, {showSign: true}))}${returnSuffix(fraction)}</span>`;
     }
 
     function trimLabel(value: string, max = 31): string {
@@ -249,7 +250,7 @@
 
     function netValueText(row: ChartRow, fontSize: number, availableWidth: number): string {
         const absolute = shortMoney(row.net, displayCurrency, true);
-        const suffix = row.kind === 'asset' ? openingPctPlainSuffix(row.net, row.startValue) : '';
+        const suffix = row.kind === 'asset' ? returnPlainSuffix(row.netPct) : '';
         if (!suffix) return absolute;
 
         const combined = `${absolute}${suffix}`;
@@ -332,6 +333,8 @@
     let chartRows = $derived.by<ChartRow[]>(() => {
         const assetRows: AssetRow[] = positions.map((position, index) => {
             const feesTaxes = parseNumberOrZero(position.period_fees_taxes);
+            // Positive like period_fees_taxes: a cost, shown with the costs' sign as `costs` below.
+            const feesTaxesPct = safeDecimal(position.period_fees_taxes_percent);
             return {
                 key: `asset-${position.broker_id}-${position.asset_id}-${index}`,
                 kind: 'asset',
@@ -342,12 +345,19 @@
                 startValue: parseNumberOrZero(position.start_value),
                 endValue: parseNumberOrZero(position.end_value),
                 net: parseNumberOrZero(position.period_pnl),
+                netPct: safeDecimal(position.period_pnl_percent),
                 isFullySold: position.is_fully_sold ?? false,
                 components: {
                     unrealized: parseNumberOrZero(position.period_unrealized_delta),
                     realized: parseNumberOrZero(position.period_realized_gain_loss),
                     income: parseNumberOrZero(position.period_income),
                     costs: feesTaxes === 0 ? 0 : -Math.abs(feesTaxes),
+                },
+                componentPcts: {
+                    unrealized: safeDecimal(position.period_unrealized_delta_percent),
+                    realized: safeDecimal(position.period_realized_gain_loss_percent),
+                    income: safeDecimal(position.period_income_percent),
+                    costs: feesTaxesPct == null || feesTaxesPct === 0 ? feesTaxesPct : -Math.abs(feesTaxesPct),
                 },
             };
         });
@@ -533,19 +543,19 @@
         const titleName = truncateName(row.label);
         const title = row.assetTicker ? `${titleName} (${row.assetTicker})` : titleName;
         const colors = palette(themeDark);
-        const componentRows: Array<{label: string; value: number; color: string}> = [
-            {label: labels.unrealized, value: row.components.unrealized, color: colors.unrealized},
-            {label: labels.realized, value: row.components.realized, color: colors.realized},
-            {label: labels.income, value: row.components.income, color: colors.income},
-            {label: labels.costs, value: row.components.costs, color: colors.costs},
+        const componentRows: Array<{label: string; value: number; pct: number | null; color: string}> = [
+            {label: labels.unrealized, value: row.components.unrealized, pct: row.componentPcts.unrealized, color: colors.unrealized},
+            {label: labels.realized, value: row.components.realized, pct: row.componentPcts.realized, color: colors.realized},
+            {label: labels.income, value: row.components.income, pct: row.componentPcts.income, color: colors.income},
+            {label: labels.costs, value: row.components.costs, pct: row.componentPcts.costs, color: colors.costs},
         ];
 
         let html = buildTooltipHeader(escapeHtml(title), theme.textColor);
         html += buildTooltipRow(labels.status, statusHtml);
-        html += buildTooltipRow(labels.periodPnl, signedMoneyWithOpeningPctHtml(row.net, row.startValue, themeDark));
+        html += buildTooltipRow(labels.periodPnl, signedMoneyWithReturnHtml(row.net, row.netPct, themeDark));
         html += buildTooltipDivider(theme.border);
         for (const component of componentRows) {
-            html += buildTooltipRow(component.label, signedMoneyWithOpeningPctHtml(component.value, row.startValue, themeDark), component.color);
+            html += buildTooltipRow(component.label, signedMoneyWithReturnHtml(component.value, component.pct, themeDark), component.color);
         }
         html += buildTooltipDivider(theme.border);
         html += buildTooltipRow(labels.startValue, escapeHtml(formatCurrencyAmountPlain(row.startValue, displayCurrency)));
