@@ -4023,7 +4023,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `afterEach` aspetta `vi.dynamicImportSettled()`, alla sua prima volta nel repo.
   - Il file da solo dà 5/5, e il primo caso passa da 437 a 57 ms; `core-unit` è verde.
   - Commit del coordinatore, lotto X-R21. Dettagli: piano 03, sezione «X-R21».
-- **X-R22 · L'invito a reinserire un segreto illeggibile non dice di ripristinare prima la vecchia chiave** — basso,
+- ✅ **X-R22 · L'invito a reinserire un segreto illeggibile non dice di ripristinare prima la vecchia chiave** (chiusa il
+  17/10: `375d09db3`, entrata in dev `618563949`) — basso,
   testi; da H (H-3, opzione B), girata a X dal coordinatore il 16/10.
   - **Il problema**: salvare un segreto riscrive la sua riga con la chiave attuale. Se l'amministratore ripristina poi
     la vecchia chiave d'istanza, il segreto appena reinserito diventa illeggibile a sua volta.
@@ -4156,7 +4157,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-R34 · Doc: `asset_plugin_guide.md` «How It Works» dice che il frontend chiama `GET …/search`** — basso; X, 17/10
   (trovato dal docs-writer).
   - In realtà il frontend usa prima lo streaming (`…/search/stream`), e il REST solo come ripiego.
-- **X-R35 · `env_url` accetta `user:pass@` e lo pubblica** — piccolo, **prima del rilascio**; da E (piano 08,
+- ✅ **X-R35 · `env_url` accetta `user:pass@` e lo pubblica** (chiusa il 17/10: `4e06d78ff`, entrata in dev
+  `67668f5ce`) — piccolo, **prima del rilascio**; da E (piano 08,
   revisione di sicurezza «R13-SEC2»), assegnata a X dal coordinatore il 17/10.
   - Un indirizzo con utente e password passa il validatore e finisce sull'anonimo `GET /system/instance`.
   - Cura: il validatore della configurazione rifiuta utente e password. Copre anche `LIBREFOLIO_PUBLIC_URL` e
@@ -4165,7 +4167,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `services/assets/core.py:81`. Oggi è innocuo: i prezzi sono condivisi e una collisione mescola solo due asset con
     parametri diversi.
   - Diventa **MEDIO** il giorno in cui gli asset avranno un proprietario: allora serve un'impronta piena.
-- **X-R37 · P20 nell'interfaccia: le 4 note di E** — piccolo, **prima di O-8**; da E («R13-SEC2/SEC3»), 17/10.
+- ✅ **X-R37 · P20 nell'interfaccia: le 4 note di E** (chiusa il 17/10: `c7434f00c`, entrata in dev `908fe6c90`) —
+  piccolo, **prima di O-8**; da E («R13-SEC2/SEC3»), 17/10.
   1. `assetSearchReport.ts:70-74`: il controllo legge il valore senza base, così `https:host` passa e, come `href`, si
      risolve sull'istanza. Usare `url.href`.
   2. **N61** (decisione notturna del coordinatore): su `managed`, senza un `support_url` valido, o con
@@ -4182,6 +4185,24 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Direzione** (la stessa di W-B58): un limite alle cifre intere in ogni scrittura dei cambi (manuale, provider,
     inverso), una lettura che non solleva mai, un 4xx e mai un 500.
   - Riusare l'helper di W `max_integer_digits(model, column)` in `db/precision.py`, che entra con W-B58.
+- **X-R39 · Editor dei dati dell'asset: le stranezze trovate con O-8** — basso; X, 17/10 (dal test-author di O-8; già
+  presenti prima di O-8).
+  - I conteggi non sono simmetrici: gli eventi eliminati vengono dal server, quelli salvati dal client. Le righe di
+    evento non valide si scartano in silenzio, mentre per i prezzi c'è il conteggio delle righe scartate.
+  - Un salvataggio sono tre richieste separate (prezzi aggiornati, prezzi cancellati, eventi): un errore può arrivare
+    dopo una scrittura parziale, e il messaggio non lo dice.
+  - Le righe di prezzo vuote, scartate, allargano lo stesso l'intervallo del grafico dopo un salvataggio riuscito
+    (`expandedRange` legge tutte le righe `appended`).
+  - `onsave` non è atteso: un errore nel ricaricamento della pagina dopo il salvataggio non viene mai mostrato.
+  - Il banner d'errore dell'editor dei cambi non ha un `data-testid` (quello degli asset l'ha avuto con O-8).
+- **X-R40 · Prezzo corrente: la quotazione rifiutata torna lo stesso come prezzo dal vivo** — basso, **dopo X-R38**; X,
+  17/10 (le mie due note alla revisione di W-B58, accettate dal coordinatore).
+  - `services/assets/price_query.py` ~862–866: una quotazione che `storable_price` non può tenere non si salva, ma la
+    risposta la restituisce (`FACurrentPriceItem.value`, sorgente `provider:…`): un 1E+60 compare nella UI come prezzo
+    dal vivo, anche se il DB l'ha rifiutato. Cura: rispondere con un errore per la voce, come «No price data available».
+  - ~865: l'avviso si ripete a ogni interrogazione della stessa quotazione (lo scheduler ogni 10 minuti, più ogni pagina
+    aperta). Cura: una volta per (asset, valore) per processo (`functools.cache`, come `_report_invalid`), oppure
+    `info`.
 
 ## W · Import e transazioni (fase 01)
 
