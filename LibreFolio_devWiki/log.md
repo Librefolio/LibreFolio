@@ -3718,3 +3718,12 @@ stay in the plan. `developer/backend/email.md` still shows the masked notice and
 `check_source_paths.py`: 5 missing (8 occurrences) of 4108, all pre-existing, none on this page.
 Updated: [[domains/email]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Vite HMR: dispose() runs only on the module an update is accepted through
+Workstream Z, Z-22 (release 1.3). H's review of Z-20 proposed `import.meta.hot?.dispose(stop)` for the listener that
+`instanceBlock.svelte.ts` adds at every hot update. Measured with the repo's Vite 7.3.5 (module runner, same
+`HMRClient` as the browser): `dispose` runs only on the accepted module, the `(app)` layout, so the leak stays (1→4
+listeners in three edits); handing the unsubscribe over through `import.meta.hot.data` keeps one. Also filed: Vitest
+4.1.11's `import.meta.hot` has no `data`, which made the first guard throw in 24 tests. Fix `d49263b0e`.
+Filed: [[problems/vite-hmr-dispose-only-on-the-accepted-module]].
+Graph: not updated; graphify is not available in this worktree.
