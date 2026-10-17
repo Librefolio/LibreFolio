@@ -473,7 +473,7 @@ def populate_registry(registry: dict) -> None:
         "data-quality-legacy",
         front_portfolio_data_quality_legacy,
         name="Data Quality Legacy Rows Tests",
-        desc="Item 22 (MISSING_COST_BASIS) with rows an older version left behind — a TRANSFER pair and an ADJUSTMENT adding quantity without cost basis, written into the lane's test DB by backend/test_scripts/test_db/legacy_cost_rows.py — reach the yellow dashboard banner with one link per affected asset, show — for P&L, P&L % and average cost on the units of unknown cost while the paid ones keep their figures, raise the same warning in the lots panel, and the asset link opens the asset page — on a disposable account",
+        desc="Item 22 (MISSING_COST_BASIS) with rows an older version left behind — a TRANSFER pair and an ADJUSTMENT adding quantity without cost basis, written into the lane's test DB by backend/test_scripts/test_db/legacy_cost_rows.py — reach the yellow dashboard banner with one link per affected asset, show — for P&L, P&L % and average cost on the units of unknown cost while the paid ones keep their figures, raise the same warning in the lots panel, and the asset link opens the asset page; the broker page shows the same dashes, and a cost of 0 per unit takes the adjustment off the banner — on a disposable account",
         tests="portfolio/data-quality-legacy.spec.ts",
     )
     add_test(
@@ -481,7 +481,7 @@ def populate_registry(registry: dict) -> None:
         "data-quality-real",
         front_portfolio_data_quality_real,
         name="Data Quality Real-Data Tests",
-        desc="Items 21-23 on disposable accounts with real data: a missing FX rate is a banner row with its pair and dates, a dash in the P&L, P&L % and average-cost cells and an issue in the lots panel, until MOCKFX «Sync rates» stores the rate and clears it everywhere (the lots panel already open refreshes by itself); an acquisition without cost basis (P-10) is a banner row linking the asset, with dashes on the dashboard and the broker page, cleared by an explicit cost; the unrealized change tooltip splits the period by currency into the asset and the exchange-rate effect",
+        desc="Items 21-23 on disposable accounts with real data: a missing FX rate is a banner row with its pair and dates, a dash in the P&L, P&L % and average-cost cells and an issue in the lots panel, until MOCKFX «Sync rates» stores the rate and clears it everywhere (the lots panel already open refreshes by itself); a SPLIT whose incoming adjustment has no cost cannot be retyped (409, P-10), so nothing of unknown cost reaches the dashboard, the lots panel or the broker page, and with a cost of 0 the retype goes through; the unrealized change tooltip splits the period by currency into the asset and the exchange-rate effect",
         tests="portfolio/data-quality-real.spec.ts",
     )
     add_test(
