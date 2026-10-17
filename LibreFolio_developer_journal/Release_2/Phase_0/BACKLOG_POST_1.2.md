@@ -3982,6 +3982,13 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Sempre nello stesso lotto, la frase sul motore di Alembic: il listener di `env.py` è una cura vera.
   - Verifica nello slot: i miei test, le suite delle migrazioni e `api backup-restore`.
 
+  ✅ **Fatto il 17/10** (checkpoint delle 15:50).
+  - `set_sqlite_pragma()` spegne `trusted_schema` per primo e rilegge lo schema per ultimo
+    (`writable_schema=RESET`). Il listener gira prima che il dialetto registri le funzioni e legge lo schema
+    presto: senza il reset un CHECK o un indice le chiamava ancora, anche nel processo dell'upgrade (sonda
+    `files/h51/`).
+  - La frase di B-18 in `security.md` è riscritta, insieme alla doc dei motori.
+  - Test: `db session-pragmas` (15).
   Dettagli: piano H, §14, «Review di B-36/B-37» e il lotto H-51.
 
 ## A · Account e accessi (fase 01)
