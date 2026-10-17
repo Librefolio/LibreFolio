@@ -1794,7 +1794,7 @@
     });
 </script>
 
-<div bind:this={wrapperEl} class="rounded-lg border border-lf-subtle/80 bg-lf-panel/80 text-lf-primary p-4" data-testid="lot-wac-price-chart">
+<div bind:this={wrapperEl} class="rounded-lg border border-lf-subtle/80 bg-lf-panel/80 text-lf-primary p-4" data-testid="lot-wac-price-chart" data-state={showChart ? 'drawn' : 'empty'}>
     <div class="mb-3 flex items-center justify-between gap-3">
         <h3 class="text-sm font-semibold text-lf-secondary">{labels.wac} / {labels.marketPrice}</h3>
 

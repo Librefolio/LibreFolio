@@ -5942,3 +5942,30 @@ finale) nel mio HEAD.
 >   conversione del prezzo live resta del client (data UTC) mentre la Δ è del backend.
 >
 > ### Lotto B rossi — checkpoint 🧊 FROZEN (13:4x)
+>
+> **Coordinatore (13:36)**: rossi del lotto B committati (`d4a31ef29`, solo il ramo). Y-31: sì allo spostamento di
+> `resolveUiLocale` in `uiLocaleRule.ts` (riesportato) e a `data-state` su `LotWacPriceChart`.
+
+## Y-31 · la regola M-18 ricopiata in una spec, e due stati non pubblicati — versione minima (13:21–13:56; HEAD `d4a31ef29`)
+
+> - **Rossi** (`test-author` `b73cf952`, quello di J-12): `uiLocale.test.ts` +2 (il modulo della regola non importa nulla,
+>   letto col compilatore TypeScript, con un controllo che lo scanner trovi l'import di `./language` in `uiLocale.ts`;
+>   `uiLocale` riesporta la stessa funzione) → 2 rossi (modulo mancante), 31 verdi; `brokers-detail.spec.ts`:
+>   `dayAsThePanelWritesIt` importa `resolveUiLocale` per percorso, legge `<html lang>` e `navigator.language`, calcola la
+>   lingua in Node e scrive il giorno nella pagina (un'annotazione registra lingua → tag → locale); J12-1 legge
+>   `data-state="drawn"` invece della tela.
+> - **Cura**: `frontend/src/lib/stores/app/uiLocaleRule.ts` (nuovo, senza import: `LANGUAGE_DEFAULTS`, `canonicalTag`,
+>   `resolveUiLocale`); `uiLocale.ts` lo importa e lo riesporta; `LotWacPriceChart.svelte` `data-state={showChart ? 'drawn'
+>   : 'empty'}` sulla radice (`showChart` è esattamente il contrario del messaggio «nessun dato»).
+> - **Documentazione** (`docs-writer` `dd486281`): `developer/frontend/i18n.md:232-235` (dove vive la regola e perché senza
+>   import); `components/features/lots-analysis.md:195` (`data-state` nella riga di `LotWacPriceChart`).
+> - **Prove**: `uiLocale.test.ts` **33/33**; `tsc -p tsconfig.e2e.json` 0 errori; Prettier, `theme-roles --check`, `git diff
+>   --check` puliti; svelte-check: i soli 36 errori dei tre file rossi di X-R59 (attesi fino alla loro cura). Slot
+>   `front-broker detail` (`files/scripts/y31_e2e.sh`, carico a 5 minuti 30.41): **40/40** in 1,8 min, J12-1 e J12-2
+>   compresi; porta 6189 libera. `mkdocs build` (strict) rc 0, 0 WARNING; `check-links` **97**.
+> - **Resta, da girare a W**: il segno durevole della riga di `?highlight=` (pagina delle transazioni).
+>
+> **Coordinatore (13:5x)**: X-R59 di MF (con SEC9-1, lo 0 finale, D1 `target_currency` su `/prices/current`) e X-R60 sono in
+> dev (`482343eb3`): dopo il commit di Y-31, dev entra nel mio ramo per i lotti A e B.
+>
+> ### Y-31 — checkpoint 🧊 FROZEN (13:5x)
