@@ -48,10 +48,22 @@ class TransactionAutoCostMixin:
         self,
         parsed_creates: list[tuple[int, TXCreateItem]],
         parsed_updates: list[tuple[int, TXUpdateItem]],
-        link_uuid_map: dict[str, list[tuple[int, Transaction]]],
+        created_rows: dict[int, Transaction],
         unreadable: list[tuple[str, int, int]] | None = None,
     ) -> list[WACPreviewResultItem] | None:
         """Compute WAC for items with cost_basis_mode in ('auto', 'auto-detail').
+
+        A create is costed on its own row, ``created_rows`` (create index → the row ``apply_creates`` flushed), an update
+        on the row it names. Before W-B67 a create without a ``link_uuid`` was found by its broker, asset, date and type,
+        the newest such row: of two such rows the first kept no cost and the second got it twice, and an Auto row before a
+        Manual one overwrote the Manual cost.
+
+        The rows are costed in the order of their pool's date, then as they came (the creates by index, then the updates by
+        index), and an Auto row of the batch stays out of the others' pools until it is costed (a split-linked one, which
+        only rescales the pool, stays in): each row gets the cost it would get were the rows saved one at a time in date
+        order (N84, W-B67). An update in Auto counts as not costed yet: its stored cost is the one it replaces. Before, a row
+        not yet costed entered the others' averages at zero cost, and the result followed the order of the indexes. The
+        results keep the order of the items: the creates, then the updates.
 
         An item whose pool holds rows that cannot be read gets no cost and no result: it goes to ``unreadable`` as
         (operation, index, count), for the batch to refuse (W-B69); without that list the ``UnreadablePoolError`` raises.
@@ -69,8 +81,7 @@ class TransactionAutoCostMixin:
 
         for orig_idx, item in parsed_creates:
             if getattr(item, "cost_basis_mode", None) in ("auto", "auto-detail"):
-                # Find the flushed Transaction row by matching in link_uuid_map or by query
-                tx = await self._find_created_tx_for_wac(item, link_uuid_map, orig_idx)
+                tx = created_rows.get(orig_idx)
                 if tx:
                     auto_items.append(("create", orig_idx, item, tx))
 
@@ -83,30 +94,31 @@ class TransactionAutoCostMixin:
         if not auto_items:
             return None
 
-        results: list[WACPreviewResultItem] = []
+        # SPLIT-linked ADJUSTMENT: cost is derived live from the ratio at WAC/FIFO
+        # computation time (the split rescale of financial_math.average_cost), never
+        # from a stored override. Writing "current WAC
+        # before this tx" here — the normal auto-mode fallback — would double the
+        # cost basis for a forward split (or halve it for a reverse split). Skip.
+        split_linked = await split_linked_ids(self.session, [db_tx for *_, db_tx in auto_items])
+        sources = [await self._auto_cost_source(db_tx) for *_, db_tx in auto_items]
+        # The Auto rows not costed yet, out of the others' pools (N84); a split-linked row only rescales: it stays in.
+        pending = {db_tx.id for *_, db_tx in auto_items if db_tx.id not in split_linked}
+        results: dict[int, WACPreviewResultItem] = {}
 
-        for operation, idx, schema_item, db_tx in auto_items:
-            source_broker_id, excluded, as_of_date = await self._auto_cost_source(db_tx)
+        for position in sorted(range(len(auto_items)), key=lambda item_position: (sources[item_position][2], item_position)):
+            operation, idx, schema_item, db_tx = auto_items[position]
+            source_broker_id, excluded, as_of_date = sources[position]
 
-            # SPLIT-linked ADJUSTMENT: cost is derived live from the ratio at WAC/FIFO
-            # computation time (the split rescale of financial_math.average_cost), never
-            # from a stored override. Writing "current WAC
-            # before this tx" here — the normal auto-mode fallback — would double the
-            # cost basis for a forward split (or halve it for a reverse split). Skip.
-            is_split_linked = db_tx.id in await split_linked_ids(self.session, [db_tx])
-
-            if is_split_linked:
+            if db_tx.id in split_linked:
                 db_tx.cost_basis_override = None
                 db_tx.cost_basis_currency = None
-                results.append(
-                    WACPreviewResultItem(
-                        operation=operation,
-                        index=idx,
-                        source_broker_id=source_broker_id,
-                        wac=None,
-                        wac_qualifying_txs=[],
-                        wac_missing_pairs=[],
-                    )
+                results[position] = WACPreviewResultItem(
+                    operation=operation,
+                    index=idx,
+                    source_broker_id=source_broker_id,
+                    wac=None,
+                    wac_qualifying_txs=[],
+                    wac_missing_pairs=[],
                 )
                 continue
 
@@ -115,33 +127,34 @@ class TransactionAutoCostMixin:
             if getattr(schema_item, "cost_basis_override", None) is not None:
                 ccy_hint = schema_item.cost_basis_override.code
 
-            # Compute WAC (session sees all flushed rows) and write it on the DB row
+            # Compute WAC (session sees all flushed rows) and write it on the DB row; the other rows not costed yet stay out
+            others = sorted(pending - {db_tx.id})
             try:
-                wac_result = await self._auto_cost(db_tx, (source_broker_id, excluded, as_of_date), ccy_hint)
+                wac_result = await self._auto_cost(db_tx, (source_broker_id, excluded + others, as_of_date), ccy_hint)
             except UnreadablePoolError as exc:
                 if unreadable is None:
                     raise
                 unreadable.append((operation, idx, exc.count))
                 continue
             self._write_auto_cost(db_tx, wac_result)
+            if wac_result.wac:
+                pending.discard(db_tx.id)
 
             # Build response item (reuse WACPreviewResultItem with batch-context fields)
             is_detail = getattr(schema_item, "cost_basis_mode", None) == "auto-detail"
-            results.append(
-                WACPreviewResultItem(
-                    operation=operation,
-                    index=idx,
-                    source_broker_id=source_broker_id,
-                    wac=wac_result.wac,
-                    wac_qualifying_txs=wac_result.wac_qualifying_txs if is_detail else [],
-                    wac_missing_pairs=wac_result.wac_missing_pairs,
-                    asset_price=wac_result.asset_price if is_detail else None,
-                    asset_price_stale=wac_result.asset_price_stale if is_detail else None,
-                    asset_price_missing=wac_result.asset_price_missing if is_detail else False,
-                )
+            results[position] = WACPreviewResultItem(
+                operation=operation,
+                index=idx,
+                source_broker_id=source_broker_id,
+                wac=wac_result.wac,
+                wac_qualifying_txs=wac_result.wac_qualifying_txs if is_detail else [],
+                wac_missing_pairs=wac_result.wac_missing_pairs,
+                asset_price=wac_result.asset_price if is_detail else None,
+                asset_price_stale=wac_result.asset_price_stale if is_detail else None,
+                asset_price_missing=wac_result.asset_price_missing if is_detail else False,
             )
 
-        return results if results else None
+        return [results[position] for position in sorted(results)] or None
 
     async def _auto_cost(self, db_tx: Transaction, source: tuple[int, list[int], date_type], ccy_hint: str | None = None) -> WACPreviewResultItem:
         """The Auto cost basis of ``db_tx``: the average cost of the pool ``source`` names (``_auto_cost_source``).
@@ -203,33 +216,6 @@ class TransactionAutoCostMixin:
         if wac_result.wac:
             db_tx.cost_basis_override = wac_result.wac.amount
             db_tx.cost_basis_currency = wac_result.wac.code
-
-    async def _find_created_tx_for_wac(
-        self,
-        item: TXCreateItem,
-        link_uuid_map: dict[str, list[tuple[int, Transaction]]],
-        orig_idx: int,
-    ) -> Transaction | None:
-        """Find the flushed Transaction DB row for a created item."""
-        if item.link_uuid and item.link_uuid in link_uuid_map:
-            # Find in link_uuid_map by matching orig_idx
-            for map_idx, tx in link_uuid_map[item.link_uuid]:
-                if map_idx == orig_idx:
-                    return tx
-        # Fallback: query by matching fields (last resort)
-        stmt = (
-            select(Transaction)
-            .where(
-                Transaction.broker_id == item.broker_id,
-                Transaction.asset_id == item.asset_id,
-                Transaction.date == item.date,
-                Transaction.type == item.type,
-            )
-            .order_by(Transaction.id.desc())
-            .limit(1)
-        )
-        result = await self.session.execute(stmt)
-        return result.scalars().first()
 
     async def _auto_cost_source(self, db_tx: Transaction) -> tuple[int, list[int], date_type]:
         """The pool an Auto cost basis averages: broker, rows left out, and the date.
