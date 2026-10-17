@@ -10,6 +10,12 @@ current price + history. These tests verify the FINANCIAL MATH internals:
 - Cache behavior
 The provider is pure/deterministic, so these tests run without DB or server.
 
+J-39 (lot CP-14b, workstream J), the section before the golden: without late interest, the MATURITY_SETTLEMENT of a
+schedule whose last period pays coupons is the value after the final coupon (the principal), not the chart's value
+before it. Before: it read ``values[last_end]``, so the final coupon was counted twice, as INTEREST and inside the
+settlement, and so were ``get_current_value`` and ``get_history_value`` after maturity. Its tests marked "Red" fail on
+that code; those marked "Guard" pass before and after.
+
 ACCRUAL GOLDEN (lot CP-14a, workstream J, U10 / decision D-8): the section at the end freezes,
 digit for digit, what ``_generate_schedule_values``, ``_compute_value_at`` and
 ``_compute_late_interest_value`` return on a matrix of schedules, in
@@ -535,6 +541,150 @@ async def test_late_interest_within_grace_period():
 
 
 # ============================================================================
+# J-39 — THE MATURITY SETTLEMENT IS THE VALUE AFTER THE FINAL COUPON (lot CP-14b, workstream J)
+# ============================================================================
+#
+# Without late interest, ``_generate_schedule_values`` closes a schedule whose last period pays coupons with a
+# MATURITY_SETTLEMENT on its last day. That same day the walk pays the final coupon as an auto INTEREST event, and after
+# a coupon the value restarts from the principal: the settlement is the value after the final coupon, the principal.
+# Before: the settlement read ``values[last_end]``, the chart's value BEFORE that day's coupon (I-bis #26), so the final
+# coupon was paid twice, once as INTEREST and once inside the settlement; ``get_current_value`` and ``get_history_value``
+# after maturity read the settlement and paid it twice too.
+#
+# Unchanged, and guarded here: the chart's maturation value ``values[last_end]`` (the pre-coupon peak); no settlement
+# when the last period pays no coupons, nor in ``_generate_schedule_values`` when the schedule has late interest; a last
+# day that pays no coupon (its value not above the principal) settles at that day's value. The late-interest part of
+# J-39 (the base of late interest, the late settlement) waits for the developer and is deliberately not tested here.
+#
+# The bond: 10 000 EUR at 5 %, ACT/365, SIMPLE, one ANNUAL period over 2024 (maturation dates 1/1 and 31/12) paying its
+# interest at maturity, no late interest. Its one coupon, read off the walk (worked out, not run):
+#   - 365 accrual days (2/1 .. 31/12 of a leap year), each 10 000 x 0.05 x 1/365 = 1.369863013698630136986301370 in the
+#     default 28-digit Decimal context;
+#   - the running sum is exact for 72 days; the 73rd rounds 100.00000000000000000000000001 down to 100, and each of the
+#     292 days after adds 1.3698630136986301369863014 (25 decimals fit there): 500.0000000000000000000000088;
+#   - the day's value, 10 000 + that sum at 28 digits, is 10 500.00000000000000000000001, and the coupon (value minus
+#     principal) 500.00000000000000000000001: one year of 5 % on 10 000, 1e-23 above 500 by rounding.
+
+_J39_PRINCIPAL = Decimal("10000")
+_J39_START = date(2024, 1, 1)
+_J39_MATURITY = date(2024, 12, 31)
+_J39_COUPON = Decimal("500.00000000000000000000001")
+
+
+def _j39_bond(*, coupons: bool = True, asset_events: list[FAAssetEventPoint] | None = None, late_interest: FALateInterestConfig | None = None) -> FAScheduledInvestmentSchedule:
+    """The J-39 bond of the section's comment; ``coupons=False`` makes its (last) period pay none."""
+    return FAScheduledInvestmentSchedule(
+        initial_value=Currency(code="EUR", amount=_J39_PRINCIPAL),
+        interest_type=InterestType.SIMPLE,
+        day_count=DayCountConvention.ACT_365,
+        schedule=[FAInterestRatePeriod(start_date=_J39_START, end_date=_J39_MATURITY, annual_rate=Decimal("0.05"), maturation_frequency=MaturationFrequency.ANNUAL, generate_interest=coupons)],
+        late_interest=late_interest,
+        asset_events=asset_events or [],
+    )
+
+
+def _j39_events(events: list[FAAssetEventPoint]) -> list[tuple[date, str, Decimal, str]]:
+    """Events as (date, type, amount, currency code), in the order given. The notes are not part of the contract."""
+    return [(event.date, event.type, event.value.amount, event.value.code) for event in events]
+
+
+def test_j39_maturity_settlement_is_the_principal_after_the_final_coupon():
+    """Red. The last day pays the final coupon, then settles the principal: the coupon is counted once.
+
+    Before: [INTEREST 500.00000000000000000000001, MATURITY_SETTLEMENT 10 500.00000000000000000000001] on 31/12/2024.
+    Contract: [INTEREST 500.00000000000000000000001, MATURITY_SETTLEMENT 10 000], amounts compared exactly; the coupon and
+    the chart's maturation values (the principal on 1/1, principal + coupon on 31/12) unchanged.
+    """
+    values, auto_events = _generate_schedule_values(_j39_bond())
+
+    peaks = {_J39_START: _J39_PRINCIPAL, _J39_MATURITY: _J39_PRINCIPAL + _J39_COUPON}
+    premise = "premise, unchanged by J-39: the maturation values are the principal and principal + the final coupon (the pre-coupon peak)"
+    misread = "If only the digits of the coupon differ, the reading of the walk in the section's comment is wrong, not the code."
+    assert values == peaks, f"{premise}, got {values}. {misread}"
+    assert _j39_events(auto_events) == [
+        (_J39_MATURITY, "INTEREST", _J39_COUPON, "EUR"),
+        (_J39_MATURITY, "MATURITY_SETTLEMENT", _J39_PRINCIPAL, "EUR"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_j39_current_value_after_maturity_is_the_principal():
+    """Red. The bond matured on 31/12/2024, so today is after maturity whatever day the test runs: the value is the settlement.
+
+    Before: 10 500.00000000000000000000001, the settlement with the final coupon still inside it.
+    Contract: 10 000.
+    """
+    assert date.today() > _J39_MATURITY, "premise: the bond has matured"
+
+    result = await ScheduledInvestmentProvider().get_current_value("j39", IdentifierType.OTHER, _j39_bond().model_dump())
+
+    assert result.value == _J39_PRINCIPAL, f"current value after maturity: expected the principal {_J39_PRINCIPAL}, got {result.value}"
+    assert result.currency == "EUR"
+
+
+@pytest.mark.asyncio
+async def test_j39_history_after_maturity_anchors_the_principal():
+    """Red. A history past maturity: the pre-coupon peak on the last day, then the principal after the settlement.
+
+    Before: the anchor of 31/3/2025 and the MATURITY_SETTLEMENT event are 10 500.00000000000000000000001.
+    Contract: points [1/1/2024 10 000, 31/12/2024 principal + coupon (unchanged), 31/3/2025 10 000]; events [INTEREST
+    coupon, MATURITY_SETTLEMENT 10 000], both on 31/12/2024.
+    """
+    end = date(2025, 3, 31)
+
+    result = await ScheduledInvestmentProvider().get_history_value("j39", IdentifierType.OTHER, _j39_bond().model_dump(), _J39_START, end)
+
+    assert [(point.date, point.close) for point in result.prices] == [
+        (_J39_START, _J39_PRINCIPAL),
+        (_J39_MATURITY, _J39_PRINCIPAL + _J39_COUPON),
+        (end, _J39_PRINCIPAL),
+    ]
+    assert _j39_events(result.events) == [
+        (_J39_MATURITY, "INTEREST", _J39_COUPON, "EUR"),
+        (_J39_MATURITY, "MATURITY_SETTLEMENT", _J39_PRINCIPAL, "EUR"),
+    ]
+
+
+def test_j39_guard_a_last_period_without_coupons_settles_nothing():
+    """Guard, green before and after: a last period with ``generate_interest=False`` emits no coupon and no settlement.
+
+    Its maturation value is the same pre-coupon value as the bond that pays the coupon: the whole year's interest.
+    """
+    values, auto_events = _generate_schedule_values(_j39_bond(coupons=False))
+    paying_values, _paying_events = _generate_schedule_values(_j39_bond())
+
+    assert auto_events == []
+    assert values[_J39_MATURITY] == paying_values[_J39_MATURITY]
+
+
+def test_j39_guard_a_last_day_without_a_coupon_settles_at_its_value():
+    """Guard, green before and after: a last day that pays no coupon settles at its own value.
+
+    A write-down of 1 000 in July keeps the value under the principal at maturity, so the last day pays no coupon (only a
+    positive one is paid) and there is no coupon to take out of the settlement.
+    """
+    write_down = FAAssetEventPoint(date=date(2024, 7, 1), type="PRICE_ADJUSTMENT", value=Currency(code="EUR", amount=Decimal("-1000")), notes="Write-down")
+
+    values, auto_events = _generate_schedule_values(_j39_bond(asset_events=[write_down]))
+
+    last_value = values[_J39_MATURITY]
+    assert last_value < _J39_PRINCIPAL, f"premise: the write-down keeps the last day under the principal, got {last_value}"
+    assert _j39_events(auto_events) == [(_J39_MATURITY, "MATURITY_SETTLEMENT", last_value, "EUR")]
+
+
+def test_j39_guard_a_schedule_with_late_interest_settles_nothing_at_maturity():
+    """Guard, green before and after: with late interest the final coupon is paid and no settlement is emitted at maturity.
+
+    Whether and when a schedule with late interest settles is the part of J-39 left to the developer: not tested here.
+    """
+    late = FALateInterestConfig(annual_rate=Decimal("0.10"), grace_period_days=30, interest_type=InterestType.SIMPLE)
+
+    values, auto_events = _generate_schedule_values(_j39_bond(late_interest=late))
+
+    assert _j39_events(auto_events) == [(_J39_MATURITY, "INTEREST", values[_J39_MATURITY] - _J39_PRINCIPAL, "EUR")]
+
+
+# ============================================================================
 # ACCRUAL GOLDEN — the safety net of lot U10 (CP-14a, workstream J, decision D-8)
 # ============================================================================
 #
@@ -559,8 +709,16 @@ async def test_late_interest_within_grace_period():
 # _compute_late_interest_value, given values[last day], is read the day after maturity, on the last day of grace and
 # the first after it, 40 days after maturity, and more than a year after it, past a 31/12.
 #
-# Known defects of these numbers (ACT/ACT across a year end, the COMPOUND base) are frozen as they are: they belong to
-# other lots, and the lot that fixes one regenerates this file on purpose, with the change declared.
+# Lot CP-14b (workstream J) fixed two of the defects these numbers had frozen, and regenerated the fixture on purpose with
+# the change declared:
+#   - ACT/ACT is ISDA: a span no longer loses a day at every year end it crosses. Exactly 3 points changed, all SIMPLE
+#     late interest in closed form over a 31/12, each one more day of late interest: s1 ACT/ACT compound and simple at
+#     2025-05-15, s3 ACT/ACT simple at 2025-03-20. Day-by-day steps (the accrual walk, COMPOUND late interest) did not
+#     move: a one-day step over a year end was already right.
+#   - The maturity settlement is the value after the final coupon (J-39): the 8 MATURITY_SETTLEMENT amounts of
+#     s4_annual_settlement (4 day counts x 2 interest types) are now the principal, 12345.67.
+# The COMPOUND base (it leaves out the manual events) is still frozen as it is: it waits for the developer, and the lot
+# that changes it regenerates this file the same way, with the change declared.
 
 GOLDEN_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "scheduled_investment" / "accrual_golden.json"
 _REGEN_ENV = "LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN"

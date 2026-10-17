@@ -3526,3 +3526,246 @@ sostituito, così restano sicuri in entrambi gli stati.
    - `check_source_paths.py`: 7 percorsi mancanti su 4118, tutti di prima e in altre pagine, nessuno nella nuova;
    - il grafo non è aggiornato: graphify non c'è in questo worktree, come per le altre voci di stanotte.
    Checkpoint FROZEN al coordinatore.
+
+### Z-14b + Z-15 — piano per il mattino (17/10 ~05:05, sola lettura; parte solo se il developer dice sì)
+
+> **Richiesta** (coordinatore, 17/10 ~04:57): «So you're ready in the morning: a **read-only plan for Z-14b + Z-15**,
+> with the exact files per owner, the reds, the E2E and the slot, ready to start if the developer says yes.»
+
+**La domanda per il developer** (una sola; in grassetto la mia raccomandazione): «Dopo un recupero dei prezzi (un
+risveglio, un ritorno all'app), le viste già sullo schermo si riallineano da sole, senza dire "occupato"?» Se sì:
+- D1, il pannello di rischio mentre ricarica: **in silenzio** (le cifre cambiano quando arrivano le nuove), oppure
+  l'icona che gira e la sezione attenuata, come dopo una sincronizzazione.
+- D2, le analisi su richiesta già a schermo (stress, replay, simulazione): **restano come sono** (le ha lanciate
+  l'utente, e una simulazione costa), oppure si rilanciano.
+- D3, il ritorno su una pagina dei prezzi dopo un recupero: **i punti vecchi subito, aggiornati in background**,
+  oppure il caricamento come una prima visita (oggi). Serve comunque alla ricarica silenziosa di una pagina aperta:
+  senza, quella ricarica accenderebbe `aria-busy`.
+
+**Stato reale** (HEAD `75a1107a7`, con Y11 sulle pagine degli asset, merge `d32d0f3d9`):
+- Il bus: `{kind: 'prices'}` (`notifyPricesCaughtUp`, `stores/portfolio/portfolioMutation.ts:155`). Ricaricano solo
+  il Dashboard (`dashboard/+page.svelte:729–737`) e la pagina del broker (`brokers/[id]/+page.svelte:449–456`), in
+  background e fuori da `pageBusy`; i loro commenti dicono che rischio e lotti restano stale.
+- Rischio: ogni pannello ha un `createRiskPanelController` (`lib/features/risk/riskPanelController.svelte.ts`):
+  Dashboard e broker (`RiskLevelsPanel`), lista asset (`AssetSetRiskPanel`, più controller), dettaglio asset
+  (`AssetRiskScenariosView`). L'onda di base si ricarica all'apertura o al cambio d'ambito (`pageBusy` `risk-load`) e
+  a `refreshVersion` (`risk-refresh`). `riskStore` segna stale a ogni segnale del bus (`riskStore.svelte.ts:307`).
+  `loadBase` mette la cache a schermo e accende `refreshing` (riga 464): in `RiskResultFrame` un'icona che gira
+  (`{testId}-refreshing`) e la sezione al 60 %.
+- Lotti: `LotsAnalysisPanel.svelte`, `loadMain` (~riga 221), mette la cache a schermo e, se stale, chiede di nuovo
+  senza indicatori. Manca solo chi lo richiami dopo un recupero: oggi lo fanno gli `$effect` sugli input e
+  `refreshVersion`.
+- Le quattro pagine dei prezzi leggono i negozi con `getMissingIntervals`. Dopo Z-14 un negozio stale dà tutto
+  l'intervallo come mancante, e la pagina mostra il caricamento:
+  - dettaglio asset, `routes/(app)/assets/[id]/+page.svelte`: `loadChartData` (1262–1345) fa
+    `loading = !pricesFromCache`, e `aria-busy`/`data-busy` della radice `asset-detail-page` (2189–2190) seguono
+    `loading`;
+  - dettaglio cambio, `routes/(app)/fx/[pair]/+page.svelte`: `loadChartData` (760–800) fa
+    `loading = !hasCachedRange`, con `data-busy={loading}` sulla radice `fx-detail-page` (1243);
+  - lista asset, `routes/(app)/assets/+page.svelte`: `fetchAllPriceData` (~640–700), `loadingPrices` per asset;
+  - lista cambi, `routes/(app)/fx/+page.svelte`: `fetchAllPairData` (~450–540), `loading: true` per coppia.
+  Nessuna delle quattro ascolta il bus.
+
+**Disegno** (decisioni N-Z14b-1…3 e N-Z15-1…2, «da rivedere»):
+- N-Z14b-1: un aiuto, mio: `lib/features/price-refresh/onPricesCaughtUp.ts`.
+  - `onPricesCaughtUp(reload)` si registra sul bus con una chiave unica per chiamata, perché una pagina può avere più
+    controller di rischio.
+  - Reagisce solo a `prices`, e chiama `reload` in un microtask, dopo che ogni negozio ha segnato stale.
+  - Rende la funzione che smette; pagine e pannelli lo chiamano nel loro ciclo di vita.
+  - Dashboard e broker restano come sono.
+- N-Z14b-2: `TimeSeriesStore` espone `isStale`, in sola lettura. Regola delle quattro pagine (D3): se il negozio è
+  stale e ha punti per l'intervallo, quei punti vanno subito a schermo e la richiesta parte senza `loading` (quindi
+  senza `aria-busy`/`data-busy`); altrimenti come oggi.
+- N-Z14b-3: ogni pagina dei prezzi, con `onPricesCaughtUp`, rilegge l'intervallo che mostra, attraverso la sua
+  funzione di oggi (`loadChartData`, `fetchAllPriceData`, `fetchAllPairData`) e fuori da `pageBusy`. Y11 ha messo
+  l'«Aggiorna» di queste pagine su `pageBusy`, e la ricarica non è un «Aggiorna».
+- N-Z15-1: il controller del rischio, con `onPricesCaughtUp`, richiede la sua onda di base senza force e fuori da
+  `pageBusy`. Con D1 «in silenzio» non accende `refreshing` (un'opzione di `loadBase`). Un solo file vale per tutti i
+  pannelli di rischio.
+- N-Z15-2: il pannello dei lotti, con `onPricesCaughtUp`, richiama `loadMain` e `loadSelectionHistories` senza force
+  e fuori da `pageBusy`; la cache stale li fa chiedere di nuovo senza indicatori.
+- Con D2 «restano», nessun rilancio delle analisi su richiesta.
+
+**File per proprietario** (lo scrittore lo assegna il coordinatore; proprietari letti nella storia dei merge):
+
+| proprietario | file | cosa |
+|---|---|---|
+| Z | `lib/features/price-refresh/onPricesCaughtUp.ts` (nuovo) e `onPricesCaughtUp.test.ts` | l'aiuto |
+| Z | `lib/stores/core/TimeSeriesStore.ts`, `lib/stores/__tests__/TimeSeriesStore.test.ts` | `isStale` |
+| Z | `e2e/portfolio/price-refresh-reload.spec.ts`; la `desc` di `price-refresh` in `scripts/test_runner/_frontend_portfolio.py` (condiviso) | gli E2E |
+| Y (Y4b, Y11) | `lib/features/risk/riskPanelController.svelte.ts`, `riskPanelController.test.ts` | N-Z15-1 |
+| Y (spostato con Y3; colori di BK; nella lista del coordinatore J: da confermare) | `lib/features/brokers/lots/LotsAnalysisPanel.svelte` | N-Z15-2, solo `<script>` |
+| Y (Y11; nella storia anche X, C-66, e AF, colori) | `routes/(app)/assets/[id]/+page.svelte`, `routes/(app)/assets/+page.svelte`, `routes/(app)/fx/[pair]/+page.svelte`, `routes/(app)/fx/+page.svelte` | N-Z14b-2 e 3, solo `<script>` |
+| DV, BK | `routes/(app)/dashboard/+page.svelte`, `routes/(app)/brokers/[id]/+page.svelte` | i commenti di `reloadAfterPriceCatchUp` |
+| docs-writer | `developer/frontend/state/domain-state.md`, `live-ticker.md#price-refresh`, `state/registries.md` («Invalidating»), la pagina di sviluppo del rischio se descrive i ricaricamenti | doc |
+
+Nessuna area dei colori: niente markup né classi. Il lotto T della lista asset tocca le righe 1707–1708, cioè il
+markup: un altro pezzo del file.
+
+**Rossi** (test-author, prima del codice):
+- `onPricesCaughtUp.test.ts` (`front-utility core-unit`):
+  - solo `prices` chiama, e dopo gli ascoltatori del dispatch;
+  - due chiamate danno due ricariche (chiavi uniche);
+  - dopo lo stop, nulla.
+- `TimeSeriesStore.test.ts` (`front-fx fx-unit`): `isStale` vero dopo `markStale()`, falso dopo `invalidateAll()`.
+- `riskPanelController.test.ts` (`front-portfolio risk-controller-unit`):
+  - con `{kind: 'prices'}` l'onda di base è chiesta di nuovo, senza force, con `pageBusy.busy` falso e (D1)
+    `refreshing` falso;
+  - con `mutation` e `refresh` no;
+  - le analisi su richiesta restano intatte (D2).
+- Le pagine e il pannello dei lotti hanno la logica nei `.svelte`: li coprono gli E2E.
+
+**E2E** (nel mio spec, `front-portfolio price-refresh`). Stesso recupero simulato e stesso registro di `data-busy`,
+con in più le radici `asset-detail-page`, `fx-detail-page`, `assets-page` e `fx-page`:
+- (i) Dashboard col pannello di rischio aperto. Dopo un recupero che ha aggiornato qualcosa, di nuovo
+  `POST /risk/query`, con le stesse domande e senza navigare; radice e «Aggiorna» mai occupati; (D1) nessuna icona
+  `-refreshing`. Controllo: un recupero che non ha aggiornato nulla non chiede niente.
+- (j) Dashboard col pannello dei lotti aperto su una posizione: di nuovo `POST /portfolio/lots/analysis`, e nessun
+  «occupato».
+- (k) Dettaglio asset aperto: la sua `prices/query` con `include_price: true`, senza navigare; `asset-detail-page` mai
+  `data-busy`; il grafico resta.
+- (l) Lo stesso per il dettaglio di un cambio: `convert`, `fx-detail-page`.
+- (m) Liste asset e cambi aperte: chiedono di nuovo prezzi e cambi; le radici non sono mai occupate.
+- (g') e (h'): (g) e (h) di oggi, più «al ritorno dopo il recupero la radice non dice mai occupato» (D3).
+
+Oggi rossi per il motivo giusto: in (i)–(m) nessuna richiesta, in (g') e (h') `data-busy` acceso.
+
+**Slot**:
+- `front-portfolio price-refresh` intero: 8 casi oggi, 7 in più; stima 15–20 min.
+- La regressione delle pagine toccate, stima 20–25 min: `front-asset asset-detail`, `front-asset asset-list`,
+  `front-asset live-pause`, `front-fx fx-detail`, `front-fx fx-list`, `front-portfolio risk-asset-detail`.
+- Due slot, o uno da ~45 min.
+
+Controlli leggeri: `core-unit`, `fx-unit`, `asset-unit`, `risk-controller-unit`, `store-unit`, `component-unit` e
+`front check`.
+
+**Passi, dopo il sì**:
+1. analisi del turno: rileggere le righe e le firme di `loadBase`, `fetchAllPriceData` e `fetchAllPairData`;
+2. rossi;
+3. codice: l'aiuto e `isStale` sono miei; i file di Y col suo via da scrittore, o li fa Y;
+4. doc;
+5. controlli leggeri;
+6. slot;
+7. checkpoint FROZEN.
+
+Stima: mezza giornata, più gli slot.
+
+**Rischi**:
+- Richieste in più dopo un recupero: una per vista aperta, e solo quando il recupero ha aggiornato qualcosa. Nel cloud
+  succede una volta, al risveglio.
+- Il dettaglio asset ha molte guardie di generazione (`chartRequestGeneration`): la ricarica passa da `loadChartData`,
+  non da un percorso nuovo.
+- File aperti da altre sessioni (Y, X, i colori): solo `<script>`, ma ogni via va annunciato.
+
+**Fatto quando**: i rossi sono verdi; i 7 E2E sono verdi nello slot, con i loro controlli; la ricarica non accende
+mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 sono ✅ nel backlog.
+
+### Z-16 — l'albero tradotto di `admin/filesystem`, a mano (17/10)
+
+> **Via** (coordinatore, 17/10 ~05:32): «meanwhile, if it's quick: **Z-16** by hand (the translated tree of
+> `admin/filesystem`: the Spanish comments, plus the 3 missing rows in IT/FR/ES), no stamp, in your lane 6186 for the
+> strict build.» Base: HEAD `1a937b93e`.
+
+1. ✅ 17/10 05:30–05:33 — Gli alberi di `filesystem.it.md`, `.fr.md` ed `.es.md`:
+   - le tre righe, `backups/` dopo `logs/`, `secrets/` e `instance.key` dopo `scenario_catalog/`;
+   - a sinistra del `#` ogni riga è uguale all'inglese (controllo riga per riga con `paste`);
+   - in spagnolo i nove commenti tradotti, con «copias de seguridad» per gli archivi: «archivos» vorrebbe dire anche
+     file;
+   - termini: le pagine tradotte non nominano ancora la chiave d'istanza; scelti «chiave dell'istanza», «clé de
+     l'instance», «clave de la instancia». Lo spagnolo dà del tu, come il resto della pagina.
+2. ✅ 17/10 05:33–05:35 — `mkdocs build` stretto rc 0, nessun avviso (carico 28); `check-links` 97 validi. Nel sito
+   costruito le tre pagine hanno `instance.key` e `backups/`. Nessuno stamp: il resto della pagina tiene il suo
+   debito (cache di Aphra del 10/10).
+3. ✅ 17/10 05:37 — Backlog: Z-16 ✅. Checkpoint al coordinatore insieme all'analisi di Z-11.
+
+### Z-11 — lock dei job tra processi: analisi (17/10 ~05:40, sola lettura)
+
+> **Via** (coordinatore, 17/10 ~05:32): «**Z-11**, the job lock across processes (flock in the data folder, state
+> re-read inside the lock; coordinator decision D-Z3-3): **analysis first** (surfaces, interaction with leader
+> election, tests), send it to me, then reds and code».
+
+**Stato reale** (HEAD `1a937b93e`):
+- **Per processo.** Ogni worker uvicorn ha:
+  - il suo loop dello scheduler (`app_lifespan`);
+  - il suo `asyncio.Lock` (`_run_lock`, uno per event loop);
+  - la sua attività e il suo `PRICE_REFRESH`.
+- **Il giro.** `_run_locked` (`scheduler.py:463`) controlla nell'ordine:
+  - spento → `disabled`; bloccata → `blocked`;
+  - poi `am_i_leader()` (`leader.py`): leader è il PID più basso fra i figli del master; con `--reload`, senza
+    genitore o con un errore, il processo è leader. Altrimenti `not_leader`;
+  - poi le impostazioni, `load_state()`, e i job dovuti in sequenza, con `save_state()` dopo ciascuno (scrittura
+    atomica, `state.py`).
+- **Con `--workers N`** (D-Z3-3):
+  - un `wake-sync` che arriva a un altro worker risponde `not_leader` e non esegue nulla
+    (`admin/sleep_wake.en.md#wake-sync-workers`);
+  - il ritorno dopo un silenzio spinge il loop del worker che ha ricevuto la richiesta: se non è il leader, nulla
+    fino al tick del leader (≤ 60 s).
+- **Quanto è comune.** `--workers auto` è un'opzione documentata per chi gira dal sorgente (`admin/cli_tools`). Docker
+  e Fly hanno un worker. Il server di test del runner gira con `--workers 2`, ma con `--no-scheduler`.
+- **`fcntl` c'è già in quattro posti**: `instance_backup/jobs.py` (`_RunLock`: `LOCK_EX | LOCK_NB`, `O_NOFOLLOW`,
+  `0o600`, e senza `fcntl` un `threading.Lock` per processo), `instance_backup/apply.py`, `db/post_migration`,
+  `brim_provider.py`. La guida d'installazione copre anche Windows, dove `fcntl` non c'è.
+- **Chi legge lo stato fuori dallo scheduler**: `api/v1/settings.py:374`, che lo mostra; la sostituzione atomica basta.
+
+**Proposta** (decisioni N-Z11-1…4, «da rivedere»):
+- N-Z11-1 — il lock al posto del leader, dove c'è `fcntl`.
+  - Un modulo nuovo, `scheduler/run_lock.py`: un context manager asincrono sul file `<data_dir>/.scheduler.lock`.
+    Nascosto, `0o600`, `O_NOFOLLOW`, mai cancellato: cancellare un file di flock in uso rompe l'esclusione.
+  - Lo prende `_run_locked` dopo i controlli `disabled`/`blocked` e le impostazioni. Dentro il lock legge lo stato,
+    esegue i dovuti, salva e rilascia.
+  - Qualunque worker esegue: chi arriva secondo aspetta, rilegge lo stato e trova i job `not_due`.
+  - Un `wake-sync` gira su qualunque worker, o aspetta chi sta già eseguendo e risponde a lavoro finito. Il ritorno
+    parte subito nel worker che l'ha visto.
+- N-Z11-2 — l'attesa.
+  - Tentativi `LOCK_NB` ogni 0,2 s, con `asyncio.sleep`: cancellabile allo spegnimento, nessun thread bloccato.
+  - Dentro `busy("scheduler")` come oggi, con il rilascio nel `finally`.
+  - Un processo che muore col lock lo perde (lo rilascia il kernel): niente lock orfani.
+- N-Z11-3 — senza `fcntl` (Windows) resta l'elezione di oggi, con `am_i_leader()` e `not_leader`. Quindi `leader.py`,
+  i suoi test e lo stato `not_leader` restano per quel caso: nessun cambio d'API (`RunReport.status` uguale), nessun
+  `api sync`.
+- N-Z11-4 — il codice del lock: una copia piccola del modello di `_RunLock` (B), non un modulo condiviso, perché
+  estrarlo toccherebbe quattro proprietari. Nel backlog, una riga per un aiuto comune dopo la 1.3.
+
+**Limiti che restano** (fuori da Z-11, invariati):
+- Il tracker `PRICE_REFRESH`, l'attività e il monitor d'inattività sono per processo. Con più worker l'avviso
+  «Aggiornamento prezzi…» compare solo sulle risposte del worker che esegue: oggi è lo stesso, col leader.
+- La sospensione su Fly usa un worker.
+
+**Test** (test-author, rossi prima):
+- `test_scheduler_run_lock.py` (nuovo, `services`, puro):
+  - esclusione fra due processi veri: un figlio tiene il lock, e l'attesa del genitore finisce solo quando il figlio
+    lo rilascia;
+  - lock rilasciato alla morte del figlio (SIGKILL);
+  - un'attesa cancellata non lascia fd aperti né il lock;
+  - il file è `0o600`, e un symlink al suo posto viene rifiutato;
+  - senza `fcntl` (monkeypatch), il percorso del leader.
+- `test_scheduler_multiprocess.py` (nuovo, `services`): due processi veri su una cartella dati in `tmp_path` lanciano
+  insieme `run_due_jobs("wake")`, con job finti che scrivono ogni esecuzione in un file.
+  - Ogni job dovuto gira una volta sola, e il secondo processo risponde `not_due`.
+  - Nessun `not_leader`, nemmeno dal processo col PID più alto.
+- Da adattare, perché il ramo del leader vale solo senza `fcntl`:
+  - `test_scheduler_catchup.py`: il contratto dell'ordine dei controlli, il caso `not_leader` e (h), «off the loop»;
+  - `test_system_wake.py`: il caso `not_leader`;
+  - `test_scheduler_backoff.py` e `test_scheduler_price_refresh.py`, che sostituiscono `am_i_leader`.
+  `test_scheduler_leader.py` resta.
+- Nessun E2E: è solo backend.
+- Azioni:
+  - `services`: `scheduler-catchup`, `scheduler-backoff`, `scheduler-price-refresh`, `scheduler-leader`,
+    `scheduler-jobs`, `scheduler-state`, `scheduler-due`, `scheduler-loop`, più le due nuove;
+  - `api`: `system-wake`.
+
+**Superfici:**
+- Miei: `scheduler/scheduler.py`, il nuovo `scheduler/run_lock.py`, i test dello scheduler e di `wake-sync`.
+- Condiviso: `scripts/test_runner/_backend_services.py`, due voci.
+- Doc (docs-writer, solo inglese; `sleep_wake` non ha traduzioni):
+  - `admin/sleep_wake.en.md#wake-sync-workers`: con più worker esegue un worker qualunque, uno alla volta;
+    `not_leader` solo dove manca `fcntl`;
+  - `developer/backend/scheduler.md`: lo schema dei controlli e `#leader-election`;
+  - `developer/architecture/database/index.md#data-directory`: la riga di `.scheduler.lock`.
+- Nessun frontend, nessuna area dei colori, nessuna migrazione.
+
+**Rischi:**
+- I test con processi veri sotto carico: scambi su file, nessuna attesa fissa, limiti larghi.
+- `flock` su un file system di rete: non è un vincolo nuovo, perché SQLite in WAL vuole già una cartella dati locale.
+
+**Stima:** S–M, mezza giornata con i test. Nessuno slot E2E: azioni `services` leggere (sotto 50) e `api system-wake`.

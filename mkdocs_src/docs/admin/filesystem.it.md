@@ -22,7 +22,10 @@ backend/data/
 │   │   ├── ✅ parsed/                # Report letti con successo
 │   │   └── ❌ failed/                # Report che non è stato possibile leggere
 │   ├── 📝 logs/                      # File di log dell'applicazione
+│   ├── 💾 backups/                   # Archivi scritti da ./dev.py backup create
 │   ├── 🎭 scenario_catalog/          # Opzionale: i tuoi scenari di stress
+│   ├── 🔐 secrets/                   # Creata la prima volta che LibreFolio usa la chiave
+│   │   └── 🔑 instance.key           # La chiave dell'istanza: salvala, non cambiarla mai
 │   └── 📋 scheduler_state.json       # Sincronizzazioni: ultima esecuzione, nuovo tentativo
 │
 └── 🧪 test/                          # Dati di test (completamente isolati)
