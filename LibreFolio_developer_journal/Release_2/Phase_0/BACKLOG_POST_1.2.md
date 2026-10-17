@@ -3887,24 +3887,43 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     posto del traceback di `PermissionError`.
 
   Dettagli: piano H, §14, lotto «H-46».
-- **H-47 · `read_secret_file`: un'opzione per rifiutare link e file non regolari, per chi legge da root** — basso,
-  sicurezza; B-38 della review BZ di B, via coordinatore, 17/10. Dopo la 1.3, salvo che costi poco.
+- **H-47 · `read_secret_file`: un'opzione per leggere un segreto da root, solo da un file regolare e senza link sotto una
+  radice data** — basso, sicurezza; B-38 della review BZ di B, via coordinatore, 17/10. Il disegno è rivisto il 17/10,
+  dopo aver riletto B-38 entrato. Dopo la 1.3.
   - La CLI del backup gira da root e legge la password e la chiave d'istanza vecchia (`--password-file`,
-    `--instance-key-file`, B-18) con `read_secret_file` (`config/__init__.py`). Quella segue i link e apre le FIFO.
-    Il file può stare in una cartella che l'utente del server controlla: `backups/`, come suggeriva la guida di B-18.
-  - B mette ora la guardia dal lato della CLI: `O_NOFOLLOW|O_NONBLOCK` e `fstat` su un file regolare, prima di
-    chiamare la mia funzione.
-  - L'opzione di H, `regular_only=False` per default: `os.open` con `O_NOFOLLOW` (dove esiste) e `O_NONBLOCK`, poi
-    `fstat`. Un link, una FIFO, una cartella o un dispositivo danno `SecretFileError` («is not a regular file»), con il
-    nome e il percorso come oggi.
-  - **Mai di default**: i segreti di Kubernetes sono link (`..data/`). I segreti di Docker invece sono file regolari
-    montati, quindi i lettori dell'avvio (`env_secret`, la chiave generata) restano come sono.
-  - Costo stimato: piccolo, una ventina di righe e i test (link, FIFO senza blocco, cartella, file regolare, opzione
-    spenta come oggi). Si fa dopo B-38, così la CLI può passare all'opzione e togliere la sua copia.
-  - B-38 è entrato (`1ed071c2f`). La guardia della CLI apre il file e lo controlla, poi `read_secret_file` lo riapre
-    per percorso: sono due aperture, e fra le due il percorso può cambiare (`scripts/backup_cli.py`, «two opens»).
-    L'opzione legge dallo stesso descrittore che controlla: con lei basta una sola apertura, e la corsa sparisce
-    (coordinatore, 17/10).
+    `--instance-key-file`, B-18) con `read_secret_file` (`config/__init__.py`). Quella apre per percorso, segue i link e
+    aprirebbe una FIFO. Il file può stare in una cartella che l'utente del server controlla: `backups/`, come
+    suggeriva la guida di B-18.
+  - **Cosa ha fatto B-38** (entrato, `1ed071c2f`; `_secret_path()` in `scripts/backup_cli.py`; `security.md`, «Secret
+    files read as root»), da root:
+    - rifiuta un percorso che passa per un link in un componente qualunque dalla cartella dei dati in giù
+      (`_link_inside()`, un `os.lstat` per componente);
+    - poi apre con `O_RDONLY|O_NONBLOCK` **seguendo i link** e chiede a `fstat` un file regolare: una FIFO, una
+      cartella o un dispositivo sono rifiutati subito, mai attesi;
+    - chiude, e lascia leggere a `read_secret_file`.
+    Fuori dalla cartella dei dati i link si seguono di proposito: i segreti di Kubernetes sono link
+    (`/etc/secret/pw` → `..data/pw`).
+  - **Il residuo**: tre passi separati, cioè il giro di `lstat`, l'apertura del controllo e quella di
+    `read_secret_file`. Fra un passo e l'altro il percorso può cambiare (lo dicono la docstring di `_secret_path()` e
+    `security.md`).
+  - **Il disegno**: `read_secret_file(path, label, *, regular_only=False, no_links_under=None)`. Mai un `O_NOFOLLOW`
+    secco, che romperebbe Kubernetes.
+    - `regular_only`: una sola apertura `O_RDONLY|O_NONBLOCK`, `fstat` sul descrittore (file regolare, altrimenti
+      `SecretFileError` «is not a regular file», con il nome e il percorso come oggi) e la lettura **dallo stesso
+      descrittore**. Un file scambiato dopo il controllo non si legge.
+    - `no_links_under=<radice>`: il tratto del percorso sotto la radice si apre un componente alla volta, con
+      `os.open(nome, O_NOFOLLOW…, dir_fd=…)` sul descrittore del componente precedente. Un link lì dà `SecretFileError`,
+      e la sua destinazione non si legge. I link fuori dalla radice restano seguiti.
+    - Così controllo e lettura passano per una sola catena di descrittori, e le corse spariscono. La CLI passa
+      all'opzione e toglie la sua copia: `_link_inside()` e la prima apertura.
+  - **Default invariati**: i lettori dell'avvio (`env_secret`, la chiave generata) restano come sono. I segreti di
+    Docker sono file regolari montati.
+  - **Costo**: piccolo-medio, perché c'è la discesa con `dir_fd` su macOS e Linux. Più i test:
+    - un link dentro e uno fuori dalla radice;
+    - una FIFO, che non deve bloccare;
+    - una cartella, un dispositivo, un file regolare;
+    - uno scambio fra controllo e lettura;
+    - l'opzione spenta, che si comporta come oggi.
 
   Dettagli: questa riga; la guardia di B in B-38.
 - **H-48 · `env_url` toglie la barra finale anche ai link di una pagina** — basso; H (review di A9), via coordinatore,
