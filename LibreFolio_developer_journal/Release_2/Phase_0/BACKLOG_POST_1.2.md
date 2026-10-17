@@ -673,9 +673,10 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 - ✅ **T-B6 · Lotti: la fonte del prezzo di riferimento dice «exact» anche quando il prezzo convertito manca** (chiusa 16/10 dal coordinatore: CP-7a di J, treno 107) — minimo;
   T, 11/10, dalla sonda di B3b. Senza cambio `reference_unit_price` è `None`, ma `reference_price_source` resta
   `exact`, e l'AI Export lo copia. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Sonda».
-- **T-B7 · AI Export: segnalare le colonne tolte perché nulle in ogni riga, in tutti i componenti** — medio-basso;
+- ✅ **T-B7 · AI Export: segnalare le colonne tolte perché nulle in ogni riga, in tutti i componenti** — medio-basso;
   coordinatore, 11/10. Il renderer compatto toglie una colonna nulla in ogni riga; solo i lotti ne hanno la traccia
   (`unavailable_amount_lot_count`, B3b). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Scoperte sul renderer dell'AI Export».
+  ✅ **Fatto da J il 17/10** (`7184cb123`, dev `36d24e7d2`): le colonne con un `null` esplicito in ogni riga sono nominate dopo la tabella (`omitted_null_columns=…`), le etichette passano a `_v2`. Seguito: J-54 (i campi in cui `null` vuol dire «nessuno»).
 
 - **T-B8 · Sintesi FIFO dell'AI Export: valore aperto e P&L non realizzato sommano insiemi di lotti diversi** — basso;
   T, 11/10, dal docs-writer di B3b. Ognuna delle due somme prende i lotti aperti in cui quel campo è noto, mentre i
