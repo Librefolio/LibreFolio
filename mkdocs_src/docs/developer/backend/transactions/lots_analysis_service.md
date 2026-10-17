@@ -395,6 +395,15 @@ at_cost_until = last_day_without_observation(price_series, history_dates)
 `utils/datetime_utils.py`): the histories walk every day of that range, and an end far in the future held the instance
 (R13-SEC7-1). The response's `requested_date_to` and `computed_date_to` carry that bounded end.
 
+`computed_from` is the first transaction's date, and `EARLIEST_RANGE_START` (1 January 1900, same module) at the
+earliest (R13-SEC8): a transaction stored centuries back made every history walk every day since. The response's
+`computed_date_from` carries it. From it start `history_dates`, the window `_load_prices()` reads and the per-day rates
+of the market series (`collect_fx_needs()`). `display_from`, the start `trim_dates()` cuts the histories to, is the
+requested `date_from` (or `computed_from`), clamped to the same floor; `requested_date_from` stays as requested. A
+transaction dated before the floor still enters the FIFO engine on its own date, so the lot it opens or closes counts,
+its history points from the floor on; `build_performance_history()` carries the flows dated before the first NAV day
+into that day, like any flow before the first mark.
+
 `last_day_without_observation()` (`financial_math/lots/prices.py`) returns the last of the ascending days whose `price_series.resolve()` is `MISSING`: the day before the first observation, `actual_to` when the asset has none, `None` when the first transaction's day already has one — a quote before it included. The days valued at cost are `[computed_from, at_cost_until]`, whether or not the asset is priced later:
 
 | Reader | What it does with `at_cost_until` |
