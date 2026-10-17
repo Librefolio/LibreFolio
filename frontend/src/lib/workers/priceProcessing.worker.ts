@@ -6,7 +6,7 @@
  * receives a subset of the `items` array from `POST /api/v1/assets/prices/query`'s raw
  * (not-yet-validated) response, validates every item with the SAME Zod schema the
  * generated Zodios client would otherwise use automatically, then computes the SAME
- * derived UI state (last price, per-period deltas, chart-ready points) the Assets list
+ * derived UI state (last price, the delta over the range, chart-ready points) the Assets list
  * page already computed on the main thread — identical schema, identical algorithm,
  * only WHERE it runs changes.
  *

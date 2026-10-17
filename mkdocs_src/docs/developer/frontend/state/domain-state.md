@@ -92,7 +92,7 @@ The bus never spins the **Refresh** button: it waits only for the requests its p
 | `POST`/`PATCH`/`DELETE /assets`, `POST /assets/{id}/market-data/wipe` | Always |
 | `POST /assets/merge` | Unless the answer says `dry_run: true` |
 | `POST /assets/prices/sync` | When a result has `points_changed > 0` or `events_changed > 0` |
-| `POST`/`DELETE` on the other `/assets/prices…` paths, `/prices/current` included | Always, except `/prices/query` (a read) |
+| `POST`/`DELETE` on the other `/assets/prices…` paths, `/prices/current` included | Always, except `/prices/query` and `/prices/period-changes` (reads) |
 | `POST`/`DELETE` on `/assets/events…` | Always, except `/events/query` |
 | `POST`/`DELETE` on `/assets/provider…` | Always, except `/provider/probe` |
 | `POST /fx/currencies/sync` | When `total_points_changed > 0`; without a total, when a result has `points_changed > 0` |
