@@ -55,6 +55,22 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     next start was dropped: the data stays as it is`` then ``⚠️  Its checked copy could not be removed: it goes when its
     check expires``, exit 0, the copy still there; the usual drop keeps its «with its copy» line (a guard). A mode changed
     for a test is given back when the command ends, failed or not.
+(h) B-18 (red until it lands; contract §2): ``restore ARCHIVE --instance-key-file FILE`` gives the old instance key, so
+    that a clear archive's saved provider keys — under the key K1 of the instance it came from — are re-encrypted with
+    this instance's own key, K2 (the source and its secrets: ``test_backup_secure.py``'s ``secret_source``, on this
+    module's database at the head). A dry run: exit 0, ``   Instance key: not included; given with
+    --instance-key-file``, the «re-encrypted» line with their count, no ⚠️ line for them, the copy removed. Confirmed
+    (``--yes``): its copy waits, every saved key in it under K2, and ``pending`` shows it. A file that gives no key
+    (missing, blank, mode 000): ``❌ <its message> (instance_key_unreadable)``, exit 1, no copy, and the password of a
+    secure archive never asked: the file is read before it. A key shorter than 32 characters: ``❌ The instance key given
+    is too short: an instance key has at least 32 characters (instance_key_invalid)``, exit 1, no copy left. D1: a
+    secure archive carrying its own key uses it, ``ℹ️  The archive carries its own instance key: --instance-key-file is
+    not used`` right after the key line. D2: a wrong key of 32 characters or more, ``⚠️  The key given with
+    --instance-key-file reads none of the saved provider keys: …`` right before the ⚠️ line of the unreadable keys —
+    unless this instance's own key cannot be used (``LIBREFOLIO_INSTANCE_KEY`` too short), then ``⚠️  This instance's
+    own key cannot be used, so nothing was re-encrypted with the key given: <problem>`` in its place, the right key
+    given all the same. As root (B-19's fake identity, ``test_backup_cli_secure.py``), the file is read before the
+    switch to the owner: a file root alone could read works. No key text ever reaches standard output or error.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -65,7 +81,8 @@ and ``os.kill`` as ``restart`` sees it record, and must stay unused. States only
 (``waiting_for``), whatever the models accept, so that what ``pending`` prints is what fails. The block is
 ``LIBREFOLIO_BLOCKED`` in this process's environment, which ``config.platform.instance_blocked()`` reads at each call:
 the one a developer's shell may carry is removed before every test (``no_inherited_block``), and a test of the block
-sets its own with ``monkeypatch``. POSIX-only (pty, modes).
+sets its own with ``monkeypatch``; the instance key it may carry is removed too (``no_inherited_instance_key``).
+POSIX-only (pty, modes).
 """
 
 from __future__ import annotations
@@ -87,9 +104,14 @@ from typing import Any
 
 import pytest
 
+from backend.app.config import SecretFileError, read_secret_file
 from backend.app.config.platform import instance_blocked
 from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, restore_dir, stage_data_dir, stage_dir, stages_dir
+from backend.app.services.platform.instance_backup.staging import read_report
+from backend.app.services.platform.instance_key import instance_key_status
+from backend.test_scripts.test_services import test_backup_secure as secure_cases
 from backend.test_scripts.test_utilities import test_backup_cli as cli
+from backend.test_scripts.test_utilities import test_backup_cli_secure as secure_cli
 from backend.test_scripts.test_utils import print_section, print_success
 from scripts import backup_cli
 
@@ -98,6 +120,9 @@ pytestmark = pytest.mark.skipif(os.name == "nt", reason="a terminal is a pty, an
 # The fixtures of the command line's tests, re-exported: ``app_version`` (autouse) and the real database at the head.
 app_version = cli.app_version
 head_database = cli.head_database
+# (B-18) Autouse, as in test_backup_secure.py: the instance key a developer's shell may carry (LIBREFOLIO_INSTANCE_KEY,
+# LIBREFOLIO_INSTANCE_KEY_FILE) is removed for every test; a check reads the key of the data directory it works on.
+no_inherited_instance_key = secure_cases.no_inherited_instance_key
 
 ACTIVE = ["pending", "applying", "applied", "rolling_back"]
 TERMINAL = ["committed", "rolled_back"]
@@ -935,3 +960,233 @@ def test_the_script_says_that_a_state_the_file_system_refuses_cannot_be_read(tmp
     assert "Traceback" not in done.stderr, f"no traceback: {done.stderr[-cli.TAIL:]}"
     assert state_path(data).read_bytes() == before, "the state kept"
     print_success(f"script {' '.join(argv)}, {fault}: (restore_state_unreadable)")
+
+
+# =============================================================================
+# (h) B-18 — restore --instance-key-file
+# =============================================================================
+
+
+#: (B-18) Test keys, never a real one: this instance's own key (K2, generated), a key of 32 characters or more that is
+#: not the source's, and two shorter than an instance key may be — one given, one configured as this instance's. The
+#: source's key, K1, is ``secure_cases.SOURCE_KEY``.
+THIS_KEY = "LibreFolio-b18-this-instance-key-0123456789"
+WRONG_KEY = "LibreFolio-b18-not-the-source-key-9876543210"
+SHORT_KEY = "LibreFolio-b18-short-key"
+UNUSABLE_OWN_KEY = "LibreFolio-b18-own-key-short"
+#: (B-18, §2) The lines of the report, verbatim.
+KEY_GIVEN_LINE = "   Instance key: not included; given with --instance-key-file"
+KEY_INCLUDED_LINE = "   Instance key: included"
+KEY_NOT_USED_LINE = "ℹ️  The archive carries its own instance key: --instance-key-file is not used"
+WRONG_KEY_LINE = "⚠️  The key given with --instance-key-file reads none of the saved provider keys: it is not the key of the instance this backup came from"
+TOO_SHORT_LINE = "❌ The instance key given is too short: an instance key has at least 32 characters (instance_key_invalid)"
+#: The saved provider keys of a ``secure_cases.secret_source``, every one under its key.
+SAVED_KEYS = len(secure_cases.SECRET_ROWS)
+#: (B-18, §2) A key file that gives no key: missing, blank, or one the file system will not read (skipped as root).
+NO_KEY_GIVEN = [pytest.param("missing", id="missing"), pytest.param("blank", id="blank"), pytest.param("unreadable", id="unreadable", marks=cli.needs_permission_checks)]
+
+
+def rekeyed_line(count: int) -> str:
+    """The report's line of the saved provider keys re-encrypted with this instance's key (lot B4), verbatim."""
+    return f"   Saved provider keys: {count} re-encrypted with this instance's key"
+
+
+def unreadable_keys_line(count: int) -> str:
+    """The report's ⚠️ line of the saved provider keys this instance's key cannot read (lot B4), verbatim."""
+    return f"⚠️  {count} saved provider key{'s' if count != 1 else ''} cannot be read with this instance's key: enter {'them' if count != 1 else 'it'} again after the restore"
+
+
+def own_key_unusable_line(problem: str) -> str:
+    """(B-18, §2) D2's exception: this instance's own key cannot be used, ``problem`` as ``instance_key_status`` says it."""
+    return f"⚠️  This instance's own key cannot be used, so nothing was re-encrypted with the key given: {problem}"
+
+
+def from_k1(tmp_path: Path, monkeypatch, database: Path) -> Any:
+    """A source whose saved provider keys its generated key K1 encrypted — ``secure_cases.secret_source`` on this module's
+    database at the head (the staging tests' ``Databases`` holding it; ``secret_source`` reads ``head`` only),
+    configured as this process's data directory, as on the server it is backed up from."""
+    return secure_cases.secret_source(tmp_path / "source", secure_cases.cases.Databases(head=database, older=database), monkeypatch)
+
+
+def checked_on_k2(tmp_path: Path, monkeypatch) -> Path:
+    """The live instance a restore is checked on, configured, its own key K2 generated: its root."""
+    root = instance(tmp_path, monkeypatch)
+    secure_cases.write_key_file(root, THIS_KEY)
+    return root
+
+
+def key_given(tmp_path: Path, text: str) -> Path:
+    """The file given with ``--instance-key-file``, outside the data directories: ``text`` and a line break, 0600."""
+    return secure_cli.password_file(tmp_path / "keys", f"{text}\n", name="old-instance.key")
+
+
+def restored_with_key(capsys, archive: Path, key_file: Path, *flags: str) -> tuple[int, list[str], str]:
+    """``restore ARCHIVE <flags> --instance-key-file <key_file>``: its exit code, the lines of its standard output, and
+    both its streams as one text."""
+    code = run("restore", str(archive), *flags, "--instance-key-file", str(key_file))
+    captured = capsys.readouterr()
+    return code, captured.out.splitlines(), captured.out + captured.err
+
+
+def no_key_shown(text: str, *keys: str) -> None:
+    """(B-18) No key text reaches standard output or error."""
+    shown = [f"<a key of {len(key)} characters>" for key in keys if key in text]
+    assert shown == [], f"a key text reached the terminal: {shown}"
+
+
+def unreadable_keys_in(lines: list[str]) -> list[str]:
+    """The ⚠️ lines of saved provider keys this instance's key cannot read."""
+    return [line for line in lines if line.startswith("⚠️") and "cannot be read with this instance's key" in line]
+
+
+def test_a_dry_run_with_the_old_key_re_encrypts_the_saved_provider_keys(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c1: a clear archive whose saved provider keys are under K1, checked on an instance under K2, K1 given:
+    every saved key re-encrypted, none left unreadable, the report says the key was given; the copy removed."""
+    print_section("B-18: restore --instance-key-file")
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    root = checked_on_k2(tmp_path, monkeypatch)
+    secure_cases.own_subkey(root)
+    code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, source.key), "--dry-run")
+    assert code == 0 and cli.RESTORABLE_LINE in lines, f"a dry run with the old key: exit 0, restorable: exit {code}: {lines}"
+    assert KEY_GIVEN_LINE in lines and rekeyed_line(SAVED_KEYS) in lines, f"the key line, verbatim {KEY_GIVEN_LINE!r}, and {rekeyed_line(SAVED_KEYS)!r}: {lines}"
+    assert unreadable_keys_in(lines) == [] and WRONG_KEY_LINE not in lines, f"no saved key left unreadable: {lines}"
+    assert cli.stages_left(root) == [], f"the copy removed: {cli.stages_left(root)}"
+    no_key_shown(text, source.key, THIS_KEY)
+    print_success(f"--dry-run with K1: {SAVED_KEYS} re-encrypted")
+
+
+def test_a_confirmed_restore_with_the_old_key_waits_with_its_saved_keys_re_encrypted(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c2: the same without ``--dry-run``, with ``--yes``: confirmed, its copy waits with every saved key
+    re-encrypted under K2 (``secure_cases.assert_rekeyed_to`` on the copy's report), and ``pending`` shows it."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    root = checked_on_k2(tmp_path, monkeypatch)
+    own = secure_cases.own_subkey(root)
+    code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, source.key), "--yes")
+    assert code == 0 and any(line.startswith("✅") and "waits for the next start" in line for line in lines), f"confirmed: exit 0, the restore waits for the next start: exit {code}: {lines}"
+    assert KEY_GIVEN_LINE in lines and rekeyed_line(SAVED_KEYS) in lines, f"the report as with --dry-run: {lines}"
+    stages = cli.stages_left(root)
+    assert len(stages) == 1, f"the copy is kept, for the next start: {stages}"
+    secure_cases.assert_rekeyed_to(own, root, read_report(root, stages[0]), source)
+    assert run("pending") == 0, "pending: exit 0"
+    pending = capsys.readouterr()
+    assert "⏳ A restore waits for the next start of the server" in pending.out.splitlines(), f"pending shows the restore waiting: {pending.out}"
+    no_key_shown(text + pending.out + pending.err, source.key, THIS_KEY)
+    print_success("--yes with K1: confirmed, the copy under K2, pending shows it")
+
+
+@pytest.mark.parametrize("case", NO_KEY_GIVEN)
+def test_a_key_file_that_gives_no_key_stops_before_the_password_and_any_copy(tmp_path, monkeypatch, capsys, case):
+    """(h) B-18, c3: the file is read before anything else — before the password a secure archive asks at a terminal,
+    the right one ready to be typed: ``❌ <read_secret_file's message> (instance_key_unreadable)``, exit 1, no copy,
+    nothing asked, nothing read from standard input."""
+    root = instance(tmp_path, monkeypatch)
+    path = secure_cli.sealed(secure_cli.clear_archive(tmp_path / "backup"), tmp_path / "inputs")
+    key_file = tmp_path / "keys" / "old-instance.key"
+    if case != "missing":
+        key_file = key_given(tmp_path, " " if case == "blank" else secure_cases.SOURCE_KEY)
+    if case == "unreadable":
+        key_file.chmod(0o000)
+    try:
+        read_secret_file(key_file, "instance key file")
+    except SecretFileError as exc:
+        expected = f"❌ {exc} (instance_key_unreadable)"
+    else:
+        pytest.fail(f"precondition: the {case} key file must give no key")
+    asked = secure_cli.answering(monkeypatch, secure_cli.PASSWORD)
+    with secure_cli.terminal_holding(monkeypatch, secure_cli.TYPED_AHEAD) as stdin:
+        code = run("restore", str(path), "--dry-run", "--instance-key-file", str(key_file))
+    captured = capsys.readouterr()
+    refusals = [line for line in captured.out.splitlines() if line.startswith("❌")]
+    assert (code, refusals) == (1, [expected]), f"{case}: exit 1 and one line, verbatim {expected!r}: exit {code}: {captured.out}"
+    assert "🔎" not in captured.out and cli.stages_left(root) == [], f"{case}: nothing checked, no copy: {cli.stages_left(root)}"
+    assert (asked, stdin.reads) == ([], []), f"{case}: the password never asked: prompts {asked}, reads {stdin.reads}"
+    no_key_shown(captured.out + captured.err, secure_cases.SOURCE_KEY)
+    print_success(f"{case}: (instance_key_unreadable), nothing asked")
+
+
+def test_a_key_too_short_is_refused_before_any_copy_is_made(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c4: a key of fewer than 32 characters can be no instance's key: the ❌ line of the check, verbatim,
+    exit 1, no copy left; the key itself never said, nor its length."""
+    root = instance(tmp_path, monkeypatch)
+    archive = cli.restorable(tmp_path, head_database)
+    code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, SHORT_KEY), "--dry-run")
+    assert (code, [line for line in lines if line.startswith("❌")]) == (1, [TOO_SHORT_LINE]), f"exit 1 and one line, verbatim {TOO_SHORT_LINE!r}: exit {code}: {lines}"
+    assert cli.stages_left(root) == [], f"no copy left: {cli.stages_left(root)}"
+    no_key_shown(text, SHORT_KEY)
+    print_success("a short key → (instance_key_invalid), no copy")
+
+
+def test_an_archive_carrying_its_own_key_uses_it_and_says_the_file_is_not_used(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c5 (D1): a secure archive that carries its key K1, and a wrong key given: the archive's key wins — every
+    saved key re-encrypted — and right after the key line, unchanged («included»), the ℹ️ line says the file is not
+    used."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    _job, envelope = secure_cases.secure_backup(source.data)
+    root = checked_on_k2(tmp_path, monkeypatch)
+    secure_cases.own_subkey(root)
+    password = secure_cli.password_file(tmp_path / "inputs", f"{secure_cases.PASSWORD}\n")
+    secure_cli.answering(monkeypatch)
+    code, lines, text = restored_with_key(capsys, envelope, key_given(tmp_path, WRONG_KEY), "--dry-run", "--password-file", str(password))
+    assert code == 0 and KEY_INCLUDED_LINE in lines, f"a secure archive carrying its key: exit 0, {KEY_INCLUDED_LINE!r}: exit {code}: {lines}"
+    following = lines[lines.index(KEY_INCLUDED_LINE) + 1 : lines.index(KEY_INCLUDED_LINE) + 2]
+    assert following == [KEY_NOT_USED_LINE], f"right after the key line, verbatim {KEY_NOT_USED_LINE!r}, not {following}: {lines}"
+    assert rekeyed_line(SAVED_KEYS) in lines and unreadable_keys_in(lines) == [] and WRONG_KEY_LINE not in lines, f"the archive's key re-encrypts every saved key, the file's is not used: {lines}"
+    no_key_shown(text, source.key, WRONG_KEY, THIS_KEY)
+    print_success("D1: the archive's own key, ℹ️ the file not used")
+
+
+def test_a_wrong_key_reads_no_saved_key_and_says_so_before_the_unreadable_line(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c6 (D2): a key of 32 characters or more that is not K1 reads none of the saved keys: nothing
+    re-encrypted, and right before the ⚠️ line of the unreadable keys, the ⚠️ line that names the key given."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    root = checked_on_k2(tmp_path, monkeypatch)
+    secure_cases.own_subkey(root)
+    code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, WRONG_KEY), "--dry-run")
+    unreadable = unreadable_keys_line(SAVED_KEYS)
+    assert code == 0 and KEY_GIVEN_LINE in lines and unreadable in lines, f"exit 0, the key line and {unreadable!r}: exit {code}: {lines}"
+    before = lines[lines.index(unreadable) - 1]
+    assert before == WRONG_KEY_LINE, f"right before the unreadable line, verbatim {WRONG_KEY_LINE!r}, not {before!r}: {lines}"
+    assert rekeyed_line(SAVED_KEYS) not in lines and not any(line.startswith("⚠️  This instance's own key") for line in lines), f"nothing re-encrypted, and this instance's key is not blamed: {lines}"
+    no_key_shown(text, WRONG_KEY, source.key, THIS_KEY)
+    print_success("D2: ⚠️ the key given reads none, before the unreadable line")
+
+
+def test_when_this_instance_s_own_key_cannot_be_used_it_is_said_instead_of_blaming_the_key_given(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c7 (D2's exception): this instance's own key cannot be used (``LIBREFOLIO_INSTANCE_KEY`` too short), so
+    nothing is re-encrypted whatever the key given — here the right one, K1. In the place of D2's line, the one that
+    says so with ``instance_key_status``'s problem (its source named, never a key); never D2's."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    checked_on_k2(tmp_path, monkeypatch)
+    monkeypatch.setenv("LIBREFOLIO_INSTANCE_KEY", UNUSABLE_OWN_KEY)
+    problem = instance_key_status().problem
+    assert problem is not None and UNUSABLE_OWN_KEY not in problem, f"precondition: this instance's own key cannot be used, said without the key: {problem!r}"
+    code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, source.key), "--dry-run")
+    unreadable = unreadable_keys_line(SAVED_KEYS)
+    assert code == 0 and unreadable in lines, f"exit 0, every saved key left unreadable: exit {code}: {lines}"
+    before = lines[lines.index(unreadable) - 1]
+    assert before == own_key_unusable_line(problem), f"right before the unreadable line, verbatim {own_key_unusable_line(problem)!r}, not {before!r}: {lines}"
+    assert WRONG_KEY_LINE not in lines and rekeyed_line(SAVED_KEYS) not in lines, f"the right key is never blamed, nothing re-encrypted: {lines}"
+    no_key_shown(text, source.key, UNUSABLE_OWN_KEY, THIS_KEY)
+    print_success("D2's exception: this instance's own key named, not the key given")
+
+
+@secure_cli.needs_another_owner
+def test_the_key_file_is_read_before_the_switch_to_the_owner_of_the_data_directory(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c8: started as root (B-19's fake identity), the key file is read before the switch to the owner, like
+    ``--password-file``: it is readable until the recorded ``setuid`` and never after it (a Docker secret root alone can
+    read), and K1 re-encrypts every saved key all the same."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    root = checked_on_k2(tmp_path, monkeypatch)
+    secure_cases.own_subkey(root)
+    key_file = key_given(tmp_path, source.key)
+    identity = secure_cli.faked_identity(monkeypatch, 0, at_switch=lambda: key_file.chmod(0o000))
+    code, lines, text = restored_with_key(capsys, archive, key_file, "--dry-run")
+    assert identity.calls == secure_cli.owner_switch(root), f"as root, the owner of the data directory: {secure_cli.owner_switch(root)}, not {identity.calls}: exit {code}: {lines}"
+    assert code == 0 and KEY_GIVEN_LINE in lines and rekeyed_line(SAVED_KEYS) in lines, f"the key file read before the switch (nobody can read it after), K1 used: exit {code}: {lines}"
+    no_key_shown(text, source.key, THIS_KEY)
+    print_success("root: the key file read before the switch")
