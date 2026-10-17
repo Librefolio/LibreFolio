@@ -226,7 +226,10 @@ history walk starts from) to `latest_range_end()`, tomorrow by the server's cale
 included. The helper lives in `backend/app/utils/date_range_limits.py`, with
 `DateOutOfRangeError` and `date_out_of_range_detail()`, the builder of the 422 `detail`. The
 reason is J's SEC8-1b: a price stored at 0001-01-01 made a backward fill or a risk replay walk
-about 740,000 days per asset.
+about 740,000 days per asset. A price row an older version stored before 1900 stays, but since
+Z-30 a full history reaches back no further than 1900-01-01, where such a row at most seeds the
+fill, and never cuts a point-derived warm-up that starts earlier
+([bulk request limits](#bulk-request-limits)).
 {: #stored-date-bounds }
 
 - **Manual call**: right after the digit check, `_reject_dates_out_of_range()` refuses the
@@ -245,8 +248,8 @@ about 740,000 days per asset.
 The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same bounds, and
 transactions have had the same floor since N74, with an end a year ahead
 ([Transaction dates](../transactions/service.md#transaction-dates), where the code is
-`dateOutOfRange`). Price and rate rows already stored before 1900 are left as they are (backlog
-Z-30). The web app's data editors still show these 422s as a generic error; their coded message
+`dateOutOfRange`). Price and rate rows already stored before 1900 are left as they are (Z-30).
+The web app's data editors still show these 422s as a generic error; their coded message
 is a follow-up (workstream X).
 
 ---
@@ -316,9 +319,15 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   (1,000,000) the method raises `BulkTooManyDaysError`, its `item_days` the request's exact total,
   and the route answers 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
 
-The count follows the fill, not the requested range: a full-history signal (`RISK_DRAWDOWN`) loads
-from `date.min`, so its fill emits from the first stored price even when the visible range is one
-day. The budget was 5,000,000 until R13-SEC9-2 lowered it: a point costs about 25.5 µs to fill,
+The count follows the fill, not the requested range. A full-history signal (`RISK_DRAWDOWN`) loads
+from the earlier of `EARLIEST_RANGE_START` (1900-01-01) and the start of the item's point-derived
+warm-up (Z-30): the full history can lengthen that warm-up, never shorten it, and adds nothing
+before a range that starts before 1900. The fill emits from the first stored price, or from the
+load start when an older version's row, dated before it, seeds the fill. So a full history over a
+visible range of one day, today, still counts about 9,800 days for an asset priced since
+2000-01-01, and about 46,300 with such a row (before Z-30 the load started at `date.min`; a row
+stored at 0001-01-01 made it about 740,000).
+The budget was 5,000,000 until R13-SEC9-2 lowered it: a point costs about 25.5 µs to fill,
 about as much to serialize, and about 1.9 KB, so even a million is close to a minute of the event
 loop and a few GB. The item cap is the route's, the budget `get_prices_bulk()`'s: the risk
 preparation and AI Export call the method directly, once for their whole scope, and reach the

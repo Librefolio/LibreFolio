@@ -50,7 +50,7 @@ from backend.app.services.series_preparation import mark_market_closed_carries, 
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.service import SignalService
 from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, BulkTooManyDaysError
-from backend.app.utils.datetime_utils import latest_range_end, utcnow
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end, utcnow
 
 logger = structlog.get_logger(__name__)
 
@@ -310,17 +310,21 @@ class PriceQueryOperations:
                 context,
                 req.annotation_requests,
             )
+            # Point-derived warm-up, for every signal of the plan.
+            warmup_days = max(
+                plan.max_history_days_before_visible,
+                plan.max_prepared_history_points_before_visible * RISK_WARMUP_DAY_MULTIPLIER,
+            )
             # E1: a full-history computation (e.g. underwater drawdown, whose
             # relevant peak may predate the visible range by years) loads from
-            # the beginning of the available history; the min() cap below then
-            # resolves to exactly date.min. Point-derived warm-up otherwise.
+            # the beginning of the available history, which Z-30 sets at
+            # EARLIEST_RANGE_START (1900-01-01, the floor of every stored date):
+            # the load starts at the earlier of that floor and the warm-up's
+            # start above. A row an older version stored before 1900 is at most
+            # the fill's seed, so a price left at 0001-01-01 no longer makes one
+            # visible day walk ~740,000 days.
             if plan.requires_full_history:
-                warmup_days = (req.date_range.start - date_type.min).days
-            else:
-                warmup_days = max(
-                    plan.max_history_days_before_visible,
-                    plan.max_prepared_history_points_before_visible * RISK_WARMUP_DAY_MULTIPLIER,
-                )
+                warmup_days = max(warmup_days, (req.date_range.start - EARLIEST_RANGE_START).days)
             warmup_days = min(
                 warmup_days,
                 (req.date_range.start - date_type.min).days,
@@ -392,8 +396,9 @@ class PriceQueryOperations:
                     seed_prices[aid] = seed_row
 
         # Z-25: the per-day points the fills will build, comparison series included, against the request's budget. The
-        # count follows the fill, not the request: a full-history signal loads from date.min, and its fill emits from
-        # the first stored price even when the visible range is one day.
+        # count follows the fill, not the request: a full-history signal loads from 1900-01-01 at the latest (Z-30), and
+        # its fill emits from the first stored price, or from the load start when an older row seeds it, even when the
+        # visible range is one day.
         item_days = 0
         for req, plan, (start, end) in zip(requests, signal_plans, load_ranges, strict=True):
             item_days += PriceQueryOperations._fill_span(price_maps.get(req.asset_id, {}), start, end, seed_prices.get(req.asset_id))
