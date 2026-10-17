@@ -6004,3 +6004,78 @@ worktree pulito. Il dry run della cura di W-B66 resta pulito.
    `5603a23a7` antenato; dev non ha toccato i miei file, solo altre sezioni del backlog). 0 conflitti, i 4 cataloghi si caricano,
    `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito. `git diff --check` pulito; porta 6184 libera (nessun
    server: solo Vitest e i runner `front-utility`). Handoff FROZEN.
+
+### W-B68 — i valori degli eventi dei provider troncati alla colonna: analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
+
+**Base**: HEAD `731140500` = dev con W-B66 (`b8e180ff8` + `32282ffac` → `e820279e1`, CHANGELOG `731140500`). Via del coordinatore
+(14:49): «W-B68: GO, failing tests first». W-B75 è passata a H (la rivedo al suo checkpoint).
+
+**Stato verificato** (sola lettura):
+- **Il difetto.** `EventStoreOperations._storable_events` (`backend/app/services/assets/event_store.py:97-127`) controlla di un
+  evento del provider solo le cifre intere (`integer_digits_issue`): non lo **tronca** a ciò che la colonna tiene. I prezzi dei
+  provider sì (`storable_price` → `truncate_to_db_precision`, `db/precision.py`).
+- **L'effetto.** `AssetEvent.value` è `RealDecimal(18, 6)` (`db/models.py:1055`, W-B60). Un valore con più di 6 decimali, o più
+  di 15 cifre significative, si scrive com'è e si rilegge arrotondato: letto ≠ scritto. `784.0774475` si rilegge `…448`, prima
+  `…447`.
+- **I percorsi.** Solo il refresh dei provider passa da `_storable_events` (`refresh.py:602` → `_upsert_asset_events`). Gli
+  eventi manuali sono rifiutati prima da `_reject_too_many_digits` (C-97) e scritti direttamente con `_write_asset_events`
+  (`:289-296`): la cura non li tocca.
+- **Il piano d'investimento programmato** (`FAScheduledInvestmentSchedule.asset_events`, parametri dell'utente) è un provider:
+  i suoi eventi passano di qui. Un valore con più di 6 decimali, oggi arrotondato in silenzio dalla lettura, sarà troncato in
+  silenzio. Rifiutarlo all'ingresso dei parametri è del provider (X): residuo da segnalare, non mio.
+- **Lo split.** Il controllo del rapporto (`is_valid_split_ratio`, X-R47) va fatto sul valore **troncato**: un rapporto `1E-7`
+  passa oggi, si salva e si rilegge 0, cioè proprio lo split che X-R47 scarta.
+
+**Cura** (prossima, dopo i rossi): in `_storable_events`, `storable_value(evt.value.amount, AssetEvent, "value")` al posto di
+`integer_digits_issue`:
+- None → scartato e registrato nel log come oggi;
+- altrimenti l'evento prende il valore troncato (`model_copy` sul `Currency`), solo se cambia: un valore che già entra resta
+  com'è, forma compresa (`1.5`, non `1.500000`);
+- il rapporto dello split si controlla sul valore troncato.
+
+Doc: dove `developer/` descrive la scrittura degli eventi dei provider (W-B58, W-B60).
+
+**Test**: `services asset-digit-limits` (`test_asset_digit_limits.py`, accanto ai test sugli eventi dei provider), più
+`asset-event-store`, `event-split-ratio` e la guardia degli upsert, come prove di non regressione.
+
+**Passi:**
+1. ✅ **Rossi** (test-author `c5b03fa0`, solo `test_asset_digit_limits.py`, test col marcatore `wb68`): 12 rossi e 8 guardie. Oggi:
+
+   | Caso | Si rilegge oggi | Contratto |
+   |---|---|---|
+   | `784.0774475` | `784.077448` | `784.077447` |
+   | `0.1234567` | `0.123457` (mezzo pari) | `0.123456` |
+   | `123456789012.123999` | `…124000` | `123456789012.123` |
+   | SPLIT `0.0000001` | salvato, si rilegge `0` | scartato, un avviso col nome dell'asset |
+   | letto = scritto, 4 valori, riga nuova e aggiornata | sessione ≠ rilettura | uguali |
+
+   Le guardie: i valori che entrano si rileggono uguali, e nella sessione tengono la forma (`1.5`, `0.123456`,
+   `123456789012.123`, uno SPLIT di 2). Prove: `asset-digit-limits WB68` 12 rossi / 8 verdi (due volte); l'azione intera 12 / 87;
+   `event-split-ratio` 78, `asset-event-store` 71.
+
+   > **⚠️ Fuori pista**, le note del test-author:
+   > - (1) «tiene la forma» non vale con `storable_value` da solo (`1.5` → `1.500000`). La mia cura assegna il valore troncato
+   >   solo quando cambia il numero, quindi la guardia della forma passa.
+   > - (2) `123456789012.123456` non è un rosso: la rilettura col mezzo pari cade già sul troncato. Usato `…123999`.
+   > - (3) Il controllo «nomina l'asset» di X-R47 in `test_event_split_ratio.py` (file di X) è lasco: accetta qualunque numero,
+   >   e con l'asset 1 basta il `count=1` dell'avviso. Lo segnalo al coordinatore, non lo tocco.
+2. ✅ **Cura** (`files/scripts/wb68_cure.py --apply`): in `_storable_events`, `storable_value` al posto di `integer_digits_issue`
+   (anche nell'import). Il valore troncato con `model_copy` solo quando cambia; il rapporto dello split giudicato sul valore
+   troncato; docstring di `_upsert_asset_events` e `_storable_events`. `ruff` e `black` puliti.
+3. ✅ **Verdi** (17/10, 15:07–15:08, `files/scripts/wb68_light.sh`, carico < 50):
+
+   | Prova | Esito |
+   |---|---|
+   | `asset-digit-limits` | 99 verdi (i 12 rossi inclusi) |
+   | `event-split-ratio` | 78 verdi |
+   | `asset-event-store` | 71 verdi |
+   | `asset-source-guards` | 29 verdi |
+   | `asset-source-refresh` | 18 verdi |
+   | `asset-source` | 61 verdi |
+4. ✅ **Doc**, entrambe senza traduzioni:
+   - `developer/backend/assets/events.md`: il paragrafo sugli eventi dei provider, con il troncamento, la forma, lo split
+     giudicato troncato e l'esempio di prima;
+   - `developer/architecture/database/index.md`: anche gli eventi dei provider sono troncati (`storable_value`).
+5. ✅ **Simulazione** (17/10, 15:09–15:11): `sim_cherry_pick.sh dev_release2 --docs` sui 6 file, dev `79d4ca239` (HEAD
+   `731140500` antenato; dev ha cambiato dei miei file solo il backlog, in altre sezioni). 0 conflitti; ruff e black puliti;
+   `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito. `git diff --check` pulito; porta 6184 libera. Handoff FROZEN.

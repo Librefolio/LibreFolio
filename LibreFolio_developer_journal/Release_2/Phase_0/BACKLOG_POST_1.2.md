@@ -5560,6 +5560,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (`784.0774475`: prima `…447`, ora `…448`, 0,000001); un valore di 10 o più cifre intere può superare le 15 significative. Cura:
   `storable_value(value, AssetEvent, "value")` anche per gli eventi dei provider, come i prezzi (letto = scritto). Dettagli: piano 04,
   sezione «W-B60».
+  ✅ 17/10: `_storable_events` (`event_store.py`) tronca col `storable_value` di `AssetEvent.value`, solo quando il numero cambia
+  (la forma resta), e giudica il rapporto dello split sul valore troncato (`1E-7` si scarta, prima si rileggeva 0). 12 rossi verdi
+  (`asset-digit-limits` 99), `event-split-ratio` 78, `asset-event-store` 71, `asset-source-guards` 29, `asset-source-refresh` 18,
+  `asset-source` 61. Residuo di X: i valori degli eventi di un piano d'investimento programmato (parametri dell'utente) oltre i 6
+  decimali si troncano in silenzio; rifiutarli all'ingresso è del provider. Dettagli: piano 04, sezione «W-B68».
 - **W-B60 · Gli importi tornano col rumore del double (C-97)** — minimo, numeri; W, 17/10 (W-B58, N63). `Transaction.amount` e
   `AssetEvent.value` sono `Numeric(18, 6)`, che SQLAlchemy rilegge col formato `'%.6f'`: da 11 cifre intere il rumore del double
   compare nei decimali (`123456789012.345` torna `123456789012.345001`; con le 15 cifre intere di N63 `99999999999999.9` torna
@@ -5649,6 +5654,7 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
   rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
   (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
+  ➡️ 17/10: passata a **H** (bilanciamento del coordinatore); io la rivedo al checkpoint di H.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
