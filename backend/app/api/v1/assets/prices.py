@@ -25,8 +25,8 @@ from backend.app.schemas.signals import (
     SignalDomain,
 )
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.signal_service import SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.service import SignalRequestValidationError
 
 logger = get_logger(__name__)
 

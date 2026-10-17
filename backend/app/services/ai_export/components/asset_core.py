@@ -547,8 +547,9 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
         start=1,
     ):
         custody = tuple(AssetLotCustodyRow(broker_id=slice_.broker_id, custody_type=slice_.custody_type, quantity=slice_.quantity) for slice_ in lot.current_custody)
-        # F6: market value of the lot at its opening date. The reference unit price (market quote at
-        # open, or the buy-price fallback used by the lots service) is quoted per quote_base_quantity
+        # F6: market value of the lot at its opening date. The reference unit price (a lot opened by an
+        # ADJUSTMENT: the home's mark on that day — a market quote or a BUY/SELL price, carried forward;
+        # otherwise the lot's own price, as the lots service resolves it) is quoted per quote_base_quantity
         # units, so the lot is valued like every holding: quantity / quote_base_quantity × price.
         # None when no reference exists.
         opening_market_value = compute_holding_value(lot.original_quantity, lot.reference_unit_price, lots_response.quote_base_quantity) if lot.reference_unit_price is not None else None

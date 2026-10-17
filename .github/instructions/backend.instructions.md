@@ -73,17 +73,19 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Cash per broker and currency, its daily value, FX results on cash | `services/financial_math/native_cash.py` |
 | Control totals of the ledger (backup manifest, restore check) | `services/financial_math/ledger_totals.py` |
 | Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
-| A period's boundary states, P&L and identity | `services/financial_math/portfolio/period.py` |
+| A period's boundary states, P&L and identity; the day's change of the total P&L | `services/financial_math/portfolio/period.py` |
+| A position's period contribution (Performance table): the transfer split between brokers, return on the start value, annualized window, closed positions | `services/financial_math/portfolio/contributions.py` |
 | FIFO lots and realized gains | `services/financial_math/fifo/` |
-| Lots analysis: lot histories, economic events, average cost lines | `services/financial_math/lots/` |
-| Simple ROI, TWRR, MWRR (and the Dashboard's MWRR rule for card and line), annualization, a period's start (rebasing), net holding return, G/L ratio, realized gain, price return, the gain that recovers a drawdown | `services/financial_math/returns.py` |
+| Lots analysis: lot summary and histories, economic events, average cost lines | `services/financial_math/lots/` |
+| Simple ROI, TWRR, MWRR (and the Dashboard's MWRR rule for card and line), annualization, a period's start (rebasing), net holding return, G/L ratio (of a holding or a group), a change as a fraction of its base, the timing effect, realized gain, price return, the gain that recovers a drawdown | `services/financial_math/returns.py` |
 | Holding value from quantity and price | `services/financial_math/valuation.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
 | Stock splits linked to the ledger: their rows and the usable ratio | `services/financial_math/splits.py` |
 | Weights and concentration: a share of a total, allocation slices, gross weights, largest weight and Herfindahl index | `services/financial_math/weights.py` |
+| Holding window of a position: oldest lot still open, a closed position's flight time | `services/financial_math/holding_window.py` |
 | FX conversion | `services/fx/conversion.py` (`convert_bulk`) |
-| Technical indicators | `services/signal_plugins/`, `services/signal_runtime.py` |
+| Technical indicators | `services/signal_plugins/` (the plugins), `services/signals/` (runtime, contract, registry) |
 | Risk metrics and optimization | `services/risk/quant/` |
 | PAC allocation | `services/pac_allocator/` |
 

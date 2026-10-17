@@ -3,8 +3,11 @@
  *
  * Charts draw on a canvas from options built in TypeScript, so a chart colour cannot follow the `dark:` classes the
  * rest of the interface uses: it is a value, chosen for the active theme. Before `lib/theme`, every chart chose with its
- * own `isDark ? '#…' : '#…'`. The tables in this folder now hold the pairs, and {@link themed} does the choosing — so
- * the day the colours become theme tokens, this is the function that changes, not the charts.
+ * own `isDark ? '#…' : '#…'`. The tables in this folder now hold the pairs, and {@link themed} does the choosing.
+ *
+ * The colours that became roles did not come through here: the neutrals of the charts are read from tokens.css at each
+ * draw by `chartNeutrals` (`./chartTheme`, B4) through `./roleColors`. What `themed` still picks is what the tables
+ * kept — series, categories, states and signs — until the designer gives them roles too.
  *
  * @module lib/theme/themePair
  */

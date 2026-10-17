@@ -117,7 +117,7 @@ class InstanceConfigResponse(StrictModel):
     email: EmailInstanceConfig = Field(default_factory=EmailInstanceConfig, description="Whether the instance can send emails (workstream E)")
     support_url: str | None = Field(
         default=None,
-        description="Where users ask for help, such as an asset the search does not find (LIBREFOLIO_SUPPORT_URL, workstream H): null when it is not set or not a valid http(s) address, and the app then links to the project's GitHub issues",
+        description="Where users ask for help, such as an asset the search does not find (LIBREFOLIO_SUPPORT_URL, workstream H): an http(s) page or mailto: and one email address; null when it is not set or not valid, and the asset search then offers a new issue on the project's GitHub on a self-hosted instance, and no report link on a managed one",
     )
 
 

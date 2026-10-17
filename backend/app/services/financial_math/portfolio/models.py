@@ -221,8 +221,8 @@ class BrokerDailyContribution:
     nav_contribution: Decimal  # market_value_by_broker + cash_by_broker + in_transit_by_broker
     capital_contribution: Decimal  # cumulative_ecf_by_broker (this broker's capital baseline)
     pnl_contribution: Decimal  # nav_contribution - capital_contribution
-    # The in-transit part of nav_contribution. Internal, never exported: the broker card
-    # (PortfolioService.get_summary) adds it to market value and cash valued at its own date.
+    # The in-transit part of nav_contribution, on the departure broker for the whole transit
+    # window. Internal, never exported: the engine's own checks read it.
     in_transit_contribution: Decimal
 
 
@@ -342,14 +342,38 @@ class EngineEndState:
     cumulative_ecf_by_broker: dict[int, Decimal]
 
 
+@dataclass(frozen=True, slots=True)
+class InternalAssetTransfer:
+    """A security moved between two brokers of the scope by a linked internal TRANSFER pair (MF-A, P22).
+
+    On arrival the sender's tract ends and the receiver's begins, at the same value: what the moved units are worth
+    that day, at the sender's share, as the receiver's NAV values them (``DailyStateBuilder._internal_pair_value``).
+    """
+
+    departure: date_type
+    arrival: date_type
+    asset_id: int
+    sender_broker_id: int
+    receiver_broker_id: int
+    # The moved units' value on arrival in the target currency; None when it cannot be computed (no rate, unknown cost).
+    value_at_arrival: Decimal | None
+    # The historical cost the sender's pool gave up for them, in the target currency; None when that cost is incomplete.
+    cost_moved: Decimal | None
+
+
 @dataclass
 class PortfolioCalculationResult:
     """Complete result from the portfolio calculation engine."""
 
     daily_states: list[DailyPortfolioState]
-    # Position snapshots for exposure + contribution views
+    # Position snapshots for exposure + contribution views: the positions held at the end of the period's start day
+    # (``period_start``, the first frame day unless the caller names it) and at date_to.
     position_states_start: list[DailyPositionState] = field(default_factory=list)
+    # The day position_states_start was taken at the end of (None for a result built without a replay).
+    position_states_start_date: date_type | None = None
     position_states_end: list[DailyPositionState] = field(default_factory=list)
+    # Linked internal TRANSFER pairs of securities between two brokers, with their value on arrival (MF-A, P22).
+    internal_asset_transfers: list[InternalAssetTransfer] = field(default_factory=list)
     # Every broker's cash in its own currencies (financial_math.native_cash): balances, values
     # and the period flows by type and position. None when calculate() returns early, with
     # no broker or no transaction in scope.

@@ -10,21 +10,27 @@ not written yet: an account that waits is written as ``hold_for_verification`` l
    token's status otherwise (``expired``, ``consumed``, ``revoked``, ``unknown``; another purpose's token ``unknown``; a
    token without an address — the hold — ``revoked`` and left live; a link emailed to another address ``revoked``
    and revoked); 422 for a body that is not ``{token}`` (missing, empty, longer than 256, another field).
-3. ``resend``: 200 ``{"language"}`` and one email for a waiting account; 401 ``{"detail": "Invalid credentials"}`` for
-   an unknown account or a wrong password, byte for byte the login's answer to the same credentials; 403
-   ``ACCOUNT_DISABLED`` for a deactivated account, the login's answer too; 409 ``EMAIL_VERIFICATION_NOT_NEEDED`` for an
-   active account; 409 ``EMAIL_UNAVAILABLE`` and ``EMAIL_LINKS_UNAVAILABLE`` with ``{error_code, message}`` only — no
-   ``problem``: whoever asks is not an administrator —; 409 ``USER_LIMIT_REACHED``; 429 ``EMAIL_RATE_LIMITED`` with
-   ``retry_after`` and the same whole seconds, at least 1, in ``Retry-After`` — per client address (before the
-   password), per account, for the hourly budget, per recipient mailbox (three verification emails an hour, whatever
-   accounts share it: the same answer as every other limit) —; 502 ``EMAIL_DELIVERY_FAILED`` with
-   ``{error_code, message}`` only — no ``smtp_code`` either —, after which «resend» works at once; 422
-   ``EMAIL_RECIPIENT_INVALID``; 422 for a body that is not ``{username, password}``. Accounts and limits are asked
-   before the configuration: an unknown account is 401 whatever email can do.
+3. ``resend``: 200 ``{"language"}`` and one email for a waiting account; 401 ``{"detail": {"error_code":
+   "INVALID_CREDENTIALS", "message": "Invalid credentials"}}`` for an unknown account or a wrong password, one answer
+   for both, with the login's status and content type — coded since lot E-11: the web app reads any other 401 of this
+   public route, such as the plain-string one of ``get_current_user`` that a blocked instance answers a caller without
+   a session, as the instance's block —; 403 ``ACCOUNT_DISABLED`` for a deactivated account, the login's answer; 409
+   ``EMAIL_VERIFICATION_NOT_NEEDED`` for an active account; 409 ``EMAIL_UNAVAILABLE`` and ``EMAIL_LINKS_UNAVAILABLE``
+   with ``{error_code, message}`` only — no ``problem``: whoever asks is not an administrator —; 409
+   ``USER_LIMIT_REACHED``; 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` and the same whole seconds, at least 1, in
+   ``Retry-After`` — per client address (before the password), per account, for the hourly budget, per recipient
+   mailbox (three verification emails an hour, whatever accounts share it: the same answer as every other limit) —;
+   502 ``EMAIL_DELIVERY_FAILED`` with ``{error_code, message}`` only — no ``smtp_code`` either —, after which «resend»
+   works at once; 422 ``EMAIL_RECIPIENT_INVALID``; 422 for a body that is not ``{username, password}``. Accounts and
+   limits are asked before the configuration: an unknown account is 401 whatever email can do.
 4. The client address is H's ``client_address(request)`` (the connection's address while
    ``LIBREFOLIO_CLIENT_IP_HEADER`` is unset, as here), keyed by H's ``client_rate_key`` (decision P17): one IPv6 /64 is
    one client; a request without an address (a unix socket) is not counted per address.
 5. No log event holds a token, a password, an identifier or an address.
+6. Neither route is in ``instance_block.ALLOWED_WHEN_BLOCKED`` (lots E-10, E-11): on a blocked instance the block, not
+   the route, answers them — a caller without a session gets the plain-string 401 of ``get_current_user`` —, and the web
+   app reads a 401 of theirs that is not E's own refusal as that block. This module mounts the routers without the
+   block's dependency, so its ``blocked`` cases read the routes' own answers; behind ``/api/v1`` the block answers first.
 
 Pure: the real auth and email routers run in-process on a private SQLite file under ``tmp_path`` (NullPool, disposed
 at teardown); accounts are rows with a real bcrypt hash at cost 4; tokens are issued by A's token service. An autouse
@@ -52,6 +58,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -59,6 +66,7 @@ from structlog.testing import capture_logs
 
 from backend.app.api.v1 import auth as auth_api
 from backend.app.api.v1 import email as email_api
+from backend.app.api.v1.instance_block import ALLOWED_WHEN_BLOCKED
 from backend.app.config import API_V1_PREFIX
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User, UserSettings
@@ -115,6 +123,9 @@ SAME_64_CLIENTS = (("2001:db8:1:2::10", 40003), ("2001:db8:1:2:ffff::1", 40004))
 
 INVALID_TOKEN_MESSAGE = "This verification link is not valid"
 RATE_LIMITED_MESSAGE = "Too many requests: try again later"
+#: «resend»'s own refusal of wrong credentials, coded since lot E-11 like E's other refusals: the web app tells it from
+#: the plain-string 401 of ``get_current_user`` — what a blocked instance answers a caller without a session — by the code.
+INVALID_CREDENTIALS_ANSWER = {"detail": {"error_code": "INVALID_CREDENTIALS", "message": "Invalid credentials"}}
 
 SHIPPED_RESEND = verification.RESEND_BY_ADDRESS
 #: The process's limiter of verification emails per recipient mailbox, as shipped (a fixture below replaces it too).
@@ -398,9 +409,10 @@ def _token_in(text: str) -> str:
 
 
 def _assert_is_the_verification_email(received: object, *, language: str = "en", username: str = ALICE) -> str:
-    """The message is exactly the verification email of the link it carries; that link's token."""
+    """The message is exactly the verification email of the link it carries, greeting nobody by name — ``username``, the account's, in no part of it (decision N62) —; that link's token."""
     token = _token_in(_text(received))
-    expected = build_verification(language=language, username=username, link=email_link(VERIFICATION, token), ttl=TTL, instance=PUBLIC_HOST)
+    assert username not in received.message["Subject"] + _text(received) + _html(received), "the verification email greets nobody by name: whoever signs up chooses the username (N62)"
+    expected = build_verification(language=language, link=email_link(VERIFICATION, token), ttl=TTL, instance=PUBLIC_HOST)
     assert received.message["Subject"] == expected.subject
     assert _lines(_text(received)) == _lines(expected.text)
     assert _lines(_html(received)) == _lines(expected.html)
@@ -545,7 +557,7 @@ async def test_a_body_that_is_not_a_token_answers_422(private: _Private, body: d
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("own", "language"), [pytest.param(None, "en", id="the-instances-language"), pytest.param("it", "it", id="the-accounts-own-language")])
 async def test_resend_answers_200_with_the_language_and_emails_the_link(private: _Private, monkeypatch: pytest.MonkeyPatch, own: str | None, language: str) -> None:
-    """EVA-005 — contract 3: the right password for a waiting account: 200 ``{"language"}`` alone, the language of the email; one message to the account's address, exactly the verification email of a live link."""
+    """EVA-005 — contract 3: the right password for a waiting account: 200 ``{"language"}`` alone, the language of the email; one message to the account's address, exactly the verification email of a live link, greeting nobody by name (decision N62)."""
     print_section(f"EVA-005: {language}")
     alice, _hold = await _waiting(private.engine)
     if own is not None:
@@ -574,8 +586,8 @@ async def test_resend_answers_200_with_the_language_and_emails_the_link(private:
         pytest.param(CAROL, WRONG_PASSWORD, id="a-wrong-password-for-a-deactivated-account"),
     ],
 )
-async def test_wrong_credentials_get_the_logins_401_byte_for_byte(private: _Private, monkeypatch: pytest.MonkeyPatch, who: str, password: str) -> None:
-    """EVA-006 — contract 3: an unknown account, or a wrong password whatever the account: 401 ``{"detail": "Invalid credentials"}``, the same status, body and content type as ``POST /auth/login`` answers to the same credentials; nothing sent."""
+async def test_wrong_credentials_get_one_coded_401_whatever_the_account(private: _Private, monkeypatch: pytest.MonkeyPatch, who: str, password: str) -> None:
+    """EVA-006 — contract 3: an unknown account, or a wrong password whatever the account: 401 ``{"detail": {"error_code": "INVALID_CREDENTIALS", "message": "Invalid credentials"}}``, one answer for all four, so that it never tells whether the account exists (and one cost: EMV-029 pins the single bcrypt check of each, a dummy hash's for an unknown account), with the status and the content type ``POST /auth/login`` answers to the same credentials. Coded since lot E-11, where it was the login's plain-string ``"Invalid credentials"``: the web app reads any other 401 of this public route — the plain-string one of ``get_current_user``, which a blocked instance answers a caller without a session — as the instance's block. Nothing sent."""
     print_section(f"EVA-006: {who}")
     await _waiting(private.engine)
     await _add_user(private.engine, BOB)
@@ -586,10 +598,10 @@ async def test_wrong_credentials_get_the_logins_401_byte_for_byte(private: _Priv
         resent = await _resend(private, who, password)
         login = await _post(private, LOGIN, {"username": who, "password": password})
 
-    assert (resent.status_code, resent.json()) == (401, {"detail": "Invalid credentials"}), resent.text
-    assert (resent.status_code, resent.content, resent.headers.get("content-type")) == (login.status_code, login.content, login.headers.get("content-type"))
+    assert (resent.status_code, resent.json()) == (401, INVALID_CREDENTIALS_ANSWER), f"the route's own refusal of wrong credentials is coded INVALID_CREDENTIALS (lot E-11): a 401 with a plain-string detail is what the web app reads as the instance's block: {resent.status_code} {resent.text}"
+    assert (resent.status_code, resent.headers.get("content-type")) == (login.status_code, login.headers.get("content-type")), f"the login's status and content type for the same credentials: {login.status_code} {login.headers.get('content-type')}"
     assert fake.connections == 0
-    print_success("401, the login's answer")
+    print_success("401 INVALID_CREDENTIALS, whatever the account")
 
 
 @pytest.mark.asyncio
@@ -778,14 +790,14 @@ async def test_the_client_address_is_keyed_and_a_request_without_one_is_not_coun
 @pytest.mark.parametrize(
     ("who", "case", "status", "body"),
     [
-        pytest.param(NOBODY, "email-off", 401, {"detail": "Invalid credentials"}, id="an-unknown-account-email-off"),
-        pytest.param(NOBODY, "blocked", 401, {"detail": "Invalid credentials"}, id="an-unknown-account-instance-blocked"),
+        pytest.param(NOBODY, "email-off", 401, INVALID_CREDENTIALS_ANSWER, id="an-unknown-account-email-off"),
+        pytest.param(NOBODY, "blocked", 401, INVALID_CREDENTIALS_ANSWER, id="an-unknown-account-instance-blocked"),
         pytest.param(BOB, "email-off", 409, {"detail": {"error_code": "EMAIL_VERIFICATION_NOT_NEEDED", "message": "This account is active: sign in"}}, id="an-active-account-email-off"),
         pytest.param(CAROL, "email-off", 403, {"detail": {"error_code": "ACCOUNT_DISABLED", "message": "Account is disabled"}}, id="a-deactivated-account-email-off"),
     ],
 )
 async def test_the_accounts_come_before_the_configuration(private: _Private, monkeypatch: pytest.MonkeyPatch, network: list[str], who: str, case: str, status: int, body: dict[str, Any]) -> None:
-    """EVA-014 — contract 3: what the instance cannot do is said only to the owner of a waiting account: with email off or the instance blocked, an unknown account is still 401, an active one 409 ``EMAIL_VERIFICATION_NOT_NEEDED``, a deactivated one 403 — an answer never tells who has an account by what email can do."""
+    """EVA-014 — contract 3: what the instance cannot do is said only to the owner of a waiting account: with email off or the instance blocked (the route's own answers: this module mounts no block, contract 6), an unknown account is still the route's own 401, coded ``INVALID_CREDENTIALS`` since lot E-11, an active one 409 ``EMAIL_VERIFICATION_NOT_NEEDED``, a deactivated one 403 — an answer never tells who has an account by what email can do."""
     print_section(f"EVA-014: {who}, {case}")
     await _waiting(private.engine)
     await _add_user(private.engine, BOB)
@@ -794,7 +806,7 @@ async def test_the_accounts_come_before_the_configuration(private: _Private, mon
 
     response = await _resend(private, who)
 
-    assert (response.status_code, response.json()) == (status, body), response.text
+    assert (response.status_code, response.json()) == (status, body), f"the account's answer whatever email can do — for an unknown account the route's own 401, coded INVALID_CREDENTIALS since lot E-11: {response.status_code} {response.text}"
     assert network == []
     print_success(f"{status}")
 
@@ -856,3 +868,22 @@ async def test_a_mailbox_with_three_verification_emails_this_hour_answers_429_as
     assert await _status(private.engine, old_link.token) == TokenStatus.VALID
     assert (budget.count(), mailbox_limit.count(MAILBOX)) == (3, 3)
     print_success("200 three times; the fourth 429 for 3420 s, nothing made for it")
+
+
+# =============================================================================
+# 5. THE INSTANCE BLOCK (LOTS E-10, E-11)
+# =============================================================================
+
+
+def test_neither_route_is_allowed_on_a_blocked_instance() -> None:
+    """EVA-017 — contract 6, a guard, green before and after lot E-11: neither ``email.confirm_email_verification`` (lot E-10) nor ``email.resend_email_verification`` (lot E-11) is in ``instance_block.ALLOWED_WHEN_BLOCKED``. Why: the web app reads a 401 of these two public routes that is not E's own refusal as the instance's block (``frontend/src/lib/features/email/verificationApi.ts``) — ``readLinkRefusal`` any 401 of «confirm», which has none of its own; ``readResendFailure`` any 401 of «resend» but the coded ``INVALID_CREDENTIALS`` of EVA-006 —, and that reading holds only while the block, not the route, answers a caller without a session on a blocked instance: with the plain-string 401 of ``get_current_user``. Putting either route in the list changes what the web app must read, so its readers change with it. Barriers, so that the absence is not vacuous: the two functions are the endpoints of ``POST`` CONFIRM and RESEND, and the list holds endpoint functions, the sign-in's ``auth.login`` among them."""
+    print_section("EVA-017: neither route in ALLOWED_WHEN_BLOCKED")
+    served = {(method, f"{API_V1_PREFIX}{route.path}"): route.endpoint for route in email_api.router.routes if isinstance(route, APIRoute) for method in route.methods}
+    assert served.get(("POST", CONFIRM)) is email_api.confirm_email_verification, f"barrier: POST {CONFIRM} is served by email.confirm_email_verification: {served.get(('POST', CONFIRM))!r}"
+    assert served.get(("POST", RESEND)) is email_api.resend_email_verification, f"barrier: POST {RESEND} is served by email.resend_email_verification: {served.get(('POST', RESEND))!r}"
+    assert auth_api.login in ALLOWED_WHEN_BLOCKED, "barrier: the list holds endpoint functions, the sign-in's among them"
+
+    allowed = sorted(endpoint.__name__ for endpoint in (email_api.confirm_email_verification, email_api.resend_email_verification) if endpoint in ALLOWED_WHEN_BLOCKED)
+
+    assert allowed == [], f"on a blocked instance the block, not the route, must answer these public routes: the web app reads a 401 of theirs that is not E's own refusal as the instance's block (lots E-10, E-11); in ALLOWED_WHEN_BLOCKED: {allowed}"
+    print_success("neither route in the list: on a blocked instance the block answers them")

@@ -11,9 +11,11 @@ import bisect
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
+from backend.app.services.financial_math.returns import change_ratio
 
 
 def state_as_of(daily_states: Sequence[DailyPortfolioState], as_of: date_type) -> DailyPortfolioState | None:
@@ -29,6 +31,31 @@ def state_as_of(daily_states: Sequence[DailyPortfolioState], as_of: date_type) -
     if index < 0:
         return None
     return daily_states[index]
+
+
+@dataclass(frozen=True)
+class DayChange:
+    """How the total P&L moved over the last day: the amount, and that amount as a fraction of the day before's P&L
+    and NAV (``returns.change_ratio``: the change's sign, None on a zero base)."""
+
+    pnl_change: Decimal
+    vs_total_pnl: Decimal | None
+    vs_nav: Decimal | None
+
+
+def day_change(daily_states: Sequence[DailyPortfolioState], as_of: date_type) -> DayChange | None:
+    """The change of the total P&L from the calendar day before ``as_of`` to ``as_of``.
+
+    Both states are the engine's, looked up by date (:func:`state_as_of`), so the day before is the calendar day — a
+    weekend carries Friday's state — never the previous point of a sampled series. None when either day has no state
+    (a portfolio born on ``as_of``).
+    """
+    end = state_as_of(daily_states, as_of)
+    previous = state_as_of(daily_states, as_of - timedelta(days=1))
+    if end is None or previous is None:
+        return None
+    change = end.total_pnl - previous.total_pnl
+    return DayChange(pnl_change=change, vs_total_pnl=change_ratio(change, previous.total_pnl), vs_nav=change_ratio(change, previous.nav_value))
 
 
 @dataclass(frozen=True)
