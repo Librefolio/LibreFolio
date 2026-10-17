@@ -93,6 +93,7 @@ class FifoLotEngine:
         reference_price_lookup: ReferencePriceLookup | None = None,
         economic_events: Sequence[EconomicEvent] = (),
         target_currency: str = "",
+        replay_until: date | None = None,
     ) -> None:
         normalized = [tx if isinstance(tx, FifoInputTransaction) else FifoInputTransaction.from_transaction(tx) for tx in transactions]
         if not normalized:
@@ -108,6 +109,9 @@ class FifoLotEngine:
         self.reference_price_lookup = reference_price_lookup
         self.economic_events = tuple(economic_events)
         self.target_currency = target_currency
+        # J-47: the replay stops at this day. An event after it is neither applied nor reported: the arrival of a
+        # transfer still in transit then, whose units stay in transit.
+        self.replay_until = replay_until
         self._tx_by_id = {tx.id: tx for tx in normalized}
         self._issues: list[FifoDataQualityIssue] = []
         self._lots: dict[int, FifoLot] = {}
@@ -239,7 +243,8 @@ class FifoLotEngine:
                 # hands each fragment over at its own FIFO cost (hands_over_at_own_cost, J-10).
                 handover_unit_price = tx.cost_basis_override if tx.cost_basis_override is not None else Decimal("0")
                 events.append(FifoEvent(kind="ADJUSTMENT_OUT", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=handover_unit_price, raw_transaction_ids=(tx.id,)))
-        self._classified_events_cache = sorted(events, key=self._event_sort_key)
+        ordered = sorted(events, key=self._event_sort_key)
+        self._classified_events_cache = ordered if self.replay_until is None else [event for event in ordered if event.date <= self.replay_until]
         return self._classified_events_cache
 
     def _resolve_transfer_pair(self, tx: FifoInputTransaction) -> tuple[FifoInputTransaction, FifoInputTransaction] | None:
@@ -1275,6 +1280,7 @@ def run_fifo_lot_engine(
     reference_price_lookup: ReferencePriceLookup | None = None,
     economic_events: Sequence[EconomicEvent] = (),
     target_currency: str = "",
+    replay_until: date | None = None,
 ) -> FifoEngineResult:
     return FifoLotEngine(
         transactions=transactions,
@@ -1284,6 +1290,7 @@ def run_fifo_lot_engine(
         reference_price_lookup=reference_price_lookup,
         economic_events=economic_events,
         target_currency=target_currency,
+        replay_until=replay_until,
     ).run()
 
 
