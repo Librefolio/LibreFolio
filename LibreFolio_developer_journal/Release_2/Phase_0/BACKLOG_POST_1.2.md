@@ -7068,8 +7068,10 @@ da Y il 15/10.
     precondizione. Verde alle 08:43 su `039af67bb`, senza X-R55; rosso alle 10:05 su `73443c6db`.
   - Da scegliere: riscrivere il test su un periodo passato con giorni portati avanti e non salvati (un fine settimana, un
     festivo), o rivedere il tetto per il caso «sincronizza un periodo futuro». Dettagli: piano di Y, «Y-27», Fuori pista.
-- **Y-29 · Il gate delle eccezioni esenta un file dichiarato anche dall'annualizzazione** — minimo, guardia; Y, 17/10
-  (`test-author`, P5). `financialMathExceptions.gate.test.ts` dichiara un file intero: la regola (C) (nessun esponente con 365
+- ✅ **Y-29 · Il gate delle eccezioni esenta un file dichiarato anche dall'annualizzazione** — minimo, guardia; Y, 17/10
+  (`test-author`, P5). ✅ 17/10: ogni voce di `DECLARED_EXCEPTIONS` dice `annualizes`, vero solo per `MeasureSignal.ts` e
+  `CompoundSignal.ts`; la regola (C) ammette esponenti con 365 solo lì; rosso prima, e una guardia che morde. Commit al
+  checkpoint. `financialMathExceptions.gate.test.ts` dichiara un file intero: la regola (C) (nessun esponente con 365
   fuori dai file dichiarati) non guarda più dentro i tre moduli dei lotti di D-MF6(b), che sommano, mediano e ribasano ma non
   annualizzano. Un'annualizzazione aggiunta un giorno lì passerebbe in silenzio. Rimedio possibile: un segnalino per voce
   («può annualizzare»), vero solo per `MeasureSignal.ts` e le curve di R19. Dettagli: piano di Y, «Y12b, il resto».
