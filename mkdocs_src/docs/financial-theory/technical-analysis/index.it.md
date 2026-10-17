@@ -14,7 +14,7 @@ Indicatori overlay che estraggono informazioni su trend, momentum, volatilità, 
 - ⚡ **[Momentum](indicators/momentum.md)** — RSI, MACD, ROC, Stochastic RSI, PPO, CCI
 - 🌊 **[Volatilità](indicators/volatility.md)** — Bande di Bollinger, ATR, NATR, Canali di Donchian
 - 📊 **[Volume](indicators/volume.md)** — OBV, MFI
-- ⚠️ **Rischio** — Drawdown dal massimo, Rendimento mobile, Volatilità mobile, Indice di Sharpe mobile, Beta mobile (solo Asset; concetti in [Metriche di Rischio](risk-metrics/index.md))
+- ⚠️ **Rischio** — Drawdown dal massimo, Rendimento mobile, Volatilità mobile, Indice di Sharpe mobile, Beta mobile (solo Asset; concetti in [Metriche di Rischio](risk-metrics/index.md), quello del Rendimento mobile in [Rendimenti](../fundamentals/returns.md#rolling-return))
 
 ### 🎯 [Benchmark Sintetici](synthetic-benchmarks/index.md)
 
