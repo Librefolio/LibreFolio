@@ -18,6 +18,9 @@ from pydantic import EmailStr, TypeAdapter, ValidationError
 from backend.app.config import env_secret, env_secret_origin, env_url
 
 _SUPPORT_URL = "LIBREFOLIO_SUPPORT_URL"
+#: The legal pages of the instance (F09, workstream A): public, linked by the legal notice every user sees.
+_TOS_URL = "LIBREFOLIO_TOS_URL"
+_PRIVACY_URL = "LIBREFOLIO_PRIVACY_URL"
 #: What the address after ``mailto:`` may not hold: a query, a fragment, an escape, a second address, the
 #: ``Name <address>`` form or a path (``mailto://``). ``EmailStr`` accepts ``?``, ``#``, ``%`` and ``/`` in a local part
 #: and unwraps angle brackets, so they are refused before it reads the address; it strips whitespace, refused anywhere.
@@ -125,6 +128,21 @@ def support_url() -> str | None:
     if value[:7].lower() == "mailto:":
         return _mailto(value)
     return env_url(_SUPPORT_URL)
+
+
+def tos_url() -> str | None:
+    """``LIBREFOLIO_TOS_URL``: the terms of service of the instance, an ``http(s)://`` page by the rule of ``env_url`` (F09).
+
+    Public: the legal notice links it for every user (the About tab, the sign-in pages, the welcome, the sidebar). A
+    hosting provider sets its own. Unset or blank: ``None``, no link. Any other value raises ``ValueError``, naming the
+    variable: the service that publishes it logs the error and publishes ``None``.
+    """
+    return env_url(_TOS_URL)
+
+
+def privacy_url() -> str | None:
+    """``LIBREFOLIO_PRIVACY_URL``: the privacy policy of the instance, by the rule of ``tos_url`` (F09)."""
+    return env_url(_PRIVACY_URL)
 
 
 def _mailto(value: str) -> str:
