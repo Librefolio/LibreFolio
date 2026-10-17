@@ -419,7 +419,8 @@
             } catch (e: any) {
                 if (mySearchId !== searchId) return;
                 console.error('Search failed:', e);
-                error = e?.message || 'Search failed';
+                // X-R31: the technical error stays in the console; the dropdown says it in the user's language
+                error = $t('assets.search.failed');
                 results = [];
             } finally {
                 if (mySearchId === searchId) {

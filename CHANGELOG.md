@@ -325,6 +325,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dividends and other events that a price provider reports with more than 6 decimals are now stored as they are read back, cut to 6 decimals like prices, instead of being read back rounded differently from what was written.
 - Very small prices, exchange rates and costs, such as a crypto token worth a fraction of a cent, are now shown with their significant digits instead of «0.00», and quantities show all 10 decimals they are stored with (in transactions, the average-cost preview, import corrections, the data editor, the lots views, the asset list, cards and detail, the FX list and cards and a transaction's exchange-rate details, the price charts and the dashboard positions; a lot of a few satoshis no longer reads «1e-7» or «0»).
 - The data editors of assets and exchange rates no longer report as saved a value the server refused: a warning names each refused date and why, such as a close outside the day's low–high, and a refused save says what was wrong, such as a date before 1900 or after tomorrow, instead of «Request failed with status code 422».
+- Assets: deleting an asset that transactions use opens its confirmation already on the result (how many transactions, with the link to them) instead of asking first; the confirmation also says the asset's events go with it; and the search's failure message, the source title, the «Manual» badge and the count of assets to delete follow your language.
+- API: converting an amount of 0 (`POST /api/v1/fx/currencies/convert`) answers 0 with the day's rate instead of a server error.
 
 #### 🔒 Security
 
