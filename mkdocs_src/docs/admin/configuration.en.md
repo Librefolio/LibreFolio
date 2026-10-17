@@ -370,6 +370,7 @@ each finding is one line of the log, at its level, with the name of the check in
 | ℹ️ `info` | `The log level is DEBUG: the log records operational detail; …` (or `TRACE`) | Go back to `INFO` once you are done troubleshooting. |
 | ❌ `error` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN is too short: use at least 32 random characters; the hosting panel's backup routes answer 503 until it is fixed`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN holds a space, a tab or a character outside visible ASCII: write it without them; …`, or `The hosting panel's backup token cannot be read: LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE: <path> does not exist` (or `cannot be read (…)`, `is empty or blank`, `is not UTF-8 text`, `is larger than 65536 bytes, too large for a secret`) (`check` is `backup.panel_token`) | The token of your hosting panel cannot be used. Generate a new one as in [Hosting for Others](hosting_providers.md#panel-token), or fix the file the line names, then restart. Only the panel's backup routes are off: they answer `503` until then. The server starts anyway. |
 | ❌ `error` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB cannot be used: expected a whole number of megabytes, 0 for no limit; restore uploads answer 503 until it is fixed` (or, rarely, `The profile's default for LIBREFOLIO_BACKUP_MAX_UPLOAD_MB is missing or of the wrong type, an error of LibreFolio itself: …`) (`check` is `backup.upload_limit`) | Write a whole number of megabytes, `0` for no limit, or remove the variable, then restart ([The Upload Limit of a Restore](hosting_providers.md#restore-upload-limit)). (The rare line is a fault of LibreFolio's own profile table: set the variable yourself, and report it.) Until then Settings › Backup cannot upload an archive to restore it; the command line still restores one. The server starts anyway. |
+| ⚠️ `warning` | `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance` (`check` is `accounts.login_limit`) | Nothing, on an instance kept for tests. Otherwise remove the variable, or set it to `on`, then restart: see [Failed Sign-ins](#login-limit). |
 | ❌ `error` | `LIBREFOLIO_SMTP_… cannot be used (SMTP_…): email stays off until it is fixed` (`check` is `email.smtp`) | Email is off, nothing else is: fix the variable the line names, then restart. What each code means: [Configuration Problems](email.md#configuration-problems). The server starts anyway. |
 | ⚠️ `warning` | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | Set `LIBREFOLIO_SMTP_TLS` to `starttls` or `tls`, or send through a relay on your own network: see [Security Notes](email.md#security). |
 | ℹ️ `info` | `LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Nothing, if no link has to go out by email. Otherwise set `LIBREFOLIO_PUBLIC_URL` to the address your users open LibreFolio at ([Accounts and Sign-ups](#accounts)), then restart: see [Email](email.md). |
@@ -391,7 +392,8 @@ start, and a blocked instance logs a warning at every start,
 
 So does a value of the [initial administrator](#initial-admin) that LibreFolio cannot use, in
 `LIBREFOLIO_ADMIN_EMAIL`, `LIBREFOLIO_ADMIN_USERNAME` or `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, even on an
-instance that already has accounts.
+instance that already has accounts, and a `LIBREFOLIO_LOGIN_LIMIT` other than `on` or `off`
+([Failed Sign-ins](#login-limit)).
 
 ---
 
@@ -455,11 +457,13 @@ for this stop, then ends the server ([Start the Server](cli_tools.md#start-the-s
 
 ## 👥 Accounts and Sign-ups {: #accounts }
 
-Who may create an account, and how many accounts the instance may hold. Without these variables,
-nothing changes: the **Registration** setting of the [Global Settings](settings.md#registration)
-decides who may sign up, and there is no limit. All four are optional: uncomment a line of the
-**Accounts** section of `.env.example` to set one. Three more, for hosting providers and scripted
-installs, create the [initial administrator](#initial-admin) of a new instance.
+Who may create an account, how many accounts the instance may hold, and the limit on failed
+sign-ins. Without these variables, the **Registration** setting of the
+[Global Settings](settings.md#registration) decides who may sign up, there is no limit on the
+number of accounts, and failed sign-ins are limited ([Failed Sign-ins](#login-limit)). All five are
+optional: uncomment a line of the **Accounts** section of `.env.example` to set one. Three more, for
+hosting providers and scripted installs, create the [initial administrator](#initial-admin) of a new
+instance.
 
 | Variable | Default | What it does |
 | --- | --- | --- |
@@ -467,8 +471,9 @@ installs, create the [initial administrator](#initial-admin) of a new instance.
 | `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires, each account waiting for its email verification while its link is live, and the [initial administrator](#initial-admin) while it waits for its setup; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
 | `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation, password-reset and setup links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link, setup link or forgotten-password email goes out ([Email](email.md)). An address that holds a user name or a password is refused, and LibreFolio then works as it does without it. |
 | `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. An address that holds a user name or a password is refused: no such link either. |
+| `LIBREFOLIO_LOGIN_LIMIT` | `on` | The limit on failed sign-ins: `on` or `off`, in any case; spaces around the value do not matter. `off` is for a test instance only: anyone can then try passwords without pause, and every start logs a [warning](#startup-checks). Unlike the four above, any other value, `true`, `1` and `yes` included, stops the server at startup. See [Failed Sign-ins](#login-limit). |
 
-An empty value counts as not set. A wrong value of these four does not stop the server, unlike the
+An empty value counts as not set. A wrong value of the first four does not stop the server, unlike the
 main options: LibreFolio stays on the safe side, and writes an error to its log the first time each
 server process needs the value: `Invalid account configuration`, with the variable and its value in
 `problem` (an address that holds an `@` is not shown: it may carry a user name or a password), and
@@ -480,6 +485,12 @@ in `consequence` what it costs until you fix it. Fix the value, then restart:
 | `LIBREFOLIO_MAX_USERS` that is not a whole number of at least 1, `0` included | A limit of 0: nobody can sign up without an invitation | `registration stays closed until it is fixed` |
 | `LIBREFOLIO_PUBLIC_URL` without `http://` or `https://`, or with a user name or a password | Ignored, as if it were not set: the [command line](cli_tools.md#invite) prints the path only and says why under each link, and the dialogs of the [Users](users.md) tab start from the browser's address. No email with a link goes out, and while email works the start log has a [warning](#startup-checks) too ([Email](email.md)) | `links show the bare path until it is fixed` |
 | `LIBREFOLIO_BILLING_URL` without `http://` or `https://`, or with a user name or a password | Ignored, as if it were not set | `the billing link stays hidden until it is fixed` |
+
+`LIBREFOLIO_LOGIN_LIMIT` is the exception: a value other than `on` or `off` **stops the server at
+startup**, as an unusable value of the [initial administrator](#initial-admin) does. The error is
+in the server's console output (`docker compose logs librefolio` with Docker) and names the
+variable and the value, such as `LIBREFOLIO_LOGIN_LIMIT='yes': expected on or off`. Fix it, then
+start again.
 
 ### 📏 When the Instance Is Full {: #user-limit }
 
@@ -497,6 +508,72 @@ A place frees up when an account is deactivated or deleted, when an invitation i
 expires, or when the link of an account waiting for its email verification expires (see
 *Email Verification* in [Email](email.md)). The first account of a new instance can always be
 created.
+
+### 🚦 Failed Sign-ins {: #login-limit }
+
+LibreFolio stops checking passwords for a while when sign-ins keep failing, so that nobody can try
+password after password until one works. The limit is on unless you turn it off.
+
+| Limit | Past it |
+| --- | --- |
+| 10 failed sign-ins every 15 minutes with the same username or email address, whether an account has it or not | Every sign-in with it is refused, the right password included, until the oldest failure is 15 minutes old. |
+| 50 failed sign-ins every 15 minutes from the same address, whatever username or email address they use; an IPv6 address counts by its /64, the block one subscriber usually holds. Not counted for the sign-ins that come through a proxy LibreFolio does not trust, on a local address: see *Behind a reverse proxy* below | Every sign-in from that address is refused, for any account, until the oldest failure is 15 minutes old. |
+
+- **What the user sees**: the login page says *Too many login attempts: wait a few minutes and try
+  again.* The wait is 15 minutes at most. The answer is the same whether an account exists or not,
+  so the limit tells nobody which accounts exist.
+- **What counts as a failure**: a wrong password, or a username or email address that no account
+  has. At the sign-in, the right password of a deactivated account, or of one still waiting for its
+  email verification, counts neither as a failure nor as a success.
+- **Trying again does not make the wait longer**: a sign-in the limit refuses is not counted, and
+  its password is not even checked.
+- **A successful sign-in** clears the failures of the username or email address it used, not those
+  of the address it came from.
+- **The username and the email address count apart**, even for one account: someone guessing its
+  password gets 10 tries with the username and 10 with the email address every 15 minutes, still
+  within the 50 of their address. Capitals A to Z do not matter: `Alice` and `alice` share one
+  count.
+- **The current password counts too.** A wrong current password in **Change Password**, or when a
+  user changes their email address in the Profile tab ([Profile](../user/settings/profile.md)),
+  counts as a failed sign-in with the account's username, from the same address. So 10 wrong
+  current passwords also block signing in with that username, and failed sign-ins with the username
+  block those two checks. Deleting one's own account asks for no password: nothing to limit there.
+- **Send the link again counts too.** On the login page, an account that waits for its email
+  verification gets **Send the link again**, which checks the username or email address and the
+  password as a sign-in does ([Email Verification](email.md#verification)). A wrong password there
+  counts as a failed sign-in with what was typed, from the same address; past the limit, it is
+  refused before the password is checked, and the page says in how many minutes to try again. The
+  right password clears the failures of what was typed, as a successful sign-in does. Its own limits
+  still apply ([Limits of the Verification Emails](email.md#verification-limits)).
+- **Not limited**: the links of invitations, password resets and setups. Their tokens are long
+  random values nobody can guess, and a limit per address could refuse them to every user behind
+  the same router. **Forgot Password?** asks for no password, and has limits of its own: see
+  [Forgotten Passwords](email.md#forgot-password).
+- **Kept in memory**, by each server process: a restart forgets every count, which also lets a user
+  who cannot wait back in at once. With several server processes (`./dev.py server --workers N`),
+  each keeps its own counts, so the limits are N times these; the Docker image runs one.
+- **Behind a reverse proxy**, the address that counts is the visitor's, as LibreFolio reads it.
+  Tell LibreFolio about your proxy, by listing it in `FORWARDED_ALLOW_IPS` or by naming the header it
+  sets in `LIBREFOLIO_CLIENT_IP_HEADER`, as
+  [The Visitor's Address](connection_checks.md#client-address) explains. Until then, LibreFolio sees
+  every visitor with the proxy's address, and what happens depends on where the proxy is.
+- **A proxy LibreFolio does not trust, on a local address** (a Docker network, your own network or
+  your VPN), such as a proxy container in front of the Docker image, the usual setup: LibreFolio
+  leaves the sign-ins through it out of the limit per address, so that 50 failed sign-ins from
+  anyone cannot refuse everyone. The limit per username or email address still counts them. The log
+  has one warning per server process, the first time a request through such a proxy meets a limit
+  per address:
+  `Requests come through a reverse proxy that LibreFolio does not trust: the limits per client address skip them. List the proxy in FORWARDED_ALLOW_IPS, or name the header it sets in LIBREFOLIO_CLIENT_IP_HEADER`.
+- **A proxy LibreFolio does not trust, on a public address**, such as a CDN: every visitor shares
+  the proxy's address and its count, so 50 failed sign-ins from anyone refuse every sign-in through
+  the proxy, the right passwords included, for up to 15 minutes.
+
+**Turning it off.** `LIBREFOLIO_LOGIN_LIMIT=off`, in any case, is meant for a test instance, whose
+automated tests sign in wrongly on purpose: nothing is counted and nothing is refused. Every start
+then logs a warning, with `accounts.login_limit` in `check`:
+`LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance`.
+Remove the variable, or set it to `on`, to turn the limit back on at the next start. Any other
+value stops the server at startup: see [Accounts and Sign-ups](#accounts).
 
 ### 👑 The Initial Administrator {: #initial-admin }
 
@@ -655,6 +732,6 @@ then the default.
 - 🧑‍💻 For developers: **[Settings System](../developer/architecture/settings.md)** — How these
   values are loaded
 - 🔒 For developers: **[Security Architecture](../developer/architecture/security.md)** — Secrets,
-  the instance key and the startup checks
+  the instance key, the startup checks and the limit on failed sign-ins
 - 🧩 For developers: **[Plugin Settings](../developer/architecture/patterns/plugin_settings.md)** —
   How plugins declare settings, and how secrets are protected

@@ -75,6 +75,7 @@ from backend.app.schemas.portfolio import PortfolioReportQuery
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import PortfolioCalculationResult
 from backend.app.services.portfolio_service import PortfolioService
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 GOLDEN_PATH = Path(__file__).resolve().parents[2] / "fixtures" / "native_cash_guard" / "eur_only_golden.json"
 _REGEN_ENV = "LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD"
@@ -532,6 +533,15 @@ def _diff(expected: str, actual: str, expected_name: str, actual_name: str) -> s
 # =============================================================================
 # FIXTURES — own copies of the helpers of test_portfolio_service.py
 # =============================================================================
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the guarded portfolio lives in January 2091, after tomorrow, so the range bound is lifted for the
+    whole module, before any fixture builds data (see ``lift_range_bound``): the golden keeps the unbounded outputs."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")

@@ -93,6 +93,13 @@
       "openRegistrationLocked": "El registro está abierto, fijado por LIBREFOLIO_REGISTRATION, y esta instancia es accesible desde fuera de tu red local: cualquiera que la encuentre puede crear una cuenta. Cambia la variable para cerrarlo.",
       "openRegistrationAction": "Cambiar quién puede registrarse"
     },
-    "instanceBlocked": "Esta instancia está bloqueada por su proveedor: inténtalo de nuevo cuando se desbloquee."
+    "instanceBlocked": "Esta instancia está bloqueada por su proveedor: inténtalo de nuevo cuando se desbloquee.",
+    "checks": {
+      "loginLimit": {
+        "ok": "Los inicios de sesión fallidos están limitados: tras 10 en 15 minutos para un nombre de usuario o un correo, o 50 desde una dirección, el inicio de sesión espera.",
+        "off": "El límite de inicios de sesión fallidos está desactivado (LIBREFOLIO_LOGIN_LIMIT=off): las contraseñas pueden probarse sin pausa. Vuelve a activarlo, salvo que sea una instancia de prueba.",
+        "invalid": "LIBREFOLIO_LOGIN_LIMIT vale «{value}», que no es ni on ni off: el servidor no arranca con este valor."
+      }
+    }
   }
 }

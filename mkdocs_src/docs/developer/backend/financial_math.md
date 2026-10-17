@@ -68,7 +68,7 @@ backend/app/services/financial_math/
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
 ├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series, fixed-period changes of a price or rate (1D … 5Y, both orientations), recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
-├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form (compound_growth): the primitives the Scheduled Investment provider builds its accrual on
+├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
@@ -144,7 +144,10 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
    scope, each broker at its `effective_share()`;
 2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`;
    an unusable ratio raises `ValueError`), and classifies them
-   (`ScopeAwareTransactionClassifier`, `classifier.py`);
+   (`ScopeAwareTransactionClassifier`, `classifier.py`). The range it replays starts no earlier than the first
+   transaction and ends no later than `latest_range_end()` (tomorrow, `utils/datetime_utils.py`): the replay walks every
+   day, and an end far in the future held the instance (R13-SEC7-1). A range that ends before the first transaction
+   gives an empty result;
 3. returns the cached `PortfolioCalculationResult` when the `portfolio_blob` cache holds one for
    the same key — scope, currency, options, data fingerprints and the day of
    `position_states_start` — that starts on or before the requested start and ends on the
@@ -513,6 +516,18 @@ maturation frequency, and its accrual walk (see
 stays, so the guard follows the names rather than a file: it fails when one of the five is not
 defined exactly once in `interest.py`, or is defined anywhere else in `backend/app` — a method,
 a nested function or a fallback under `except ImportError` included.
+
+Lots R13-SEC7-2 and MF-SI1 added `compound_growth()` to `interest.py`: the growth factor of
+daily compounding over a span, `Π (1 + r × Δt(d − 1, d))` over its days, in closed form and at a
+cost that does not grow with the span — one power under ACT/365 and ACT/360; under ACT/ACT the
+first and last years' days, and one power each for the whole common and the whole leap years
+between; under 30/360 one power per step size (0, 1, 2 or 3 days over 360), from exact integer
+step counts. It is memoized (`_compound_growth`, an LRU cache of 4 096 entries) on the rate as
+written and the caller's `Decimal` precision and rounding; `_calculate_act_act()` memoizes its
+full-year prefix the same way (`_act_act_years_before`), with the digits of the per-year sum.
+Its one caller is COMPOUND late interest (see
+[Scheduled Investment Provider](assets/provider_scheduled_investment.md#late-interest)). The
+guard's five names do not include it.
 
 The other rule over `backend/app` keeps one question in one place, «which rows are linked to a
 SPLIT asset event», and fails when:
