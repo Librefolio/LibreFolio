@@ -22,7 +22,9 @@ exports never get the shortened variant.
 - **Signal path**: `DrawdownParams.full_history: bool = True` (user-visible
   toggle — boolean params render as checkboxes via `SignalParamControl`).
   `SignalWarmupRequirement.full_history` → `SignalExecutionPlan.requires_full_history`
-  → `get_prices_bulk` loads from `date.min`. `compute()` unchanged; the existing
+  → `get_prices_bulk` loads from `date.min` (since Z-30, 17/10/2026: from the earlier of
+  1900-01-01 and the start of the plan's finite warm-up; a row stored before 1900 only seeds
+  the fill). `compute()` unchanged; the existing
   post-computation slicing still cuts to the visible window.
 - **AI Export path** (`drawdown_context._execute_drawdown`): the risk
   `drawdown_summary` analytic is always called with a full-history range —
