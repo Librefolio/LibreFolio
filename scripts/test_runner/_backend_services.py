@@ -1143,6 +1143,15 @@ def services_market_data_wipe_split_guard(verbose: bool = False, test_names: lis
     return run_command(cmd, "Market data wipe split guard tests", verbose=verbose)
 
 
+def services_routes_generic_500(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R74: the asset and FX routes answer a generic 500, the error logged, never echoed."""
+    print_section("Services: Routes Generic 500")
+    print_info("Testing: backend/app/api/v1/assets/{providers,crud,events,market_data}.py, backend/app/api/v1/fx/{providers,currencies}.py")
+    print_info("Tests: each of the 26 failure paths answers 500 with a message naming no error, the error logged with its exception; the authored refusals unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_routes_generic_500.py", test_names)
+    return run_command(cmd, "Routes generic 500 tests", verbose=verbose)
+
+
 def services_provider_wipe_split_guard(verbose: bool = False, test_names: list = None) -> bool:
     """Run X-R49: a parametric provider's change refuses while a SPLIT it generated has incoming adjustments without a purchase cost."""
     print_section("Services: Provider Wipe Split Guard")
@@ -2509,6 +2518,15 @@ Note: No backend server required.
         desc="X-R48: POST /assets/{id}/market-data/wipe refused before any write with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a SPLIT of the asset, manual or provider, has linked incoming ADJUSTMENTs without a purchase cost; details list every such SPLIT by date then id with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller); a cost of 0, an outgoing row, a SPLIT without links, another asset's SPLIT and the dry run leave the wipe as before",
         # WRITE-SCOPED, the category default: every row is this unit's own (assets, brokers, users and accesses under a
         # unique marker), wiped by asset and broker id; the route runs in process on an app of the call's own.
+    )
+    add_test(
+        cat,
+        "routes-generic-500",
+        services_routes_generic_500,
+        name="Routes Generic 500",
+        desc="X-R74 (R13-SEC9-3's rule): every failure path of the asset and FX routes that answered 500 with the error's text (26 sites in assets/providers, crud, events, market_data and fx/providers, currencies) answers a fixed message naming no error, the error logged with its exception; the authored 400/404/409/502 refusals unchanged",
+        # PURE: the route functions are called in process, their services replaced through monkeypatch and their sessions
+        # by doubles that raise; nothing reaches the database, the lane server or the network.
     )
     add_test(
         cat,

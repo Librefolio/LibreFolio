@@ -851,7 +851,8 @@ class AssetCRUDService:
         except Exception as e:
             await session.rollback()
             logger.exception(f"Error merging asset {source_asset_id} into {target_asset_id}: {e}")
-            raise AssetSourceError(f"Merge failed: {e!s}", "MERGE_FAILED", {"source_asset_id": source_asset_id, "target_asset_id": target_asset_id}) from e
+            # X-R74: the log keeps the error; the answer never echoes it (an SQL error names the schema)
+            raise AssetSourceError("Merge failed: internal error", "MERGE_FAILED", {"source_asset_id": source_asset_id, "target_asset_id": target_asset_id}) from e
 
         logger.info(
             "assets merged: %d → %d (tx=%d, prices=%d/-%d, events=%d/-%d, relinked=%d)",

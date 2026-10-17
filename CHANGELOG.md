@@ -350,6 +350,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A price dated far in the past (e.g. year 1), stored by an older version, no longer makes an asset's full-history drawdown load hundreds of thousands of days: the history starts on 1 January 1900.
 - The restore outcome route, which answers without signing in, no longer fills the server log: it reads the restore's state only for the ticket of the restart, and a ticket file it cannot use is logged once, not at every request.
 - A restored backup's database can no longer make the server run code through its schema: every database connection turns SQLite's `trusted_schema` off first and reads the schema again last, so a `CHECK`, a `DEFAULT` or an index that calls a function the app registers is refused instead of run, in the server and in the restore check's upgrade.
+- Unexpected errors in the asset and exchange-rate requests (assets, their providers, events and market data; exchange-rate providers, routes and sync) no longer reveal internal details, such as database errors, in their answer: it says only which action failed, and the details go to the server log.
 
 #### 📚 Documentation
 

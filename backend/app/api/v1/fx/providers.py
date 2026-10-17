@@ -114,7 +114,8 @@ async def list_providers(
 
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch providers: {e!s}") from e
+        logger.exception(f"Error listing FX providers: {e}")
+        raise HTTPException(status_code=500, detail="Internal error while listing FX providers") from e
 
 
 # ============================================================================
@@ -161,7 +162,8 @@ async def list_routes(session: AsyncSession = Depends(get_session_generator), _c
 
         return FXConversionRoutesResponse(items=routes_list)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch routes: {e!s}") from e
+        logger.exception(f"Error listing conversion routes: {e}")
+        raise HTTPException(status_code=500, detail="Internal error while listing conversion routes") from e
 
 
 @router_providers.post("/routes", response_model=FXCreateRoutesResponse, status_code=201)
@@ -342,7 +344,8 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
         ) from e
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to create routes: {e!s}") from e
+        logger.exception(f"Error saving conversion routes: {e}")
+        raise HTTPException(status_code=500, detail="Internal error while saving conversion routes") from e
 
 
 @router_providers.delete("/routes", response_model=FXDeleteRoutesResponse)
@@ -486,4 +489,5 @@ async def delete_routes_bulk(  # noqa: C901 — sequential batch stages: preload
 
     except Exception as e:
         await session.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete routes: {e!s}") from e
+        logger.exception(f"Error deleting conversion routes: {e}")
+        raise HTTPException(status_code=500, detail="Internal error while deleting conversion routes") from e
