@@ -17,7 +17,7 @@ from backend.app.schemas.portfolio import (
     LotAnalysisType,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.financial_math.fifo.models import FifoEvent, FifoLot, FragmentInterval, LotClosure
+from backend.app.services.financial_math.fifo.models import FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots.prices import opening_reference_price
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import realized_gain
@@ -123,7 +123,7 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
     analyses: Sequence[LotAnalysisType],
     lots_by_id: dict[int, FifoLot],
     selected_ids: Sequence[int],
-    transactions: Sequence[Transaction],
+    transactions: Sequence[Transaction | FifoInputTransaction],
     price_series: AssetPriceSeries,
     prices: Sequence[PriceHistory],
     fragments: Sequence[FragmentInterval],
@@ -202,7 +202,7 @@ def collect_performance_fx_needs(
     *,
     fx_resolver: FxRateResolver,
     analyses: Sequence[LotAnalysisType],
-    transactions: Sequence[Transaction],
+    transactions: Sequence[Transaction | FifoInputTransaction],
     closures: Sequence[LotClosure],
     lots_by_id: dict[int, FifoLot],
     asset_currency: str,
