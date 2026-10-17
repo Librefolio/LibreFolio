@@ -360,6 +360,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A price dated far in the past (e.g. year 1), stored by an older version, no longer makes an asset's full-history drawdown load hundreds of thousands of days: the history starts on 1 January 1900.
 - The restore outcome route, which answers without signing in, no longer fills the server log: it reads the restore's state only for the ticket of the restart, and a ticket file it cannot use is logged once, not at every request.
 - A restored backup's database can no longer make the server run code through its schema: every database connection turns SQLite's `trusted_schema` off first and reads the schema again last, so a `CHECK`, a `DEFAULT` or an index that calls a function the app registers is refused instead of run, in the server and in the restore check's upgrade.
+- A restore's check now refuses, as a damaged database, an archive whose schema calls a function LibreFolio's server cannot use. Before, such an archive ended the check with a generic error (`dev.py backup restore` stopped with a traceback), or passed the check and broke the first start after the restore.
 
 #### 📚 Documentation
 
