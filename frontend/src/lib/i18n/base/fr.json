@@ -124,6 +124,11 @@
     "bulkRefusal": {
       "tooManyItems": "Certaines valeurs n'ont pas pu être chargées : le serveur accepte au plus {max, number} éléments par requête, et celle-ci en contenait {count, number}.",
       "tooManyDays": "Certaines valeurs n'ont pas pu être chargées : le serveur calcule au plus {max, number} valeurs journalières par requête, et celle-ci en demandait davantage. Choisissez une période plus courte."
+    },
+    "nonIsoCurrency": {
+      "suggestion": "{value} n'est pas un code ISO : il désigne {suggestion}",
+      "candidates": "{value} n'est pas un code ISO : il peut désigner {candidates}",
+      "unknown": "{value} n'est pas un code de devise ISO"
     }
   },
   "csvImport": {

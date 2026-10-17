@@ -6688,6 +6688,164 @@ non sposti il registro.
 >   Frontend: banner e selettore, i18n nelle 4 lingue. Test: services, api, Vitest.
 > - **La correzione** (A o C) e quella degli asset: un lotto medio.
 
+#### E-19b1.3 — `staging.py` sopra B-43 ⏳
+> - `_report(..., non_iso_currencies=False)`, il codice dopo tutti gli altri;
+> - in `_stage`, dopo i totali, sulla copia aggiornata: una connessione propria di staging (`mode=ro`,
+>   `trusted_schema=OFF` per primo, così il registratore di B-37 la vede), `find_stored_currency_findings`; un
+>   `sqlite3.Error` → avviso nel log (id dello stage e classe dell'errore), nessun codice, il controllo va avanti;
+> - la docstring a :158-162;
+> - poi `api sync` (dev porta altre modifiche all'OpenAPI), RNW, services `backup-staging`, `restoreText` e la parità
+>   del client; poi il checkpoint E-19b1 e b2 (Z-32 (c) è in dev).
+
+#### E-19b1.2 — Il codice, senza `staging.py` ✅ (2026-10-17, 17:3x–18:4x; HEAD `f2cd04e9a`)
+> **Il backend**:
+> - `schemas/common.py`: `iso_currency_candidates(value)` diventa pubblica. Un non-testo dà `()`; il testo si ripulisce
+>   (`strip().upper()`); i tre di `NEVER_RELABELLED_CURRENCY_CODES` danno `()`; un codice alfabetico valido dà
+>   `(CODE,)`; il resto passa da `_iso_currency_candidates`. `suggested_iso_currency` ne prende l'unico candidato: stesso
+>   comportamento di E-19a.
+> - `schemas/utilities.py`: `CurrencySuggestionResponse` (`canonical`, `suggestion`, `candidates`), uno `StrictModel`.
+> - `api/v1/utilities.py`: `GET /utilities/currencies/suggest?value=`, sincrona e pubblica come le sorelle; `value` da 1
+>   a 200 caratteri, altrimenti 422.
+> - `schemas/backup.py`: il `Literal` degli avvisi riceve `non_iso_currencies`, e il commento a :167.
+> - `scripts/backup_cli.py`: `_STAGE_WARNINGS["non_iso_currencies"]`, col rimando a `./dev.py db currencies`.
+>
+> **Il frontend**:
+> - `currencyStore.ts`: `suggestCurrency(value)`, con una `Map` di promesse, anche quelle in volo. Un errore risponde
+>   «nessun suggerimento» e si toglie dalla cache.
+> - `CurrencySearchSelect.svelte`:
+>   - un valore assente dall'**intera** lista (non da quella filtrata), a lista caricata e non vuota, diventa
+>     un'opzione sintetica disabilitata in testa: il campo mostra `978` invece del segnaposto;
+>   - finché la risposta non arriva, e per un codice ISO che la lista non ha (`canonical`), il valore si mostra com'è,
+>     senza avviso: mai un «non è un codice ISO» falso;
+>   - poi l'icona `AlertTriangle` in `text-lf-warning` e la riga `text-xs text-lf-warning`, con
+>     `data-testid="currency-non-iso-hint"` e `data-suggestion`; in compatto l'icona col `title` e il testo `sr-only`;
+>   - nelle righe della lista nessun colore di stato, perché sulla tinta `selected` non regge: la riga è disabilitata,
+>     col testo muted che la regola TC-15 alza già a secondario;
+>   - nessuna scelta in un clic (D1/D2);
+>   - la chiamata a `suggestCurrency` sta in un try/catch: i test che fanno il mock del negozio senza
+>     `suggestCurrency` (vitest lancia all'accesso) leggono «nessun suggerimento».
+> - i18n con `dev.py i18n add`, 4 lingue, niente `<` né `&`:
+>   - `common.nonIsoCurrency.{suggestion,candidates,unknown}`, in `base/`;
+>   - `backup.restore.report.warning.non_iso_currencies`, in `backup/`.
+> - `restoreText.ts` `WARNING_KEYS`, `restoreI18n.test.ts` §5.
+>
+> **Registrazioni**:
+> - schemas `currency-candidates` (pure), services `restore-non-iso-warning` (pure), api `utilities-currency-suggest`
+>   (isolamento di default);
+> - Vitest: il negozio e `restoreText` in `core-unit`, il selettore in `component-unit`.
+>
+> **Docs**:
+> - `admin/cli_tools.en.md`: l'elenco degli avvisi, col rimando alla sezione `#currency-codes`. Pagina tradotta,
+>   contenuto nuovo: nessun timbro, come in E-19a;
+> - `developer/frontend/components/core-ui/select.md`, `developer/frontend/state/reference-state.md`,
+>   `developer/architecture/database/brokers_transactions.md`.
+>
+> **Prove** (corsia 6188):
+> - **Vitest**:
+>   - i 3 file nuovi più `CurrencySearchSelect`, `SearchSelect` e `restoreI18n`: **6 file, 194 verdi**;
+>   - i 20 file che fanno il mock di `currencyStore`: **20 file, 866 verdi**.
+> - **pytest diretti** (`files/tools/e19b1_pure.sh g1`):
+>   - CCA 72, `currency-suggestion` 119, `currency-write-strict` 864, `stored-currencies` 24;
+>   - RNW **17 rossi, 12 verdi**: i 17 dicono tutti «`_report` non prende ancora `non_iso_currencies`», cioè
+>     `staging.py`, dopo B-43.
+> - **Runner** (`e9_suites.sh e19b1g1`, `e19b1g2`): api `utilities-currency-suggest` 13, api `utilities` 9, schemas
+>   `currency-candidates` 72, schemas `openapi-client-text` 78; porta 6188 libera.
+> - **Statici** (`files/tools/e19b1_static.sh s1`):
+>   - ruff e black puliti (13 file), `i18n check`, `theme-roles --check` pulito, 6 porte Vitest (163 verdi);
+>   - `mkdocs build` stretto con 0 avvisi, `check-links` 97 validi, `git diff --check` pulito;
+>   - `front check`: un errore (sotto), poi 0 errori e 0 avvisi.
+> - **OpenAPI contro HEAD** (`files/tools/oas_delta.sh`): **3 differenze, tutte volute**: il percorso nuovo,
+>   `CurrencySuggestionResponse` e il valore `non_iso_currencies` nell'enum degli avvisi.
+>
+> **⚠️ Fuori pista**:
+> - `api sync` girato a carico 65, sopra 50: uno sbaglio mio.
+> - La prima Vitest sui 20 file l'ho lanciata a carico 73: avevo stampato il carico senza attendere. Da qui ogni run
+>   passa per `files/tools/wait_load.sh` o per gli script che attendono.
+> - `front check` ha trovato un errore di tipo nel file del `test-author` (`currencyStore.suggest.test.ts:201`: `route`
+>   è l'unione di tutti gli endpoint, e non tutti hanno `parameters`). Corretto da me, solo il tipo
+>   (`(route as {parameters?: unknown} | undefined)?.parameters`), con l'asserzione invariata; poi il file 10 verdi.
+>
+> **Resta**: `staging.py` (E-19b1.3).
+>
+> **Prove dopo** (18:0x–18:4x):
+> - runner `e19b1g3`: front-utility `core-unit` **8.741** e `component-unit` **4.847** verdi;
+> - runner `e19b1g4`: services `restore-non-iso-warning` **25 rossi, 14 verdi**, coi rossi aggiunti (E-19b1.1): tutti
+>   e 25 dicono «red until E-19b1» su staging (17 `_report`, 7 `_stage`, 1 l'import di
+>   `find_stored_currency_findings`);
+> - ruff e black puliti su `_backend_services.py` e RNW; i 6 file nuovi senza spazi in coda; porta 6188 libera.
+>
+> **Checkpoint b1, parte 1** (18:4x). B-43 era già in dev dalle 16:41 (`fc4d5eab4`), ma la mia base `f2cd04e9a` è
+> precedente. Il coordinatore: congelo; lui fa il commit di b1 senza `staging.py` e porta dev nel ramo (B-43, Z-32 (c)
+> col lettore `_held_asset_quote_facts`, CP-10d `market_series`, X-R75 e il resto). Poi `staging.py` sopra B-43.
+> - **La previsione del merge** (`git diff --name-only f2cd04e9a dev_release2`, dev `c5b9cca75`, 232 file): si
+>   sovrappongono solo i tre registri del runner, con hunk lontani. I più vicini:
+>   - `_frontend_utility.py`: il mio dopo la riga 166, quello di dev dopo la 167;
+>   - `_backend_services.py`: dev cambia la 2799, io inserisco dopo la 2804.
+> - I 15 nomi che RNW prende da `test_backup_staging` esistono tutti nella versione di dev.
+> - RNW entra nel checkpoint, rosso per disegno, così il registro punta a un file che esiste e il lavoro del
+>   `test-author` è al sicuro.
+> - La revisione di A-51, in coda, la faccio da congelato: sola lettura.
+
+#### E-19b2.0 — L'accordo con Z (2026-10-17, 17:2x–17:4x; Z `d401e062`)
+> Chiesto dal coordinatore: le due voci del rapporto di qualità, Z-32 (c) e la mia, non devono divergere.
+>
+> **Confermato da Z** (fatto nel suo worktree, non ancora in dev):
+> - **nessun campo nuovo** in `DataQualityIssue`: entrambi i lotti usano `message_i18n_key` e `message_params`, e il nome
+>   condiviso del parametro è `suggestion`. Z usa solo `{count}`: il suo testo dice «… to 100», perché l'unica unità
+>   minore, `GBp`, ha fattore 100;
+> - `IssueCode.QUOTE_IN_MINOR_UNIT` subito dopo `INVALID_SPLIT_RATIO`, il mio `NON_ISO_CURRENCY` dopo;
+> - il kwarg di Z `quote_in_minor_unit_assets: list[tuple[int, str]] | None = None` dopo `invalid_split_assets`; il suo
+>   blocco dopo quello degli split, prima di `TRANSACTIONS_BEFORE_FLOOR`;
+> - **il lettore**, in `portfolio_service.py`:
+>   - `async def _held_asset_quote_facts(self, engine_result) -> list[HeldAssetQuoteFacts]`;
+>   - una query (`Asset` outer join `AssetProviderAssignment`, per id) sugli asset tenuti sopra
+>     `_QUANTITY_DUST_THRESHOLD`, senza doppioni fra broker;
+>   - `HeldAssetQuoteFacts`, dataclass frozen di modulo: `asset_id`, `name` (`display_name`), `currency` **com'è
+>     salvata** (un `978` arriva `978`), `quote_base_quantity` (NULL o ≤ 0 → 1), `provider_code`, `reported_currency`;
+>   - entrambi i percorsi del rapporto lo chiamano una volta nella locale `held_quote_facts`, subito prima di
+>     `views.build_data_quality_report(...)`: il mio filtro va su quella variabile, il mio kwarg in entrambe le chiamate;
+>   - il filtro di Z è la staticmethod `_quote_in_minor_unit_assets(facts)`; il mio le sta accanto.
+> - `lots_analysis_service.py:780` chiama `build_data_quality_report` senza i due kwarg: valgono None.
+> - Nuovi in Z e fuori dal mio perimetro: la colonna `asset_provider_assignments.reported_currency` (migrazione
+>   `010_provider_reported_currency`) e `backend/app/utils/currency_units.py` (`MINOR_UNIT_FACTORS = {"GBp": 100}`).
+
+#### E-19b1.1 — I rossi ✅ (2026-10-17, 16:5x–17:1x; `test-author` `116f6270`, solo file nuovi)
+> Sei file nuovi:
+> - pytest: `test_currency_candidates.py` (CCA, pure), `test_currency_suggest_api.py` (CSA-API, 13 casi, solo raccolti:
+>   servono il server e l'endpoint), `test_restore_non_iso_warning.py` (RNW, pure);
+> - Vitest: `CurrencySearchSelect.nonIso.test.ts` (CNI), `currencyStore.suggest.test.ts` (CSS),
+>   `restoreText.nonIso.test.ts` (RTN).
+>
+> **125 rossi e 13 verdi** (le guardie), ognuno col suo «red until E-19b1».
+>
+> I rischi segnalati dal `test-author`:
+> - il client generato valida con zod gli avvisi del ripristino, quindi serve `api sync`;
+> - i test che fanno il mock stretto di `currencyStore` vanno fatti girare dopo il selettore (erano 20, non 14);
+> - la lista dei codici scritta a mano in `restoreI18n`.
+>
+> **Rossi aggiunti** (18:0x–18:3x, mentre B-43 non è ancora entrato). Nei rossi di RNW mancava la prova che `_stage`
+> legga davvero la copia: c'era solo `_report`.
+> - **RNW §5, da capo a fondo** (`test-author` `7a4a71f6`): RNW-101…106 passano da `staging.stage_archive` su archivi
+>   veri sotto `tmp_path`, con gli aiuti di `test_backup_staging` (lo fanno già 8 moduli). Ogni archivio avvisato ha
+>   un «gemello» con le valute a `EUR`.
+>   - RNW-101: `978`, `eur`, `EURO` e tre forme con un riferimento rotto: l'avviso c'è una volta sola, per ultimo,
+>     e non blocca;
+>   - RNW-102: il gemello senza avviso (guardia);
+>   - RNW-103: `read_report` uguale al rapporto restituito;
+>   - RNW-104: senza amministratori resta bloccato come il gemello;
+>   - RNW-105: un archivio più vecchio, aggiornato sulla copia, avvisa;
+>   - RNW-106: l'aggiornamento corregge `978` in `EUR`, quindi niente avviso (guardia): il controllo legge la copia
+>     aggiornata, non l'archivio.
+>   - Il `test-author` ha provato con un'imbracatura temporanea che i casi distinguono il giusto da sei sbagliati
+>     (lettura prima dell'aggiornamento, un codice per reperto, codice primo, avviso come blocco, avviso sempre).
+> - **La decisione sul guasto** (dubbio del `test-author`), sul precedente B-29: una lettura dei totali che fallisce
+>   non chiude mai il controllo. Se aprire la copia o `find_stored_currency_findings` alza `sqlite3.Error`, staging
+>   scrive un avviso nel log (con l'id dello stage e la classe dell'errore, mai il percorso né il testo dell'errore) e
+>   va avanti senza il codice. Lo fissa **RNW-107** (secondo `test-author`), che controlla anche il log con
+>   `cases.staging_logs()`.
+> - **RNW: 25 rossi, 14 verdi.** Il registro (`restore-non-iso-warning`) ora nomina `stage_archive` e resta `pure`
+>   (tutto sotto `tmp_path`, come `backup-staging`).
+
 #### E-19a.3 — Fix-forward: il passo d'avvio dopo le due riparazioni ✅ (2026-10-17, 17:1x–17:2x; HEAD `e98934eed`)
 > **Il rosso** (coordinatore, 17:1x, gate I, `all-backend` in dev):
 > `test_lone_transfer_legs.py::test_the_startup_step_runs_right_after_the_post_migration_fixes`, perché

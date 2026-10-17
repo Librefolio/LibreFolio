@@ -239,10 +239,20 @@ A specialized `SearchSelect` for currency selection.
   the currencies at either end of a configured FX pair (`fxRoutesStore.getConfiguredCurrencySet()`),
   plus `value` and `defaultCurrency`; the currency a chain route passes through is left out, since
   syncing a chain stores only the composed rate of its own pair
+- A **stored value that is no currency of the list** (`978`, `EURO`: what an earlier version saved
+  as written, E-19b1) stays in the field instead of the placeholder, as a disabled option: a warning
+  icon and a line naming the ISO code it stands for, or the codes it may stand for
+  (`common.nonIsoCurrency.*`; `data-testid="currency-non-iso-hint"`, with the one code in
+  `data-suggestion`). The answer is asked once per value, through `currencyStore.suggestCurrency()`;
+  until it comes, and for an ISO code the list lacks, the value is shown as it is. There is no
+  one-click fix: choosing the code is up to the user, since in the asset modal a new currency is a
+  currency change, whose only path today deletes the asset's prices and events (Policy D)
 
 **Used in**: currency fields across the app — FX pair creation (base/quote), broker form, asset
 modal, dashboard and asset detail target currency, settings.
-**Data source**: `GET /api/v1/utilities/currencies` — ISO 4217 reference list.
+**Data source**: `GET /api/v1/utilities/currencies` — ISO 4217 reference list; `GET
+/api/v1/utilities/currencies/suggest?value=` — what a stored value stands for (`canonical`,
+`suggestion`, `candidates`).
 
 ---
 

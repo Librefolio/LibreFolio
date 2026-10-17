@@ -124,6 +124,11 @@
     "bulkRefusal": {
       "tooManyItems": "Some values could not be loaded: the server takes at most {max, number} items in one request, and this one held {count, number}.",
       "tooManyDays": "Some values could not be loaded: the server builds at most {max, number} daily values in one request, and this one needed more. Choose a shorter period."
+    },
+    "nonIsoCurrency": {
+      "suggestion": "{value} is not an ISO code: it stands for {suggestion}",
+      "candidates": "{value} is not an ISO code: it may stand for {candidates}",
+      "unknown": "{value} is not an ISO currency code"
     }
   },
   "csvImport": {
