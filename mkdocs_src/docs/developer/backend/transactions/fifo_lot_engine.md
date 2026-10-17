@@ -209,7 +209,7 @@ EventKind = Literal[
 | `BUY` | First closes existing `SHORT` fragments on same broker (`close_reason="BUY"`). Any remainder opens new `LONG` lot. |
 | `SELL` | Closes `LONG` fragments FIFO on same broker. Any remainder opens new `SHORT` lot only if `broker_shorting[broker_id]` is true; otherwise emits `FIFO_SOURCE_QUANTITY_MISSING`. |
 | `ADJUSTMENT_IN` | First closes existing `SHORT` fragments on same broker (`close_reason="BUY"`) at the event's `unit_price` — the row's `cost_basis_override`, 0 without one — in the cost basis's currency when the row carries one (`cost_basis_currency`, else the row's `currency`), else in the row's `currency`. Any remainder opens a new `LONG` lot at that price, in that currency, and resolves its reference price. |
-| `ADJUSTMENT_OUT` | Closes `LONG` fragments FIFO on same broker (`close_reason="ADJUSTMENT_OUT"`): with a `cost_basis_override`, every fragment at that per-unit cost, in `cost_basis_currency` (the lot's currency when empty) — the units are handed over at cost; without one, at `close_unit_price = 0` in the lot's currency — a write-off. If quantity still missing, engine emits issue; it never opens/consumes unsupported SHORT adjustment legs. |
+| `ADJUSTMENT_OUT` | Closes `LONG` fragments FIFO on same broker (`close_reason="ADJUSTMENT_OUT"`): with a `cost_basis_override`, every fragment at that per-unit cost, in `cost_basis_currency` (the lot's currency when empty) — the units are handed over at cost; without one, at `close_unit_price = 0` in the lot's currency — a write-off; flagged `hands_over_at_own_cost` (a transfer leg leaving the lots' scope on a day without a price, see [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)), every fragment at its own FIFO unit cost in the lot's currency — realized 0. If quantity still missing, engine emits issue; it never opens/consumes unsupported SHORT adjustment legs. |
 | `TRANSFER_DEPART` | Extracts `LONG` broker fragments FIFO from source broker, optionally opens `IN_TRANSIT` fragments, records pending transfer pieces, realizes **no P&L**. |
 | `TRANSFER_ARRIVE` | Closes matching transit fragments and reopens broker custody at destination with same quantity and unit price. |
 | `SPLIT` | Multiplies active fragment quantities by ratio, divides unit prices by ratio, then recomputes lot-level quantities/reference price while preserving cost. |
@@ -318,7 +318,10 @@ Transfers are modeled as **custody moves**, not disposals.
 - absolute quantities match
 - both legs belong to same asset
 
-Otherwise engine records `TRANSFER_PAIR_MISSING` and skips pair.
+Otherwise engine records `TRANSFER_PAIR_MISSING` and skips pair. The engine sees only the rows it is given: a lots
+analysis reads a leg whose partner pairs back from a broker outside its scope before the replay, as an adjustment
+(see [Transfers Across the Scope's Edge](lots_analysis_service.md#scope-edge-transfers)), so that leg never reaches
+this rule.
 
 ### 🛫 Depart
 

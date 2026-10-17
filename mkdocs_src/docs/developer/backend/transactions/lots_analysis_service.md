@@ -118,7 +118,7 @@ async def get_lots_analysis(
 High-level flow:
 
 1. Load accessible brokers, asset transactions, split ratios, broker shorting flags, `price_history`, asset income and FEE / TAX transactions. A split whose stored ratio fails `is_valid_split_ratio()` stays in the ratio map, so its row is still split-linked and the WAC lines still treat it as a split, but the FIFO engine skips it: no lot is rescaled, `lot_events` has no `SPLIT` row for it, and the analysis reports no issue (lot MF-D4).
-2. Build one qbq-aware resolver series with `build_asset_price_series()`, from the `price_history` rows and the loaded transactions — before the engine, which reads it for reference prices (see [Unified Price Resolver](#unified-price-resolver)).
+2. Build one qbq-aware resolver series with `build_asset_price_series()`, from the `price_history` rows and the loaded transactions — before the engine, which reads it for reference prices (see [Unified Price Resolver](#unified-price-resolver)). Then read the transfer legs that cross the scope's edge with `read_transfers_at_scope_boundary()`: every later step reads the list it returns (see [Transfers Across the Scope's Edge](#scope-edge-transfers)).
 3. When a requested analysis reads income, fees or taxes, build the engine's economic inputs first — income and FEE / TAX events and the BUY / SELL amounts that weight the FEE / TAX split, each converted at its own date (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`). Then build `reference_price_lookup()` over the series (see [Reference Price](#reference-price)) and run `run_fifo_lot_engine(...)`.
 4. Resolve selected lots, and the days valued at cost: `at_cost_until = last_day_without_observation(price_series, history_dates)` (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)).
 5. Collect needed FX pairs with `collect_fx_needs()` / `collect_performance_fx_needs()`, then batch-load rates through `FxRateResolver`.
@@ -129,6 +129,42 @@ High-level flow:
 10. Once every builder has run, report the gaps once, for the whole analysis: `_report_gaps()` adds to `data_quality` the WAC lines' gaps and every conversion `FxRateResolver` could not make (see [FX Conversion](#fx-conversion)).
 
 Step 1's broker scope comes from `_get_scope_broker_ids()`: every broker the user can access, in any role, intersected with `broker_ids` when given. No owner share is applied anywhere in the analysis — quantities, values and P&L are each broker's full figures, unlike the portfolio summary, which scales an OWNER's brokers by their `share_percentage`. The lot modal says so next to its quantities (`brokers.lots.modal.absoluteQuantityTooltip`).
+
+### ↔️ Transfers Across the Scope's Edge {: #scope-edge-transfers }
+
+A scope can hold one leg of a transfer and not the other: `broker_ids` names the receiver alone, or a co-owner sees one
+of the two brokers. The engine replays the scope's rows only, so on its own it could not pair that leg and would fail the
+whole asset (`TRANSFER_PAIR_MISSING`). Instead, `read_transfers_at_scope_boundary()`
+(`financial_math/lots/scope_boundary.py`, J-10, decision N76) reads the leg the way the scope sees it, as the
+broker-scope Dashboard does:
+
+| Leg | Read as | Effect |
+|-----|---------|--------|
+| In (quantity > 0) | An `ADJUSTMENT` in, at the leg's own `cost_basis_override` / `cost_basis_currency` (the Auto cost a receiving leg carries) | A new lot opens on the arrival day at that cost. Without a cost basis (old data) it is a costless adjustment: `MISSING_COST_BASIS`, `DEGRADED` |
+| Out (quantity < 0) | An `ADJUSTMENT` out, at the market value of its own day: the resolver's mark brought to one unit (`compute_holding_value`), in the mark's currency | The lots close on the departure day; the scope realizes market − FIFO cost, the gain the units made while in it |
+| Out, no observation on or before its day | An `ADJUSTMENT` out flagged `hands_over_at_own_cost` | Each fragment leaves at its own FIFO cost: realized 0. The day is one the analysis already values at cost (`CURRENT_PRICE_ASSUMED_AT_COST`) |
+
+- **When.** Only when the partner (`related_transaction_id`) exists, sits at a broker outside the scope and pairs back:
+  a `TRANSFER`, linked to the leg, of the same asset, of the opposite sign and the same absolute quantity — the checks of
+  the engine's own pairing. A pair really missing or broken is left as it is, and the engine still fails it.
+- **What is read of the partner.** Its pairing columns only (`_read_at_scope_boundary()` selects id, broker, asset,
+  type, quantity and link): never an amount or a cost, so nothing of a broker outside the scope reaches the figures —
+  for an owner filtering one broker as for a co-owner who sees only one.
+- **Detached copies.** Each read leg is a `FifoInputTransaction` (type `ADJUSTMENT`, no link, amount 0) in the leg's
+  place; the ORM rows are never changed. The split ratios and the price series come from the rows as loaded, before the
+  reading: a `TRANSFER` or an `ADJUSTMENT` is never a split link nor an observation.
+- **Every reader.** The engine, the histories, the conversions and the average-cost lines all read the returned list.
+  `FifoInputTransaction.from_transaction()` hands a copy back as it is, so the flag survives
+  `build_engine_transactions()`.
+- **Performance.** `build_performance_history()` moves a read leg's market value of the day across the scope —
+  money in for a leg that arrives, out for one that leaves — through `PerformanceSourceContext.boundary_legs`, exactly
+  as it counts a transfer whose two legs the re-run over the accessible brokers holds. The two paths give the same
+  series. The re-run reads the edge of the accessible brokers in turn, for a partner at a broker the user cannot see.
+- **The same rule as the Dashboard.** In a broker's own view the Dashboard counts an incoming leg's cost basis in the
+  average cost and its market value as capital, and an outgoing leg's market value as the capital that left (lot 41,
+  D2 and D5): lots and Dashboard agree broker by broker.
+
+The timeline shows a read leg as an `ADJUSTMENT_IN` / `ADJUSTMENT_OUT` row.
 
 ### 💱 FX Conversion {: #fx-conversion }
 
@@ -506,7 +542,7 @@ and in `financial_math/lots/`:
 - `build_return_history()` — same continuity and at-cost rules, plus `relative_return` against `opening_reference_price()` (see [Reference Price](#reference-price))
 - `build_price_history()` — truncates at closure date, no post-close points
 - `build_broker_wac_history()` / `build_cumulative_wac_history()` — WAC points read from the average-cost lines via `average_cost_points()` (see [WAC Lines](#wac-lines))
-- `build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows. The NAV is read only on a day with a mark: no at-cost fallback reaches it (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)). Money in: a BUY's amount and an ADJUSTMENT-in's money. Money out: a LONG SELL closure's proceeds and, for an ADJUSTMENT-out carrying a cost basis, the cost it hands over — `|quantity| × cost_basis_override`, converted from `cost_basis_currency` (the asset's currency when empty) at the row's date; the flow is read from the row, never from the `ADJUSTMENT_OUT` closures' proceeds. Transfer legs crossing the broker scope count at market value. An ADJUSTMENT-out without a cost basis is a quantity correction, never a flow. The units of an ADJUSTMENT-out leave at cost, so on a day the asset is quoted above that cost the gain they carried leaves with them — the same principle as an ADJUSTMENT-in valued at cost.
+- `build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows. The NAV is read only on a day with a mark: no at-cost fallback reaches it (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)). Money in: a BUY's amount and an ADJUSTMENT-in's money. Money out: a LONG SELL closure's proceeds and, for an ADJUSTMENT-out carrying a cost basis, the cost it hands over — `|quantity| × cost_basis_override`, converted from `cost_basis_currency` (the asset's currency when empty) at the row's date; the flow is read from the row, never from the `ADJUSTMENT_OUT` closures' proceeds. Transfer legs crossing the broker scope count at market value: a pair the re-run over the accessible brokers holds whole, and a leg read at the scope's edge (see [Transfers Across the Scope's Edge](#scope-edge-transfers)). An ADJUSTMENT-out without a cost basis is a quantity correction, never a flow. The units of an ADJUSTMENT-out leave at cost, so on a day the asset is quoted above that cost the gain they carried leaves with them — the same principle as an ADJUSTMENT-in valued at cost.
 
 Important nuance: `date_from` trims emitted rows only. Engine still starts from earliest in-scope asset transaction so FIFO state stays correct.
 
