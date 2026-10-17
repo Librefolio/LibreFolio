@@ -20,9 +20,18 @@ export {INSTANCE_BLOCKED_CODE, INSTANCE_BLOCKED_STATUS, isInstanceBlockedError} 
 
 let blocked = $state(instanceBlockState.blocked);
 
-instanceBlockState.subscribe(() => {
+const stopFollowing = instanceBlockState.subscribe(() => {
     blocked = instanceBlockState.blocked;
 });
+
+// Development only (Z-22): a hot update of this file evaluates a new copy, while `instanceBlockState` keeps the old
+// copy's listener. Vite calls `dispose()` only on the module an update is accepted through (here the `(app)` layout,
+// never this file), so each copy stops the one before it through `import.meta.hot.data`. A build drops the block, and
+// Vitest's stand-in for `import.meta.hot` has no `data`.
+if (import.meta.hot?.data) {
+    import.meta.hot.data.stopFollowing?.();
+    import.meta.hot.data.stopFollowing = stopFollowing;
+}
 
 export const instanceBlock = {
     get blocked(): boolean {
