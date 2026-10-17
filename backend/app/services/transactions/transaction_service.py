@@ -38,7 +38,7 @@ from backend.app.services.transactions.event_suggestions import TransactionEvent
 from backend.app.services.transactions.promotion import TransactionPromotionMixin
 from backend.app.services.transactions.queries import TransactionQueryMixin
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
-from backend.app.services.transactions.transaction_batch_stages import check_decimal_limits, finalize_response, parse_inputs, preload_and_authorize, validate_balances
+from backend.app.services.transactions.transaction_batch_stages import check_dates, check_decimal_limits, finalize_response, parse_inputs, preload_and_authorize, validate_balances
 from backend.app.services.transactions.validation import TransactionValidationMixin
 from backend.app.utils.datetime_utils import utcnow
 
@@ -129,9 +129,10 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
     ) -> TXBatchResponse:
         """Unified pipeline for both /validate (commit=False) and /commit (commit=True).
 
-        Order: parse → decimal limits → access → delete → split → update → create → promote →
-        link → WAC → cost basis → balance replay → response. A refused access, or a value past its column's
-        integer digits (W-B58: the stages after compute with it), stops the batch after the access check.
+        Order: parse → decimal limits → dates → access → delete → split → update → create → promote →
+        link → WAC → cost basis → balance replay → response. A refused access, a value past its column's
+        integer digits (W-B58: the stages after compute with it), or a date outside its bounds (N74: the replay and
+        the rates use it), stops the batch after the access check.
 
         ``commit`` selects response semantics only. The caller still owns the
         session commit or rollback.
@@ -148,7 +149,8 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
 
         parse_inputs(context)
         out_of_range = check_decimal_limits(context)
-        if await preload_and_authorize(self, context) or out_of_range:
+        dates_refused = check_dates(context)
+        if await preload_and_authorize(self, context) or out_of_range or dates_refused:
             return TXBatchResponse(
                 committed=False,
                 issues=context.issues,

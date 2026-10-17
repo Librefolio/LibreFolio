@@ -66,6 +66,30 @@ Usage::
 """
 
 # =============================================================================
+# DECIMAL EXPONENT BOUND — an input never expanded (R13-SEC7-3)
+# =============================================================================
+
+MAX_DECIMAL_EXPONENT = 100
+"""The largest power of ten, either way, an input amount or quantity may carry (R13-SEC7-3).
+
+No column comes near it — 24 digits before the decimal point at most, 12 after — and the columns' own limits still
+decide (``db/precision.decimal_limit_issue``). The bound only keeps a finite value such as ``1E+999999999``, which
+pydantic accepts, from reaching a fixed-point format (a billion digits on the event loop) or the context's arithmetic.
+"""
+
+
+def check_decimal_exponent(value: Decimal) -> Decimal:
+    """``value``, or a ``ValueError`` (a 422 at the boundary) when its exponent is past ±``MAX_DECIMAL_EXPONENT``.
+
+    ``adjusted()`` is the exponent of the leading digit — the exponent itself for a zero, so ``0E-999999999`` is refused
+    too — and costs nothing whatever the value. NaN and the infinities are left to pydantic, which refuses them.
+    """
+    if value.is_finite() and abs(value.adjusted()) > MAX_DECIMAL_EXPONENT:
+        raise ValueError(f"Value out of range: its exponent must be within ±{MAX_DECIMAL_EXPONENT}")
+    return value
+
+
+# =============================================================================
 # CACHED CURRENCY VALIDATION
 # =============================================================================
 
@@ -207,14 +231,15 @@ class Currency(BaseModel):
     @field_validator("amount", mode="before")
     @classmethod
     def validate_amount(cls, v: Any) -> Decimal:
-        """Convert amount to Decimal if needed."""
+        """Convert amount to Decimal if needed; refuse an exponent past ±100 (``check_decimal_exponent``, R13-SEC7-3)."""
         if isinstance(v, Decimal):
-            return v
+            return check_decimal_exponent(v)
         if isinstance(v, (int, float, str)):
             try:
-                return Decimal(str(v))
+                amount = Decimal(str(v))
             except Exception:
                 raise ValueError(f"Cannot convert '{v}' to Decimal") from None
+            return check_decimal_exponent(amount)
         raise ValueError(f"Amount must be numeric, got {type(v)}")
 
     def __add__(self, other: Currency) -> Currency:
