@@ -6843,18 +6843,29 @@ sulla base `23f6578f3`.
       `read_secret_file`, che è di H);
     - nella guida, la chiave fuori dalla cartella dei dati.
     Test: un link o una FIFO come `--instance-key-file` da root → ❌, niente letto.
-- **B-39 · Formule nei CSV esportati** — ⚪ basso; BZ parte 1, F5.
+- ✅ **B-39 · Formule nei CSV esportati** — ⚪ basso; BZ parte 1, F5.
   - Ogni utente può scrivere le `notes` degli eventi di un asset (`POST /assets/events`), e ogni utente può esportarle
     in CSV (`GET /backup/asset/{id}/events`, `series_export.stream_rows_as_csv`).
   - Una nota che comincia con `=`, `+`, `-`, `@`, tab o CR diventa una formula quando un altro utente apre il file in un
     foglio di calcolo.
   - Cura: un `'` davanti ai valori di testo che cominciano così, mai ai numeri (`-1.5` resta). Test: `=1+1` diventa
     `'=1+1`.
+  ✅ **Fatto il 17/10** (B-39). All'export, un testo come una formula (`'*[=+\-@\t\r]` all'inizio, mai un numero
+  puro) riceve un `'` in più; l'import degli eventi toglie esattamente quell'apostrofo dalle `notes`, quindi il ritorno
+  è esatto. Dettagli: piano 07, «B-39».
 - ✅ **B-40 · La tabella «What It Lists» della scheda Sicurezza non ha i due controlli di B-9** — minimo; H con H-46, 17/10.
   `admin/settings.en.md` («What It Lists») non elenca `backup.panel_token` e `backup.upload_limit`, e la pagina dice che
   i risultati seguono l'ordine della tabella. Le due righe vanno nel prossimo lotto, nel loro posto dell'ordine.
   ✅ **Fatto il 17/10** in B-35 (checkpoint delle 12:36): le tre righe di B (`backup.panel_token`,
   `backup.upload_limit`, `backup.restore_limit`) fra il «Log level» della piattaforma e il primo controllo di A.
+- **B-41 · `/restore/outcome` registra un errore a ogni chiamata quando lo stato è illeggibile** — basso; E, R13-SEC9,
+  17/10.
+  - Con uno stato del ripristino illeggibile, la rotta anonima `GET /backup/restore/outcome` legge lo stato prima del
+    biglietto, e la lettura indulgente registra un errore a ogni chiamata. Un client anonimo può ripeterlo.
+  - È rumore, com'era prima di B-32.
+  - Cura economica: la rotta controlla prima il biglietto (forma, registro, impronta, scadenza) e legge lo stato
+    soltanto per un biglietto valido; oppure un solo log per stato, o a livello debug.
+  Dopo la 1.3, se non costa poco.
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
