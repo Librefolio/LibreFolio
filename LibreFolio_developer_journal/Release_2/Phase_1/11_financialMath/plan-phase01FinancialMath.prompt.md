@@ -2371,3 +2371,144 @@ centinaia di migliaia di giorni: le storie partono al più presto dal 1° gennai
   **SEC8-2 `api portfolio` 51**; P2b **rossi `api period-changes` 12 failed, 12 passed** (oltre il tetto ×2 e sesto
   `as_of` ×2: 200 invece di 422; prima del 1900 ×8: 200, o 500 per 0005-12-30 e 0001-01-01); P2b rimesso → **verdi
   `api period-changes` 24/24**; porta 6190 libera.
+- ✅ **MF-SEC8-2 entrato**: dev `e119c71bc`, CHANGELOG 🐛 `91f4de9cb`. **MF-P2b committed** sul mio ramo: `58500cad0`
+  (fix) + `a275ec8af` (journal); l'ingresso aspetta la revisione delle rotte di X. HEAD **`a275ec8af`**, albero pulito.
+
+#### X-R59 — il Δ dell'intervallo intero dal backend (regola 10) — analisi (17/10, 10:1x)
+Richiesta (coordinatore, 09:4x): il Δ dell'intervallo intero delle schede degli asset e il Δ Abs/Δ % del FX si calcolano
+ancora nel browser; stessa direzione di MF-P2. Analisi prima.
+
+**Stato reale (HEAD `a275ec8af`)** — i calcoli nel browser (float):
+- `frontend/src/lib/utils/assetPriceDerived.ts:128-150` `computeDerivedPriceState()`: `deltaAbs = last − first`,
+  `deltaPercent = (last − first) / first × 100` sul primo e l'ultimo punto della serie caricata; chiamata da
+  `assets/+page.svelte:820` e dal worker `workers/priceProcessing.worker.ts:80`.
+- `frontend/src/lib/stores/fxStoreRegistry.ts:65-70` `displayFxDelta(firstRate, lastRate, inverted)`: Δ assoluto e % del
+  cambio mostrato (invertito: `1/r`); letta da `components/fx/FxTable.svelte:113` (colonne Δ Abs, Δ %),
+  `components/fx/FxCard.svelte:100`, `routes/(app)/fx/[pair]/+page.svelte:297` (→ `FxPriceSummary.svelte`).
+- Fuori perimetro: `charts/signals/MeasureSignal.ts` e `MeasurePanel.svelte` (lo strumento di misura interattivo:
+  eccezione dichiarata dalla regola 6 di `financial-math.instructions.md`).
+
+**Che cosa vede l'utente oggi** (da riprodurre): il primo punto della serie è il valore sul giorno d'inizio (riempito
+all'indietro senza limite dall'ultimo prima), **oppure, se non ce n'è nessuno prima, il primo valore dentro l'intervallo**:
+- asset: `price_query._build_backward_filled_series` senza seme parte da `min(price_map)` (X-R55);
+- FX: la serie per giorno di `/fx/currencies/convert` scarta i giorni senza cambio, quindi parte dal primo giorno con un
+  cambio.
+L'ultimo punto è il valore su `dateEnd` (riempito all'indietro).
+
+**Perché non sulla risposta della serie**: lo store FX compone la serie da lacune caricate a parte
+(`ensureFxRangeLoaded`: `getMissingIntervals` → `merge` → `getRange`) e la pagina asset riusa una cache: un Δ attaccato
+alla risposta di `/prices/query` o `/fx/currencies/convert` non sarebbe quello dell'intervallo mostrato. **Casa giusta**:
+l'endpoint dei cambi a periodo fisso (MF-P2), già chiamato con `as_of = dateEnd`, con un `range_start` esplicito.
+
+**Proposta**:
+- `financial_math/returns.py`: `range_change(anchor, reference)` → `change_abs`, `change_ratio` (e per FX
+  `inverse_change_abs = 1/anchor − 1/reference`, `inverse_change_ratio`), in Decimal, sopra `price_return`; nessun valore da
+  un'ancora o un riferimento mancante o ≤ 0 (come `fixed_period_changes`).
+- Richiesta: `range_start: Optional[PeriodChangesAsOf]` (≥ 1900, ≤ `as_of`, se no 422) negli item asset e FX.
+- Risposta: `range_change: {reference_date, change_abs, change_ratio[, inverse_change_abs, inverse_change_ratio]} | null`;
+  `reference_date` = il giorno del valore di riferimento (il `range_start`, o il primo giorno con un valore dopo).
+- Servizi: asset → il valore su `range_start` dalla query raggruppata esistente (un giorno in più nel set dei giorni) e,
+  solo per gli asset senza, una query raggruppata `MIN(date) … date > range_start AND date <= as_of GROUP BY asset_id`
+  + la chiusura; FX → `convert_bulk` su `range_start` e, per le coppie senza, `MIN(FxRate.date)` per coppia nella stessa
+  finestra con i limiti `usable` di X-R38. Nessuna camminata giorno per giorno. Tetto: `range_start` distinti dentro
+  `PERIOD_CHANGES_MAX_AS_OF_DAYS` (un giorno valutato in più ciascuno).
+- Frontend (X, dopo l'ingresso, come MF-P2): `assetPriceDerived.ts` (via `deltaAbs`/`deltaPercent`), `displayFxDelta` via,
+  `FxTable`/`FxCard`/`fx/[pair]` + `FxPriceSummary`, la scheda asset, il worker; la pagina di dettaglio FX fa una
+  chiamata per la sua coppia.
+
+**Numeri visibili**: nessuno con la regola (a) sotto (stesso primo e ultimo punto); sparisce solo il rumore del float
+(`7.000000000000001`). Con la (b) le schede di un asset o di una coppia la cui storia inizia dentro l'intervallo
+mostrerebbero «—» invece del Δ dal primo valore.
+
+**Prova**: test-author, rossi prima: casa (`range_change`, Decimal, invertito, ≤ 0/mancante); servizi (riferimento sul
+giorno d'inizio, riempito da prima, primo valore dentro l'intervallo, nessun valore, valuta diversa); **equivalenza**: per
+un asset e una coppia di prova, `range_change` = primo/ultimo punto di `/prices/query` e di `/fx/currencies/convert` sullo
+stesso intervallo (API, slot). Frontend: i test di X.
+**Superfici mie**: `financial_math/returns.py`, `schemas/prices.py`, `schemas/fx.py`, `services/assets/period_changes.py`,
+`services/fx/period_changes.py`, i test, `api sync`, docs (`financial_math.md`, `assets/architecture.md`,
+`fx/architecture.md`). Conflitti: nessuno aperto (X non ha questi file; il frontend è suo dopo).
+**Stima**: backend medio-piccolo (~1 h codice + test-author + uno slot API).
+**Domande chiuse** (raccomandazione in grassetto):
+1. Riferimento senza valore su `range_start`: **(a) il primo valore dentro l'intervallo (come oggi)** / (b) null.
+2. Forma: **`range_start` opzionale + `range_change` negli endpoint di MF-P2** / un endpoint nuovo.
+3. Δ assoluto: **nella valuta dell'ancora (asset nativi) e quota per base (FX), più l'inverso per le coppie mostrate
+   invertite** / solo il %.
+4. Le pagine di dettaglio FX (`fx/[pair]`, `FxPriceSummary`): **dentro (una chiamata per la coppia)** / dopo.
+- ✅ **Z-25 contro P2b** (coordinatore, 10:0x): `git merge-tree --write-tree a275ec8af 4b711e803` pulito (rc 0, albero
+  `b7f626f3`). Semantica: Z-25 limita `/prices/query` e `/fx/currencies/convert` a `MAX_BULK_ITEMS = 1 000` con un
+  `detail` strutturato (`{"code": "bulk_too_many_items", …}`), P2b a 10 000/1 000 con l'errore di pydantic e una stringa.
+  **Decisione** (coordinatore): tetto **1 000** = `MAX_BULK_ITEMS`, `detail` strutturati (`bulk_too_many_items` +
+  `period_changes_too_many_days`); P2b entra com'è dopo la revisione di X; l'allineamento nel checkpoint di X-R59 dopo
+  il merge di Z-25 nel mio ramo, più una riga in Z-27 (sezione di Z): la regola di divisione della web app vale anche per
+  period-changes.
+- ✅ **Decisioni X-R59** (coordinatore, 10:0x, N80 per il developer; X può porre il veto su 2 e 4): 1 (a) il primo valore
+  dentro l'intervallo; 2 `range_start` + `range_change` sugli endpoint di MF-P2; 3 Δ assoluto nella valuta dell'ancora /
+  quota per base + l'inverso; 4 pagine di dettaglio FX dentro. Base: P2b (`a275ec8af`).
+- ✅ **Codice X-R59** (10:1x):
+  - `financial_math/returns.py`: `RangeChange` (frozen) e `range_change(reference, anchor)` sopra `price_return`; tutto
+    None con un valore mancante o ≤ 0.
+  - `schemas/prices.py`: `range_start: Optional[PeriodChangesAsOf]` + validatore `range_start ≤ as_of`;
+    `FARangeChange {reference_date, change_abs, change_ratio}`; `FAPeriodChangesResult.range_change`.
+  - `schemas/fx.py`: idem, `FXRangeChange` con i campi inversi; il controllo `range_start ≤ as_of` nel validatore esistente.
+  - `services/assets/period_changes.py`: `range_start` aggiunto ai giorni valutati; `_first_prices_inside()` (una query
+    raggruppata `MIN(date)` per finestra, solo per gli asset senza prezzo su o prima di `range_start`); `_Valuation`
+    valuta il giorno di riferimento (con `target_currency` convertito al cambio di quel giorno) e `range_change()`.
+  - `services/fx/period_changes.py`: `range_start` nella stessa chiamata `convert_bulk`; `_first_rate_days_inside()`
+    (`MIN(FxRate.date)` per coppia salvata, limiti `usable` di X-R38) e una seconda `convert_bulk` per quelle coppie;
+    `_range_change()`.
+  - rotte: `range_start` distinti ≤ `PERIOD_CHANGES_MAX_AS_OF_DAYS` → 422 (stile P2b; si allinea con Z-25).
+  - Sonda in memoria: 3 → 3.21: abs 0.21, ratio **0.07** esatto; uguali → 0; None/0 → tutto None; `range_start` dopo
+    `as_of` e prima del 1900 rifiutati. ruff/black puliti.
+- ✅ Suite esistenti col codice: `schemas period-changes-bounds` 12, `services period-changes` 20, `financial-math
+  returns` 141.
+- ✅ **Test** (test-author `xr59-tests`, 10:1x–10:2x): casa `TestRangeChange` (31) in
+  `test_financial_math/test_fixed_period_changes.py`; schema (24) in `test_schemas/test_period_changes_bounds.py`; servizio
+  `TestAssetRangeChange`/`TestFxRangeChange` in `test_services/test_period_changes.py` (helper `first_carried_day` in
+  `fixtures/period_changes/seeds.py`); API (equivalenza con `/prices/query` e `/fx/currencies/convert`, 6 `range_start` →
+  422, `range_start > as_of` → 422) in `test_api/test_period_changes_api.py`.
+- ✅ **Docs** (docs-writer `xr59-docs`): `financial_math.md`, `assets/architecture.md`, `fx/architecture.md`.
+  ⚠️ **Fuori pista**: il validatore condiviso diceva «as_of» anche per `range_start` → `ValidationInfo.field_name`.
+- ✅ **Rossi leggeri** (prodotto invertito): schema **24 failed**, servizio **18 failed** (2 guardie + 20 esistenti
+  verdi), casa **31 failed**. **Verdi**: schema 36, servizio 40, `financial-math` 1147.
+- ✅ **P2b entrato** (dev `c9b1162d4`, 🐛 `46bbbb1e3`; X OK su tutto). **Base**: lavoro di X-R59 messo da parte
+  (`files/xr59/wip_before_merge.patch`, sha `612e111b…`, albero pulito), ff a dev **`46bbbb1e3`** (P2b + Z-25 `d0bc7a547`),
+  `git apply --3way` pulito, indice ripulito con `git restore --staged` (l'albero di lavoro intatto).
+- ✅ **Allineamento a Z-25** (decisione del coordinatore): `schemas/common.py::period_changes_request_refusal(items)` — un
+  solo posto — `MAX_BULK_ITEMS` (1 000) → `bulk_too_many_items_detail` di Z; > 5 `as_of` o `range_start` distinti →
+  `{"code": "period_changes_too_many_days", "message", "field", "max_days", "days"}`; le due rotte la chiamano per prima.
+  Via `Body(max_length)`, `PERIOD_CHANGES_MAX_ASSETS`, `PERIOD_CHANGES_MAX_PAIRS`. Backlog: riga in **Z-27** (la regola di
+  divisione in lotti vale per period-changes).
+- ✅ **La quotazione dal vivo della pagina di dettaglio asset** (nota di X, `assets/[id]/+page.svelte:494-514`: con
+  l'intervallo che finisce oggi l'ultimo valore è `live.currentPrice`, non una chiusura salvata). Scelta **(c)**: `POST
+  /assets/prices/current?range_start=…` (parametro di query opzionale, prima del 1900 → 422); ogni risultato porta
+  `range_change` (`FARangeChange`, spostato prima di `FACurrentPriceItem`) da
+  `services/assets/period_changes.py::live_range_changes()`: ancora = il prezzo corrente (dal vivo o di ripiego), nella
+  sua valuta; riferimento = la regola di period-changes (le stesse due query raggruppate); formula = `range_change` della
+  casa. Scartate: (a) eccezione dichiarata e (b) rapporto nel browser (due case della formula). Nota: il percorso dal
+  vivo salva già la quotazione di oggi come riga, ma solo quando la quotazione è datata oggi; (c) è esatta sempre.
+- ✅ Suite leggere dopo allineamento e (c): schema 36, servizio 40, `financial-math` 1169 (la base nuova). ruff/black
+  puliti, `import backend.app.main` ok.
+- ✅ **Test, secondo giro** (test-author, 10:3x–10:4x): `period_changes_request_refusal` puro (21 casi, in
+  `test_period_changes_bounds.py`); API adattate ai tetti di Z (1 000, `detail["code"]`, i numeri) e `/prices/current`
+  (`range_start` prima del 1900 → 422; senza → `range_change` null; con → uguale al `range_change` di period-changes con
+  `as_of` = giorno della quotazione); servizio `TestLiveRangeChange` (13 casi).
+  ⚠️ **Fuori pista** (test-author): alle 10:43 la fixture `seeded` di `test_period_changes.py` è girata una volta sul DB
+  della corsia (pytest ha importato una seconda copia del modulo senza le sue patch): seminato e ripulito, nessun residuo
+  (verifica in sola lettura); nessuna mia prova era in corso (l'ultima finita alle 10:35).
+- ✅ **Docs, secondo giro** (docs-writer): righe Request di `#fixed-period-changes` riscritte (tetti di Z, `range_start`),
+  la sezione `#current-quotes-range-change` per `/prices/current`, la frase in `financial_math.md`. Mio ritocco: il punto
+  «A failure» (sotto).
+  ⚠️ **Fuori pista** (docs-writer): un errore in `live_range_changes()` avrebbe reso 500 tutto `/prices/current` dopo la
+  scrittura della riga di oggi → isolato in un `try` suo: registrato, `range_change` tutto null, le quotazioni restano.
+- ✅ **Rossi** (`files/xr59.sh red`, prodotto invertito, sha `e3f2fa6e…` uguale dopo): schema **38 failed**, 12 passed;
+  servizio **32 failed**, 22 passed; casa **31 failed**. **Verdi**: schema **50**, servizio **54**, `financial-math`
+  1169. `api sync` exit 0; mkdocs build strict 0, check-links 0; `check-orphans` 0; `git diff --check` pulito.
+- ✅ **Slot** (via del coordinatore 10:59, carico a 5 min 44; `files/xr59.sh slot` su `46bbbb1e3` + X-R59): prodotto
+  invertito (sha `e3f2fa6e…`, uguale dopo) → `api period-changes` **17 failed, 19 passed** (tetto ×2, sesto `as_of` ×2,
+  sesto `range_start` ×2, `range_start > as_of` ×2, le due risposte con `range_change`, le due equivalenze con
+  `/prices/query` e `/fx/currencies/convert`, `/prices/current` prima del 1900 ×4 e la sua equivalenza); rimesso → **36/36**;
+  `api assets-price` **21**; `api current-price-persistence` **5**; porta 6190 libera.
+- **Frontend** (X, dopo l'ingresso): `assetPriceDerived.ts` (via `deltaAbs`/`deltaPercent`), `fxStoreRegistry.displayFxDelta`
+  via, `FxTable`/`FxCard`/`fx/[pair]` + `FxPriceSummary`, la scheda asset e il worker leggono `range_change` di
+  period-changes con `range_start` = inizio dell'intervallo; la pagina di dettaglio asset con l'intervallo che finisce oggi
+  lo legge da `/prices/current?range_start=…`. Divisione in lotti da 1 000 (Z-27).
