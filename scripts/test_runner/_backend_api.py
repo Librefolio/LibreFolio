@@ -263,6 +263,16 @@ def api_system(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "System API tests", verbose=verbose)
 
 
+def api_instance_config_legal(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the legal block of GET /system/instance (A9, F09): in-process, the OpenAPI document, one live read."""
+    print_section("Instance Configuration: Legal Links (A9)")
+    print_info("Testing GET /api/v1/system/instance legal, LegalInstanceConfig, the OpenAPI document")
+    print_info("In-process on private databases; one anonymous read on the lane's server, which sets neither variable")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_instance_config_legal_api.py", test_names)
+    return run_command(cmd, "Instance configuration legal tests", verbose=verbose)
+
+
 def api_system_wake(verbose: bool = False, test_names: list = None) -> bool:
     """Test the scheduled wake-up (POST /system/wake-sync) and its token, in an app of the test (no server reached)."""
     print_section("System API: the scheduled wake-up")
@@ -1015,6 +1025,8 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
+    # Read-only on the lane (one anonymous GET); every case with a variable runs in-process on a private database.
+    add_test(api, "instance-legal", api_instance_config_legal, name="Instance Configuration: Legal Links (A9)", desc="GET /system/instance legal {terms_url, privacy_url}: valid, unset, invalid (null, still 200), no secret; the schema and the OpenAPI document; live on the lane: both null")
     add_test(
         api,
         "system-wake",
