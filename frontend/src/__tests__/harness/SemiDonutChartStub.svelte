@@ -25,6 +25,8 @@
 -->
 <script lang="ts">
     interface OwnerSlice {
+        /** The owner's stable key (its user id), as in `SemiDonutChart.svelte`: the colour follows it. */
+        key: string | number;
         name: string;
         percentage: number;
         avatarUrl?: string | null;

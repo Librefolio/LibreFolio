@@ -20,7 +20,6 @@ lib/features/brokers/lots/LotComparisonChart.svelte	2
 lib/features/brokers/lots/LotCustodyModal.svelte	20
 lib/features/brokers/lots/LotGanttChart.svelte	4
 lib/features/brokers/lots/UnifiedLotsTable.svelte	60
-lib/features/dashboard/KpiSection.svelte	4
 lib/features/risk/RiskReturnLevel.svelte	4
 lib/features/settings/SettingToggle.svelte	18
 lib/features/settings/tabs/AboutTab.svelte	21

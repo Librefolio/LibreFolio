@@ -277,17 +277,31 @@ draw. Owner: DV.
     toward white at 15, 30 and 45 %; dark theme: toward the card at 18, 32 and 45 %. From the fourth subtype (the ETF
     family has six) the same steps go toward the opposite pole: `#1C2420` in light, white in dark (DV decision 2). Past
     the sixth the cycle starts again.
-- **No semantic red or green among the categories (GR2).** The brand sage colours the cash alone (`Liquidity`, GR3):
-  `#2D6A54` in light and `#429E79` in dark. «Unclassified» is a fog grey.
+- **No green among the categories (round 3, §1.1).** No green, teal, olive, lime or greenish cyan in a type, a sector,
+  a country or the map: green and red belong to gain and loss, the brand green to the primary actions. The cash
+  (`Liquidity`) is a slate blue, `#3F628C` in light and `#639BC0` in dark; «unclassified» a blue-grey. The list is
+  the designer's final one (17/10/2026): the pairs she kept between ΔE00 5 and 8 are named exceptions of the
+  distinguishability test (`chartCategories.test.ts`), told apart by the legend and the tooltip.
 - **Categories without a key (GR5):**
-  - the owners of the semi-donut: `sequenceColor()` over `CATEGORY_SEQUENCE`, the first eight asset types, with the
-    poles of `shadePoles()`;
-  - the countries of the geography history: `sequenceColor()` over `KEYLESS_SEQUENCE`, the fourteen sectors;
-  - past the end of these sequences, the same colours one shade further, never a silent repeat;
-  - **the exception, the broker lines of the Growth chart:** `growthBrokerColor()` takes `categoryColor()` of the
-    first eight asset types by `index % 8`, so the ninth broker repeats the first (DV-8, to fix after W6);
-  - the world maps: `GEO_CHOROPLETH_SCALE` (`chartPalettes.ts`);
-  - the correlation matrix: `danger` ↔ `panel` ↔ `info`.
+  - the owners of the semi-donut: by their key (the user id), never by the order of the data. Sorted by key, they take
+    `sequenceColor()` over `CATEGORY_SEQUENCE`, the first eight asset types, with the poles of `shadePoles()` (§1.5);
+  - the broker lines of the Growth chart: `growthBrokerColor()`, the same eight by the broker's index;
+  - the countries of the geography history: `sequenceColor()` over `COUNTRY_SEQUENCE`, fourteen references to types
+    and sectors (§1.4), so a country follows the colour of the category it shares it with;
+  - a sequence names categories (`CategoryRef`), never colours: the tables are the only colours of the file (C2);
+  - past the end of a sequence, the same colours one shade further, never a silent repeat.
+- **Scales, values of their own (round 3, §1.6):**
+  - the world maps: `GEO_CHOROPLETH_SCALE` (`chartPalettes.ts`), six blues, the same on the Dashboard, the asset page
+    and the PAC; the countries with no data: `GEO_MAP_COLORS.land` (`chartTheme.ts`);
+  - the correlation matrix: `CORRELATION_SCALE`, red ↔ grey-blue ↔ cobalt, no longer on roles; the value in a cell is
+    pure black or pure white, whichever reads best (`CORRELATION_CELL_TEXT` through `readableOn()`).
+- **The PAC's bars, «ideal vs actual»:** the ideal in its own neutral grey, `PAC_EXPOSURE_COLORS.ideal` of
+  `chartTheme.ts`; the actual weight in its row's category colour, a subtype in a shade of its family (§1.7).
+- **The type colours outside the canvas** (§1.9, decision A): the HTML that draws a type reads T's roles
+  `--lf-cat-<type>` (`bg-lf-cat-etf`; `-soft` and `-on-soft` for a badge), as the book-value and cash bars of the
+  Dashboard's net-worth card do. Until the Designer Lab moves to the roles (DV-11) a type colour lives twice, in
+  `chartCategories.ts` and in tokens.css: change both together; the parity test of `chartCategories.test.ts` holds them
+  equal.
 - **Roles in a chart:** `chartRoles(dark, scope)` of `roleColors.ts` reads `--lf-*` on the chart's own element at each
   draw: `color(role)`, and `readableText(background)` for a label over a fill.
 - **Neutrals on roles (B4):** axes, grids and rules, labels, tooltip boxes, pointers, and the gaps and rings in the
@@ -303,8 +317,8 @@ draw. Owner: DV.
 - **Redraw** when the theme changes (`onThemeClassChange`) and when the Designer Lab edits a colour
   (`onChartColorsChange`, contract C4). A chart that otherwise updates its data only must rebuild its options at that
   signal, or its colours do not change (TD-1b: `GrowthChart` calls `renderChart(true)`).
-- **Never a hex in a chart component, and never a category colour changed locally:** the designer's list is under
-  review (open question 1).
+- **Never a hex in a chart component, and never a category colour changed locally:** a change of the designer's
+  list goes back to her, and lands in `chartCategories.ts`.
 - **A colour the user picked stays his** (signals, DV decisions 6 and 7): only the proposed colours change, and a saved
   signal migrates only while it is still on the old default. This is S9, still to do.
 
