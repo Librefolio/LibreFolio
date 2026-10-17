@@ -58,6 +58,13 @@ Under test, in ``backend/app/services/platform/instance_backup/``: ``jobs.py`` (
     then starts the check of that same upload (its thread is given the key, never the password), which ends done and
     removes the upload, as today; no file of ``.restore`` holds the password. A chunk damaged: the check ends ``failed``,
     ``envelope_damaged``, nothing of the stage left. A clear zip given a password: the password ignored.
+(h) Lot B4b (review R13-SEC4, B-26): a key the archive could not give back is not exported. A restore reads the key
+    entry up to ``INSTANCE_KEY_MAX_BYTES`` (4096) bytes of UTF-8 and refuses a larger one, so a generated key over the
+    bound — 4097 ASCII characters, or 2049 characters of which 2048 take two bytes — that the instance key module reads
+    and uses stays out of a secure backup: no key entry, ``included`` false, the warning ``instance_key_unusable``, the
+    backup done and its check restorable; ``exportable_instance_key()`` is ``None`` and ``generated_key_unusable()``
+    true for it. Exactly 4096 bytes, in either form, travels, and a check reads it back: the copy's secrets are
+    re-encrypted with it.
 
 How. The database of every source is ``test_backup_staging.py``'s, made once by ``alembic upgrade`` at the head (its
 module fixture, imported), copied into a data directory of the test with that module's accounts and files. The live
@@ -83,7 +90,9 @@ no sleep. Modes and locks are POSIX-only.
 
 Written RED, before B4: ``envelope.py`` and ``secure.py`` do not exist, and are looked up by the test that needs them
 (``envelope_module``, ``secure_module``), never imported at the top: the file collects without them, and each test fails
-on its own with a "[new] …" message, as the new parameters, fields and errors do, each asserted before it is used.
+on its own with a "[new] …" message, as the new parameters, fields and errors do, each asserted before it is used. (h)
+was written red after B4, before B4b: its cases over the bound fail on the key B4 still exports; those at the bound
+pin what B4b must keep.
 """
 
 from __future__ import annotations
@@ -114,7 +123,7 @@ from backend.app.config import read_secret_file
 from backend.app.services.accounts import password_policy
 from backend.app.services.accounts.password_policy import PasswordRule
 from backend.app.services.platform.instance_backup import jobs, restore_jobs, staging
-from backend.app.services.platform.instance_backup.archive import check_archive
+from backend.app.services.platform.instance_backup.archive import INSTANCE_KEY_MAX_BYTES, check_archive
 from backend.app.services.platform.instance_backup.jobs import BackupJob, archive_name, get_job, job_archive, run_backup, start_backup
 from backend.app.services.platform.instance_backup.paths import (
     DATABASE_ENTRY,
@@ -208,6 +217,13 @@ NOISE = "custom-uploads/noise.bin"
 #: A's password rules today (decision 37), and those of an archive (P12).
 A_RULES = (PasswordRule("min_length", 8), PasswordRule("uppercase"), PasswordRule("lowercase"), PasswordRule("digit"), PasswordRule("special"))
 ARCHIVE_RULES = (PasswordRule("min_length", 12), *A_RULES[1:])
+#: Lot B4b, B-26: the largest instance key entry a restore reads back (``archive.INSTANCE_KEY_MAX_BYTES``), spelled out
+#: so that a change of the bound shows. Generated keys at the bound and one byte over it, in UTF-8: ASCII, and two-byte
+#: characters (``é``), over the bound with fewer characters than bytes — the bound counts bytes. Test keys, not secrets.
+KEY_MAX_BYTES = 4096
+TWO_BYTES = "\N{LATIN SMALL LETTER E WITH ACUTE}"
+KEY_AT_THE_BOUND = {"ascii": "k" * KEY_MAX_BYTES, "two-byte-characters": TWO_BYTES * (KEY_MAX_BYTES // 2)}
+KEY_OVER_THE_BOUND = {"ascii": "k" * (KEY_MAX_BYTES + 1), "two-byte-characters": TWO_BYTES * (KEY_MAX_BYTES // 2) + "k"}
 
 
 # =============================================================================
@@ -313,21 +329,29 @@ def subkey_of(key: str) -> bytes:
     return derive_key_from(key, SUBKEY_PURPOSE, SUBKEY_LENGTH)
 
 
+def shown_key(value: object) -> str:
+    """A key as a message shows it: a long one by its size (characters, UTF-8 bytes), never 4 KiB of text; else as is."""
+    if isinstance(value, str) and len(value) > 64:
+        return f"<a key of {len(value)} characters, {len(value.encode('utf-8'))} bytes>"
+    return repr(value)
+
+
 @dataclass(frozen=True)
 class SecretSource:
-    """A source instance whose plugin secrets its generated key K1 encrypted: its data directory, and the value of each
-    secret by row (scope, family, plugin, field, user id)."""
+    """A source instance whose plugin secrets its generated key (K1, unless another ``key`` is given) encrypted: its data
+    directory, the value of each secret by row (scope, family, plugin, field, user id), and that key."""
 
     data: Path
     values: dict[tuple, str]
+    key: str = SOURCE_KEY
 
 
-def secret_source(root: Path, databases: cases.Databases, monkeypatch: pytest.MonkeyPatch) -> SecretSource:
-    """A source whose key LibreFolio generated (K1), holding ``SECRET_ROWS`` encrypted under K1's subkey, each its own
-    value, written with plain SQL as the app stores them."""
-    data = source_dir(root, databases, monkeypatch, key=SOURCE_KEY)
-    subkey = subkey_of(SOURCE_KEY)
-    assert settings_subkey() == subkey, "precondition: the source's own subkey is K1's: its generated key file is its key"
+def secret_source(root: Path, databases: cases.Databases, monkeypatch: pytest.MonkeyPatch, *, key: str = SOURCE_KEY) -> SecretSource:
+    """A source whose key LibreFolio generated (``key``, K1 by default), holding ``SECRET_ROWS`` encrypted under that
+    key's subkey, each its own value, written with plain SQL as the app stores them."""
+    data = source_dir(root, databases, monkeypatch, key=key)
+    subkey = subkey_of(key)
+    assert settings_subkey() == subkey, "precondition: the source's own subkey is its key's: its generated key file is its key"
     values: dict[tuple, str] = {}
     with closing(sqlite3.connect(data / DATABASE_ENTRY)) as conn, conn:
         users = dict(conn.execute("SELECT username, id FROM users").fetchall())
@@ -337,7 +361,7 @@ def secret_source(root: Path, databases: cases.Databases, monkeypatch: pytest.Mo
             values[(scope, family, plugin, field, user_id)] = value
             blob = encrypt_secret(subkey, secret_aad(family, plugin, field, scope, user_id), value)
             crypto_cases._insert_secret(conn, scope, family, plugin, field, user_id, blob, key_id_of(subkey))
-    return SecretSource(data=data, values=values)
+    return SecretSource(data=data, values=values, key=key)
 
 
 def stored_secrets(database: Path) -> dict[tuple, tuple[bytes, str]]:
@@ -361,17 +385,17 @@ def files_holding(root: Path, needle: bytes) -> list[str]:
     return sorted(path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file() and not path.is_symlink() and needle in path.read_bytes())
 
 
-def own_subkey(root: Path) -> bytes:
+def own_subkey(root: Path, *, source_key: str = SOURCE_KEY) -> bytes:
     """The subkey of the live instance at ``root`` (configured): its generated key K2, read as the instance reads it;
-    checked to be the one ``settings_subkey`` gives, and not K1's."""
+    checked to be the one ``settings_subkey`` gives, and not the source's (K1 by default)."""
     own = subkey_of(read_secret_file(root / INSTANCE_KEY_FILE, "instance key file"))
-    assert settings_subkey() == own != subkey_of(SOURCE_KEY), "precondition: this instance's own key is its generated K2, not K1"
+    assert settings_subkey() == own != subkey_of(source_key), "precondition: this instance's own key is its generated K2, not the source's"
     return own
 
 
 def assert_rekeyed_to(own: bytes, root: Path, report: StagingReport, source: SecretSource) -> None:
-    """The copy of a check given the archive's key (K1): every secret of ``source`` kept, re-encrypted under ``own``,
-    with its key id and its value; the archive's key never unpacked, in no file of the stage."""
+    """The copy of a check given the archive's key (the source's): every secret of ``source`` kept, re-encrypted under
+    ``own``, with its key id and its value; the archive's key never unpacked, in no file of the stage."""
     rows = stored_secrets(copy_database(root, report))
     key_ids = sorted({key_id for _blob, key_id in rows.values()})
     assert (set(rows), key_ids) == (set(source.values), [key_id_of(own)]), f"every secret kept, under this instance's key id: {key_ids}"
@@ -379,7 +403,7 @@ def assert_rekeyed_to(own: bytes, root: Path, report: StagingReport, source: Sec
     stage = stage_dir(root, report.stage_id)
     assert sorted(os.listdir(stage)) == [STAGE_DATA_FOLDER, STAGE_REPORT_FILE], f"the copy and its report, nothing else: {sorted(os.listdir(stage))}"
     assert not (stage / STAGE_DATA_FOLDER / "secrets").exists(), "the archive's key is never unpacked"
-    assert files_holding(stage, SOURCE_KEY.encode("utf-8")) == [], "the archive's key is in no file of the stage"
+    assert files_holding(stage, source.key.encode("utf-8")) == [], "the archive's key is in no file of the stage"
 
 
 # -----------------------------------------------------------------------------
@@ -420,6 +444,20 @@ def no_key_yet(data: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> P
 def unusable_key(data: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path | None:
     """A key file of 10 characters: never used, never replaced."""
     return write_key_file(data, UNUSABLE_KEY)
+
+
+def generated_key_of(text: str) -> Callable[[Path, pytest.MonkeyPatch, Path], Path | None]:
+    """The key LibreFolio generated, holding ``text`` (lot B4b: a key at, or over, the bound a restore reads)."""
+
+    def arrange(data: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path | None:
+        return write_key_file(data, text)
+
+    return arrange
+
+
+def bound_cases(keys: dict[str, str], expected: Callable[[str], object]) -> list[Any]:
+    """One case per key of ``keys``: its arrangement, what is expected of it, an id saying its size in bytes and its form."""
+    return [pytest.param(generated_key_of(key), expected(key), id=f"generated-{len(key.encode('utf-8'))}-bytes-{form}") for form, key in keys.items()]
 
 
 # =============================================================================
@@ -856,6 +894,9 @@ EXPORTED = [
     pytest.param(configured_key_file, None, id="configured-key-file-a-key-file-beside-it"),
     pytest.param(no_key_yet, None, id="no-key-yet"),
     pytest.param(unusable_key, None, id="unusable-generated-key"),
+    # Lot B4b, B-26: at the bound a restore reads, the key travels; one byte over it, it does not.
+    *bound_cases(KEY_AT_THE_BOUND, lambda key: key),
+    *bound_cases(KEY_OVER_THE_BOUND, lambda key: None),
 ]
 
 
@@ -863,16 +904,18 @@ EXPORTED = [
 def test_exportable_instance_key_is_the_generated_key_alone_and_creates_nothing(tmp_path, monkeypatch, arrange, exported):
     """(c) §2 ``exportable_instance_key``: the text of the key LibreFolio generated, read as ``read_secret_file`` reads it
     (a BOM and the trailing line break dropped); ``None`` for a configured key (a key file beside it or not), for no key
-    and for an unusable one. Nothing created, nothing changed in the data directory."""
+    and for an unusable one — and (h), lot B4b, for one over ``INSTANCE_KEY_MAX_BYTES`` bytes of UTF-8, which no restore
+    could read back. Nothing created, nothing changed in the data directory."""
     secure = secure_module()
     data = tmp_path / "data"
     data.mkdir()
     cases.configure(monkeypatch, data)
     arrange(data, monkeypatch, tmp_path)
     before = cases.fingerprint(data)
-    assert secure.exportable_instance_key() == exported, f"{secure.exportable_instance_key()!r}, not {exported!r}"
+    found = secure.exportable_instance_key()
+    assert found == exported, f"{shown_key(found)}, not {shown_key(exported)}"
     assert cases.fingerprint(data) == before, f"nothing created or changed: {cases.changed(before, cases.fingerprint(data))}"
-    print_success(f"{exported!r}")
+    print_success(shown_key(exported))
 
 
 # =============================================================================
@@ -1298,3 +1341,90 @@ def test_a_password_given_with_a_clear_zip_is_ignored(instance, tmp_path, databa
     assert PASSWORD not in repr((threads.started[0].args, threads.started[0].kwargs)), "the password is never handed to the check's thread"
     assert b4_report(read_report(root, check.stage_id))["encrypted"] is False, "the report says the archive was not encrypted"
     print_success("a zip: the password ignored")
+
+
+# =============================================================================
+# (h) Lot B4b, B-26: a key the archive could not give back is not exported
+# =============================================================================
+
+
+UNUSABLE_GENERATED_KEYS = [
+    pytest.param(generated_key, False, id="generated"),
+    pytest.param(configured_key, False, id="configured-key-a-key-file-beside-it"),
+    pytest.param(no_key_yet, False, id="no-key-yet"),
+    pytest.param(unusable_key, True, id="generated-10-characters"),
+    *bound_cases(KEY_AT_THE_BOUND, lambda key: False),
+    *bound_cases(KEY_OVER_THE_BOUND, lambda key: True),
+]
+
+
+@pytest.mark.parametrize(("arrange", "unusable"), UNUSABLE_GENERATED_KEYS)
+def test_generated_key_unusable_is_true_for_a_generated_key_a_secure_backup_leaves_out(tmp_path, monkeypatch, arrange, unusable):
+    """(h) ``generated_key_unusable()``, the warning's question: true for a generated key the instance key module cannot
+    use (10 characters, as before) and — lot B4b — for one it reads fine but that is over ``INSTANCE_KEY_MAX_BYTES``
+    bytes of UTF-8, which no restore could read back; false for a usable generated key up to the bound, a configured key
+    and no key yet. Never raises; nothing created or changed."""
+    secure = secure_module()
+    data = tmp_path / "data"
+    data.mkdir()
+    cases.configure(monkeypatch, data)
+    arrange(data, monkeypatch, tmp_path)
+    before = cases.fingerprint(data)
+    found = secure.generated_key_unusable()
+    assert found is unusable, f"generated_key_unusable(): {found!r}, not {unusable!r} (instance key status: {instance_key_status()})"
+    assert cases.fingerprint(data) == before, f"nothing created or changed: {cases.changed(before, cases.fingerprint(data))}"
+    print_success(f"unusable: {unusable}")
+
+
+@pytest.mark.parametrize("form", list(KEY_OVER_THE_BOUND))
+def test_a_generated_key_over_4096_bytes_stays_out_of_a_secure_backup_with_a_warning(instance, tmp_path, databases, monkeypatch, form):
+    """(h) Lot B4b, B-26: a restore reads the key entry up to ``INSTANCE_KEY_MAX_BYTES`` (4096) bytes and refuses a larger
+    one, so a generated key of 4097 bytes of UTF-8 — 4097 ASCII characters, or 2049 characters of which 2048 take two
+    bytes — which the instance key module reads and uses, is not exported: the secure backup is done without a key
+    entry, ``instance_key.included`` false, warned ``instance_key_unusable``; the key file untouched; and a check of that
+    archive is not refused for it: restorable, no key included."""
+    print_section(f"(h) A generated key over the bound, {form}")
+    env = envelope_module()
+    key = KEY_OVER_THE_BOUND[form]
+    assert (INSTANCE_KEY_MAX_BYTES, len(key.encode("utf-8"))) == (KEY_MAX_BYTES, KEY_MAX_BYTES + 1), f"precondition: the bound is 4096 bytes and this key one byte over it: {INSTANCE_KEY_MAX_BYTES}, {shown_key(key)}"
+    data = source_dir(tmp_path / "source", databases, monkeypatch, key=key)
+    key_file = data / INSTANCE_KEY_FILE
+    before = key_file.read_bytes()
+    status = instance_key_status()
+    assert (status.source, status.problem) == ("generated", None), f"precondition: the instance key module finds a generated key without a problem of its own: {status}"
+    assert settings_subkey() == subkey_of(key), "precondition: it is the key this instance derives its keys from"
+    job, path = secure_backup(data)
+    opened = open_envelope(env, path, tmp_path / "opened")
+    keys = {name: len(entry) for name, entry in opened.entries.items() if name.startswith("secrets/")}
+    assert (keys, opened.manifest["instance_key"]["included"]) == ({}, False), f"a key no restore could read back stays out of the archive: entries {keys} (bytes), {opened.manifest['instance_key']}"
+    assert (new_field(job, "encrypted"), tuple(job.warnings)) == (True, ("instance_key_unusable",)), f"the secure backup is done, warned that the key stayed out: {job}"
+    assert key_file.read_bytes() == before, "the key file is never changed"
+    root = checked_on(monkeypatch, instance)
+    report = stage_archive(path, root, key=env.unlock(path, PASSWORD))
+    assert (report.restorable, report.instance_key_included, b4_report(report)["encrypted"]) == (True, False, True), f"a check of the archive is not refused for its key: restorable, no key included: {report.blockers}, {report.instance_key_included}"
+    print_success(f"{shown_key(key)}: no key entry, instance_key_unusable, the archive restorable")
+
+
+@pytest.mark.parametrize("form", list(KEY_AT_THE_BOUND))
+def test_a_generated_key_of_4096_bytes_travels_in_a_secure_backup_and_a_check_reads_it_back(instance, tmp_path, databases, monkeypatch, form):
+    """(h) Lot B4b, B-26, the boundary: a generated key of exactly 4096 bytes of UTF-8 — 4096 ASCII characters, or 2048
+    two-byte ones — is exported: the entry is its text, announced with its SHA-256, no warning. A check of that archive
+    reads it back: the copy's secrets, encrypted by the source under that key, are re-encrypted to this instance's key
+    (``secrets_rekeyed`` 5, none unreadable), and the key is never unpacked."""
+    env = envelope_module()
+    key = KEY_AT_THE_BOUND[form]
+    assert (INSTANCE_KEY_MAX_BYTES, len(key.encode("utf-8"))) == (KEY_MAX_BYTES, KEY_MAX_BYTES), f"precondition: the bound is 4096 bytes and this key exactly that: {INSTANCE_KEY_MAX_BYTES}, {shown_key(key)}"
+    source = secret_source(tmp_path / "source", databases, monkeypatch, key=key)
+    job, path = secure_backup(source.data)
+    assert tuple(job.warnings) == (), f"a usable key at the bound: no warning: {job.warnings}"
+    opened = open_envelope(env, path, tmp_path / "opened")
+    entry = opened.entries.get(KEY_ENTRY) or b""
+    announced = opened.manifest.get("instance_key") or {}
+    assert (entry == key.encode("utf-8"), announced.get("included"), announced.get("sha256")) == (True, True, cases.sha256(key.encode("utf-8"))), f"the key travels, its text, announced with its SHA-256: an entry of {len(entry)} bytes, {announced}"
+    root = checked_on(monkeypatch, instance)
+    own = own_subkey(root, source_key=key)
+    report = stage_archive(path, root, key=env.unlock(path, PASSWORD))
+    assert b4_report(report) == {"encrypted": True, "secrets_rekeyed": len(SECRET_ROWS), "secrets_unreadable": NO_UNREADABLE}, f"the check reads the key back and re-encrypts every secret with it: {b4_report(report)}"
+    assert (report.instance_key_included, report.restorable) == (True, True), f"the key included, the archive restorable: {report.instance_key_included}, {report.blockers}"
+    assert_rekeyed_to(own, root, report, source)
+    print_success(f"{shown_key(key)}: exported, read back, {len(SECRET_ROWS)} secrets re-encrypted")

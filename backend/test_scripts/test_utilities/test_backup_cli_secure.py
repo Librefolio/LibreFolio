@@ -54,6 +54,20 @@ but those ``inspect`` and a dry run already print for a zip (``test_backup_cli.p
     link, its folder and the folder's file two hours old), a file named ``.decrypt-file``. A job folder of
     ``backups/.jobs/`` and the earlier backups beside it (a ``.zip``, an ``.lfbk``), two hours old, stay too. Each
     entry kept as it was, to its mode and modification time; ``inspect`` exits 0 as before, its own folder removed.
+    Lot B4b moves that rule into the backend (``leftovers.py``); the command line keeps this behaviour, unchanged here.
+(k) Lot B4b, B-24 (red until it lands): ``decrypt`` of an envelope whose archive carries the instance key — its
+    manifest says so — ends with one more line, verbatim, once, after the ✅ and 🔒 lines of every decrypt:
+    ``🔑 It also holds the instance key: with it, every saved provider key can be read.``; never the key itself. No key
+    in the archive, or a zip or a manifest it cannot read (an envelope holding no zip; a zip without its manifest, the
+    key entry in it all the same): no such line, exit 0, the file written. Each of those first decrypts an archive with
+    the key, so that «no such line» never holds only because the line does not exist yet.
+(l) Lot B4b, B-25 (red until it lands): ``--password-stdin`` when standard input is a terminal takes the terminal path
+    — a line read there was echoed as it was typed. ``getpass`` asks twice for ``create``, once for ``inspect``,
+    ``restore`` and ``decrypt``; nothing is read from standard input, where a wrong password waits, typed ahead; the
+    password typed at the prompt is the one used. At ``create``: two different passwords → ``password_mismatch``,
+    end-of-file or an empty password at the prompt → ``password_required``, nothing written. From a pipe, unchanged (a
+    guard, green before and after): the first line is the password — a second one is neither ``create``'s
+    confirmation nor part of it — and nothing is asked.
 
 No password — a weak, a wrong or a second one included — reaches stdout or stderr of any run.
 
@@ -68,7 +82,9 @@ answers a terminal test types, so that no prompt ever waits on the terminal the 
 is moved under ``tmp_path`` where a test looks for clear copies. The tests seal their envelopes at scrypt's lowest
 accepted cost (``log2_n=14``); the restore cases use the real database at the head made once for the module by
 ``alembic upgrade``. The ages the sweep of (j) reads are set with ``os.utime`` — a link's own with
-``follow_symlinks=False``, never its target's — and checked before the run. POSIX-only (pty, modes, links).
+``follow_symlinks=False``, never its target's — and checked before the run. At a terminal (l), ``sys.stdin`` is
+watched — every read through it recorded — and end-of-file waits after what was typed ahead, so that no read ever
+waits. POSIX-only (pty, modes, links).
 """
 
 from __future__ import annotations
@@ -88,18 +104,18 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, TextIO
 
 import pytest
 
 from backend.app.services.accounts.password_policy import failed_rules
 from backend.app.services.platform.instance_backup.archive import build_archive, check_archive
-from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, backups_dir, ensure_private_dir
+from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, backups_dir, ensure_private_dir
 from backend.test_scripts.test_utilities import test_backup_cli as cli
 from backend.test_scripts.test_utils import print_section, print_success
 from scripts import backup_cli
@@ -162,15 +178,16 @@ def given(source: str, folder: Path, password: str = PASSWORD) -> tuple[list[str
     return ["--password-stdin"], f"{password}\n"
 
 
-def clear_archive(folder: Path, *, big: bool = False) -> Path:
+def clear_archive(folder: Path, *, big: bool = False, instance_key: str | None = None) -> Path:
     """A backup archive (a zip) of a small data directory of its own under ``folder``, outside the data directory the
-    commands see. ``big``: one more file of random bytes, so that the archive is longer than a chunk of an envelope."""
+    commands see. ``big``: one more file of random bytes, so that the archive is longer than a chunk of an envelope.
+    ``instance_key``: the key the archive carries, as a secure backup's does (its entry, and its manifest saying so)."""
     source = cli.make_data_dir(folder / "source")
     if big:
         (source / "custom-uploads" / "big.bin").write_bytes(random.Random(4).randbytes(envelope().CHUNK_SIZE + (64 << 10)))
     work = folder / "work"
     work.mkdir()
-    return build_archive(source, work, work / cli.NAME, origin="cli").path
+    return build_archive(source, work, work / cli.NAME, origin="cli", instance_key=instance_key).path
 
 
 def sealed(clear: Path, folder: Path, password: str = PASSWORD) -> Path:
@@ -272,9 +289,10 @@ def written_archives(root: Path) -> list[Path]:
     return sorted(path for path in folder.iterdir() if path.is_file()) if folder.is_dir() else []
 
 
-def output_path(tmp_path: Path) -> Path:
-    """Where ``decrypt`` is told to write, outside the data directory: a file not there yet, in an empty folder of its own."""
-    folder = tmp_path / "out"
+def output_path(tmp_path: Path, name: str = "out") -> Path:
+    """Where ``decrypt`` is told to write, outside the data directory: a file not there yet, in an empty folder of its
+    own, ``name``."""
+    folder = tmp_path / name
     folder.mkdir()
     return folder / "decrypted.zip"
 
@@ -1004,3 +1022,218 @@ def test_inspect_of_an_envelope_first_removes_the_decrypt_folders_a_killed_inspe
     assert prompts == [], f"a source was given: nothing is asked: {prompts}"
     not_shown(ran, PASSWORD)
     print_success("stale .decrypt-* folders removed; the young ones, the link and its folder, the file, the job and the earlier backups untouched")
+
+
+# =============================================================================
+# (k) decrypt says when the zip opens the saved keys (lot B4b, B-24)
+# =============================================================================
+
+
+#: What ``decrypt`` says last of a zip that carries the instance key (B-24): verbatim.
+KEY_LINE = "🔑 It also holds the instance key: with it, every saved provider key can be read."
+#: Not a real key: the instance key a test archive carries.
+INSTANCE_KEY = "test-only-instance-key-never-a-secret-0123456789"
+#: Archives with no key ``decrypt`` may announce (B-24: «no such line, still exit 0, the file written»): a zip without
+#: the key; no zip at all; a zip without its manifest, the key entry in it all the same — the line follows what the
+#: manifest says, never an entry's name.
+NO_KEY_TO_ANNOUNCE = [pytest.param("no-key", id="zip-without-the-key"), pytest.param("not-a-zip", id="not-a-zip"), pytest.param("no-manifest", id="key-entry-without-a-manifest")]
+
+
+def decrypting(monkeypatch, capsys, path: Path, out: Path) -> Ran:
+    """``decrypt path -o out``, the password from a file beside the envelope, standard input an empty pipe."""
+    flags, typed = given("file", path.parent)
+    with stdin_holding(monkeypatch, typed):
+        return run(capsys, "decrypt", str(path), "-o", str(out), *flags)
+
+
+def key_lines(ran: Ran) -> list[str]:
+    """The 🔑 lines of ``ran``."""
+    return [line for line in ran.text.splitlines() if line.startswith("🔑")]
+
+
+def with_no_key_to_announce(case: str, folder: Path) -> Path:
+    """The file the envelope of ``case`` holds, made under ``folder``."""
+    if case == "no-key":
+        return clear_archive(folder)
+    if case == "not-a-zip":
+        folder.mkdir(parents=True)
+        path = folder / "not-a-zip.bin"
+        path.write_bytes(b"not a zip, sealed all the same\n" * 64)
+        return path
+    return cli.rebuilt(clear_archive(folder, instance_key=INSTANCE_KEY), folder / "no-manifest.zip", drop=(MANIFEST_ENTRY,))
+
+
+def test_decrypt_of_an_archive_holding_the_instance_key_ends_with_the_key_line(tmp_path, monkeypatch, capsys, prompts):
+    """(k) B-24: the zip ``decrypt`` wrote opens every saved provider key, and ``decrypt`` says so last, once, after the
+    lines every decrypt prints; the key itself never reaches the terminal."""
+    print_section("dev.py backup decrypt, an archive holding the instance key")
+    instance(tmp_path, monkeypatch)
+    clear = clear_archive(tmp_path / "backup", instance_key=INSTANCE_KEY)
+    assert check_archive(clear).manifest.instance_key.included, "precondition: the manifest says the archive carries the instance key"
+    out = output_path(tmp_path)
+    ran = decrypting(monkeypatch, capsys, sealed(clear, tmp_path / "inputs"), out)
+    lines = [line for line in ran.out.splitlines() if line.strip()]
+    assert ran.code == 0 and lines[-1:] == [KEY_LINE], f"exit 0, and the last line says the zip opens the saved keys, verbatim {KEY_LINE!r}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert len(lines) >= 3 and lines[-3].startswith("✅ Decrypted: ") and lines[-2].startswith("🔒") and key_lines(ran) == [KEY_LINE], f"once, right after the ✅ and 🔒 lines of every decrypt: {lines}"
+    assert cli.sha256_of(out) == cli.sha256_of(clear), "OUT is the zip that was sealed, its key entry in it"
+    assert INSTANCE_KEY not in ran.text, "the key itself is never printed"
+    assert prompts == [], f"a source was given: nothing is asked: {prompts}"
+    not_shown(ran, PASSWORD)
+    print_success("the key line, last, once")
+
+
+@pytest.mark.parametrize("case", NO_KEY_TO_ANNOUNCE)
+def test_decrypt_announces_no_key_its_manifest_does_not_announce(tmp_path, monkeypatch, capsys, prompts, case):
+    """(k) B-24: no key in the archive, or a written zip or manifest that cannot be read: no 🔑 line, exit 0, never a
+    traceback, the file written. The presence barrier first: an archive with the key gets the line, so that «no such
+    line» cannot hold only because no such line exists yet (as today)."""
+    instance(tmp_path, monkeypatch)
+    keyed = decrypting(monkeypatch, capsys, sealed(clear_archive(tmp_path / "keyed", instance_key=INSTANCE_KEY), tmp_path / "keyed" / "inputs"), output_path(tmp_path, "keyed-out"))
+    assert keyed.code == 0 and key_lines(keyed) == [KEY_LINE], f"the presence barrier: an archive with the key gets the key line (without it, «no such line» below holds by construction): exit {keyed.code}: {keyed.text[-cli.TAIL:]}"
+    clear = with_no_key_to_announce(case, tmp_path / "case")
+    out = output_path(tmp_path)
+    ran = decrypting(monkeypatch, capsys, sealed(clear, tmp_path / "case" / "inputs"), out)
+    assert ran.code == 0 and any(line.startswith("✅ Decrypted: ") for line in ran.out.splitlines()), f"{case}: decrypted, exit 0: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert key_lines(ran) == [], f"{case}: no key line: {key_lines(ran)}"
+    assert cli.sha256_of(out) == cli.sha256_of(clear), f"{case}: the file is written, byte for byte what was sealed"
+    assert prompts == [], f"a source was given: nothing is asked: {prompts}"
+    not_shown(ran, PASSWORD)
+    print_success(f"{case}: exit 0, no key line")
+
+
+# =============================================================================
+# (l) --password-stdin at a terminal (lot B4b, B-25)
+# =============================================================================
+
+
+#: How many times a terminal asks the password: twice to choose one (``create``), once to open an envelope.
+ASKED = [pytest.param("create", 2, id="create"), pytest.param("inspect", 1, id="inspect"), pytest.param("restore", 1, id="restore"), pytest.param("decrypt", 1, id="decrypt")]
+#: What waits in standard input at a terminal: a wrong password typed ahead, twice — what a read would take instead of
+#: the password typed at the prompt.
+TYPED_AHEAD = f"{WRONG_PASSWORD}\n" * 2
+#: At ``create``, what is typed at the prompts, and the code of the refusal: the terminal path's own errors (B-25).
+TYPED_AT_CREATE = [
+    pytest.param((PASSWORD, OTHER_PASSWORD), "password_mismatch", id="two-different-passwords"),
+    pytest.param((), "password_required", id="end-of-file-at-the-prompt"),
+    pytest.param(("", ""), "password_required", id="empty-password"),
+]
+
+
+class WatchedStdin:
+    """``sys.stdin`` as a command sees it, every read through it recorded; the rest (``isatty``, ``fileno`` …) is the
+    stream's own."""
+
+    def __init__(self, stream: TextIO) -> None:
+        self._stream = stream
+        self.reads: list[str] = []
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._stream, name)
+
+    def __iter__(self) -> Iterator[str]:
+        self.reads.append("iteration")
+        return iter(self._stream)
+
+    def __next__(self) -> str:
+        self.reads.append("next")
+        return next(self._stream)
+
+    def read(self, *args: Any) -> str:
+        self.reads.append("read")
+        return self._stream.read(*args)
+
+    def readline(self, *args: Any) -> str:
+        self.reads.append("readline")
+        return self._stream.readline(*args)
+
+    def readlines(self, *args: Any) -> list[str]:
+        self.reads.append("readlines")
+        return self._stream.readlines(*args)
+
+
+@contextmanager
+def terminal_holding(monkeypatch, typed_ahead: str) -> Iterator[WatchedStdin]:
+    """``sys.stdin`` a terminal (a pty), watched, ``typed_ahead`` waiting in it, then end-of-file three times (Ctrl-D):
+    a read takes what was typed ahead, and never waits."""
+    keep, read_end = pty.openpty()
+    os.write(keep, typed_ahead.encode("utf-8") + b"\x04" * 3)
+    reader = open(read_end, encoding="utf-8")
+    watched = WatchedStdin(reader)
+    monkeypatch.setattr(sys, "stdin", watched)
+    try:
+        yield watched
+    finally:
+        reader.close()
+        os.close(keep)
+
+
+def password_command(name: str, root: Path, tmp_path: Path, request: pytest.FixtureRequest) -> tuple[list[str], Callable[[Ran], None]]:
+    """``name`` ready to run but for its password source: its arguments, and the check that the run used ``PASSWORD``.
+    ``create`` backs up ``root``, and its envelope must open with ``PASSWORD``; ``inspect``, ``restore --dry-run`` and
+    ``decrypt`` get an envelope sealed with it (``restore``: of a restorable backup), and must do their work."""
+    if name == "create":
+
+        def created(ran: Ran) -> None:
+            assert ran.code == 0, f"create: exit 0, not {ran.code}: {ran.text[-cli.TAIL:]}"
+            holds_a_backup_of_the_cli(the_envelope_written(root, ran.out), PASSWORD, tmp_path / "opened")
+
+        return ["create"], created
+    clear = cli.restorable(tmp_path / "backup", request.getfixturevalue("head_database")) if name == "restore" else clear_archive(tmp_path / "backup")
+    path = sealed(clear, tmp_path / "inputs")
+    out = output_path(tmp_path)
+    argv = {"inspect": ["inspect", str(path)], "restore": ["restore", str(path), "--dry-run"], "decrypt": ["decrypt", str(path), "-o", str(out)]}[name]
+    said = {"inspect": VERIFIED_LINE, "restore": cli.RESTORABLE_LINE, "decrypt": "✅ Decrypted: "}[name]
+
+    def did_its_work(ran: Ran) -> None:
+        assert ran.code == 0 and said in ran.out, f"{name}: the envelope opened with the password, exit 0 and {said!r}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+        if name == "decrypt":
+            assert cli.sha256_of(out) == cli.sha256_of(clear), "decrypt: OUT is the zip that was sealed"
+
+    return argv, did_its_work
+
+
+@pytest.mark.parametrize(("name", "times"), ASKED)
+def test_password_stdin_at_a_terminal_is_asked_through_getpass_and_nothing_is_read(tmp_path, monkeypatch, capsys, request, name, times):
+    """(l) B-25: at a terminal, ``--password-stdin`` takes the terminal path — a line read from standard input there was
+    echoed as it was typed. ``getpass`` asks, twice to choose a password and once to open an envelope; standard input
+    is never read; the password typed at the prompt is the one used, not the wrong one typed ahead."""
+    print_section(f"dev.py backup {name} --password-stdin, at a terminal")
+    root = instance(tmp_path, monkeypatch)
+    argv, used_the_password = password_command(name, root, tmp_path, request)
+    asked = answering(monkeypatch, *[PASSWORD] * times)
+    with terminal_holding(monkeypatch, TYPED_AHEAD) as stdin:
+        ran = run(capsys, *argv, "--password-stdin")
+    assert (stdin.reads, len(asked)) == ([], times), f"at a terminal: asked through getpass {times}×, standard input never read: reads {stdin.reads}, prompts {asked}, exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    used_the_password(ran)
+    not_shown(ran, PASSWORD, WRONG_PASSWORD)
+    print_success(f"{name}: asked {times}×, standard input never read, the password typed used")
+
+
+@pytest.mark.parametrize(("typed", "code"), TYPED_AT_CREATE)
+def test_password_stdin_at_a_terminal_refuses_at_create_what_the_terminal_path_refuses(tmp_path, monkeypatch, capsys, typed, code):
+    """(l) B-25: the terminal path's errors, unchanged: exit 1, the code on a ❌ line, nothing written; standard input
+    never read, not even after an end-of-file at the prompt."""
+    root = instance(tmp_path, monkeypatch)
+    before = cli.listing(root)
+    asked = answering(monkeypatch, *typed)
+    with terminal_holding(monkeypatch, TYPED_AHEAD) as stdin:
+        ran = run(capsys, "create", "--password-stdin")
+    assert ran.code == 1 and ran.refusals(code), f"exit 1, a ❌ line naming {code}: exit {ran.code}, reads {stdin.reads}, prompts {asked}: {ran.text[-cli.TAIL:]}"
+    assert stdin.reads == [] and asked, f"asked at the terminal, standard input never read: reads {stdin.reads}, prompts {asked}"
+    assert cli.listing(root) == before, f"nothing written: {sorted(set(cli.listing(root)) - set(before))}"
+    not_shown(ran, PASSWORD, OTHER_PASSWORD, WRONG_PASSWORD)
+    print_success(f"({code}), nothing written")
+
+
+@pytest.mark.parametrize("name", COMMANDS)
+def test_password_stdin_from_a_pipe_is_still_its_first_line(tmp_path, monkeypatch, capsys, prompts, request, name):
+    """(l) B-25 leaves a pipe as it was (a guard, green before and after): one line, the password; a second line is
+    neither ``create``'s confirmation nor part of the password; nothing is asked."""
+    root = instance(tmp_path, monkeypatch)
+    argv, used_the_password = password_command(name, root, tmp_path, request)
+    with stdin_holding(monkeypatch, f"{PASSWORD}\n{WRONG_PASSWORD}\n"):
+        ran = run(capsys, *argv, "--password-stdin")
+    used_the_password(ran)
+    assert prompts == [], f"from a pipe, nothing is asked: {prompts}"
+    not_shown(ran, PASSWORD, WRONG_PASSWORD)
+    print_success(f"{name}: the first line of the pipe, nothing asked")

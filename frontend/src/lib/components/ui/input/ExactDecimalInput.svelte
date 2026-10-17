@@ -1,4 +1,5 @@
 <script lang="ts">
+    import {_} from '$lib/i18n';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {filterDecimalInput, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {ArrowHold} from '$lib/utils/core/arrowHold';
@@ -166,7 +167,12 @@
 
     let parsedValue = $derived(normalizedParts(value));
     let locallyInvalid = $derived(!parsedValue.valid || externalInvalid);
-    let maxLength = $derived(maxIntegerDigits + maxFractionDigits + Math.max(0, Math.floor((maxIntegerDigits - 1) / 3)) + (maxFractionDigits > 0 ? 1 : 0) + (allowNegative ? 1 : 0));
+    // C-97b: a fraction past the budget is flagged (``digitsValid``) and said under the field, the value kept as typed. No
+    // maxlength: a browser cut a longer paste down to it in silence, into a number that looked valid.
+    let fractionOverflow = $derived.by(() => {
+        if (parsedValue.empty || !parsedValue.syntaxValid) return false;
+        return (parsedValue.normalized.split('.')[1] ?? '').length > maxFractionDigits;
+    });
     let lastValidityKey = '';
 
     $effect(() => {
@@ -341,7 +347,6 @@
     inputmode="decimal"
     autocomplete="off"
     spellcheck="false"
-    maxlength={maxLength}
     {value}
     {disabled}
     readonly={readOnly}
@@ -360,3 +365,8 @@
     style={inlineStyle || undefined}
     class={`w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 font-mono text-lf-primary placeholder:text-lf-placeholder outline-none transition-colors hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus aria-invalid:border-lf-danger read-only:cursor-default disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
 />
+{#if fractionOverflow}
+    <p class="mt-1 text-xs text-lf-danger" data-testid={testid ? `${testid}-digits-error` : undefined} data-max={maxFractionDigits}>
+        {$_('common.decimalPlacesExceeded', {values: {max: maxFractionDigits}})}
+    </p>
+{/if}

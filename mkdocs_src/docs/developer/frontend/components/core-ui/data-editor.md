@@ -99,8 +99,10 @@ Asset only:
   transaction (decision 22). `eventSaveErrorMessage()` (`transactions/events/eventSaveError.ts`,
   keys `events.saveError.*`) turns the refusal into one sentence in the user's language, which
   names the row at fault when the refusal points at one: its date and type, with the currency for
-  `EVENT_CURRENCY_MISMATCH`, the number of linked transactions for `EVENT_IN_USE`, and the value
-  typed for a 422 on a type (`EVENT_NOT_EDITABLE`, `EVENT_NOT_DELETABLE` and
+  `EVENT_CURRENCY_MISMATCH`, the number of linked transactions for `EVENT_IN_USE`, the three
+  maxima of `params` (decimal places, significant digits, digits before the decimal point) for
+  `EVENT_TOO_MANY_DIGITS` (`events.saveError.tooManyDigits`: the first event at fault, and how many
+  more), and the value typed for a 422 on a type (`EVENT_NOT_EDITABLE`, `EVENT_NOT_DELETABLE` and
   `EVENT_ASSET_NOT_FOUND` ask for a reload instead). It shows as a *Save failed: …* toast and a
   banner above the tabs, and `onsave` is not called: the editor stays open with the pending rows.
   Prices are sent before events, so the prices of that save may already be stored.

@@ -1181,22 +1181,51 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
     - In francese e spagnolo, nella vista admin su desktop, la barra trabocca ancora: «Perfil»/«Profil» è fuori vista e
       la seconda scheda è tagliata al bordo («…ferencias»). Nello scatto non c'è segno che la barra scorra.
     - La posizione è deterministica (a = b). In inglese e italiano la barra ci sta.
-- **Nota per la prossima galleria completa, quella del giro della designer** (coordinatore, 16/10 sera). Rispetto a
-  `designer-16b` e `baseline-r2` sono attese differenze **di dato, non di colore**, che arrivano dalla 1.3. Nel
-  confronto vanno classificate come cambi di dato, senza indagarle come regressioni.
+- **Nota per la prossima galleria completa, quella del giro della designer** (coordinatore, 16/10 sera; corretta il
+  17/10, dopo la galleria della notte). Rispetto a `designer-16b` e `baseline-r2` sono attese differenze **di dato,
+  non di colore**, che arrivano dalla 1.3. Nel confronto vanno classificate come cambi di dato, senza indagarle come
+  regressioni.
+  - **Prima di tutto, cosa legge la galleria.** I test della Dashboard servono `frontend/e2e/dashboard-report.json`,
+    una fotografia reale con le date spostate a oggi, a ogni `POST /api/v1/portfolio/report` (`setupDashboardMockReport`
+    in `gallery.spec.ts`). Così le card dei KPI, il grafico di crescita e P&L, le allocazioni, le posizioni con la vista
+    Periodo e la scheda delle transazioni non risentono di un cambio del motore. Leggono invece il backend:
+    - il pannello dei lotti FIFO della Dashboard, che analizza Apple;
+    - il dettaglio del broker, che apre «Interactive Brokers»;
+    - le posizioni e i lotti del dettaglio broker, che aprono «Coinbase»;
+    - la lista dei broker.
   - **MF N54**, entrato in `8d244d1c6`: dove prima c'era «—» può comparire un MWRR, nei portafogli più giovani
-    dell'intervallo.
-  - **J-24**, entrato in `31a59bdb1`: nella demo circa **−165 EUR** di realizzato e di P&L. L'aggiustamento AAPL −3 di IBKR esce a
-    160 USD contro un costo medio di circa 220.
-    - Cambiano: nella Dashboard le card dei KPI, il grafico di crescita e P&L dal giorno −20 e la tabella Performance;
-      il dettaglio del broker IBKR; la vista Periodo.
-    - Non cambiano NAV e lotti.
+    dell'intervallo. Nella galleria solo dove si legge il backend, non nelle card della Dashboard.
+  - **J-24**, entrato in `31a59bdb1`: nella demo circa **−165 EUR** di realizzato e di P&L. L'aggiustamento AAPL −3 di
+    IBKR esce a 160 USD contro un costo medio di circa 220.
+    - Nel prodotto cambiano le card dei KPI, il grafico di crescita e P&L dal giorno −20 e la tabella Performance della
+      Dashboard, il dettaglio del broker IBKR e la vista Periodo. Non cambiano NAV e lotti.
+    - **Nella galleria (correzione del 17/10) cambia solo `brokers/detail`**, il dettaglio di IBKR. Gli scatti della
+      Dashboard vengono dalla fixture, e la vista Periodo del dettaglio broker si fotografa su Coinbase.
     - Dettagli: piano di J, §10 «J-24».
   - **J CP-7b**, entrato in `48da9bf3c`, solo backend (coordinatore, 16/10 22:23):
     - AAPL, il lotto ADJUSTMENT (tx 60, IBKR): il prezzo di riferimento passa da 300.0201 a **299.82 USD**, «Open
       Return» da 2,342 % a **2,410 %**, e il banner `REFERENCE_PRICE_FALLBACK` mostra 299.82.
     - Test KRW Stock (Directa): sparisce il banner «No market price available … estimated at cost».
-    - Il resto non cambia.
+    - Il resto non cambia. Nella galleria può vedersi nei lotti di Apple, `dashboard/fifo-lots-*`, dove compare quel
+      lotto.
+  - **MF-A**, entrato in `536501541` (17/10): la vista Performance delle posizioni prende i valori dal motore. Nella
+    galleria cambiano solo `brokers/positions-performance-table` e `-map` (Coinbase), non quelli della Dashboard.
+    MF-P, nello stesso ingresso, aggiunge campi che il frontend non legge ancora.
+  - **J-27**, entrato in `e221a0544`: i totali del registro leggono solo importi decimali semplici. Nella notte del
+    17/10 i passi del PAC senza grafici sono identici o nel rumore, e i target hanno gli stessi numeri: nessun effetto
+    visto.
+  - **X, sotto-lotto 3**, entrato in `4469f37b6`: la ricerca della galleria dell'import risponde con errori, e la
+    modale dell'asset precompilata mostra «Can't find it? Let us know» sotto «nessun risultato».
+  - **B4 dei backup**, entrato con `df1f0d52c` (17/10): lo scatto `settings/backup-ready` cambia di testo e di forma.
+    - La descrizione della card del backup è riscritta.
+    - Fra il backup pronto e «Create a new backup» c'è la scelta «Kind of backup», chiaro o sicuro (`backup-mode`,
+      chiaro di partenza), con le due descrizioni. L'avviso sulla riservatezza (`backup-privacy-notice`) resta, legato
+      alla scelta «chiaro».
+    - La fixture `galleryBackup.ts` risponde ora `encrypted: false`, quindi la nota della copia cifrata non compare.
+    - La card si allunga ancora, e su mobile la card del ripristino scende più in basso (G-20).
+  - **Y, lotto R17/W8**, non ancora entrato alle 03:33 del 17/10. Quando entra, la Dashboard della galleria perde la
+    riga del giorno sotto il P&L totale, e mostra «—» per l'effetto timing e per il G/L dei gruppi del treemap, finché
+    il developer non rigenera `dashboard-report.json`. Il prodotto è corretto.
 - **`settings/backup-ready` per la 1.3 ✅, 16/10 22:54–23:11.** Commit `b89985a8b`: la punta, con B (`0cd910a7e`: B3
   ripristino, B5b, B5c). Due run identiche, `g-backup-a` e `g-backup-b`, sullo stesso build, 2 worker. Il filtro
   `-f "Settings backup ready \(admin\) - all languages and themes"` seleziona solo `gallery.spec.ts:2126`.
@@ -1216,3 +1245,75 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
       in fr la scheda dell'e-mail resta fuori a destra. È la domanda 33 per la designer.
   - Il backup mostrato è quello della fixture `galleryBackup.ts` (`librefolio-backup-20261015-094112.zip`, 46,0 MB):
     lo scatto non dipende dal giorno.
+- **Galleria della notte del 17/10 ✅, 02:02–04:28.** Chiesta dal coordinatore (16/10 23:2x) per il mattino del
+  developer: gli scatti dei lotti colore della notte, con un foglio prima/dopo. Alle 23:34 il coordinatore ha scelto
+  un «prima» dello stesso giorno, invece del confronto con `designer-16b`, per isolare i lotti.
+  - **Il filtro:** 78 test su 123, 126 scatti su 182, a 6 worker. L'insieme esatto è verificato su entrambi i commit.
+    - Per gruppo: tabelle (T) 23 test e 44 scatti; file, media e menu (AF) 16 e 19; grafici (DV B4) 26 e 45; stati
+      vuoti e banner d'import (T) 13 e 18.
+    - Fuori: Auth, Onboarding, Security, Support, Settings, l'hub dei Tool, le griglie a card, le modali di creazione
+      e modifica, i form delle transazioni. Lì non ci sono `DataTable` né grafici.
+    - La mappa scatto → test (182 scatti, 123 test) è ricavata dalla spec, con gli aiuti condivisi risolti a mano.
+  - **Kit di sessione**, `files/night/`:
+    - `night.sh` (`preflight`, `run`, `fill`, `compare`, `expected`, `status`), con gli orari limite e i fill
+      automatici dei rossi sullo stesso SHA e nello stesso giorno;
+    - `selection.py`, `selcheck.py`, `reds.py`, `groups.py`, `summary.py`, `unpaired.py`;
+    - `expected_notes.md`, le differenze attese.
+
+    Provato prima della notte senza toccare la corsia: il confronto su una coppia piccola, e `run` con uno stub.
+  - **«Prima», `778156983`** (16/10 23:19), lanciato alle 02:01 da un'automazione della sessione.
+    - Base 02:02–02:47, con circa 10 min di build. 7 rossi di carico:
+      - 5 desktop fra le 02:13 e le 02:16, col carico a 172 (le corsie della 1.3 sulle porte 6182, 6185 e 6189, e il
+        Playwright di un altro worktree);
+      - 2 mobile alle 02:44, col carico a 141.
+    - Fill a 2 worker, desktop 02:47–03:00 e mobile 03:00–03:03: tutti verdi. 2.016 PNG.
+  - **«Dopo», `55b53d8c1`**, al via del coordinatore delle 03:33.
+    - Base 03:36–04:13 (build 247 s). 3 rossi di carico, col carico a 74–82:
+      - allocazioni desktop: il click sul tema non è tornato in 20 s;
+      - editor dei dati dell'asset desktop: `GET /api/v1/ai-export/catalog` ha risposto in 44,5 s;
+      - passi del PAC mobile: il fuoco non è arrivato in 3 s.
+    - Fill a 2 worker 04:13–04:18: tutti verdi. 2.016 PNG.
+  - **Triage:** ambiente per tutti e 10 (skill `test-triage`). Per le allocazioni ho escluso un rallentamento portato
+    da B4: sui test verdi in tutte e due le run, il «dopo» ha impiegato 0,89 volte il tempo del «prima» (mediana), e il
+    test è passato nel fill.
+  - In tutte e 6 le catture nessun prezzo live. **Misti G-18: 0 su 2.016, da tutti e due i lati.**
+  - **Fra i due commit:**
+    - colore: T, le tabelle (`9016f47c3`); AF, media, file e menu (`9d3607eb6`); T, `CompactCashCell` (`b58108665`);
+      DV, B4 (`323c61b73`); AF, i colori disegnati (`55b53d8c1`);
+    - dato: J-27, MF-A e MF-P; testo: X, sotto-lotto 3;
+    - la cattura cambia di una sola riga, in `galleryBackup.ts` (B4 dei backup), che serve solo allo scatto del
+      backup, fuori dal filtro.
+  - **Il confronto**, 04:21–04:28, al netto delle maschere del rumore di G-13: 2.016 coppie, 205 identiche, 52 nel
+    rumore, 3 trascurabili, 64 su scatti instabili, 1.692 cambiate, 0 strutturali. Per gruppo, gli scatti per
+    mediana del cambio visibile (oltre 12 livelli su un canale):
+    - tabelle (T), 44: 17 sopra il 10 %, 16 fra l'1 e il 10 %, 6 fra lo 0,1 e l'1 %, 5 sotto lo 0,1 %;
+    - file, media e menu (AF), 19: 13 sopra il 10 %, 4 fra l'1 e il 10 %, 2 fra lo 0,1 e l'1 %;
+    - grafici (DV B4), 45: 2 sopra il 10 %, 17 fra l'1 e il 10 %, 16 fra lo 0,1 e l'1 %, 10 sotto lo 0,1 %;
+    - stati vuoti e banner d'import (T), 18: 4 sopra il 10 %, 3 fra l'1 e il 10 %, 11 sotto lo 0,1 %.
+    - I più visibili: il caricamento dei file (37 %), gli editor dei dati di cambi e asset (29 %), le pagine e le
+      anteprime dei file (23–28 %), la tabella delle posizioni (23 %).
+    - Quasi identici: lo stato vuoto e i due banner della Dashboard, `kpi-top`, i passi del PAC senza grafici.
+  - **Controlli a occhio:**
+    - la tabella Performance della Dashboard ha gli stessi numeri al centesimo: viene dalla fixture, cambia solo il
+      colore;
+    - i target del PAC hanno gli stessi numeri (30/30/40 %): J-27 non si vede;
+    - negli scatti dei file l'ora di «Uploaded» è quella del popolamento del DB (02:02 contro 03:36). G-13 la maschera
+      già come rumore (`medium`).
+  - **G-18 non vede questi lotti:** gli elementi con una classe legacy sono 22.592 da tutti e due i lati.
+    - I lotti della notte lavorano su `<style>`, token di componente e colori dei grafici in JS.
+    - I 4 file usciti dal baseline (m1 da 697 a 674) non compaiono negli scatti del filtro.
+    - La guardia resta utile per le classi miste; non misura una migrazione fatta nel CSS.
+  - **Dove guardare:** `LibreFolio_visual_review/diffs/g-night17-prima-778156983__vs__g-night17-dopo-55b53d8c1/`, con
+    `contact_sheet.it.html` (il foglio), `night_summary.it.md` (il riassunto per gruppo), `night_expected_notes.md`,
+    `night_expected.txt`, `night_report.md` e `index.html`.
+
+  > **⚠️ Fuori pista**:
+  > - Alle 02:13 il carico è salito a 172: la galleria non era stata annunciata come blocco alle corsie della 1.3
+  >   (nota del coordinatore). Su sua richiesta la 1.3 ha fermato i passi pesanti fino alle 03:30. Il «dopo» ha avuto
+  >   il blocco annunciato, 03:35–04:35.
+  > - Alle 02:25 macOS ha toccato `frontend/src/.DS_Store`, e il primo fill del «prima» ha rifatto il build dello
+  >   stesso commit (6 min in più). Nel «dopo» c'era già `c53012fcb` («ignore hidden and test files in build check»):
+  >   i fill hanno riusato il build.
+  > - La nota di MF-A citava `5c9ad06d7`, che porta solo il diario di MF: il codice è in `536501541`.
+  > - Leggendo la spec ho trovato che la Dashboard della galleria viene dalla fixture: corrette la nota di J-24 e la
+  >   classificazione di MF-A, qui sopra.
