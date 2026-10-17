@@ -7251,3 +7251,15 @@ componenti delle impostazioni), `admin/cli_tools.en.md` (A-40, solo EN: le tradu
   porta 6182 libera.
 - **Lotto A-11/A-16/A-40/A-26: definizione di fatto ✅** — rossi osservati prima del codice, verdi locali e di corsia, doc
   EN con build strict e link, indice aggiornato. Non eseguiti: nessun E2E (il lotto non ne tocca), `all-backend`.
+
+## Lotto A-11/A-16/A-40/A-26 — Entrato nel ramo; note di E e di H (17/10, 19:55–)
+- **Checkpoint del coordinatore** (6 commit, 30 file): `3e12b09ae` (A-11), `16164411d` (A-16), `87356c8c5` (A-40),
+  `f8503b48e` (A-26), `c64d8192b` (doc), `a1b826e42` (journal). HEAD `a1b826e42`, albero pulito.
+- **Revisione di E di A-51: OK**, con tre note → indice, sezione A: **A-54** (la `refresh` di una riga cancellata nella
+  finestra → 500, quattro punti), **A-55** (la DELETE rilegge sotto il lock solo l'admin in attesa), **A-56** (il limite
+  contato prima del lock: la riattivazione dal PATCH e, trovato da me, `create_invite`; la registrazione è già sicura).
+  Proposto al coordinatore un lotto «decidere sotto il lock»: A-52 + A-54 + A-55 + A-56 + A-53; in attesa del GO.
+- **Da H-43** (dev `a6adb0066`, la corsia gestita), due righe nell'indice: **A-57** (LGM-E-01/03 di
+  `legal-and-managed.spec.ts` leggono il profilo della corsia; in 1.3, prima della fase 2 di H-43; dopo il lotto in corso)
+  e **A-58** (la metà UX di H-53, dopo la 1.3: cosa vede l'admin quando `connect-src 'self'` blocca la verifica
+  dell'indirizzo).

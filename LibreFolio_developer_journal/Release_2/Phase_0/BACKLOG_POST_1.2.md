@@ -4556,6 +4556,28 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   (doc); dal `docs-writer` del lotto A-11/A-16/A-40 (17/10). `PATCH /api/v1/auth/users/me/preferences` con
   `{language, currency}`: le preferenze sono `PUT /api/v1/settings/user` (`language`, `base_currency`, `theme`,
   `avatar_url`). Pagina solo EN.
+- **A-54 · Un account cancellato da un altro admin nella stessa finestra risponde 500, non 404** — basso (classe A-51);
+  dalla revisione di E di A-51 (17/10), tramite il coordinatore. Dopo `begin_writes`, `session.refresh(user)` solleva
+  `InvalidRequestError` su una riga appena cancellata (prima era `StaleDataError`, sempre un 500), in quattro punti:
+  `update_user_status` (PATCH), `set_user_active` e `set_user_admin` (CLI), il ramo «in attesa» di `DELETE /users/{id}`.
+  Cura: un aiuto che la intercetta, fa rollback e risponde il 404 di `_user_or_404` (con `USER_NOT_FOUND`: da decidere),
+  nella CLI «User 'x' not found». Proposta nel lotto «decidere sotto il lock» (A-52, A-54, A-55, A-56).
+- **A-55 · `DELETE /users/{id}` rilegge sotto il lock solo l'admin in attesa** — basso; da E (17/10), come A-54. Un
+  account promosso da un altro admin nella finestra viene cancellato senza `DEMOTE_FIRST` (non può togliere l'ultimo
+  admin attivo: chi cancella lo è). Cura: rileggere sotto il lock per ogni cancellazione.
+- **A-56 · Il limite di utenti si conta prima del lock** — basso (conta per i limiti dei piani); da E (17/10, la
+  riattivazione, preesistente), e da A la creazione degli inviti. Il PATCH guarda `usage.full` prima di
+  `update_user_status`, `create_invite` conta prima di ogni scrittura: due operazioni concorrenti a limite − 1 lo
+  superano di uno. La registrazione è già sicura: riconta dopo la sua scrittura, sotto il lock. Cura: contare dopo
+  `begin_writes`.
+- **A-57 · `legal-and-managed.spec.ts`: LGM-E-01 e LGM-E-03 devono leggere il profilo della corsia** — basso, solo test;
+  in 1.3, prima della fase 2 di H-43 (il cancello RC di H); dal coordinatore (17/10, da H-43, dev `a6adb0066`, la corsia
+  di prova gestita). I due casi danno per scontata la variante self-hosted: su una corsia gestita falliscono per
+  costruzione. Cura: leggere `GET /api/v1/system/instance` della corsia e verificare la variante corrispondente; poi H
+  rimette la spec in `CLOUD_SMOKE_SPECS`. Dopo il lotto in corso.
+- **A-58 · Con `connect-src 'self'` imposto, la verifica dell'indirizzo di un link verso un'altra origine è bloccata** —
+  basso, UX; dopo la 1.3, la metà UX di H-53; dal coordinatore (17/10). Il dialogo d'invito della scheda Utenti
+  (`LinkShare` → `checkAddress()`) oggi dice «non verificabile»: decidere cosa vede l'admin. Decisione aperta.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
