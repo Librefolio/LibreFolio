@@ -165,6 +165,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/reference/brokerStoreIconHydration.test.ts",
             "src/lib/stores/reference/sectorStore.test.ts",
             "src/lib/features/changelog/changelog.test.ts",
+            "src/lib/features/changelog/whatsNew.test.ts",
+            "src/lib/features/changelog/whatsNewStore.test.ts",
             "src/lib/features/update-check/updateCheck.test.ts",
             "src/lib/features/update-check/updateCheck.managed.test.ts",
             "src/lib/features/support/donations.test.ts",
@@ -390,6 +392,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/import/FixFlaggedStep.test.ts",
             "src/lib/features/transactions/import/ReportSetCard.escape.test.ts",
             "src/lib/components/layout/ChangelogModal.test.ts",
+            "src/lib/features/changelog/WhatsNewModal.test.ts",
             "src/lib/components/layout/ChangelogModal.managed.test.ts",
             "src/lib/components/layout/Header.test.ts",
             "src/lib/components/layout/Header.managed.test.ts",
@@ -559,6 +562,16 @@ def front_legal_managed(verbose: bool = False, ui: bool = False, headed: bool = 
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/legal-and-managed.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_whats_new(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run «What's new since your last version» (C-54, lot A11): GET /auth/me's user.whats_new injected per page, POST /auth/whats-new/seen answered by the spec."""
+    print_section("Frontend What's New Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/whats-new.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -951,6 +964,15 @@ def populate_registry(registry: dict) -> None:
         desc="The instance's legal notice (F09) and the managed profile's account-side effects (F05), lot A9 of workstream A, desktop: GET /system/instance answered with the real response, observed untouched or patched per page (profile, legal; fixtures/instance-config.ts serveInstanceConfig, checked against the generated schema); signed out on the lane's answer auth-legal-links under the login card (after it, below it) holding legal-links without legal-terms-link/legal-privacy-link, and auth-donate-link once the configuration is in; with legal stubbed to two https pages both links there, href exactly those pages, target _blank, rel noopener noreferrer, never clicked; signed in as e2e_test_user header-donate-link, sidebar-legal-links after sidebar-version, Settings › About's about-legal-card holding legal-notice, and the self-hosted contrast (changelog-check-update, help-donate-link, support-coffee); profile stubbed managed with legal set to the same two pages and signed in: first sidebar-legal-links holding legal-terms-link with exactly the stubbed href (the proof the managed answer is in force: the links come from the stubbed answer alone, which the store applies whole), then the changelog opened from sidebar-version without changelog-check-update, no header-donate-link, no help-donate-link in the open Help menu (its GitHub issues item, found by its link, stays), About's legal-notice linking the same pages and no support-coffee in its support card (its support-share-* buttons stay), no link to the donation page anywhere, the proof and every absence in one app runtime (a mark on window set before the proof); profile stubbed managed and signed out: the forgot card shows forgot-ask-admin, neither forgot-reset-commands nor forgot-email-unavailable, no auth-donate-link",
         prereq="Test users created (e2e_test_user an ordinary member, grandfathered on every onboarding flow); the lane self-hosted (LIBREFOLIO_PROFILE unset) and without LIBREFOLIO_TOS_URL or LIBREFOLIO_PRIVACY_URL",
         tests="layout/legal-and-managed.spec.ts",
+    )
+    add_test(
+        cat,
+        "whats-new",
+        front_whats_new,
+        name="What's New E2E",
+        desc="«What's new since your last version» (C-54, lot A11 of workstream A), desktop, written red-first: e2e_test_user signs in untouched, then a fresh load of /dashboard has GET /auth/me answered with the real response and user.whats_new replaced (changed, never added: a lane without the field is reported by name; checked against the generated schema), and every request to /auth/whats-new/seen answered by the spec (POST 204, counted) so none reaches the lane; the chapters to expect read from the repository's CHANGELOG.md (released ## [x.y.z] - date chapters with a body, never [Unreleased]: the newest the release, the one before the since); {since, release}: whats-new-modal, deferred-app-popups data-active-popup whats-new, exactly the whats-new-chapter elements with since < data-version ≤ release (the release alone, not the since), whats-new-close, whats-new-full-changelog off the app's origin with rel noopener noreferrer (never clicked), nothing posted while it shows, the close button → the modal hidden, the host released, exactly one POST; after that close a reload whose /auth/me answers null → no modal behind the barrier (the null answer served, the app shell, dashboard-page settled), the host not whats-new, still one POST; {since: null, release} → the release chapter alone; Esc pressed with the modal on screen → closed, one POST; profile stubbed managed (serveInstanceConfig, two legal pages of the spec's own linked by the sidebar as the proof the managed answer is in force) → the same modal, closed by its button, one POST; whats_new null → never shown, nothing posted; the lane's own user.whats_new null checked as a precondition",
+        prereq="Test users created (e2e_test_user an ordinary member, grandfathered on every onboarding flow); the lane's server started with LIBREFOLIO_DISABLE_WHATS_NEW=1 (dev.py server --test), so its GET /auth/me carries user.whats_new null; a frontend build bundling the repository's CHANGELOG.md",
+        tests="layout/whats-new.spec.ts",
     )
     add_test(
         cat,

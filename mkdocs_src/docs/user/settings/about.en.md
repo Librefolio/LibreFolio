@@ -173,6 +173,25 @@ A check started here always tells you how it went:
   [Update Notifications](../../admin/index.md#update-notifications) for the admin-side flow.
 - If a newer release exists and you are **not an admin**, the **Update available — contact an administrator** dialog lists the instance **administrators** — with e-mail addresses when available, each with a mailto link and a copy button — so you know whom to ask for the upgrade. Non-admins are never probed automatically.
 
+### ✨ What's new after an update {: #whats-new }
+
+When LibreFolio has been updated since your last visit, the next time you open it a
+**What's new in LibreFolio** window shows what changed: the part of the changelog for each version
+released since the last one you saw. If your account is older than this window, it shows the part of
+the version now running.
+
+- Each part is in your interface language when its translation is ready; otherwise it is in English,
+  marked **Not translated yet**, as in the changelog.
+- **Full changelog** opens the complete changelog on GitHub, in a new tab.
+- **Got it** closes the window, and so do <kbd>Esc</kbd> and a click outside it. It does not come
+  back until the next update. If LibreFolio cannot record that you closed it, for example because
+  the connection dropped, the window shows again the next time you open LibreFolio.
+- It waits until no guide and no other window is open, and comes before the
+  [donation popup](#donation-popup) and the update notice.
+- A new account never sees it: it starts with the version it was created on.
+- It shows the same way on an instance a hosting provider runs for you: there, it is how you learn
+  that your instance was updated.
+
 ---
 
 ## 🔗 Related
