@@ -2840,6 +2840,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   stato (proposta a, T3-b). Va scritta anche la regola del developer per i banner (rosso per gli errori veri, ambra per
   i dati mancanti, blu per le note, verde per i successi) e il `MISSING_PRICE` del rischio diventato un avviso. Per la
   passata della documentazione a fine programma (docs-writer). Dettagli: piano di T, «Giro 3 della designer».
+- ✅ **TC-20 · Il caso «export JSON, reset all, import back» del Lab dava per diverse due sorgenti di colore diventate
+  una** — basso, test; T, 18/10, verifica per l'ingresso di DV; **chiusa il 18/10 nel checkpoint di R3-c**: per il passo
+  L2 il caso usa la radice della pagina delle transazioni (`transactionsPageRoot`, `text-lf-primary`), con le
+  precondizioni che le due sorgenti siano diverse e che dopo L1 la radice tenga il suo colore; `front-designer-lab live`
+  12/12 sulla punta `b238d5b6e` più l'albero (01:11–01:14). La segnalazione com'era:
+  `frontend/e2e/designer-lab/designer-lab-live.spec.ts:673` cambia nella stessa run la variabile del sottotitolo delle
+  transazioni (L1, rosa) e il letterale dell'intestazione della data di `DataTable` (L2, blu); dal 16/10 leggono
+  entrambi `--lf-text-muted` (`546204732`, e il lotto delle tabelle di T `77bfa6a39`), così l'override di L1 vince e
+  l'intestazione resta rosa: rosso deterministico, anche sul target senza DV (`7845fc3d3`: 11 verdi e 1 rosso). Verdetto
+  della triage: un'assunzione del test. La spec era di L (archiviato): la prende T. Dettagli: piano di T, «Una verifica
+  per l'ingresso di DV» e «R3-c e TC-20».
 
 ---
 
