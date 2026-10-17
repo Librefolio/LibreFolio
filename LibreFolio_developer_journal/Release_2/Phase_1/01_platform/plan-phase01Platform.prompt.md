@@ -5778,3 +5778,149 @@ backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check
 
    - Nessun documento dice ancora che la scheda «valuterà» i controlli.
    - `git merge-file` contro dev `67dd18676`: 0 conflitti. Porta libera.
+3. ✅ **Ingresso** (17/10, ~09:35): H-35 è entrato in dev `d28a6d7df`, senza riga di CHANGELOG. Il mio HEAD è avanzato a
+   `d28a6d7df`.
+   - Il coordinatore ha dato l'OK di scrittura per H-19.
+   - Per H-42 vuole prima l'analisi, e per gli E2E preferisce un header vero se il runner lo permette in modo pulito,
+     altrimenti `page.route`.
+
+### Lotto «H-42: tre direttive della CSP imposte accanto a `frame-ancestors`» (E, LOW, 2026-10-17, mattina) — analisi
+
+> Suggerimento di E dopo la chiusura di H-39: imporre già, nello stesso header di `frame-ancestors`, `object-src 'none';
+> base-uri 'self'; form-action 'self'` (iniezione di `<base>`, esfiltrazione con un form). `script-src` resta in sola
+> segnalazione. Da verificare con gli E2E che aprono i documenti e il visore PDF.
+
+**Analisi** (sola lettura, HEAD `d28a6d7df`):
+
+1. `security_headers.py`:
+   - con la protezione dai frame accesa (default di managed), `FRAME_HEADERS` mette `X-Frame-Options: SAMEORIGIN` e
+     `Content-Security-Policy: frame-ancestors 'self'` su **ogni** risposta: pagine, documenti, API, file;
+   - `CSP_REPORT_ONLY_POLICY` contiene già le tre direttive, ma solo in sola segnalazione e solo sulle pagine HTML
+     dell'app;
+   - nessuna rotta mette una CSP sua.
+2. **Chi le userebbe**:
+   - l'app (sorgenti): nessun `<object>`, `<embed>` o `<base>`, nessun `formaction` né `<form action=…>`; SvelteKit ha
+     `paths.base: ''`;
+   - il visore PDF è EmbedPDF: PDFium in WebAssembly, dentro un worker di modulo, e disegna su canvas;
+   - i documenti costruiti (`mkdocs_src/site`, 1337 pagine): nessun `<object>`, `<embed>` né `<base>`. Gli unici form
+     sono `md-header__option` (la tavolozza) e `md-search__form` (la ricerca), tutti e due senza `action`, gestiti in
+     JavaScript e sulla stessa origine;
+   - nessun PDF nei documenti.
+3. **Un rischio, se le tre direttive vanno su ogni risposta.** Chromium tratta il suo visore PDF integrato come un
+   plugin, e `object-src 'none'` *sulla risposta del PDF* può impedirgli di mostrarlo. È da una ricerca web, non
+   verificato: in headless il visore non c'è, e nessun E2E potrebbe vederlo. Oggi l'app non apre un PDF navigandoci
+   sopra:
+   - `uploads/file` risponde sempre `attachment`;
+   - `brokers/files/{id}` dà `inline` solo con `download=false`, che il frontend non manda mai.
+
+   Un'apertura in una scheda nuova, domani, si romperebbe in silenzio.
+4. **Il runner** non permette una corsia con l'header vero. `configure_test_runtime` toglie ogni `LIBREFOLIO_*` dello
+   sviluppatore, salvo `TEST_LANE_KEEPS` e `LIBREFOLIO_TEST_*`, e un run ha un solo backend condiviso. Servirebbe
+   un'opzione nuova (per esempio `--lane-setting NOME=VALORE`, con una lista di nomi ammessi), cioè lavoro su `_cli.py`
+   e su `cli_base.py`, con i loro test e documenti.
+5. **E2E esistenti**: `files-pdf-offline` (il visore PDF) e `docs-offline-math` (una pagina annidata dei documenti)
+   usano già `context.route` / `page.route`. Il service worker dell'app (`static/sw.js`) risponde alle navigazioni con
+   `respondWith(fetch(…))`: uno spec che inietta header deve bloccarlo (`serviceWorkers: 'block'`), altrimenti la
+   navigazione non passa dalla rotta. Nessuno spec ascolta oggi `securitypolicyviolation`.
+
+**Proposta**:
+- **Codice** (`security_headers.py`, mio): a protezione accesa, le risposte `text/html` (pagine dell'app e documenti)
+  hanno `frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'`; le altre restano con
+  `frame-ancestors 'self'` soltanto, così un PDF mostrato inline non subisce mai `object-src`. Il self-hosted non
+  cambia (interruttore spento per default), e una CSP messa da una rotta vince ancora.
+- **Test backend** (`services security-headers`): i due valori per tipo di contenuto, il self-hosted senza nulla, la
+  CSP di una rotta che resta, `/mkdocs` in HTML con la politica intera, il JSON delle API con solo `frame-ancestors`.
+- **E2E: `page.route` invece della corsia con l'header vero.** Uno spec nuovo, nella suite normale e quindi una guardia
+  permanente:
+  - inietta la politica nelle risposte HTML, con i service worker bloccati;
+  - controlli positivi: un `<object>` e un `<base>` iniettati devono dare un `securitypolicyviolation`;
+  - poi la ricerca dei documenti dà risultati, l'anteprima PDF arriva a `data-state="ready"`, e la dashboard si apre,
+    senza nessuna violazione.
+
+  Una corsia vera girerebbe solo quando qualcuno la lancia. La corsia managed per gli E2E del cloud può essere una voce
+  del backlog a parte.
+- Documenti: `security.md#managed-headers`, la riga di `LIBREFOLIO_FRAME_PROTECTION` in `configuration`,
+  `hosting_providers`; CHANGELOG 🔒 (cambia anche il self-hosted di chi accende l'interruttore).
+- Serve: l'OK di scrittura sulla registrazione dello spec (`_frontend_utility.py`) e uno slot E2E.
+
+### H-3, opzione A: il contesto per la decisione P24 (2026-10-17, mattina) — analisi, decisione del developer
+
+> Il coordinatore chiede prima l'analisi, e se serve una decisione del developer va registrata. P24 è ancora
+> *aperto* (`decisioni-analisi-20261014.md`): il developer vuole più contesto, cioè dove sta la chiave, che cosa
+> protegge e perché nel cloud è più sicuro. Qui le risposte, sul codice di oggi (HEAD `d28a6d7df`).
+
+**Dove sta la chiave d'istanza**
+- **Configurata**: `LIBREFOLIO_INSTANCE_KEY`, oppure `LIBREFOLIO_INSTANCE_KEY_FILE` (un Docker secret), fuori dalla
+  cartella dei dati. Se non si può usare, l'avvio si ferma.
+- **Altrimenti generata** al primo uso: `<cartella dati>/secrets/instance.key`, 32 byte casuali, cartella `0700` e file
+  `0600`. Sta nello stesso volume dei dati, ma non nel database.
+
+**Che cosa protegge** (le derivazioni di oggi, `derive_key`)
+- `plugins.settings.v1` e `plugins.settings.fingerprint.v1` (X): cifrano i **segreti salvati delle impostazioni dei
+  plugin**, come le chiavi API dei provider. Ogni riga tiene il `key_id` della chiave che l'ha cifrata.
+- `accounts.address-probe.v1` (A): firma il nonce della prova dell'indirizzo; non salva nulla.
+- I **backup**: un archivio protetto da password porta con sé la chiave generata (decisione 39, B4), e il ripristino
+  ricifra i segreti con la chiave dell'istanza che ripristina. Un archivio in chiaro non la porta.
+- **Non** protegge: le password (sono hash), le sessioni (`JWT_SECRET`), i dati finanziari (in chiaro nel DB).
+
+**Che cosa succede se il file sparisce** (self-hosted con la chiave generata)
+- Al primo uso ne nasce una nuova, senza avvisi. Con dei segreti salvati, il primo uso è all'avvio (H-15).
+- I segreti salvati diventano illeggibili, e l'avvio scrive un **errore con il conteggio** (`platform.plugin_secrets`,
+  anche nella scheda Sicurezza).
+- La doc dice di rimettere la copia vecchia *prima* di inserire di nuovo i segreti (opzione B, entrata il 16/10).
+- **Il rischio che resta**: se l'amministratore inserisce di nuovo i segreti prima di accorgersene, finiscono cifrati
+  con la chiave nuova. Rimettere poi la vecchia rende illeggibili proprio quelli.
+
+**Perché nel cloud è più sicuro**
+- Il pannello configura la chiave (un `_FILE`), fuori dal volume dei dati: un ripristino dei dati non la tocca, e non
+  si genera mai da sola.
+- Se manca o è rovinata, l'avvio si ferma: fallisce chiuso.
+- Un cambio di chiave lo segnala comunque H-15.
+
+**L'opzione A, da decidere (P24)**: nessuna chiave nuova in silenzio quando il DB ha segreti.
+- Il passo d'avvio `plugin-secrets-check` vede che il file della chiave manca e che ci sono righe con un segreto
+  (contate senza derivare). Allora vieta la generazione per tutto il processo, e scrive un errore che dice cosa fare.
+- Le funzioni con segreti rispondono come con una chiave inutilizzabile: 503. Il 503 della prova dell'indirizzo è H-19,
+  in corso.
+- Un comando esplicito, `./dev.py instance-key new`, riparte con una chiave nuova.
+- Cambia solo uno stato già guasto, e solo nel self-hosted. Un'installazione nuova genera la chiave come oggi.
+- Peso: un lotto piccolo-medio, che tocca `instance_key.py`, `plugin_secrets_check.py`, il comando in `dev.py`
+  (superficie condivisa), la doc admin (con debito di traduzione) e i test.
+
+**Il mio consiglio**: per la 1.3 basta l'opzione B, già fatta. La A migliora il self-hosted, non il cloud. Proposta:
+rimandarla dopo la 1.3, salvo una scelta diversa del developer. Per ora H-3 resta aperta su P24.
+
+### Lotto «H-19: `POST /users/address-probe` risponde 503 se la chiave d'istanza non si può usare» (2026-10-17, mattina) — ✅ provato
+
+> Dall'analisi di H-3 (16/10). Il codice è di A: OK di scrittura del coordinatore su `api/v1/users.py` (solo
+> `issue_address_probe`) e su `test_api/test_address_probe_api.py`, e A rivede.
+
+**Analisi** (sola lettura):
+- `issue_probe_nonce()` chiama `derive_key(PROBE_PURPOSE)`, che solleva `InstanceKeyError` quando la chiave non si può
+  usare. A runtime succede con un file generato rovinato o irraggiungibile; una chiave configurata ferma già l'avvio.
+- La rotta non la prende, quindi risponde 500 con il traceback nel log. `verify_probe_nonce()`, il controllo pubblico,
+  la tollera già e risponde `False`.
+- Il frontend (`checkAddress`) legge già ogni errore della richiesta del nonce come *unverifiable*.
+- Lo schema esiste già: `plugin_settings.py` risponde 503 per una chiave inutilizzabile.
+- Il ramo di A non tocca la riga: `git merge-file` contro `e58be67fe` dà 0 conflitti su tutti e due i file.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla), nel file di A:
+   - AP-API-12: in processo, la `derive_key` del modulo sostituita da una che solleva. Prima una barriera (la stessa
+     chiamata con la `derive_key` vera dà 200), poi 503 con il corpo esatto, nessun nonce, un solo warning esatto,
+     nessun errore e nessun `exc_info`;
+   - AP-API-13: il controllo pubblico, nello stesso stato, risponde 200 `{"match": false}`.
+2. ✅ **Slot** (`GO 6181`, 09:50–09:56, con gli E2E di E e J in corso; dentro lo slot senza il cancello del carico),
+   `files/runs/h19-slot-go.sh`:
+   - **rosso**, per nome: **1 failed / 1 passed**. AP-API-12 dà «InstanceKeyError left the app»: prima della cura,
+     un 500 con il traceback;
+   - **cura** (`files/h19/apply.py --apply`, identica alla copia di prova): `try` intorno a `issue_probe_nonce()`; per
+     un `InstanceKeyError`, `logger.warning("Address probe: the instance key cannot be used, no nonce issued",
+     admin_id=…)` e `HTTPException(503, {"error_code": "INSTANCE_KEY_UNAVAILABLE", "message": …}) from None`;
+   - **verde**: `api address-probe` intero, **28 passed**. Porta libera.
+3. ✅ **Documenti** (docs-writer, solo inglese, pagine per sviluppatori):
+   - `access_control.md`, la riga della rotta: `503` `INSTANCE_KEY_UNAVAILABLE`, con il link alla chiave d'istanza;
+   - `security.md`, «Verification» dell'Address Probe: «Issuing has no such fallback… 500» diventa il 503 con il
+     warning a ogni chiamata rifiutata, e il paragrafo dei test ha il caso in processo.
+   > **⚠️ Fuori pista** (dal docs-writer di H-42): il ripiego dell'anteprima PDF (`FilePreviewModal`, un `<iframe>`
+   > su `/api/v1/uploads/file/{id}`) riceve sempre `attachment`, quindi probabilmente scarica invece di mostrare. È
+   > precedente, senza proprietario: registrato come **H-44** (decisione del coordinatore), con il legame a H-42.
