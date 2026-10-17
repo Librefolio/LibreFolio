@@ -62,7 +62,10 @@ Today the profile changes seven things:
   for the idle risk workers, then `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` (see
   «Main Options» and «Risk engine workers» in [Environment Variables](configuration.md)). A value you
   set always wins over the profile, even one equal to the `selfhosted` default:
-  `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` keeps 600 seconds on a managed instance.
+  `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` keeps 600 seconds on a managed instance. If your panel
+  or your environment turns `LIBREFOLIO_FRAME_PROTECTION` or `LIBREFOLIO_CSP_REPORT_ONLY` off, the
+  log says so at every start, a warning for frame protection and an `info` for the policy, and so do
+  the security checks: see «Startup Checks» in [Configuration](configuration.md).
 - **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
   `Content-Security-Policy: frame-ancestors 'self'` to every response: a browser then shows
   LibreFolio in a frame only inside LibreFolio's own pages. If your hosting panel, or any page at
