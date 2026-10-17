@@ -61,12 +61,36 @@ needles, 60 000 dumps for 300 assets). Green before and after (guards):
 ``test_guard_bulk_candidates_at_size_match_the_per_asset_search`` (300 extractions over 1 011 assets, wildcard bond
 names, codes stored in either case, duplicate holders) and ``test_guard_bulk_exact_hits_keep_the_universe_order``.
 
+X-R45 — the planner's saved FX reads skip a stored rate no read may use. A 1.2 install could store rates no reader can
+use: 0 (a manual ``1E-11`` truncated to 10 decimals), an infinite REAL (``1E+400``), 1E+14 and above — outside X-R38's
+``usable_fx_rate_bounds()``, 1E-10 <= rate < 1E+14. On HEAD 16e837153 two planner reads take them for rates: the latest
+saved quote of a pair (``pac_allocator/source/fx_quotes._load_latest_planner_fx_rows``: a ``max(date)`` subquery, then a
+join) and the WAC evidence (``pac_allocator/source/wac._load_wac_fx_rows``: the exact keys). The cure adds
+``usable_fx_rate_clause()`` (``db/precision.py``) to the subquery of the latest date and to the WAC select. Pinned in
+section 4 on ERN/STN, its rows planted with raw SQL past the model, as an older release could leave them:
+
+5. the latest *usable* row on or before ``as_of`` wins — D1's 2.5 over a 0, an inf or a 1E+14 on D2 —, and the planner's
+   quote is that rate, with no issue;
+6. a pair whose only saved rate is unusable has no saved quote: no rate, the issue ``allocation.saved_fx_missing``;
+7. the WAC evidence has no row for a key whose stored rate is unusable (0 included), and keeps the usable key beside it.
+
+Red on HEAD 16e837153: ``test_xr45_the_latest_saved_planner_fx_row_is_the_latest_usable_one`` (0, inf and 1E+14, as of
+D2 and later), ``test_xr45_the_planner_fx_quote_is_the_latest_usable_rate``,
+``test_xr45_a_planner_fx_pair_whose_only_saved_rate_is_unusable_is_missing`` and
+``test_xr45_wac_fx_evidence_has_no_row_for_a_saved_rate_no_read_may_use`` (0, inf and 1E+14 each). Green before and
+after (guards): ``test_xr45_guard_the_latest_usable_planner_fx_rate_wins`` and
+``test_xr45_guard_wac_fx_evidence_reads_a_usable_saved_rate_on_its_exact_date`` (an ordinary rate and the two bounds,
+1E-10 and 99999999999999). The structural side, every reader of ``fx_rates`` calling the clause or named as a raw
+reader, is ``test_utilities/test_usable_fx_rate_gate.py``.
+
 Isolation: PURE — no lane database, no server, no network. Each test has its own in-memory SQLite database
 (``SQLModel.metadata.create_all``), closed and disposed at teardown.
 
 Reference: backend/app/utils/sql_chunks.py, backend/app/services/brim/brim_provider.py (search_asset_candidates,
 search_asset_candidates_bulk, _classify_candidates, _contains_matcher, _like_to_regex, _other_as_text),
 backend/app/services/pac_allocator/source/wac.py (_load_wac_fx_rows),
+backend/app/services/pac_allocator/source/fx_quotes.py (_load_latest_planner_fx_rows, build_planner_fx_quotes),
+backend/app/db/precision.py (usable_fx_rate_bounds, and the cure's usable_fx_rate_clause),
 backend/test_scripts/test_db/test_brim_bulk_candidates.py (the same parity on a small universe).
 """
 
@@ -82,7 +106,7 @@ from typing import Optional
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import String, and_, cast, insert, or_, select
+from sqlalchemy import String, and_, cast, insert, or_, select, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -90,6 +114,7 @@ from backend.app.db.base import SQLModel  # imports every model, and backend.app
 from backend.app.db.models import Asset, AssetType, FxRate
 from backend.app.schemas.brim import BRIMMatchConfidence
 from backend.app.services.brim import brim_provider
+from backend.app.services.pac_allocator.source import fx_quotes as source_fx_quotes
 from backend.app.services.pac_allocator.source import wac as source_wac
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -771,3 +796,192 @@ async def test_guard_bulk_exact_hits_keep_the_universe_order(session):
         assert _shape(bulk[triple]) == answer, f"{triple}: bulk {_shape(bulk[triple])}, expected {answer}"
         assert _shape(await brim_provider.search_asset_candidates(session, *triple)) == answer, f"{triple}: the per-asset search agrees"
     print_success("three primaries, one alternate, two tickers: display-name order in both paths")
+
+
+# =============================================================================
+# 4. X-R45: THE PLANNER'S SAVED FX READS SKIP A STORED RATE NO READ MAY USE
+# =============================================================================
+
+#: The pair of this section, as ``fx_rates`` keeps it (base < quote): real ISO 4217 codes, since a planner quote
+#: validates its pair. No other test stores it — and each test has its own database anyway.
+XR45_BASE, XR45_QUOTE = "ERN", "STN"
+XR45_PAIR = f"{XR45_BASE}/{XR45_QUOTE}"
+XR45_D1 = date(1987, 6, 8)  # a usable rate
+XR45_D2 = date(1987, 6, 10)  # the pair's latest row: a rate no read may use, in the red cases
+XR45_LATER = date(1987, 6, 15)  # an as_of after both
+XR45_D1_RATE = Decimal("2.5")
+#: Rates a 1.2 install could store and no read may use (X-R38: usable is 1E-10 <= rate < 1E+14), as SQLite binds them.
+XR45_UNUSABLE = [
+    pytest.param(0.0, id="0"),  # a manual 1E-11, truncated to the column's 10 decimals
+    pytest.param(float("inf"), id="inf"),  # 1E+400, written as an SQLite REAL
+    pytest.param(1e14, id="1E+14"),  # the first rate refused
+]
+#: Rates a read may use, the two bounds among them, with the Decimal ``fx_rates.rate`` reads back.
+XR45_USABLE = [
+    pytest.param(4.0, Decimal("4"), id="ordinary-4"),
+    pytest.param(1e-10, Decimal("1E-10"), id="smallest-1E-10"),
+    pytest.param(99999999999999.0, Decimal("99999999999999"), id="largest-99999999999999"),
+]
+XR45_AS_OF = [pytest.param(XR45_D2, id="as-of-D2"), pytest.param(XR45_LATER, id="as-of-later")]
+
+
+def _xr45_source(day: date) -> str:
+    """The source of the rate planted on ``day``: it tells the rows apart."""
+    return f"XR45-{day.isoformat()}"
+
+
+async def _xr45_plant(session: AsyncSession, rates: dict[date, float]) -> None:
+    """ERN/STN rates written with raw SQL, past the model: what an older release could leave in ``fx_rates``.
+
+    Barrier: raw SQL reads back the very rates planted — an inf stays inf, a 0 stays 0 — and no other ERN/STN row.
+    """
+    for day, rate in rates.items():
+        await session.execute(
+            text("INSERT INTO fx_rates (date, base, quote, rate, source, fetched_at) VALUES (:day, :base, :quote, :rate, :source, CURRENT_TIMESTAMP)"),
+            {"day": day.isoformat(), "base": XR45_BASE, "quote": XR45_QUOTE, "rate": rate, "source": _xr45_source(day)},
+        )
+    stored = (await session.execute(text("SELECT date, rate FROM fx_rates WHERE base = :base AND quote = :quote"), {"base": XR45_BASE, "quote": XR45_QUOTE})).all()
+    found = {date.fromisoformat(day): rate for day, rate in stored}
+    assert found == rates, f"the fixture itself is wrong: raw SQL reads back {found}, not the rates planted, {rates}"
+
+
+async def _xr45_quotes(session: AsyncSession, issues: list, story: str) -> list:
+    """``build_planner_fx_quotes`` for ERN/STN as of ``XR45_LATER``. An exception fails the test, naming it: on HEAD the
+    quote's schema refuses an infinite rate, so the builder raises instead of answering."""
+    try:
+        return await source_fx_quotes.build_planner_fx_quotes(session, request_pairs=[XR45_PAIR], as_of=XR45_LATER, issues=issues)
+    except Exception as exc:  # any exception is the defect under test, reported as such
+        pytest.fail(f"{story}: build_planner_fx_quotes raised {exc!r} (X-R45: a rate no read may use is a missing rate, never a quote)")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("as_of", XR45_AS_OF)
+@pytest.mark.parametrize("unusable", XR45_UNUSABLE)
+async def test_xr45_the_latest_saved_planner_fx_row_is_the_latest_usable_one(session, unusable, as_of):
+    """Red on HEAD 16e837153: the ``max(date)`` subquery of ``_load_latest_planner_fx_rows`` counts every row, so the row
+    of D2 — 0, inf or 1E+14 — is the pair's latest and comes back instead of D1's.
+
+    Contract (X-R45): the latest *usable* row on or before ``as_of`` wins: D1's, its rate 2.5 and its source. The clause
+    belongs in the subquery of the latest date: in the outer select alone the pair would have no row at all.
+    """
+    story = f"{XR45_PAIR} 2.5 on {XR45_D1} and a legacy {unusable!r} on {XR45_D2}, as of {as_of}"
+    print_section(f"X-R45: the planner's latest saved row, {story}")
+    await _xr45_plant(session, {XR45_D1: float(XR45_D1_RATE), XR45_D2: unusable})
+
+    rows = await source_fx_quotes._load_latest_planner_fx_rows(session, directed_pairs=[(XR45_BASE, XR45_QUOTE)], as_of=as_of)
+
+    found = {pair: (row.date, row.rate, row.source) for pair, row in rows.items()}
+    expected = {(XR45_BASE, XR45_QUOTE): (XR45_D1, XR45_D1_RATE, _xr45_source(XR45_D1))}
+    assert found == expected, f"{story}: the latest saved row is {found}, expected {expected} — the latest usable one, the legacy rate being no rate (X-R45)"
+    print_success(f"{story}: D1's usable row")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("unusable", XR45_UNUSABLE)
+async def test_xr45_the_planner_fx_quote_is_the_latest_usable_rate(session, unusable):
+    """Red on HEAD 16e837153: the quote is built from the unusable row of D2. 0 gives no rate and the issue
+    ``allocation.saved_fx_invalid``, though D1 holds a usable rate; an inf cannot even be a quote — the schema refuses an
+    infinite rate, so ``build_planner_fx_quotes`` raises —; 1E+14 is quoted as the rate, an absurd planner amount.
+
+    Contract (X-R45): D1's quote — rate 2.5, reference date D1, its source, 7 days before the request — and no issue.
+    """
+    story = f"the planner quote of {XR45_PAIR} as of {XR45_LATER}, 2.5 on {XR45_D1} and a legacy {unusable!r} on {XR45_D2}"
+    print_section(f"X-R45: {story}")
+    await _xr45_plant(session, {XR45_D1: float(XR45_D1_RATE), XR45_D2: unusable})
+    issues: list = []
+
+    quotes = await _xr45_quotes(session, issues, story)
+
+    found = [(quote.pair, quote.rate, quote.reference_date, quote.source, quote.days_before_requested) for quote in quotes]
+    expected = [(XR45_PAIR, XR45_D1_RATE, XR45_D1, _xr45_source(XR45_D1), (XR45_LATER - XR45_D1).days)]
+    assert found == expected, f"{story} is {found}: expected {expected}, the latest usable rate (X-R45)"
+    assert [issue.code for issue in issues] == [], f"{story} reports {[issue.code for issue in issues]}: a usable rate is saved, nothing is missing or invalid"
+    print_success(f"{story}: 2.5 of {XR45_D1}, no issue")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("unusable", XR45_UNUSABLE)
+async def test_xr45_a_planner_fx_pair_whose_only_saved_rate_is_unusable_is_missing(session, unusable):
+    """Red on HEAD 16e837153: the unusable row is the pair's saved quote. 0 is ``allocation.saved_fx_invalid``, with D2 as
+    its reference date; an inf makes ``build_planner_fx_quotes`` raise; 1E+14 is quoted as a rate.
+
+    Contract (X-R45): no usable rate, no saved quote. The pair is quoted as a pair with no row — no rate, reference date,
+    source or age — with the one issue ``allocation.saved_fx_missing``.
+    """
+    story = f"the planner quote of {XR45_PAIR} as of {XR45_LATER}, whose only rate is a legacy {unusable!r} on {XR45_D2}"
+    print_section(f"X-R45: {story}")
+    await _xr45_plant(session, {XR45_D2: unusable})
+    issues: list = []
+
+    quotes = await _xr45_quotes(session, issues, story)
+
+    found = [(quote.pair, quote.rate, quote.reference_date, quote.source, quote.days_before_requested) for quote in quotes]
+    assert found == [(XR45_PAIR, None, None, None, None)], f"{story} is {found}: expected the quote of a pair with no saved rate (X-R45)"
+    codes = [issue.code for issue in issues]
+    assert codes == ["allocation.saved_fx_missing"], f"{story} reports {codes}: expected ['allocation.saved_fx_missing'], a missing rate (X-R45)"
+    print_success(f"{story}: missing")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("latest", "read_back"), XR45_USABLE)
+async def test_xr45_guard_the_latest_usable_planner_fx_rate_wins(session, latest, read_back):
+    """Guard: green before and after. With 2.5 on D1 and a usable ``latest`` on D2 — an ordinary 4, and the two bounds
+    1E-10 and 99999999999999 — the latest row is D2's and the quote is its rate, with no issue: the clause skips nothing
+    a read may use."""
+    story = f"{XR45_PAIR} 2.5 on {XR45_D1} and {latest!r} on {XR45_D2}, as of {XR45_LATER}"
+    print_section(f"X-R45 guard: the latest usable rate wins, {story}")
+    await _xr45_plant(session, {XR45_D1: float(XR45_D1_RATE), XR45_D2: latest})
+    issues: list = []
+
+    rows = await source_fx_quotes._load_latest_planner_fx_rows(session, directed_pairs=[(XR45_BASE, XR45_QUOTE)], as_of=XR45_LATER)
+    quotes = await _xr45_quotes(session, issues, story)
+
+    found_rows = {pair: (row.date, row.rate) for pair, row in rows.items()}
+    assert found_rows == {(XR45_BASE, XR45_QUOTE): (XR45_D2, read_back)}, f"{story}: the latest saved row is {found_rows}, expected D2's {read_back}"
+    found = [(quote.rate, quote.reference_date, quote.source) for quote in quotes]
+    assert found == [(read_back, XR45_D2, _xr45_source(XR45_D2))], f"{story}: the quote is {found}, expected D2's {read_back}"
+    assert issues == [], f"{story} reports {[issue.code for issue in issues]}: expected none"
+    print_success(f"{story}: D2's {read_back}")
+
+
+XR45_WAC_RATE = Decimal("1.25")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("unusable", XR45_UNUSABLE)
+async def test_xr45_wac_fx_evidence_has_no_row_for_a_saved_rate_no_read_may_use(session, unusable):
+    """Red on HEAD 16e837153: ``_load_wac_fx_rows`` reads the exact (base, quote, date) rows with no bounds and answers the
+    key of D2 with its unusable row. An inf or a rate of 1E+14 reaches the WAC evidence as a saved rate (1 / inf = 0 once
+    inverted, inf otherwise), stopped only by the comparison with the rate the cost used; 0 is turned away later
+    (``saved_row.rate > 0``), so its red is the loader's alone.
+
+    Contract (X-R45): no row for the key of D2 — a missing rate, which the planner already reports as
+    ``allocation.wac_fx_missing`` — while the key of D1 keeps its usable row.
+    """
+    story = f"the WAC evidence of {XR45_PAIR} on {XR45_D1} (1.25) and {XR45_D2} (a legacy {unusable!r})"
+    print_section(f"X-R45: {story}")
+    await _xr45_plant(session, {XR45_D1: float(XR45_WAC_RATE), XR45_D2: unusable})
+    keys = {(XR45_BASE, XR45_QUOTE, XR45_D1), (XR45_BASE, XR45_QUOTE, XR45_D2)}
+
+    rows = await source_wac._load_wac_fx_rows(session, keys=keys)
+
+    found = {key: (row.rate, row.source) for key, row in rows.items()}
+    expected = {(XR45_BASE, XR45_QUOTE, XR45_D1): (XR45_WAC_RATE, _xr45_source(XR45_D1))}
+    assert found == expected, f"{story} reads {found}: expected {expected}, no row for the legacy rate (X-R45)"
+    print_success(f"{story}: D1's row alone")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("usable", "read_back"), XR45_USABLE)
+async def test_xr45_guard_wac_fx_evidence_reads_a_usable_saved_rate_on_its_exact_date(session, usable, read_back):
+    """Guard: green before and after. A usable rate on the key's exact date — an ordinary 4, and the two bounds 1E-10 and
+    99999999999999 — comes back as the key's row; D1's row, not asked for, stays out."""
+    story = f"the WAC evidence of {XR45_PAIR} on {XR45_D2} ({usable!r})"
+    print_section(f"X-R45 guard: {story}")
+    await _xr45_plant(session, {XR45_D1: float(XR45_WAC_RATE), XR45_D2: usable})
+
+    rows = await source_wac._load_wac_fx_rows(session, keys={(XR45_BASE, XR45_QUOTE, XR45_D2)})
+
+    found = {key: (row.rate, row.source) for key, row in rows.items()}
+    assert found == {(XR45_BASE, XR45_QUOTE, XR45_D2): (read_back, _xr45_source(XR45_D2))}, f"{story} reads {found}: expected D2's {read_back}"
+    print_success(f"{story}: {read_back}")

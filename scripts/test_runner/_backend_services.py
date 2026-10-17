@@ -1703,6 +1703,15 @@ def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Scheduler job body tests", verbose=verbose)
 
 
+def services_scheduler_last_fx_dates(verbose: bool = False, test_names: list = None) -> bool:
+    """Test X-R45 on the history sync's lookup: the real _last_fx_dates skips a stored rate no read may use (lane DB)."""
+    print_section("Services: Scheduler Last FX Dates (X-R45)")
+    print_info("Testing: backend/app/services/platform/scheduler/jobs.py (_last_fx_dates, _history_sync_start) on the lane database")
+    print_info("Tests: 1.5 on D1 and a legacy 0 / inf / 1E+14 on D2 → D1 for both slugs, the sync starting the day after D1; a legacy rate alone → nothing; guard: a usable latest rate (2, 1E-10, 99999999999999) → D2")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_last_fx_dates.py", test_names)
+    return run_command(cmd, "Scheduler last FX dates tests", verbose=verbose)
+
+
 def services_scheduler_joblog_builders(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler job log entry builders and the append/rotate/read round trip."""
     print_section("Services: Scheduler Job Log Builders")
@@ -2704,6 +2713,16 @@ Note: No backend server required.
         # sandbox dir, and jobs.py mutates the SchedulerState object it is handed
         # without ever calling save_state(), so nothing global is written.
         isolation="read",
+    )
+    add_test(
+        cat,
+        "scheduler-last-fx-dates",
+        services_scheduler_last_fx_dates,
+        name="Scheduler Last FX Dates (X-R45)",
+        desc="jobs._last_fx_dates, the real one on the lane database: a usable rate on D1 and a legacy 0, inf or 1E+14 on D2 answer D1 for both slugs of the pair, and the history sync (horizon a week) starts the day after D1, so D2 is fetched again; a pair whose only rate is unusable answers nothing; guard: a usable latest rate (2, 1E-10, 99999999999999) answers D2",
+        # WRITE_SCOPED: each test writes rows of its own pair XQD/XQE (used by no other test, checked free before writing)
+        # with raw SQL in its own session and never commits: the session rolls them back, no other connection sees them.
+        isolation="write-scoped",
     )
     add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches, LIBREFOLIO_PROFILE validation")
     add_test(cat, "config-package", services_config_package, name="Config Package", desc="Env vars read only in backend/app/config/, section accessors keep their semantics", isolation="pure")
