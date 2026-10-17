@@ -4070,7 +4070,20 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `200.html`. Gli script stanno alle stesse righe perché vengono dallo stesso `app.html`; con gli hash la dipendenza
     sparisce.
 
-  Dettagli: piano H, §14, lotto «H-43, fase 1», decisioni D4 e passo 4 (F1).
+  ✅ **Fatto il 17/10** (checkpoint delle 21:15; decisioni del coordinatore D-H52-1…4).
+  - `spa_inline_script_hashes()` (`static_site.py`) dà gli hash degli script inline di ogni pagina della build
+    (`index.html`, `200.html`, che ha un bootstrap diverso, e `offline.html`). Li legge una volta, alla costruzione del
+    middleware; `report_only_policy()` li aggiunge a `script-src`, accanto a `'report-sample'`.
+  - Il gestore inline di `offline.html` è diventato un listener, e `sw.js` è ritimbrato.
+  - La baseline E2E ha due voci: F1 con il campione esatto, F3. Il meccanismo delle righe è tolto.
+  - Lungo la strada, due difetti preesistenti curati con l'OK del coordinatore:
+    - `check_frontend_needs_build()` non guardava `frontend/static/`: una modifica lì lasciava la build «fresca»;
+    - `stamp_service_worker()` riscriveva `sw.js` a ogni build della doc. Ora scrive solo se cambia, e `front build`
+      timbra prima di costruire.
+  - Prove: `services managed-headers` 411, `utils pwa-assets` 26, `runtime-isolation` 387; `front-utility
+    csp-collector` 12 + 1 skipped su entrambe le corsie; cloud smoke nello slot.
+
+  Dettagli: piano H, §14, lotto «H-43, fase 1», decisioni D4 e passo 4 (F1); lotto «H-52».
 - **H-53 · La sonda dell'indirizzo di un link, con una `connect-src` applicata (F3 di H-43, metà sicurezza)** — basso,
   sicurezza; trovato dal primo cloud smoke, deciso dal coordinatore il 17/10. La metà dell'esperienza è di A.
   - Il controllo dell'indirizzo di un link (Impostazioni › Utenti) prende `<indirizzo scritto dall'admin>/api/v1/auth/
@@ -4082,6 +4095,15 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura, quando la CSP si applica: l'origine pubblica configurata in `connect-src`, oppure la sonda dal server.
 
   Dettagli: piano H, §14, lotto «H-43, fase 1», passo 4 (F3).
+- **H-54 · Il controllo della build vecchia non vede un file tolto da `frontend/src/` o da `frontend/static/`** —
+  minimo, strumenti; trovato da test-author nel lotto H-52, 17/10.
+  - `check_frontend_needs_build()` confronta le date dei file che esistono. Le date delle cartelle non contano (un
+    `.DS_Store` le muoverebbe), quindi un file cancellato dopo la build resta nella build, che sembra fresca. Solo gli
+    input dei contratti dei Tool hanno l'impronta del loro elenco (H-24).
+  - Cura possibile: la stessa impronta dell'elenco (nomi, non date) per `src/` e `static/`, registrata a ogni build
+    riuscita.
+
+  Dettagli: piano H, §14, lotto «H-52», passo 3.
 
 ## A · Account e accessi (fase 01)
 
