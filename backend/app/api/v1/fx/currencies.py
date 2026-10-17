@@ -38,7 +38,8 @@ from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
-from backend.app.utils.date_range_limits import latest_range_end, range_span_floor
+from backend.app.utils.date_range_limits import range_span_floor
+from backend.app.utils.datetime_utils import latest_range_end
 
 router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
 
@@ -424,6 +425,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
     conversion_metadata: list[dict] = []
 
     latest_end = latest_range_end()
+    served_ranges: dict[int, DateRangeModel] = {}
     for conv_idx, conversion in enumerate(request):
         to_cur = conversion.to_currency
         # X-R55: the range ends at latest_range_end() and spans RANGE_SPAN_LIMIT_DAYS at most; a conversion entirely
@@ -433,6 +435,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
         in_range = visible_start <= requested_end
         if in_range and (visible_start, requested_end) != (conversion.date_range.start, conversion.date_range.end or conversion.date_range.start):
             conversion = conversion.model_copy(update={"date_range": DateRangeModel(start=visible_start, end=requested_end)})
+        served_ranges[conv_idx] = conversion.date_range
 
         current_date = visible_start
         while current_date <= requested_end:
@@ -559,7 +562,7 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
                 request_index=request_index,
                 from_currency=conversion.from_amount.code,
                 to_currency=conversion.to_currency,
-                date_range=conversion.date_range,
+                date_range=served_ranges[request_index],
                 signals=await signal_service.execute(
                     plan,
                     signal_points[request_index],
