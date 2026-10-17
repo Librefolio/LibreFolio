@@ -42,7 +42,7 @@
   },
   "email_changed": {
     "subject": "L'adresse e-mail de votre compte LibreFolio a changé",
-    "intro": "L'adresse e-mail de votre compte sur $instance a été remplacée par $address. Ce message part vers l'adresse qu'il avait avant.",
+    "intro": "L'adresse e-mail de votre compte sur $instance a été modifiée. Ce message part vers l'adresse qu'il avait avant.",
     "advice": "Si vous avez fait ce changement, vous n'avez rien à faire. Sinon, quelqu'un utilise peut-être votre compte : changez tout de suite votre mot de passe si vous pouvez encore vous connecter, et prévenez l'administrateur de $instance."
   }
 }

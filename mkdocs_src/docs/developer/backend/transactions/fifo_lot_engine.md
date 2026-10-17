@@ -45,7 +45,7 @@ def run_fifo_lot_engine(
 | `broker_shorting` | Per-broker flag controlling whether a `SELL` remainder may open a `SHORT` lot. |
 | `split_ratios_by_tx_id` | Split transaction ID → ratio used to synthesize `SPLIT` events. |
 | `split_event_ids_by_tx_id` | Split transaction ID → its `SPLIT` `AssetEvent` id, carried by the synthesized event as `asset_event_id`. Yield on Cost passes it; the lots analysis does not. |
-| `reference_price_lookup` | Optional pure lookup used by current implementation when `ADJUSTMENT_IN` opens a new LONG lot. |
+| `reference_price_lookup` | Optional pure lookup used by current implementation when `ADJUSTMENT_IN` opens a new LONG lot. The lots analysis passes one that reads the asset's daily marks (see [Reference Price](lots_analysis_service.md#reference-price)); without a lookup, or when it returns `None`, the lot gets `reference_price_source = "unavailable"`. |
 | `economic_events` | Asset-linked `DIVIDEND` / `INTEREST` / `FEE` / `TAX` as `EconomicEvent`s, each with its native amount and the target-currency amount its caller resolved; consumed by the [economic allocation stage](#economic-allocation-stage). |
 | `target_currency` | The caller's report currency; each `EconomicEvent` also carries its own `target_currency`. `_close_position_piece()` also reads it: a lot or a closing price without a currency counts in it when a closure's currency is compared with its lot's (see [Closure currency](#closure-currency)). |
 
@@ -91,7 +91,7 @@ One FIFO lot. Usually opened by a `BUY`, by the remainder of an `ADJUSTMENT_IN`,
 | `reference_unit_price` | Optional reference price the engine resolves for a lot (e.g. when an `ADJUSTMENT_IN` opens a new LONG lot), consumed downstream by `LotsAnalysisService`. |
 | `reference_price_source` | `"exact"`, `"fallback"`, `"unavailable"`, or `None`. |
 
-`reference_unit_price` is stored on the market/`quote_base_quantity` axis when the resolver supplies one. If no opening quote is available, `opening_reference_price()` (`financial_math/lots/prices.py`) falls back to `lot.opening_unit_price * quote_base_quantity` before the lots analysis computes `relative_return`; the engine itself does not know `quote_base_quantity`.
+`reference_unit_price` is stored on the market/`quote_base_quantity` axis when the lookup supplies one — resolver marks already live on that axis. When the lot has none — opened by a `BUY` or a short-opening `SELL`, or by an `ADJUSTMENT_IN` with no observation on or before its opening date — `opening_reference_price()` (`financial_math/lots/prices.py`) falls back to `lot.opening_unit_price * quote_base_quantity` before the lots analysis computes `relative_return`; the engine itself does not know `quote_base_quantity`.
 
 ### 🧩 `FragmentInterval`
 
@@ -403,7 +403,7 @@ numeric net breakdown).
 
 ### 📈 Net annualization handoff
 
-The engine returns realized P&L plus economic accumulators; `LotsAnalysisService._build_lot_summaries()` derives `total_pnl`, subtracts allocated FEE/TAX into `net_total_pnl`, computes `net_total_return`, and annualizes **that net figure** over `opening_date → closing_date` (closed lots) or `opening_date → analysis_end` (open lots). The shipped `LotSummarySchema.annualized_return` therefore annualizes `net_total_return`, not gross `total_return`.
+The engine returns realized P&L plus economic accumulators; `lot_summary_figures()` (`financial_math/lots/summary.py`), called by `LotsAnalysisService._build_lot_summaries()`, derives `total_pnl`, subtracts allocated FEE/TAX into `net_total_pnl`, computes `net_total_return`, and annualizes **that net figure** over `opening_date → closing_date` (closed lots) or `opening_date → analysis_end` (open lots). The shipped `LotSummarySchema.annualized_return` therefore annualizes `net_total_return`, not gross `total_return`.
 
 ---
 
@@ -419,7 +419,7 @@ The engine returns realized P&L plus economic accumulators; `LotsAnalysisService
 
 !!! note "Estimated valuation lives outside FIFO"
 
-    The engine has no `ESTIMATED_AT_COST` branch and does not emit `CURRENT_PRICE_ASSUMED_AT_COST`. When lots analysis has no usable mark for an open LONG lot on a price-less asset, the service values the open slice at cost and sets `market_pnl = 0`; when the unified resolver can derive a trade-origin mark, that mark is flagged `estimated=True` on the price-history line.
+    The engine has no `ESTIMATED_AT_COST` branch and does not emit `CURRENT_PRICE_ASSUMED_AT_COST`. On a day with no observation on or before it — no quote, no `BUY` or `SELL` — the lots analysis values the open slice of a LONG lot at cost, with no market P&L (see [Estimated-at-Cost Fallback](lots_analysis_service.md#estimated-at-cost-fallback)); a trade-origin mark is a price, flagged `estimated=True` on the price-history line.
 
 !!! info "Issues degrade result instead of aborting run"
 

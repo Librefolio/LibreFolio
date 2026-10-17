@@ -22,14 +22,19 @@
  *     literal or arbitrary value, no `dark:`, no important modifier, every role declared in tokens.css; and each state
  *     is drawn in its own family, a tinted box pairing its soft surface with the on-soft text — `LINKS_PROBE_CLASSES`
  *     included: `checking` muted, `match` in the success family, the four warnings in the warning family's box;
- *   - the verification of an address (lot E5a): `VERIFY_PAGE_KEYS` words each of the seven states of the page of a
- *     verification link — `checking`, the four refusals of the link, `missing`, `error` — with
- *     `email.verification.page.<state>`; `resendFailureMessage` makes exactly one translator call per failure —
+ *   - the verification of an address (lot E5a): `VERIFY_PAGE_KEYS` words each of the eight states of the page of a
+ *     verification link — `checking`, the four refusals of the link, `missing`, `error`, and `blocked` since lot E-10 —
+ *     with `email.verification.page.<state>`; `resendFailureMessage` makes exactly one translator call per failure —
  *     `email.verification.resendErrors.<CODE>` for the five codes the owner can act on, the minutes until the next
  *     request for a rate limit, `…resendErrors.unavailable` for the four ways the instance cannot send, and
  *     `…resendErrors.generic` for anything else, an inherited name included —; every one of these keys, and the
  *     notice's and the page's own (`loginRequired`, `resend`, `resending`, `resent`, `verified` with its
  *     `{username}`), is in the four catalogues with exactly the placeholders the code fills;
+ *   - the page on a blocked instance (lot E-10): its eighth state, `blocked`, has a key of its own, in the four
+ *     catalogues without a placeholder — `email.verification.page.blocked` names nothing the page fills;
+ *   - «send the link again» on a blocked instance (lot E-11): `resendFailureMessage` words `INSTANCE_BLOCKED` with one
+ *     call for the sign-in's `auth.instanceBlocked` (lot A7b), in the four catalogues without a placeholder — E has no
+ *     key of its own for it, so that the sentence has one home —;
  *   - «send by email» and «forgot password» (lot E4a): `linkSendFailureMessage` makes one translator call per failure —
  *     `email.sendLink.errors.<CODE>` for the codes of `POST /email/links`, the minutes for a rate limit, the SMTP reason's
  *     `email.smtpErrors.<CODE>` for a refused delivery (`SEND_FAILED` when missing, unknown or inherited) but
@@ -374,8 +379,8 @@ describe('the class maps — whole strings of colour roles (theme-roles skill)',
 });
 
 // =====================================================================================================================
-/** The seven states of the page of a verification link. */
-const VERIFY_PAGE_STATES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error'];
+/** The eight states of the page of a verification link: `blocked` since lot E-10, the instance blocked by its provider. */
+const VERIFY_PAGE_STATES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error', 'blocked'];
 
 /** What `resendFailureMessage` asked the translator for, how many times, and what it returned. */
 function askedResend(failure: ResendFailure): {calls: number; key: string | undefined; values: Values | undefined; answer: string} {
@@ -388,6 +393,7 @@ function askedResend(failure: ResendFailure): {calls: number; key: string | unde
 /** One failure of each kind `resendFailureMessage` words, with the key and values it must ask for. */
 const RESEND_FAILURES: Array<{label: string; failure: ResendFailure; key: string; values?: Values}> = [
     {label: 'INVALID_CREDENTIALS', failure: {errorCode: 'INVALID_CREDENTIALS'}, key: 'email.verification.resendErrors.INVALID_CREDENTIALS'},
+    {label: 'INSTANCE_BLOCKED (lot E-11), in the sign-in’s own words of lot A7b', failure: {errorCode: 'INSTANCE_BLOCKED'}, key: 'auth.instanceBlocked'},
     {label: 'EMAIL_RATE_LIMITED, 180 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 180}, key: 'email.verification.resendErrors.EMAIL_RATE_LIMITED', values: {minutes: 3}},
     {label: 'EMAIL_RATE_LIMITED, 61 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 61}, key: 'email.verification.resendErrors.EMAIL_RATE_LIMITED', values: {minutes: 2}},
     {label: 'EMAIL_RATE_LIMITED, no wait said', failure: {errorCode: 'EMAIL_RATE_LIMITED'}, key: 'email.verification.resendErrors.EMAIL_RATE_LIMITED', values: {minutes: 1}},
@@ -399,7 +405,7 @@ const RESEND_FAILURES: Array<{label: string; failure: ResendFailure; key: string
 ];
 
 describe('the verification of an address (lot E5a) — its words', () => {
-    it('ETX-07: VERIFY_PAGE_KEYS words each of the seven states of the page with a key of its own', () => {
+    it('ETX-07: VERIFY_PAGE_KEYS words each of the eight states of the page with a key of its own', () => {
         expect(VERIFY_PAGE_KEYS).toEqual(Object.fromEntries(VERIFY_PAGE_STATES.map((state) => [state, `email.verification.page.${state}`])));
     });
 

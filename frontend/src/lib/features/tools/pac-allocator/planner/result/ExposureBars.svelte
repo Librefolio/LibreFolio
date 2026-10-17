@@ -19,6 +19,7 @@
     import {chartPercent, type WeightRow} from './model';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {shadePoles} from '$lib/theme/chartShades';
+    import {chartNeutrals} from '$lib/theme/chartTheme';
     import {chartRoles} from '$lib/theme/roleColors';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
     import {actualColours, idealColour} from './exposureBarColours';
@@ -90,9 +91,10 @@
 
     function option(): echarts.EChartsOption {
         void colorsVersion;
-        const grid = buildGridColors(dark);
-        const theme = buildTooltipTheme(dark);
         // The roles of the chart's own element: a forced theme subtree, or the Lab's preview, has its own.
+        const grid = buildGridColors(dark, container ?? null);
+        const theme = buildTooltipTheme(dark, container ?? null);
+        const neutrals = chartNeutrals(dark, container ?? null);
         const roles = chartRoles(dark, container ?? null);
         const ideal = idealColour(roles);
         const card = roles.color('--lf-surface-card');
@@ -125,7 +127,7 @@
             },
             tooltip: {
                 trigger: 'axis',
-                axisPointer: {type: 'shadow'},
+                axisPointer: {type: 'shadow', shadowStyle: {color: neutrals.axisPointer.shadow}},
                 confine: true,
                 backgroundColor: theme.bg,
                 borderColor: theme.border,

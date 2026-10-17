@@ -4,6 +4,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -21,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, IssueCode
+from backend.app.schemas.portfolio import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, IssueCode, LotTimelineEventSchema
 from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.lots_analysis_service import get_lots_analysis
 from backend.app.services.portfolio_service import PortfolioService
@@ -1196,10 +1197,14 @@ async def test_dividend_in_foreign_currency_converted_to_target(session, test_us
 
 
 @pytest.mark.asyncio
-async def test_estimated_at_cost_when_no_price_history(session, test_user, asset, broker):
+async def test_an_asset_without_quotes_is_priced_by_its_trades_and_raises_no_at_cost_warning(session, test_user, asset, broker):
     """No asset-system price -> the resolver values the open portion at the last observed *trade*
     mark (the BUY at 15/unit), so value_source is MARKET_PRICE (observation-based) with market_pnl 0
-    while price == cost; income still accrues and the no-quote DQ issue is still raised."""
+    while price == cost; income still accrues.
+
+    J-28 (CP-7b): the BUY prices the lot from its first day, so nothing is assumed at cost and the
+    lots raise no CURRENT_PRICE_ASSUMED_AT_COST. Before CP-7b that warning was raised whenever the
+    asset had no quote, although its trades priced the lots."""
     session.add_all(
         [
             Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 10), quantity=Decimal("1000"), amount=Decimal("-15000"), currency="EUR"),
@@ -1230,7 +1235,7 @@ async def test_estimated_at_cost_when_no_price_history(session, test_user, asset
     assert lot.total_return == Decimal("1250") / Decimal("15000")
 
     codes = {issue.code for issue in result.data_quality.issues}
-    assert IssueCode.CURRENT_PRICE_ASSUMED_AT_COST in codes
+    assert IssueCode.CURRENT_PRICE_ASSUMED_AT_COST not in codes, f"issues={result.data_quality.issues}"
 
     # History is now populated (previously skipped when market_price was None).
     assert result.value_history
@@ -1294,51 +1299,6 @@ async def test_adjustment_only_asset_is_estimated_at_cost_not_priced_by_its_adju
     off_cost = sorted((point.date, point.open_value) for point in result.value_history if point.open_value != Decimal("200"))
     assert off_cost == [], f"days whose open value is not the 200 EUR cost: {off_cost}"
     assert not result.price_history, f"an adjustment-only asset has no price line, got {result.price_history}"
-
-
-@pytest.mark.asyncio
-async def test_adjustment_before_the_first_quote_has_no_value_point(session, test_user, asset, broker):
-    """J-17: an asset received by an ADJUSTMENT-in (10 units at 20 EUR) on 2025-01-10 and first quoted on
-    2025-01-15 (25 EUR). Before the first quote nothing prices it (the asset has quotes, so it is not
-    estimated at cost either): the lot's value history starts on 2025-01-15, at 250.
-
-    Before J-17: the adjustment's 20 EUR priced it from 2025-01-10, so the history had points on
-    01-10..01-14 at an open value of 200.
-    """
-    session.add_all(
-        [
-            Transaction(
-                broker_id=broker.id,
-                asset_id=asset.id,
-                type=TransactionType.ADJUSTMENT,
-                date=date(2025, 1, 10),
-                quantity=Decimal("10"),
-                amount=Decimal("0"),
-                currency=None,
-                cost_basis_override=Decimal("20"),
-                cost_basis_currency="EUR",
-            ),
-            PriceHistory(asset_id=asset.id, date=date(2025, 1, 15), close=Decimal("25"), currency="EUR", source_plugin_key="TEST"),
-        ]
-    )
-    await session.flush()
-
-    result = await get_lots_analysis(
-        session=session,
-        user_id=test_user.id,
-        asset_id=asset.id,
-        broker_ids=[broker.id],
-        date_from=None,
-        date_to=date(2025, 1, 20),
-        target_currency="EUR",
-        selected_lot_ids=None,
-        requested_analyses=["VALUE_HISTORY"],
-    )
-
-    assert result.value_history is not None
-    points = _points_by_date(result.value_history)
-    assert sorted(points) == [date(2025, 1, 15) + timedelta(days=offset) for offset in range(6)], f"value points on {sorted(points)}"
-    assert points[date(2025, 1, 15)].open_value == Decimal("250")
 
 
 @pytest.mark.asyncio
@@ -2676,3 +2636,459 @@ async def test_a_foreign_lot_sold_whole_realizes_what_the_dashboard_realizes(ses
     lot_realized = [lot.realized_pnl for lot in lots.lots or [] if lot.lot_id == buy.id]
     dashboard_realized = [row.period_realized_gain_loss for row in contribution.positions if row.asset_id == usd_asset.id and row.broker_id == broker.id]
     assert {"lot": lot_realized, "dashboard": dashboard_realized} == {"lot": [Decimal("59.375")], "dashboard": [Decimal("59.375")]}
+
+
+# --------------------------------------------------------------------------- #
+# CP-7b — the lots read their prices from the asset's daily price series (V1, with J-28)
+# --------------------------------------------------------------------------- #
+#
+# The developer's decisions P2/J-17 («trades are prices, an adjustment isn't») and P21 («every amount at the rate of its
+# day»), then option (a) of the CP-7b amendment («the Dashboard's per-day rule in the lots too: one rule in the whole
+# app»), through the real service and database. The lots read the asset's daily price series (financial_math.
+# price_marks): the last close, or BUY/SELL price, on or before a day, carried forward — never an ADJUSTMENT.
+#
+# * A lot opened by an ADJUSTMENT takes the opening day's mark as its reference — a BUY's price too — converted at the
+#   opening day's rate. Before CP-7b: the last stored close however old, converted at that close's own day.
+# * An open LONG lot of known cost is valued at cost on the days with no observation on or before them — the run before
+#   the asset's first close, BUY or SELL — and CURRENT_PRICE_ASSUMED_AT_COST names that range: from the first
+#   transaction to the day before the first observation, or to the analysis end when there is none. Before CP-7b: at
+#   cost only when the asset had no close at all (then every unpriced day), and the warning raised on that alone, so an
+#   asset priced by its trades was told its price was assumed at cost (J-28).
+#
+# Every test owns its user, broker and asset (the fixtures, or an asset of its own) and the EUR/USD rates it reads
+# (_own_fx_rate); the session fixture rolls everything back. GUARD marks a value CP-7b leaves as it was.
+
+
+def _at_cost_warnings(result) -> list[dict]:
+    """The lots' CURRENT_PRICE_ASSUMED_AT_COST issues, each as its message key and its parameters: the range it names."""
+    assert result.data_quality is not None
+    return [{"key": issue.message_i18n_key, **issue.message_params} for issue in result.data_quality.issues if issue.code == IssueCode.CURRENT_PRICE_ASSUMED_AT_COST]
+
+
+def _at_cost_warning(asset: Asset, date_from: date, date_to: date) -> dict:
+    """The at-cost warning of ``asset`` over [date_from, date_to], as _at_cost_warnings reads it."""
+    return {"key": "dataQuality.currentPriceAssumedAtCostRange", "asset_id": asset.id, "date_from": date_from.isoformat(), "date_to": date_to.isoformat()}
+
+
+def _value_points_of(result, lot_id: int) -> dict[date, tuple[Decimal, Decimal]]:
+    """A lot's value history as {date: (open value, P&L)}, the lot found by its id."""
+    assert result.value_history is not None
+    return {point.date: (point.open_value, point.pnl) for point in result.value_history if point.lot_id == lot_id}
+
+
+async def _assert_never_quoted(session, asset: Asset) -> None:
+    """Precondition: no close is stored for the asset, so whatever prices it below is a trade, or nothing."""
+    closes = (await session.execute(select(PriceHistory.id).where(PriceHistory.asset_id == asset.id))).all()
+    assert closes == [], f"precondition broken: {len(closes)} close(s) stored for this test's own asset"
+
+
+def _received_at_20(broker: Broker, asset: Asset, day: date) -> Transaction:
+    """10 units received by an ADJUSTMENT at a cost basis of 20 EUR a unit — an inherited position, 200 EUR of cost."""
+    return Transaction(
+        broker_id=broker.id,
+        asset_id=asset.id,
+        type=TransactionType.ADJUSTMENT,
+        date=day,
+        quantity=Decimal("10"),
+        amount=Decimal("0"),
+        currency=None,
+        cost_basis_override=Decimal("20"),
+        cost_basis_currency="EUR",
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_asset_priced_by_its_trades_alone_raises_no_at_cost_warning(session, test_user, asset, broker):
+    """(g) J-28: never quoted, bought (10 for 1000 EUR on 1 Apr) and sold (4 for 520 EUR on 15 Apr), read on 20 Apr.
+
+    The BUY prices the lot from its first day, the SELL from the 15th: no day is at cost, so no CURRENT_PRICE_ASSUMED_AT_COST,
+    and the lot is at the SELL's 130 carried forward — MARKET_PRICE, 6 × 130 = 780. Before CP-7b: the same lot, but the
+    warning raised over 1–20 Apr, because the asset had no close.
+    """
+    await _assert_never_quoted(session, asset)
+    buy = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 4, 1), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    sell = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 4, 15), quantity=Decimal("-4"), amount=Decimal("520"), currency="EUR")
+    session.add_all([buy, sell])
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 4, 20),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY"],
+    )
+
+    lots = [(lot.value_source, lot.open_quantity, lot.open_value) for lot in result.lots or [] if lot.opening_transaction_id == buy.id]
+    assert {"at-cost warnings": _at_cost_warnings(result), "the BUY's lot": lots} == {
+        "at-cost warnings": [],
+        "the BUY's lot": [("MARKET_PRICE", Decimal("6"), Decimal("780"))],
+    }
+
+
+@pytest.mark.asyncio
+async def test_an_asset_with_adjustments_alone_is_at_cost_over_the_whole_window_and_says_so(session, test_user, asset, broker):
+    """(h) GUARD: never quoted, bought or sold, only received — 10 by an ADJUSTMENT at 20 EUR a unit on 2 May — read on 10 May.
+
+    No day has an observation, so the whole window is at cost: one CURRENT_PRICE_ASSUMED_AT_COST over [the first
+    transaction, the analysis end] = [2 May, 10 May], and the lot ESTIMATED_AT_COST at its cost, 200, market P&L 0.
+    The same before CP-7b, where this was the only case at cost.
+    """
+    await _assert_never_quoted(session, asset)
+    adjustment = _received_at_20(broker, asset, date(2025, 5, 2))
+    session.add(adjustment)
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 5, 10),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY"],
+    )
+
+    lots = [(lot.value_source, lot.open_value, lot.market_pnl) for lot in result.lots or [] if lot.opening_transaction_id == adjustment.id]
+    assert {"at-cost warnings": _at_cost_warnings(result), "the ADJUSTMENT's lot": lots} == {
+        "at-cost warnings": [_at_cost_warning(asset, date(2025, 5, 2), date(2025, 5, 10))],
+        "the ADJUSTMENT's lot": [("ESTIMATED_AT_COST", Decimal("200"), Decimal("0"))],
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_lot_opened_by_an_adjustment_after_a_newer_buy_takes_the_buys_price_as_reference(session, test_user, asset, broker):
+    """(i) X closed at 100 EUR on 2 Jun, 10 were bought at 120 EUR on 5 Jun, 5 received by an ADJUSTMENT at 90 EUR a unit on 9 Jun, read that day.
+
+    On 9 Jun the newest observation is the BUY: the ADJUSTMENT's lot is referenced to 120, ``fallback`` (no close that
+    day), and its relative return is 120 / 120 − 1 = 0. GUARD: the BUY's lot keeps its own price, 120, ``exact``.
+    Before CP-7b: 100, the close of 2 Jun, still ``fallback``, and a relative return of +20 %.
+    """
+    buy = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 6, 5), quantity=Decimal("10"), amount=Decimal("-1200"), currency="EUR")
+    adjustment = Transaction(
+        broker_id=broker.id,
+        asset_id=asset.id,
+        type=TransactionType.ADJUSTMENT,
+        date=date(2025, 6, 9),
+        quantity=Decimal("5"),
+        amount=Decimal("0"),
+        currency=None,
+        cost_basis_override=Decimal("90"),
+        cost_basis_currency="EUR",
+    )
+    session.add_all([buy, adjustment, PriceHistory(asset_id=asset.id, date=date(2025, 6, 2), close=Decimal("100"), currency="EUR", source_plugin_key="TEST")])
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 6, 9),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY"],
+    )
+
+    lots = {lot.opening_transaction_id: lot for lot in result.lots or []}
+    assert set(lots) == {buy.id, adjustment.id}, f"precondition: the BUY and the ADJUSTMENT open one lot each, got {result.lots}"
+    observed = {
+        "the ADJUSTMENT's lot": (lots[adjustment.id].reference_unit_price, lots[adjustment.id].reference_price_source, lots[adjustment.id].relative_return),
+        "the BUY's lot": (lots[buy.id].reference_unit_price, lots[buy.id].reference_price_source),
+    }
+    assert observed == {
+        "the ADJUSTMENT's lot": (Decimal("120"), "fallback", Decimal("0")),
+        "the BUY's lot": (Decimal("120"), "exact"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_foreign_reference_carried_from_an_older_close_converts_at_the_opening_days_rate(session, test_user, broker):
+    """(j) A USD asset, report EUR: closed at 64 USD on 2 Jul; 10 received by an ADJUSTMENT at 50 USD a unit on 7 Jul, five days later; read that day.
+
+    The reference is that close carried forward, 64 USD, ``fallback``. It stands for 7 Jul and converts at that day's rate,
+    1.28 USD a euro: 64 × 0.78125 = 50 EUR. The lot's current price is the same mark at the same rate, so its relative
+    return is 0. Before CP-7b it converted at the close's day, 2 Jul, 1.25 USD a euro: 64 × 0.8 = 51.2 EUR, and a relative
+    return of 50 / 51.2 − 1 = −0.0234375 — the exchange rate's move read as the asset's.
+
+    The rates are owned for both days (_own_fx_rate, 1.25 and 1.28 USD a euro: exact inverses), the asset is this test's own.
+    """
+    marker = uuid4().hex
+    usd_asset = Asset(display_name=f"LotsRefFx_{marker}", identifier_ticker=f"LRFX{marker[:4]}", currency="USD", asset_type=AssetType.STOCK)
+    session.add(usd_asset)
+    await session.flush()
+    close_day, opening_day = date(2025, 7, 2), date(2025, 7, 7)
+    await _own_fx_rate(session, on=close_day, base="EUR", quote="USD", rate=Decimal("1.25"))
+    await _own_fx_rate(session, on=opening_day, base="EUR", quote="USD", rate=Decimal("1.28"))
+    adjustment = Transaction(
+        broker_id=broker.id,
+        asset_id=usd_asset.id,
+        type=TransactionType.ADJUSTMENT,
+        date=opening_day,
+        quantity=Decimal("10"),
+        amount=Decimal("0"),
+        currency=None,
+        cost_basis_override=Decimal("50"),
+        cost_basis_currency="USD",
+    )
+    session.add_all([adjustment, PriceHistory(asset_id=usd_asset.id, date=close_day, close=Decimal("64"), currency="USD", source_plugin_key="TEST")])
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=usd_asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=opening_day,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY"],
+    )
+
+    assert result.data_quality is not None and result.data_quality.missing_fx_pairs == [], f"precondition: both rates are this test's own, got {result.data_quality}"
+    lots = [(lot.reference_unit_price, lot.reference_price_source, lot.relative_return) for lot in result.lots or [] if lot.opening_transaction_id == adjustment.id]
+    assert lots == [(Decimal("50"), "fallback", Decimal("0"))]
+
+
+@pytest.mark.asyncio
+async def test_an_adjustment_before_the_first_quote_is_at_cost_until_that_quote(session, test_user, asset, broker):
+    """(k) Received by an ADJUSTMENT-in (10 at 20 EUR a unit) on 10 Jan, first quoted on 15 Jan (25 EUR), read on 20 Jan.
+
+    10–14 Jan have no observation on or before them: the lot is at its cost, 200, P&L 0, as the Dashboard values the
+    holding (J-17); from 15 Jan it is worth 10 × 25 = 250, P&L 50. One CURRENT_PRICE_ASSUMED_AT_COST names 10–14 Jan,
+    and the summary, read on 20 Jan, is at the market: MARKET_PRICE, 250 (GUARD).
+
+    Before CP-7b (J-17's rule, at cost only an asset with no close at all): no point on 10–14 Jan and no warning, which
+    test_adjustment_before_the_first_quote_has_no_value_point pinned; this test replaces it.
+    """
+    adjustment = _received_at_20(broker, asset, date(2025, 1, 10))
+    session.add_all([adjustment, PriceHistory(asset_id=asset.id, date=date(2025, 1, 15), close=Decimal("25"), currency="EUR", source_plugin_key="TEST")])
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 20),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY"],
+    )
+
+    at_cost, priced = _days_between(date(2025, 1, 10), date(2025, 1, 14)), _days_between(date(2025, 1, 15), date(2025, 1, 20))
+    summary = [(lot.value_source, lot.open_value) for lot in result.lots or [] if lot.opening_transaction_id == adjustment.id]
+    observed = {"value history": _value_points_of(result, adjustment.id), "at-cost warnings": _at_cost_warnings(result), "summary": summary}
+    assert observed == {
+        "value history": {**dict.fromkeys(at_cost, (Decimal("200"), Decimal("0"))), **dict.fromkeys(priced, (Decimal("250"), Decimal("50")))},
+        "at-cost warnings": [_at_cost_warning(asset, date(2025, 1, 10), date(2025, 1, 14))],
+        "summary": [("MARKET_PRICE", Decimal("250"))],
+    }
+
+
+@pytest.mark.asyncio
+async def test_an_adjustment_before_the_first_buy_is_at_cost_until_that_buy(session, test_user, asset, broker):
+    """(l) Never quoted: received by an ADJUSTMENT-in (10 at 20 EUR a unit) on 1 Sep, then 5 bought at 30 EUR on 6 Sep, read on 8 Sep.
+
+    1–5 Sep have no observation on or before them: the ADJUSTMENT's lot is at its cost, 200, P&L 0; from 6 Sep the BUY's
+    30 prices it, 10 × 30 = 300, P&L 100. The warning names 1–5 Sep, and both lots' summaries are at the market.
+    Before CP-7b the values were the same (the asset had no close, so every unpriced day was at cost), but the warning
+    named the whole window, 1–8 Sep, although the BUY priced the lots from 6 Sep.
+    """
+    await _assert_never_quoted(session, asset)
+    adjustment = _received_at_20(broker, asset, date(2025, 9, 1))
+    buy = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 9, 6), quantity=Decimal("5"), amount=Decimal("-150"), currency="EUR")
+    session.add_all([adjustment, buy])
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 9, 8),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY"],
+    )
+
+    at_cost, priced = _days_between(date(2025, 9, 1), date(2025, 9, 5)), _days_between(date(2025, 9, 6), date(2025, 9, 8))
+    summaries = {lot.opening_transaction_id: (lot.value_source, lot.open_value) for lot in result.lots or []}
+    observed = {"the ADJUSTMENT's value history": _value_points_of(result, adjustment.id), "at-cost warnings": _at_cost_warnings(result), "summaries": summaries}
+    assert observed == {
+        "the ADJUSTMENT's value history": {**dict.fromkeys(at_cost, (Decimal("200"), Decimal("0"))), **dict.fromkeys(priced, (Decimal("300"), Decimal("100")))},
+        "at-cost warnings": [_at_cost_warning(asset, date(2025, 9, 1), date(2025, 9, 5))],
+        "summaries": {adjustment.id: ("MARKET_PRICE", Decimal("300")), buy.id: ("MARKET_PRICE", Decimal("150"))},
+    }
+
+
+# --------------------------------------------------------------------------- #
+# MF-E1 (V11) — an opening event states the lot's opening value
+# --------------------------------------------------------------------------- #
+#
+# ``LotTimelineEventSchema.opening_value``: on a BUY and an ADJUSTMENT_IN event — the two that open a lot — the lot's
+# original cost converted to the analysis currency at the opening date: the very figure of that lot's
+# ``LotSummarySchema.original_cost``, in the currency of the event's ``unit_price``. None on every other kind (SELL,
+# SPLIT, TRANSFER_*), and None when the opening's conversion is missing. Before MF-E1 the schema has no such field.
+#
+# Every test owns its user, broker(s) and asset (the fixtures, or an asset of its own), and the rates it reads, in
+# 2048, a year no other test writes (_own_fx_rate); the session fixture rolls everything back.
+
+
+def _assert_the_event_schema_has_an_opening_value() -> None:
+    assert "opening_value" in LotTimelineEventSchema.model_fields, "LotTimelineEventSchema has no opening_value field (MF-E1, V11)"
+
+
+@pytest.mark.asyncio
+async def test_an_opening_event_states_its_lots_original_cost_in_the_analysis_currency(session, test_user, asset, broker):
+    """(V11) An EUR asset analysed in EUR, three lots opened three ways, then a SELL, a 2:1 SPLIT and a TRANSFER:
+
+    * 2 Mar 2048, BUY 10 for 1 000 EUR — original cost 1 000 EUR;
+    * 3 Mar, BUY 4 for 500 USD at 1.25 USD a euro — 400 EUR;
+    * 4 Mar, ADJUSTMENT-in 5 at a cost basis of 30 USD a unit, at 1.6 USD a euro — 150 USD, 93.75 EUR;
+    * 5 Mar, SELL 3 of the first lot; 7 Mar, SPLIT 2:1; 8→9 Mar, TRANSFER of 4 to a second broker; read on 10 Mar.
+
+    Each opening event's ``opening_value`` is its lot's ``original_cost``: converted at the opening date (two different
+    rates), and in the currency of the event's ``unit_price`` — quantity × unit price, no fees. The SELL, SPLIT and
+    TRANSFER events have none. Before MF-E1: no ``opening_value`` on the event schema at all.
+    """
+    _assert_the_event_schema_has_an_opening_value()
+    broker_b = Broker(name=f"LotsBrokerB_{uuid4().hex}")
+    session.add(broker_b)
+    await session.flush()
+    session.add(BrokerUserAccess(broker_id=broker_b.id, user_id=test_user.id, role="OWNER", share_percentage=Decimal("1")))
+    await session.flush()
+    await _own_fx_rate(session, on=date(2048, 3, 3), base="EUR", quote="USD", rate=Decimal("1.25"))
+    await _own_fx_rate(session, on=date(2048, 3, 4), base="EUR", quote="USD", rate=Decimal("1.6"))
+    split_event = AssetEvent(asset_id=asset.id, date=date(2048, 3, 7), type=AssetEventType.SPLIT, value=Decimal("2"), currency="EUR")
+    session.add(split_event)
+    await session.flush()
+
+    buy_eur = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2048, 3, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    buy_usd = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2048, 3, 3), quantity=Decimal("4"), amount=Decimal("-500"), currency="USD")
+    received = Transaction(
+        broker_id=broker.id,
+        asset_id=asset.id,
+        type=TransactionType.ADJUSTMENT,
+        date=date(2048, 3, 4),
+        quantity=Decimal("5"),
+        amount=Decimal("0"),
+        currency=None,
+        cost_basis_override=Decimal("30"),
+        cost_basis_currency="USD",
+    )
+    sell = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2048, 3, 5), quantity=Decimal("-3"), amount=Decimal("390"), currency="EUR")
+    # 16 held at the split (7 + 4 + 5): the 2:1 split adds 16.
+    split = Transaction(
+        broker_id=broker.id,
+        asset_id=asset.id,
+        type=TransactionType.ADJUSTMENT,
+        date=date(2048, 3, 7),
+        quantity=Decimal("16"),
+        amount=Decimal("0"),
+        currency="EUR",
+        asset_event_id=split_event.id,
+    )
+    transfer_out = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.TRANSFER, date=date(2048, 3, 8), quantity=Decimal("-4"), amount=Decimal("0"), currency="EUR")
+    transfer_in = Transaction(broker_id=broker_b.id, asset_id=asset.id, type=TransactionType.TRANSFER, date=date(2048, 3, 9), quantity=Decimal("4"), amount=Decimal("0"), currency="EUR")
+    session.add_all(
+        [
+            buy_eur,
+            buy_usd,
+            received,
+            sell,
+            split,
+            transfer_out,
+            transfer_in,
+            PriceHistory(asset_id=asset.id, date=date(2048, 3, 2), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2048, 3, 10), close=Decimal("60"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+    transfer_out.related_transaction_id = transfer_in.id
+    transfer_in.related_transaction_id = transfer_out.id
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id, broker_b.id],
+        date_from=None,
+        date_to=date(2048, 3, 10),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "EVENT_HISTORY"],
+    )
+
+    # Precondition: the three lots, each cost converted at its own opening date (GUARD: the summary as before MF-E1).
+    original_costs = {lot.lot_id: lot.original_cost for lot in result.lots or []}
+    assert original_costs == {buy_eur.id: Decimal("1000"), buy_usd.id: Decimal("400"), received.id: Decimal("93.75")}, f"precondition: three lots of known cost, got {result.lots}"
+    assert result.lot_events is not None
+    events_by_kind: dict[str, list[LotTimelineEventSchema]] = {}
+    for row in result.lot_events:
+        events_by_kind.setdefault(str(row.kind), []).append(row)
+    # Presence first: every kind this ledger produces is there, so the Nones below are about rows that exist.
+    assert set(events_by_kind) == {"BUY", "ADJUSTMENT_IN", "SELL", "SPLIT", "TRANSFER_DEPART", "TRANSFER_ARRIVE"}, f"precondition: the ledger's event kinds, got {sorted(events_by_kind)}"
+
+    openings = {row.lot_id: (str(row.kind), row.opening_value) for row in events_by_kind["BUY"] + events_by_kind["ADJUSTMENT_IN"]}
+    assert openings == {
+        buy_eur.id: ("BUY", Decimal("1000")),
+        buy_usd.id: ("BUY", Decimal("400")),
+        received.id: ("ADJUSTMENT_IN", Decimal("93.75")),
+    }
+    assert {lot_id: opening_value for lot_id, (_kind, opening_value) in openings.items()} == original_costs
+    # The currency of the event's unit price: quantity × unit price, a BUY without fees and a priced ADJUSTMENT.
+    assert {row.lot_id: row.quantity * row.unit_price for row in events_by_kind["BUY"] + events_by_kind["ADJUSTMENT_IN"]} == original_costs
+
+    others = [(str(row.kind), row.lot_id, row.opening_value) for kind in ("SELL", "SPLIT", "TRANSFER_DEPART", "TRANSFER_ARRIVE") for row in events_by_kind[kind]]
+    assert [(kind, lot_id) for kind, lot_id, opening_value in others if opening_value is not None] == []
+
+
+@pytest.mark.asyncio
+async def test_an_opening_event_has_no_opening_value_when_its_conversion_is_missing(session, test_user, broker):
+    """(V11) A VND asset bought in VND on 9 Jun 2048, analysed in EUR with no VND/EUR rate or route.
+
+    The lot's original cost is unknown in EUR (B3a), and so is its opening event's ``opening_value``: None, never the
+    native 2 500 000 VND. The absence of the pair is owned as in B3a's test: ``fx_rates`` and ``fx_conversion_routes``
+    are emptied for EUR/VND inside this test's transaction, which the ``session`` fixture rolls back.
+    Before MF-E1: no ``opening_value`` on the event schema at all.
+    """
+    _assert_the_event_schema_has_an_opening_value()
+    marker = uuid4().hex
+    vnd_asset = Asset(display_name=f"LotsOpeningVND_{marker}", identifier_ticker=f"LOVN{marker[:4]}", currency="VND", asset_type=AssetType.STOCK)
+    session.add(vnd_asset)
+    await session.flush()
+    base, quote = sorted(("VND", "EUR"))
+    await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote))
+    await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
+    buy = Transaction(broker_id=broker.id, asset_id=vnd_asset.id, type=TransactionType.BUY, date=date(2048, 6, 9), quantity=Decimal("100"), amount=Decimal("-2500000"), currency="VND")
+    session.add_all([buy, PriceHistory(asset_id=vnd_asset.id, date=date(2048, 6, 9), close=Decimal("25000"), currency="VND", source_plugin_key="TEST")])
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=vnd_asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2048, 6, 10),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "EVENT_HISTORY"],
+    )
+
+    # Precondition: the BUY opened the only lot, of unknown cost in EUR.
+    assert [(lot.lot_id, lot.original_cost) for lot in result.lots or []] == [(buy.id, None)], f"precondition: one lot of unknown EUR cost, got {result.lots}"
+    openings = [(row.lot_id, row.opening_value) for row in result.lot_events or [] if row.kind == "BUY"]
+    assert openings == [(buy.id, None)]

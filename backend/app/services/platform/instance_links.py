@@ -1,8 +1,8 @@
 """Links of the instance that the app shows to its users.
 
 Owner: workstream H (platform). Each function reads its address from ``backend/app/config/platform.py`` and never
-raises: an invalid address is logged once per process, with what it costs until it is fixed, and the app shows its
-default link instead.
+raises: an invalid address is logged once per process, with what it costs until it is fixed, and the app falls back to
+its default (for the support address: a new GitHub issue on a self-hosted instance, no report link on a managed one).
 """
 
 import functools
@@ -12,8 +12,8 @@ from backend.app.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-#: What an invalid support address costs until it is fixed, as the error log says it.
-_DEFAULT_SUPPORT = "the app links to the project's issues on GitHub until it is fixed"
+#: What an invalid support address costs until it is fixed, as the error log says it (N61: no public fallback when managed).
+_DEFAULT_SUPPORT = "until it is fixed, the asset search offers a new GitHub issue on a self-hosted instance and no report link on a managed one"
 
 
 @functools.cache
@@ -23,7 +23,8 @@ def _report_invalid(problem: str, consequence: str) -> None:
 
 
 def support_link() -> str | None:
-    """``LIBREFOLIO_SUPPORT_URL``, or None when it is unset or invalid (logged once): the app then links to GitHub issues."""
+    """``LIBREFOLIO_SUPPORT_URL``, or None when it is unset or invalid (logged once): the asset search then offers a new
+    GitHub issue on a self-hosted instance, and no report link on a managed one."""
     try:
         return support_url()
     except ValueError as exc:

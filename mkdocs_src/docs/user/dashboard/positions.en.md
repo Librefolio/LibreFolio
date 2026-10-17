@@ -42,7 +42,7 @@ What do you own on the end date, and how is each position doing? **Portfolio** l
 | **Qty** | Shares, units or coins held |
 | **Price** *(hidden)* | The unit price used: the market price, or the price of your last purchase or sale when there is no quote; `—` for an asset valued at what it cost you, which has no price at all → [Price Resolution](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
 | **Avg. Cost** *(hidden)* | Average purchase price per unit, each purchase at its own date's exchange rate → [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
-| **Oldest open lot** *(hidden)* | Opening date of the oldest lot still open |
+| **Oldest open lot** *(hidden)* | Opening date of the oldest lot still open at this broker; a stock split keeps the dates |
 | **Brokers** | The broker holding the position |
 
 **How to read it**
@@ -93,6 +93,8 @@ Which positions made or lost money in the period, and how? **Period** lists ever
 - **Closed positions** are in italics, or carry a **Closed** badge in the chart; to list one kind only, show **Status** and filter it.
 - **In the Map**, gains stack right of zero and losses left, the net result closing the row; each percentage compares with the position's start value.
 - **A position's Period P&L** can differ from its lifetime gain: only the period counts.
+- **Start Value** and **End Value** are worked out as the **Value** in **Portfolio** — same prices, an asset with no price at what it cost you, each day's exchange rate — so the rows plus the **Other Period Effects** add up to the [Period P&L card](kpi-cards.md#card-1-period-pl). A **`—`** in **Unrealized change** means a value could not be computed, such as a missing exchange rate or purchase cost: it is not a zero.
+- **Securities moved between two of your brokers** during the period split their result: the sending broker's row keeps what they did until they arrived, the receiving broker's what they did after; the total does not change.
 
 ??? tip "🙈 Hide amounts — what the chart still shows"
 
@@ -182,7 +184,7 @@ What are the selected lots worth, and what have they earned since opening? With 
 
 - **Comprehensive value above Opening value**: the lots gained, sales and income included.
 - **A dashed line** in **Value** means a lot's current value is estimated at cost: its asset has no price at all — no market price, and no purchase or sale up to the end date.
-- **A line that starts after its lot opened**: the asset had no price yet on those days — no market price, no purchase or sale — so they are not valued. An asset with no market price at all up to the end date is valued at cost on those days instead.
+- **A flat start**: until the asset's first price — market price, purchase or sale — a lot, for example one you received through an adjustment, is valued at what it cost you, with no gain or loss. A day whose price has no exchange rate is left out instead.
 
 ### 🧾 5. Lot Detail
 
@@ -203,7 +205,7 @@ The whole story of one lot. Open it with **View lot detail** (⋮) or by clickin
 
     - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner).
     - **A red message** means quantities or transfers do not add up: the figures may be incomplete, so check the asset's transactions.
-    - **A lot valued at cost** has no market price: dashed bubble border, no market gain or loss.
+    - **Valued at cost**: on the days before the asset's first price — no market price, no purchase or sale — its lots are valued at what they cost, with no market gain or loss, and the banner names those days. With no price at all up to the end date, the lot's bubble has a dashed border.
 
 ---
 

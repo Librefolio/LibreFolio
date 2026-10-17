@@ -42,9 +42,8 @@
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
-    import {themed} from '$lib/theme/themePair';
-    import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {CHART_TOOLTIP_COLORS, chartNeutrals} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Props
@@ -180,12 +179,15 @@
     // =========================================================================
 
     onMount(() => {
-        // Watch for dark-mode class changes on <html>
-        const observer = onThemeClassChange(() => {
+        // Watch for dark-mode class changes on <html>, and for the Designer Lab's colour edits (C4)
+        const redraw = () => {
             if (chartContainer && data.length > 0) renderChart();
-        });
+        };
+        const observer = onThemeClassChange(redraw);
+        const chartColors = onChartColorsChange(redraw);
         return () => {
             observer.disconnect();
+            chartColors.disconnect();
             cleanup();
         };
     });
@@ -224,19 +226,19 @@
     }
 
     function buildTooltipHeader(date: string, bucketInfo?: {bucketStart: string; bucketEnd: string}): string {
+        const heading = chartNeutrals(isDarkProp ?? isDarkTheme(), chartContainer).tooltip.candlestickBox.heading;
         if (resolution === 'daily') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${themed(CHART_TOOLTIP_COLORS.candlestickBox.heading, isDarkProp ?? isDarkTheme())}">${formatDay(date)}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${heading}">${formatDay(date)}</div>`;
         }
 
-        const dark = isDarkProp ?? isDarkTheme();
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
         const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
 
         if (resolution === 'weekly') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${themed(CHART_TOOLTIP_COLORS.candlestickBox.heading, dark)}">${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${heading}">${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</div>`;
         }
 
-        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${themed(CHART_TOOLTIP_COLORS.candlestickBox.heading, dark)}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</div>`;
+        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${heading}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</div>`;
     }
 
     // =========================================================================
@@ -354,11 +356,12 @@
         }
 
         const dark = isDarkProp ?? isDarkTheme();
+        const neutrals = chartNeutrals(dark, chartContainer);
 
         const greenColor = dark ? COLORS.greenDark : COLORS.greenLight;
         const redColor = dark ? COLORS.redDark : COLORS.redLight;
-        const axisColor = themed(CHART_NEUTRALS.priceAxis.line, dark);
-        const labelColor = themed(CHART_NEUTRALS.priceAxis.label, dark);
+        const axisColor = neutrals.priceAxis.line;
+        const labelColor = neutrals.priceAxis.label;
 
         const dates = data.map((d) => d.date);
         lastRenderedDates = dates;
@@ -497,7 +500,7 @@
         }
 
         // ── Y-axes ──
-        const colors = getChartColors(dark);
+        const colors = getChartColors(dark, chartContainer);
         const priceYAxis = buildPriceYAxis({mode: yAxisMode, min: yAxisMin, max: yAxisMax, isPercentage}, colors, {gridIndex: 0, showGridLines});
         const yAxes: any[] = [priceYAxis, ...secondaryAxes];
 
@@ -546,7 +549,7 @@
                 if (p.seriesName === 'Volume') {
                     const vol: number = p.value ?? 0;
                     const volFmt = formatVolume(vol);
-                    html += `<div style="color:${themed(CHART_TOOLTIP_COLORS.candlestickBox.muted, dark)};font-size:11px;margin-top:3px">Vol: ${volFmt}</div>`;
+                    html += `<div style="color:${neutrals.tooltip.candlestickBox.muted};font-size:11px;margin-top:3px">Vol: ${volFmt}</div>`;
                     continue;
                 }
 
@@ -558,7 +561,7 @@
                     // works regardless of whether the index got prepended.
                     const {open, close, low, high, bullish} = parseCandleTooltipValue(p.value as number[]);
                     const clr = bullish ? greenColor : redColor;
-                    const dimClr = themed(CHART_TOOLTIP_COLORS.candlestickBox.muted, dark);
+                    const dimClr = neutrals.tooltip.candlestickBox.muted;
                     html += `<div style="display:grid;grid-template-columns:auto 1fr;gap:0 6px;font-size:11px;margin-top:2px">`;
                     html += `<span style="color:${dimClr}">O</span><span style="color:${clr}">${fmtPrice(open)}</span>`;
                     html += `<span style="color:${dimClr}">H</span><span style="color:${clr}">${fmtPrice(high)}</span>`;
@@ -576,10 +579,10 @@
 
             const staleDays = staleLookup.get(date);
             if (staleDays !== undefined) {
-                html += `<div style="color:${CHART_TOOLTIP_COLORS.staleWarning};font-size:11px;margin-top:3px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</div>`;
+                html += `<div style="color:${neutrals.tooltip.staleWarning};font-size:11px;margin-top:3px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</div>`;
                 const fxStaleDays = fxStaleLookup.get(date);
                 if (fxStaleDays !== undefined && fxStaleDays > 0) {
-                    html += `<div style="color:${CHART_TOOLTIP_COLORS.staleWarning};font-size:11px">⚠ ${$t('chart.tooltip.fxStale', {values: {days: fxStaleDays}})}</div>`;
+                    html += `<div style="color:${neutrals.tooltip.staleWarning};font-size:11px">⚠ ${$t('chart.tooltip.fxStale', {values: {days: fxStaleDays}})}</div>`;
                 }
             }
 
@@ -594,13 +597,13 @@
             yAxis: yAxes,
             tooltip: {
                 trigger: 'axis' as const,
-                axisPointer: {type: 'cross' as const, crossStyle: {color: themed(CHART_TOOLTIP_COLORS.candlestickBox.crosshair, dark)}},
+                axisPointer: {type: 'cross' as const, crossStyle: {color: neutrals.tooltip.candlestickBox.crosshair}},
                 appendToBody: true,
                 confine: true,
                 position: tooltipPositionSide,
-                backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, dark),
-                borderColor: themed(CHART_TOOLTIP_COLORS.candlestickBox.border, dark),
-                textStyle: {color: themed(CHART_TOOLTIP_COLORS.candlestickBox.text, dark), fontSize: 12},
+                backgroundColor: neutrals.tooltip.box.background,
+                borderColor: neutrals.tooltip.candlestickBox.border,
+                textStyle: {color: neutrals.tooltip.candlestickBox.text, fontSize: 12},
                 formatter: tooltipFormatter,
             },
             series,

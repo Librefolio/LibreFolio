@@ -29,8 +29,9 @@ status, the setting) are not written yet: this module calls the functions of ``v
 5. ``registration_email_work(user_id, *, engine)``, for an account that still waits: a new token carrying the account's
    address replaces its other verification tokens and goes by email — exactly what ``build_verification`` writes in the
    account's language, with the ``LIBREFOLIO_PUBLIC_URL`` link of ``/verify-email``, 24 hours, the host of that address
-   as the instance —, committed before the email, one unit of the hourly budget spent; the emailed link verifies the
-   account. Nothing at all for an account that no longer waits. When the instance is blocked, email or links are not
+   as the instance, greeting nobody by name (no username: whoever signs up chooses it, decision N62) —, committed before
+   the email, one unit of the hourly budget spent; the emailed link verifies the account. Nothing at all for an account
+   that no longer waits. When the instance is blocked, email or links are not
    usable, the budget is spent or the recipient's mailbox had its three verification emails of the hour, nothing is
    made and the hold stays live (logged «not sent»). When anything fails once the new token is
    committed — reading the account's language, building the link or the email, ``send_email`` (the SMTP server
@@ -58,8 +59,10 @@ status, the setting) are not written yet: this module calls the functions of ``v
    spent or not; the hold never counts —, the wait being the longest of the two; then, when no link of the account is
    live any more, a place under ``LIBREFOLIO_MAX_USERS`` (``USER_LIMIT_REACHED``); then the hourly budget; then the
    recipient's mailbox — three verification emails an hour per mailbox, whatever accounts they are for, letter case
-   and surrounding spaces aside, counted on the emails that went out only (``EmailRateLimitedError`` with the wait);
-   then the email of contract 5, returning its language. Whatever fails once the new token is committed is raised,
+   and surrounding spaces aside, and the aliases of one mailbox folded by ``delivery.mailbox_budget_key`` (E-9 a: a
+   ``+tag`` on any domain, the dots of a Gmail local part, ``googlemail.com`` for ``gmail.com``), each email still going
+   to its account's address as stored —, counted on the emails that went out only (``EmailRateLimitedError`` with the
+   wait); then the email of contract 5, returning its language. Whatever fails once the new token is committed is raised,
    and the new token stays without its address: it confirms nothing and counts for nothing, so «resend» may be asked
    again at once. A link emailed meanwhile by another request rolls everything back: ``EmailRateLimitedError``.
    Inside the write transaction the account's unspent links are revoked first: none left means it stopped waiting
@@ -469,9 +472,9 @@ def _token_in(text: str) -> str:
     return parse_qs(match.group(1))["token"][0]
 
 
-def _expected(token: str, *, language: str = "en", username: str = ALICE) -> object:
-    """What ``build_verification`` writes for the PUBLIC_URL link of ``token``: 24 hours, the public host as the instance."""
-    return build_verification(language=language, username=username, link=email_link(VERIFICATION, token), ttl=TTL, instance=PUBLIC_HOST)
+def _expected(token: str, *, language: str = "en") -> object:
+    """What ``build_verification`` writes for the PUBLIC_URL link of ``token``: 24 hours, the public host as the instance, no username (decision N62)."""
+    return build_verification(language=language, link=email_link(VERIFICATION, token), ttl=TTL, instance=PUBLIC_HOST)
 
 
 def _assert_is(received: object, expected: object) -> None:
@@ -793,7 +796,7 @@ async def test_an_account_waits_when_inactive_with_an_unspent_verification_token
 
 @pytest.mark.asyncio
 async def test_the_registration_email_replaces_the_hold_with_an_emailed_link(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter) -> None:
-    """EMV-012 — contract 5: after a real hold, the work sends one message: to the account's address, from the configured sender, exactly what ``build_verification`` writes in English with the PUBLIC_URL ``/verify-email`` link of a new token, 24 hours, the public host as the instance. The new token carries the account's address, was issued now and is live; the hold is revoked now; the account still waits. One unit spent; the work returns None and logs the link emailed by ids and language, never the token nor the address."""
+    """EMV-012 — contract 5: after a real hold, the work sends one message: to the account's address, from the configured sender, exactly what ``build_verification`` writes in English with the PUBLIC_URL ``/verify-email`` link of a new token, 24 hours, the public host as the instance — greeting nobody by name: the username its owner chose is in no part of it (decision N62). The new token carries the account's address, was issued now and is live; the hold is revoked now; the account still waits. One unit spent; the work returns None and logs the link emailed by ids and language, never the token nor the address."""
     print_section("EMV-012: the registration email")
     await _option(engine, "true")
     alice = await _add_user(engine, ALICE)
@@ -811,6 +814,7 @@ async def test_the_registration_email_replaces_the_hold_with_an_emailed_link(mon
     assert received.rcpt_tos == [alice.email]
     assert (_mailboxes(received.message["To"]), _mailboxes(received.message["From"])) == ([("", alice.email)], [SENDER])
     token = _token_in(_text(received))
+    assert ALICE not in _text(received) + _html(received), "the verification email greets nobody by name: whoever signs up chooses the username (N62)"
     _assert_is(received, _expected(token))
     hold, emailed = await _rows(engine, alice.id)
     assert (hold.email, ensure_utc(hold.revoked_at), hold.consumed_at) == (None, moment, None)
@@ -1912,3 +1916,65 @@ async def test_wrong_credentials_are_a_warning_without_the_identifier(engine: As
     secrets = (identifier, ALICE, NOBODY, alice.email, ACCOUNT_PASSWORD, WRONG_PASSWORD, ADDRESS)
     assert _holding(events, *secrets) == [], f"a log event holds an identifier, a password or an address: {_holding(events, *secrets)}"
     print_success("one warning, nothing of the credentials")
+
+
+# =============================================================================
+# 10. ALIASES OF ONE MAILBOX SHARE ITS BUDGET (E-9 a)
+# =============================================================================
+
+#: One Gmail mailbox written four ways, each the address of a waiting account of its own: a ``+tag``, the dots of the
+#: local part and ``googlemail.com`` all deliver to it. ``delivery.mailbox_budget_key`` folds the four into
+#: GMAIL_ALIAS_KEY; ``strip().casefold()`` keeps them apart, a budget each.
+GMAIL_ALIASES = ("zq.vic+1@gmail.com", "zqvic+2@googlemail.com", "z.q.v.i.c@gmail.com", "zqvic+verify@gmail.com")
+GMAIL_ALIAS_KEY = "zqvic@gmail.com"
+#: One mailbox outside Gmail written four ways: a ``+tag`` is cut on every domain, so the four share TAGGED_KEY.
+TAGGED_ALIASES = ("zq-v+1@example.com", "zq-v+2@example.com", "zq-v+3@example.com", "zq-v@example.com")
+TAGGED_KEY = "zq-v@example.com"
+
+
+@pytest.mark.asyncio
+async def test_aliases_of_one_gmail_mailbox_share_its_verification_emails(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, clock: FakeClock, mailbox_limit: SlidingWindowLimiter) -> None:
+    """EMV-049 — contracts 5 and 7 (E-9 a): four accounts registered with aliases of one Gmail mailbox — ``zq.vic+1@gmail.com``, ``zqvic+2@googlemail.com``, ``z.q.v.i.c@gmail.com``, ``zqvic+verify@gmail.com`` —, each waiting with its hold. The registration emails of the first three go out, a minute apart, each to its account's stored address exactly — the key is never a recipient —; the fourth's does not: «Verification email: not sent», a warning with ``EmailRateLimitedError`` and ``EMAIL_RATE_LIMITED``, nothing raised, and that account still waits. The mailbox counted three times, under its folded key."""
+    print_section("EMV-049: four Gmail aliases, three verification emails")
+    assert len({address.casefold() for address in GMAIL_ALIASES}) == len(GMAIL_ALIASES), "precondition: letter case alone keeps the four apart: only folding the aliases makes them one mailbox"
+    moment = utcnow()
+    accounts = [await _waiting(engine, f"zq_alias_{index}", created=moment - timedelta(minutes=5), email=address) for index, address in enumerate(GMAIL_ALIASES)]
+    last = accounts[-1][0]
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with capture_logs() as events:
+            for index, (user, _hold) in enumerate(accounts):
+                clock.now = START + 60 * index
+                await verification.registration_email_work(user.id, engine=engine, now=moment + timedelta(minutes=index))
+
+    assert [message.rcpt_tos for message in fake.messages] == [[address] for address in GMAIL_ALIASES[:3]], "the 4th alias of one mailbox got its own budget: three verification emails an hour per mailbox, however its address is written"
+    refused = [(event["log_level"], event.get("reason"), event.get("code"), event.get("user_id")) for event in _named(events, "Verification email: not sent")]
+    assert refused == [("warning", "EmailRateLimitedError", "EMAIL_RATE_LIMITED", last.id)], refused
+    assert await _awaits(engine, last.id) is True
+    assert (budget.count(), mailbox_limit.count(GMAIL_ALIAS_KEY)) == (3, 3), "three emails, counted under the mailbox's folded key"
+    print_success("three verification emails to one mailbox under three aliases; the fourth not sent")
+
+
+@pytest.mark.asyncio
+async def test_plus_tags_outside_gmail_share_the_verification_budget(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, mailbox_limit: SlidingWindowLimiter) -> None:
+    """EMV-050 — contract 7 (E-9 a): four waiting accounts at ``zq-v+1@example.com``, ``zq-v+2@example.com``, ``zq-v+3@example.com`` and ``zq-v@example.com`` — one mailbox outside Gmail: a ``+tag`` is cut on every domain — each ask «resend» once, a minute apart. The first three get their link, each at its account's stored address exactly, tag included; the fourth's «resend» is ``EmailRateLimitedError``: the mailbox had its three verification emails of the hour. Counted three times, under ``zq-v@example.com``."""
+    print_section("EMV-050: +tags outside Gmail, one budget")
+    moment = utcnow()
+    accounts = [await _waiting(engine, f"zq_tagged_{index}", created=moment - timedelta(minutes=5), email=address) for index, address in enumerate(TAGGED_ALIASES)]
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        for index, (user, _hold) in enumerate(accounts[:3]):
+            clock.now = START + 60 * index
+            assert await _resend(engine, user.username, now=moment + timedelta(minutes=index)) == "en"
+        clock.now = START + 180
+        try:
+            fourth: object = await _resend(engine, accounts[3][0].username, now=moment + timedelta(minutes=3))
+        except EmailRateLimitedError as refused:
+            fourth = refused
+
+    assert isinstance(fourth, EmailRateLimitedError), f"the 4th alias of one mailbox got its own budget: «resend» answered {fourth!r} and sent {[message.rcpt_tos for message in fake.messages]}"
+    assert [message.rcpt_tos for message in fake.messages] == [[address] for address in TAGGED_ALIASES[:3]], "each link at its account's stored address, tag included"
+    assert mailbox_limit.count(TAGGED_KEY) == 3, "three emails, counted under the mailbox's folded key"
+    print_success("three links to one mailbox under three addresses; the fourth refused")

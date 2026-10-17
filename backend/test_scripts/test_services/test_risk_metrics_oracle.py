@@ -64,17 +64,17 @@ from backend.app.services.risk.metrics import (
     summarize_drawdown,
     wealth_index,
 )
-from backend.app.services.risk.signal_helpers import (
+from backend.app.services.risk_plugins.historical_var.plugin import (
+    HistoricalVarAnalytic,
+    HistoricalVarParams,
+)
+from backend.app.services.signals.risk_adapters import (
     rolling_annualized_sharpe_values,
     rolling_annualized_volatility_values,
     rolling_beta_values,
     rolling_pair_values,
     rolling_single_values,
     undefined_window_warnings,
-)
-from backend.app.services.risk_plugins.historical_var.plugin import (
-    HistoricalVarAnalytic,
-    HistoricalVarParams,
 )
 
 # --------------------------------------------------------------------------- #
@@ -724,7 +724,7 @@ def test_riskfolio_numbins_is_not_the_freedman_diaconis_bin_count():
 #
 # Load-bearing, and written BEFORE the rolling helpers are vectorised because it is
 # the only thing that will catch a semantic regression there.
-# ``backend/app/services/signal_service.py:845`` derives ``has_undefined_window``
+# ``backend/app/services/signals/service.py:845`` derives ``has_undefined_window``
 # from this count and uses it to pick the RESULT STATUS (UNAVAILABLE / partial), not
 # merely to emit a warning. Losing or inflating the count silently changes the API.
 # --------------------------------------------------------------------------- #

@@ -33,7 +33,7 @@ What it sends — six kinds of email, with texts in English, Italian, French and
   real now. A new account — every one but the instance's first — waits, inactive, until its owner opens a 24-hour link
   on `/verify-email`; meanwhile the login, given the right password, answers 403 `EMAIL_NOT_VERIFIED` and offers
   **Send the link again**.
-- **A notice to the old address** when an account's email changes: no link, the new address masked as `***@domain`.
+- **A notice to the old address** when an account's email changes: no link, and nothing of the new address (N62).
 - **The setup link of the initial administrator**: when LibreFolio creates the administrator from
   `LIBREFOLIO_ADMIN_EMAIL` and generates the link itself, workstream A's `deliver_setup_link()` (lot A7a) writes it to
   the log once and emails it with `build_admin_setup()` when email works; a link from the hosting panel's token is the
@@ -46,7 +46,11 @@ the login page and the Users dialogs offer the email actions only when they can 
 
 Sending is bounded by an instance budget, `LIBREFOLIO_SMTP_MAX_PER_HOUR` (50 an hour by default, in the memory of each
 process), and the anonymous paths add limits per client address, per typed identifier, per mailbox and per account.
-Every in-memory limit counts with one primitive, the sliding-window limiter of `utils/runtime/rate_window.py`.
+The three per-mailbox limits (forgotten password, verification, change notice; 3 an hour each) count the aliases of
+one mailbox together: `delivery.mailbox_budget_key()` case-folds the address, cuts a `+tag` on every domain unless
+nothing would be left before it, and drops the dots of a Gmail local part (`googlemail.com` counts as `gmail.com`).
+Only a key: never stored, logged or shown, and the email still goes to the address as stored. Every in-memory limit
+counts with one primitive, the sliding-window limiter of `utils/runtime/rate_window.py`.
 
 The tokens are workstream A's ([[domains/auth]]): stored only as SHA-256, one purpose each, spent by one conditional
 UPDATE; a reset link lives 30 minutes, an invitation 7 days, a verification link 24 hours (an admin setup link 72
@@ -131,7 +135,17 @@ the why.
 - **The E4c rule (accepted with A, 16/10; done).** Comparisons of two account addresses use A's
   `user_service.same_email()` (A–Z folding, like SQLite's `lower()` and A's unique index): `email_changed_work()` and
   `confirm_email()`, so the rule lives in one place with A's `PUT /auth/profile`, where a capitals-only change is no
-  change. The four limiter keys stay `strip().casefold()`, where the broader grouping is the prudent side.
+  change. The four limiter keys stay case-folded, `strip().casefold()` — since E-9 the three per-mailbox ones also fold
+  aliases — where the broader grouping is the prudent side.
+- **N62 — no email a stranger can address carries text they chose** (lot E-9, a night decision of the coordinator,
+  17/10, to be reviewed by the developer). The username (3–50 free characters, URLs included) and a new address's
+  domain let a stranger use the instance as a spam relay to many addresses, which in the managed cloud harms the
+  per-instance Brevo key and the shared `mail.librefolio.eu` sender domain. So a password reset (the builder of the
+  administrator's «Send by email» too), an email verification and the change notice greet anonymously, and the notice
+  shows nothing of the new address: without a DNS check even a domain's last label is free text. `build_password_reset`
+  and `build_verification` no longer take `username`, `build_email_changed(*, language, instance)` neither it nor
+  `new_address`; `messages.masked_address()` is gone. The admin-setup and test emails keep the username: their senders
+  are trusted.
 
 ## Known problems / limitations
 
@@ -160,8 +174,12 @@ the why.
 - **Lookups by identifier.** A's `get_user_by_username_or_email()` takes the first match without an order, and
   usernames may hold `@`, so login and «forgot password» can land on the wrong account — never a takeover, since the
   link goes to the found account's own address (routed to A: A-21). Since P18 the email half is case-insensitive.
-- **Aliases** (backlog E-9): the per-mailbox limits do not merge `name+tag@` or Gmail's dots, so with open
-  registration the hourly budget can be aimed at one inbox (final security review, plan «E6.9»).
+- **Aliases: resolved, with a remainder.** With open registration, `name+tag@` and Gmail's dots let one inbox receive
+  up to the instance's hourly budget (backlog E-9, a note below the bar of the final security review, plan «E6.9»,
+  16/10); since the night of 17/10 (N62) the per-mailbox limits fold them. Catch-all domains and Fastmail's sub-domain
+  addresses (`x@victim.fastmail.com`) still give a new key per local part, so only the instance budget bounds them
+  (backlog E-12, low). And draining that budget with many distinct mailboxes from many IPs blocks everyone's resets: a
+  cloud question for the developer, whose cures (captcha or proof-of-work, registration limits) are not E's.
 - **Out of 1.3**: notifications (F19). `admin/email.en.md` is English only, by choice; the translation debt of the
   touched pages is declared, without stamps.
 
@@ -238,11 +256,12 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
   A's OK. Done: the C-99 rows, the TODO moved, the FAQ, the coherence pass on `admin/email.en.md`, the A7a docs (the
   `admin_setup` kind), the final security review (no finding; E-9 to the backlog, A-27 to A).
 - **Developer decisions**: the «Confirm» button on `/verify-email`, the message after a held email, the proxy for the
-  cloud; and the review of the night decisions (the hold removed entirely, E-8, the notice-limit compromise, P1 as a
-  `<details>`).
+  cloud, the instance budget that many mailboxes can drain (since E-9); and the review of the night decisions (the
+  hold removed entirely, E-8, the notice-limit compromise, P1 as a `<details>`, N62).
 - **Backlog «E · Email (fase 01)»**: E-1 and E-5 closed. E-2 (the widened optional type,
   [[problems/generated-client-widens-nullable-scalar]]), E-3 (`ApiError`) and E-6 (the settings tab registry) deferred
-  to 1.4, as they touch shared files. E-4 in E6, with A's OK. E-7 out of 1.3. E-8 and E-9 open, proposed for 1.4.
+  to 1.4, as they touch shared files. E-4 in E6, with A's OK. E-7 out of 1.3. E-8 still open, proposed for 1.4. E-9
+  done (N62, 17/10), leaving E-12 (catch-all and Fastmail addresses, low).
 
 ## Source files
 
@@ -253,7 +272,7 @@ Mostly from the plan's «⚠️ Fuori pista» notes (plan 08), each with its sec
 | Contract rule 4 (texts the client generator does not escape) | `mkdocs_src/docs/developer/api/overview.md` |
 | Configuration accessors, `EmailConfigError` | `backend/app/config/email.py` |
 | SMTP transport | `backend/app/services/email/smtp.py` |
-| Configuration state, hourly budget, `send_email()` | `backend/app/services/email/delivery.py` |
+| Configuration state, hourly budget, the per-mailbox key `mailbox_budget_key()`, `send_email()` | `backend/app/services/email/delivery.py` |
 | Message builders | `backend/app/services/email/messages.py` |
 | Email texts in four languages, HTML layout | `backend/app/services/email/templates/` |
 | Configuration checks | `backend/app/services/email/checks.py` |

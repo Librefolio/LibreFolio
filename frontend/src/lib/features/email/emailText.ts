@@ -112,8 +112,9 @@ export function testFailureMessage(translate: Translate, failure: EmailTestFailu
     }
 }
 
-/** What the page of a verification link shows: the wait, why the link cannot be used, or a check that failed. */
-export type VerifyPageStatus = 'checking' | VerificationLinkRefusal | 'missing' | 'error';
+/** What the page of a verification link shows: the wait, why the link cannot be used, a blocked instance, or a check
+ * that failed. */
+export type VerifyPageStatus = 'checking' | VerificationLinkRefusal | 'blocked' | 'missing' | 'error';
 
 export const VERIFY_PAGE_KEYS: Record<VerifyPageStatus, string> = {
     checking: 'email.verification.page.checking',
@@ -121,6 +122,7 @@ export const VERIFY_PAGE_KEYS: Record<VerifyPageStatus, string> = {
     consumed: 'email.verification.page.consumed',
     revoked: 'email.verification.page.revoked',
     unknown: 'email.verification.page.unknown',
+    blocked: 'email.verification.page.blocked',
     missing: 'email.verification.page.missing',
     error: 'email.verification.page.error',
 };
@@ -130,6 +132,9 @@ export function resendFailureMessage(translate: Translate, failure: ResendFailur
     switch (failure.errorCode) {
         case 'INVALID_CREDENTIALS':
             return translate('email.verification.resendErrors.INVALID_CREDENTIALS');
+        case 'INSTANCE_BLOCKED':
+            // The hosting provider blocks the instance: the text of lot A7b, one home for it.
+            return translate('auth.instanceBlocked');
         case 'EMAIL_RATE_LIMITED':
             return translate('email.verification.resendErrors.EMAIL_RATE_LIMITED', {values: {minutes: minutesUntil(failure.retryAfter)}});
         case 'EMAIL_VERIFICATION_NOT_NEEDED':

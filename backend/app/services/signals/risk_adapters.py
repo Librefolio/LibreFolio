@@ -23,7 +23,7 @@ from backend.app.schemas.signals import (
     SignalWarningCode,
 )
 from backend.app.services.risk.metrics import ZERO_TOLERANCE, daily_risk_free_rate
-from backend.app.services.signal_plugins.base import SignalUnavailableError
+from backend.app.services.signals.base import SignalUnavailableError
 
 
 def prepared_primary_returns(

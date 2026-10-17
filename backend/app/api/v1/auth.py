@@ -291,10 +291,11 @@ async def register(request: AuthRegisterRequest, background: BackgroundTasks, ht
 @router.post("/tokens/inspect", response_model=TokenInspectResponse)
 async def inspect_link_token(request: TokenInspectRequest, session: AsyncSession = Depends(get_session_generator)):
     """
-    What a link's token is worth: an invitation or a password-reset link.
+    What a link's token is worth: an invitation, a password-reset link, or the setup link of the initial administrator.
 
     Public: it answers whoever holds the token, and a token of another purpose is ``unknown``. The details — when it
-    expires, the role and address of an invitation, the account of a reset link — come only with a valid token.
+    expires, the role and address of an invitation, the account of a reset or setup link — come only with a valid
+    token.
     """
     purpose = AccountTokenPurpose(request.purpose)
     inspection = await token_service.inspect_token(session, request.token, purpose)
@@ -378,8 +379,8 @@ async def update_profile(
     Changing the email needs the current password (A6e): with a «forgot password» link, a new address is a way to take
     the account over. It is checked before anything else, so whoever lacks it cannot probe which addresses are taken.
     The change ends every other session of the account; this one receives a new session cookie and carries on. When
-    email works, the address the account had before gets a notice after the answer (workstream E), with the new one
-    masked.
+    email works, the address the account had before gets a notice after the answer (workstream E), which shows nothing
+    of the new one (N62).
     """
     # Nothing to update
     if request.username is None and request.email is None:

@@ -32,7 +32,7 @@ one place. The details of each engine are on the pages listed under [Deep Pages]
 4. **Report copies.** Report any copy you meet, old or new. Before closing work that touched
    financial math, search the project for copies of what you changed.
 
-The technical indicators (`services/signal_plugins/`, `services/signal_runtime.py`), the
+The technical indicators (`services/signal_plugins/`, `services/signals/runtime.py`), the
 [risk engine](risk/architecture.md) (`services/risk/`) and the PAC allocator
 (`services/pac_allocator/`) stay where they are, but take the common math — returns,
 annualization, conversions, average cost, valuation — from the layer. FX conversion itself stays
@@ -48,12 +48,13 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio, realized gain, price return, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
 ├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule
+├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
 │   ├── models.py            input transactions, events, lots, fragments, closures, result
@@ -66,14 +67,16 @@ backend/app/services/financial_math/
 │   ├── daily_state.py       DailyStateBuilder: the daily state vector, without I/O
 │   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…), cost positions
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
-│   ├── period.py            a period's boundary states, its P&L and the identity that closes it
+│   ├── period.py            a period's boundary states, its P&L and the identity that closes it; the day's P&L change
+│   ├── contributions.py     a position's row in the Dashboard's Performance table: return on the start value, annualized returns, the internal-transfer split (P22)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
-    ├── prices.py            PriceHistoryLookup, opening_reference_price()
+    ├── prices.py            from the asset's AssetPriceSeries: a lot's reference price at its opening, the last day valued at cost
     ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price and performance histories
+    ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
     └── average_cost_lines.py  per-broker and cumulative WAC history points
 ```
 
@@ -101,14 +104,20 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
    an unusable ratio raises `ValueError`), and classifies them
    (`ScopeAwareTransactionClassifier`, `classifier.py`);
 3. returns the cached `PortfolioCalculationResult` when the `portfolio_blob` cache holds one for
-   the same key — scope, currency, options and data fingerprints — that starts on or before the
-   requested start and ends on the requested end date;
+   the same key — scope, currency, options, data fingerprints and the day of
+   `position_states_start` — that starts on or before the requested start and ends on the
+   requested end date;
 4. loads the prices, `quote_base_quantity`, currencies, types and classifications of the held
    assets, and preloads the FX rates in one `convert_bulk()` call (`_preload_fx_rates()`);
 5. computes the average cost of every position (`compute_average_costs()` over
    `build_cost_positions()`), one `AssetPriceSeries` per held asset
    (`build_asset_price_series()`) and the native cash (`compute_native_cash()`);
 6. runs `DailyStateBuilder` (`daily_state.py`) and stores its result in the cache.
+
+`position_states_start` holds the positions at the end of `calculate(period_start=…)` — the caller's period start, while
+the replay runs from `date_from` (t=0 for the Dashboard) — or of the first frame day when it is not named.
+`internal_asset_transfers` lists each linked TRANSFER of a security between two brokers of the scope, with its value on
+arrival and the cost the sender moved: the Performance table's transfer split (`contributions.py`, developer decision P22).
 
 Callers derive their views from the result with `DerivedViewsBuilder` (`derived_views.py`) —
 history, per-broker P&L, candles, acquisition funding, performance inputs, allocation — and the
@@ -138,7 +147,7 @@ day is dirty when it has:
   that moves a quantity — plus `STALE_PRICE_THRESHOLD_DAYS` + 1, since a price is stale when it
   is carried more than `STALE_PRICE_THRESHOLD_DAYS` days;
 - a split;
-- or it is `frame_start`.
+- or it is `frame_start`, or `period_start` when it falls in the frame.
 
 Both rate rules take their days from one pure function, the one home of «the day a rate changes»:
 `native_cash.change_days(read, currencies, days)` returns the days of the calendar `days`, in its
@@ -171,8 +180,10 @@ checks with its guards that a day whose terms do not move keeps its values, and 
 
 `ledger_totals.py` reduces the transaction ledger to its control totals — the cash of every
 broker in each currency and the quantity of every position — read from the rows alone, with no
-price, rate, cost, setting or clock. The instance backup writes them into a backup's manifest
-and, after a restore, compares them with the totals recomputed on the restored database.
+price, rate, cost, setting or clock. The instance backup writes them into a backup's manifest.
+The check of a restore recomputes them on the archive's copy, once upgraded to the app's schema,
+and compares them before the restore is confirmed. A difference is a warning in the check's
+report, never a refusal: a migration may correct data.
 
 | Name | Contract |
 |------|----------|
@@ -215,6 +226,17 @@ Every amount is canonical decimal text — plain notation without trailing zeros
 text. `ControlTotals.from_json(data)` is the inverse of `to_json()` and raises `ValueError` for
 another version or a malformed document. Read `version` before calling it: totals of another
 version are not comparable, which is not the same as a difference.
+
+`from_json()` reads an amount only as `to_json()` writes it.
+
+- **Accepted:** an optional `-`, then at most 60 ASCII digits before the point and 60 after it,
+  the precision of the exact context.
+- **Refused with `ValueError`:** everything else that `Decimal` would also take — an exponent
+  (`"1E+9"`), a `+`, spaces, `_`, other scripts' digits.
+- **Why:** a manifest written by hand, or damaged, could otherwise make `_canonical()` write an
+  exponent out in full; `"1E+50000000"` alone costs about 121 MB.
+- **Round trip:** it holds for every total within that bound, and every ledger the database can
+  hold stays within it (amounts `Numeric(18, 6)`, quantities `RealDecimal(22, 10)`).
 
 What the totals promise their caller:
 

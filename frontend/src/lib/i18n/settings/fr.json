@@ -246,7 +246,8 @@
         "you": "Vous",
         "admin": "Admin",
         "inactive": "Désactivé",
-        "protected": "Protégé"
+        "protected": "Protégé",
+        "pendingSetup": "En attente de configuration"
       },
       "actions": {
         "deactivate": "Désactiver",
@@ -307,7 +308,8 @@
         "DELETION_FAILED": "La suppression a échoué : rien n'a été supprimé.",
         "INVALID_INPUT": "Vérifiez votre saisie : l'adresse e-mail n'est peut-être pas valide.",
         "generic": "L'action a échoué. Réessayez.",
-        "load": "Impossible de charger les comptes."
+        "load": "Impossible de charger les comptes.",
+        "PENDING_SETUP": "Cet administrateur active le compte par son lien de configuration : il ne peut pas être réactivé ici."
       },
       "invite": {
         "button": "Inviter",
@@ -338,7 +340,8 @@
         "signedOut": "{username} est déconnecté partout.",
         "guidesRestarted": "Les guides de {username} recommencent.",
         "resetLinkCreated": "Lien de réinitialisation créé pour {username}."
-      }
+      },
+      "pendingSetupHint": "Ce compte administrateur s'active par son lien de configuration. Si le lien est perdu, lancez « dev.py user setup-link » sur le serveur, ou demandez à votre hébergeur."
     },
     "linkShare": {
       "addressLabel": "Adresse du serveur",

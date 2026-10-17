@@ -53,6 +53,12 @@ on 127.0.0.1, on a port the OS picks: nothing reaches the network. The contract 
     spent and no connection opened. Unset, blank, ``0``, ``false``, ``no`` or ``off``: the e-mail goes out.
     ``sending_blocked()`` says exactly that — true when blocked or unreadable, false otherwise — and never raises: the
     flows ask it before anything else.
+11. ``mailbox_budget_key(address)`` (E-9 a) is the key of the three per-mailbox limiters, folding the aliases of one
+    mailbox: stripped and case-folded; without an ``@`` as it is; else split at the last ``@``, the local part cut at
+    its first ``+`` unless nothing comes before it, ``googlemail.com`` read as ``gmail.com``, and on ``gmail.com`` every
+    dot of the local part removed. Dots matter on every other domain, a subdomain or a look-alike of Gmail included, and
+    a domain beyond ASCII is case-folded, never IDNA-encoded. Pure, it never raises on a ``str``. Red while it does not
+    exist: each test fails naming it.
 
 Pure: no database, no server of the lane, no network beyond 127.0.0.1. An autouse fixture removes every inherited
 ``LIBREFOLIO_SMTP_*`` and ``LIBREFOLIO_BLOCKED`` (until C-96 lands a lane carries the developer's ``.env``) and each test
@@ -1328,3 +1334,57 @@ def test_sending_blocked_is_true_when_blocked_or_unreadable_and_never_raises(mon
 
     assert answer is blocked, f"sending_blocked() is {answer!r} for {value!r}"
     print_success(f"{answer}")
+
+
+# =============================================================================
+# 11. THE KEY OF A MAILBOX'S BUDGET (E-9 a)
+# =============================================================================
+
+#: An address and the key ``mailbox_budget_key`` gives it: the aliases of one mailbox fold into one key.
+MAILBOX_BUDGET_KEYS = [
+    pytest.param("Victim.Name+News@GoogleMail.com", "victimname@gmail.com", id="googlemail-dots-tag-and-case"),
+    pytest.param("victim@gmail.com", "victim@gmail.com", id="gmail-as-it-is"),
+    pytest.param("v.i.c.t.i.m@gmail.com", "victim@gmail.com", id="gmail-every-dot-removed"),
+    pytest.param("victim+1@gmail.com", "victim@gmail.com", id="gmail-tag-cut"),
+    pytest.param("zq.victim+2@googlemail.com", "zqvictim@gmail.com", id="googlemail-is-gmail"),
+    pytest.param("zq-victim+a+b@outlook.com", "zq-victim@outlook.com", id="cut-at-the-first-plus"),
+    pytest.param("first.last@outlook.com", "first.last@outlook.com", id="dots-matter-outside-gmail"),
+    pytest.param("first.last+x@example.org", "first.last@example.org", id="tag-cut-on-any-domain-dots-kept"),
+    pytest.param("+tag@example.org", "+tag@example.org", id="an-empty-base-keeps-its-tag"),
+    pytest.param("  Alice@Example.COM  ", "alice@example.com", id="stripped-and-case-folded"),
+    pytest.param("a.b@mail.gmail.com", "a.b@mail.gmail.com", id="a-subdomain-of-gmail-is-not-gmail"),
+    pytest.param("a.b@notgmail.com", "a.b@notgmail.com", id="a-look-alike-of-gmail-is-not-gmail"),
+    pytest.param("user@B\u00fccher.de", "user@b\u00fccher.de", id="case-folded-never-idna"),
+    pytest.param("not-an-address", "not-an-address", id="no-at-sign-as-it-is"),
+    pytest.param("", "", id="empty"),
+]
+
+
+def _budget_key(address: str) -> str:
+    """``delivery.mailbox_budget_key(address)``; fails, naming it, while the function does not exist."""
+    function = getattr(delivery, "mailbox_budget_key", None)
+    if function is None:
+        pytest.fail("delivery.mailbox_budget_key does not exist: the per-mailbox limiters still give every alias of a mailbox a budget of its own (E-9 a)")
+    return function(address)
+
+
+@pytest.mark.parametrize(("address", "key"), MAILBOX_BUDGET_KEYS)
+def test_mailbox_budget_key_folds_the_aliases_of_a_mailbox(address: str, key: str) -> None:
+    """EMD-050 — contract 11: ``mailbox_budget_key(address)`` is ``key``, a ``str``: the ``+tag`` cut on every domain unless nothing comes before it, the dots of a ``gmail.com`` local part removed, ``googlemail.com`` read as ``gmail.com``, the address stripped and case-folded; dots kept everywhere else — on a subdomain or a look-alike of Gmail too —, a domain beyond ASCII case-folded and not IDNA-encoded, a value without an ``@`` as it is."""
+    print_section(f"EMD-050: mailbox_budget_key({address!r})")
+
+    folded = _budget_key(address)
+
+    assert isinstance(folded, str) and folded == key, f"mailbox_budget_key({address!r}) is {folded!r}, not {key!r}"
+    print_success(f"→ {key!r}")
+
+
+def test_aliases_of_one_mailbox_share_a_key_and_two_mailboxes_do_not() -> None:
+    """EMD-051 — contract 11: the table's three ways of writing one Gmail mailbox — ``victim@gmail.com``, ``v.i.c.t.i.m@gmail.com``, ``victim+1@gmail.com`` — share one key, so one budget; ``zq.a@outlook.com`` and ``zqa@outlook.com``, two mailboxes outside Gmail, apart in a dot alone, have two."""
+    print_section("EMD-051: one mailbox, one key; two mailboxes, two keys")
+
+    aliases = {address: _budget_key(address) for address in ("victim@gmail.com", "v.i.c.t.i.m@gmail.com", "victim+1@gmail.com")}
+
+    assert len(set(aliases.values())) == 1, f"three aliases of one mailbox, three budgets: {aliases}"
+    assert _budget_key("zq.a@outlook.com") != _budget_key("zqa@outlook.com"), "outside Gmail a dot is part of the mailbox: zq.a@ and zqa@outlook.com must keep two budgets"
+    print_success(f"one key {set(aliases.values())}; zq.a@ and zqa@outlook.com apart")

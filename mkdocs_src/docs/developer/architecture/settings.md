@@ -55,19 +55,36 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `get_settings().LIBREFOLIO_PROFILE`, read at each call. A blank or an invalid value stays under
       the module's own rules: a module can, for example, treat a blank value as unset, and answer an
       invalid one with a coded error when the value is used rather than stop the startup.
-      `profile_default()` converts nothing (a `cast`): an entry is written in the type of the
-      module's fallback (`500`, never `"500"`). The first entry is the upload limit of a restore:
-      `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43).
+      `profile_default()` converts nothing, but checks the active profile's entry before returning
+      it: the entry must be of the exact type of `fallback`, the reader's own default (`500` for the
+      fallback `0`; never `None`, `"500"`, `500.0` nor `True`: `True` does not pass for an `int`
+      fallback, nor `60` for a `float` one). An entry of any other type raises `ProfileDefaultError`,
+      a `TypeError` defined in `__init__.py` whose message names the variable, the profile, both types
+      and the table, and the reader stops instead of using the value: unchecked, a `None` under
+      `managed` would mean no upload limit at all for a restore (`backup_max_upload_mb()`, below). The
+      fallback itself, for a name the active profile does not list (any name under `selfhosted`), is
+      returned unchecked. The check runs at the reader's call, never at startup: only the reader knows
+      the type it expects; the table is code, guarded before release by the tests below.
+      The first entry is the upload limit of a restore:
+      `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43), read by
+      `backup_max_upload_mb()` in `config/backup.py` with `profile_default(MAX_UPLOAD_VARIABLE, 0)`: no limit on a
+      self-hosted install.
       `./dev.py test services profile-defaults` guards this table too: one entry per profile;
       `selfhosted` empty; `managed` equal, value and type, to `ENVIRONMENT_MANAGED_DEFAULTS`, the
       decided table of the test file; no key that is a `Settings` field or sits in both tables; every
-      key read, as a string constant, by a section module, and documented in `.env.example`; and, for
+      key read, as a string constant, by a section module, and documented in `.env.example`; for
       every listed name, `profile_default()` returning the fallback under `selfhosted` and the
-      table's value under `managed`. To give such a variable a managed default, a workstream adds one
+      table's value under `managed`; an entry of another type raising `ProfileDefaultError` under
+      `managed` while `selfhosted` still gets the fallback, and the real `backup_max_upload_mb()`
+      raising on a `None` managed entry instead of lifting the limit; and, read in the sources, every
+      `profile_default(NAME, …)` call of a section module written with a literal fallback whose type
+      is exactly that of every profile's entry for `NAME`.
+      To give such a variable a managed default, a workstream adds one
       entry to `ENVIRONMENT_PROFILE_DEFAULTS["managed"]` and the same entry to
       `ENVIRONMENT_MANAGED_DEFAULTS` in the test file, says the managed value in the variable's
       commented line of `.env.example`, and calls `profile_default(NAME, fallback)` in its section
-      module while the variable is unset. Admin view of both tables:
+      module while the variable is unset, with a literal fallback of the variable's own type, as the
+      upload limit's `0`. Admin view of both tables:
       [The Managed Profile](../../admin/hosting_providers.md#managed-profile).
     - `get_data_dir()` picks the data root: in test mode `LIBREFOLIO_TEST_DATA_DIR` or
       `backend/data/test` (refused if it overlaps production), otherwise `LIBREFOLIO_DATA_DIR`,
@@ -99,10 +116,18 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       [Security → Test lanes and the instance's configuration](security.md#test-lanes-and-the-instances-configuration).
     - Addresses go through `env_url(name)` in `__init__.py`, one rule for every `LIBREFOLIO_*_URL`:
       an empty or blank value is `None`; otherwise the value, stripped, must be an `http://` or
-      `https://` address with a host name (a name, an IPv4 or an IPv6 address, with a port or not) and
-      no space, tab or line break inside, and one trailing slash is removed; anything else, `https://`
-      alone included, raises `ValueError`, which names the variable. The accessor's caller decides
-      what an invalid address costs, and logs it.
+      `https://` address with a host name (a name, an IPv4 or an IPv6 address, with a port or not),
+      no user info (no `@` in its authority, as in `https://user:pass@host`: the user name and the
+      password would be handed out with the address; an `@` in the path, the query or the fragment is
+      not user info) and no space, tab or line break inside, and one trailing slash is removed;
+      anything else, `https://` alone included, raises `ValueError`, which names the variable and
+      quotes the value, unless the value holds an `@` anywhere: it may carry a user name or a
+      password, so the message never quotes it. The accessor's caller decides what an invalid address
+      costs, and logs the error. `support_url()` (`platform.py`) also takes
+      `mailto:` and one email address, the scheme in any case: `?`, `#`, `%`, `,`, `;`, `<`, `>`, `"`,
+      `/` and any whitespace are refused before pydantic's `EmailStr` reads the address, without DNS,
+      and it returns `mailto:` and the address as `EmailStr` normalizes it. `env_url()` itself stays
+      http(s) only.
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, the address reader `env_url()`, `Settings` and `get_settings()`. New variables

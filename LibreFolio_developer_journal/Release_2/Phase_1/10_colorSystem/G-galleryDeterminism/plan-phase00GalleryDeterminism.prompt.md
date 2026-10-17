@@ -1192,3 +1192,27 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
       il dettaglio del broker IBKR; la vista Periodo.
     - Non cambiano NAV e lotti.
     - Dettagli: piano di J, §10 «J-24».
+  - **J CP-7b**, entrato in `48da9bf3c`, solo backend (coordinatore, 16/10 22:23):
+    - AAPL, il lotto ADJUSTMENT (tx 60, IBKR): il prezzo di riferimento passa da 300.0201 a **299.82 USD**, «Open
+      Return» da 2,342 % a **2,410 %**, e il banner `REFERENCE_PRICE_FALLBACK` mostra 299.82.
+    - Test KRW Stock (Directa): sparisce il banner «No market price available … estimated at cost».
+    - Il resto non cambia.
+- **`settings/backup-ready` per la 1.3 ✅, 16/10 22:54–23:11.** Commit `b89985a8b`: la punta, con B (`0cd910a7e`: B3
+  ripristino, B5b, B5c). Due run identiche, `g-backup-a` e `g-backup-b`, sullo stesso build, 2 worker. Il filtro
+  `-f "Settings backup ready \(admin\) - all languages and themes"` seleziona solo `gallery.spec.ts:2126`.
+  - Carico e orario:
+    - a è partita alle 22:54, con carico 57, dopo 4,5 min di attesa;
+    - b è partita alle 23:09, con carico 55. Per G-13 doveva partire entro le 23:45, quindi entrambe sono finite prima
+      di mezzanotte.
+    - Il build di a ha preso 581 s (frontend e MkDocs, base nuova); b l'ha riusato.
+  - Esito: 2 test su 2 verdi per run, 16 PNG ciascuna, `live_price_check` pulito. Misti a runtime (G-18): 0.
+  - **a↔b: 16 immagini identiche su 16.** In G-13 lo scatto era `low` (3 varianti su 16, Δ 1).
+  - **Lo scatto è cambiato con B:** sotto la card del backup c'è ora la card del ripristino (`restore-card`).
+    - Desktop: il blocco passa da 488–508 a 756–796 px secondo la lingua (en da 508 a 776), e lo schermo si allunga da
+      720 a 845–885 px (en 865). Le due card si vedono intere.
+    - Mobile: lo schermo resta di 740 px mentre la pagina si allunga (`dh` en da 787 a 1167). Lo scatto si ferma, come
+      il 15/10, al pulsante «Create a new backup»: la card del ripristino non si vede. Da decidere con G-20.
+    - Desktop fr ed es: la striscia delle schede non ci sta intera. In es parte scorsa («…erfil» tagliato a sinistra);
+      in fr la scheda dell'e-mail resta fuori a destra. È la domanda 33 per la designer.
+  - Il backup mostrato è quello della fixture `galleryBackup.ts` (`librefolio-backup-20261015-094112.zip`, 46,0 MB):
+    lo scatto non dipende dal giorno.
