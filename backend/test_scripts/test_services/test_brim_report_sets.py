@@ -77,6 +77,12 @@ uploaded with 1.1.0, which recorded no ``batch_id``: detected again, it forms no
 must be uploaded again, together. The rules of the detection and of the broker lock are
 in ``test_brim_parse_race.py``.
 
+W-B71 (red-first, at the end of this file): the five one-day shifts of
+``brim_report_sets`` — the day after a gap-fix (``_first_history_day``), the eve of the
+first trade (``build_preview``, twice), the day after the first checkpoint and the eve
+of H0 (``apply_history``) — stop at 0001-01-01 and 9999-12-31 instead of raising
+OverflowError. Each test drives one of them; its case one day inside the edge is a guard.
+
 Design: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/design-phase00BrimReportSets.md (v5.3), §3.1–§3.5 and §3.8
 Plan: LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep4Implementation.prompt.md, §3 A1 and A2
 """
@@ -97,7 +103,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NoReturn, Optional, Tuple
 
 import pytest
 import pytest_asyncio
@@ -3272,3 +3278,192 @@ class TestConcurrentCombine:
         assert sorted(outcome.reused for outcome in outcomes) == [False, True], [(outcome.reused, outcome.combined.file_id) for outcome in outcomes]
         assert {outcome.combined.file_id for outcome in outcomes} == {combined[0].file_id}
         assert (_info(custody.file_id).combined_into, _info(cash.file_id).combined_into) == ([combined[0].file_id], [combined[0].file_id])
+
+
+# =============================================================================
+# W-B71 — THE REPORT SETS AT THE CALENDAR'S EDGES
+# =============================================================================
+#
+# Written red-first, before the cure. ``brim_report_sets`` moves a date by one day in five places: the day after a
+# gap-fix correction (``_first_history_day``: H0, read by ``history_start`` and by ``preview_set``), the eve of the
+# first trade (``build_preview``: the period of a missing role, then the coverage check), the day after the first
+# checkpoint and the eve of H0 (``apply_history``). Before 0001-01-01 and after 9999-12-31 there is no such day:
+# OverflowError, a 500 of the set preview, of the combine (which previews first) or of the parse of a combined file.
+# The cure (W-B71) cuts each shift at the calendar's edge (``backend.app.utils.datetime_utils.shift_date``). Each test
+# drives one place through the entry point this file already uses; its case whose id starts with ``guard-`` sits one
+# day inside the edge and passes before and after the cure.
+
+LAST_EVE = date(9999, 12, 30)
+
+
+def _edge_overflow(call: str, exc: OverflowError, why: str) -> NoReturn:
+    """Fail naming W-B71: ``call`` ran past the calendar's edge; ``why`` says where, and what the cure gives instead."""
+    pytest.fail(f"W-B71: {call} raised OverflowError ({exc}): {why}", pytrace=False)
+
+
+class TestCalendarEdges:
+    """W-B71 — every one-day shift of ``brim_report_sets`` stops at 0001-01-01 and 9999-12-31 instead of raising OverflowError."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("rows", "expected"),
+        [
+            pytest.param([_own("9999-12-31", f"import,{HISTORY_TAG},gap_fix")], date.max, id="gap-fix-on-the-last-day"),
+            pytest.param([_own("2025-01-02", f"import,{HISTORY_TAG}"), _own("9999-12-31", f"import,{HISTORY_TAG},gap_fix")], date(2025, 1, 2), id="gap-fix-on-the-last-day-after-the-history-began"),
+            pytest.param([_own("9999-12-30", f"import,{HISTORY_TAG},gap_fix")], date.max, id="guard-gap-fix-on-the-eve-of-the-last-day"),
+        ],
+    )
+    async def test_history_start_with_a_gap_fix_at_the_end(self, db_session: AsyncSession, rows: List[Tuple[int, date, Optional[str]]], expected: date) -> None:
+        """``_first_history_day`` through ``history_start`` (so every parse, through ``apply_history``): a gap-fix correction counts from its next day.
+
+        RED until W-B71 for a correction dated 9999-12-31, which has no next day: cut at the calendar's edge, it counts
+        from 9999-12-31 itself, and an older row of the history stays H0. The guard: one dated 9999-12-30 counts from 9999-12-31.
+        """
+        history_start = _sets("history_start")
+        await _seed_history(db_session, rows)
+
+        try:
+            h0 = await history_start(db_session, broker_id=BROKER_ID, history_tag=HISTORY_TAG)
+        except OverflowError as exc:
+            _edge_overflow(
+                f"history_start for a broker whose history is {[(day.isoformat(), tags) for _broker, day, tags in rows]}",
+                exc,
+                f"_first_history_day counts a gap-fix correction from its next day, tx_date + 1 day, and 9999-12-31 has none: a 500 of every parse of this plugin's combined files (apply_history) and of POST /brokers/import/sets/preview. The next day must be cut at the calendar's edge (shift_date): a correction dated 9999-12-31 counts from 9999-12-31, and H0 is {expected.isoformat()}",
+            )
+
+        assert h0 == expected
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("gap_fix_day", [pytest.param(date.max, id="gap-fix-on-the-last-day"), pytest.param(LAST_EVE, id="guard-gap-fix-on-the-eve-of-the-last-day")])
+    async def test_preview_with_a_gap_fix_at_the_end(self, set_storage: Path, fake_plugin: BRIMProvider, db_session: AsyncSession, gap_fix_day: date) -> None:
+        """``_first_history_day`` read by ``preview_set`` (``POST /sets/preview``, and ``/sets/combine``, which previews first).
+
+        RED until W-B71 for a correction dated 9999-12-31: the broker's history began on 2025-01-08, and the preview of a
+        complete set still says so, with the correction as the last day of the history and both rows counted; it falls in
+        no segment of the set, so nothing else is warned. The guard: the same with the correction dated 9999-12-30.
+        """
+        preview_set = _sets("preview_set")
+        batch = str(uuid.uuid4())
+        _member(CUSTODY_JAN, CUSTODY_NAME, batch_id=batch)
+        _member(CASH_JAN, CASH_NAME, batch_id=batch)
+        await _seed_history(db_session, [(BROKER_ID, date(2025, 1, 8), f"import,{FAKE_CODE}"), (BROKER_ID, gap_fix_day, f"import,{FAKE_CODE},gap_fix")])
+
+        try:
+            preview = await preview_set(db_session, broker_id=BROKER_ID, plugin_code=FAKE_CODE, batch_id=batch)
+        except OverflowError as exc:
+            _edge_overflow(
+                f"preview_set of a complete set for a broker whose history began on 2025-01-08 and holds a gap-fix correction dated {gap_fix_day.isoformat()}",
+                exc,
+                "preview_set reads H0 with _first_history_day, which counts a gap-fix correction from its next day, tx_date + 1 day, and 9999-12-31 has none: a 500 of POST /brokers/import/sets/preview and /sets/combine. The next day must be cut at the calendar's edge (shift_date): H0 stays 2025-01-08",
+            )
+
+        assert (preview.history_start, preview.history_end, preview.history_count) == (date(2025, 1, 8), gap_fix_day, 2)
+        assert (preview.segments, _codes(preview), preview.complete) == ([JAN_SEGMENT], [FAKE_SET_NOTICE], True)
+
+    @pytest.mark.parametrize(("first_trade", "cash_from"), [pytest.param("0001-01-01", date.min, id="custody-from-the-first-day"), pytest.param("0001-01-02", date.min, id="guard-custody-from-the-second-day")])
+    def test_missing_cash_period_of_a_custody_from_the_start(self, set_storage: Path, fake_plugin: BRIMProvider, first_trade: str, cash_from: date) -> None:
+        """``build_preview``, a missing role: its export must cover from the eve of the first trade of the role it covers (``must_cover``).
+
+        RED until W-B71 for a custody export whose first trade is 0001-01-01, which has no eve: cut at the calendar's
+        edge, the missing cash export must cover from 0001-01-01 to the last trade. The guard: a first trade on
+        0001-01-02 asks for the same period.
+        """
+        missing = _schema("BRIMSetMissing", A2)
+        custody = _member(_custody_csv(first_trade, "2025-01-15"), CUSTODY_NAME)
+
+        try:
+            preview = _preview(fake_plugin, [custody])
+        except OverflowError as exc:
+            _edge_overflow(
+                f"build_preview of a set whose custody export starts on {first_trade} and has no cash export",
+                exc,
+                "the period a missing role's export must cover starts on the eve of the first trade, covered[0] − 1 day, and 0001-01-01 has none: a 500 of POST /brokers/import/sets/preview and /sets/combine. The eve must be cut at the calendar's edge (shift_date): the missing cash export must cover from 0001-01-01",
+            )
+
+        assert preview.missing == [missing(role="cash", start=cash_from, end=date(2025, 1, 15))]
+        assert (_roles(preview)["cash"].status, preview.complete) == ("missing", False)
+
+    @pytest.mark.parametrize(
+        ("first_trade", "cash_from", "expected"),
+        [
+            pytest.param("0001-01-01", "0001-01-01", set(), id="custody-and-cash-from-the-first-day"),
+            pytest.param("0001-01-01", "2025-01-01", {"coverage_starts_late"}, id="custody-from-the-first-day-cash-later"),
+            pytest.param("0001-01-02", "0001-01-01", set(), id="guard-custody-from-the-second-day-cash-from-its-eve"),
+        ],
+    )
+    def test_cash_coverage_of_a_custody_from_the_start(self, set_storage: Path, fake_plugin: BRIMProvider, first_trade: str, cash_from: str, expected: set) -> None:
+        """``build_preview``, a complete set: the cash export must cover the custody period from the eve of its first trade.
+
+        RED until W-B71 for a custody export whose first trade is 0001-01-01, which has no eve: cut at the calendar's
+        edge, a cash export from 0001-01-01 covers it, and one from 2025-01-01 starts late (a warning: the set stays
+        complete). The guard: a first trade on 0001-01-02 is covered from its eve, 0001-01-01.
+        """
+        custody = _member(_custody_csv(first_trade, "2025-01-15"), CUSTODY_NAME)
+        cash = _member(_cash_csv(cash_from, "2025-01-17"), CASH_NAME)
+
+        try:
+            preview = _preview(fake_plugin, [custody, cash])
+        except OverflowError as exc:
+            _edge_overflow(
+                f"build_preview of a complete set whose custody export starts on {first_trade} and cash export on {cash_from}",
+                exc,
+                "the cash coverage is checked from the eve of the first trade, covered[0] − 1 day, and 0001-01-01 has none: a 500 of POST /brokers/import/sets/preview and /sets/combine. The eve must be cut at the calendar's edge (shift_date): a cash export from 0001-01-01 covers the custody period, one from 2025-01-01 starts late",
+            )
+
+        assert {notice.code for notice in preview.warnings if notice.code in COVERAGE_CODES} == expected
+        assert (preview.segments, preview.complete) == ([DateRangeModel(start=date.fromisoformat(first_trade), end=date(2025, 1, 15))], True)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("plugin", "checkpoint_day"),
+        [
+            pytest.param(_FakeBankProvider, "9999-12-31", id="summarize-policy-checkpoint-on-the-last-day"),
+            pytest.param(_FakeBankImportPolicyProvider, "9999-12-31", id="import-policy-without-rows-checkpoint-on-the-last-day"),
+            pytest.param(_FakeBankProvider, "9999-12-30", id="guard-checkpoint-on-the-eve-of-the-last-day"),
+        ],
+    )
+    async def test_first_import_whose_first_checkpoint_is_at_the_end(self, db_session: AsyncSession, plugin: type, checkpoint_day: str) -> None:
+        """``apply_history``, a first import: H0 is the day after the first checkpoint (policy ``summarize``, or ``import`` without rows).
+
+        RED until W-B71 for a checkpoint dated 9999-12-31, which has no next day: cut at the calendar's edge, H0 is
+        9999-12-31, and the checkpoint and the verification come back as the plugin made them. The guard: a checkpoint
+        dated 9999-12-30 gives the same H0.
+        """
+        apply_history = _sets("apply_history")
+        output = _parse_output(checkpoints=[(checkpoint_day, "opening")], verifications=[checkpoint_day])
+
+        try:
+            checkpoints, verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=plugin(), output=output)
+        except OverflowError as exc:
+            _edge_overflow(
+                f"apply_history of a first import whose only checkpoint is dated {checkpoint_day} ({plugin.__name__})",
+                exc,
+                "on a first import H0 is the day after the first checkpoint, as_of + 1 day, and 9999-12-31 has none: a 500 of POST /brokers/import/files/{file_id}/parse for the combined file. It must be cut at the calendar's edge (shift_date): H0 is 9999-12-31, and the checkpoint is kept",
+            )
+
+        assert h0 == date.max
+        assert (checkpoints, verifications) == (output.checkpoints, output.verifications)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("oldest_row", "expected_h0"), [pytest.param("0001-01-01", date.min, id="oldest-row-on-the-first-day"), pytest.param("0001-01-02", date(1, 1, 2), id="guard-oldest-row-on-the-second-day")])
+    async def test_first_import_whose_oldest_row_is_at_the_start(self, db_session: AsyncSession, oldest_row: str, expected_h0: date) -> None:
+        """``apply_history``, a first import with the ``import`` policy: H0 is the oldest row, and the checkpoints are kept from its eve on.
+
+        RED until W-B71 for a row dated 0001-01-01, which has no eve: cut at the calendar's edge, nothing precedes it,
+        so every checkpoint comes back as the plugin made it. The guard: a row dated 0001-01-02 has its eve, with the
+        same result.
+        """
+        apply_history = _sets("apply_history")
+        output = _parse_output(transactions=["2025-02-01", oldest_row], checkpoints=[("2024-12-31", "opening"), ("2025-06-30", "gap")], verifications=["2025-12-31"])
+
+        try:
+            checkpoints, verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankImportPolicyProvider(), output=output)
+        except OverflowError as exc:
+            _edge_overflow(
+                f"apply_history of a first import (policy import) whose oldest row is dated {oldest_row}",
+                exc,
+                "the checkpoints are kept from the eve of H0, start − 1 day, and 0001-01-01 has none: a 500 of POST /brokers/import/files/{file_id}/parse for the combined file. The eve must be cut at the calendar's edge (shift_date): H0 is 0001-01-01, and every checkpoint is kept",
+            )
+
+        assert h0 == expected_h0
+        assert (checkpoints, verifications) == (output.checkpoints, output.verifications)

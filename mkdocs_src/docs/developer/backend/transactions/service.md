@@ -525,7 +525,9 @@ Both count the broker's rows dated up to `as_of`, inclusive, and every row when
 
 Both sums run in Python, exactly, over the rows the query returns; the query keeps
 only the filters. `get_balances_at_end_of()` sums the same way, through
-`_get_balances_before_date()` — the starting balances of the
+`_get_balances_before_date(..., through=True)` — the rows dated up to `as_of` included, never
+the eve of `as_of` + 1 day, which the calendar's last day does not have (W-B71) — the starting
+balances of the
 [end-of-day replay](balance_validation.md), and LibreFolio's side of the BRIM gap-fix,
 without its excluded ids — and so does the asset list's set of held assets
 (`AssetCRUDService.list_assets()`, then `> QUANTITY_DUST_THRESHOLD`). Never an SQL

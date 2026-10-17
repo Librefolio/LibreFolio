@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import List
 
 from sqlalchemy import select
@@ -11,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import AssetEvent, AssetEventType, TransactionType
 from backend.app.schemas.transactions.event_suggest import TXEventSuggestCandidate, TXEventSuggestRequestItem, TXEventSuggestResultItem
 from backend.app.schemas.transactions.type_metadata import event_compatible
+from backend.app.utils.datetime_utils import shift_date
 
 
 class TransactionEventSuggestionsMixin:
@@ -60,8 +60,9 @@ class TransactionEventSuggestionsMixin:
                 continue
 
             event_types = type_map.get(req.type, set())
-            lo = req.date - timedelta(days=req.tolerance_days)
-            hi = req.date + timedelta(days=req.tolerance_days)
+            # W-B71: a date at the calendar's edge narrows the window, never raises.
+            lo = shift_date(req.date, -req.tolerance_days)
+            hi = shift_date(req.date, req.tolerance_days)
 
             stmt = select(AssetEvent).where(AssetEvent.asset_id == req.asset_id).where(AssetEvent.type.in_(event_types)).where(AssetEvent.date >= lo).where(AssetEvent.date <= hi)
             rows = (await self.session.execute(stmt)).scalars().all()

@@ -5468,3 +5468,54 @@ approvato: W-B74 (dopo l'entrata di W-B69 di MF, aiuto condiviso) → W-B71 → 
 parse del batch apre, mai mostrato). Oggi l'utente lo legge in inglese grezzo. Nel lotto di W-B72: la sua chiave (4 lingue) accanto
 a `costBasisNotAllowed`, e un cancello che dia a ogni codice delle regole una chiave, come quello di W-B69 per `TXValidationCode`.
 Script di W-B71 pronto (`files/scripts/wb71_cure.py`, dry run pulito su 4 file).
+
+### W-B71 — le finestre di date ai bordi del calendario: cura ✅ (2026-10-17) — 🧊 FROZEN
+
+**Base**: HEAD `9b23bdbfe` (dev, avanzato dal coordinatore dopo l'entrata di SEC7-3: cura `550e462a5`, giornale `b46a49385`, dev
+`e609082ab`, CHANGELOG `dbc2e7225`). Disegno: sezione «W-B71, W-B72, W-B74 — analisi» qui sopra.
+
+**Ordine cambiato** (proposto al coordinatore, 17/10 10:0x): W-B71 ora; la metà del batch di W-B69 con `EARLIEST_RANGE_START` quando
+entra MF-SEC8-2; poi W-B74, poi W-B72 (N78). Perché W-B74 dopo W-B69: il suo rifiuto è per broker (una riga illeggibile rende ignoti i
+saldi del broker, e la lista nemmeno le mostra), quindi ogni scenario del batch di W-B69 (una riga illeggibile nell'insieme del broker
+d'origine, che si rigioca) avrebbe un secondo issue `ledgerUnreadable`: con W-B69 prima, i rossi di W-B74 si scrivono sul batch com'è
+allora, e quelli parcheggiati di W-B69 non si riscrivono due volte.
+
+1. ✅ **Rossi** (test-author `83f7167c`): `shift_date` in `test_datetime_utils.py`; il suggerimento di promozione e quello degli eventi
+   con un input al `0001-01-01` e al `9999-12-31` accanto a uno ordinario (che trova ancora il suo candidato, e non a un giorno in più);
+   il gap-fix con un `as_of` al `9999-12-31`.
+   > **Note implementazione**: primo giro (carico 38–47): `utils datetime` 26 rossi / 13 verdi (manca `shift_date`), `services
+   > brim-gap-fix` 3 rossi / 102 verdi (`OverflowError`); i due file `api` (B3.12–B3.13 in `test_transactions_batch_split_promote.py`,
+   > G.4.9–G.4.10 in `test_events_suggest.py`) scritti, da girare in uno slot (la prima azione ricostruisce frontend e MkDocs).
+   > **⚠️ Fuori pista** (dai dubbi del test-author, presi): (1) con `shift_date` la fine del `9999-12-31` è `date.max`, e
+   > `_get_balances_before_date` conta solo `date < date.max`: una riga datata proprio `9999-12-31` (di una versione vecchia) mancherebbe →
+   > `get_balances_at_end_of` diventa una query inclusiva (`date <= as_of`, `through=True`), senza spostare il giorno; (2)
+   > `brim_report_sets.py` ha cinque `± 1 giorno` su date del report caricato o di righe salvate (`:164`, `:243`, `:253`, `:437`,
+   > `:440`): stesso 500 con un file costruito → dentro W-B71 con `shift_date` (miei file BRIM), rossi in `test_brim_report_sets.py`.
+   > Script della cura riscritto (5 file, dry run pulito); il pezzo nuovo in `files/scripts/wb71_balances_sets_part.py.txt`.
+2. ✅ **Cura**: `files/scripts/wb71_cure.py` (dry run pulito su 4 file anche su `9b23bdbfe`).
+   > **Note implementazione**: ordine approvato dal coordinatore (10:0x). Avanzamento a dev `91f4de9cb` (MF-SEC8-2, `e119c71bc`) chiesto
+   > e fatto **prima** della cura: `EARLIEST_RANGE_START` di MF e il mio `shift_date` stanno nello stesso punto di
+   > `utils/datetime_utils.py`; MF l'ha messo prima di `latest_range_end()`, quindi l'ancora dello script regge (dry run di nuovo
+   > pulito). MF-SEC8-2 non tocca i file dei test di W-B71.
+   > **Note implementazione** (rossi, secondo giro, 10:42–10:57, slot del coordinatore): `services brim-report-sets` 9 rossi / 265
+   > verdi (`TestCalendarEdges`: i cinque punti raggiunti dalle entrate che il file già usa, ognuno con la sua guardia un giorno dentro
+   > il bordo), `services brim-gap-fix` 4 rossi / 102 (`TestCalendarsLastDay`, più la riga datata proprio `9999-12-31` che deve contare
+   > alla fine di quel giorno: una cura che sposta solo la data non basta), `api batch-split-promote` 1 rosso (B3.13) / 37, `api
+   > events-suggest` 1 rosso (G.4.10) / 10. Il primo giro `api` ha ricostruito frontend e MkDocs (6m42s).
+   > **⚠️ Fuori pista**: nel primo giro B3.13 era rosso per la ragione giusta (`promotion.py:315`, `OverflowError` nel log del server) ma
+   > col messaggio sbagliato: la sonda che seguiva usava la connessione che uvicorn chiude dopo un'eccezione non gestita
+   > (`httpx.ReadError`). Il test-author manda ora ogni richiesta che può dare un 500 su un client suo; rigirato pulito, broker e asset
+   > cancellati. Dubbi annotati, senza azione: una correzione datata `9999-12-31` (solo da dati vecchi: N74 la rifiuta)
+   > farebbe H0 = `9999-12-31` (gli avvisi `before_history_segment` lo mostrano); `delete_owned` (aiuto esistente) ferma le
+   > cancellazioni al primo errore di connessione.
+   > **Cura applicata** (11:00): `shift_date` in `utils/datetime_utils.py` (dopo `latest_range_end()`, `EARLIEST_RANGE_START` di MF prima),
+   > i due suggerimenti, i cinque punti di `brim_report_sets.py`; `get_balances_at_end_of` con `_get_balances_before_date(...,
+   > through=True)` (query inclusiva). `timedelta` non serve più in `balances.py`, `promotion.py`, `event_suggestions.py`,
+   > `brim_report_sets.py`. Ruff pulito; black ha riformattato la `select(...)` lunga di `balances.py` (script non riallineato: conta il
+   > diff).
+3. ✅ **Verdi** (11:00–11:10, slot, carico a 5 minuti 43–49): `utils datetime` 39, `services brim-gap-fix` 106, `services
+   brim-report-sets` 274, `api batch-split-promote` 38, `api events-suggest` 11, `services transaction` 104; porta libera.
+4. ✅ **Doc**: `developer/frontend/state/transaction-draft.md` (la finestra del suggerimento ai bordi), `developer/backend/transactions/
+   service.md` (`get_balances_at_end_of`, query inclusiva), `developer/architecture/patterns/brim_plugin_guide.md` (i giorni attorno a H0
+   e alla copertura, tenuti ai bordi). Nessuna pagina utente: il comportamento visibile è «nessun suggerimento» invece di un errore.
+5. ⏳ **Simulazione e handoff**.
