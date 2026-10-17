@@ -1499,6 +1499,13 @@ wrong balance with the bank, which would propose a correction duplicating the ro
 (`get_balances_at_end_of` raises `UnreadableLedgerError`, `brim_gap_fix` turns it into
 `BRIMLedgerUnreadable`; W-B74). The wizard shows the message in that broker's group.
 
+When those transactions hold a cash currency that is not a canonical ISO 4217 code — a name or a number an earlier
+version saved as written (`978`, `EURO`), or a code in another case (`eur`) — the endpoint answers the same **409**
+`ledger_unreadable`, naming at most five such codes, each with the code it stands for (`'978' (EUR)`): such a balance is
+a bucket of its own that the bank's `EUR` never meets, so the comparison would propose a correction for money already
+there (`_refuse_non_iso_cash` in `brim_gap_fix.py`, after the W-B74 check; E-19a). Only `Transaction.currency` counts:
+the cost basis is no cash.
+
 ### 🧪 Testing a report-set plugin {: #report-set-tests }
 
 1. Put **synthetic** members (invented values, the real column layout) in `sample_reports/`,
