@@ -202,7 +202,7 @@
             {#if semanticMode === 'holdings' && visualMode === 'table'}
                 <ExposureTable bind:this={exposureTableComponent} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
-                <ExposureTreemap {holdings} {displayCurrency} {onAnalyze} />
+                <ExposureTreemap {holdings} holdingGroups={summary?.holding_groups ?? []} {displayCurrency} {onAnalyze} />
             {:else if semanticMode === 'performance' && visualMode === 'table' && contribution}
                 <ContributionTable bind:this={contributionTableComponent} positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
                 <OtherPeriodEffectsTable effects={otherEffects} {displayCurrency} />

@@ -116,11 +116,17 @@ frontend/src/routes/
     - the start-of-period carets come from `period_market_value_start`, `period_book_value_start`
       and the first history point's `cash_value`; the Cash tooltip from the last history point's
       `cash_from_contributed_capital` / `cash_from_generated_returns`
-    - the day-change lines are computed in the browser from the last two history points: Δ of
-      `total_pnl`, divided by the previous `|total_pnl|` (Card 1) or `|nav_value|` (Card 2); a zero
-      base drops the percentage, and fewer than two points drops the line
-    - the timing effect is `mwrr_cumulative_percent − twrr_percent` in pp, labelled neutral below
-      0.05 pp; its colour intensity saturates at 3 pp
+    - the day-change lines read `pnl_change_1d`: the Total P&L's change from the calendar day
+      before the valuation date (`date_to`, else today) to it, from the engine's daily states;
+      null for a portfolio born on the valuation date. Card 1 shows it with its share
+      `pnl_change_1d_vs_total_pnl_percent`, Card 2 only the share `pnl_change_1d_vs_nav_percent`:
+      fractions of the day before's `|total_pnl|` and `|nav_value|`, with the change's sign, null
+      on a zero base. A null change drops Card 1's line, a null share its percentage (on Card 2,
+      the whole line); neither line is derived from `history`
+    - the timing effect reads `timing_effect_percent`, the backend's
+      `mwrr_cumulative_percent − twrr_percent` (null when either is missing), shown ×100 in pp:
+      `—` with no label when null, labelled neutral below 0.05 pp; its colour intensity saturates
+      at 3 pp
     - each card's help icon is a `DocsLink` to `user/dashboard/kpi-cards/#card-1-period-pl`,
       `#card-2-returns` and `#card-3-net-worth`: keep these explicit anchors in every language
 - **Positions tab** — `PositionsPanel`, also mounted on the broker detail Positions tab:
@@ -133,6 +139,18 @@ frontend/src/routes/
       `ContributionTable`, not a panel toggle, and `PerformanceChart` shows an Open / Closed badge
     - `positions_contribution` is fetched apart, on demand: `PositionsPanel` asks for it the first
       time the Period view is shown; a cached copy shows at once and is refreshed when stale
+    - `ExposureTreemap`'s type and broker tooltips take their G/L and G/L % from
+      `summary.holding_groups`, passed by `PositionsPanel` as `holdingGroups` (only holdings with a
+      known value and G/L count): the group of the same `(broker_id, asset_type)`, `asset_type`
+      null for the whole broker. A group not sent, or sent without `gain_loss`, reads
+      **Unrealized P&L** `—`; tile areas and NAV weights still add up the holdings' own
+      `current_value` and `nav_weight_percent`
+    - `PerformanceChart` computes no return: it shows the backend's fractions of `|start_value|`,
+      rounded to 4 decimals and ×100 for display only — `period_pnl_percent` beside `period_pnl`
+      (the bar label and the tooltip's **Period P&L** row), and `period_unrealized_delta_percent`,
+      `period_realized_gain_loss_percent`, `period_income_percent` and `period_fees_taxes_percent`
+      beside the tooltip's four component rows (`period_fees_taxes_percent` is positive, a cost,
+      and shown negative). A null fraction shows no return
     - the lots panel opens from the **Analyze Lots** row action (⋮) or the right-click menu of
       every view — there is no plain-click trigger — and is mirrored in `?asset=<id>`;
       `LotsAnalysisPanel` renders inline below, with a slide transition, and scrolls itself into
