@@ -4426,6 +4426,53 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Cura: mostrare il `detail` del 400 e gli `errors` del 200 (per data), contarli a parte. Prove: Vitest e
     `front-fx fx-editor`. Poi la frase della pagina utente (`user/fx/detail/data-editor.en.md`) può dire «con un messaggio
     che nomina la data».
+- **X-R47 · Il rapporto di uno SPLIT non è mai validato** — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
+  V-4 di CP-14a, F4, girato dal coordinatore).
+  - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
+    il report della Dashboard risponde 500.
+  - Cura: validare il rapporto alla scrittura dell'evento. Al via, verificare col coordinatore chi possiede i file degli
+    eventi (consegnati a W dopo CP2b).
+- **X-R48 · `market-data/wipe` cancella gli SPLIT collegati a rettifiche senza costo** — **prima del rilascio, dopo
+  l'ingresso di CP-14a di J**; X, 17/10 (J, F1, girato dal coordinatore).
+  - `POST /assets/{id}/market-data/wipe` (il flusso del cambio di valuta, ma si può chiamare anche da solo) scollega ogni
+    transazione dagli eventi dell'asset e li cancella tutti, SPLIT compresi (`currency_change.py:131-137`). Una
+    rettifica +q collegata a uno SPLIT, senza costo, diventa `MISSING_COST_BASIS`.
+  - **Deciso**: una guardia come quella di P-10, cioè un rifiuto 409 con i dettagli (evento, data, transazioni), tramite
+    `financial_math.splits.costless_incoming_split_adjustments`, che arriva con CP-14a.
+- **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** — basso; X, 17/10 (J, F2,
+  girato dal coordinatore).
+  - `provider_management.py:212-221`: vale solo se un utente ha scritto uno SPLIT fra gli eventi del piano.
+  - Ordine deciso dal coordinatore dopo X-R40/W-B62: X-R47 → X-R48 → X-R44 → X-R49.
+- **X-R50 · Seguito di X-R38: tre note della revisione R13-SEC5 di E** — piccolo, **nel lotto di X-R40/W-B62**; X, 17/10
+  (E, girato dal coordinatore).
+  1. Limite del double: un tasso a meno di 0,008 da `1E+14` ha 14 cifre intere e passa, risposto «inserted», ma SQLite lo
+     salva come `1e14`, e ogni conversione lo salta. `storable_fx_rate` deve chiedere anche `float(v) < 1E+14`.
+  2. Underflow: `normalize_storable_rate` può restituire zero quando l'inverso va in underflow, contro la sua docstring.
+     Dopo l'inversione, chiedere `> 0`.
+  3. BOE e SNB: `Decimal(str)` solleva `InvalidOperation`, che il loro `except` non cattura; un valore ostile fa fallire
+     tutto il fetch di quel provider (solo disponibilità). FED ha lo stesso buco
+     (`except (ValueError, IndexError, ZeroDivisionError)`): lo chiudo insieme.
+  - Inoltre E ha classato MEDIUM 8/10 le scritture dei cambi da parte di qualunque utente (profilo gestito): va al
+    developer insieme a D-SEC2-1, non a X.
+- **X-R51 · Il refresh non dice più perché ha scartato il valore corrente** — piccolo, **subito dopo l'ingresso di
+  X-R40/W-B62**; X, 17/10 (trovato dal docs-writer di X-R40).
+  - Con X-R40/W-B62 una quotazione corrente che nessuna colonna tiene si scarta prima dell'upsert. Il risultato del
+    refresh perde così il motivo («rejected … no price column can keep»): con lo storico è OK senza messaggio, senza
+    storico è FAILED con «No price data available from provider». Il motivo resta solo nel log, una volta.
+  - Cura pronta (`files/checks/xr51_code.py` della sessione X): una nota in `_FetchedRefreshData` che finisce negli
+    `errors`, quindi PARTIAL col motivo, oppure FAILED col motivo. Rossi pronti in `files/drafts/`. Docs da ritoccare:
+    il paragrafo del refresh in `backend/assets/architecture.md`.
+  - Nello stesso lotto, due ritocchi trovati dal docs-writer di X-R50:
+    - `fx_rate_limits_text()` non nomina la regola del double: un `99999999999999.995` manuale si sente dire «al
+      massimo 14 cifre prima della virgola», ma ne ha 14. Aggiungere «sotto 100000000000000». I test cercano solo i
+      numeri 14 e 10, e la frase va aggiornata anche in `backend/fx/configuration.md`;
+    - la docstring di `_collect_leg_rates()` (`sync.py`) nomina solo l'overflow, non l'underflow.
+- **X-R52 · ECB: un valore che non è un numero fa perdere tutta la valuta** — piccolo, disponibilità; X, 17/10 (trovato dal
+  docs-writer di X-R50).
+  - `ecb/plugin.py` non ha un `try` per osservazione, e il suo `except (KeyError, IndexError, ValueError)` non cattura
+    `InvalidOperation`: un valore ostile fa uscire l'eccezione grezza invece di `FXServiceError`, e si perde la valuta,
+    forse tutto il fetch di ECB. ECB è il fornitore principale dei cambi.
+  - Cura: saltare l'osservazione (`ArithmeticError`), come BOE, SNB e FED con X-R50. Un rosso in `test_fx_parse_errors.py`.
 
 ## W · Import e transazioni (fase 01)
 
