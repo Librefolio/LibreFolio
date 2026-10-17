@@ -635,6 +635,16 @@ def api_username_rules(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Username rules API tests", verbose=verbose)
 
 
+def api_whats_new(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the API tests of C-54, in-process: user.whats_new in the answers, POST /auth/whats-new/seen."""
+    print_section("What's New API Tests")
+    print_info("Testing user.whats_new in the answers of POST /auth/register, POST /auth/login, GET /auth/me and POST /auth/setup, and POST /auth/whats-new/seen")
+    print_info("In-process on private databases, the running version patched, accounts written as rows: never the lane's server")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_whats_new_api.py", test_names)
+    return run_command(cmd, "What's new API tests", verbose=verbose)
+
+
 def api_security_checks(verbose: bool = False, test_names: list = None) -> bool:
     """Run the lane's tests of GET /security/checks: administrators only, the login limit off on the lane."""
     print_section("Security Checks API Tests")
@@ -1174,6 +1184,17 @@ Tests for REST API endpoints (server auto-started):
         desc="A-21a over HTTP: register and profile refuse a new username with an @ (400 USERNAME_INVALID) and an address that is a legacy username (400 Email already registered); the sign-in reads an address first, then the exact legacy name (E's point c, both orders)",
         # PURE: in-process apps on private SQLite files under tmp_path, legacy accounts written as rows, limiters of their
         # own; no lane DB, no server reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "whats-new",
+        api_whats_new,
+        name="What's New API",
+        desc="C-54 over HTTP: user.whats_new, {since, release} or null, in the answers of register, login, /auth/me and setup — a fresh account null, NULL or an older release pending at every /auth/me without marking it, LIBREFOLIO_DISABLE_WHATS_NEW null —; POST /auth/whats-new/seen 401 without a session, 204 writing the server's running release (never a client's), nobody else's, idempotent",
+        # PURE: in-process apps on private SQLite files under tmp_path, the running version patched in this process,
+        # accounts written as rows, limiters of their own; no lane DB, no server reached (the api category still starts
+        # the lane's backend around it).
         isolation="pure",
     )
     add_test(

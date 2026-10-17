@@ -613,6 +613,16 @@ def services_username_lookup(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Username lookup tests", verbose=verbose)
 
 
+def services_whats_new(verbose: bool = False, test_names: list = None) -> bool:
+    """Test C-54, «What's new since your last version»: the base release, who has something new to see, create_user and mark_seen."""
+    print_section("Services: What's New (C-54)")
+    print_info("Testing: backend/app/services/accounts/whats_new_service.py, user_service.create_user")
+    print_info("Tests: the base release of a version (git describe, tags, hashes), the running one read at each call, LIBREFOLIO_DISABLE_WHATS_NEW, pending_for by release (NULL, older, newer, unknown), create_user writes the running release, mark_seen commits it, idempotent")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_whats_new_service.py", test_names)
+    return run_command(cmd, "What's new service tests", verbose=verbose)
+
+
 def services_password_policy(verbose: bool = False, test_names: list = None) -> bool:
     """Test the password rules in one place: what a new password must meet, for the API, the CLI and the app."""
     print_section("Services: Password Policy")
@@ -2065,6 +2075,16 @@ Note: No backend server required.
         name="Username Lookup (A-21a)",
         desc="get_user_by_username_or_email: an address first, then the exact legacy name; without an @ a username only, exact, never an address; both orders of the rows",
         # PURE: every database is a private file under tmp_path built with create_all; get_async_engine a tripwire.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "whats-new",
+        services_whats_new,
+        name="What's New (C-54)",
+        desc="release_of: the base release X.Y.Z of a version (tag, git describe, pre-release, X.Y), None for a hash, dev, unknown; current_release reads backend.app.config.get_version at each call; LIBREFOLIO_DISABLE_WHATS_NEW; pending_for by release, as numbers (NULL or unreadable: since None; older; newer; unknown running release; switched off); create_user writes the running release (NULL when unknown); mark_seen commits it, nobody else's, idempotent",
+        # PURE: every database is a private file under tmp_path built with create_all; the running version patched with
+        # monkeypatch in this process, get_async_engine a tripwire, variables removed. No lane DB, no server.
         isolation="pure",
     )
     add_test(
