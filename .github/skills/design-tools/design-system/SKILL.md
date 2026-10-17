@@ -297,6 +297,11 @@ draw. Owner: DV.
     pure black or pure white, whichever reads best (`CORRELATION_CELL_TEXT` through `readableOn()`).
 - **The PAC's bars, «ideal vs actual»:** the ideal in its own neutral grey, `PAC_EXPOSURE_COLORS.ideal` of
   `chartTheme.ts`; the actual weight in its row's category colour, a subtype in a shade of its family (§1.7).
+- **The type colours outside the canvas** (§1.9, decision A): the HTML that draws a type reads T's roles
+  `--lf-cat-<type>` (`bg-lf-cat-etf`; `-soft` and `-on-soft` for a badge), as the book-value and cash bars of the
+  Dashboard's net-worth card do. Until the Designer Lab moves to the roles (DV-11) a type colour lives twice, in
+  `chartCategories.ts` and in tokens.css: change both together; the parity test of `chartCategories.test.ts` holds them
+  equal.
 - **Roles in a chart:** `chartRoles(dark, scope)` of `roleColors.ts` reads `--lf-*` on the chart's own element at each
   draw: `color(role)`, and `readableText(background)` for a label over a fill.
 - **Neutrals on roles (B4):** axes, grids and rules, labels, tooltip boxes, pointers, and the gaps and rings in the

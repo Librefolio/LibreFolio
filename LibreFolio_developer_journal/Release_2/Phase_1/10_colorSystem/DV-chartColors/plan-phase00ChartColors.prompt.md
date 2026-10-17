@@ -2193,8 +2193,24 @@ Z-29b su `LineChart.svelte`, che resta fuori.
   >   2949): disgiunte, ma un merge non si fa su un file modificato e non committato.
   > - Il target ha già corretto l'ideale del PAC in `decisioni.md` e `palette-finale.json` (`ba8e06763`): la nota per
   >   il coordinatore di G3-1…G3-4 è chiusa.
-- [ ] G3-8, dopo il merge del target: girare `CATEGORY_ROLES_IN_TOKENS`, prove leggere sul ramo unito; R3-5 se il
-  coordinatore lo include; poi la richiesta dello slot.
+- [x] ✅ (18/10/2026, 00:23) G3-8, sul ramo unito: il flag di parità e R3-5.
+  > **Base:** il coordinatore ha committato il checkpoint in `323ea518e` (genitore `38b7e6313`, i 37 file) e fatto la
+  > base merge `3dba7f894` (genitori `323ea518e` + `7845fc3d3`), pulita; `BACKLOG_POST_1.2.md` si è unito da sé.
+  > **Note implementazione:**
+  > - **Flag di parità:** `CATEGORY_ROLES_IN_TOKENS = true` in `chartCategories.test.ts`, con la data e il commit di T
+  >   nel commento, e l'avviso che un colore di tipo vive in due posti fino a DV-11. Il blocco gira nel ramo `true`:
+  >   3 test su 3 (`files/r3-light-merged/parity-verbose.log`).
+  > - **R3-5:** `KpiSection.svelte`, la barra del valore contabile su `bg-lf-cat-etf` e quella della liquidità su
+  >   `bg-lf-cat-liquidity`, le utility di T. `theme-roles.mjs --update`: il baseline perde solo la riga di
+  >   `KpiSection` (m1 594 → 590). Nessun test né pagina di docs nominava quei colori.
+  > - **Skill «Charts»:** una riga sui colori dei tipi fuori dal canvas (i ruoli `--lf-cat-*` di T, le due barre) e
+  >   sulle due copie da cambiare insieme. La regola 11 dice ancora «palette classes until the categorical roles come»:
+  >   è di T (R3-c).
+  > - **Backlog:** DV-7, le barre dei KPI fatte; DV-11, il primo passo chiuso.
+  > **Prove** sul ramo unito (`files/r3-light-merged/`, carico sotto 5): `api sync` senza file tracciati cambiati;
+  > Prettier, compilatore e ratchet puliti; `front check` 0 e 0; **32 file Vitest, 1500 test, tutti verdi**
+  > (i 31 di prima più `assetTypeTables.test.ts` di T, 49).
+- [ ] G3-9, lo slot di circa 55 minuti nella 6156, al via del coordinatore.
 
 ## Definizione di fatto
 
