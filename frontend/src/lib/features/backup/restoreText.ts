@@ -90,6 +90,9 @@ export const ERROR_KEYS: Record<string, string> = {
     restore_already_pending: 'backup.restore.errors.restore_already_pending',
     restore_not_pending: 'backup.restore.errors.restore_not_pending',
     restore_pending: 'backup.restore.errors.restore_pending',
+    restore_confirm_failed: 'backup.restore.errors.restore_confirm_failed',
+    restore_cancel_failed: 'backup.restore.errors.restore_cancel_failed',
+    restore_restart_failed: 'backup.restore.errors.restore_restart_failed',
     // No usable answer
     network: 'backup.restore.errors.network',
     unexpected: 'backup.restore.errors.unexpected',
