@@ -4728,6 +4728,29 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   Bulk si chiede di scartare modifiche che non ci sono. Precedente a C-97b (la guardia chiude con «Annulla»). Da verificare con un
   rosso, poi l'«Applica» riporta il segno della convenzione del Bulk (grandezza). Dettagli: piano 04, sezione «C-97b — i decimali in
   input: la cura».
+- **W-B66 · Il campo decimale: un esponente incollato cambia il numero, un incolla enorme blocca la scheda** — basso, numeri e
+  disponibilità; E, 17/10 (R13-SEC5, revisione di C-97b, sotto la soglia). Tre note: (1) `filterDecimalInput`
+  (`frontend/src/lib/utils/core/parseDecimalInput.ts`) toglie ciò che non è cifra, punto, virgola o il meno iniziale, quindi un
+  `1e-8` incollato diventa `18`, visibile ma senza un avviso (precedente al lotto); (2) un incolla enorme blocca la scheda di chi
+  incolla: `ExactDecimalInput` confronta coi limiti `min`/`max` con `10n ** places` (le cifre decimali incollate), e la cella del Bulk
+  passa il testo da `formatDecimalForDisplay`, la cui regex `^-?\d*\.?\d*$` torna indietro in modo quadratico su un testo lungo che
+  non combacia (solo il proprio browser); (3) il toast di «+ New event» mostra 2 decimali (`parseFloat`, `formatFixed`): va con
+  C-97c. Cura: (1) un esponente incollato letto esatto o rifiutato col messaggio; (2) un tetto alla lunghezza del testo prima del
+  confronto e una regex lineare; (3) in C-97c. Dettagli: piano 08 di E, «R13-SEC5».
+- **W-B67 · Il costo Auto può finire sulla riga sbagliata** — medio, numeri; J, 17/10 (analisi di V-4, via il coordinatore). Prima
+  del rilascio. `_find_created_tx_for_wac` (`backend/app/services/transactions/auto_cost.py:158-183`) trova la riga creata di un
+  elemento senza `link_uuid` cercando l'ultima con lo stesso broker, asset, data e tipo (`order_by(id.desc()).limit(1)`): con due
+  ADJUSTMENT Auto non collegati nello stesso giorno in un batch, il primo non riceve mai il costo e si salva senza (come Auto salta il
+  controllo del costo), il secondo lo riceve due volte; e un Auto seguito da un Manuale con la stessa chiave sovrascrive il costo
+  Manuale con la media. Cura: la riga di ogni elemento dalla mappa che la creazione già conosce (indice → riga), senza la ricerca per
+  campi; rossi prima. Dopo W-B60. Dettagli: piano 04, sezione «W-B67» (quando parte).
+- **W-B68 · I valori degli eventi dei provider non sono troncati alla colonna** — basso, numeri; W, 17/10 (W-B60, docs-writer). I
+  prezzi dei provider si salvano troncati a ciò che la colonna tiene (`storable_value`, `truncate_priceHistory`), i valori degli eventi
+  dei provider no: `_storable_events` (`backend/app/services/assets/event_store.py`) ne controlla solo la grandezza. Con la lettura di
+  `RealDecimal(18, 6)` (W-B60) un valore con più di 6 decimali si rilegge arrotondato, e un pareggio arrotonda in modo diverso da prima
+  (`784.0774475`: prima `…447`, ora `…448`, 0,000001); un valore di 10 o più cifre intere può superare le 15 significative. Cura:
+  `storable_value(value, AssetEvent, "value")` anche per gli eventi dei provider, come i prezzi (letto = scritto). Dettagli: piano 04,
+  sezione «W-B60».
 - **W-B60 · Gli importi tornano col rumore del double (C-97)** — minimo, numeri; W, 17/10 (W-B58, N63). `Transaction.amount` e
   `AssetEvent.value` sono `Numeric(18, 6)`, che SQLAlchemy rilegge col formato `'%.6f'`: da 11 cifre intere il rumore del double
   compare nei decimali (`123456789012.345` torna `123456789012.345001`; con le 15 cifre intere di N63 `99999999999999.9` torna
@@ -4742,12 +4765,17 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
 - **W-B62 · `/prices/current` risponde per intero un prezzo enorme del provider** — basso, disponibilità; W, 17/10 (R13-SEC2, nota
   6). Il serializzatore `format(v, "f")` (`backend/app/schemas/common.py:47`) scrive per intero un `1E+50000000`: ~50 MB per
   risposta, che la cache di 2 minuti riserve. Dopo W-B58 il valore non si salva più, ma la risposta lo porta ancora. Cura: la
-  quotazione non memorizzabile risponde come non disponibile, o il serializzatore rifiuta un esponente oltre una soglia. Dettagli:
-  piano 04, sezione «W-B58 e W-B59».
+  quotazione non memorizzabile risponde come non disponibile, o il serializzatore rifiuta un esponente oltre una soglia. Analisi
+  (17/10): anche la cache di 2 minuti e il delta del refresh la portano; proposta al confine del provider, mai nel serializzatore.
+  **Passata a X** (coordinatore, 17/10 03:4x), con la sua X-R40; i rossi scritti da W gli vanno consegnati. Dettagli: piano 04,
+  sezioni «W-B58 e W-B59» e «W-B62 e W-B63».
 - **W-B63 · Un inf già salvato in una colonna `Numeric` rompe le risposte** — basso, dati; W, 17/10 (W-B58). Importo, valore di
   evento, volume e cambio si rileggono `Decimal('Infinity')` (formato `'%.Nf'`), che il JSON scrive `Infinity`. Solo dati scritti
-  prima di W-B58 o a mano. Importo e valore dell'evento li chiude W-B60; volume e cambio restano. Dettagli: piano 04, sezione
-  «W-B58 e W-B59».
+  prima di W-B58 o a mano. Importo e valore dell'evento li chiude W-B60 (letti `None`, mai più scritti); volume e cambio restano.
+  E dopo W-B60 la query degli eventi (`query_events_bulk`) fallisce ancora su un valore `None` (`Currency(amount=None)`): una riga
+  così va saltata, con un avviso. Analisi (17/10): una correzione post-migrazione che annulla o cancella gli inf ricavabili e
+  riporta quelli dell'utente, più due guardie puntuali; decisione D-W63-1. Dettagli: piano 04, sezioni «W-B58 e W-B59», «W-B60» e
+  «W-B62 e W-B63».
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
