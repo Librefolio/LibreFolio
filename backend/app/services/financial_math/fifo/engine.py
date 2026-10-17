@@ -443,13 +443,16 @@ class FifoLotEngine:
 
     def _apply_transfer_depart(self, event: FifoEvent) -> None:
         pair_id = _require_id(event.pair_id)
+        # An issue names the giving leg, the row to fix (J-12): the departure event carries the lower id of a same-day
+        # pair, or the leg dated first, which can be the receiving one.
+        giving_leg_id = event.raw_transaction_ids[0] if event.raw_transaction_ids else event.transaction_id
         source_broker_id = _require_id(event.source_broker_id)
         destination_broker_id = _require_id(event.destination_broker_id)
         quantity = _require_decimal(event.quantity)
         if self.signed_quantity_for_broker(source_broker_id) < Decimal("0") or any(fragment.direction == "SHORT" for fragment in self._broker_fragments(source_broker_id, "SHORT")):
             self._issue(
                 code="SHORT_TRANSFER_NOT_SUPPORTED",
-                transaction_id=event.transaction_id,
+                transaction_id=giving_leg_id,
                 broker_id=source_broker_id,
                 related_transaction_id=pair_id,
                 message="Transfer of SHORT position is not supported in phase 1.",
@@ -467,7 +470,7 @@ class FifoLotEngine:
         if remainder > Decimal("0"):
             self._issue(
                 code="FIFO_SOURCE_QUANTITY_MISSING",
-                transaction_id=event.transaction_id,
+                transaction_id=giving_leg_id,
                 broker_id=source_broker_id,
                 related_transaction_id=pair_id,
                 message="TRANSFER exceeds available LONG quantity on source broker.",
