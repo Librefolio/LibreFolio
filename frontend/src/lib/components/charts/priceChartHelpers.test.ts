@@ -1486,11 +1486,24 @@ describe('buildDeltaHtml', () => {
         expect(html).toContain('(Δ -10.0000 / -10.00%)');
     });
 
-    it('reports a 0% relative delta when the first value is 0 (no divide-by-zero)', () => {
+    it('reports no relative delta when the first value is 0: the move is unknown, not 0% (J-44, N65)', () => {
         const html = buildDeltaHtml(10, 0, false);
-        // Why (re-pin, M-18 CP2): the relative delta goes through `formatPercent`, and a zero carries no
-        // `+` (CP1): `+0.00%` becomes `0.00%`. The absolute delta keeps its `+`: it is a gain.
-        expect(html).toContain('(Δ +10.0000 / 0.00%)');
+        // Red (J-44, N65): a change measured from a start of 0 has no percentage, so the relative delta
+        // reads «—» (U+2014), as the chart ruler's Δ% does since CP-14b (`changePct` in MeasureSignal.ts,
+        // the one copy of the rule). This test pinned `(Δ +10.0000 / 0.00%)` before — re-pinned by M-18
+        // CP2 for the zero's missing `+` — because the old code answers the division by zero with 0
+        // (`firstValue !== 0 ? … : 0`): a flat move that never happened. The absolute delta keeps its `+`:
+        // it is a gain.
+        expect(html).toContain('(Δ +10.0000 / —)');
+    });
+
+    it('colours a fall from a first value of 0 by the absolute delta: red, with no relative delta (J-44, N65)', () => {
+        const html = buildDeltaHtml(-10, 0, false);
+        // Red (J-44, N65): `(Δ -10.0000 / —)`. Before: `(Δ -10.0000 / 0.00%)`, the same 0 % as above. The red
+        // is already right today and must survive the change: with no percentage left, the sign of the
+        // absolute delta alone decides the colour.
+        expect(html).toContain('#ef4444');
+        expect(html).toContain('(Δ -10.0000 / —)');
     });
 });
 
@@ -1619,7 +1632,8 @@ describe('splitGhostLabel — the name and the currency apart, nothing cut (K st
  * interface's. Every figure follows the interface language (the developer's decision M-18, 2026-10-12):
  *
  *   - percentage view: `(Δ ${formatPercent(value)})`;
- *   - absolute view: `(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})`;
+ *   - absolute view: `(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})`, with «—» for
+ *     the relative part when the first value is 0 (N65, J-44: the move is unknown, not 0 %);
  *   - the colours stay derived from the sign, a zero green;
  *   - `formatMonthLabel(date)` defaults to the interface locale; an explicit locale still wins.
  *
@@ -1686,10 +1700,13 @@ describe('buildDeltaHtml and formatMonthLabel in the interface language (M-18)',
             {value: 2234.5, first: 1000, color: GREEN},
         ];
         // The two deltas as the helper computes them: the difference, and its share of the first value
-        // (0 when there is none).
+        // (none when the first value is 0, written «—»: the move is unknown, not 0 %).
+        // Red (J-44, N65) on the third case, {value: 10, first: 0}. Before: the share was 0, so the helper
+        // wrote `formatPercent(0, FR)`, a French 0 % for a move that has no percentage. The other three
+        // cases keep their percentage, computed as before.
         const expected = cases.map(({value, first, color}) => {
-            const deltaPct = first !== 0 ? ((value - first) / first) * 100 : 0;
-            return {color, text: `(Δ ${formatFixed(value - first, 4, {signed: true, ...FR})} / ${formatPercent(deltaPct, FR)})`};
+            const deltaPct = first !== 0 ? ((value - first) / first) * 100 : null;
+            return {color, text: `(Δ ${formatFixed(value - first, 4, {signed: true, ...FR})} / ${deltaPct === null ? '—' : formatPercent(deltaPct, FR)})`};
         });
         expect(expected[0].text, 'French differs from English').not.toBe('(Δ +10.0000 / +10.00%)');
 
