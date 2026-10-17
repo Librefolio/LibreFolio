@@ -267,6 +267,11 @@ change itself is the house's `fixed_period_changes()`
 `errors` is deduplicated and capped at ten plus one "… and N more" line. The endpoint reads the stored history
 directly, so a 5Y change exists whatever range the page has loaded.
 
+The Assets list calls the endpoint through `fetchAssetPeriodChanges()` (`frontend/src/lib/utils/periodChanges.ts`):
+one request for every asset of the list, native (no `target_currency`), with `as_of` the end of the selected range.
+Besides its fixed 1D column, the table shows each period whose `days` fit in the range's whole calendar days
+(`visiblePeriodColumns()`).
+
 ### 💹 Current Quotes and Today's OHLC
 
 `get_current_prices_bulk()` is deliberately separate from the DB-only historical query. For each
