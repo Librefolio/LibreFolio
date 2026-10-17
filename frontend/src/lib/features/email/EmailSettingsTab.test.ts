@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * EmailSettingsTab — Settings › Email, for administrators (workstream E, lot E2).
+ * EmailSettingsTab — Settings › Administration › Email, for administrators (workstream E, lot E2).
  *
  * The contract under test:
  *   - on mount the tab reads the status once; its root `email-tab` publishes `data-busy` (and `aria-busy`) true while a

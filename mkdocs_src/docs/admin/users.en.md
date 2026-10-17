@@ -282,10 +282,10 @@ an address LibreFolio can use ([Emails with a Link](email.md#public-url)) — bo
   while the account is active.
 - **The link in the email starts with `LIBREFOLIO_PUBLIC_URL`**, whatever the **Server address**
   above shows: the dialog says so.
-- **The language**: an invitation goes in the instance's **Default Language**, a reset link in the
-  account's.
-- **The result** shows in the dialog: *Sent to …* with the address, or why the email did not go out
-  ([Sending Errors](email.md#sending-errors)).
+- **The language**: an invitation goes in the language chosen in **Language of the email**, the
+  instance's **Default Language** unless you pick another; a reset link goes in the account's.
+- **The result** shows in the dialog: *Sent to …* with the address and the language the email was
+  written in, or why the email did not go out ([Sending Errors](email.md#sending-errors)).
 
 Without email, the button is not there: copy the link as before. The rules and the limits:
 [Links Sent by an Administrator](email.md#admin-links).
