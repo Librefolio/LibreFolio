@@ -672,7 +672,9 @@ class PortfolioService:
         _realized_accum = sum((gain for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to) if (gain := realized_gain(sale.proceeds, sale.cost)) is not None), Decimal("0"))
 
         lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
-        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: oldest_open_lot_date(quantity_moves(txns, lot_split_ids)) for key, txns in lot_txns_by_key.items()}
+        # MF-A10: the moves at the owner's share, as the engine's quantities the rows test against the dust threshold
+        lot_shares = {access.broker_id: effective_share(access.role, access.share_percentage) for access in accesses}
+        oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: oldest_open_lot_date(quantity_moves(txns, lot_split_ids, share=lot_shares[key[0]])) for key, txns in lot_txns_by_key.items()}
         # First lot-affecting transaction per position (includes ADJUSTMENT/TRANSFER, so
         # in-kind/succession/snapshot-seeded positions get a real window start — unlike
         # first_position_dates which only tracks BUY/SELL). Anchors the net annualized window.
@@ -1657,7 +1659,9 @@ class PortfolioService:
         moved_in = transfer_tracts_moved_in(engine_result.internal_asset_transfers, date_from, effective_end)
 
         lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
-        lot_moves = {key: quantity_moves(txns, lot_split_ids) for key, txns in lot_txns_by_key.items()}
+        # MF-A10: the moves at the owner's share, as the engine's quantities the rows test against the dust threshold
+        lot_shares = {access.broker_id: effective_share(access.role, access.share_percentage) for access in accesses}
+        lot_moves = {key: quantity_moves(txns, lot_split_ids, share=lot_shares[key[0]]) for key, txns in lot_txns_by_key.items()}
         oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: oldest_open_lot_date(moves) for key, moves in lot_moves.items()}
 
         for pos_key, info in position_info.items():
@@ -1714,8 +1718,8 @@ class PortfolioService:
             # the position's window, on the end cost for a position opened inside the period; for a position closed in
             # it, the annualized return on the cost it sold over its flight time.
             period_pnl_pct = period_return_on_start(period_pnl, start_value)
-            # MF-A9: a position opened in the period that still holds every unit it received by a counted tract counts
-            # them, in its fallback base, from their value on arrival, as its result does
+            # MF-A9: a position opened in the period that received units by a counted tract, and from which no unit left in
+            # the period, counts them, in its fallback base, from their value on arrival, as its result does
             row_exits = exits_in(lot_moves.get(pos_key, []), date_from, effective_end)
             period_annualized = annualized_period_return(
                 period_pnl,

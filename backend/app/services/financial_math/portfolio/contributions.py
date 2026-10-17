@@ -119,11 +119,12 @@ def annualized_period_return(
     The base is the size of the start value; a position opened inside the period (no start value) falls back to its
     cost at the end. None without a base, a window, or the days :func:`returns.cumulative_to_annualized` needs.
 
-    ``moved_in`` (MF-A9), for a position opened inside the period that received units by counted tracts and still holds
-    them all: what they gained before arriving (:func:`transfer_tracts_moved_in`). Its result counts them from their value
-    on arrival, its end cost at their historical cost; the fallback base adds the same amount, as a closed position's does
-    (MF-A8), and must then be positive. Not passed when units left the position in the period: a transfer carries no
-    quantity, so the part of the tract that left with them cannot be told apart, and the end cost stays the base.
+    ``moved_in`` (MF-A9), for a position opened inside the period that received units by counted tracts and from which
+    no unit left in the period: what they gained before arriving (:func:`transfer_tracts_moved_in`). Its result counts
+    them from their value on arrival, its end cost at their historical cost; the fallback base adds the same amount, as a
+    closed position's does (MF-A8), and must then be positive. Not passed when units left the position in the period —
+    before the arrival or after it: a transfer carries no quantity, so the part of the tract that left with them cannot
+    be told apart, and the end cost stays the base.
     """
     ratio = period_return_on_start(period_pnl, start_value)
     if ratio is None and period_pnl is not None and end_cost is not None:
