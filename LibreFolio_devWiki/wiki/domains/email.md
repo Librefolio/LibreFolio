@@ -22,7 +22,7 @@ and invitation and reset links are copied by hand.
 
 What it sends — six kinds of email, with texts in English, Italian, French and Spanish:
 
-- **A test email**: an administrator sends it to their own address from **Settings › Email**. The tab also shows the
+- **A test email**: an administrator sends it to their own address from **Settings › Administration › Email**. The tab also shows the
   state (off, ready, or not working with the variable at fault), the configuration checks, the hourly budget left, and
   a check, run from the admin's browser, that `LIBREFOLIO_PUBLIC_URL` reaches this very instance.
 - **Links an administrator creates**: **Send by email** in the invitation and password-reset dialogs of the Users tab.
@@ -63,7 +63,7 @@ No feature code (`F-NNN`) is assigned to this domain yet.
 ```mermaid
 graph LR
     Env["LIBREFOLIO_SMTP_* and _FILE"] --> Cfg["config/email.py"]
-    UI["Settings › Email, Send by email,<br/>forgot password, /verify-email"] --> API["api/v1/email.py"]
+    UI["Settings › Administration › Email, Send by email,<br/>forgot password, /verify-email"] --> API["api/v1/email.py"]
     Hooks["auth.py hooks (workstream A):<br/>register, login, update_profile"] --> Flows["flows.py, verification.py"]
     API --> Flows
     Flows --> Tokens["token_service.py<br/>(workstream A)"]
