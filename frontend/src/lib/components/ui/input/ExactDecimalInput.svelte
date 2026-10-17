@@ -1,7 +1,7 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {filterDecimalInput, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {expandScientificNotation, exponentNotReadable, filterDecimalInput, MAX_DECIMAL_EXPONENT, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {ArrowHold} from '$lib/utils/core/arrowHold';
 
     interface ExactDecimalValidity {
@@ -124,7 +124,9 @@
                 valid: !required,
             };
         }
-        if (!/^-?[\d\s.,]*$/.test(trimmed)) {
+        // A number in scientific notation within ±MAX_DECIMAL_EXPONENT reads exactly (W-B66), from a paste or from a value
+        // a parent formatted through Number (`1e-8`).
+        if (!/^-?[\d\s.,]*$/.test(trimmed) && expandScientificNotation(trimmed) === null) {
             return {
                 normalized: candidate,
                 empty: false,
@@ -151,8 +153,10 @@
         const unsigned = normalized.startsWith('-') ? normalized.slice(1) : normalized;
         const [integer = '', fraction = ''] = unsigned.split('.');
         const digitsValid = (integer || '0').length <= maxIntegerDigits && fraction.length <= maxFractionDigits;
-        const belowMin = min !== undefined && compareExact(normalized, min) === -1;
-        const aboveMax = max !== undefined && compareExact(normalized, max) === 1;
+        // Within the budget only: past it the value is refused anyway, and the comparison builds a BigInt of every pasted
+        // digit (W-B66).
+        const belowMin = digitsValid && min !== undefined && compareExact(normalized, min) === -1;
+        const aboveMax = digitsValid && max !== undefined && compareExact(normalized, max) === 1;
         const rangeValid = !belowMin && !aboveMax;
         return {
             normalized,
@@ -173,6 +177,8 @@
         if (parsedValue.empty || !parsedValue.syntaxValid) return false;
         return (parsedValue.normalized.split('.')[1] ?? '').length > maxFractionDigits;
     });
+    // W-B66: a text with an exponent the field cannot read exactly stays as typed, refused, and says why.
+    let exponentRefused = $derived(exponentNotReadable(value));
     let lastValidityKey = '';
 
     $effect(() => {
@@ -304,6 +310,9 @@
             restoreDomValue();
             return;
         }
+        // W-B66: neither a value past the digit budget (its BigInt would be as long as the paste) nor a text kept for its
+        // exponent, which an arrow would replace with a number, is stepped.
+        if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && (!parsedValue.digitsValid || exponentRefused)) return;
         const next = acceleratedArrowStep(event, value);
         if (next === null) {
             if (event.key === 'Enter') commit();
@@ -368,5 +377,10 @@
 {#if fractionOverflow}
     <p class="mt-1 text-xs text-lf-danger" data-testid={testid ? `${testid}-digits-error` : undefined} data-max={maxFractionDigits}>
         {$_('common.decimalPlacesExceeded', {values: {max: maxFractionDigits}})}
+    </p>
+{/if}
+{#if exponentRefused}
+    <p class="mt-1 text-xs text-lf-danger" data-testid={testid ? `${testid}-exponent-error` : undefined} data-max={MAX_DECIMAL_EXPONENT}>
+        {$_('common.decimalExponentOutOfRange', {values: {max: MAX_DECIMAL_EXPONENT}})}
     </p>
 {/if}

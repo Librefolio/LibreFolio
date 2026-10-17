@@ -5907,9 +5907,11 @@ nuova.
 
 Nessun backend, nessuna API.
 
-### W-B66 — cura (2026-10-17, in corso)
+### W-B66 — cura ✅ (2026-10-17) — 🧊 FROZEN
 
-**Base**: HEAD `f078b766c` = dev con W-B67 (`279b3d5bd` + `581757965` → `ac92e6fae`, CHANGELOG `f078b766c`).
+**Base**: HEAD `f078b766c` = dev con W-B67 (`279b3d5bd` + `581757965` → `ac92e6fae`, CHANGELOG `f078b766c`). Poi, alle 14:14,
+HEAD `5603a23a7` = dev con la cura del cancello dell'HTML (`21b8aa975` + `cc86dee84`): avanzamento veloce del coordinatore, a
+worktree pulito. Il dry run della cura di W-B66 resta pulito.
 
 1. ✅ **Decisioni del coordinatore** (17/10, 14:00):
    - **scrittore** di `utils/core/parseDecimalInput.ts` e `utils/core/formatDecimal.ts` (nessun worktree li ha aperti), oltre al
@@ -5923,7 +5925,9 @@ Nessun backend, nessuna API.
    oltre il budget non cambia nulla per i genitori. I test esistono già e sono registrati:
    `src/lib/utils/__tests__/parseDecimalInput.test.ts` e `src/lib/utils/core/__tests__/formatDecimal.test.ts` (`core-unit`),
    `src/lib/components/ui/input/ExactDecimalInput.test.ts` (`component-unit`).
-2. ⏳ **Rossi** (test-author `539999df`, Vitest).
+2. ✅ **Rossi** (test-author `539999df`, Vitest; due giri, sotto). La cura era pronta nel frattempo (`files/scripts/wb66_cure.py`,
+   dry run pulito su 3 file), con l'i18n in `files/scripts/wb66_i18n.sh`: `{max}` semplice, niente plurale né formato
+   numerico, spagnolo col tu come la maggior parte di `base`.
 
    > **⚠️ Fuori pista**, cose trovate mentre scrivevo la cura.
    > - **Una terza regex quadratica**: `formatDecimalForDisplay` toglie gli zeri finali con `frac.replace(/0+$/, '')`, quadratica su
@@ -5945,6 +5949,58 @@ Nessun backend, nessuna API.
    > - **Le frecce**: su un `1e-200` tenuto, `normalizeDecimalInput` leggeva 1200, e una freccia lo faceva 1201. Né un valore
    >   fuori budget né un esponente rifiutato si spostano con le frecce.
    > - `ExactDecimalInput` accetta un esponente in portata anche dal `value` del genitore (un `Number` che stampa `1e-8`).
-3. ⏳ **Cura** pronta (`files/scripts/wb66_cure.py`, dry run pulito su 3 file) e i18n (`files/scripts/wb66_i18n.sh`: `{max}`
-   semplice, niente plurale, niente formato numerico; spagnolo col tu, come la maggior parte di `base`). Poi verdi (`core-unit`,
-   `component-unit`), doc, handoff.
+
+   ✅ **Primo giro dei rossi** (test-author `539999df`, 17/10): 64 rossi e 138 verdi sui tre file. Ogni rosso mostra il
+   risultato di oggi: `1e-8` → `18`, `3E+150` → `3150`, il prop `1e-8` invalido, 4 `BigInt` della lunghezza dell'incolla, le frecce
+   a `1.1234567890133`. Tempi di oggi:
+
+   | Caso | Tempo |
+   |---|---|
+   | regex di visualizzazione | 2,5–2,8 s |
+   | `/0+$/` | 2,8–3,9 s |
+   | componente | pochi ms, quindi i suoi rossi sono di comportamento |
+
+   Il rosso di tempo di `normalizeDecimalInput` non può esistere: `CANONICAL` vede solo testi già filtrati e corti. Diventa una
+   guardia, e il cambio di `CANONICAL` resta difensivo.
+
+   > **⚠️ Fuori pista**: le note 3–6 del test-author mostrano un buco del mio contratto. «Il filtro di sempre appena il testo non
+   > è più scientifico» rimetteva il difetto con un tasto: `1e-200` più un carattere dà `1e-200x`, cioè `1200`; un `1e5x` incollato
+   > dava `15`, `1.234,5e2` dava `1234.52`; una freccia su un `1e-200` tenuto lo sostituiva con un numero. **Regola rifinita**
+   > (dentro D-W66-1: un numero non cambia mai in silenzio):
+   > - un **marcatore d'esponente** è una cifra, un segno decimale facoltativo, `e`/`E`, un segno facoltativo e una cifra
+   >   (`/\d[.,]?[eE][+-]?\d/`, lineare);
+   > - un testo con un marcatore che non si legge esatto (fuori portata, o non interamente un numero) resta com'è, rosso, col
+   >   messaggio (`exponentNotReadable`, che prende il posto di `isScientificOutOfRange`);
+   > - senza marcatore il filtro resta quello di sempre: una `e` digitata da sola sparisce, `EUR 12,34` dà `12,34`;
+   > - il testo tenuto vince sulla regola del segno (`-1e-200` resta tale);
+   > - le frecce non spostano un testo tenuto.
+   >
+   > Il messaggio ora copre i due casi: «Write the number out in full: scientific notation is read only on its own, with an
+   > exponent up to ±{max}». Verificato con node (`--experimental-strip-types`) sulle funzioni curate in uno specchio: 24 casi
+   > come da contratto; `1e100` dà 101 caratteri, `1e-100` 102.
+
+   ✅ **Secondo giro dei rossi** (test-author `539999df`): 231 test, 88 rossi e 143 verdi, i conti previsti prima di girare.
+   - Oggi: `1e5x` → `15`, `1e-200x` → `1200`, `1e5e3` → `153`, `1.234,5e2` → `1234.52`, `-1e-200` → `1200`, `.5e1` → `.51`;
+     le frecce su un `1e-200` tenuto danno `1200.000000000001`.
+   - Il test-author ha aggiunto anche: `-1e5x` tenuto col segno; `12EUR` → `12` (una cura che prendesse ogni `e` dopo una cifra
+     come marcatore la romperebbe); una riga di 40 000 caratteri `…9e5x`, che coglie una cura quadratica (una regex lasca vi
+     impiega 2,5 s).
+3. ✅ **Cura applicata** (17/10, 14:30 circa): `files/scripts/wb66_cure.py --apply` su 3 file, e
+   `files/scripts/wb66_i18n.sh` (la chiave in `base/{en,it,fr,es}.json`: «Write the number out in full: scientific notation is read
+   only on its own, with an exponent up to ±{max}»).
+4. ✅ **Verdi** (carico < 50; log `files/logs/wb66_*.log`):
+
+   | Prova | Esito |
+   |---|---|
+   | Vitest, i tre file | 231 verdi |
+   | `prettier --check` sui sorgenti e i cataloghi cambiati | pulito |
+   | `dev.py i18n check` | stretto, 5 051 chiavi |
+   | `front-utility core-unit` (cancello dell'HTML e test del planner inclusi) | 209 file, 8 589 verdi |
+   | `front-utility component-unit` | 179 file, 4 821 verdi |
+   | `dev.py front check` | svelte-check 0 errori, 0 avvisi |
+5. ✅ **Doc**: `developer/frontend/components/core-ui/atoms.md` «ExactDecimalInput», tre aggiunte: l'esponente incollato e il
+   messaggio, `min`/`max` solo nel budget, le frecce e la linearità. La pagina non ha traduzioni.
+6. ✅ **Simulazione** (17/10, 14:46–14:50): `sim_cherry_pick.sh dev_release2 --docs` sui 13 file, dev `f8e1f6aed` (HEAD
+   `5603a23a7` antenato; dev non ha toccato i miei file, solo altre sezioni del backlog). 0 conflitti, i 4 cataloghi si caricano,
+   `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito. `git diff --check` pulito; porta 6184 libera (nessun
+   server: solo Vitest e i runner `front-utility`). Handoff FROZEN.
