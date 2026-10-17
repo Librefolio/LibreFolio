@@ -6588,3 +6588,49 @@ prossimo checkpoint.
 - **Esito: la decisione 47 in USD è corretta da capo a fondo**, quindi nessun difetto. W-B55 si chiude con la consegna di
   soli test; la riga è nella sezione di W e la chiude il coordinatore.
 - ⏳ **Checkpoint W-B55** (FROZEN; W rivede).
+- ✅ **Checkpoint W-B55** (2026-10-17): entrato (dev `bea6b1ac0`, `2a35c1b73`), W-B55 chiusa dal coordinatore
+  (`1eeb297b2`); worktree in fast-forward. Lo specchio di MF-A5 va a MF come **MF-A8**.
+
+#### MF-J45d (revisione) e CP-10d (17/10, dalle 18:05; base `1eeb297b2`)
+
+- **MF-J45d** (`7265de9e3`, il mio LOW di J45b): **OK così**, senza l'alternativa.
+  - Il codice: `except Exception` passa al volo l'errore del capo e lo segna come letto; una cancellazione
+    (`BaseException`) finisce nel `finally` con `_LeaderGone`, e i seguaci ricostruiscono.
+  - Il compromesso dichiarato (un errore transitorio fa fallire anche i seguaci) non pesa: la costruzione legge soltanto,
+    con `journal_mode=WAL` e `busy_timeout=30000` (`db/session.py:60-61`); lo spegnimento dell'executor avviene solo a
+    app ferma.
+- **CP-10d: GO del coordinatore** (~18:05), con una regola d'ordine che non mi tocca.
+  - La regola: un import in `price_store.py` o un percorso in `_backend_services.py` vanno fatti per ultimi.
+  - Il mio import è in `price_query.py`, e il runner non lo tocco.
+- ✅ **La rinomina (18:07)**: `services/series_preparation.py` → `services/market_series.py`, con un `mv` semplice; il
+  contenuto non cambia, quindi git la vede come rinomina al 100%.
+  - Script `files/j/cp10d/apply_rename.py`: 21 file, 43 menzioni.
+    - Codice: 4 import, più un commento in `drawdown_context.py`.
+    - Test: 6 file; in `test_series_returns.py` l'alias, `MARKET_SERIES_SOURCE` e i 4 nomi della guardia di parità;
+      il percorso in `test_data_quality_thresholds.py`.
+    - 2 commenti nei file di Y (`assetSetLevels.ts`, `.test.ts`).
+    - L'`applyTo` di `backend-risk` e di `backend-signals`, più una frase.
+    - 2 pagine MkDocs e 4 della devWiki.
+  - Restano col loro nome, apposta: il file `test_series_preparation.py` e l'azione `series-preparation` (nominano
+    l'operazione), più storia e cache (`TODO_FUTURI.md`, `graphify-out/`, i diari, un commento «moved from
+    test_series_preparation.py»).
+  - Nessuno shim, e nessun numero cambia.
+  > **⚠️ Fuori pista**: la rinomina ha spostato l'ordine alfabetico degli import (ruff I001) in `risk/scope.py`,
+  > `test_risk_asset_set.py` e `test_series_preparation.py`. `ruff check --select I001 --fix`, poi ruff e black puliti.
+- ✅ **Verdi (18:10–18:25)**:
+  - import di prova dei 5 moduli;
+  - `series-preparation` **22**;
+  - `financial-math` **1309**;
+  - `range-ceiling` **72** (`price_query`);
+  - `risk-all` **918**;
+  - segnali: registry **66**, runtime **6**, contracts **10**, service **69**, annotations **25**, plugin-matrix
+    **91**;
+  - `ai-export` **1083**;
+  - check-orphans ✓;
+  - `api sync` senza differenze tracciate;
+  - `mkdocs build` stretto ✓, check-links ✓;
+  - devWiki `check_source_paths.py`: gli stessi 7 percorsi mancanti di prima, nessuno nelle 4 pagine toccate;
+  - prettier pulito sui 2 file di Y.
+
+  Porta 6185 libera.
+- ⏳ **Checkpoint CP-10d** (FROZEN).
