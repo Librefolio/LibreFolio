@@ -999,6 +999,36 @@ def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Lone transfer legs tests", verbose=verbose)
 
 
+def services_probe_rate_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the per-user limit of POST /assets/provider/probe (MF-SI2)."""
+    print_section("Services: Probe Rate Limit")
+    print_info("Testing: config/plugins.py (probe_rate_limit), api/v1/assets/providers.py (probe_limiter, PROBES_BY_USER, probe_provider_config), dev.py (cmd_server lane env)")
+    print_info("Tests: 30 probes per 60 s per user; past it 429 PROBE_RATE_LIMITED, retry_after = Retry-After = ceil(wait) >= 1, manager not called, refusal not counted; per user; free again after the window; LIBREFOLIO_PROBE_RATE_LIMIT (30, 0 off, unusable → 30), the lanes off")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_probe_rate_limit.py", test_names)
+    return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
+
+
+def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC9-1/-3/-4 + Y's D1: POST /assets/prices/current (no lane DB, no server, no network)."""
+    print_section("Services: Current Prices Bulk (R13-SEC9, Y's D1)")
+    print_info("Testing: api/v1/assets/prices.py (get_current_prices_bulk, query_prices_bulk), services/assets/price_query.py (_live_quote_item, get_current_prices_bulk)")
+    print_info(
+        "Tests: a repeated id fetched and written back once; one cache key waiting for the slot, one provider call; 1 001 ids refused before any read; range_start/target_currency refused by their parameters; the range change once per distinct id, its target handed through; a 500 never echoes its error"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_prices_bulk.py", test_names)
+    return run_command(cmd, "Current prices bulk tests", verbose=verbose)
+
+
+def services_fx_pairs_per_query(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC9-2: rate queries read 1 000+ pairs in chunks SQLite can parse (private in-memory DB)."""
+    print_section("Services: FX Pairs per Query (R13-SEC9-2)")
+    print_info("Testing: services/fx/conversion.py (convert_bulk), services/fx/period_changes.py (_first_rate_days_inside)")
+    print_info("Tests: 1 000 and 1 035 distinct pairs answered without «Expression tree is too large»; a barrier proves one OR of that many is refused")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_pairs_per_query.py", test_names)
+    return run_command(cmd, "FX pairs per query tests", verbose=verbose)
+
+
 def services_auto_cost_unreadable_pool(verbose: bool = False, test_names: list = None) -> bool:
     """Test W-B69: an Auto cost is never computed over a pool holding a row it cannot read."""
     print_section("Services: Auto Cost over an Unreadable Pool (W-B69)")
@@ -2285,6 +2315,38 @@ Note: No backend server required.
         name="Auto Cost over an Unreadable Pool",
         desc="W-B69: _auto_cost raises UnreadablePoolError(count) over a pool with a row whose quantity, amount or stored cost basis reads None; rows outside the pool and a readable pool as guards; a broker deletion over such a pool fails whole",
         # Write-scoped: every test works in its own session on the lane's database, under a unique marker, rolled back.
+    )
+    add_test(
+        cat,
+        "probe-rate-limit",
+        services_probe_rate_limit,
+        name="Probe Rate Limit",
+        desc="POST /assets/provider/probe: PROBES_BY_USER is probe_limiter() at import, a SlidingWindowLimiter of 30 per 60 s by default; the first hits per user reach AssetSourceManager.probe_provider_config with the request, its operations and the user id; past the limit 429 PROBE_RATE_LIMITED with an int retry_after >= 1 (the wait rounded up) equal to Retry-After and a message, the manager not called and the refusal not counted; another user is not limited; past the window the user probes again. LIBREFOLIO_PROBE_RATE_LIMIT: probe_rate_limit() reads it at each call, unset/blank 30, stripped ASCII whole number 0..10000, anything else a ValueError naming the variable and the value; probe_limiter() is n per 60 s, None for 0 with one warning, 30 with one error for an unusable value (never off by mistake); with the limit off 40 probes of one user all reach the manager; the route applies the configured limit (2: the third is 429; unusable: 30); ./dev.py server --test hands the server LIBREFOLIO_PROBE_RATE_LIMIT=0, a start without --test does not",
+        # PURE: no DB, no server, no network. The route coroutine is called directly; PROBES_BY_USER is replaced by a
+        # private SlidingWindowLimiter on a fake clock and the manager's probe by a recording stub, both with monkeypatch,
+        # so the lane's real limiter is never consumed. The lane switch runs dev.cmd_server in-process with every launch
+        # stubbed (test_dev_designer_lab_banner.start_server): nothing starts.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "current-prices-bulk",
+        services_current_prices_bulk,
+        name="Current Prices Bulk (R13-SEC9)",
+        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (1900…tomorrow) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error",
+        # PURE: the service on a private in-memory SQLite (create_all), the provider a double behind core.configured_provider,
+        # a private current-value cache, the route called directly or through a fresh in-process app (httpx.ASGITransport),
+        # its service and live_range_changes replaced by recorders, all by monkeypatch.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "fx-pairs-per-query",
+        services_fx_pairs_per_query,
+        name="FX Pairs per Query (R13-SEC9-2)",
+        desc="convert_bulk and _first_rate_days_inside with 1 000 / 1 035 distinct pairs: every conversion answered, no OperationalError; barrier: one OR of that many is refused by SQLite",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown.
+        isolation="pure",
     )
     add_test(
         cat,

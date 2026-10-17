@@ -27,6 +27,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import FACurrentPriceItem, FAPeriodChange, FAPeriodChangesQueryItem, FAPeriodChangesResult, FARangeChange
 from backend.app.services.financial_math.returns import fixed_period_changes, fixed_period_dates, range_change
 from backend.app.services.fx.conversion import convert_bulk
+from backend.app.utils.datetime_utils import today_date
 
 _MAX_ERRORS = 10
 
@@ -139,13 +140,17 @@ async def get_period_changes_bulk(items: Sequence[FAPeriodChangesQueryItem], ses
     ]
 
 
-async def live_range_changes(session: AsyncSession, live: Sequence[FACurrentPriceItem], range_start: date) -> dict[int, FARangeChange]:
+async def live_range_changes(session: AsyncSession, live: Sequence[FACurrentPriceItem], range_start: date, target_currency: str | None = None) -> dict[int, FARangeChange]:
     """The whole-range change from ``range_start`` to each asset's current price (X-R59, ``POST /prices/current``).
 
-    When the range ends today the asset page shows the live quote, which may not be stored: the anchor is that price,
-    in its own currency. The reference is the period changes' (``_Valuation``): the price on ``range_start``, or the first
-    one inside ``(range_start, the price's day]`` when none is on or before it; one in another currency gives no change.
-    The formula is the house's ``range_change``.
+    When the range ends today the asset page shows the live quote, which may not be stored: the anchor is that price.
+    The reference is the period changes' (``_Valuation``): the price on ``range_start``, or the first one inside
+    ``(range_start, the price's day]`` when none is on or before it. The formula is the house's ``range_change``.
+
+    Natively both ends are in the price's currency, and a reference in another one gives no change. With
+    ``target_currency`` (Y's D1: the page's converted view) both ends are converted into it: the reference at its own
+    day's rate, the price at today's (the UTC date, as the page converts the live quote), in one ``convert_bulk`` batch;
+    a missing rate on either end gives no change, never a difference of two currencies.
     """
     priced = [item for item in live if item.value is not None and item.currency and item.as_of_date is not None and item.as_of_date >= range_start]
     if not priced:
@@ -155,6 +160,9 @@ async def live_range_changes(session: AsyncSession, live: Sequence[FACurrentPric
     without = [asset_id for asset_id in asset_ids if asset_id not in on_start]
     inside = await _first_prices_inside(session, without, range_start, max(item.as_of_date for item in priced)) if without else {}
     changes: dict[int, FARangeChange] = {}
+    # (item, reference_date, reference end, anchor end); an end is (amount, its currency, the day of its rate)
+    rows: list[tuple[FACurrentPriceItem, date, tuple[Decimal | None, str, date], tuple[Decimal | None, str, date]]] = []
+    today = today_date()
     for item in priced:
         if item.asset_id in on_start:
             reference_date, price = range_start, on_start[item.asset_id]
@@ -163,7 +171,23 @@ async def live_range_changes(session: AsyncSession, live: Sequence[FACurrentPric
         else:
             changes[item.asset_id] = FARangeChange()
             continue
-        reference = price[1] if price[2] == item.currency else None
-        change = range_change(reference, item.value)
+        rows.append((item, reference_date, (price[1], price[2], reference_date), (item.value, item.currency, today)))
+
+    rates: dict[tuple[str, Decimal, date], Decimal | None] = {}
+    if target_currency is not None:
+        wanted = list(dict.fromkeys((currency, amount, day) for _item, _day, *ends in rows for amount, currency, day in ends if amount is not None and currency != target_currency))
+        if wanted:
+            results, _messages = await convert_bulk(session, [(Currency(code=currency, amount=amount), target_currency, day) for currency, amount, day in wanted], raise_on_error=False)
+            rates = {key: result[0].amount if result is not None else None for key, result in zip(wanted, results, strict=True)}
+
+    def valued(end: tuple[Decimal | None, str, date], into: str) -> Decimal | None:
+        amount, currency, day = end
+        if amount is None or currency == into:
+            return amount
+        return rates.get((currency, amount, day)) if target_currency is not None else None
+
+    for item, reference_date, reference, anchor in rows:
+        into = target_currency or item.currency
+        change = range_change(valued(reference, into), valued(anchor, into))
         changes[item.asset_id] = FARangeChange(reference_date=reference_date, change_abs=change.change_abs, change_ratio=change.change_ratio)
     return changes

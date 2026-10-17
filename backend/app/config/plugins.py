@@ -12,10 +12,13 @@ alias.
 
 The order of the asset providers in the search (F21) has two overrides, ``asset_providers_premium()`` and
 ``asset_providers_order()``; ``services/assets/provider_policy.py`` applies them.
+
+The per-user limit of the provider probe (MF-SI2) is ``probe_rate_limit()``; ``api/v1/assets/providers.py`` applies it.
 """
 
 import math
 import os
+import re
 
 from backend.app.config import env_secret, env_secret_origin
 
@@ -120,3 +123,26 @@ def asset_providers_order() -> tuple[str, ...] | None:
     providers still come before the others. A code that no provider has is ignored, and logged once.
     """
     return _provider_codes("LIBREFOLIO_ASSET_PROVIDERS_ORDER")
+
+
+#: Provider probes (``POST /api/v1/assets/provider/probe``) one user may start in a minute (MF-SI2), and the most a
+#: setting may allow.
+DEFAULT_PROBE_RATE_LIMIT = 30
+PROBE_RATE_LIMIT_MAX = 10_000
+PROBE_RATE_LIMIT_VARIABLE = "LIBREFOLIO_PROBE_RATE_LIMIT"
+_WHOLE_NUMBER = re.compile(r"[0-9]+")
+
+
+def probe_rate_limit() -> int:
+    """``LIBREFOLIO_PROBE_RATE_LIMIT``: how many provider probes one user may start in a minute (MF-SI2).
+
+    30 when unset or blank; ``0`` turns the limit off, as ``./dev.py server --test`` does for the test lanes, whose E2E
+    suites probe many times as one user. Otherwise a whole number from 1 to 10 000, spaces around allowed. Any other value
+    raises ``ValueError`` naming the variable and the value: ``api/v1/assets/providers.py`` logs it and keeps 30.
+    """
+    raw = os.environ.get("LIBREFOLIO_PROBE_RATE_LIMIT", "").strip()
+    if not raw:
+        return DEFAULT_PROBE_RATE_LIMIT
+    if not _WHOLE_NUMBER.fullmatch(raw) or int(raw) > PROBE_RATE_LIMIT_MAX:
+        raise ValueError(f"{PROBE_RATE_LIMIT_VARIABLE}={raw!r}: expected 0 (off) or a whole number of probes per minute up to {PROBE_RATE_LIMIT_MAX}")
+    return int(raw)

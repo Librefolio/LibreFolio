@@ -150,7 +150,10 @@ items. Like the ceiling, the caps are the endpoint's: `convert_bulk()` has none.
 
 Portfolio reports call `convert_bulk()` with thousands of items: the engine preloads a rate for every
 non-reporting currency and every day of the range. So the function reads only the rows the batch can
-use, in one query for all pairs:
+use, in one query for up to `FX_PAIRS_PER_QUERY` (500) pairs — more pairs take several queries
+(R13-SEC9-2: SQLite refuses an `OR` of about a thousand terms, «Expression tree is too large», and a
+request of some 990 pairs answered 500; `_first_rate_days_inside()` of the fixed-period changes reads
+in the same chunks):
 
 - for each pair it tracks the earliest (`min_date`) and latest (`max_date`) requested dates;
 - it loads the rows from the **backward-fill anchor** — the last rate on or before `min_date`, a
@@ -205,7 +208,9 @@ linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
 - **`inverse_change_ratio`**: `rate(as_of − days) / rate(as_of) − 1`, the change of the inverted pair (base per
   quote).
 
-Both are fractions, null when either rate is missing. A day without a rate adds *No B/Q rate on or before D* to
+Both are fractions, null when either rate is missing. A rate is never 0 here: the API keeps rates > 0, and
+`convert_bulk()` skips a stored rate below its [usable bound](#convert-bulk-window) (X-R38), so the house's −100 %
+for a value written down to 0 never reaches an FX pair. A day without a rate adds *No B/Q rate on or before D* to
 `errors`.
 
 An item may also send `range_start`, the first day of the range the page shows, for the whole-range Δ Abs and Δ % of
@@ -216,7 +221,7 @@ the FX pages (X-R59, decision N80); its limits are in the **Request** bullet abo
   reference rate: `change_abs = rate(as_of) − reference` and `change_ratio = rate(as_of) / reference − 1`, the pair as
   asked (quote per base); `inverse_change_abs = 1 / rate(as_of) − 1 / reference` and
   `inverse_change_ratio = reference / rate(as_of) − 1`, the inverted pair (base per quote). All four are null when
-  either rate is missing or ≤ 0.
+  either rate is missing.
 - **Reference**: the rate on `range_start`, one more item per request in the same `convert_bulk()` batch, with its
   unlimited backward fill, and `reference_date = range_start`. A pair with no rate on or before `range_start` takes its
   first stored rate inside the range, after `range_start` and up to `as_of`, converted on its own day, with that day

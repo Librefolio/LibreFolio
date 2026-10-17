@@ -656,7 +656,9 @@ limits) can neither reach the tests nor change their outcome.
 - One setting is the lanes' own, on purpose: the [failed sign-in limit](#login-limit) is off, since the
   suites sign in wrongly on purpose. `dev.py server --test` sets `LIBREFOLIO_LOGIN_LIMIT=off` for the
   lane's server after the cleanup, and `backend/test_scripts/conftest.py` sets it in every pytest
-  process that does not have it already.
+  process that does not have it already. The same line sets `LIBREFOLIO_PROBE_RATE_LIMIT=0`: the per-user
+  limit of the [provider probe](../backend/assets/architecture.md#provider-probe) is off on the lane's server,
+  whose E2E suites probe many times as one user; its own tests build their limiters in-process.
 
 ### 🧬 Instance Key {: #instance-key }
 

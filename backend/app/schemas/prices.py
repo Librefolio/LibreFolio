@@ -354,8 +354,8 @@ class FARangeChange(StrictModel):
     """The change of an asset's price over the whole range the page shows (X-R59): the first and last point of its series."""
 
     reference_date: Optional[date_type] = Field(None, description="The day of the reference price: range_start, or the first price inside the range when none is on or before it; null without any")
-    change_abs: Optional[SafeDecimal] = Field(None, description="Price on as_of (or the live price) − reference price, in the result's currency; null without a usable price")
-    change_ratio: Optional[SafeDecimal] = Field(None, description="(Price on as_of, or the live price ÷ reference price) − 1; null without a usable price")
+    change_abs: Optional[SafeDecimal] = Field(None, description="Price on as_of (or the live price) − reference price, in the result's currency; null without a usable price (a reference ≤ 0, a negative price)")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="((Price on as_of or the live price) ÷ reference price) − 1; −1 for a price of 0; null without a usable price")
 
 
 class FACurrentPriceItem(StrictModel):
@@ -414,7 +414,7 @@ class FAPeriodChange(StrictModel):
 
     key: str = Field(..., description="Period key: 1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y")
     days: int = Field(..., ge=1, description="Calendar days of the period")
-    change_ratio: Optional[SafeDecimal] = Field(None, description="(Price on as_of ÷ price on as_of − days) − 1; null without a usable price on either day")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="(Price on as_of ÷ price on as_of − days) − 1; −1 for a price of 0 on as_of; null without a usable price on either day")
 
 
 class FAPeriodChangesResult(StrictModel):
