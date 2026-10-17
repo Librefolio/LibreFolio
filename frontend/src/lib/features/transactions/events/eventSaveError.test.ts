@@ -167,6 +167,20 @@ describe('eventSaveErrorMessage — the refusals of decision 22', () => {
         expectReadable(message, 'EVENT_ASSET_NOT_FOUND');
     });
 
+    // X-R47: a manual SPLIT whose ratio (its value) is not a number above 0 is refused, 400 EVENT_INVALID_SPLIT_RATIO, with
+    // params.events = [{event_index, date, type: 'SPLIT', ratio}, …], the ratio a string as sent.
+    it('EVENT_INVALID_SPLIT_RATIO names the first split whose ratio is not above 0, its ratio as sent, and how many more', () => {
+        const {t, calls} = fakeT();
+        const events = [
+            {event_index: 1, date: '2026-02-10', type: 'SPLIT', ratio: '0'},
+            {event_index: 3, date: '2026-04-10', type: 'SPLIT', ratio: '-2'},
+        ];
+        const message = eventSaveErrorMessage(refusal(400, 'EVENT_INVALID_SPLIT_RATIO', {asset_id: 7, item_index: 0, events}), t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: 'events.saveError.invalidSplitRatio', values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', ratio: '0', more: 1}});
+        expectReadable(message, 'EVENT_INVALID_SPLIT_RATIO');
+    });
+
     it('without labels, the date and the type are passed as the server wrote them', () => {
         const {t, calls} = fakeT();
         eventSaveErrorMessage(refusal(400, 'EVENT_KEY_CONFLICT', {asset_id: 7, item_index: 0, date: '2026-03-15', type: 'INTEREST'}), t);
