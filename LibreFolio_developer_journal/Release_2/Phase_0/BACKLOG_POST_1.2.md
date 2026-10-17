@@ -682,11 +682,12 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   T, 11/10, dal docs-writer di B3b. Ognuna delle due somme prende i lotti aperti in cui quel campo è noto, mentre i
   conteggi della copertura contano i lotti in cui sono noti entrambi; con il costo di un lotto ignoto (B3b) le due
   somme non coprono più gli stessi lotti. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Passo 6».
-- **T-B9 · AI Export: un residuo reale sotto l'unità minima della valuta si stampa `0` accanto a `reconciled` falso** —
+- ✅ **T-B9 · AI Export: un residuo reale sotto l'unità minima della valuta si stampa `0` accanto a `reconciled` falso** —
   minimo; T, 12/10, dal docs-writer di C-53. Il renderer stampa `0` un residuo monetario più piccolo dell'unità minima
   (`monetary_residuals_zeroed`); dopo C-53 `reconciled` tollera solo `CONVERSION_DUST` (1e-9), quindi un residuo fra le
   due soglie si contraddirebbe. Improbabile: il riepilogo chiude la scomposizione per costruzione. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «C-53 — implementazione».
+  ✅ **Chiusa come verificata, senza codice** (J, 17/10; piano 05, «T-B9»): il residuo è solo arrotondamento del contesto `Decimal` a 28 cifre (~1e-27 × gli importi), `other_result` viene dagli stessi `Decimal` del riepilogo; il caso `1E-24` è già fissato da `test_engine_closing_term_reconciles_despite_decimal_rounding`.
 
 **Unificazioni della matematica comune (parte 1)**
 
