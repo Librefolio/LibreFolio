@@ -13,7 +13,7 @@ graph TD
     PT -.->|used by| BD["Broker Detail"]
     PT -.->|used by| AL["Assets List/Detail"]
     PT -.->|used by| FX["FX List/Detail"]
-    TB -.->|used by| ST["Settings<br/><small>scrollable</small>"]
+    TB -.->|used by| ST["Settings<br/><small>scrollable, two bars</small>"]
 
     style RL fill:#e3f2fd,stroke:#1565c0
     style PT fill:#e8f5e9,stroke:#2e7d32
@@ -93,17 +93,20 @@ Used by both `TabBar.svelte` (own `shrinkLabelsToFit` prop) and `PageToolbar.sve
 
 ## ↔️ Scrollable tab bar {: #tabbar-scrollable }
 
-`scrollable` is an opt-in prop of `TabBar` (`lib/components/ui/tabs/TabBar.svelte`), default `false`: the other bars (`PageToolbar`, Files, the risk panel, the asset data editor) keep their markup. Only the [Settings page](../features/settings.md#tab-registry) passes it: an administrator sees eight tabs there, each button keeps its natural width above `sm`, and the card around the bar is `overflow-hidden`, so in a long language or a medium-width window the last tabs would be cut off at the card's edge.
+`scrollable` is an opt-in prop of `TabBar` (`lib/components/ui/tabs/TabBar.svelte`), default `false`: the other bars (`PageToolbar`, Files, the risk panel, the asset data editor) keep their markup. Only the [Settings page](../features/settings.md#settings-page) passes it, to both its bars: the top bar (four tabs and the «Administration» group) and the second bar of the group's tabs (five for an administrator). Each button keeps its natural width above `sm`, and the card around the bars is `overflow-hidden`, so in a long language (French, Spanish) or a narrow window the last tabs would be cut off at the card's edge.
 
 With it, the tab row (`role="tablist"`) sits inside a horizontal scroll container (`data-testid="tab-bar-scroller"`, `overflow-x-auto`, thin scrollbar):
 
-- **The row is `min-w-full w-max`**: never narrower than the bar, so a tab's `ml-auto` (the Settings right-hand group, `alignEnd`) still pushes it right while the tabs fit; wider than the bar, and scrolling, when they do not.
+- **The row is `min-w-full w-max`**: never narrower than the bar, so an entry's `ml-auto` (the Settings «Administration» group, `alignEnd`) still pushes it right while the tabs fit; wider than the bar, and scrolling, when they do not.
 - **The active tab stays whole in view**: `revealActiveTab()` moves only the scroller's `scrollLeft`, never the page, just enough to show it — on a change of tab (click, `activeTab` prop, `?tab=` on load), when the bar or the row resizes (a `ResizeObserver` on both), and when the labels change (a language switch). A tab reached with the keyboard is brought into view by the browser's own focus scrolling.
+- **The sides that hide tabs fade** (lot A8b, decision P13 a): the scroller carries `data-fade`, `none` while the row fits, `start` when tabs hide on the left (`scrollLeft > 1`), `end` when they hide on the right (`scrollLeft + clientWidth < scrollWidth - 1`), `both` for both, with a 1 px tolerance on each side. `updateFade()` sets it once mounted, on every `scroll` event of the scroller (the user's own scrolling included, which it never undoes: no reveal runs on a scroll), from the `ResizeObserver`, and in the frame after a change of tab or of labels; in the last two, after `revealActiveTab()`, so it reads where the reveal left the scroller, and also when nothing scrolled (a shorter language that now fits goes back to `none`). The fade is a CSS mask on the scroller, Tailwind 4.1's `mask-l-from-[calc(100%-1.5rem)]` for `start` and `mask-r-from-[calc(100%-1.5rem)]` for `end`: a linear gradient from opaque to transparent over the last 1.5rem of that side, the two intersected for `both`. A mask takes only the alpha of its gradient, so the fade brings no colour and follows the bar's own roles in both themes. The classes are whole literals in `FADE_CLASSES`, so that Tailwind generates each one.
 
 Neither existing prop does the job:
 
-- **Not `shrinkLabelsToFit`**: it compares each label with its own button's box, which at natural width always holds it, so nothing ever shrinks — and even at the 75% floor, seven labelled tabs do not fit in 640 px.
-- **Not `fillWidth`**: it stretches every tab to an equal share of the bar, leaving no free space for `ml-auto` to push the right-hand group over.
+- **Not `shrinkLabelsToFit`**: it compares each label with its own button's box, which at natural width always holds it, so nothing ever shrinks — and when an administrator's bar held seven labelled tabs, even the 75% floor did not fit them in 640 px.
+- **Not `fillWidth`**: it stretches every tab to an equal share of the bar, leaving no free space for `ml-auto` to push the «Administration» group over.
+
+Tests: `./dev.py test front-utility component-unit` runs `lib/components/ui/tabs/TabBar.test.ts`: the markup with and without `scrollable`, the reveal on a modelled layout (on mount, on a change of tab, on a click, on a resize, on a language switch), and the fade (no `data-fade` without `scrollable`; scrolling both ways, the scroll left to the user; a resize of the scroller and of the row; the reveal on mount, after a resize and after a language switch; a row that fits again; the mask on the named sides only, without a colour).
 
 ## 📐 "Justified" Center alignment
 

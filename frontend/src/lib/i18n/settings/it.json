@@ -3,7 +3,6 @@
     "profile": "Profilo",
     "preferences": "Preferenze",
     "about": "Informazioni",
-    "admin": "Amministrazione",
     "profileInfo": "Informazioni Profilo",
     "profileDescription": "Gestisci i dettagli del tuo account",
     "enableEditing": "Abilita modifica",
@@ -378,6 +377,24 @@
         "OWNER": "Proprietario",
         "EDITOR": "Editor",
         "VIEWER": "Lettore"
+      }
+    },
+    "administration": "Amministrazione",
+    "tooManyPasswordAttempts": "Troppe password sbagliate: aspetta qualche minuto e riprova.",
+    "securityTab": {
+      "title": "Controlli di sicurezza",
+      "description": "Come è configurata questa istanza, controllata quando apri le Impostazioni: prima ciò che richiede la tua attenzione. «Controlla di nuovo» la rilegge.",
+      "allClear": "Niente richiede la tua attenzione.",
+      "passed": "{count, plural, one {# controllo superato} other {# controlli superati}}",
+      "loadError": "Non è stato possibile caricare i controlli di sicurezza.",
+      "retry": "Riprova",
+      "refresh": "Controlla di nuovo",
+      "openEmail": "Apri la scheda Email",
+      "openPlugins": "Apri le impostazioni dei plugin",
+      "severity": {
+        "error": "Errore",
+        "warning": "Avviso",
+        "info": "Informazione"
       }
     }
   }
