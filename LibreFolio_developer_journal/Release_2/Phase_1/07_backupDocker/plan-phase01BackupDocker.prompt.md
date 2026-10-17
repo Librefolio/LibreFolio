@@ -4793,7 +4793,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Backlog**: B-16 chiuso con ✅. Aggiunti gli SHA ai chiusi di oggi: B-21..B-26 `964ecf434`, B-28 `9403ecda0`, B-29
 > `c96861834`.
 
-### B-9 — il token del pannello fra i controlli della configurazione (2026-10-17, 06:35-07:12) — ✅ 🧊 FROZEN (checkpoint delle 07:12)
+### B-9 — il token del pannello fra i controlli della configurazione (2026-10-17, 06:35-07:36) — ✅ entrato in dev `997dc7ecf`
 
 > **B-16 entrato (coordinatore, 06:33)**: dev `3896cb6b3`, il CHANGELOG 🐛 in `47405701f`. HEAD portata in avanti a
 > **`47405701f`**, pulita. Via all'analisi di B-9.
@@ -4958,6 +4958,250 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   (py_compile, ruff e black puliti). Niente `front check`: nessun file Svelte o TS cambia, solo i cataloghi JSON,
 >   coperti da `i18n check` e dai due gate.
 > - **Backlog**: B-9 ✅; B-30 nuovo.
+>
+> **Commit e merge con A8a+N70+E-13** (07:12-07:36):
+>
+> - 07:12: il coordinatore committa B-9 (`b35581e5b`). Contro il ramo A8a+N70+E-13 confligge in 4 file; A entra prima.
+>   Intanto, fino al merge: albero pulito, B-30 solo in analisi (sezione «B-30» qui sotto).
+> - 07:22: A8a+N70+E-13 è entrato (dev `45f9c5406`), e il coordinatore apre nel mio worktree il merge di dev nel mio ramo.
+> - Risoluzione, tenendo entrambi i lati, nell'ordine vero di `CONFIG_CHECKS`: piattaforma, **B**, **A**, E.
+>   - `config_audit.py`: `*BACKUP_CONFIG_CHECKS` dopo `check_log_level`, poi `*ACCOUNTS_CONFIG_CHECKS` di A, poi quelli
+>     di E. È l'ordine che il test di A sulla tupla intera
+>     (`test_config_checks_holds_every_check_in_its_place_with_its_id`) già si aspettava: il suo `platform` era ogni
+>     voce di `CHECK_IDS` tranne quelle di E, quindi conteneva anche le due di B. Restano veri «A subito prima dei tre di
+>     E» ed «E per ultimo» (EMK-010/011/012). La docstring del modulo ora nomina i prefissi `auth`, `backup` ed `email`.
+>   - `test_config_audit.py`: in `_configure` entrambi i blocchi (B, poi A); la docstring (c); nel test di A sulla tupla
+>     intera, i controlli di B resi espliciti (`backup = (check_panel_token, check_upload_limit)`, fuori da `platform`).
+>     Il verdetto è lo stesso; il messaggio e la docstring prima erano sbagliati. Da far rivedere a H.
+>   - `configuration.en.md`, «Startup Checks»: le due righe di B, poi quella di A, poi quelle dell'email (ordine del
+>     log).
+>   - `security.md`:
+>     - la riga `i18n_key`: la riscrittura di dev più la clausola `backup.checks.*`, e «No page shows the `instance`,
+>       `auth` and `backup` messages yet»;
+>     - due mie righe che il merge aveva reso false, il punto «In `CONFIG_CHECKS`» e la frase dell'ordine («platform,
+>       B, A, E»);
+>     - due righe `backup.*` nella tabella dell'ordine di H, fra `platform.log_level` e `accounts.login_limit`: senza
+>       di esse la tabella, che dice «in this order», mostrava il controllo di A subito dopo `log_level`. Da far rivedere
+>       a H.
+>   - Riletti gli auto-merge: `settings.md` (la mia clausola intatta; i pezzi di dev stanno altrove),
+>     `_backend_services.py` (entrambi i selettori; compila), `BACKLOG_POST_1.2.md` (sezione B intatta).
+>   - Il nuovo `GET /security/checks` di dev restituisce `run_config_checks()`, quindi anche i due controlli di B. I suoi
+>     test (`api security-checks`, `api login-throttle`) confrontano a runtime, senza una lista fissa: non me ne aspetto
+>     la rottura. Il coordinatore lo mette nel prossimo gate; io lo faccio girare nello slot API di B-30.
+> - Gate (07:27-07:36, corsia 6187, carico 36-48, un'attesa sopra 50): `services config-audit` 102 (101 prima, più il
+>   test di A), `backup-checks` 57, `email-checks` 87, `accounts-checks` 76; `mkdocs build` strict OK (124 s),
+>   `check-links` OK, `utils gate-docs-links` 63. Porta libera; `git diff --cached --check` pulito; ho messo in stage
+>   solo le 4 risoluzioni.
+> - **Entrato**: merge `0f3f72961` → dev `997dc7ecf`, CHANGELOG ✨ `94fb9be08`; HEAD portata in avanti a `94fb9be08`.
+> - **Congelamento** (coordinatore): `frontend/e2e/settings/backup.spec.ts` resta fermo fino all'ingresso di A8b.
+>   A cambia il controllo del membro e il clic a `:263/:276` (il nuovo percorso della scheda); lo rivedo al
+>   checkpoint di A.
+
+### B-30 — un disco pieno negli avvii brevi del backup e del ripristino (2026-10-17, 07:12-08:00) — ✅ 🧊 FROZEN (checkpoint delle 08:00)
+
+> **Analisi** (07:12-07:17, in sola lettura sull'albero pulito; testo intero nei file della sessione,
+> `b30-analysis.md`). `jobs._out_of_space` (ENOSPC, EDQUOT, `SQLITE_FULL`, lungo la catena delle cause) distingue un
+> disco pieno da ogni altro guasto nelle fasi lunghe: la costruzione del backup (`backup_no_space`), il controllo in
+> background (`no_space`), il file e le scritture dell'upload (507). Non negli avvii brevi:
+>
+> 1. **upload, la cartella**: `ensure_private_dir(uploads_dir)` sta fuori dal `try` (`restore_jobs.py` l.145): il primo
+>    upload su un disco pieno dà 500 `backup_upload_failed`, non 507 (il B-30 annotato);
+> 2. **upload, la fine**: `fsync`, `close` e `replace` di `finish()` senza mappatura. NFS e le quote segnalano il
+>    guasto a `close` o `fsync` (close(2)), quindi 500. In più, una `close` fallita lasciava `self._fd` impostato, e
+>    `abort` l'avrebbe chiuso una seconda volta (EBADF, o il descrittore riusato da un altro thread);
+> 3. **il controllo, l'avvio** (`POST /restore/stage` → `start_check`): la rotta non prende `OSError`. ENOSPC, EACCES
+>    o EIO escono come il 500 in testo semplice di Starlette, senza codice, con un traceback nel log; la scheda dice
+>    «unexpected». È la stessa classe della scoperta (f) n.1 di B3, corretta allora solo per l'upload;
+> 4. **la conferma**: lo stesso 500 senza codice (raro; `_write_state` è atomico: mai mezza conferma);
+> 5. **il backup, l'avvio** (scheda e pannello, `start_job`): un disco pieno dà 500 `backup_failed`; un secondo dopo,
+>    nella costruzione, lo stesso disco dà `backup_no_space`;
+> 6. **il riavvio**: `restore_restart_failed` ha un codice ma nessun messaggio nella UI (fuori da `ERROR_KEYS`: dice
+>    «unexpected») e nessuna riga nella guida;
+> 7. **l'annullamento**: un `OSError` dà un 500 senza codice. Non riguarda lo spazio.
+>
+> **Decisioni del coordinatore (07:18)**:
+>
+> 1. ambito **1+2+3+5**;
+> 2. **`stage_failed`** per un `OSError` che non è spazio all'avvio del controllo, con una riga nel log;
+> 3. **B-31** (4, 6, 7) come lotto separato, dopo B-30.
+>
+> L'implementazione parte dopo il merge e l'ingresso di B-9 (via arrivato verso le 07:38), con uno slot API breve per
+> rossi e verdi.
+>
+> **Contratto congelato** (file della sessione, `b30-test-brief.md`):
+>
+> - un disco pieno (ENOSPC o EDQUOT) alla cartella o alla fine dell'upload, all'avvio del controllo, all'avvio del
+>   backup (scheda e pannello) → **507 `backup_no_space`**;
+> - all'avvio del controllo, ogni altro `OSError` → **500 `stage_failed`**, con un ERROR nel log (tipo e strerror);
+> - mai le parole del sistema né un percorso nella risposta; nulla lasciato indietro; il lock del controllo libero;
+> - `jobs._out_of_space` diventa pubblica, `out_of_space`: la usano le rotte;
+> - OpenAPI: 507 in `START_RESPONSES` e sulla rotta del controllo, il cui 500 nomina anche `stage_failed`.
+>
+> Nessun cambiamento del frontend: `backupFailureCode` legge `detail.code` qualunque sia lo stato, e le due schede
+> hanno già le frasi di `backup_no_space` e `stage_failed`. Le guardie lo fissano.
+>
+> **Codice pronto** in `b30-wip/apply_b30.py` (18 operazioni in 5 file), provato a secco su `94fb9be08`. Le copie
+> patchate, scritte nei file della sessione, passano ruff (ordine degli import compreso) e black, letti da stdin col
+> percorso vero del repo: il worktree resta intatto finché i rossi non hanno girato.
+>
+> - ✅ **Rossi scritti** (TA-B, dalle 07:39, ultimo file alle 07:47): 39 istanze in 4 file, nessuna verde oggi.
+>   - `test_backup_restore.py` 15: (1) cartella ENOSPC/EDQUOT ×2; (2) fine dell'upload ×3 (fsync-ENOSPC,
+>     close-EDQUOT, close-ENOSPC), con la chiusura del descrittore contata una sola volta; (3) ×4 e (3') ×4 (le cartelle e
+>     il primo stato, × ENOSPC/EDQUOT o EACCES/EIO; il messaggio esatto, una riga di log, l'upload tenuto, nessuno stato
+>     né thread, poi 202); l'OpenAPI: `refusals` (+507) e un test nuovo sui codici `no_space`/`stage_failed`;
+>   - `test_backup_instance_errors.py` 4: ENOSPC, EDQUOT, EIO causato da ENOSPC → 507, più l'OpenAPI;
+>   - `test_backup_panel.py` 2 (PANEL-022): l'avvio del pannello su un disco pieno → 507, più l'OpenAPI;
+>   - `test_backup_jobs.py` 18: `jobs._out_of_space` → `jobs.out_of_space`.
+>   Note di TA-B:
+>   - la doppia `close` è un bug vero: una `close` fallita lasciava il numero a `abort`, che su Linux poteva chiudere
+>     il file aperto nel frattempo da un'altra richiesta;
+>   - il lock di (3) funziona già oggi: manca solo la mappatura nella rotta;
+>   - `_FOLDER_UNUSABLE` è condiviso fra stage e conferma, quindi lo stage ha la sua descrizione (`_STAGE_NOT_STARTED`
+>     nella patch).
+> - ✅ **Rosso leggero** (07:49, corsia 6187, carico 27): `services backup-jobs`, 18 falliti e 51 passati: 16
+>   `AttributeError: … has no attribute 'out_of_space'`, più i 2 cicli, che falliscono dentro il loro thread.
+> - **Slot API chiesto** (07:48): i rossi `api backup-restore`, `backup-instance-errors` e `backup-panel`, poi il
+>   codice, poi i verdi degli stessi più `api backup`, `backup-secure`, `backup-restore-apply` e `security-checks`.
+> - ✅ **Slot 2** (concesso alle 07:49, rilasciato alle 07:57; corsia 6187, carico 20-36):
+>   - rossi (07:50-07:54): `api backup-restore` 15 falliti e 131 passati, `api backup-instance-errors` 4 e 6,
+>     `api backup-panel` 2 e 59. Ognuno per la ragione attesa: 500 `backup_upload_failed`; il 500 in testo semplice di
+>     Starlette («Internal Server Error») all'avvio del controllo; i 507 e i codici assenti dall'OpenAPI. Il primo run ha
+>     ricostruito frontend e doc (svelte-check: 0 errori);
+>   - **codice** (07:54): `apply_b30.py`, 18 operazioni in 5 file; ruff e black puliti sui 6 file Python di B-30;
+>     nessun `_out_of_space` rimasto;
+>   - verdi (07:54-07:57): `api backup-restore` 146, `api backup-instance-errors` 10, `api backup-panel` 61,
+>     `api backup` 23, `api backup-secure` 24, `api backup-restore-apply` 136, `api security-checks` 3 (i due controlli
+>     di B ora fra quelli che l'endpoint restituisce).
+> - ✅ **Verdi leggeri** (07:57-07:58): `services backup-jobs` 69, `backup-staging` 161, `backup-secure` 68,
+>   `backup-leftovers` 44, `backup-checks` 57.
+> - ✅ `api sync` (07:58): l'OpenAPI documenta il 507 sui tre avvii (stage `no_space`; istanza e pannello
+>   `backup_no_space`) e il 500 `stage_failed` dello stage; i file generati sono ignorati da git.
+> - ✅ **Doc** (07:59-08:00): `mkdocs build` strict OK (55 s), `check-links` OK, `utils gate-docs-links` 63. Traduzioni:
+>   `backup_restore.en.md` non ne ha;
+>   `hosting_providers.en.md` non ne ha.
+> - Non eseguiti: `e2e` (nessun file Svelte né componente cambia; `frontend/e2e/settings/backup.spec.ts` resta fermo per
+>   A8b), `front check` a parte quello del build dentro il primo run `api`.
+> - **Backlog**: B-30 ✅; B-31 nuovo (conferma, annullamento, messaggio del riavvio).
+> - ✅ **Guardie Vitest** (TA-F, 07:43): 4 casi in 3 file (`backupJob.test.ts`, `BackupDownloadCard.test.ts`,
+>   `restoreFlow.test.ts`), verdi già oggi per lettura del codice (non ancora eseguiti): ogni codice si legge da
+>   `detail.code` qualunque sia lo stato, e le schede lo traducono. Nessun buco funzionale del frontend.
+> - **Revisione di H su B-9** (OK, via il coordinatore, 07:45): nella docstring di `instance_backup/checks.py`
+>   «right before E's email checks» non è più vero, perché in mezzo ci sono quelli di A. Corretta dentro B-30: «right
+>   after the platform's own checks and before workstream A's and E's (E's close it)»; ruff e black puliti. Le
+>   impalcature «B-9 is not written» in `test_config_audit.py` le toglie H in H-35: io non le tocco.
+> - **⚠️ Fuori pista — il codice all'avvio del controllo** (07:44, decisione mia, dentro i codici di B): TA-F nota che
+>   il 507 `backup_no_space` all'avvio del controllo farebbe dire alla scheda «Not enough free space on the server for
+>   this archive.», la frase scritta per l'upload. Il codice del controllo che resta senza spazio, `no_space`, dice
+>   invece «…to check the archive». Quindi all'avvio del controllo: **507 `no_space`** e 500 `stage_failed`, i due
+>   codici del controllo (`StagingError`). L'upload e l'avvio del backup restano `backup_no_space`. Aggiornati la patch,
+>   il contratto (revisione 07:44), TA-B (mentre scriveva), TA-F e il docs-writer.
+> - ✅ **Guardie eseguite** (07:45, carico 24): `vitest run` su `backupJob.test.ts`, `BackupDownloadCard.test.ts`,
+>   `restoreFlow.test.ts`: 3 file, 412 test verdi. Il frontend legge già le nuove risposte, senza cambiare nulla.
+> - ✅ **Doc** (docs-writer, finito alle 07:44; codice non ancora applicato):
+>   - `backup_restore.en.md`: quattro righe in «What Settings › Backup Says» (upload `backup_no_space`, controllo
+>     `no_space`, `stage_failed`, backup `backup_no_space`), in un solo blocco per il merge con A8b;
+>   - `hosting_providers.en.md`: una riga `507` all'avvio del pannello; il 507 dell'upload vale anche per un disco che
+>     si dice pieno solo alla fine;
+>   - `security.md`: «The start» del backup, la riga delle rotte del controllo, un paragrafo su `jobs.out_of_space` e su
+>     `UploadWriter`.
+>   Il docs-writer ha corretto il mio contratto: la cartella è `.restore/upload/` (`UPLOAD_FOLDER = "upload"`), non
+>   `uploads/`. Nota sua, lasciata com'è: dopo un avvio di controllo fallito, la scheda dimentica l'id dell'upload; nella
+>   UI «riprova» vuol dire scegliere di nuovo l'archivio, che sostituisce quello tenuto.
+
+### B-31 — conferma, annullamento e riavvio: un codice e un messaggio (2026-10-17, 08:01-08:46) — ✅ 🧊 FROZEN (checkpoint delle 08:46)
+
+> **B-30 entrato** (coordinatore, 08:01): commit con la punta `116df6800`, dev `af9b7f482`, CHANGELOG 🐛 `f4dab3db7`;
+> HEAD portata in avanti a **`f4dab3db7`**, pulita. **Via a B-31** come annotato: un 500 con un codice e un messaggio
+> suo per conferma, annullamento e riavvio (3 chiavi × 4, `ERROR_KEYS`, l'elenco §5 di `restoreI18n`), 507 alla
+> conferma. Niente classi di colore; `backup.spec.ts` resta fermo per A8b.
+>
+> **Stato reale** (verificato prima di scrivere il contratto):
+>
+> - conferma (`confirm_check` → `apply.confirm_restore`): la cartella `.restore`, il lock, poi lo stato scritto per
+>   ultimo e in modo atomico; dopo, solo `drop_ticket`, che non solleva mai. Quindi un `OSError` vuol dire sempre «nulla
+>   confermato». La rotta prende solo `BackupPathError`: tutto il resto esce come il 500 in testo semplice;
+> - annullamento (`apply.cancel_restore`): il lock, la lettura, l'`unlink` dello stato, poi `drop_ticket` e `_fsync_dir`,
+>   che non sollevano, poi, con `drop_copy`, `_remove_leftovers`, quasi tutto in silenzio. Restano due punti rari di
+>   `remove_stage` (`lstat`, `unlink` di un non-cartella) che possono sollevare **dopo** che il ripristino è già
+>   annullato: allora un 500 «could not be cancelled» sarebbe falso. **Correzione accoppiata**: in `cancel_restore` un
+>   `OSError` di `_remove_leftovers` diventa un WARNING, e la copia se ne va con `prune`. Così il 500 vuol dire sempre
+>   «nulla annullato». Vale anche per `dev.py backup pending --cancel`;
+> - riavvio: il 500 `restore_restart_failed` c'è già, ma nessun test lo fissa, e la scheda dice «unexpected» (nessuna
+>   chiave, fuori da `ERROR_KEYS`).
+>
+> **Contratto congelato** (file della sessione, `b31-test-brief.md`, alle 08:05):
+>
+> - conferma: un disco pieno → 507 `backup_no_space` (WARNING); ogni altro `OSError` → 500 `restore_confirm_failed`
+>   (ERROR, tipo e strerror). Nulla confermato; la stessa conferma, tolto il guasto, dà 202;
+> - annullamento: un `OSError` prima di togliere il ripristino → 500 `restore_cancel_failed`, il ripristino ancora in
+>   attesa; uno durante la rimozione della copia → 204 e un WARNING;
+> - riavvio: invariato e ora fissato (500 `restore_restart_failed`, nessun riavvio programmato);
+> - i messaggi, in 4 lingue: «… could not be confirmed … Nothing changed.», «… could not be cancelled … It still waits
+>   for the next start.», «LibreFolio could not be restarted … The restore still waits for the next start.».
+>
+> - **Rossi in scrittura** (brief inviati alle 08:05):
+>   - TA-B: `test_backup_restore_apply.py` (conferma, annullamento, riavvio, OpenAPI);
+>   - TA-S: `test_backup_apply.py` (`cancel_restore` con la copia che non si toglie);
+>   - TA-F: `restoreI18n.test.ts` §5 e `restoreFlow.test.ts`.
+> - **Codice pronto** in `b31-wip/apply_b31.py` (alle 08:05): 9 operazioni in 3 file, più 4 cataloghi. Provato a secco
+>   su `f4dab3db7`; le copie passano ruff, black e prettier.
+> - ✅ **Rossi scritti**:
+>   - TA-F, 3 + 4 casi: `restoreI18n` §5 con i 3 codi (rossi); `restoreFlow`, blocco «B-31», con conferma 500, conferma
+>     507 (guardia), annullamento 500 e riavvio 500 (rossi sulla chiave: oggi «unexpected»);
+>   - TA-S, 2 + 1 in `test_backup_apply.py`: la copia che non si toglie (EACCES, EIO; rossi: l'`OSError` esce) e la
+>     guardia con `drop_copy=False`. Su sua nota, entrambi fissano anche l'INFO «Pending restore cancelled» con
+>     `copy_dropped` falso: dopo una rimozione fallita la riga diceva `copy_dropped=True`. Corretto nella patch;
+>   - TA-B, 19 istanze in `test_backup_restore_apply.py`: conferma 507 ×6 (lock o scrittura dello stato × ENOSPC,
+>     EDQUOT, EIO causato da ENOSPC) e 500 ×4; annullamento 500 ×4 (lock o rimozione dello stato); la copia che non si
+>     toglie ×2 (204); riavvio ×2 (guardie: la rotta prende già l'errore); OpenAPI (rosso su conferma 500/507 e
+>     annullamento 500).
+> - **⚠️ Fuori pista — «la lettura» nel contratto**: TA-B nota che `_read_state` prende ogni `OSError`, lo registra e
+>   rende `None`. Quindi uno stato illeggibile fa rispondere a un annullamento 404 `restore_not_pending`, non 500.
+>   Il contratto (§1) diceva «leggere o rimuovere lo stato»: i test coprono il lock e la rimozione. Il 404 su uno stato
+>   illeggibile è un comportamento di prima: va nel residuo.
+> - ✅ **Rossi leggeri**:
+>   - Vitest (08:08, carico 32): 6 falliti e 338 passati, i 6 attesi;
+>   - `services backup-apply` (08:19-08:20): 2 falliti e 229 passati, cioè i due casi della copia («cancel_restore let
+>     the OSError of the copy's removal out, once the restore was dropped»).
+> - ✅ **Metà frontend applicata** (08:09): `--part front` (`ERROR_KEYS` più le 3 chiavi × 4); `i18n build` (4993
+>   chiavi) e `i18n check` strict puliti; Vitest (08:09-08:10) su `restoreI18n`, `restoreFlow` e `RestoreCard`: 398 su
+>   398; `utils gate-i18n-catalog` 176 e `gate-i18n-usage` 195 (08:14-08:15, dopo un'attesa sopra 50).
+> - ✅ **Doc** (docs-writer):
+>   - `backup_restore.en.md`: la riga «…for this archive.» ora copre anche la conferma; tre righe nuove;
+>   - `security.md`: le righe di conferma, annullamento e riavvio, più la frase su `cancel_restore`;
+>   - `cli_tools.en.md` l.580 allineata (la pagina ha traduzioni: debito).
+>   Fra le note del docs-writer: il bottone della conferma è «Restore and restart», non «Confirm the restore».
+> - **Residuo** (pre-esistente, fuori dall'ambito approvato), in backlog come **B-32**:
+>   - in `cancelPending()` la riga `state = 'pending'` è morta (`#fail` mette `failed`): un annullamento rifiutato
+>     finisce sulla schermata di errore, non sul blocco del ripristino in attesa con l'errore accanto, come fa il
+>     riavvio;
+>   - `dev.py backup pending --cancel` finisce in un traceback su un `OSError` prima della rimozione, e la sua riga ✅
+>     dice «with its copy» anche quando la copia è rimasta;
+>   - uno stato illeggibile dà 404 «not pending» all'annullamento (e `read_restore` dà `None`).
+> - **Slot API chiesto** (08:20): il rosso `api backup-restore-apply`, poi la metà backend, poi i verdi
+>   `api backup-restore-apply` e `api backup-restore`.
+> - **Coordinatore** (risposta alla richiesta, fra le 08:21 e le 08:29): in coda per lo slot 2; approvate le due decisioni (copia → WARNING e 204; conferma →
+>   507 `backup_no_space`); i residui nel backlog di B (B-32).
+> - ✅ **Slot 2** (08:30-08:34, corsia 6187):
+>   - rosso: `api backup-restore-apply` 17 falliti e 137 passati. Conferma e annullamento sul 500 in testo semplice di
+>     Starlette; l'OpenAPI sui codici non documentati; le 2 guardie del riavvio verdi. Il primo run ha ricostruito
+>     frontend e doc (svelte-check: 0 errori, con la metà frontend già dentro);
+>   - **metà backend** (08:33): `--part back`, 8 operazioni su `restore.py` e `apply.py`; ruff e black puliti;
+>   - verdi: `api backup-restore-apply` 154, `api backup-restore` 146.
+> - ✅ **Verdi leggeri** (08:34-08:39, con un'attesa per carico sopra 50): `services backup-apply` 231, `services backup-outcome` 97,
+>   `utils backup-cli-restore` 77.
+> - ✅ `api sync` (08:39): la conferma documenta 507 `backup_no_space` e 500 `restore_confirm_failed`, l'annullamento
+>   500 `restore_cancel_failed`; i file generati sono ignorati.
+> - **⚠️ Fuori pista — le doc dicevano «read»**: le righe dell'annullamento (`backup_restore.en.md`, `security.md`)
+>   davano «locked, read or removed». Uno stato illeggibile risponde invece 404 (B-32): tolto «read» dalle due pagine e
+>   dal contratto.
+> - ✅ **Doc** (08:41-08:45): `mkdocs build` strict OK (143 s), `check-links` OK, `utils gate-docs-links` 63.
+>   Traduzioni: `cli_tools.en.md` ne ha (cli_tools.es.md, cli_tools.fr.md, cli_tools.it.md), quindi
+>   la sua riga è debito; `backup_restore.en.md` non ne ha. Niente stamp.
+> - Non eseguiti: `e2e` (nessun componente cambia; `backup.spec.ts` fermo per A8b); `front check` separato (lo
+>   svelte-check del build del primo run `api` era pulito, con `restoreText.ts` già cambiato); `theme-roles` (nessun file
+>   Svelte e nessuna classe).
+> - **Backlog**: B-31 ✅; B-32 nuovo.
 
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 

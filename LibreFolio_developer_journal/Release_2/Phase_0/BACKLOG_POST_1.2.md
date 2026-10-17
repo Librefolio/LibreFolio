@@ -3292,6 +3292,12 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - 17/10, H-36: un blocco nuovo in fondo a `#client-address` di `connection_checks` (un paragrafo, quattro punti, un
     paragrafo) e due frasi nel §2 di `docker_advanced`, che rimandano a `connection_checks.md#client-address`.
     **Ordine**: `docker_advanced` va tradotta insieme a `connection_checks` o dopo, per la stessa ancora.
+  - 17/10, H-39 e H-40:
+    - in `configuration`, «Startup Checks», due righe nuove (la protezione dai frame e la CSP report-only spente nel
+      profilo managed);
+    - in `connection_checks`, «Limits», il paragrafo «It cannot always see where visitors are» riscritto in parte
+      (IPv4 e IPv6 su Docker Engine), e una clausola nel punto «To fix it» di «The Visitor's Address».
+    - `hosting_providers` e le pagine per sviluppatori sono solo in inglese.
 
   Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
 - ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
@@ -3728,8 +3734,15 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Stato al 17/10: la regola è scritta in `.github/instructions/backend.instructions.md`, e la riga accanto a C-99 la
     scrive il coordinatore. I due controlli, i test e le chiavi i18n aspettano l'ingresso di B-9, che scrive negli
     stessi file (`config_audit.py`, `test_config_audit.py`). La cura in prova è pronta in `files/h39/` della sessione H.
+  - Cura fatta il 17/10, dopo B-9 (lotto «H-39», piano H §14).
+    - `check_frame_protection` (warning) e `check_csp_report_only` (info) in `config_audit.py`, dopo
+      `check_client_address`.
+    - Sei chiavi `instance.checks.*` in 4 lingue, e i documenti: `security.md`, `settings.md`, `configuration`,
+      `hosting_providers`.
+    - Resta: un controllo a richiesta letto dopo una modifica di `.env` senza riavvio può mostrare il valore nuovo,
+      mentre il middleware porta ancora quello vecchio. I documenti dicono già di riavviare.
 
-  Dettagli: piano H, §14, lotto «Z-24» (la nota di H-39).
+  Dettagli: piano H, §14, lotti «Z-24» (la nota di H-39) e «H-39».
 - **H-40 · IPv6 su Docker Engine: il visitatore arriva dal gateway della rete** — basso, documentazione; E, via
   coordinatore, 17/10.
   - `connection_checks.en.md:328-329` dice che Docker Engine su Linux tiene l'indirizzo del visitatore. Vale per IPv4
@@ -3737,6 +3750,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     senza header di inoltro. N70 non può vederlo, e tutti i visitatori IPv6 condividono un solo conteggio per
     indirizzo (istanza esposta direttamente).
   - Una frase nei documenti, da verificare su un host Linux, come H-38. Va con i documenti di H-39.
+  - Frase scritta il 17/10 (lotto «H-39», piano H §14), come cautela, in `connection_checks#limits`; più due clausole,
+    in `connection_checks#client-address` e in «Why only a local peer» di `security.md`. Un visitatore IPv6 che passa
+    da `docker-proxy` può anche aggiungere un header di inoltro e lasciare i limiti per indirizzo, come con Docker
+    Desktop. Resta da verificare su un host Linux con Docker, insieme a H-38.
 - **H-41 · I `resolved_fields` di una promozione non sono validati** — medio, robustezza; W (trovato nel lotto H-34),
   17/10.
   - `TXPromoteBatchItem.resolved_fields: Dict[str, Any]` (`POST /transactions/validate` e `/commit`) è applicato così
@@ -4593,7 +4610,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `test_upsert_multiple_pairs` e la fixture di modulo di `test_fx_conversion` committano tassi che non tolgono mai.
   - Inoltre le ragioni `exclusive_because` di `fx-core` e `fx-sync-service` nel runner descrivono ancora il troncamento
     di tutta la tabella, mentre le due fixture ora sono limitate alle loro righe.
-- ✅ **X-R43 · Impostazioni dei plugin: un intero di 401 cifre in `value` dà un 500** (consegnata il 17/10, 07:30; SHA all'ingresso) — basso, solo admin o proprietario; X,
+- ✅ **X-R43 · Impostazioni dei plugin: un intero di 401 cifre in `value` dà un 500** (chiusa il 17/10: entrata in dev `3e7948446`, fix e journal; E rivede a posteriori) — basso, solo admin o proprietario; X,
   17/10 (trovato con H-32, girato nel backlog dal coordinatore; lo stesso difetto nella R13-SEC7-2 di E).
   - `fields.py:324` passa il valore a `math.isfinite()`, che con un `int` più grande di un double solleva
     `OverflowError`. `service.py:255` cattura solo `SettingValueError`, quindi `PATCH /settings/plugins/bulk` risponde 500
@@ -4690,8 +4707,11 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     `InvalidOperation`: un valore ostile fa uscire l'eccezione grezza invece di `FXServiceError`, e si perde la valuta,
     forse tutto il fetch di ECB. ECB è il fornitore principale dei cambi.
   - Cura: saltare l'osservazione (`ArithmeticError`), come BOE, SNB e FED con X-R50. Un rosso in `test_fx_parse_errors.py`.
-- **X-R53 · Usare il campo dei periodi fissi (1D, 1W…) che MF porta nel backend** — medio, **quando MF manda il
+- ✅ **X-R53 · Usare il campo dei periodi fissi (1D, 1W…) che MF porta nel backend** (consegnata il 17/10, 08:40; SHA all'ingresso) — medio, **quando MF manda il
   contratto**; X, 17/10 (coordinatore).
+  - Fatto: `lib/utils/periodChanges.ts` legge le due rotte di MF; le pagine degli asset e dei cambi non calcolano più le
+    Δ (via `DELTA_PERIODS`, `computePeriodDelta` e la seconda copia); `/period-changes` non è una scrittura; riga 🐛
+    dell'ora legale nel CHANGELOG. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «X-R53».
   - Oggi la tabella dei periodi fissi di asset e cambi si calcola nel frontend (`lib/utils/assetPriceDerived.ts:193`,
     `AssetTable.svelte:239`, `routes/(app)/fx/+page.svelte:236`). MF, nel lotto MF-P, crea il campo nel backend.
   - Da fare: leggerlo da lì nei miei file, quando MF scrive col contratto. Non ora.
@@ -4719,6 +4739,29 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
       cambiano, e va una riga 🐛 nel CHANGELOG;
     - altre differenze: 1D c'è anche con un intervallo di un giorno; una serie nativa con valute miste, o una
       conversione fallita, dà null più un errore; un prezzo ≤ 0 dà null.
+- **X-R56 · Uno SPLIT di un provider con un rapporto non valido, salvato prima di X-R47, non si può correggere** — basso,
+  **dopo X-R53**, prima l'analisi; X, 17/10 (MF-D4, girato dal coordinatore).
+  - Non si modifica per id (`EVENT_NOT_EDITABLE`, è di un provider) e non si cancella finché ha transazioni collegate
+    (`EVENT_IN_USE`): la CTA `navigate_asset` del nuovo avviso `INVALID_SPLIT_RATIO` porta a un vicolo cieco.
+  - Direzione: un refresh del provider riscrive o scarta quell'evento (con la regola dei collegamenti), oppure una via
+    di recupero.
+- **X-R58 · Le liste di asset e cambi tacciono quando la richiesta bulk supera i limiti di Z-25** — piccolo, **subito
+  dopo X-R53, quando Z-25 entra**; X, 17/10 (coordinatore, N77).
+  - Z-25 aggiunge due 422 con codice a `POST /assets/prices/query` e `POST /fx/currencies/convert`:
+    `bulk_too_many_items` (più di 1000 voci) e `bulk_too_many_days` (più di 5 milioni di giorni-voce, contati dopo la
+    lettura). Oggi il `catch` di `fetchAllPriceData` (asset) e quello dei cambi tacciono: card senza prezzi.
+  - Cura: un messaggio esplicito col limite, una chiave i18n in 4 lingue, su quei codici. Serve il contratto di Z (la
+    forma del `detail` e i parametri del limite) quando Z-25 entra.
+- **X-R59 · La Δ sull'intervallo si calcola ancora nel browser** — basso, regola 10 (una casa sola per la matematica
+  finanziaria); X, 17/10 (trovata dal docs-writer di X-R53). Da assegnare: MF, che possiede la casa.
+  - Il cambio sull'intervallo scelto (le card delle due liste; le colonne Δ Abs e Δ % della tabella dei cambi) è
+    `computeDerivedPriceState()` (`lib/utils/assetPriceDerived.ts`) e `FxTable.getDelta()` → `displayFxDelta()`
+    (`lib/stores/fxStoreRegistry.ts`, anche nella card e nella pagina della coppia): ultimo / primo − 1, in float.
+  - X-R53 ha portato nel backend solo le colonne dei periodi fissi (1D…5Y).
+- **X-R57 · Il commento C-66 di `asset-detail.spec.ts` dà una ragione superata** — minimo; X, 17/10 (Z, dopo Z-3).
+  - Verso la riga 8672 di `e2e/assets/asset-detail.spec.ts` il commento dice «by its UTC reckoning…»; dopo Z-3 (dev
+    `0f55265a1`) le pagine degli asset leggono il giorno dell'utente (`todayIso()`). Lo stub resta giusto: cambia solo
+    la ragione scritta. Da fare al prossimo tocco di quel file.
 - **X-R55 · Intervalli senza tetto: una data estrema blocca l'istanza** — sicurezza, disponibilità; **passata a Z** (il
   coordinatore, 17/10 06:38: Z è libera; X rivede al checkpoint di Z, perché i file sono di X); X, 17/10 (J, lo stesso
   vettore di R13-SEC7-1; girato dal coordinatore). E rivede.
@@ -6000,6 +6043,18 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   lock di produzione farebbe solo aspettare a turno i giri dei due server, senza toccare dati. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra processi:
   analisi».
+- **Z-25 · Un tetto alla lunghezza delle liste di `POST /assets/prices/query` e `POST /fx/currencies/convert`** —
+  basso, sicurezza; Z, 17/10 (X-R55, N75, punto 4; via coordinatore). Con X-R55 ogni voce ha un intervallo con un
+  tetto, ma le due API accettano liste di lunghezza qualsiasi (`List[FAPriceQueryItem]`, `List[FXConversionRequest]`),
+  e N voci moltiplicano il tetto per voce. Cura possibile: un `max_length` sui due corpi, con un 422 chiaro. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «X-R55 — intervalli di date senza
+  tetto su prezzi e cambi: analisi».
+- **Z-26 · L'attesa del lock fra processi dello scheduler non ha un tempo massimo** — basso; E (R13-SEC8), via
+  coordinatore, 17/10. `scheduler_run_lock()` (`scheduler/run_lock.py:83-91`, Z-11) aspetta il lock senza limite. Un
+  job bloccato in un worker ferma i giri degli altri: lo scheduler resta occupato, e `wake-sync` risponde 409 a chi
+  arriva dopo, dove prima rispondevano `not_leader`. Dopo X-R55 e Z-25; prima un'analisi: quanto aspettare, e cosa
+  rispondere quando il tempo finisce. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «Z-11 — lock dei job tra processi: analisi».
 
 ## B · Backup e Docker (fase 01)
 
@@ -6283,13 +6338,46 @@ sulla base `23f6578f3`.
   esatta 1e70). Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J
   legge accanto a una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince
   `absent`.
-- **B-30 · La cartella degli upload creata su un disco pieno dà 500, non 507** — minimo; TA-B, 17/10 (B-9, rilettura
-  delle etichette di `test_backup_restore.py`). `UploadWriter` crea la cartella degli upload con `ensure_private_dir`
-  fuori dal `try` che riconosce lo spazio esaurito: un `ENOSPC` lì (il primo upload su un disco pieno) diventa
-  `500 backup_upload_failed`, mentre la creazione del file e la scrittura danno già `507 backup_no_space`
-  (`restore_jobs.py`, `_out_of_space`). Cura: lo stesso controllo attorno alla creazione della cartella, più un test.
-  Dettagli: piano 07, «B-9».
+- ✅ **B-30 · Un disco pieno negli avvii brevi del backup e del ripristino risponde col codice sbagliato, o senza codice**
+  — piccolo; TA-B, 17/10 (B-9, rilettura delle etichette di `test_backup_restore.py`), allargato dall'analisi del 17/10.
+  Annotato per la cartella degli upload. `jobs._out_of_space` copre le fasi lunghe, non gli avvii brevi:
+  - la cartella degli upload e la fine dell'upload (`fsync`/`close`, dove NFS e le quote segnalano il disco pieno)
+    danno 500 `backup_upload_failed`, non 507;
+  - l'avvio di un controllo (`POST /restore/stage`) lascia uscire ogni `OSError` come 500 senza codice;
+  - l'avvio di un backup (scheda e pannello) dà 500 `backup_failed`, non `backup_no_space`.
+  Cura decisa dal coordinatore (17/10, 07:18), ambito 1+2+3+5: 507 `backup_no_space` per un disco pieno in tutti e
+  quattro; all'avvio del controllo, ogni altro `OSError` → 500 `stage_failed` con una riga nel log. Solo backend, con
+  codici e chiavi che esistono già. Dettagli: piano 07, «B-30».
 
+  ✅ **Fatto il 17/10** (checkpoint delle 08:00). Un disco pieno (ENOSPC o EDQUOT, anche fra le cause) risponde 507
+  `backup_no_space` alla cartella e alla fine dell'upload e all'avvio del backup (scheda e pannello), e 507 `no_space`
+  (il codice del controllo) all'avvio del controllo; lì ogni altro `OSError` dà 500 `stage_failed` con una riga nel log,
+  mai più il 500 senza codice. `jobs.out_of_space` è pubblica. Corretta anche la doppia `close` di `UploadWriter.finish()`
+  (trovata da TA-B). Test: 21 rossi API e 18 nei servizi, poi tutti verdi; 4 guardie Vitest.
+- ✅ **B-31 · Conferma, annullamento e riavvio di un ripristino: un guasto del disco senza codice o senza messaggio** —
+  basso; B, 17/10 (analisi di B-30). `POST /restore/stage/{id}/confirm` e `DELETE /restore/pending` lasciano uscire un
+  `OSError` come 500 senza codice; `restore_restart_failed` (il biglietto del riavvio non scritto) ha un codice ma
+  nessun messaggio nella UI (fuori da `ERROR_KEYS`: dice «unexpected») né una riga nella guida. Cura: un 500 con un
+  codice e un messaggio suo per ciascuno (3 chiavi × 4 lingue, `ERROR_KEYS`, l'elenco §5 di `restoreI18n.test.ts`) e
+  507 `backup_no_space` per un disco pieno alla conferma. Lotto separato, dopo B-30 (coordinatore, 07:18). Dettagli:
+  piano 07, «B-30» (punti 4, 6, 7).
+
+  ✅ **Fatto il 17/10** (checkpoint delle 08:46). Conferma: 507 `backup_no_space` su un disco pieno, 500
+  `restore_confirm_failed` altrimenti, nulla confermato. Annullamento: 500 `restore_cancel_failed` prima di togliere il
+  ripristino, che resta in attesa; una copia che non si toglie dopo → 204 e un WARNING (anche da CLI). Riavvio: il suo
+  500 ora ha il messaggio e un test. Tre messaggi × 4 lingue in `ERROR_KEYS`. Test: 17 rossi API, 2 nei servizi, 6
+  Vitest, poi tutti verdi.
+- **B-32 · Dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile** — basso; B, 17/10 (B-31: TA-F,
+  TA-B, il docs-writer).
+  - In `restoreFlow.cancelPending()` la riga `state = 'pending'` è morta (`#fail` mette subito `failed`): un
+    annullamento rifiutato finisce sulla schermata di errore con «Try again», non sul blocco del ripristino in attesa con
+    l'errore accanto, come per il riavvio. Da decidere quale delle due.
+  - `dev.py backup pending --cancel` prende solo `RestoreNotPendingError`: un `OSError` prima della rimozione dello stato
+    finisce in un traceback; e la riga ✅ dice «with its copy» anche quando la copia è rimasta (B-31 la registra con un
+    WARNING).
+  - Uno stato illeggibile (EACCES, EIO) fa dire a `_read_state` `None`: l'annullamento risponde 404 «not pending», lo
+    stato del ripristino dice «none», mentre un ripristino può essere ancora in attesa.
+  Dettagli: piano 07, «B-31».
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
@@ -6531,8 +6619,10 @@ da Y il 15/10.
   - Rimedio proposto: `test-author` ricattura il corpus con la procedura del file, annotando che la differenza viene da
     I-01.
   - Dettagli: piano di Y, §7 «Y3».
-- **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
-  passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). **Serve una decisione del
+- ✅ **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
+  passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). ✅ 16/10, `6ac6ead12`
+  («test(e2e): rewrite lots comparison toggles test»): il test morto riscritto in due test sui controlli di oggi (P25),
+  con `aria-pressed` e il contatore dei rendering. La ✅ qui mancava: aggiunta il 17/10. **Serve una decisione del
   developer sulla funzione**, che porta il coordinatore. **Decisa il 16/10 (P25): si riscrive** sui controlli di oggi;
   è il prossimo lotto di Y, dopo Y12a.
   - Il test «Value presentation toggle…» (`e2e/brokers/brokers-detail.spec.ts:582`, numero di riga dopo la correzione
@@ -6661,9 +6751,13 @@ da Y il 15/10.
     `canRequestPnlCandles` più `untrack`) toglie il ciclo, ma serve una «chiave di scope» perché un cambio di periodo
     o un Refresh dopo un errore chiedano di nuovo.
   - Dettagli: piano di Y, «Y-16».
-- **Y-25 · Il ridimensionamento riallinea le frecce a ogni callback, e la riscrittura parte anche senza angoli cambiati**
-  — minimo, prestazioni; `test-author` di Y, 17/10 (analisi di Y-8). Comportamento preesistente, della stessa natura di
-  Y-8 ma su un gesto raro.
+- ✅ **Y-25 · Il ridimensionamento riallinea le frecce a ogni callback, e la riscrittura parte anche senza angoli cambiati**
+  — minimo, prestazioni; `test-author` di Y, 17/10 (analisi di Y-8). ✅ 17/10: (a) la riscrittura parte solo se una freccia
+  gira di più di 0,01°; (b) i tre `ResizeObserver` riallineano all'assestamento (`LineChart` e `CandlestickChart` riarmano
+  quello delle etichette, `PriceChartFull` lascia fare al suo rinvio da 200 ms), mai a ogni callback; (d)
+  `noteArrowMarkers`, dopo ogni disegno completo, fa uscire `updateArrowRotations` prima di `getOption()` sui grafici senza
+  frecce, cioè quasi tutti. 16 rossi prima (unità, componenti, pin), la prova del morso sul verso pericoloso di (d).
+  Commit al checkpoint.
   - Il `ResizeObserver` di `LineChart`, `CandlestickChart` e `PriceChartFull` chiama `updateArrowRotations` a ogni
     callback, cioè a ogni frame mentre si trascina il bordo della finestra: una copia di `getOption()` e una riscrittura
     di tutte le serie ciascuna, oltre al `resize()`.
@@ -6674,6 +6768,20 @@ da Y il 15/10.
     nessun angolo cambia (il test di Y-8 sull'assestamento va allora rifatto con lo zoom vero del registratore di
     Y-8b, che cambia gli angoli).
   - Dettagli: piano di Y, «Y-8 · `updateArrowRotations()` e `getOption()` a ogni passo dello zoom».
+- **Y-26 · La vista percentuale dei grafici di prezzo, da un primo valore 0, mostra valori assoluti come percentuali** —
+  basso, numeri; Y, 17/10 (revisione di J-44). Comportamento preesistente; serve una scelta del developer.
+  - `toDisplaySeries` (`components/charts/priceChartHelpers.ts:369`) rende la serie intatta quando il primo valore è 0
+    (lo dice il suo JSDoc): nella vista `%` la linea **e** il Δ del tooltip (`(Δ ${formatPercent(value)})`) mostrano
+    valori assoluti come percentuali, cioè un 10 assoluto si legge «+10.00%». J-44 ha tolto lo 0 % solo dalla vista
+    assoluta.
+  - Altre copie dello stesso ribasamento, con tre comportamenti su una base nulla (regola 10): `computeGhostSeries`
+    (`priceChartHelpers.ts:469`, tutto 0 %); `candlestickChartHelpers.toPercent` (`:35`) e
+    `charts/signals/backendRenderer.ts::transformValue` (`:37`), il valore grezzo; `lotWacPriceChartHelpers.toPercentSeries`
+    (`:130`), che ribasa sul primo valore non nullo e lascia null prima.
+  - Da decidere: da un inizio a 0, (a) niente vista `%` (il commutatore spento, con una nota); (b) una serie vuota, `—`,
+    cioè `changePct` dappertutto; (c) ribasare sul primo valore non nullo, come il grafico dei lotti. Poi una copia sola
+    della regola per tutte.
+  - Raro: un prezzo o un cambio esattamente a 0 all'inizio. Dettagli: piano di Y, «J-44 · revisione a posteriori».
 
 ## MF · Matematica finanziaria (fase 01)
 
@@ -6784,3 +6892,11 @@ punto di partenza, l'audit dello stesso giorno:
   massimo (costo lineare, solo il corpo della richiesta li limita), e `POST /assets/provider/probe` non ha un limite
   per utente. Proposta: un tetto agli eventi (p. es. 10 000) nello schema, e il limite della sonda dove vivono gli altri
   limiti delle richieste. Dettagli: piano MF, sezione «SEC7-2 entrato; MF-SI1».
+- **MF-J45a · L'esecutore del motore non è chiuso allo spegnimento** — minimo; docs-writer di MF, 17/10 (J-45).
+  `_ENGINE_EXECUTOR` (`financial_math/portfolio/engine.py`) non è nella sequenza di spegnimento dell'app: una
+  ricostruzione in corso tiene il processo fino alla fine, come l'esecutore predefinito di `asyncio.to_thread`.
+  Proposta, se serve: `shutdown(wait=False, cancel_futures=True)` nel lifespan. Dettagli: piano MF, sezione «J-45».
+- **MF-J45b · Nessun single-flight sulla cache del motore** — basso, carico; J, 17/10 (revisione di J-45). Tra la
+  lettura della cache `portfolio_blob` (`portfolio/engine.py` ~:316) e la sua scrittura (~:457) nessun lucchetto: due
+  richieste identiche concorrenti ricostruiscono entrambe (con J-45 occupano i due worker). Nessuna azione ora; cura
+  possibile: un `asyncio.Future` per chiave in volo. Dettagli: piano MF, sezione «J-45».

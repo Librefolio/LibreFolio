@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextvars
 import hashlib
 import json
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -36,6 +39,11 @@ logger = structlog.get_logger(__name__)
 # Portfolio engine blob cache: stores PortfolioCalculationResult keyed by
 # (user, brokers, currency, fingerprints). Range-aware: can be sliced or extended.
 _portfolio_blob_cache = get_ttl_cache("portfolio_blob", maxsize=30, ttl=86400)  # 24h
+
+# J-45 (R13-SEC7-1b): the daily replay is pure CPU and long on a wide range, so it runs here, off the event loop, and
+# never in the default executor the asyncio.to_thread callers share. Two workers bound how many replays run at once;
+# the GIL still serializes them, but the loop keeps answering other requests in between.
+_ENGINE_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")
 
 
 # =============================================================================
@@ -437,7 +445,10 @@ class PortfolioCalculationEngine:
             compute_acquisition_funding=include_acquisition_funding,
             period_start=period_start,
         )
-        result = builder.build()
+        # The builder reads only loaded column attributes of the transactions (no relationship, no deferred column) and no
+        # session, and calculate() never commits or expires: nothing it touches loads lazily from the worker thread.
+        # run_in_executor does not copy contextvars (to_thread does): the copied context keeps them, the secret mask included.
+        result = await asyncio.get_running_loop().run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_context().run, builder.build)
         # J-43: the pairs between brokers owned at different shares, for the data-quality report (the cache key holds the shares).
         result.share_mismatches = classification.share_mismatches
         result.invalid_split_events = sorted(invalid_split_events.values(), key=lambda event: event.event_id)

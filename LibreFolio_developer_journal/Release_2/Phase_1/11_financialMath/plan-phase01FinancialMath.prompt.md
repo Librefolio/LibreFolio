@@ -2101,3 +2101,98 @@ Quattro commit, uno per lotto che cambia numeri:
 - ✅ **Verdi** (07:26–07:37, attese per carico): `invalid_split_ratio` 67, `roi-fifo-utils` **1245** (golden),
   `portfolio-engine` 41, `lots-analysis-pure` 177, `financial-math` 1111, `event-split-ratio` 78,
   `utils gate-i18n-catalog` 176. ruff/black puliti. **Da fare in slot**: `api portfolio` (enum nuovo, report).
+- ✅ **Residui MF-D4** (coordinatore): (1) divergenza FIFO/WAC accettata (dato corrotto e segnalato); (2) l'evento del
+  fornitore col rapporto non valido non modificabile né cancellabile → **X-R56** di X (un refresh del fornitore lo
+  scarta).
+- ✅ **MF-D4 slot e ingresso**: slot 1 su `4fab57400` (carico a 5 min 47): `api portfolio` **51**, `roi-fifo-utils`
+  1245, `portfolio-engine` 41, porta libera → **entrato** dev `c2feaf3e4`, CHANGELOG `7e6cf7914`, HEAD ff
+  **`7e6cf7914`**.
+
+#### J-45 = R13-SEC7-1b — il motore fuori dal ciclo degli eventi (17/10, 07:4x)
+- ✅ **Codice** (`portfolio/engine.py`, unico scrittore): `_ENGINE_EXECUTOR = ThreadPoolExecutor(max_workers=2,
+  thread_name_prefix="portfolio-engine")` a livello di modulo; `result = await
+  asyncio.get_running_loop().run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_context().run, builder.build)`.
+  ⚠️ **Fuori pista — il contesto**: `run_in_executor`, a differenza di `asyncio.to_thread`, non copia i `contextvars`
+  (il contesto dei log di structlog, il `request_id`): passato esplicitamente con `copy_context().run`. Commento sul
+  perché è sicuro (solo colonne caricate, nessuna sessione).
+- Suite esistenti verdi col codice (07:4x): `roi-fifo-utils` **1245** (golden `native_cash_guard` compreso, ora
+  attraverso l'esecutore), `portfolio-engine` 41, `financial-math` 1111, `portfolio-allocation-source` 98 (il PAC chiama
+  il motore).
+- ✅ **Test (17/10, 08:0x)** — test-author, un file nuovo
+  `test_financial/test_portfolio_engine/test_engine_off_the_loop.py` (6 test, nessuna riga di runner: lo prende
+  `roi-fifo-utils`): (1) la ricostruzione gira su un worker `portfolio-engine_N`; (2) il ciclo fa 5 giri mentre `build`
+  è bloccato su un `threading.Event` (limite 5 s); (3) parità puro ciclo/worker, esponenti Decimal compresi (rosso con
+  precisione 12 nel worker); (4) guardia: nessuna lettura di `related_transaction` e nessun caricamento pigro
+  (`AttributeImpl._fire_loader_callables`) durante `build`, su un registro con `paired_tx` dei tre tipi collegati e
+  gambe in transito; (4b) autoverifica della guardia; (5) il `request_id` di structlog e la maschera
+  `secrets_in_flight` arrivano dentro `build`. Mutazioni provate dal test-author: senza `copy_context().run` → (5)
+  rosso; `_ = tx.related_transaction` nel giro del builder → (4) rosso; senza guardia quella lettura è silenziosa (le
+  due gambe sono nella identity map).
+- ✅ **Docs (docs-writer)**: `financial_math.md` passo 6 + sezione `#### 🧵 Off the Event Loop {: #off-the-event-loop }`;
+  `async.md` una frase nell'avviso «Event Loop Blocking Rule» (descrittiva: rischio e segnali restano su `to_thread`).
+  mkdocs build strict exit 0, check-links 97 validi.
+  ⚠️ **Fuori pista — commenti corretti in `engine.py`** dopo il riscontro del docs-writer: niente «~75» chiamanti
+  (oggi 97 chiamate `to_thread` in 33 file); nessun contesto di richiesta structlog legato in `backend/app` (il
+  contesto copiato porta i `contextvars`, la maschera dei segreti compresa); non ogni sessione ha
+  `expire_on_commit=False`, quindi il commento poggia su «`calculate()` non fa commit né expire».
+  Nota non corretta: `_ENGINE_EXECUTOR` non è chiuso allo shutdown (come l'esecutore predefinito di `to_thread`); una
+  ricostruzione in corso tiene il processo fino alla fine.
+- ✅ **Rossi** (`files/j45.sh red`, carico 25): `engine.py` invertito → **2 failed, 4 passed** (1: «ran on thread
+  'MainThread'»; 2: «waited 5.0s … saw 0 ticks»); patch reinserita, sha `5dd46e44…` uguale.
+- ✅ **Verdi** (`files/j45.sh green`): `engine_off_the_loop` 6, `roi-fifo-utils` **1251**, `portfolio-engine` 41,
+  `financial-math` 1111, `portfolio-allocation-source` 98. ruff/black puliti, `git diff --check` pulito, porta 6190
+  libera. Non eseguito: `api portfolio` (pesante, nello slot del coordinatore).
+- ✅ **Slot 2 su `ae4f41297`** (J-45 + dev `7f8e69be6`, albero pulito; carico a 5 min < 50 alle 08:20): `api
+  portfolio` **51**, `roi-fifo-utils` **1251**, `portfolio-engine` 41, porta 6190 libera.
+- ✅ **Revisione J: OK, un LOW di sola doc** (08:3x): «Off the Event Loop» e la docstring del test (l. 8–12, 22–24,
+  127) dicevano il contesto structlog (`merge_contextvars`: nessuno chiama `bind_contextvars`) e `expire_on_commit=False`
+  come argomento. Corretti: la copia porta oggi la maschera dei segreti e il contesto `decimal` (tenuto da `decimal` in
+  una contextvar: la ricostruzione calcola con precisione e arrotondamento della richiesta); l'invariante vero è «solo
+  righe caricate dalle query di `calculate()`, che non fa commit, rollback né expire». La pagina cita ora il file di
+  test. `engine_off_the_loop` 6/6, ruff/black puliti, mkdocs build strict exit 0, check-links 97. Backlog **MF-J45b**
+  (nessun single-flight tra lettura e scrittura della cache `portfolio_blob`).
+- ✅ **J-45 entrato** (08:30): dev `15d414a69`, CHANGELOG 🐛 `b5d9f627f`, HEAD ff **`b5d9f627f`**.
+
+#### W-B69 — il costo Auto su un pool illeggibile (17/10, 08:1x; da W, rilascio bloccante)
+Assegnato dal coordinatore (W occupato con SEC7-3, file aperti). Perimetro: `auto_cost.py` e `lone_transfer_legs.py`;
+**vietati** `transaction_batch_stages.py`, `batch_creates.py`, `transaction_service.py`, `batch_costs.py` (W: la metà
+batch, `autoCostUnreadable`, la prende W dopo SEC7-3 tramite la cucitura). Revisore: W.
+- Difetto: da W-B58 (`db/real_decimal.py`) un valore salvato che non è un numero (testo, REAL ±inf) si rilegge `None`.
+  `compute_wac_iterative` salta la riga (quantità `None`), conta l'importo come 0 (`abs(tx.amount) if tx.amount else 0`:
+  un acquisto gratis) o il costo come ignoto: il costo Auto scritto resta sbagliato per sempre. Prima di W-B58 il calcolo
+  sollevava (`TypeError`) e i passi lo trattavano (decisione 1 delle gambe sole); ora no → 2 rossi in
+  `test_lone_transfer_legs.py` (470050 convertita a 20 EUR invece di restare TRANSFER; lo script offline esce 0).
+- ✅ **Codice** (bozza di W, `files/wb69_for_mf/auto_cost_edits_reference.py.txt` della sessione W, rivista e applicata):
+  - `UnreadablePoolError(count)` in `auto_cost.py`: solo il conteggio, mai un id (il pool può essere il broker di un
+    altro utente: un TRANSFER ricevuto media quello del partner);
+  - `_unreadable_pool_rows(broker, asset, as_of, excluded)`: gli stessi filtri di `compute_wac_iterative`; conta le righe
+    con quantità o importo letti `None`, o un costo salvato (non `IS NULL` in SQL) ma letto `None`;
+  - `_auto_cost` solleva prima di `compute_wac_iterative` (nessun file di J/portfolio_service toccato);
+  - **cucitura per W**: `_compute_wac_for_auto_items(..., unreadable: list | None = None)`: con la lista, l'item va in
+    `(operation, index, count)` senza costo né risultato; senza, rilancia;
+  - `lone_transfer_legs.py`: solo docstring e commento (il `except Exception` per riga c'era già: decisione 1).
+  - `delete_by_broker` fallisce intero senza toccarlo: calcola tutti i costi prima di cambiare righe, e
+    `BrokerService.delete_bulk` chiude il savepoint del broker con `message=str(e)` (il conteggio, nessun id).
+  ⚠️ **Fuori pista — il parcheggio**: la patch scritta durante l'attesa dello slot J-45 è stata tolta dall'albero
+  (`files/wb69/code_draft1.patch`, sha `ec54e3db…`) per far girare lo slot sulla revisione J-45 pura, poi rimessa dopo
+  l'ingresso (stesso sha).
+- ✅ **Rossi lone legs** (`files/wb69.sh red`, prodotto invertito): `services lone-transfer-legs` **2 failed, 18
+  passed** (`…cost_cannot_be_computed…`: 470050 risposta convertita; `…offline_script…`: exit 0);
+  `transaction-cost-basis-rule` 80 (base, senza i rossi di W). **Verde** lone legs **20/20**.
+- ✅ **I rossi di W per la mia metà** (08:35): un file nuovo, autonomo, `test_services/test_auto_cost_unreadable_pool.py`
+  (17 test, copiato tale e quale dalla cartella di W, sha `1272a3d3…`), registrato come `services
+  auto-cost-unreadable-pool` in `scripts/test_runner/_backend_services.py` (solo righe aggiunte: funzione + `add_test`).
+  `test_transaction_cost_basis_rule.py` non toccato (la metà batch di W resta lì).
+  Rossi (`files/wb69.sh red`, prodotto invertito): `auto-cost-unreadable-pool` **8 failed, 9 passed** (raise ×4: 100/50/50/50
+  EUR invece del raise; conteggio ×2; cancellazione (c) ×2: riuscita e 100 EUR scritti sul superstite); guardie verdi.
+  `lone-transfer-legs` 2 failed, 18 passed; `transaction-cost-basis-rule` 80.
+- ✅ **Verdi** (`files/wb69.sh green`): `lone-transfer-legs` **20**, `auto-cost-unreadable-pool` **17**,
+  `transaction-cost-basis-rule` 80, `broker` 79, `db post-migration-orphan-pairs` 47, `roi-fifo-utils` 1251;
+  `check-orphans` exit 0; ruff/black puliti; `git diff --check` pulito; porta 6190 libera.
+- ✅ **Docs** (docs-writer): `wac.md` nuova sezione `### 🚫 Unreadable pool {: #unreadable-pool }` + un punto nell'elenco
+  del costo Auto; `service.md` paragrafo «An unreadable pool (W-B69)» nella cancellazione del broker;
+  `database/index.md` la conversione delle gambe sole nomina `UnreadablePoolError` e il motivo W-B58. Nessuna traduzione
+  per queste pagine. mkdocs build strict exit 0, check-links 97. Da aggiornare quando W cabla la cucitura: l'ultimo
+  paragrafo di `#unreadable-pool` dice che oggi il batch propaga l'errore (`batch_costs.py:32-36`, e il `_handover_cost`
+  della separazione a `:44`).
+- Non eseguito: `api transactions-wac`/`portfolio-wac` (pesanti: slot).

@@ -110,6 +110,22 @@ There is no triangulation at conversion time. A pair that no provider quotes dir
 sync time from a multi-step chain route, which stores the composite rate under the pair itself
 (`source = "CHAIN:…"`) — see [Direct vs. Chain Routes](configuration.md#direct-vs-chain-routes).
 
+`POST /api/v1/fx/currencies/convert` expands each conversion's `date_range` into one `convert_bulk()`
+item per day, both ends included; with signals, a second series of one-unit items runs from the start
+of their warm-up to the same end. Both ends have a limit (X-R55). The end is cut at tomorrow by the
+server's calendar (`datetime_utils.latest_range_end()`, the helper
+[R13-SEC7-1](../financial_math.md#portfolio-package) also uses), a day of margin for a user whose
+today is already the server's tomorrow. The start, the warm-up included, goes back at most
+`RANGE_SPAN_LIMIT_DAYS` (36,525 days, 100 years) before that end (`range_span_floor()`, never before
+`date.min`; both in `backend/app/utils/date_range_limits.py`). A conversion that starts after the cut
+asks for nothing: no result, no error, and its signals run on an empty series; the other conversions
+are unaffected. The `date_range` of each `signal_results` item (`FXSignalQueryResult`) is the range
+its signals cover, the cut one; a conversion that starts after the cut echoes its requested range
+there, with no points. Before, nothing bounded the expansion: from 0001-01-01 to
+9999-12-31 it built about 3.65 million items, then failed with a 500 (`OverflowError`). The ceiling is
+the endpoint's: `convert_bulk()` itself, which the other callers use directly, has none.
+{: #convert-range-ceiling }
+
 ### 🪟 Loading only the usable rate window {: #convert-bulk-window }
 
 Portfolio reports call `convert_bulk()` with thousands of items: the engine preloads a rate for every
@@ -149,8 +165,9 @@ linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
 
 - **Request**: a list of `{base, quote, as_of}`. `base` and `quote` must differ, or the request is refused (422).
 - **Rate on a day**: the conversion of 1 `base` into `quote` on that day by `convert_bulk()`, with its unlimited
-  backward fill. It is the rate `POST /api/v1/fx/currencies/convert` returns for that day. One `convert_bulk()` batch
-  serves every pair and day of the request.
+  backward fill. It is the rate `POST /api/v1/fx/currencies/convert` returns for that day, up to that endpoint's
+  [ceiling](#convert-range-ceiling): `as_of` has none. One `convert_bulk()` batch serves every pair and day of the
+  request.
 - **Response**: `items[]`, in request order, of `{base, quote, as_of, periods[], errors[]}`. Each period is
   `{key, days, change_ratio, inverse_change_ratio}`.
 - **`change_ratio`**: `rate(as_of) / rate(as_of − days) − 1`, the pair as asked (quote per base).
@@ -159,6 +176,12 @@ linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
 
 Both are fractions, null when either rate is missing. A day without a rate adds *No B/Q rate on or before D* to
 `errors`.
+
+The FX list calls the endpoint through `fetchFxPeriodChanges()` (`frontend/src/lib/utils/periodChanges.ts`): one
+request for every configured pair, with `as_of` the end of the selected range, and one for a single pair when that pair
+reloads on its own (its **Reload**, or after its **Sync**: `fetchPairData()`). A pair shown swapped (⇄) reads
+`inverse_change_ratio`, the others `change_ratio`. Besides its fixed 1D column, the table shows each period whose
+`days` fit in the range's whole calendar days (`visiblePeriodColumns()`).
 
 ## 🧹 Rate writes clear the portfolio caches {: #portfolio-cache-invalidation }
 
