@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import (
     Asset,
     AssetEvent,
-    AssetEventType,
     BrokerUserAccess,
     Transaction,
     User,
@@ -28,7 +27,7 @@ from backend.app.schemas.common import (
 )
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.price_store import PRICE_UPSERT_CHUNK_SIZE
-from backend.app.services.financial_math.splits import costless_incoming_split_adjustments, is_valid_split_ratio
+from backend.app.services.financial_math.splits import costless_incoming_split_adjustments, is_split_event_type, is_valid_split_ratio
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.utils.datetime_utils import utcnow
 
@@ -105,7 +104,7 @@ class EventStoreOperations:
             evt = raw if isinstance(raw, FAAssetEventPoint) else FAAssetEventPoint(**raw)
             if integer_digits_issue(evt.value.amount, AssetEvent, "value") is not None:
                 dropped.append(f"{evt.date.isoformat()} {evt.type!s}={evt.value.amount}")
-            elif str(evt.type) == AssetEventType.SPLIT and not is_valid_split_ratio(evt.value.amount):
+            elif is_split_event_type(evt.type) and not is_valid_split_ratio(evt.value.amount):
                 invalid_splits.append(f"{evt.date.isoformat()} ratio {evt.value.amount}")
             else:
                 storable.append(evt)
@@ -240,8 +239,8 @@ class EventStoreOperations:
         Args:
             data: List of FAEventUpsert objects (asset_id + mode + events[])
             session: Database session
-            current_user_id: The user the request answers (the route passes the caller): a refusal then names only the
-                transactions that user can see (R13-SEC7). None for a caller that answers no user.
+            current_user_id: The user the request answers (the route passes the caller): a refusal names only the
+                transactions that user can see (R13-SEC7). Without one it names none, counting them (X-R47b: fail closed).
 
         Returns:
             dict with results list (``event_ids``: the row each event wrote, in request
@@ -413,13 +412,14 @@ class EventStoreOperations:
 
         offending: list[dict] = []
         for index, raw_evt in enumerate(events or []):
-            if str(field(raw_evt, "type") or "").strip().upper() != AssetEventType.SPLIT:
+            event_type = field(raw_evt, "type")
+            if not is_split_event_type(event_type):
                 continue
             value_obj = field(raw_evt, "value")
             amount = field(value_obj, "amount") if value_obj is not None else None
             ratio = amount if amount is None or isinstance(amount, Decimal) else Decimal(str(amount))
             if not is_valid_split_ratio(ratio):
-                offending.append({"event_index": index, "date": str(field(raw_evt, "date")), "type": str(AssetEventType.SPLIT), "ratio": str(amount)})
+                offending.append({"event_index": index, "date": str(field(raw_evt, "date")), "type": str(event_type).strip().upper(), "ratio": str(amount)})
         if offending:
             shown = ", ".join(f"#{e['event_index']}={e['date']} ratio {e['ratio']}" for e in offending[:5]) + (f" (+{len(offending) - 5} more)" if len(offending) > 5 else "")
             raise AssetSourceError(
@@ -572,11 +572,11 @@ class EventStoreOperations:
 
         Raises:
             AssetSourceError(code="EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST"): ``details`` names the first such edit in
-                request order: ``event_id``, ``date`` (the stored event's) and ``transaction_ids``, sorted. With a
-                ``current_user_id`` (R13-SEC7), ``transaction_ids`` keeps only the transactions that user can see (a
-                ``BrokerUserAccess`` row for their broker, as ``delete_events_bulk`` decides) and
-                ``hidden_transactions_count`` counts the others: a SPLIT of a global asset may carry other users'
-                adjustments, and anyone could provoke the refusal. The message gives the total count only.
+                request order: ``event_id``, ``date`` (the stored event's), ``transaction_ids`` (only the transactions
+                ``current_user_id`` can see: a ``BrokerUserAccess`` row for their broker, as ``delete_events_bulk``
+                decides; sorted) and ``hidden_transactions_count`` (the others). A SPLIT of a global asset may carry
+                other users' adjustments, and anyone could provoke the refusal (R13-SEC7); without a
+                ``current_user_id`` no transaction is named, all are counted (X-R47b). The message gives the total count.
         """
         retyped = [event_id for event_id, point in edits.items() if str(point.type) != str(rows[event_id].type)]
         costless = await costless_incoming_split_adjustments(session, retyped)
@@ -585,11 +585,11 @@ class EventStoreOperations:
                 continue
             day = rows[event_id].date.isoformat()
             transaction_ids = costless[event_id]
-            details: dict = {"event_id": event_id, "date": day, "transaction_ids": transaction_ids}
+            visible: list[int] = []
             if current_user_id is not None:
                 visible_stmt = select(Transaction.id).join(BrokerUserAccess, Transaction.broker_id == BrokerUserAccess.broker_id).where(Transaction.id.in_(transaction_ids), BrokerUserAccess.user_id == current_user_id)
                 visible = sorted({int(row[0]) for row in (await session.execute(visible_stmt)).all()})
-                details = {"event_id": event_id, "date": day, "transaction_ids": visible, "hidden_transactions_count": len(transaction_ids) - len(visible)}
+            details = {"event_id": event_id, "date": day, "transaction_ids": visible, "hidden_transactions_count": len(transaction_ids) - len(visible)}
             raise AssetSourceError(
                 f"EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST: the split of {day} (event {event_id}) has {len(transaction_ids)} linked adjustment(s) without a cost; give them a cost before changing its type",
                 "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST",
