@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date as date_type
-from datetime import timedelta
 from decimal import Decimal
 from typing import Collection, Dict, List, Optional, Tuple
 
@@ -127,8 +126,8 @@ class TransactionBalancesMixin:
                             batch_operation=b_op,
                         )
 
-    async def _get_balances_before_date(self, broker_id: int, before_date: date_type, exclude_tx_ids: Collection[int] = ()) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
-        """Get cash and asset balances at end of day before the given date.
+    async def _get_balances_before_date(self, broker_id: int, before_date: date_type, exclude_tx_ids: Collection[int] = (), *, through: bool = False) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
+        """Get cash and asset balances at end of day before the given date — with ``through``, at the end of that date.
 
         ``exclude_tx_ids`` leaves those transactions out of both sums (e.g. rows the bulk
         editor is about to delete, when the report-set gap-fix compares with the bank).
@@ -136,7 +135,11 @@ class TransactionBalancesMixin:
         Summed by the layer, exactly (C-97): ``native_balances`` for the cash, ``position_quantities`` for the
         quantities, over the columns they read. Never an SQL ``SUM``: it adds the stored doubles, not the decimals.
         """
-        stmt = select(Transaction.id, Transaction.type, Transaction.date, Transaction.broker_id, Transaction.asset_id, Transaction.currency, Transaction.amount, Transaction.quantity).where(Transaction.broker_id == broker_id).where(Transaction.date < before_date)
+        stmt = (
+            select(Transaction.id, Transaction.type, Transaction.date, Transaction.broker_id, Transaction.asset_id, Transaction.currency, Transaction.amount, Transaction.quantity)
+            .where(Transaction.broker_id == broker_id)
+            .where(Transaction.date <= before_date if through else Transaction.date < before_date)
+        )
         excluded = list(exclude_tx_ids)
         if excluded:
             stmt = stmt.where(Transaction.id.notin_(excluded))
@@ -147,8 +150,12 @@ class TransactionBalancesMixin:
         return cash_balances, asset_balances
 
     async def get_balances_at_end_of(self, broker_id: int, as_of: date_type, exclude_tx_ids: Collection[int] = ()) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
-        """Cash per currency and quantity per asset of a broker at the end of ``as_of`` (inclusive)."""
-        return await self._get_balances_before_date(broker_id, as_of + timedelta(days=1), exclude_tx_ids)
+        """Cash per currency and quantity per asset of a broker at the end of ``as_of`` (inclusive).
+
+        The rows dated up to ``as_of`` included, never ``as_of`` + 1 day: the gap-fix's ``as_of`` comes from the request,
+        and the day after the calendar's last raised (W-B71).
+        """
+        return await self._get_balances_before_date(broker_id, as_of, exclude_tx_ids, through=True)
 
     # =========================================================================
     # BALANCE QUERIES (for BRSummary)
