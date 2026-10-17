@@ -225,6 +225,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After the server catches up on prices (for example when an instance wakes up), the asset and currency pages ask for the new prices the next time you open them or change the period, instead of showing the ones kept from earlier in the session.
 - AI Export FIFO summary: open value and unrealized P&L now add up the same lots — those whose value and P&L are both known — so the two totals stay comparable when a lot's cost is unknown.
 - The asset's data editor now speaks your language when it saves: «12 prices saved, 1 event deleted» and its error message were in English in every language.
+- **Exchange rates the database cannot keep are refused, not saved wrong.** A manual rate with more than 14 digits before the decimal point was saved as infinite, its inverse as 0, and one below 0.0000000001 as 0; saving it now fails with a message naming the pair, the date and the limits. A provider's rate outside the limits is skipped with one warning, and the pair's other dates are still synced, instead of the whole pair failing. Conversions treat such a rate left by an older version as missing. API: `POST /api/v1/fx/currencies/rate` answers 422, not 500, to a rate that is not a number.
 
 #### 🔒 Security
 

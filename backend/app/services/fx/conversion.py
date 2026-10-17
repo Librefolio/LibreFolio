@@ -12,6 +12,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy import select as sql_select
 
 from backend.app.db.models import FxRate
+from backend.app.db.precision import storable_fx_rate, usable_fx_rate_bounds
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency
 from backend.app.services.fx.base import RateNotFoundError
@@ -21,6 +22,12 @@ logger = get_logger(__name__)
 # ============================================================================
 # CHAIN COMPUTATION
 # ============================================================================
+
+
+def _usable_rate(rate: Decimal | None) -> bool:
+    """A leg rate a chain may use (X-R38): one ``fx_rates.rate`` can keep (finite, at most 14 digits before the decimal
+    point, not 0 at 10 decimal places), above 0."""
+    return rate is not None and storable_fx_rate(rate) is not None and rate > 0
 
 
 def compute_chain_rate(
@@ -41,7 +48,10 @@ def compute_chain_rate(
     This means chains using providers with sparse data (e.g. SNB monthly)
     will only produce rates on dates where every leg has fresh data.
 
-    Returns: composite rate, or None if any leg is missing for this date.
+    A leg ``fx_rates.rate`` could not keep (0, an infinite one, 20 digits before the decimal point, NaN) counts as
+    missing (X-R38): never a division by zero, never an infinite or absurd rate.
+
+    Returns: composite rate, or None if any leg is missing or unusable for this date.
     """
     composite = Decimal("1")
     for step in steps:
@@ -52,7 +62,7 @@ def compute_chain_rate(
         norm_quote = max(fc, tc)
         key = (norm_base, norm_quote, target_date)
         rate = leg_rates.get(key)
-        if rate is None:
+        if not _usable_rate(rate):
             return None
         if fc < tc:
             # Direct order: multiply by rate
@@ -85,6 +95,10 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
     ⚡ BREAKING CHANGE: Now accepts/returns Currency objects instead of Decimal.
 
     Rates are stored alphabetically (base < quote): 1 base = rate * quote
+
+    Only usable rates are read (X-R38): a legacy rate ``fx_rates.rate`` cannot keep, written by an older release (an
+    infinite one, 0, 20 digits before the decimal point), is a missing rate for its date, backward-filled over like a
+    date without a row, or the missing-rate error. Never a division by zero, never an infinite amount.
 
     Args:
         session: Database session
@@ -167,6 +181,10 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
     # OPTIMIZATION: Single batch query for all needed rates
     # Build OR clauses for all pairs
     if pairs_needed:
+        # Only the rates a conversion may use, in the anchor too: a legacy unusable rate is skipped like a date without
+        # a row (X-R38)
+        smallest_rate, first_refused_rate = usable_fx_rate_bounds()
+        usable = and_(FxRate.rate >= smallest_rate, FxRate.rate < first_refused_rate)
 
         conditions = []
         for (base, quote), info in pairs_needed.items():
@@ -174,13 +192,14 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
             # earliest requested date (the backward-fill anchor) up to the latest date.
             # Without the lower bound every call loaded the pair's whole history, which
             # made per-day portfolio conversions load millions of rows.
-            anchor = sql_select(func.max(FxRate.date)).where(FxRate.base == base, FxRate.quote == quote, FxRate.date <= info["min_date"]).scalar_subquery()
+            anchor = sql_select(func.max(FxRate.date)).where(FxRate.base == base, FxRate.quote == quote, FxRate.date <= info["min_date"], usable).scalar_subquery()
             conditions.append(
                 and_(
                     FxRate.base == base,
                     FxRate.quote == quote,
                     FxRate.date <= info["max_date"],
                     FxRate.date >= func.coalesce(anchor, info["min_date"]),
+                    usable,
                 )
             )
 

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from backend.app.db.models import FxConversionRoute, FxRate
-from backend.app.db.precision import truncate_fx_rate
+from backend.app.db.precision import fx_rate_limits_text, storable_fx_rate
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncLegDetail, FXSyncPairResult, SyncDateRangeModel, SyncStatus
@@ -22,7 +22,7 @@ from backend.app.services.fx.base import FXProviderStartDate, FXRateLimitedError
 from backend.app.services.fx.conversion import compute_chain_rate
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx.runtime import call_fx_provider, configured_fx_provider, settings_cache_part
-from backend.app.services.fx.storage import normalize_rate_for_storage
+from backend.app.services.fx.storage import normalize_storable_rate
 from backend.app.utils.runtime.cache import clear_cache, get_ttl_cache
 
 logger = get_logger(__name__)
@@ -37,6 +37,62 @@ def _is_date_within_sync_range(target_date: date, start_date: FXProviderStartDat
     if start_date == "min":
         return target_date <= end_date
     return start_date <= target_date <= end_date
+
+
+def _warn_unusable_rates(pair: str, provider: str, days: list[date]) -> None:
+    """One warning per pair and sync for its rates ``fx_rates.rate`` cannot keep, skipped (X-R38): never stored, never
+    raising, the pair's other dates stored. At most ten dates are listed; ``skipped`` counts them all."""
+    if not days:
+        return
+    ordered = sorted(set(days))
+    logger.warning(
+        "FX rates skipped: the column cannot keep them",
+        pair=pair,
+        provider=provider,
+        skipped=len(ordered),
+        dates=[day.isoformat() for day in ordered[:10]],
+        limits=fx_rate_limits_text(),
+    )
+
+
+def _collect_leg_rates(
+    rates_by_currency: dict,
+    provider_code: str,
+    leg_rates: dict[tuple, Decimal],
+    leg_unusable: dict[tuple[str, str, str], list[date]],
+) -> None:
+    """A provider's observations into ``leg_rates``, normalized (alphabetical pair, the rate inverted when needed). One
+    that is not a finite rate above 0, or whose inverse overflows, goes into ``leg_unusable`` instead: skipped, and said
+    by the pairs whose route uses the leg (X-R38)."""
+    for _currency, observations in rates_by_currency.items():
+        for obs_date, obs_base, obs_quote, rate in observations:
+            normalized = normalize_storable_rate(obs_base, obs_quote, rate)
+            if normalized is None:
+                leg_unusable.setdefault((min(obs_base, obs_quote), max(obs_base, obs_quote), provider_code), []).append(obs_date)
+                continue
+            norm_base, norm_quote, norm_rate = normalized
+            leg_rates[(norm_base, norm_quote, obs_date)] = norm_rate
+
+
+def _storable_chain_rates(route, steps: list[dict], leg_rates: dict[tuple, Decimal], dates: list[date]) -> tuple[list[tuple[date, str, str, Decimal]], list[date]]:
+    """Each date's chain rate, normalized and truncated to what ``fx_rates.rate`` keeps, and the dates skipped (X-R38): a
+    leg present but unusable, or a chain rate the column cannot keep (``1E+20``, or 0 once truncated). A date a leg lacks
+    is ``compute_chain_rate``'s strict date matching, not a skip."""
+    computed: list[tuple[date, str, str, Decimal]] = []
+    unusable: list[date] = []
+    for d in dates:
+        chain_rate = compute_chain_rate(steps, leg_rates, d)
+        if chain_rate is None:
+            if all((min(s["from"], s["to"]), max(s["from"], s["to"]), d) in leg_rates for s in steps):
+                unusable.append(d)
+            continue
+        normalized = normalize_storable_rate(route.base, route.quote, chain_rate)
+        stored = None if normalized is None else storable_fx_rate(normalized[2])
+        if stored is None:
+            unusable.append(d)
+            continue
+        computed.append((d, normalized[0], normalized[1], stored))
+    return computed, unusable
 
 
 # ============================================================================
@@ -209,8 +265,9 @@ async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeli
     currencies_synced = []
 
     # Normalize all observations and collect unique pairs from API
-    all_normalized = []  # [(currency, obs_date, base, quote, rate), ...]
+    all_normalized = []  # [(currency, obs_date, base, quote, rate as stored), ...]
     api_pairs = set()  # {(base, quote, date), ...}
+    kept_by_currency: dict[str, list[tuple[date, str, str, Decimal]]] = {}  # what the batch insert writes
 
     for currency, observations in rates_by_currency.items():
         if not observations:
@@ -220,11 +277,21 @@ async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeli
         currencies_synced.append(currency)
         total_fetched += len(observations)
 
-        # Normalize for storage (alphabetical ordering)
+        # Normalize for storage (alphabetical ordering), truncated to what fx_rates.rate keeps. An observation it cannot
+        # keep is skipped, never stored and never raising, and said once for its pair (X-R38)
+        skipped: dict[str, list[date]] = {}
         for obs_date, base, quote, rate in observations:
-            norm_base, norm_quote, norm_rate = normalize_rate_for_storage(base, quote, rate)
-            all_normalized.append((currency, obs_date, norm_base, norm_quote, norm_rate))
+            normalized = normalize_storable_rate(base, quote, rate)
+            stored = None if normalized is None else storable_fx_rate(normalized[2])
+            if stored is None:
+                skipped.setdefault(f"{min(base, quote)}/{max(base, quote)}", []).append(obs_date)
+                continue
+            norm_base, norm_quote, _norm_rate = normalized
+            all_normalized.append((currency, obs_date, norm_base, norm_quote, stored))
+            kept_by_currency.setdefault(currency, []).append((obs_date, norm_base, norm_quote, stored))
             api_pairs.add((norm_base, norm_quote, obs_date))
+        for pair, days in skipped.items():
+            _warn_unusable_rates(pair, provider.code, days)
 
     # ========================================================================
     # Compare DB vs API: Log rates in DB but not in API
@@ -245,9 +312,9 @@ async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeli
         key = (base, quote, obs_date)
         old_rate = existing_lookup.get(key)
 
-        # Truncate new rate to DB precision for comparison
+        # The new rate is already truncated to DB precision (storable_fx_rate)
         # This prevents false "updates" when values are identical after truncation
-        rate_truncated = truncate_fx_rate(rate_value)
+        rate_truncated = rate_value
 
         if old_rate is None:
             # New insert
@@ -255,8 +322,9 @@ async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeli
                 changes_by_currency[currency] = 0
             changes_by_currency[currency] += 1
         else:
-            # Truncate old rate too for proper comparison
-            old_rate_truncated = truncate_fx_rate(old_rate)
+            # The old rate as the column keeps it: a legacy one it cannot keep (inf, 1e60, 0) is None, a change the
+            # new rate overwrites, never a raise (X-R38)
+            old_rate_truncated = storable_fx_rate(old_rate)
             if old_rate_truncated != rate_truncated:
                 # Updated value (only if different after truncation)
                 if currency not in changes_by_currency:
@@ -275,13 +343,8 @@ async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeli
         if not observations:
             continue
 
-        # Normalize for storage and truncate to DB precision
-        normalized_observations = []
-        for obs_date, base, quote, rate in observations:
-            norm_base, norm_quote, norm_rate = normalize_rate_for_storage(base, quote, rate)
-            # Truncate to DB precision to match what will actually be stored
-            norm_rate_truncated = truncate_fx_rate(norm_rate)
-            normalized_observations.append((obs_date, norm_base, norm_quote, norm_rate_truncated))
+        # Normalized and truncated to DB precision above, the observations no column can keep left out (X-R38)
+        normalized_observations = kept_by_currency.get(currency, [])
 
         if normalized_observations:
             _, base, quote, _ = normalized_observations[0]
@@ -380,8 +443,8 @@ async def _count_actual_changes(
         if old_rate is None:
             # New insert
             changed += 1
-        elif truncate_fx_rate(old_rate) != new_rate:
-            # Value actually changed
+        elif storable_fx_rate(old_rate) != new_rate:
+            # Value actually changed; a legacy rate no column can keep (inf, 1e60, 0) is None: a change, never a raise (X-R38)
             changed += 1
     return changed
 
@@ -452,6 +515,7 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
     leg_events: dict[tuple[str, str, str], asyncio.Event] = {}  # (norm_base, norm_quote, provider) → Event
     leg_rates: dict[tuple, Decimal] = {}  # (norm_base, norm_quote, date) → rate
     leg_errors: dict[tuple[str, str, str], str] = {}  # (norm_base, norm_quote, provider) → error msg
+    leg_unusable: dict[tuple[str, str, str], list[date]] = {}  # (norm_base, norm_quote, provider) → dates not normalizable (X-R38)
     provider_refusals: dict[str, float | None] = {}  # PROVIDER CODE (upper) → retry_after: paused or refused for too many requests
 
     for pair_slug in pairs:
@@ -521,10 +585,7 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
                 rates_by_currency = await call_fx_provider(provider, lambda: provider.fetch_rates(date_range, list(target_currencies), base_currency=None))
                 _fx_fetch_cache.set(cache_key, rates_by_currency)
 
-            for _currency, observations in rates_by_currency.items():
-                for obs_date, obs_base, obs_quote, rate in observations:
-                    norm_base, norm_quote, norm_rate = normalize_rate_for_storage(obs_base, obs_quote, rate)
-                    leg_rates[(norm_base, norm_quote, obs_date)] = norm_rate
+            _collect_leg_rates(rates_by_currency, provider_code, leg_rates, leg_unusable)
 
             # Signal all events for this provider
             for target_cur in target_currencies:
@@ -658,6 +719,14 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
             elapsed_ms=elapsed_ms,
         )
 
+    def _unusable_leg_dates(steps: list[dict]) -> list[date]:
+        """The dates in range whose observation of one of the route's legs could not be normalized (X-R38)."""
+        days: list[date] = []
+        for step in steps:
+            key = (min(step["from"], step["to"]), max(step["from"], step["to"]), step["provider"])
+            days.extend(d for d in leg_unusable.get(key, []) if _is_date_within_sync_range(d, start_date, end_date))
+        return days
+
     async def _compute_single_step(
         pair_slug: str,
         route,
@@ -673,11 +742,18 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
         norm_q = max(route.base, route.quote)
 
         computed_rates = []
+        unusable = _unusable_leg_dates([step])
         for key, rate in leg_rates.items():
             if key[0] == norm_b and key[1] == norm_q:
                 d = key[2]
                 if _is_date_within_sync_range(d, start_date, end_date):
-                    computed_rates.append((d, norm_b, norm_q, truncate_fx_rate(rate)))
+                    # What fx_rates.rate keeps; a rate it cannot keep is skipped, never stored (X-R38)
+                    stored = storable_fx_rate(rate)
+                    if stored is None:
+                        unusable.append(d)
+                        continue
+                    computed_rates.append((d, norm_b, norm_q, stored))
+        _warn_unusable_rates(pair_slug, provider_code, unusable)
 
         if computed_rates:
             async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:
@@ -709,7 +785,11 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
             actual_changed = 0
 
         elapsed_ms = (time.monotonic_ns() - t_route_start) // 1_000_000
-        partial_msg = None if computed_rates else (f"Provider {provider_code} returned no data for " f"{route.base}/{route.quote} in {start_date}–{end_date}")
+        partial_msg = None
+        if not computed_rates and unusable:
+            partial_msg = f"Provider {provider_code} returned no rate the database can keep for {route.base}/{route.quote} in {start_date}–{end_date}: {fx_rate_limits_text()}"
+        elif not computed_rates:
+            partial_msg = f"Provider {provider_code} returned no data for " f"{route.base}/{route.quote} in {start_date}–{end_date}"
         # Build per-leg detail for single-step route
         leg_detail = None
         if not computed_rates:
@@ -747,13 +827,8 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
         # Collect all dates from leg_rates
         all_dates = sorted({key[2] for key in leg_rates.keys() if _is_date_within_sync_range(key[2], start_date, end_date)})
 
-        computed_rates = []
-        for d in all_dates:
-            chain_rate = compute_chain_rate(steps, leg_rates, d)
-            if chain_rate is not None:
-                norm_base, norm_quote, norm_rate = normalize_rate_for_storage(route.base, route.quote, chain_rate)
-                norm_rate = truncate_fx_rate(norm_rate)
-                computed_rates.append((d, norm_base, norm_quote, norm_rate))
+        computed_rates, unusable = _storable_chain_rates(route, steps, leg_rates, all_dates)
+        _warn_unusable_rates(pair_slug, source, _unusable_leg_dates(steps) + unusable)
 
         if computed_rates:
             async with AsyncSession(get_async_engine(), expire_on_commit=False) as pair_session:

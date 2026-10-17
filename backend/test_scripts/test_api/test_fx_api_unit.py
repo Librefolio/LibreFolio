@@ -3,16 +3,23 @@ Direct unit tests for FX API handlers.
 
 Focus: happy-path/main-branch coverage in backend/app/api/v1/fx/
 without live server/network dependency.
+
+X-R38 (the FX side of W-B58): POST /fx/currencies/rate and a rate no column can keep, served in process
+(``httpx.ASGITransport``) on the lane's test database: see its block at the end.
 """
 
 import json
+import re
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, Mock
 
+import httpx
 import pytest
-from fastapi import HTTPException
+import pytest_asyncio
+from fastapi import FastAPI, HTTPException
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import PROJECT_ROOT
@@ -23,9 +30,11 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from backend.app.api.v1.auth import get_current_user
 from backend.app.api.v1.fx import currencies as fx_currencies_api
 from backend.app.api.v1.fx import providers as fx_providers_api
-from backend.app.db.models import FxConversionRoute
+from backend.app.db.models import FxConversionRoute, FxRate
+from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.fx import FXConversionRouteItem, FXConversionRouteReadItem, FXDeleteItem, FXUpsertItem
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest, FXSyncPairResult, SyncDateRangeModel, SyncStatus
@@ -531,3 +540,226 @@ async def test_create_routes_atomic_error_preserves_every_result_metadata(order,
     # No invalid candidate is ever handed to add(), even before the rollback.
     assert all("ZZ_UNKNOWN_FX" not in call.args[0].providers_used for call in session.add.call_args_list)
     route_providers.assert_not_called()
+
+
+# ============================================================================
+# X-R38 (the FX side of W-B58): POST /fx/currencies/rate and a rate no column can keep
+# ============================================================================
+#
+# Measured before the cure, in process on the lane's test database. The rate "1E+400" (a JSON string) is stored as a
+# REAL inf, and typed MMK → KHR its inverse as 0; a JSON number 1E+15 is stored as it is, "1E-11" as 0: 200 each time. A
+# JSON number 1E+400 reaches the schema as inf, which it refuses (not a finite number), and FastAPI's 422 carries it back
+# as its input, which Starlette's JSON renderer refuses: the request ends in 500; so do a NaN literal and the string
+# "Infinity". "1E-1000000" typed MMK → KHR makes the endpoint's own inversion raise decimal.Overflow, outside its
+# per-item try: 500. A rate that is not a number at all ("abc", "0x10", the JSON boolean true) makes the schema's
+# coerce_rate raise decimal.InvalidOperation, which is not a ValueError: Pydantic does not turn it into a validation
+# error, it escapes the request: 500.
+#
+# Contract (X-R38): a 4xx, never a 500. A rate storable_fx_rate refuses once normalized (the endpoint inverts MMK → KHR
+# itself) gets its item's error; all items refused → 400 naming the limits (14 digits before the decimal point, 10
+# decimal places); nothing refused is stored, every other item of the request is. A rate that is not a number is the
+# schema's to refuse: 422, its detail located on the item's rate.
+#
+# Isolation: the unit's default, write-scoped. KHR/MMK is this block's own (no seed and no other test uses the pair): its
+# rates in the window are wiped before and after each test, and nothing else is read.
+
+XR38_DAYS = (date(1986, 3, 3), date(1986, 3, 4), date(1986, 3, 5))
+_XR38_RATE_URL = "/api/v1/fx/currencies/rate"
+
+
+async def _xr38_wipe() -> None:
+    """Drop the KHR/MMK rates of the window."""
+    async with AsyncSession(get_async_engine()) as session:
+        await session.execute(delete(FxRate).where(FxRate.base == "KHR", FxRate.quote == "MMK", FxRate.date >= XR38_DAYS[0], FxRate.date <= XR38_DAYS[-1]))
+        await session.commit()
+
+
+@pytest_asyncio.fixture
+async def xr38_khr_mmk():
+    """X-R38: no KHR/MMK rate in the window before and after the test."""
+    await _xr38_wipe()
+    yield
+    await _xr38_wipe()
+
+
+async def _xr38_stored() -> dict[date, Decimal]:
+    """The KHR/MMK rates of the window by date, read through the model, as the app reads them."""
+    async with AsyncSession(get_async_engine()) as session:
+        rows = (await session.execute(select(FxRate.date, FxRate.rate).where(FxRate.base == "KHR", FxRate.quote == "MMK", FxRate.date >= XR38_DAYS[0], FxRate.date <= XR38_DAYS[-1]))).all()
+    return {row.date: row.rate for row in rows}
+
+
+def _xr38_numbers(message: str) -> set[str]:
+    """The whole numbers ``message`` states, its ISO dates taken out first: a date cannot stand in for a limit."""
+    return set(re.findall(r"\d+", re.sub(r"\d{4}-\d{2}-\d{2}", " ", message)))
+
+
+def _xr38_item(day: date, base: str, quote: str, rate: str) -> str:
+    """One item of the request body, its rate written as given: ``1E+400`` is a JSON number, ``"1E+400"`` a JSON string."""
+    return f'{{"date": "{day.isoformat()}", "base": "{base}", "quote": "{quote}", "rate": {rate}, "source": "MANUAL"}}'
+
+
+async def _xr38_signed_in_user():
+    """The user ``get_current_user`` would give: the rate routes only require one."""
+    return Mock(id=0)
+
+
+async def _xr38_post(items: list[str], story: str) -> httpx.Response:
+    """``POST /api/v1/fx/currencies/rate`` with ``items``, served in process by the FX rate routes on the lane's test
+    database, a signed-in user stubbed. An exception escaping the app fails the test naming it: the server answers 500."""
+    app = FastAPI()
+    app.include_router(fx_currencies_api.router_currencies, prefix="/api/v1/fx")
+    app.dependency_overrides[get_current_user] = _xr38_signed_in_user
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        try:
+            return await client.post(_XR38_RATE_URL, content=f"[{', '.join(items)}]".encode(), headers={"content-type": "application/json"})
+        except Exception as exc:  # noqa: BLE001 — what escapes the app is what the server answers 500 to
+            pytest.fail(f"{story}: POST /fx/currencies/rate raised {exc!r}, the server answers 500 (X-R38: a 4xx, never a 500)")
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+@pytest.mark.parametrize(
+    ("base", "quote", "rate", "normalized"),
+    [
+        pytest.param("KHR", "MMK", '"1E+400"', "1E+400", id="string-1E+400"),
+        pytest.param("MMK", "KHR", '"1E+400"', "1E-400", id="inverted-string-1E+400"),
+        pytest.param("KHR", "MMK", "1E+15", "1E+15", id="number-1E+15"),
+        pytest.param("KHR", "MMK", '"1E-11"', "1E-11", id="string-1E-11"),
+        pytest.param("MMK", "KHR", '"1E-15"', "1E+15", id="inverted-string-1E-15"),
+        pytest.param("MMK", "KHR", '"1E+11"', "1E-11", id="inverted-string-1E+11"),
+        pytest.param("MMK", "KHR", '"1E-1000000"', "1E+1000000", id="derived-inverted-string-1E-1000000-the-inversion-overflows"),
+    ],
+)
+async def test_xr38_upsert_rates_endpoint_answers_400_to_a_rate_no_column_can_keep(base, quote, rate, normalized):
+    """Red today: 200 and the rate stored, 1E+400 as a REAL inf, its inverse, 1E-11 and the inverse of 1E+11 as 0, 1E+15
+    and the inverse of 1E-15 as they are; the inverse of 1E-1000000 raises ``decimal.Overflow`` outside the item's try:
+    500.
+
+    Contract (X-R38): its only item refused, so 400, the detail naming the limits (14 digits before the decimal point, 10
+    decimal places); nothing stored. The ``derived-`` case reads "never a 500".
+    """
+    story = f"POST /fx/currencies/rate of {base} → {quote} {rate} on {XR38_DAYS[0]} (KHR/MMK {normalized} once normalized)"
+
+    response = await _xr38_post([_xr38_item(XR38_DAYS[0], base, quote, rate)], story)
+
+    assert response.status_code == 400, f"{story} answered {response.status_code} {response.text[:300]}: expected 400, its only item refused (X-R38)"
+    detail = response.json().get("detail")
+    assert {"14", "10"} <= _xr38_numbers(str(detail)), f"{story}: the 400 does not name the limits, 14 digits before the decimal point and 10 decimal places: {detail!r}"
+    stored = await _xr38_stored()
+    assert not stored, f"{story} was refused, yet rows were written: {stored}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+@pytest.mark.parametrize(
+    ("base", "quote", "rate"),
+    [
+        pytest.param("KHR", "MMK", "1E+400", id="number-1E+400"),
+        pytest.param("MMK", "KHR", "1E+400", id="inverted-number-1E+400"),
+        pytest.param("KHR", "MMK", "NaN", id="derived-literal-NaN"),
+        pytest.param("KHR", "MMK", '"Infinity"', id="derived-string-Infinity"),
+    ],
+)
+async def test_xr38_upsert_rates_endpoint_answers_4xx_to_a_rate_that_is_not_a_finite_number(base, quote, rate):
+    """Red today: the JSON number 1E+400 is parsed as inf (a NaN literal as nan; "Infinity" becomes Decimal('Infinity')),
+    the schema refuses it, not a finite number, and FastAPI's 422 carries it back as its input, which Starlette's JSON
+    renderer refuses (``allow_nan=False``): 500.
+
+    Contract (X-R38): a 4xx, the endpoint's 400 or the schema's 422, never a 500; nothing stored. The ``derived-`` cases
+    read the same rule.
+    """
+    story = f"POST /fx/currencies/rate of {base} → {quote} with the rate {rate} on {XR38_DAYS[0]}"
+
+    response = await _xr38_post([_xr38_item(XR38_DAYS[0], base, quote, rate)], story)
+
+    assert 400 <= response.status_code < 500, f"{story} answered {response.status_code} {response.text[:300]}: expected a 4xx (X-R38: never a 500)"
+    stored = await _xr38_stored()
+    assert not stored, f"{story} was refused, yet rows were written: {stored}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+@pytest.mark.parametrize(
+    "rate",
+    [
+        pytest.param('"abc"', id="string-abc"),
+        pytest.param("true", id="derived-boolean-true"),
+        pytest.param('"0x10"', id="derived-string-0x10"),
+    ],
+)
+async def test_xr38_upsert_rates_endpoint_answers_422_to_a_rate_that_is_not_a_number(rate):
+    """Red today: the schema's ``coerce_rate`` calls ``Decimal()`` itself, on "abc" and "0x10" as they are and on the JSON
+    boolean true as "True" (a bool is an int), and ``Decimal()`` raises ``decimal.InvalidOperation``, which is not a
+    ``ValueError``: Pydantic does not turn it into a validation error, it escapes the request and the server answers 500.
+
+    Contract (X-R38): the schema refuses the item, 422, never a 500; the body is JSON and its detail locates the refusal
+    on the item's rate; nothing stored. The ``derived-`` cases read the same rule.
+    """
+    story = f"POST /fx/currencies/rate of KHR → MMK with the rate {rate} on {XR38_DAYS[0]}"
+
+    response = await _xr38_post([_xr38_item(XR38_DAYS[0], "KHR", "MMK", rate)], story)
+
+    assert response.status_code == 422, f"{story} answered {response.status_code} {response.text[:300]}: expected 422, the schema refusing a rate that is not a number (X-R38: never a 500)"
+    detail = response.json().get("detail")
+    assert isinstance(detail, list) and any(isinstance(error, dict) and (error.get("loc") or [])[-1:] == ["rate"] for error in detail), f"{story}: the 422 does not tell the user the item's rate is what was refused: {detail!r}"
+    stored = await _xr38_stored()
+    assert not stored, f"{story} was refused, yet rows were written: {stored}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+async def test_xr38_upsert_rates_endpoint_keeps_the_valid_rate_and_reports_the_refused_one():
+    """Red today: 200 and both rates stored, "1E+400" as a REAL inf; no error reported.
+
+    Contract (X-R38): 200; the valid rate of 1.5 is stored and listed in the results; the rate no column can keep is not
+    stored and has its item's error, "Rate 1: …", naming the limits (14 digits before the decimal point, 10 decimal
+    places).
+    """
+    story = f'POST /fx/currencies/rate of KHR → MMK 1.5 on {XR38_DAYS[0]} and KHR → MMK "1E+400" on {XR38_DAYS[1]}'
+
+    response = await _xr38_post([_xr38_item(XR38_DAYS[0], "KHR", "MMK", '"1.5"'), _xr38_item(XR38_DAYS[1], "KHR", "MMK", '"1E+400"')], story)
+
+    assert response.status_code == 200, f"{story} answered {response.status_code} {response.text[:300]}: expected 200, one item stored"
+    stored = await _xr38_stored()
+    assert stored == {XR38_DAYS[0]: Decimal("1.5")}, f"{story} stored {stored}: expected the valid rate alone (X-R38)"
+    body = response.json()
+    listed = [(item["base"], item["quote"], item["date"]) for item in body["results"]]
+    assert listed == [("KHR", "MMK", XR38_DAYS[0].isoformat())], f"{story} lists the results {listed}: expected the valid rate alone"
+    errors = body["errors"]
+    assert len(errors) == 1 and errors[0].startswith("Rate 1") and {"14", "10"} <= _xr38_numbers(errors[0]), f"{story} reports the errors {errors}: expected one, 'Rate 1: …', naming the limits 14 and 10 (X-R38)"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+async def test_xr38_guard_upsert_rates_endpoint_stores_a_rate_typed_as_a_json_number():
+    """Guard: green today and after. A rate typed as a JSON number, the float 1.5 or the integer 2 (which the X-R38 cure
+    of ``coerce_rate`` hands to Pydantic as it is), is read as the number it is: 200, no error, both stored as typed."""
+    story = f"POST /fx/currencies/rate of KHR → MMK 1.5 on {XR38_DAYS[0]} and KHR → MMK 2 on {XR38_DAYS[1]}, both JSON numbers"
+
+    response = await _xr38_post([_xr38_item(XR38_DAYS[0], "KHR", "MMK", "1.5"), _xr38_item(XR38_DAYS[1], "KHR", "MMK", "2")], story)
+
+    assert response.status_code == 200 and response.json()["errors"] == [], f"{story} answered {response.status_code} {response.text[:300]}: expected 200, both rates stored and no error"
+    stored = await _xr38_stored()
+    assert stored == {XR38_DAYS[0]: Decimal("1.5"), XR38_DAYS[1]: Decimal("2")}, f"{story} stored {stored}: expected 1.5 and 2, as typed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr38_khr_mmk")
+async def test_xr38_guard_upsert_rates_endpoint_stores_rates_at_the_limits():
+    """Guard: green today and after. 14 digits before the decimal point and 1E-10 are the limits, not past them, typed
+    (KHR → MMK 99999999999999) or reached by the endpoint's inverse (MMK → KHR 1E+10 is KHR/MMK 1E-10); and the limit is
+    checked on the rate stored, never on the rate typed (MMK → KHR 1E-13, which the column could not keep as it is, is
+    KHR/MMK 1E+13): 200, all three stored."""
+    story = f"POST /fx/currencies/rate of KHR → MMK 99999999999999 on {XR38_DAYS[0]}, MMK → KHR 1E+10 on {XR38_DAYS[1]} and MMK → KHR 1E-13 on {XR38_DAYS[2]}"
+    items = [
+        _xr38_item(XR38_DAYS[0], "KHR", "MMK", '"99999999999999"'),
+        _xr38_item(XR38_DAYS[1], "MMK", "KHR", '"1E+10"'),
+        _xr38_item(XR38_DAYS[2], "MMK", "KHR", '"1E-13"'),
+    ]
+
+    response = await _xr38_post(items, story)
+
+    assert response.status_code == 200 and response.json()["errors"] == [], f"{story} answered {response.status_code} {response.text[:300]}"
+    stored = await _xr38_stored()
+    assert stored == {XR38_DAYS[0]: Decimal("99999999999999"), XR38_DAYS[1]: Decimal("1E-10"), XR38_DAYS[2]: Decimal("1E+13")}, f"{story} stored {stored}"
