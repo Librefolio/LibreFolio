@@ -72,7 +72,8 @@ def shutdown_engine_executor() -> None:
 
 
 class _LeaderGone(Exception):
-    """The build a request was waiting for failed or was cancelled: the waiting request builds for itself (MF-J45b)."""
+    """The build a request was waiting for was cancelled with its request: the waiting request builds for itself
+    (MF-J45b). A build that fails hands its own error to every request waiting on it instead (MF-J45d)."""
 
 
 #: MF-J45b: the builds in flight in this process, by blob key and range. An identical request waits for the one running
@@ -367,15 +368,17 @@ class PortfolioCalculationEngine:
 
         # MF-J45b: one build per key and range at a time in this process. An identical request that arrives while one
         # runs waits for it and gets the same result (the object the cache holds, read-only like a cache hit), instead
-        # of paying the reads and an executor worker again. If that build fails or is cancelled, a waiting request builds
-        # for itself (the first one to resume leads the others); it never waits on a build nobody will finish.
+        # of paying the reads and an executor worker again. If that build fails, every request waiting on it fails at once
+        # with the same error (MF-J45d: the same data fails the same way, and retrying it one request after another made
+        # the k-th wait k builds); if it is cancelled with its request, a waiting request builds for itself (the first one
+        # to resume leads the others). None ever waits on a build nobody will finish.
         flight_key = (blob_key, actual_from, actual_to)
         loop = asyncio.get_running_loop()
         while (flight := _IN_FLIGHT.get(flight_key)) is not None and flight.get_loop() is loop:
             try:
                 return await asyncio.shield(flight)
             except _LeaderGone:
-                logger.debug("Portfolio build awaited failed or was cancelled; building", user_id=user_id)
+                logger.debug("Portfolio build awaited was cancelled; building", user_id=user_id)
         flight = loop.create_future()
         _IN_FLIGHT[flight_key] = flight
         try:
@@ -395,10 +398,17 @@ class PortfolioCalculationEngine:
                 all_txs=all_txs,
                 invalid_split_events=invalid_split_events,
             )
+        except Exception as error:
+            # MF-J45d: the waiting requests get the build's own error, at once
+            flight.set_exception(error)
+            flight.exception()  # retrieved: no «never retrieved» warning when nobody was waiting
+            raise
+        else:
             flight.set_result(result)
             return result
         finally:
-            # Settled before the key goes: a waiting request never sees an orphaned build
+            # Settled before the key goes: a waiting request never sees an orphaned build. Still pending here only when
+            # the build was cancelled (a BaseException): the waiting requests build for themselves
             if not flight.done():
                 flight.set_exception(_LeaderGone())
                 flight.exception()  # retrieved: no «never retrieved» warning when nobody was waiting
