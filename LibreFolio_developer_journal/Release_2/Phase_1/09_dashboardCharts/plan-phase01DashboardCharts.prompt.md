@@ -4996,3 +4996,198 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >   - **Codice vero**: `front-portfolio page-busy` **17/17** e `front-portfolio dashboard` **27/27**.
 >   - Porta 6189 libera. Log in `files/logs/y16_e2e_*.log`.
 > - **Backlog**: Y-16 ✅ (opzione A; la correzione vera è Y-24) e Y-2 ✅.
+
+### Y13 · lista degli spostamenti FE9–FE11 (06:10–06:20, sola lettura; HEAD `abf8391fb`)
+
+> **Note implementazione**. Script `files/y13_movelist.py` → `files/y13_movelist.md` (cartella di sessione), mandata al
+> coordinatore. Rispetto all'analisi del 16/10, FE8b di W ha già chiuso 3 inversioni e 12 archi.
+> - **FE9, 7 file da spostare**: `utils/core/positionKey.ts` → `features/dashboard/` (Y); `utils/files/pdfPreviewState.ts`,
+>   `pdfViewerAssets.ts` e `utils/urlFilters.ts` → `features/files/`; `utils/assetGrouping.ts`, `assetIdentifiers.ts`,
+>   `utils/core/requestConcurrency.ts` e `utils/currency/fxConversionHelper.ts` → `features/transactions/` (W). Nessuno è
+>   in `themeRoles.baseline.tsv`. Tre righe di `_frontend_utility.py` (121–123) e la SKILL `design-system` (`:220`) sono
+>   del programma colori.
+> - **Restano**: `utils/url/queryParams.ts` e `utils/brim/pluginKind.ts`, condivisi con `utils/broker` e `utils/url`.
+> - **`PasswordStrength`**: (a) spostamento puro in `features/auth/`, oppure (b) regole come prop nei 5 chiamanti di A e B.
+>   Proposta (a): è la domanda **Y13-4**.
+> - **Inversioni**: 4 (`chartUtils` → `LineChart.svelte`, `chartSettingsStore` → `calendarReturnWindow.ts`, `urlFilters` →
+>   `table/types.ts`, `assetTypes` → `treeSelect.ts`), più Y-7. **Archi componenti → feature**: 30 (`components/assets` 19
+>   e `fx` 1, che chiudono FE4 e FE5; `layout` 6, il guscio; `ui` 4, con `AssetPickerModal` → `FileGrid`, composizione
+>   accettabile). **FE10**: nessuno store di un dominio solo. **FE11**: Modal 45, Panel 23, Section 19, Dialog 10, Popover 1.
+> - **Coordinatore (06:2x)**: piano parcheggiato fino alla risposta del developer a Y13-1 (dopo il tag); Y13-4 è nella sua
+>   lista con la proposta (a).
+>
+> **Fuori pista**: la prima scansione degli store cercava `$lib/lib/stores/…` e non trovava niente; rifatta corretta
+> (`connectionSecurityStore` lo usa solo il guscio, `TimeSeriesStore` solo `utils`).
+
+### Y-8 · `updateArrowRotations()` e `getOption()` a ogni passo dello zoom — analisi e scelta (06:20)
+
+> **Via del coordinatore** (06:1x), con la condizione vincolante del programma colori:
+> - `updateArrowRotations()` riscrive tutto `option.series` letto da `getOption()`, colori compresi. Una cache fra due
+>   passi dello zoom va invalidata a ogni `setOption` che ricostruisce l'opzione, anche su `onThemeClassChange` e
+>   `onChartColorsChange`; in alternativa, dalla cache non si riscrive niente che porti colore;
+> - test unitario obbligatorio: costruzione in chiaro, ricostruzione in scuro, un passo di zoom → il payload porta i
+>   colori scuri, o nessun colore. Nessuna classe di colore cambiata; `theme-roles --check` pulito; prima il rosso.
+>
+> **Stato reale** (verificato su `abf8391fb`):
+> - `lineChartHelpers.ts:590` `updateArrowRotations(chart)`: `getOption()` (copia profonda di tutta l'opzione), poi per ogni
+>   marcatore `arrow` di un `markPoint` due `convertToPixel`, poi `setOption({series: option.series}, false)`: riscrive
+>   tutte le serie, dati e colori compresi. Senza frecce non riscrive niente, ma la copia la fa comunque.
+> - Lo chiamano a ogni passo i tre gestori di `dataZoom`: `LineChart.svelte:401`, `CandlestickChart.svelte:292`,
+>   `PriceChartFull.svelte:613` (quest'ultimo sotto la nota «do NOT read `getOption()` here», che contraddice).
+> - Le frecce vengono solo dai segnali sovrapposti (`markerStart`/`markerEnd`: lo stile scelto dall'utente in
+>   `SignalStyleEditor`, e la freccia finale di `MeasureSignal`), costruite in `LineChart.svelte:557` e in
+>   `chartCoreHelpers.ts:359` (`buildOverlaySignalSeries`, per `CandlestickChart` e `PriceChartFull`). Ogni marcatore porta
+>   `itemStyle.color`. Gli eventi di split (`EVENT_SYMBOLS.SPLIT = 'arrow'`) sono serie scatter: non c'entrano.
+> - I tre grafici hanno già un rinvio a gesto fermo: `scheduleZoomedAxisLabels` (`ZOOM_LABEL_SETTLE_MS`, 120 ms) in
+>   `LineChart` e `CandlestickChart`, `scheduleResolutionRecompute` (200 ms) in `PriceChartFull`. Gli hook del tema
+>   (`onThemeClassChange`, `onChartColorsChange`) chiamano `renderChart()`: ricostruzione completa, poi
+>   `updateArrowRotations` alla fine.
+>
+> **Scelta: rinviare la rotazione al gesto fermo**, come le etichette (la seconda strada del backlog).
+> - Il gestore di `dataZoom` non chiama più `updateArrowRotations`; la chiama il timer che già esiste: dopo
+>   `applyZoomedAxisLabels()` in `LineChart` e `CandlestickChart`; nel ramo «risoluzione tenuta» di
+>   `scheduleResolutionRecompute` in `PriceChartFull` (una risoluzione nuova ridisegna, e `renderChart` già le ruota).
+> - **Nessuna cache**: `getOption()` si legge al momento, una volta per gesto. Quindi il payload porta sempre i colori
+>   dell'opzione corrente, scuri dopo una ricostruzione in scuro: la condizione del colore vale per costruzione.
+> - **Perché non la rotazione dal vivo con una cache**: toglierebbe la copia, ma non la riscrittura. In ECharts ogni
+>   `setOption` con `series` rifonde tutte le serie (`mergeOption`, poi `getInitialData`) e ridisegna, e i marcatori
+>   (array) si possono riscrivere solo interi, colore compreso. Il costo per passo resterebbe circa la metà, e in più ci
+>   sarebbe una cache da invalidare.
+> - **Il prezzo**: durante il gesto la freccia tiene l'angolo di prima, e si riallinea 120–200 ms dopo l'ultimo passo,
+>   come le etichette. Le frecce sono piccole (8 px circa) e solo sui segnali che le hanno.
+> - **Fuori da Y-8**: il ridimensionamento chiama ancora `updateArrowRotations` subito (`ResizeObserver`): non è per passo
+>   di zoom, resta com'è.
+>
+> **Passi**:
+> 1. `test-author`: i rossi (nessun `getOption()` e nessuna riscrittura delle serie per passo; le frecce riallineate una
+>    volta a gesto fermo) per i tre grafici, in `LineChart.test.ts` e `PriceChartFull.test.ts` (già registrati in
+>    `component-unit`); il test del colore chiaro → scuro → un passo, che oggi è verde per costruzione.
+> 2. La correzione nei tre componenti e nel JSDoc di `updateArrowRotations`.
+> 3. La prova del morso sul test del colore: una variante che tiene in cache il primo `getOption()` deve farlo diventare
+>    rosso; ripristino controllato con l'hash.
+> 4. Prove leggere: i file Vitest dei grafici, svelte-check, Prettier, `theme-roles --check`, `git diff --check`.
+> 5. Documentazione (`developer/frontend/components/charts.md`, punto «Zoom», con `docs-writer`), devWiki
+>    (`concepts/echarts-chart-gotchas`), backlog; poi lo slot E2E e il checkpoint.
+>
+> **Passo 1 ✅, i rossi** (`test-author` `dd7aff62`, 06:25–06:52; solo `LineChart.test.ts` e `PriceChartFull.test.ts`,
+> già registrati in `component-unit`):
+> - **Il registratore di ECharts**, nei due file, ora tiene l'opzione come ECharts: un `setOption` fonde oggetto per
+>   oggetto e componente per indice (`notMerge` sostituisce tutto); `getOption()` risponde una copia profonda, ogni
+>   componente come lista, e conta le chiamate (`getOptionCount`); `convertToPixel` mappa `[categoria, valore]` su una
+>   griglia fissa (10 px a categoria, y = 400 − valore), così una freccia viene ruotata e riscritta come su uno schermo;
+>   `resize` conta (`resizeCount`). In `PriceChartFull.test.ts` anche `on`/`emit` come nel file di `LineChart`.
+> - **Una barriera nuova**: il primo disegno riallinea le frecce altre due volte da solo (`scheduleFirstRenderStabilityFix`:
+>   subito, e dopo due frame fermi); i casi aspettano `resizeCount ≥ 2` prima dei timer finti.
+> - **Tre rossi**, uno per grafico (`LineChart`, `PriceChartFull`, `CandlestickChart`): cinque passi di zoom di fila →
+>   `{getOptionReads: 5, seriesWriteBacks: 5}` invece di `{0, 0}`; al gesto fermo nessun riallineamento (`[]` invece di
+>   una riscrittura con le due frecce ruotate); letture totali 5 (6 per `PriceChartFull`) invece di ≤ 1 (≤ 2: l'intervallo
+>   assestato, letto apposta, più le frecce). Il caso di `PriceChartFull` prova anche che il gesto si ferma nel ramo
+>   «risoluzione tenuta»: nessun ridisegno, etichette ridistanziate, asse ancora giornaliero.
+> - **Quattro guardie del colore, verdi oggi per costruzione**: `LineChart` in chiaro → scuro (`lineColor`/`darkLineColor`)
+>   e su `notifyChartColorsChange()` con un ruolo cambiato (`setRoleReader`, la linea di base); `PriceChartFull` (linea del
+>   prezzo, `colorByBaseline: false`) e `CandlestickChart` (guadagno e perdita di `CHART_GAIN_LOSS.price`) in chiaro →
+>   scuro. Dopo un passo di zoom, ogni riscrittura delle serie porta i colori nuovi, mai i vecchi.
+> - **Le prove di `test-author`**, su copie e poi ripristinate con l'hash: la correzione emulata porta i tre rossi al
+>   verde; il mutante con la cache del primo `getOption()` porta le quattro guardie al rosso.
+> - Esiti: `LineChart` 1 rosso, 7 verdi; `PriceChartFull` 2 rossi, 38 verdi (`files/logs/y8_red_*.log`). Prettier pulito.
+> - **Osservazioni di `test-author`, fuori da Y-8**: il primo disegno fa 3 copie di `getOption()` e 3 riscritture in circa
+>   50 ms; `updateArrowRotations` riscrive anche quando nessun angolo cambia; il ridimensionamento riallinea a ogni
+>   callback; `CandlestickChart` riallinea dopo il ripristino dello zoom, `LineChart` prima. Il verde scuro del prezzo
+>   coincide con il verde del guadagno (`#4ade80`). I costi del ridimensionamento e della riscrittura senza angoli
+>   cambiati vanno in **Y-25** (backlog, minimo); il resto sono costi di una volta, non per passo.
+>
+> **Passo 2 ✅, la correzione** (06:52, `files/scripts/y8_apply.py`, 9 sostituzioni esatte, ognuna trovata una volta; 4 file,
+> +23 −11):
+> - `LineChart.svelte` e `CandlestickChart.svelte`: il gestore di `dataZoom` chiama solo `scheduleZoomedAxisLabels(event)`;
+>   il timer da 120 ms, dopo `applyZoomedAxisLabels()`, chiama `updateArrowRotations` (nel callback del timer, non dentro
+>   `applyZoomedAxisLabels`, i cui ritorni anticipati in modo compatto o senza finestra salterebbero le frecce: avviso di
+>   `test-author`). Il JSDoc delle due variabili del timer dice che ora riallinea anche le frecce.
+> - `PriceChartFull.svelte`: il gestore chiama solo `scheduleResolutionRecompute()`, e la nota «do NOT read getOption()
+>   here» ora nomina anche `updateArrowRotations()`; nel ramo «risoluzione tenuta» del rinvio, dopo
+>   `applyZoomedAxisLabels()`, `updateArrowRotations(chartInstance)`. Una risoluzione nuova ridisegna, e `renderChart()`
+>   riallinea da sé.
+> - `lineChartHelpers.ts`: il JSDoc di `updateArrowRotations` dice quando va chiamata (a gesto fermo, mai per passo) e che
+>   legge l'opzione al momento e non tiene niente fra due chiamate.
+> - Nessuna classe di colore toccata. Il ridimensionamento e il primo disegno restano come prima.
+>
+> **Passo 3 ✅, la prova del morso** (06:57, `files/scripts/y8_bite.sh`, sul codice corretto): il mutante che tiene in cache
+> il primo `getOption()` di ogni grafico porta **le 4 guardie del colore al rosso**, con i loro messaggi («Y-8 guard: a
+> series write-back after the zoom brought the light price line back over the dark rebuild…», e così per la linea di
+> base, `PriceChartFull` e le candele). Ripristino dalla copia: hash uguale (`08156eba9ac4`), nessun `__y8Cache` nel file.
+>
+> **Passo 4 ✅, prove leggere** (06:53–06:55, carico 24, `files/scripts/y8_light.sh`): `LineChart` 8/8, `PriceChartFull`
+> 40/40, `lineChartHelpers` 42, `lineChartHelpers.sessionGaps` 9, `chartCoreHelpers` 290 (i pin di 47-1 reggono: il
+> timer chiama ancora `applyZoomedAxisLabels()` senza graffe di mezzo, e il codice delle funzioni dello zoom, tolti i
+> commenti, non nomina `getOption(`), `CandlestickChart.tooltipEscape` 7, `PriceChartFull.tooltipEscape` 17,
+> `echartsZoomPan` 24, `chartFlagFont` 16; svelte-check 0/0; Prettier pulito sui 6 file; `theme-roles --check` pulito;
+> `git diff --check` pulito.
+>
+> **Passo 5, in corso**: devWiki (`concepts/echarts-chart-gotchas`: una riga nella tabella, quattro nei file sorgente; la
+> riga dell'indice; una voce del log; `check_source_paths.py`: 7 mancanti, 12 occorrenze, nessuna della mia pagina, tutte
+> di altre pagine), backlog Y-8 ✅, `docs-writer` su `charts.md`. Slot 2 per l'E2E (coordinatore, 06:58), dopo
+> l'avanzamento rapido del mio HEAD a dev `952c68cd5` (38 commit, nessuna sovrapposizione con i miei file).
+>
+> **Passo 5 ✅, documentazione, devWiki, backlog ed E2E** (06:58–07:10):
+> - **E2E** (slot 2, `files/scripts/y8_e2e.sh`, HEAD `952c68cd5` più i miei file; carico a 5 minuti 22): `front-asset
+>   asset-detail` **35/35** (2,7 minuti), `front-fx fx-detail` **17/17** (1,0 minuto). Porta 6189 libera alle 07:08.
+> - **`docs-writer`** (`028c525a`): `developer/frontend/components/charts.md`, un punto nuovo **«Arrow markers»** dopo
+>   «Zoom», nella sezione «Responsive Date Axis»: le frecce si riallineano nell'assestamento che ridistanzia le etichette,
+>   mai a ogni passo; durante il gesto tengono l'angolo; l'opzione si legge al momento, quindi la riscrittura non riporta i
+>   colori di prima di un cambio di tema o di colore. La pagina è solo in inglese e non ha marca di data: niente
+>   `translate-stamp`.
+> - **`mkdocs build` (strict) e `check-links`** (`files/scripts/y8_docs_check.sh`, carico 32): build rc 0, 0 righe WARNING,
+>   50,8 s; `check-links` 97 link validi. Nessun file tracciato cambiato dal build.
+>
+> **⚠️ Fuori pista: un buco aperto dalla correzione, trovato da `docs-writer`** (Y-8b, nello stesso lotto):
+> - `LineChart.renderChart()` riallineava le frecce **prima** di ripristinare lo zoom salvato (`dispatchAction` `dataZoom`),
+>   subito dopo il `setOption(option, true)` che azzera lo zoom: frecce orientate sull'asse intero. Prima di Y-8 l'evento del
+>   ripristino le correggeva subito nel gestore. Ora il gestore pianifica solo l'assestamento, quindi dopo ogni ridisegno
+>   completo di un `LineChart` zoomato con frecce restavano storte per circa 120 ms. ECharts 6 emette l'evento anche per un
+>   `dispatchAction` da codice (`echarts.js:1479`, salvo `silent`), quindi si correggevano dopo l'assestamento.
+> - `CandlestickChart` ripristina già prima e riallinea dopo (`:624-636`); `PriceChartFull` scrive la finestra nell'opzione.
+> - **Correzione**: lo stesso ordine in `LineChart` (`files/scripts/y8b_apply.py`, a secco pulito). Tocca solo il `LineChart` a
+>   piena misura: i grafici del rischio (`UnderwaterChart`, `L4Simulation`, `RiskAnalysisPanel`) e l'anteprima di
+>   `ChartSettingsModal`; le card compatte non ripristinano lo zoom.
+> - **Coordinatore** (07:1x): via allo scambio, prima il rosso; slot 2 per `front-portfolio risk` quando rosso e correzione
+>   sono pronti, con la guardia sul carico a 5 minuti; poi CHECKPOINT READY.
+> - Il rosso lo scrive `test-author` (`dd7aff62`) in `LineChart.test.ts`: un ridisegno completo di un grafico zoomato → la
+>   prima riscrittura porta le frecce orientate sulla finestra ripristinata, non sull'asse intero.
+>
+> **Y-8b ✅, rosso, scambio e prove** (07:10–07:30):
+> - **Il rosso** (`test-author` `dd7aff62`, solo `LineChart.test.ts`, 07:10–07:22):
+>   - il registratore ora ha uno zoom vero: `dispatchAction` registra ogni azione (`dispatchedActions`, con `atCall`); un
+>     `dataZoom` con `start`/`end` numerici aggiorna `dataZoom[0]` dell'opzione tenuta (e toglie `startValue`/`endValue`,
+>     come `setRawRange`) ed emette `dataZoom` subito, con la forma di ECharts 6 per un'azione non a lotti, salvo
+>     `silent`; `userZoom({start, end})` simula il gesto dell'utente (modello aggiornato, poi evento); `convertToPixel` mappa
+>     x sulla finestra a schermo (`gridPixel`, 800 px sulle categorie visibili, contate come `visiblePointCountFromZoom`);
+>   - il caso: montaggio con le frecce di TREND, zoom dell'utente a `{70, 100}`, assestamento; poi un ridisegno completo
+>     (`rerender({showGridLines: false})`) con i timer finti, e un `advanceTimersByTimeAsync(0)` che lascia girare le
+>     microtask senza far scattare l'assestamento. Barriere: un disegno completo nuovo, un ripristino `{70, 100}` dopo di
+>     esso, una riscrittura delle serie, l'assestamento ancora pendente;
+>   - **rosso** (`files/logs/y8b_red_LineChart.log`, 1 rosso e 8 verdi): «Y-8: a full redraw of a zoomed chart aimed its
+>     arrows on the whole axis, before restoring the zoom — they point wrong until the settle»; freccia iniziale 102,85°
+>     invece di 93,97°, finale −77,15° invece di −86,03°; una precondizione vuole i due angoli diversi di oltre 1°.
+> - **Lo scambio** (`files/scripts/y8b_apply.py --apply`, 07:23): in `LineChart.renderChart()` prima il ripristino dello zoom
+>   salvato, poi `updateArrowRotations` e il blocco della stabilità, con un commento sul perché. È l'ordine di
+>   `CandlestickChart`.
+> - **Prove leggere** (`files/scripts/y8b_light.sh`, 07:23–07:28, carico 35): `LineChart` **9/9**, `PriceChartFull` 40/40,
+>   `lineChartHelpers` 42, `sessionGaps` 9, `chartCoreHelpers` 290 (il pin dell'ordine del ridisegno di 47-1 regge: il
+>   ripristino viene ancora dopo `setOption(option, true)`), i due `tooltipEscape` 7 e 17, `echartsZoomPan` 24,
+>   `chartFlagFont` 16; svelte-check 0/0; Prettier pulito; `theme-roles --check` pulito; `git diff --check` pulito.
+> - **Prova del morso rifatta sul codice finale** (`files/scripts/y8b_bite.sh`): il mutante con la cache porta di nuovo le 4
+>   guardie del colore al rosso; ripristino con hash uguale (`08156eba9ac4`).
+> - **Osservazione di `test-author`, nessuna voce**: il ripristino non è `silent`, quindi 120 ms dopo ogni ridisegno di un
+>   grafico zoomato l'assestamento riallinea di nuovo (una copia e una riscrittura in più, ridondanti dopo lo scambio). Lo
+>   stesso in `CandlestickChart`. Costo una volta per ridisegno, non per passo: annotato in **Y-25**, con il
+>   ridimensionamento.
+> - **E2E** (slot 2, `files/scripts/y8b_e2e.sh`, 07:30–07:37, carico a 5 minuti 47 alla partenza, poi fino a 60 per il
+>   build del frontend e le altre sessioni): `front-portfolio risk` **38/38** (2,3 minuti), i grafici del rischio che usano il
+>   `LineChart` a piena misura. Porta 6189 libera alle 07:37.
+> - **Backlog**: Y-8 ✅ con Y-8b; **Y-25** nuova (minimo): il ridimensionamento riallinea a ogni callback, la riscrittura
+>   parte anche senza angoli cambiati, il riallineamento in più dopo ogni ridisegno zoomato.
+> - **devWiki**: la riga di `concepts/echarts-chart-gotchas` dice anche l'ordine «ripristino, poi riallineamento»; voce del
+>   log aggiornata.
+>
+> ### Y-8 — checkpoint 🧊 FROZEN (07:4x)
+>
+> Handoff al coordinatore con le liste da committare. Nessun server, porta 6189 libera, `git diff --check` pulito.

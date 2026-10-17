@@ -66,10 +66,12 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       types and the table, and the reader stops instead of using the value: unchecked, a `None` under
       `managed` would mean no upload limit at all for a restore (`backup_max_upload_mb()`, below).
       Under `selfhosted`, the fallback itself is returned unchecked. Both checks, for a missing entry
-      and for an entry's type, run at the reader's call, never at startup: only the reader knows the
-      variables it reads and the type it expects; the table is code, guarded before release by the
-      tests below; and a startup refused for one missing entry would take every managed instance
-      down, where a reader that stops closes only the feature that reads it.
+      and for an entry's type, run at the reader's call, never as a startup check of their own: only
+      the reader knows the variables it reads and the type it expects; the table is code, guarded before
+      release by the tests below; and a startup refused for one missing entry would take every managed
+      instance down, where a reader that stops closes only the feature that reads it. The backup's
+      startup checks call the upload limit's reader, and only log its error
+      ([Configuration Checks of the Backup](security.md#backup-config-checks)).
       The first entry is the upload limit of a restore:
       `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43), read by
       `backup_max_upload_mb()` in `config/backup.py` with `profile_default(MAX_UPLOAD_VARIABLE, 0)`: no limit on a

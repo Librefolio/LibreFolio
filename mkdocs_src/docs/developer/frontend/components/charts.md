@@ -413,6 +413,14 @@ Two neighbouring labels never read the same (pinned in `chartCoreHelpers.test.ts
   (120 ms), `PriceChartFull` in its 200 ms `scheduleResolutionRecompute()`; resizes and full renders
   count the visible window too. Time axes need none of it: ECharts spreads their `splitNumber` ticks
   over the visible extent.
+- **Arrow markers** (category axis): an overlay signal may end in an arrow
+  (`markerStart`/`markerEnd: 'arrow'`), aimed along the line's on-screen slope, which a zoom or a
+  pan can change. The settle that re-spaces the labels also re-aims the arrows, through
+  `updateArrowRotations()` (`lineChartHelpers.ts`), never on each tick, since the call reads
+  `getOption()` and writes every series back: during the gesture an arrow keeps its angle (full
+  renders and resizes still call it at once). It reads the option afresh on every call, so its
+  write-back, which carries every series' colours, never brings back those from before a theme
+  switch or a chart-colour change (pinned in `LineChart.test.ts` and `PriceChartFull.test.ts`).
 - **Right inset** (time axis, compact or wide): the axis ends on the last day of the data or of the
   zoom, and ECharts centres that day's label on its tick, so half of it overhangs the plot's right
   edge. `grid.containLabel: true` reserves the labels' height, never that overhang, so on a phone

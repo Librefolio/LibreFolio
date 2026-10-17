@@ -482,13 +482,14 @@ address `rate_limit_address(http_request)` gives, and workstream E's «send the 
   its two limiters. The limit's own tests turn it on with `monkeypatch`, on limiters of their own.
 - **Per process, in memory.** A restart forgets every count, and with N worker processes (`dev.py server --workers N`)
   each keeps its own, so the limits are N times these; the Docker image runs one worker. Each limiter holds at most
-  10,000 keys (the limiter's `max_keys`): a new key beyond them evicts, among the 32 least recently used
-  (`eviction_scan`), the first that is not full, and the least recently used only when those 32 are all full
-  ([The Sliding-Window Limiter](../backend/email.md#rate-window), decision N70). A locked identifier is full, so a
-  spray of fresh identifiers, one failure each, does not push it out; plain least-recently-used eviction let at most
-  10,000 of them hand it 10 new attempts, and behind a [proxy nobody trusts](#untrusted-proxy) no limit per address
-  slows such a spray. The bound on the search has a price: 31 identifiers locked just after the victim's, about 310
-  failures more, fill the search with full keys, and the fallback evicts the victim all the same.
+  10,000 keys (the limiter's `max_keys`): a new key beyond them evicts the key with the fewest failures still in the
+  window, the least recently used among them ([The Sliding-Window Limiter](../backend/email.md#rate-window), lot
+  E-14). So a spray of fresh identifiers, one failure each, never pushes out an identifier with more failures, locked
+  or one short of the lock, and behind a [proxy nobody trusts](#untrusted-proxy) no limit per address slows such a
+  spray. To push out an identifier with n failures, every other key must hold n failures too: about 90,000 failures
+  within 15 minutes buy 9 more guesses. The eviction of decision N70 (the first key not full among the 32 least
+  recently used) spared only locked identifiers: one stopped a failure short of the lock went for 10,000 fresh ones,
+  as with plain least-recently-used eviction.
 - **Behind a reverse proxy** the address must be the visitor's ([The Client's Address](#client-address)). Behind one
   that LibreFolio does not trust, every visitor has the proxy's address: counted together, 50 failures from anyone, at
   about one a second, would refuse every sign-in through it, the right password included (security review R13-SEC6).
@@ -601,8 +602,9 @@ Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_
 it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged at startup and shown to
 administrators in Settings › Administration › Email ([Email Service](../backend/email.md#config-state)).
 Nor does an unusable `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`: `backup_download_token()` in
-`backend/app/config/backup.py` reads it only when the hosting panel calls one of its routes, never at
-startup, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
+`backend/app/config/backup.py` reads it for the startup checks (`check_panel_token()`, `backup.panel_token`: one error
+line in the start log, never a stop; [Configuration Checks of the Backup](#backup-config-checks)) and at each call of
+the hosting panel's routes, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
 `BackupConfigError` for a token with anything but visible ASCII characters, spaces included
 (`BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`), or shorter than 32 characters
 (`BACKUP_DOWNLOAD_TOKEN_TOO_SHORT`). `require_panel_token()` in `backend/app/api/v1/backup/panel.py` turns
@@ -799,6 +801,12 @@ encrypt (`backend/app/api/v1/backup/panel.py` passes no password). The format is
 - **The codes.** `EnvelopeError.code` is `wrong_password`, `envelope_damaged` or `envelope_unsupported`; the messages
   hold no path and no secret.
 
+**The start** (`job_views.start_job()`, for `POST /backup/instance` and the hosting panel's `POST /backup/panel/jobs`
+alike). `jobs.start_backup()` creates the job's folder and its first state before the thread runs: a full disk or quota
+there (`jobs.out_of_space()`) answers `507` `backup_no_space`, `Not enough free space to start the backup`, logged as a
+warning, `Instance backup could not start: not enough free space` (lot B-30). Another backup running stays `409`
+`backup_busy`, and any other failure `500` `backup_folder_unusable` or `backup_failed`.
+
 **The creation** (`jobs._run()`). With a password, `build_archive()` writes the zip as for a clear backup, in the
 job's folder `backups/.jobs/<id>/` (`0700`, the zip `0600`), with the instance key entry when there is one to carry
 (below). `_encrypt()` then checks the free space for the envelope (the zip's size plus 64 MiB, or `backup_no_space`),
@@ -990,6 +998,40 @@ part on its own, the locks held, the links, a part that raises, a clean data dir
 `restore-commit` before `backup-leftovers` in `./dev.py test services backup-apply` (`test_backup_apply.py`, section
 (j)).
 
+#### Configuration Checks of the Backup {: #backup-config-checks }
+
+`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives two checks in the shape of H's `ConfigCheck`
+([Configuration Checks](#configuration-checks)), under the same rules: they change nothing, never raise, and never put
+the token or a file's content in a result. With them, an unusable token or upload limit shows in the start log, not only
+at the hosting panel's first call or at the first restore upload.
+
+| `check_id` | State | `i18n_key` | `detail` | Severity |
+|------------|-------|------------|----------|----------|
+| `backup.panel_token` (reads `backup_download_token()`) | Neither `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` nor its `_FILE` is set, the default: the panel's routes answer `404` | `backup.checks.panelToken.off` | — | `ok`: a default start logs nothing new, as email off is `ok` too |
+| `backup.panel_token` | A usable token | `backup.checks.panelToken.ok` | — | `ok` |
+| `backup.panel_token` | `BackupConfigError` `BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`: a space, a tab or a character outside visible ASCII | `backup.checks.panelToken.notVisibleAscii` | — | `error` |
+| `backup.panel_token` | `BackupConfigError` `BACKUP_DOWNLOAD_TOKEN_TOO_SHORT` | `backup.checks.panelToken.tooShort` | `{"minimum": 32}` | `error` |
+| `backup.panel_token` | `SecretFileError`: the `_FILE` cannot give the token | `backup.checks.panelToken.unreadable` | `{"reason": …}`, the error's text: the variable and the path, never the content | `error` |
+| `backup.upload_limit` (reads `backup_max_upload_mb()`) | A limit, the managed profile's 500 included | `backup.checks.uploadLimit.limited` | `{"limit_mb": n}` | `ok` |
+| `backup.upload_limit` | No limit: `0`, or unset in the self-hosted profile | `backup.checks.uploadLimit.unlimited` | — | `ok` |
+| `backup.upload_limit` | `BackupConfigError` `BACKUP_MAX_UPLOAD_MB_INVALID`: not a whole number | `backup.checks.uploadLimit.invalid` | — | `error` |
+| `backup.upload_limit` | `ProfileDefaultError`: the entry of `ENVIRONMENT_PROFILE_DEFAULTS`, asked only while the variable is unset, is missing or of the wrong type (H-27, H-37; [Settings](settings.md)) | `backup.checks.uploadLimit.profileTable` | — | `error` |
+
+- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit)` is unpacked in
+  `CONFIG_CHECKS` right after `check_log_level`, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
+  `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs the two
+  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of
+  [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
+  error line at each call.
+- **The import.** `config_audit` imports this module to build its tuple, so `checks.py` imports `ConfigCheck` only
+  when a check runs, as E's `checks.py` does ([Email Service](../backend/email.md#configuration-checks)): either module
+  can be imported first.
+- **The messages.** `backup.checks.*`, in the `backup` i18n subsystem, written whole in the module for the i18n usage
+  scan; the «Security» tab of Settings › Administration shows them, from [`GET /security/checks`](#security-checks-endpoint).
+
+Tests: `./dev.py test services backup-checks` (`backend/test_scripts/test_services/test_backup_checks.py`), and
+`./dev.py test services config-audit`.
+
 ## 🩺 Configuration Checks {: #configuration-checks }
 
 `backend/app/services/platform/config_audit.py` checks the settings that leave an instance weaker than
@@ -999,7 +1041,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 18 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all three subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 18 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose nine messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all four subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -1020,6 +1062,8 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `platform.client_address` | Since the start, forwarding headers came from an untrusted local peer ([Behind a Proxy Nobody Trusts](#untrusted-proxy)): `instance.checks.clientAddress.untrustedProxy`, `detail` `{"headers": …}` with the names met, such as `"X-Forwarded-For, X-Real-IP"`, summary `UNTRUSTED_PROXY_SUMMARY` | `warning` |
 | `platform.client_address` | Since the start, they came from untrusted public peers only: `instance.checks.clientAddress.publicForwarding`, the names met in `headers`, summary `PUBLIC_FORWARDING_SUMMARY` | `info` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
+| `backup.panel_token` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, or its `_FILE`, is set but cannot be used: `backup.checks.panelToken.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
+| `backup.upload_limit` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, or the profile's entry for it, cannot be used: `backup.checks.uploadLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `accounts.login_limit` | `LIBREFOLIO_LOGIN_LIMIT=off`, in any case: the [failed sign-in limit](#login-limit) is off. `auth.checks.loginLimit.off`, and one fixed summary however `off` is written: `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance` | `warning` |
 | `accounts.login_limit` | Any value other than `on` or `off`: `auth.checks.loginLimit.invalid`, `detail` `{"value": <the value, stripped>}`, as `login_limit_value()` reads it. `log_configuration_audit()` stops the start on such a value (below), so the error shows only for a value read after the start | `error` |
 
@@ -1031,6 +1075,9 @@ reads the variable only through `backend/app/config/accounts.py`, `login_limit_e
 never from `os.environ`: the rule of the configuration package ([Settings System](settings.md)). Like E's module,
 `checks.py` imports `ConfigCheck` inside the check, when it runs, and under `TYPE_CHECKING` for its annotation:
 `config_audit` imports it to build its tuple, so either module can be imported first.
+
+So `CONFIG_CHECKS` is the platform's checks, then workstream B's two
+([Configuration Checks of the Backup](#backup-config-checks)), then A's, then E's three, which close it.
 
 At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
 `backend/app/services/platform/app_lifespan.py`) runs `log_configuration_audit()` in a thread
@@ -1714,7 +1761,7 @@ only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error
 
 | Route | What it does |
 |-------|--------------|
-| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)) |
+| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)). At its start (its folders, its first state), `POST /backup/restore/stage` answers `507` `no_space`, the check's own code, on a full disk or quota, logged as a warning, `A check of a backup archive could not start: not enough free space`, and `500` `stage_failed` on any other failure of the file system (permissions, a read-only disk, `EIO`), logged as an error, `A check of a backup archive could not start`, with the error's type and the system's reason; either way the upload stays, for another try (lot B-30) |
 | `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
 | `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable` |
 | `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting |
@@ -1722,13 +1769,23 @@ only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error
 | `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `202` `RestoreRestartAccepted`: the `RestoreStatus` and `outcome_ticket`, with `Cache-Control: no-store`. `409` `restore_not_pending`; `500` `restore_restart_failed` when the ticket cannot be written, or `restore_folder_unusable`: no restart then |
 | `GET /backup/restore/outcome` | No session: the ticket of the restart in the `X-Restore-Ticket` header. `200` `RestoreOutcome`, `state` (`pending`, `in_progress`, `committed` or `rolled_back`), `reason` and `waiting` only, with `Cache-Control: no-store`, as often as asked until the ticket expires, a final outcome included; the same `404` `restore_outcome_not_found` for every ticket that does not give it. See [The Outcome Ticket](#backup-restore-outcome) |
 
+A full disk or quota that a backup route meets before it answers is a `507` (lot B-30), recognised by
+`jobs.out_of_space()`: `ENOSPC` or `EDQUOT` in the error or one of its causes, or SQLite's `SQLITE_FULL`. Its code is
+`backup_no_space` for an upload and at the start of a backup, and `no_space` at the start of a check, the code of a
+check that runs out of space. For the upload,
+`UploadWriter` (`restore_jobs.py`) maps one met anywhere from the creation of its folder, `.restore/upload/`, to the end
+of the file, its `fsync` and `close` included (a network file system or a quota may report it only there), to
+`UploadNoSpaceError`, and takes its descriptor before closing it, so that `abort()` never closes it twice: nothing of
+the upload is left.
+
 Every `RestoreStatus` carries `upload_limit_mb`, the largest archive `PUT /backup/restore/upload` accepts at the time of
 the answer, in megabytes: `0` for no limit, `null` when the limit cannot be read (the upload then answers `503`
 `backup_upload_unavailable`, and an error naming the variable is logged). It cannot be read when
 `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not a whole number (`BackupConfigError`), or when `ENVIRONMENT_PROFILE_DEFAULTS`
 gives the active profile no value for it (any profile but `selfhosted`, H-37) or a value of the wrong type
 (`ProfileDefaultError`, [Settings](settings.md); B-21): `_upload_limit()` and `_readable_limit_mb()` in `restore.py`
-treat the two alike, so the status still answers `200`.
+treat the two alike, so the status still answers `200`. The startup checks report it too (`backup.upload_limit`,
+[Configuration Checks of the Backup](#backup-config-checks)).
 
 On the server, `./dev.py backup restore ARCHIVE` confirms as `cli`, once the word `restore` is typed at a terminal or
 with `--yes`, and `./dev.py backup pending [--cancel]` shows the restore, or drops it with its copy. The command prints

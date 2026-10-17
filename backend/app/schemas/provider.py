@@ -29,10 +29,11 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, List, Optional
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from backend.app.db.models import IdentifierType, ProviderInputType
 from backend.app.schemas.common import BaseBulkResponse, BaseDeleteResult, OldNew, SafeDecimal, StrictModel
+from backend.app.utils.json_utils import ensure_json_safe
 
 # Note: AssetProviderRegistry is imported inside validators to avoid circular imports
 
@@ -232,6 +233,13 @@ class FAProviderConfigBase(StrictModel):
     identifier: str = Field(..., description="Asset identifier for this provider (ticker, ISIN, UUID, URL, etc.)")
     identifier_type: str = Field(..., description="Provider input type (TICKER, ISIN, URL, AUTO_GENERATED) — mapped to IdentifierType on save")
     provider_params: Optional[dict[str, Any]] = Field(None, description="Provider-specific configuration (JSON)")
+
+    @field_validator("provider_params", mode="before")
+    @classmethod
+    def validate_provider_params_json(cls, value: Any) -> Any:
+        """JSON values only, a finite number included (H-34): a NaN or an Infinity inside would be stored as it is and read
+        back as null."""
+        return ensure_json_safe(value, "provider_params")
 
     @model_validator(mode="after")
     def validate_provider_params_with_plugin(self):

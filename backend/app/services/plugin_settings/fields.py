@@ -71,6 +71,10 @@ SECRET_MIN_LENGTH_FLOOR = 8
 #: The prefix of the environment variables derived from a field.
 ENV_PREFIX = "LIBREFOLIO_PLUGIN_"
 
+#: The largest integer a setting takes, in absolute value: 2**53 - 1, the last one a JavaScript number (the settings page)
+#: and a double hold exactly (X-R43).
+MAX_SAFE_INTEGER = 2**53 - 1
+
 _TRUE_WORDS = frozenset({"1", "true", "yes", "on"})
 _FALSE_WORDS = frozenset({"0", "false", "no", "off"})
 
@@ -291,10 +295,18 @@ def _check_bounds(declared: PluginSettingField, name: str) -> None:
             raise SettingsDeclarationError(f"{name}: lengths must satisfy 1 <= min_length <= max_length <= {STRING_MAX_LENGTH}")
     if numeric:
         for bound in (declared.minimum, declared.maximum):
-            if bound is not None and (isinstance(bound, bool) or not isinstance(bound, (int, float)) or not math.isfinite(bound)):
-                raise SettingsDeclarationError(f"{name}: bounds are finite numbers")
+            if bound is not None and (isinstance(bound, bool) or not isinstance(bound, (int, float)) or not _holdable_number(bound)):
+                raise SettingsDeclarationError(f"{name}: bounds are finite numbers, an integer within {MAX_SAFE_INTEGER}")
         if declared.minimum is not None and declared.maximum is not None and declared.minimum > declared.maximum:
             raise SettingsDeclarationError(f"{name}: minimum is above maximum")
+
+
+def _holdable_number(value: int | float) -> bool:
+    """A number a setting can hold (X-R43): an integer within ``MAX_SAFE_INTEGER``, or a finite float. Never raises:
+    ``math.isfinite`` raised ``OverflowError`` on an integer past a double."""
+    if isinstance(value, int):
+        return abs(value) <= MAX_SAFE_INTEGER
+    return math.isfinite(value)
 
 
 def validate_value(declared: PluginSettingField, value: object) -> Any:  # noqa: C901 — one branch per type
@@ -321,7 +333,10 @@ def validate_value(declared: PluginSettingField, value: object) -> Any:  # noqa:
         raise SettingValueError("expected a number")
     if declared.type is SettingType.INTEGER and not isinstance(value, int):
         raise SettingValueError("expected a whole number")
-    if not math.isfinite(value):
+    if isinstance(value, int) and not _holdable_number(value):
+        # X-R43: ``math.isfinite`` raised OverflowError here on an integer past a double, and the request answered 500
+        raise SettingValueError(f"too large: at most {MAX_SAFE_INTEGER} in absolute value")
+    if not _holdable_number(value):
         raise SettingValueError("expected a finite number")
     if declared.minimum is not None and value < declared.minimum:
         raise SettingValueError(f"below the minimum of {declared.minimum:g}")

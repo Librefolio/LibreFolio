@@ -379,6 +379,20 @@ class ShareMismatch:
     date: date_type
 
 
+@dataclass(frozen=True, slots=True)
+class InvalidSplitEvent:
+    """A SPLIT asset event stored with a ratio the layer cannot use (None, not finite, or ≤ 0; MF-D4).
+
+    It counts as missing: its linked ADJUSTMENT rows stay the split's rescale (cost kept, never in-kind capital), but no
+    ratio restates a trade price observed before it (market quotes are never restated). The data-quality report names
+    its asset.
+    """
+
+    event_id: int
+    asset_id: int
+    date: date_type
+
+
 @dataclass
 class PortfolioCalculationResult:
     """Complete result from the portfolio calculation engine."""
@@ -407,6 +421,8 @@ class PortfolioCalculationResult:
     average_costs: dict[tuple[int, int], AverageCost] = field(default_factory=dict)
     # SELLs replayed, in replay order, with proceeds and historical cost in target_currency
     realized_sales: list[RealizedSale] = field(default_factory=list)
+    # MF-D4: the SPLIT events whose stored ratio is unusable, counted as missing (one per event, by event id).
+    invalid_split_events: list[InvalidSplitEvent] = field(default_factory=list)
     # Conversions a movement (cost, cash, external flow, in-transit cost) needed and could not
     # get: pair "FROM/TO" -> dates. Valuation failures are per day in DailyPortfolioState.missing_fx_pairs.
     missing_fx: dict[str, set[date_type]] = field(default_factory=dict)
