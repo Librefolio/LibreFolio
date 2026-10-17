@@ -112,6 +112,19 @@ flowchart TD
     Result --> Store
 ```
 
+**The range first** (R13-SEC8-1b). The request's `date_range`, and a historical replay's
+`replay_range`, are walked day by day over prices, so `bounded_range()` (`risk/scope.py`) bounds
+them before anything reads them. The range ends by `latest_range_end()` (tomorrow,
+`utils/datetime_utils.py`). It starts no earlier than `range_span_floor()` of that end,
+`RANGE_SPAN_LIMIT_DAYS` (100 years) before it: the span limit of
+[X-R55](../assets/architecture.md#price-query-range-ceiling). The price query itself bounds only the
+end, and backward-fills a range from its start, so without this a price stored long ago would let a
+range starting just after it walk every day since. A start after that end moves to it,
+and a range already within bounds is left as it is. `execute()` bounds the request's range on entry,
+so the prices, the report, the context and the labels all read the same range; nothing in the
+response echoes the request's own range. A replay bounds its window in
+`prepare_historical_replay_context()` (see [Replay Coverage](#replay-coverage)).
+
 `RiskService.execute()` runs these steps for every `POST /query`:
 
 1. **Pre-flight, per analytic.** Each requested `analytic_code` is looked up in the registry and
@@ -452,14 +465,19 @@ returns on the joint calendar of the whole selection.
 
 A [historical replay](../../../financial-theory/technical-analysis/risk-metrics/historical-replay.md)
 compares values at the two ends of a crisis window, so it prepares its **own** series over
-`replay_range` (`prepare_historical_replay_context()` in `risk/replay.py`). Before that
+`replay_range` (`prepare_historical_replay_context()` in `risk/replay.py`), bounded first like the
+request's range ([The range first](#request-flow)). The bounded window drives everything below; the
+parameters keep the request, so `output.replay_range` and `metadata.params` echo it as asked. Before that
 preparation, every scope asset the user neither proxied nor excluded is checked with
 `replay_coverage()`. An asset that is not priced at both ends within the staleness threshold is
 excluded automatically (`no_prices_in_window`, `starts_after_window_start`,
 `stale_at_window_start`, `stale_at_window_end`, `missing_fx`) instead of blocking the replay, or of
 moving the joint baseline and shortening the replay of every other asset. When a shorter window
 would bring back the assets its edges exclude, the service proposes it (`suggested_replay_range`,
-verified by a second reading in `verified_replay_range()`) and never applies it. `proxy_assets`
+verified by a second reading in `verified_replay_range()`) and never applies it. The proposal lies
+inside the bounded window, so applying it never walks further than the replay itself could: before
+the bound, a price stored at year 1 and a window reaching into the future made it propose a window
+starting at year 1. `proxy_assets`
 and `excluded_assets` must belong to the scope, and every proxy must exist, or the replay is
 `invalid_parameters`.
 
