@@ -1009,3 +1009,72 @@ describe('KpiSection — the day change and the timing effect come from the summ
         });
     });
 });
+
+/**
+ * Round 3, §1.7 — the timing effect publishes its direction, and has no colour of its own.
+ *
+ * The designer: the timing effect takes the sign tokens of the other KPIs, with no function making a green of its own.
+ * Until round 3 its value and its label carried an inline `style`, a `color-mix` of the gain or the loss role, stronger
+ * the larger the effect (`timingEffectColor`, removed). Now the card publishes the reading as `data-direction`, on
+ * `kpi-timing-effect-value` and on `kpi-timing-effect-label` alike: `favorable` above +0.05 pp, `unfavorable` below
+ * −0.05 pp, `neutral` within, and none at all when the backend sends no timing effect, where the value reads «—». The
+ * colour follows the direction through the sign classes of the other KPIs; a class is not a contract (the design
+ * system's rule 10, «state for tests, not colours»), so what is asserted is the state, and that neither element keeps
+ * an inline colour.
+ *
+ * `timing_effect_percent` is a fraction: '0.05' is +5 pp, '0.0004' is +0.04 pp, inside the neutral band. Read on the
+ * first frame (the page cache's hydration context, as in the R17 block above), so no read waits on a tween; the
+ * Returns card's ROI bar is the barrier that the card is drawn.
+ */
+describe('KpiSection — the timing effect publishes its direction, and has no colour of its own (round 3, §1.7)', () => {
+    const hydration = Tweened as unknown as {TWEEN_HYDRATION_CONTEXT?: unknown};
+    const EM_DASH = '\u2014';
+    const norm = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
+
+    /** The KPI row with the file's summary and `timing` as its timing effect; then the timing effect's value and label. */
+    function mountTiming(timing: string | null): {value: HTMLElement; label: HTMLElement} {
+        expect(hydration.TWEEN_HYDRATION_CONTEXT, 'control: TweenedValue exports its hydration context').toBeDefined();
+        render(KpiSection, {
+            props: {summary: {...summary(), timing_effect_percent: timing}, history: [], loading: false, displayCurrency: 'EUR'},
+            context: new Map([[hydration.TWEEN_HYDRATION_CONTEXT, () => true]]),
+        });
+        const card = within(screen.getByTestId('kpi-returns'));
+        expect(norm(card.getByTestId('kpi-return-roi-value').textContent), 'barrier: the Returns card is drawn').toBe('50.00%');
+        return {value: card.getByTestId('kpi-timing-effect-value'), label: card.getByTestId('kpi-timing-effect-label')};
+    }
+
+    beforeEach(() => {
+        // Module-level state the other blocks move: the figures in the clear, in English notation.
+        setPrivacyEnabled(false);
+        expect(uiLocale(), 'control: the interface locale is en-US').toBe('en-US');
+    });
+
+    it.each([
+        {timing: '0.05', direction: 'favorable', figure: /^\+5\.00(?!\d)/},
+        {timing: '-0.05', direction: 'unfavorable', figure: /^-5\.00(?!\d)/},
+        {timing: '0.0004', direction: 'neutral', figure: /^\+0\.04(?!\d)/},
+        {timing: '-0.0004', direction: 'neutral', figure: /^-0\.04(?!\d)/},
+        {timing: '0', direction: 'neutral', figure: /^0\.00(?!\d)/},
+    ])('timing_effect_percent $timing: data-direction="$direction" on the value and on its label', ({timing, direction, figure}) => {
+        const {value, label} = mountTiming(timing);
+
+        expect(norm(value.textContent), 'barrier: the value shows the figure it was given').toMatch(figure);
+        expect({value: value.getAttribute('data-direction'), label: label.getAttribute('data-direction')}).toEqual({value: direction, label: direction});
+    });
+
+    it('timing_effect_percent null: no data-direction on the value or on its label, and the value reads «—»', () => {
+        const {value, label} = mountTiming(null);
+
+        expect(norm(value.textContent)).toBe(EM_DASH);
+        expect({value: value.hasAttribute('data-direction'), label: label.hasAttribute('data-direction')}).toEqual({value: false, label: false});
+    });
+
+    it.each(['0.05', '-0.05', '0.0004', null])('timing_effect_percent %s: no inline colour on the value or on its label', (timing) => {
+        const {value, label} = mountTiming(timing);
+
+        expect([value, label].map((element) => ({testid: element.getAttribute('data-testid'), inlineColour: element.style.color, style: element.getAttribute('style') ?? ''}))).toEqual([
+            {testid: 'kpi-timing-effect-value', inlineColour: '', style: expect.not.stringMatching(/color/i)},
+            {testid: 'kpi-timing-effect-label', inlineColour: '', style: expect.not.stringMatching(/color/i)},
+        ]);
+    });
+});

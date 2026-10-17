@@ -111,16 +111,16 @@ export function chartNeutrals(dark: boolean, scope?: Element | null) {
         /** The allocation charts: the gap between slices and rings, the captions outside the outer ring, the labels on the history's areas and their halo. */
         allocation: {sliceBorder: card, caption: secondary, historyAreaLabel: primary, historyAreaLabelShadow: card},
         /**
-         * The ownership semi-donut. Its owners take the first asset types in order (`CATEGORY_SEQUENCE` in
-         * `./chartCategories`); the initial on an avatar takes the text that reads best on its disc (`readableText`).
-         * The slice of what is still available is a track.
+         * The ownership semi-donut. Its owners take the first asset types (`CATEGORY_SEQUENCE` in `./chartCategories`)
+         * by their key, never by the order of the data; the initial on an avatar takes the text that reads best on its
+         * disc (`readableText`). The slice of what is still available is a track.
          */
         semiDonut: {label: primary, labelShadow: translucent(card, 0.8, 0.6), labelLine: input, avatarBorder: card, sliceGap: card, available: roles.color('--lf-surface-neutral')},
         /** World maps: the borders between countries, the labels and their background. The land and the highlight: `GEO_MAP_COLORS`. */
         geoMap: {border: card, label: primary, labelBackground: translucent(card, 0.72, 0.55)},
         /**
-         * The correlation heatmap and its tooltip. Its scale is three roles, danger, panel and info (GR5.3, read in
-         * `CorrelationHeatmap.svelte` through `./roleColors`); the value in a cell takes the text that reads best on it.
+         * The correlation heatmap and its tooltip. Its scale and the value in a cell are the designer's own
+         * (`CORRELATION_SCALE` and `CORRELATION_CELL_TEXT` in `./chartPalettes`, round 3, §1.6).
          * The hovered cell: a border in the opposite shade of the theme, a halo in the card's.
          */
         correlation: {
@@ -194,12 +194,22 @@ export const ALLOCATION_CHART_COLORS = {
 /** World maps: the portfolio's geography and the PAC planner's exposure maps. Their scale: `GEO_CHOROPLETH_SCALE`. */
 export const GEO_MAP_COLORS = {
     /**
-     * Countries with no weight: the zero of the scale, so not a role (B4) — on `--lf-surface-neutral` it would sit at
-     * ΔE00 4.1 (light) and 3.7 (dark) from the scale's first step. For the designer, with the scale (GR5.1).
+     * Countries with no data: the designer's neutral grey (round 3, §1.6), chosen with the scale, so not a role. Darker
+     * than the scale's first step on purpose, at ΔE00 4.9 (light) and 6.1 (dark).
      */
-    land: {light: '#e2e8f0', dark: '#334155'},
+    land: {light: '#D5D9E0', dark: '#343B46'},
     /** A hovered or selected country. */
     highlight: {light: '#f59e0b', dark: '#fbbf24'},
+} as const;
+
+/** The PAC planner's exposure bars, «ideal vs actual» (TD-1): the actual weight takes its row's category colour. */
+export const PAC_EXPOSURE_COLORS = {
+    /**
+     * The ideal weight: the designer's neutral grey (round 3, §1.7; P1-a′ and P2-c, 17/10/2026), 3.0:1 and 4.8:1 on the
+     * card. At least ΔE00 10 from every colour a row can draw, the shades of the ETF subtypes included, but in light
+     * «Non classificato» (8.0) and «Other» (8.7).
+     */
+    ideal: {light: '#8C929E', dark: '#868594'},
 } as const;
 
 /** Chart signals, the same in both themes. Default line colours: `SIGNAL_DEFAULT_PALETTE` in `./chartPalettes`. */
