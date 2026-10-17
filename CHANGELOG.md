@@ -74,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test configuration says what it read**: only the last few days of prices, while a new asset gets its whole price history when it is created.
 - **Premium sources first in the asset search**: an instance can mark price sources as premium (`LIBREFOLIO_ASSET_PROVIDERS_PREMIUM`) and set their order (`LIBREFOLIO_ASSET_PROVIDERS_ORDER`). When a premium source takes part in a search, its results come first under a «Premium» badge, and the others wait in a closed «Non-premium sources (community)» section that, once opened, warns that LibreFolio does not vouch for them. Without a premium source the list looks as before.
 - **«Can't find it? Let us know»** after every asset search: a report of the search — the text, the sources asked and what each answered, the currency, type and identifiers already in the form, the version — sent from your own device. `LIBREFOLIO_SUPPORT_URL` says where: an email address (`mailto:` and one address), or a support page that opens with the report copied for you; without it, on a self-hosted instance, a GitHub issue you review before sending; on an instance run by a hosting provider the link appears only once the provider sets an address. Nothing about you or your portfolio goes in it.
+- **Dashboard: a transfer between two brokers you own at different shares now shows an info note**: each side counts at its own share, and the difference counts as a gain or loss.
 
 ### 🔄 Changed
 
@@ -247,6 +248,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A restore whose restart never happens says so** — if LibreFolio does not stop after **Restore and restart**, the page no longer waits forever: after a minute it says to restart LibreFolio yourself, and offers **Back to Backup**, where the waiting restore can be restarted or cancelled.
 - Very large cash amounts and event values (eleven digits or more before the decimal point) read back exactly, without a stray digit in the sixth decimal place.
 - Scheduled Investment: a schedule must lie between 1900 and 2200, span at most 100 years with at most 1,200 periods; larger ones are refused as invalid instead of tying up the server, and long late-interest histories are computed in one pass.
+- A portfolio, lots, risk or AI Export request with a date range reaching far into the future or the past no longer freezes the server: a range now ends no later than tomorrow and starts no earlier than your first transaction.
 
 #### 🔒 Security
 
