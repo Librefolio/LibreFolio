@@ -5696,6 +5696,13 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - Due gambe collegate dello stesso giorno, fra broker con quote di proprietà diverse, non producono nessun avviso
     (`share_mismatch_warnings`, `schemas/portfolio.py:239`).
   - Cura: l'avviso esce dal ramo delle date diverse e resta una volta per coppia. Prima il rosso.
+  - **Analisi di J (17/10, 05:55): l'avviso non esce mai dal classificatore, in nessuna data.** `engine.py:246` non
+    legge `classification.warnings`; `build_data_quality_report(classifier_warnings=…)` non ha chiamanti che lo
+    passino; `DataQualityReport.share_mismatch_warnings` (e `in_transit_cost_basis_warnings`) non li riempie nessuno,
+    da `77b976ebc` (giugno). Il modello è voluto (D-MF4 = a: lo scarto fra quote diverse è P&L), quindi l'avviso è
+    l'unica spiegazione per l'utente. **J-43a** (come scritta) subito; **J-43b** (portarlo nel rapporto, issue INFO
+    `TRANSFER_SHARE_MISMATCH` in 4 lingue, o togliere i campi morti) aspetta il via del coordinatore. Dettagli:
+    [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-43».
 - **J-44 · Il Δ% del tooltip del grafico dà 0 % quando il primo valore è 0** — minimo, numeri; J, 17/10, letto nel
   codice durante CP-14b. `components/charts/priceChartHelpers.ts::buildDeltaHtml` calcola il Δ% dal primo valore del
   grafico e, per scelta scritta nel suo JSDoc, dà 0 % su un primo valore 0. È lo stesso numero sbagliato che la
@@ -5703,6 +5710,15 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Da instradare: il file ha storia dei colori (lotto B) e di X (helper della pagina asset). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «CP-14b».
   - 17/10, coordinatore: **a J**, dopo F5, riusando `changePct` di `MeasureSignal.ts` (stessa regola di N65); X rivede in sola lettura, nessuna classe di colore toccata.
+- **J-45 (SEC7-1b) · Il rigioco del motore del portafoglio gira sul ciclo degli eventi** — medio, sicurezza
+  (disponibilità); J, 17/10, nell'analisi di R13-SEC7-1. `PortfolioCalculationEngine.calculate` chiama
+  `builder.build()` (`engine.py:424`), lavoro di CPU sincrono, dentro una funzione `async`: un rapporto lungo ferma
+  tutte le richieste dell'istanza per la sua durata. SEC7-1 toglie le date senza limite, non questo. Portarlo in
+  `asyncio.to_thread` non è gratis: il costruttore legge oggetti ORM (`Transaction`) i cui attributi pigri potrebbero
+  toccare la sessione asincrona da un altro thread; serve prima staccare i dati (valori semplici) dalla sessione.
+  Decisione del coordinatore (17/10): nell'indice, non in SEC7-1. **→ MF** (coordinatore, 17/10 07:00: `run_in_executor` con un
+  pool dedicato, `max_workers=2`, insieme a MF-D4 dopo l'ingresso di J-43/SEC7-1; J rivede). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «R13-SEC7-1».
 
 ## Z · Sospensione e risveglio (fase 01)
 

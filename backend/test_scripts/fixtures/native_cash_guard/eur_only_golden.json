@@ -7289,11 +7289,30 @@
               "count": 1
             },
             "severity": "warning"
+          },
+          {
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "code": "TRANSFER_SHARE_MISMATCH",
+            "count": 2,
+            "cta_action": null,
+            "cta_target": null,
+            "domain": "portfolio",
+            "group_key": "transfer_share_mismatch",
+            "message_i18n_key": "dataQuality.transferShareMismatch",
+            "message_params": {
+              "count": 2
+            },
+            "severity": "info"
           }
         ],
         "missing_fx_pairs": [],
         "missing_price_assets": [],
-        "share_mismatch_warnings": [],
+        "share_mismatch_warnings": [
+          "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12",
+          "Linked internal pair (tx:tr_out_A_EQ, tx:tr_in_B_EQ): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-16"
+        ],
         "stale_prices": [],
         "unresolved_fx_pairs": [],
         "unusable_assets": [],
@@ -9665,11 +9684,30 @@
                 "count": 1
               },
               "severity": "warning"
+            },
+            {
+              "affected_asset_ids": [],
+              "affected_asset_names": [],
+              "affected_fx_pairs": [],
+              "code": "TRANSFER_SHARE_MISMATCH",
+              "count": 2,
+              "cta_action": null,
+              "cta_target": null,
+              "domain": "portfolio",
+              "group_key": "transfer_share_mismatch",
+              "message_i18n_key": "dataQuality.transferShareMismatch",
+              "message_params": {
+                "count": 2
+              },
+              "severity": "info"
             }
           ],
           "missing_fx_pairs": [],
           "missing_price_assets": [],
-          "share_mismatch_warnings": [],
+          "share_mismatch_warnings": [
+            "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12",
+            "Linked internal pair (tx:tr_out_A_EQ, tx:tr_in_B_EQ): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-16"
+          ],
           "stale_prices": [],
           "unresolved_fx_pairs": [],
           "unusable_assets": [],
@@ -10223,11 +10261,30 @@
               "count": 1
             },
             "severity": "warning"
+          },
+          {
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "code": "TRANSFER_SHARE_MISMATCH",
+            "count": 2,
+            "cta_action": null,
+            "cta_target": null,
+            "domain": "portfolio",
+            "group_key": "transfer_share_mismatch",
+            "message_i18n_key": "dataQuality.transferShareMismatch",
+            "message_params": {
+              "count": 2
+            },
+            "severity": "info"
           }
         ],
         "missing_fx_pairs": [],
         "missing_price_assets": [],
-        "share_mismatch_warnings": [],
+        "share_mismatch_warnings": [
+          "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12",
+          "Linked internal pair (tx:tr_out_A_EQ, tx:tr_in_B_EQ): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-16"
+        ],
         "stale_prices": [],
         "unresolved_fx_pairs": [],
         "unusable_assets": [],
@@ -13055,11 +13112,29 @@
               "count": 1
             },
             "severity": "warning"
+          },
+          {
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "code": "TRANSFER_SHARE_MISMATCH",
+            "count": 1,
+            "cta_action": null,
+            "cta_target": null,
+            "domain": "portfolio",
+            "group_key": "transfer_share_mismatch",
+            "message_i18n_key": "dataQuality.transferShareMismatch",
+            "message_params": {
+              "count": 1
+            },
+            "severity": "info"
           }
         ],
         "missing_fx_pairs": [],
         "missing_price_assets": [],
-        "share_mismatch_warnings": [],
+        "share_mismatch_warnings": [
+          "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12"
+        ],
         "stale_prices": [
           {
             "asset_id": "IDX",
@@ -13949,11 +14024,29 @@
                 "count": 1
               },
               "severity": "warning"
+            },
+            {
+              "affected_asset_ids": [],
+              "affected_asset_names": [],
+              "affected_fx_pairs": [],
+              "code": "TRANSFER_SHARE_MISMATCH",
+              "count": 1,
+              "cta_action": null,
+              "cta_target": null,
+              "domain": "portfolio",
+              "group_key": "transfer_share_mismatch",
+              "message_i18n_key": "dataQuality.transferShareMismatch",
+              "message_params": {
+                "count": 1
+              },
+              "severity": "info"
             }
           ],
           "missing_fx_pairs": [],
           "missing_price_assets": [],
-          "share_mismatch_warnings": [],
+          "share_mismatch_warnings": [
+            "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12"
+          ],
           "stale_prices": [
             {
               "asset_id": "IDX",
@@ -14456,11 +14549,29 @@
               "count": 1
             },
             "severity": "warning"
+          },
+          {
+            "affected_asset_ids": [],
+            "affected_asset_names": [],
+            "affected_fx_pairs": [],
+            "code": "TRANSFER_SHARE_MISMATCH",
+            "count": 1,
+            "cta_action": null,
+            "cta_target": null,
+            "domain": "portfolio",
+            "group_key": "transfer_share_mismatch",
+            "message_i18n_key": "dataQuality.transferShareMismatch",
+            "message_params": {
+              "count": 1
+            },
+            "severity": "info"
           }
         ],
         "missing_fx_pairs": [],
         "missing_price_assets": [],
-        "share_mismatch_warnings": [],
+        "share_mismatch_warnings": [
+          "Linked internal pair (tx:ct_out_A, tx:ct_in_B): share mismatch broker A=1.000000 vs broker B=0.500000, complete on 2091-01-12"
+        ],
         "stale_prices": [
           {
             "asset_id": "IDX",

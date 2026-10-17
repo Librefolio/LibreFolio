@@ -1484,6 +1484,15 @@ def services_ai_export_pure(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "AI Export pure contract tests", verbose=verbose)
 
 
+def services_ai_export_period_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the AI Export period bound (R13-SEC7-1): the period a snapshot hands its components (no DB, no network)."""
+    print_section("Services: AI Export Period Bounds (R13-SEC7-1)")
+    print_info("Testing: backend/app/services/ai_export/runtime_service.py (prepare_request, build_snapshot)")
+    print_info("Tests: period end clamped to tomorrow, start to 100 years before it, extreme periods bounded fast")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_ai_export_period_bounds.py", test_names)
+    return run_command(cmd, "AI Export period bound tests", verbose=verbose)
+
+
 def services_provider_errors(verbose: bool = False, test_names: list = None) -> bool:
     """Run the provider error-path contracts (no DB, no server, no network)."""
     print_section("Services: Provider Error Paths")
@@ -2497,6 +2506,14 @@ Note: No backend server required.
         services_ai_export_pure,
         name="AI Export Pure Contracts",
         desc="Payload/aggregate invariants, observed FX math, shared technical helpers",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "ai-export-period-bounds",
+        services_ai_export_period_bounds,
+        name="AI Export Period Bounds",
+        desc="R13-SEC7-1: the period a snapshot hands its components ends at tomorrow at the latest and spans 100 years at most (mocked session, test-owned registry)",
         isolation="pure",
     )
     add_test(
