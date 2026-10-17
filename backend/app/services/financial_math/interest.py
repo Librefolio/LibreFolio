@@ -26,7 +26,7 @@ def calculate_day_count_fraction(
     Supports multiple conventions:
     - ACT/365: Actual days / 365
     - ACT/360: Actual days / 360
-    - ACT/ACT: Actual days / actual days in year (365 or 366 if leap year)
+    - ACT/ACT (ISDA): the days in each calendar year / that year's length (365, or 366 in a leap year)
     - 30/360: Assumes 30 days per month, 360 days per year
 
     Args:
@@ -57,9 +57,10 @@ def _calculate_act_fixed(start_date: date, end_date: date, denominator: int) -> 
 
 def _calculate_act_act(start_date: date, end_date: date) -> Decimal:
     """
-    ACT/ACT: Actual days / actual days in year.
+    ACT/ACT (ISDA): the days in each calendar year over that year's length.
 
-    Handles leap years correctly by calculating the fraction for each year separately.
+    The span is cut at every 1 January it crosses: each piece counts its days up to the next 1 January (or the end
+    date) and is divided by 366 in a leap year, 365 otherwise. 2025-07-01 → 2026-06-30 is 184/365 + 180/365 = 364/365.
     """
     if start_date.year == end_date.year:
         days = (end_date - start_date).days
@@ -67,30 +68,12 @@ def _calculate_act_act(start_date: date, end_date: date) -> Decimal:
         return Decimal(days) / Decimal(days_in_year)
 
     total_fraction = Decimal("0")
-    current_year = start_date.year
-
-    last_year = end_date.year
-    if end_date.month == 1 and end_date.day == 1:
-        last_year -= 1
-
-    while current_year <= last_year:
-        if current_year == start_date.year:
-            period_start = start_date
-            if current_year == last_year:
-                period_end = end_date
-            else:
-                period_end = date(current_year, 12, 31)
-        elif current_year == last_year:
-            period_start = date(current_year, 1, 1)
-            period_end = end_date
-        else:
-            period_start = date(current_year, 1, 1)
-            period_end = date(current_year, 12, 31)
-
-        days = (period_end - period_start).days
-        days_in_year = 366 if calendar.isleap(current_year) else 365
-        total_fraction += Decimal(days) / Decimal(days_in_year)
-        current_year += 1
+    for year in range(start_date.year, end_date.year + 1):
+        segment_start = max(start_date, date(year, 1, 1))
+        segment_end = min(end_date, date(year + 1, 1, 1))
+        days = (segment_end - segment_start).days
+        if days > 0:
+            total_fraction += Decimal(days) / Decimal(366 if calendar.isleap(year) else 365)
 
     return total_fraction
 
