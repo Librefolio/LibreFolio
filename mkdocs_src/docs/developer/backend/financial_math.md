@@ -66,7 +66,7 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series, fixed-period changes of a price or rate (1D … 5Y, both orientations), recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series, fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
@@ -132,6 +132,21 @@ the rate `convert_bulk()` gives on it ([`POST /fx/currencies/period-changes`](fx
 `value(as_of) / value(as_of − days) − 1`, and `inverse_change_ratio`, `value(as_of − days) / value(as_of) − 1`, the
 change of the inverted quote. Both are None when either value is missing or ≤ 0.
 {: #fixed-period-changes }
+
+`range_change(reference, anchor)` (`returns.py`) holds the change of a price or rate over the whole range a page
+shows, from its first point to its last (X-R59, decision N80): the whole-range Δ of the Assets cards and the Δ Abs /
+Δ % of the FX pages. The browser still computes them in floats from the first and last point of the loaded series
+(`computeDerivedPriceState()` in `frontend/src/lib/utils/assetPriceDerived.ts`, `displayFxDelta()` in
+`frontend/src/lib/stores/fxStoreRegistry.ts`); the web app is to read the endpoints' `range_change` instead. The
+function returns a frozen `RangeChange` of unrounded Decimals: `change_abs`, `anchor − reference`; `change_ratio`,
+`anchor / reference − 1`; and the same for the inverted quote (an FX pair read the other way round),
+`inverse_change_abs`, `1 / anchor − 1 / reference`, and `inverse_change_ratio`, `reference / anchor − 1`. All four are
+None when either value is missing or ≤ 0. The same two endpoints value the ends, for an item that sends a
+`range_start`: the anchor is the value on `as_of`, as for the periods; the reference is the value on `range_start`
+(backward-filled), or, when there is none on or before it, the first value inside the range — the first point of the
+page's series. `POST /assets/prices/current?range_start=…` applies the same function to the current price, live or
+stored, as the anchor, for an asset page whose range ends on a live quote
+([Current Quotes and Today's OHLC](assets/architecture.md#current-quotes-range-change)).
 
 ### ⚙️ The Portfolio Package at Work {: #portfolio-package }
 
