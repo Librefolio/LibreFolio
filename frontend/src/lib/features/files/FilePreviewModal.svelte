@@ -6,7 +6,8 @@
     import {formatBytes} from '$lib/utils/files/upload';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {NO_PDF_REPORTS, pdfPreviewState, type PdfPreviewReports, type PdfPreviewState} from '$lib/utils/files/pdfPreviewState';
-    import {SPREADSHEET_LIGHT_BORDERS, SPREADSHEET_TARGET_ROW_BG, buildDarkSpreadsheetTheme} from '$lib/theme/drawnColors';
+    import {buildDarkSpreadsheetTheme, spreadsheetLightBorders, spreadsheetTargetRowBg} from '$lib/theme/drawnColors';
+    import {chartRoles} from '$lib/theme/roleColors';
     import type {DocumentManagerCapability, TilingCapability} from '@embedpdf/snippet';
     import {AlertCircle, Copy, Download, Eye, FileImage, FileSpreadsheet, FileText, LoaderCircle, Minus, Plus, RotateCcw, X} from 'lucide-svelte';
     import katex from 'katex';
@@ -289,13 +290,17 @@
             try {
                 const cheetahGrid = (await import('cheetah-grid')) as CheetahGridModule;
                 if (token !== tableToken) return;
-                // Firmer grid lines than the stock theme: with faint borders there is no way to
-                // tell a short value from one the column is cutting off.
-                const tableTheme = isDarkTheme() ? buildDarkSpreadsheetTheme() : (cheetahGrid.themes?.MATERIAL_DESIGN?.extends?.({...SPREADSHEET_LIGHT_BORDERS}) ?? 'MATERIAL_DESIGN');
+                // The grid draws on a canvas: its colours are the roles read on the grid's own element, once, when the
+                // grid is built (a theme switch shows at the next preview). Firmer grid lines than the stock theme: with
+                // faint borders there is no way to tell a short value from one the column is cutting off.
+                const dark = isDarkTheme();
+                const roles = chartRoles(dark, host);
+                const tableTheme = dark ? buildDarkSpreadsheetTheme(roles) : (cheetahGrid.themes?.MATERIAL_DESIGN?.extends?.({...spreadsheetLightBorders(roles)}) ?? 'MATERIAL_DESIGN');
 
                 // Tinting whole rows, not single cells: the rows are what the caller is
                 // pointing at, and a single highlighted cell reads as a selection instead.
-                const rowStyle = targets.size === 0 ? undefined : (record: {__rowNumber?: number}) => (record.__rowNumber !== undefined && targets.has(record.__rowNumber) ? {bgColor: SPREADSHEET_TARGET_ROW_BG} : undefined);
+                const targetRowBg = spreadsheetTargetRowBg(roles);
+                const rowStyle = targets.size === 0 ? undefined : (record: {__rowNumber?: number}) => (record.__rowNumber !== undefined && targets.has(record.__rowNumber) ? {bgColor: targetRowBg} : undefined);
 
                 const records = rows.map((row, rowIndex) => {
                     const record: Record<string, string | number> = {__rowNumber: rowIndex + 1};
