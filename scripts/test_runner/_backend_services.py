@@ -218,6 +218,7 @@ def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: get_prices_bulk + _build_backward_filled_series, the POST /fx/currencies/convert handler, refresh._fetch_refresh_item")
     print_info("Extreme ranges (0001-01-01 … 9999-12-31) bounded by the wall clock and by fuses inside the per-day loops")
     print_info("Bulk caps: 1 000 items per request, 1 M item-days (R13-SEC9-2) (the fill's span, warm-up and comparisons included), lowered per case")
+    print_info("X-R65 (N83): stored date bounds, 1900-01-01 … tomorrow: the helpers, and the 422 date_out_of_range of POST /assets/prices and POST /fx/currencies/rate")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *RANGE_CEILING_TEST_PATHS, "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
@@ -1038,7 +1039,7 @@ def services_asset_source_guards(verbose: bool = False, test_names: list = None)
     """Run the AssetSourceManager integrity guards and event FX conversion tests."""
     print_section("Services: Asset Source Guards")
     print_info("Testing: backend/app/services/assets/ (bulk_upsert_prices, get_prices_bulk, list_assets)")
-    print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass")
+    print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass, X-R65 stored date bounds")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
     return run_command(cmd, "Asset Source guard tests", verbose=verbose)
 
@@ -1565,7 +1566,7 @@ def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX pair-sync orchestration branches in services/fx/sync.py."""
     print_section("Services: FX Sync Orchestration")
     print_info("Testing: backend/app/services/fx/sync.py")
-    print_info("Tests: _is_date_within_sync_range, sync_pairs_bulk._process_route/._compute_multi_step")
+    print_info("Tests: _is_date_within_sync_range (X-R65 floor 1900-01-01), sync_pairs_bulk._process_route/._compute_multi_step")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_sync_service.py", test_names)
     return run_command(cmd, "FX sync service tests", verbose=verbose)
 
@@ -1852,11 +1853,12 @@ Note: No backend server required.
         "range-ceiling",
         services_range_ceiling,
         name="Date Range Ceiling",
-        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built",
+        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built; X-R65 (N83): stored_date_bounds (1900-01-01 … the ceiling, read at the call), DateOutOfRangeError and the 422 date_out_of_range detail; POST /assets/prices and POST /fx/currencies/rate refuse a date outside before any statement or write",
         # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
         # with create_all (or on a stand-in session that reads nothing); the FX handler is called directly with
         # convert_bulk replaced by an in-process converter; the sync step runs with an in-process provider double and
         # stand-ins for the two core caches, all by monkeypatch.
+        # X-R65's handlers run the same way: the price route on a stand-in session that reads nothing, the rate route with upsert_rates_bulk replaced by an in-process writer.
         isolation="pure",
     )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
@@ -2333,11 +2335,12 @@ Note: No backend server required.
         "asset-source-guards",
         services_asset_source_guards,
         name="Asset Source Guards",
-        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion",
+        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion; X-R65 (N83): a manual price outside [1900-01-01, tomorrow] refuses the whole upsert before any statement (DateOutOfRangeError: items per asset, count), a provider's is dropped, named and logged, the others stored",
         # WRITE_GLOBAL: Asset, PriceHistory and AssetEvent carry no user_id, so the
-        # asset this unit creates and every price/event row written against it are
-        # visible to all concurrent tests. Rows are uniquely named and dropped in
-        # teardown, but the tables themselves are shared surfaces.
+        # assets this unit creates (one for the module, a second for one X-R65 test)
+        # and every price/event row written against them are visible to all
+        # concurrent tests. Rows are uniquely named and dropped in teardown, but the
+        # tables themselves are shared surfaces.
         isolation="write-global",
     )
     add_test(
@@ -2756,7 +2759,7 @@ Note: No backend server required.
         "fx-sync-service",
         services_fx_sync,
         name="FX Sync Orchestration",
-        desc="_is_date_within_sync_range, _process_route/_compute_multi_step",
+        desc="_is_date_within_sync_range (X-R65: no day before 1900-01-01, whatever the start), _process_route/_compute_multi_step",
         exclusive_because="an autouse fixture truncates fx_rates and fx_conversion_routes before every test, so any concurrent unit reading rates or routes loses them mid-test",
     )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")

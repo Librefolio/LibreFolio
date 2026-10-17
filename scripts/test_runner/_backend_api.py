@@ -993,12 +993,12 @@ Tests for REST API endpoints (server auto-started):
         # below, each with the run that proved it.
         default_isolation="write-scoped",
     )
-    add_test(api, "fx", api_fx, name="FX API", desc="Conversion, providers, pair sources")
+    add_test(api, "fx", api_fx, name="FX API", desc="Conversion, providers, pair sources; X-R65 422 date_out_of_range on manual rates")
     add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="_compress_convert_errors utility")
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
-    add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync")
+    add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
     add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of, as_of ≥ 1900")
     add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")

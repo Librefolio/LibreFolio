@@ -1201,3 +1201,69 @@ async def test_convert_over_the_item_day_budget_is_refused_fast(test_server):
         assert BULK_MAX_ITEM_DAYS < detail["item_days"] <= crossing * CONVERSION_SPAN_DAYS, detail
         assert elapsed < BULK_REJECT_SECONDS, f"{elapsed:.1f} s"
         print_success(f"✓ 422 {detail['code']} at {detail['item_days']:,} item-days, in {elapsed:.2f} s")
+
+
+# ============================================================================
+# X-R65 (N83): a stored rate is dated within [1900-01-01, the server's tomorrow]
+# ============================================================================
+#
+# POST /fx/currencies/rate checks every item's date against date_range_limits.stored_date_bounds() -- 1900-01-01 and
+# latest_range_end(), both included -- before its loop: one item outside refuses the request with a 422 coded detail, and
+# nothing is written, not even the valid items. The frozen ceiling, the bounds themselves and the cap of ten are pinned on
+# the handler (services range-ceiling, RC-W05…W07); here the route on the lane's server, at its real ceiling, read before
+# the request and after the answer. The pair is this block's own (no seed and no other test uses CVE or GMD); its rates
+# on the block's days are dropped before and after.
+
+BOUNDS_PAIR = ("CVE", "GMD")  # stored as it is: CVE < GMD
+STORED_FLOOR = "1900-01-01"  # the contract's floor (EARLIEST_RANGE_START), written here and not read from the code
+
+
+async def _pair_rate_days(client: httpx.AsyncClient, base: str, quote: str) -> set[str]:
+    """Every day the pair has a rate on, whatever its date: the backup export reads the table, no range and no fill."""
+    resp = await client.get(f"{API_BASE}/backup/fx/{base}/{quote}/rates", params={"format": "json"}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return {row["date"] for row in resp.json()["rows"]}
+
+
+async def _drop_pair_rate_days(client: httpx.AsyncClient, base: str, quote: str, days: list[str]) -> None:
+    """Delete the pair's rates on ``days``, one single-day range each, and nothing else."""
+    deletions = [{"from": base, "to": quote, "date_range": {"start": day}} for day in days]
+    resp = await client.request("DELETE", f"{API_BASE}/fx/currencies/rate", json=deletions, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_rate_upsert_outside_the_stored_bounds_writes_nothing(test_server):
+    """RC-API-06 (X-R65, N83): POST /fx/currencies/rate with four CVE/GMD rates -- a valid day, 1899-12-31, another
+    valid day, a day past the ceiling -- answers 422 ``{"code": "date_out_of_range", "message", "params": {"min":
+    "1900-01-01", "max": the ceiling}, "items": [{"index": 1, "date": "1899-12-31"}, {"index": 3, "date": that day}],
+    "count": 2}``, and the pair has no rate on any of the four days: the valid ones are not written either.
+
+    The ceiling is ``latest_range_end()``, read before the request and after the answer: ``max`` lies between them. The
+    day past it is 30 days on, past whatever the ceiling becomes meanwhile.
+    Red before X-R65: 200, the four rates stored one by one -- 1899-12-31 and the day past the ceiling with them.
+    """
+    print_section("RC-API-06: rate upsert outside the stored bounds refused")
+
+    base, quote = BOUNDS_PAIR
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        ceiling_before = latest_range_end()
+        days = ["2020-03-02", "1899-12-31", "2020-03-03", (ceiling_before + timedelta(days=30)).isoformat()]
+        await _drop_pair_rate_days(client, base, quote, days)
+        try:
+            assert not await _pair_rate_days(client, base, quote) & set(days), "barrier: the block's days still hold a rate after the drop"
+            rates = [{"date": day, "base": base, "quote": quote, "rate": str(Decimal("1.5") + index)} for index, day in enumerate(days)]
+            response = await client.post(f"{API_BASE}/fx/currencies/rate", json=rates, timeout=TIMEOUT)
+            ceiling_after = latest_range_end()
+            detail = _coded_refusal(response, "date_out_of_range")
+            assert set(detail) == {"code", "message", "params", "items", "count"}, detail
+            assert set(detail["params"]) == {"min", "max"} and detail["params"]["min"] == STORED_FLOOR, detail
+            assert ceiling_before <= date.fromisoformat(detail["params"]["max"]) <= ceiling_after, f"max {detail['params']['max']} outside {ceiling_before} … {ceiling_after}"
+            assert detail["items"] == [{"index": 1, "date": "1899-12-31"}, {"index": 3, "date": days[3]}], detail
+            assert detail["count"] == 2, detail
+            written = await _pair_rate_days(client, base, quote) & set(days)
+            assert not written, f"{base}/{quote} has rates on {sorted(written)}: nothing of a refused request may be written"
+            print_success(f"✓ 422 {detail['code']}: {detail['count']} item(s), nothing written")
+        finally:
+            await _drop_pair_rate_days(client, base, quote, days)
