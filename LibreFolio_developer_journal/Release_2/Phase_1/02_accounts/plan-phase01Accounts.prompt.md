@@ -7012,3 +7012,103 @@ vincolo «il testo resta inglese»; (c) il permesso su `DeferredAppPopups`; (d) 
 - **C-54 (+ la nota di H): definizione di fatto ✅** (revisione di E, H — `DeferredAppPopups`, onboarding — e della squadra
   dei colori per `WhatsNewModal` dopo l'ingresso; galleria di G dopo). La riga C-54 dell'indice sta nella sezione C (non
   la mia): la chiude il coordinatore.
+
+## C-54 — Entrato; X-R66 (dalla sezione di X) (17/10, 17:48–; base `7f2290ae0`)
+- **Entrato**: dev `630c478cd` (`737268864`); CHANGELOG ✨ e C-54 chiusa nella sezione C (`7f2290ae0`). Revisioni: E
+  (backend), H (`DeferredAppPopups`, il mock di `OnboardingCoachmark`), la squadra dei colori (`WhatsNewModal`); la foto
+  della galleria nella coda di G.
+- Dal coordinatore: «Next, from X's section (to lighten X's queue): X-R66, analysis first … X reviews.»
+
+### X-R66 — Il limite delle sonde dei provider nella lingua dell'utente: analisi (17:55, sola lettura)
+**Stato reale**
+- Backend (MF-SI2, `api/v1/assets/providers.py:243-273`): oltre `LIBREFOLIO_PROBE_RATE_LIMIT` sonde al minuto per
+  utente (30 di default) `POST /assets/provider/probe` risponde 429 `{error_code: "PROBE_RATE_LIMITED", retry_after:
+  <secondi, ≥ 1>, message: "Too many provider probes: try again later"}` con `Retry-After`. Nulla da cambiare.
+- «Test Configuration» (`components/assets/ProviderAssignmentSection.svelte:361`, `buildTestResults`):
+  `extractErrorMessage(probe.error, …)` → la frase inglese del backend, e `summarizeProbeError(detail)` → «Error» nel
+  riassunto di una riga.
+- «Ask Provider» (`components/assets/AssetModal.svelte` `fetchAndCompareMetadata`, ~:976): ogni errore → il toast
+  generico `common.errorOccurred`.
+- C'è già il modello: `resolveProviderError.ts` traduce il `RATE_LIMITED` dei provider («In pausa … fino alle {time}»,
+  `RATE_LIMITED_DAY` quando la fine è un altro giorno, `RATE_LIMITED_NO_TIME`), con `formatResumeTime`/`resumesToday`
+  (ora locale, arrotondata al minuto per eccesso), testi entro i 60 caratteri del riassunto. Chiavi nella sorgente i18n
+  `assets` (di X).
+- Nessun test oggi fissa il 429 della sonda.
+
+**Disegno**
+1. Un aiuto in `resolveProviderError.ts`: `probeRateLimitMessage(error: unknown, t): string | null` — per una risposta
+   429 con `detail.error_code === "PROBE_RATE_LIMITED"` la frase tradotta con l'ora locale di fine attesa (`retry_after`
+   del dettaglio, altrimenti l'intestazione `Retry-After`); `null` per ogni altro errore. Chiavi nuove
+   `providerErrors.PROBE_RATE_LIMITED` / `_DAY` / `_NO_TIME`, entro 60 caratteri con l'ora (la sonda conta sia «Test
+   Configuration» sia «Ask Provider»: la frase parla di verifiche del provider, non di un solo bottone).
+2. «Test Configuration»: il dettaglio e il riassunto di una riga diventano quella frase quando l'aiuto risponde; gli altri
+   errori come oggi.
+3. «Ask Provider»: il toast d'errore diventa quella frase per il 429; gli altri errori restano il generico.
+4. Test (`test-author`, rossi prima): `resolveProviderError.test.ts` (l'aiuto: oggi/altro giorno, senza `retry_after`,
+   dall'intestazione, gli altri errori → null, lunghezza ≤ 60 nelle 4 lingue), `ProviderAssignmentSection.test.ts`
+   (dettaglio e riassunto tradotti), `AssetModal.test.ts` o `.providerLifecycle.test.ts` (il toast). Niente backend,
+   niente E2E (tutto in Vitest: la corsia non serve).
+5. Doc: dove MF-SI2 descrive il 429 (sviluppatore), una riga: la UI lo dice tradotto, con l'ora.
+**Superfici**: file di X (`ProviderAssignmentSection.svelte`, `AssetModal.svelte` — area dei colori, nessuna classe
+toccata —, `resolveProviderError.ts`, la sorgente i18n `assets`); X rivede. **Peso**: basso.
+**Fuori**: `summarizeProbeError` dà riassunti inglesi anche per altri errori (timeout, HTTP…): non tradotti oggi, fuori.
+- **Coordinatore (17:50): GO**, com'è disegnato, rossi prima; X rivede; riga 🐛 al checkpoint. La sorgente `assets` può
+  essere aperta da X (X-R46): le chiavi vanno lì comunque, un'eventuale fusione la risolve il coordinatore all'ingresso
+  (non posso guardare l'albero di X; su dev la sorgente è cambiata più volte oggi).
+
+### XR66.1 — Rossi (17:51–, `test-author`) e codice pronto
+- Rossi: `resolveProviderError.test.ts` (l'aiuto: oggi, mezzanotte → `_DAY`, solo l'intestazione, nessuna attesa →
+  `_NO_TIME`, le chiavi mancanti → `_NO_TIME` poi il `message` del backend, ogni altro errore → null; la lunghezza ≤ 60
+  sui cataloghi veri delle 4 lingue), `ProviderAssignmentSection.test.ts` (dettaglio e riassunto), il test di
+  `AssetModal` che prova «Ask Provider» (il toast; la guardia: un altro errore resta generico).
+- Codice pronto, non applicato: `work/xr66/apply_xr66.py` (`probeRateLimitMessage` con `probeRefusal`/`toSeconds`; le due
+  chiamate) e `work/xr66/i18n_xr66.py` (3 chiavi `providerErrors.PROBE_RATE_LIMITED*`, frasi corte: «Too many checks: try
+  again at {time}» e simili). Dry-run pulito.
+
+### XR66.2 — Rossi osservati, codice applicato, verdi ✅ (17/10, 18:13–18:40)
+- **Rossi osservati prima del codice** (`cd frontend && nice -n 10 node_modules/.bin/vitest run <file> --maxWorkers 2`):
+  `resolveProviderError.test.ts` 36 rossi; `ProviderAssignmentSection.test.ts` PAS-RL1 rosso, le guardie PAS-RL2 verdi;
+  `AssetModal.providerLifecycle.test.ts` 1 rosso su 56, il toast di «Ask Provider» («An error occurred»), le guardie verdi
+  (`/tmp/libreFolio_xr66.log`).
+- **Codice** (applicato con `apply_xr66.py` e `i18n_xr66.py`):
+  - `resolveProviderError.ts`: `toSeconds`, `ProbeRefusal`, `probeRefusal(error)` e l'esportata
+    `probeRateLimitMessage(error, t, now?)`. Un 429 con `detail.error_code === 'PROBE_RATE_LIMITED'` dà
+    `providerErrors.PROBE_RATE_LIMITED` (o `_DAY`) con `{time: formatResumeTime(…)}`; l'attesa viene da `retry_after`,
+    altrimenti dall'intestazione `retry-after`; senza attesa `_NO_TIME`, senza chiavi il `message` del backend; `null`
+    per ogni altro errore;
+  - `ProviderAssignmentSection.svelte` (`buildTestResults`): la riga d'errore di una sonda rifiutata ha quella frase come
+    dettaglio e come riassunto (prima: la frase inglese del backend e «Error»);
+  - `AssetModal.svelte` (`fetchAndCompareMetadata`, il catch): `probeRateLimitMessage(e, $t) ?? $t('common.errorOccurred')`;
+  - sorgente i18n `assets`, 4 lingue: `providerErrors.PROBE_RATE_LIMITED`, `_DAY`, `_NO_TIME`.
+- **Verdi**:
+  - i 3 file: 189/189 (`/tmp/libreFolio_xr66_green.log`);
+  - tutta la cartella `components/assets`: 38 file, 1 629 test (`/tmp/libreFolio_xr66_assets.log`);
+  - `front-utility core-unit` dal runner (corsia 6182): 213 file, 8 880 test (`/tmp/libreFolio_xr66_core.log`);
+  - `front check` 0 errori e 0 avvisi; i18n strict 5 062 chiavi; `theme-roles --check` pulito; Prettier senza cambi.
+- **Doc**:
+  - `developer/backend/assets/architecture.md` (la sezione della sonda, dopo il 429): una frase su cosa dice la UI;
+  - `admin/configuration.en.md:58`, la riga `LIBREFOLIO_PROBE_RATE_LIMIT`: «**Ask Provider** counts too» e «past it,
+    the form tells the user when to try again». Nessun timbro: la riga manca ancora nelle traduzioni (debito di MF-SI2,
+    che resta visibile);
+  - `mkdocs build` strict pulito, `check-links` 97 validi (`/tmp/libreFolio_xr66_mkdocs2.log`, `…_links2.log`).
+- **Non eseguiti**: nessun E2E e nessun backend (non toccato). `component-unit` dal runner non lanciato: i due file del lotto
+  che ci stanno sono nella cartella `assets`, passata intera.
+- **Previsione dei conflitti** con dev `870d519bd` (29 commit avanti; i 7 dopo `0cf8eb4d5`, X-R75, non toccano questi file):
+  - 3 file in comune: `ProviderAssignmentSection.svelte` e il suo test (C-97c-3), `architecture.md` (Z-32 (c));
+  - la fusione a tre vie simulata in `/tmp` (`git merge-file`) è pulita, e le modifiche sono indipendenti: dev cambia il
+    formato del prezzo nel ramo riuscito (`formatPrice`), io aggiungo un ritorno anticipato per la sonda rifiutata; i due
+    `describe` nuovi del test hanno aiuti locali; la sezione nuova di Z-32 sta alla riga 285 della doc, la mia frase
+    alla 615;
+  - la sorgente i18n `assets`: su dev nessun cambio dalla mia base; l'albero di X non lo posso vedere.
+- **Note**:
+  - la prova della lunghezza (≤ 60 caratteri con l'ora) gira su en-GB, en-US, it, fr, es: fr-CA, es-US ed es-MX restano
+    fuori perché i testi X8 che ci sono già superano i 60;
+  - restano inglesi gli altri riassunti di `summarizeProbeError` (timeout, HTTP…): fuori, come da analisi.
+- **⚠️ Fuori pista**: la riga dell'admin (`admin/configuration`) non era nel disegno. La sonda conta anche «Ask Provider»
+  (`AssetModal.svelte:939` chiama lo stesso endpoint), e il messaggio nuovo lo dice: è doc direttamente collegata,
+  corretta con una riga e segnalata al coordinatore.
+- **X-R66: definizione di fatto ✅** (revisione di X dopo l'ingresso). La riga X-R66 dell'indice sta nella sezione di X: la
+  chiude il coordinatore.
+- **Indice, sezione A** (pulizia, 17/10): chiuse con ✅ due righe già fatte ma mai registrate, A-3 (A4, `3ac4114d5`) e la
+  «Nota per A8» (A8, `66873b0c9`), verificate nel codice. Fusione simulata con dev `870d519bd` (8 commit sull'indice):
+  pulita.
