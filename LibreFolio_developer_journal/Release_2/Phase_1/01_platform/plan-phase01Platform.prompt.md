@@ -6311,3 +6311,151 @@ server parte. E lo vede nella revisione del checkpoint.
      caratteri: una corsia così non partirebbe comunque;
    - `get_data_dir()` può sollevare in test mode (`validate_test_data_dir`), ma allora fallisce già l'import di
      `backend.app.main`: come per `check_instance_key`, nessun caso nuovo.
+
+### Lotto «H-45: la politica delle pagine anche sui documenti SVG e XML; nessuna CSP su un 304» (E, LOW, 2026-10-17) — ✅ provato
+
+> Dal coordinatore (17/10, dopo H-46), con la specifica di E:
+> - riconoscere `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml` e i tipi `+xml`;
+> - i PDF restano fuori; il report-only resta su `text/html`;
+> - un caso per tipo in `test_managed_headers.py`;
+> - facoltativa: nessuna CSP su un 304 (un rischio latente se si aggiorna Starlette), con un test.
+
+**Analisi** (HEAD `3bd1098ad`, dev con H-42 e H-46; Starlette 1.6.0):
+1. **Chi risponde 304 oggi**:
+   - `/`, la SPA e le pagine di `/mkdocs` passano da `_revalidated_file()`, cioè `FileResponse`. In Starlette 1.6 non
+     gestisce `If-None-Match` (gestisce solo `Range` e `If-Range`): risponde sempre 200;
+   - solo `StaticFiles` (il mount `/_app`, `ImmutableStaticFiles`) risponde 304, con `NotModifiedResponse`, senza
+     `Content-Type`. Sotto `/_app` non ci sono pagine HTML;
+   - quindi **H-42 oggi non perde nulla**. Correggo l'avviso che avevo dato al coordinatore al momento dell'unione:
+     le pagine dei documenti non ricevono mai un 304.
+2. **Il meccanismo è reale** (sonda `files/h45/probe/`: un server di sola libreria standard sulla porta 6181, poi
+   Chromium 149, sia col profilo in memoria sia con uno persistente; `run3.out`):
+   - una pagina servita 200 con `PAGE_POLICY`, poi rivalidata (`reload`, e `goto` di nuovo) con un 304;
+   - 304 con `frame-ancestors 'self'` da solo, cioè quello che il middleware mette oggi su un 304: la pagina presa
+     dalla cache **prende la CSP del 304**. Il `<base>` iniettato cambia l'URL base, e nessuna violazione scatta;
+   - 304 senza CSP, oppure con `PAGE_POLICY`: la pagina resta protetta;
+   - le prime due sonde non vedevano nessun 304: il server rispondeva in HTTP/1.0 e Chromium non mandava
+     `If-None-Match`. Con HTTP/1.1 e un'immagine di controllo la cache si vede.
+3. **Documenti SVG e XML serviti oggi**:
+   - nessun SVG nella build, nei documenti costruiti, né nei plugin;
+   - l'unico XML è `sitemap.xml` dei documenti (`FileResponse`, sempre 200);
+   - un SVG dell'utente non arriva mai inline:
+     - l'originale è sempre `attachment`;
+     - l'anteprima `img_preview` passa da Pillow, che non apre gli SVG, e risponde 500;
+     - i broker hanno `INLINE_SAFE_MEDIA_TYPES` senza SVG;
+   - la rotta degli asset dei plugin (`/api/v1/uploads/plugin/…`) servirebbe inline un SVG fornito con il plugin.
+     Oggi non ce n'è nessuno.
+   - Quindi H-45 è difesa in profondità, senza effetti visibili oggi.
+4. **Con H-45 la guardia del 304 diventa necessaria**, anche se ancora latente:
+   - un SVG sotto `/_app`, rivalidato, perderebbe la politica come nella sonda;
+   - lo stesso varrebbe per ogni pagina se un aggiornamento di Starlette desse a `FileResponse` i 304.
+
+**Proposta** (solo file di H):
+- `security_headers.py`:
+  - `_media_type(headers)`: il primo `content-type`, prima del `;`, senza spazi, in minuscolo;
+  - `_is_document()`: `text/html`, `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml`, e ogni
+    tipo che finisce in `+xml`. Prende `PAGE_POLICY`;
+  - `_is_html()` resta, sul tipo esatto `text/html`, e serve solo al report-only (le pagine della web app);
+  - **un 304 non riceve né `Content-Security-Policy` né `Content-Security-Policy-Report-Only`**: il browser tiene
+    quella della risposta in cache. `X-Frame-Options`, `nosniff` e `Referrer-Policy` restano come oggi.
+- **Test** (test-author), `test_managed_headers.py`:
+  - un caso per tipo (con `charset` e maiuscole), i PDF e il JSON fuori;
+  - un SVG su un percorso della web app: `PAGE_POLICY` sì, report-only no;
+  - il 304 con il middleware da solo, anche con un `Content-Type` HTML (lo Starlette di domani), nei due profili;
+  - un 304 vero da `StaticFiles` nello stack.
+- **Doc**: `security.md#managed-headers` (anche la frase «Not covered: …» di H-42 e il paragrafo dei test), la riga
+  di `LIBREFOLIO_FRAME_PROTECTION` in `configuration.en.md` (debito per H-5), il commento in `.env.example` e in
+  `config/__init__.py`.
+- **E2E**: nessuno. Lo spec di H-42 copia la regola dell'HTML, che non cambia, e nessun documento XML viene servito
+  inline. Lo slot non serve.
+- **Selettori**: `services managed-headers`, `security-headers`, `config-env-example`, `config-package`; `mkdocs
+  build` stretto e `check-links`.
+- **CHANGELOG**: proposta 🔒, ma oggi niente cambia per l'utente: decide il coordinatore.
+
+### Review di A9 (le righe di A nei miei file) e di Z-28 (la parte della post-migrazione) (2026-10-17, 12:10) — ✅ OK
+
+**A9** (`3c9303cf2`, entrato con `ba8f3b06e`): `LIBREFOLIO_TOS_URL` e `LIBREFOLIO_PRIVACY_URL`.
+- `config/platform.py`: `tos_url()` e `privacy_url()` passano da `env_url`, come `support_url()`; i nomi sono
+  costanti letterali, quindi la guardia di `.env.example` le vede.
+- `instance_links.py`: `terms_link()` e `privacy_link()` non sollevano mai e scrivono l'errore una volta per
+  processo, con il loro costo, attraverso `_report_invalid` (`functools.cache` sulla coppia problema-costo).
+- `schemas/system.py`: `LegalInstanceConfig`, due campi nulli per default; `legal` con `default_factory`.
+- `api/v1/system/instance.py`: nessun I/O sull'event loop, perché `env_url` legge solo l'ambiente.
+- `.env.example`: due righe commentate accanto a `LIBREFOLIO_SUPPORT_URL`; nessuna riga non commentata nuova.
+- Verdi sul HEAD unito (`files/runs/a9review.sh`): `services legal-links` 56, `services config-package` 864 (una più
+  di prima di A9). `api instance-legal` non l'ho lanciato: vuole un server di corsia, e A l'ha fatto al suo
+  checkpoint.
+- **Nota, nessuna richiesta ad A**: `env_url` toglie una barra finale («so a path can be appended»), pensato per
+  `LIBREFOLIO_PUBLIC_URL`. Per un link a una pagina (supporto, termini, privacy) `…/terms/` diventa `…/terms`. Quasi
+  tutti i server rispondono con un redirect, quindi è innocuo in pratica. È una regola mia (`support_url`): la segnalo
+  al coordinatore e non apro una voce.
+
+**Z-28** (`3a3d5ab1c`), il mio pezzo: `_exclusive_run` in `db/post_migration/__init__.py`.
+- `os.open(…, O_RDWR | O_CREAT | O_NOFOLLOW, 0o600)`:
+  - un link, pendente o no, dà `OSError` prima che si apra il database;
+  - dietro un link pendente non si crea nulla;
+  - il file nuovo nasce `0600`, e un lock già esistente tiene il suo modo (la doc lo dice: «when missing»);
+  - il descrittore si chiude sempre e il `flock` si rilascia nel `finally`;
+  - senza POSIX esce prima (`fcntl is None`): `getattr(os, "O_NOFOLLOW", 0)` non serve lì, ma non nuoce.
+- Le due frasi della doc sono vere:
+  - all'avvio `run_post_migration_fixes_at_startup` (`database_bootstrap.py`, mio) prende ogni `Exception` e scrive
+    il WARNING «Post-migration fixes could not run; starting normally»;
+  - lo script offline (`__main__.py`, riga 36) chiama fuori da ogni `try`: traceback, uscita 1.
+- `O_RDWR` vuole il permesso di scrittura come prima l'`"a+"`: nessuna regressione.
+- Verde sul HEAD unito: `db post-migration` 44.
+
+**Via del coordinatore** (17/10, ~12:00): «OK, go», con la guardia del 304 dentro; CHANGELOG 🔒 breve, sì.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla), in `test_managed_headers.py`, 99 casi nuovi:
+   - (g) esteso: 11 risposte tipizzate nuove nei 6 modi:
+     - 8 documenti: XHTML, SVG anche con `charset` e in maiuscolo, `application/xml`, `text/xml`, Atom, RSS con
+       `charset`;
+     - 3 no: `application/problem+json`, `text/plain`, `text/htmlx`;
+   - il pin di `DOCUMENT_MEDIA_TYPES` e del suffisso, letti con `getattr`;
+   - il report-only resta su `text/html` esatto: SVG, XHTML e `text/htmlx` su un percorso della web app;
+   - il 304 col middleware da solo, in 4 forme per 6 modi: senza `Content-Type`, HTML, con la CSP della rotta, con il
+     report-only della rotta. Prima una barriera a 200;
+   - un 304 vero da `ImmutableStaticFiles`, di un chunk JS e di un SVG aggiunto alla build finta
+     (`_app/immutable/assets/logo.a1b2.svg`), con le barriere su 304, ETag e `Cache-Control`.
+2. ✅ **Run** (`files/runs/h45-backend.sh`, cancello del carico, nessuno slot):
+
+   | Passo | Esito |
+   |---|---|
+   | rosso `services managed-headers` | **34 failed / 321 passed**, come previsto: 18 (g), 1 pin, 4 report-only, 9 sul 304, 2 sul 304 vero |
+   | cura `files/h45/apply.py --apply` | i tre file identici alle copie di prova |
+   | verde `managed-headers` | **355** |
+   | `security-headers` | 15 |
+   | `config-env-example` | 38 |
+   | `config-package` | 864 |
+
+   - ruff e black puliti sui 3 file Python; porta libera.
+   - La cura, in `security_headers.py`:
+     - `DOCUMENT_MEDIA_TYPES` e `DOCUMENT_MEDIA_TYPE_SUFFIX`;
+     - `_media_type()`: il primo `content-type`, prima del `;`, senza spazi, minuscolo, decodificato latin-1;
+     - `_is_document()`; `_is_html()` esatto;
+     - `self.not_modified_headers`: un 304 riceve gli header senza CSP, e nessun report-only;
+     - più la docstring del modulo.
+   - I commenti di `LIBREFOLIO_FRAME_PROTECTION` in `config/__init__.py` e in `.env.example`.
+3. ✅ **Documenti** (docs-writer, solo inglese, nessun timbro):
+   - `security.md#managed-headers`:
+     - la tabella (documenti; il 304);
+     - «Frame protection», con `_media_type`, `_is_document` e `_is_html`;
+     - «Why documents only», con ciò che si serve oggi;
+     - un punto nuovo «No policy on a `304`», con la sonda;
+     - «Where the report-only policy goes»;
+     - i test.
+   - `configuration.en.md`, la riga di `LIBREFOLIO_FRAME_PROTECTION`: anche SVG e XML, e la nota del 304. Debito di
+     traduzione per H-5.
+   - `hosting_providers.en.md`: la nota del 304.
+   - Controlli (`files/runs/h45-docs.sh`): `mkdocs build` stretto pulito, 97 link validi, Prettier pulito sullo spec,
+     `git diff --check` pulito.
+4. ✅ **Lo spec di H-42**: solo il commento di `isHtml`. Prima diceva «la regola del server», ma da H-45 il server dà
+   `PAGE_POLICY` a ogni documento (`_is_document`). Il codice resta com'è, perché ogni flusso dello spec apre solo
+   pagine HTML: lo slot non serve.
+   > **⚠️ Fuori pista** (dal docs-writer, verificato): `FileResponse` di Starlette 1.6 non risponde «sempre 200». A un
+   > `Range` risponde 206 (`multipart/byteranges` per più intervalli), 416 o 400, e rispetta `If-Range`. **Non risponde
+   > mai 304**, che è il punto. Corretti la docstring della cura (prima di applicarla) e questa analisi.
+   > - Un 206 con più intervalli prende `frame-ancestors 'self'` da solo, ma i browser non chiedono intervalli di un
+   >   documento: nessuna guardia, una nota sola.
+   > - `/mkdocs/sitemap.xml.gz` esce come `text/xml`: per `mimetypes` il `.gz` è una codifica, e `FileResponse` tiene
+   >   solo il tipo. Con H-45 prende `PAGE_POLICY`: innocuo, ed è documentato.
