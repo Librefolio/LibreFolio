@@ -1849,6 +1849,212 @@ describe('the restart: the server probed until the outcome is known (§0.2, §0.
 });
 
 // =====================================================================================================================
+// B-16 — a server that never stops: notStopping (written red first)
+// =====================================================================================================================
+
+/*
+ * After «Restore and restart», a server that never goes down (a lost signal, a process that does not exit) leaves the
+ * restore pending: the page reads the outcome after `fastRestartMs`, finds it pending, and keeps probing, while `slow`
+ * fires only for a server seen DOWN. B-16 (brief §1): `notStopping`, true once a probe finds the server UP while the
+ * restart is followed, the server never seen down since the restart was asked, and at least `slowAfterMs` elapsed since
+ * then — counted from the restart, not from the fast read; cleared by `load()`, by a new restart, by every outcome that
+ * settles, and by a probe that finds the server down. The probing goes on while it holds, a late stop proceeds as
+ * today, and `slow` and `notStopping` are never both true.
+ *
+ * This file's timings: `pollMs` 200, `fastRestartMs` 3 000, `slowAfterMs` 6 000. The restart is accepted at once, at 0,
+ * so «since the restart was asked» and «since its request» are one instant here. The pinned case «up all along, the
+ * restore still pending at the fast read» above stays as it is: its server goes down before `slowAfterMs`.
+ *
+ * Red today: the controller publishes no `notStopping`, and every case fails on the helper below, which names it.
+ */
+
+/** `notStopping` (B-16 §1), or a failure that names it while the controller publishes none. */
+function notStoppingOf(controller: RestoreFlowController): boolean {
+    const value = (controller as unknown as {notStopping?: unknown}).notStopping;
+    expect(typeof value, 'restoreFlow.svelte.ts: the controller publishes no notStopping (B-16 §1)').toBe('boolean');
+    return value as boolean;
+}
+
+/** A restart accepted at 0 over a server up all along, the restore pending at every read, followed until `notStopping` holds. */
+async function notStoppingShown() {
+    const context = await restartAccepted('up');
+    context.api.restoreOutcome.mockResolvedValue({kind: 'status', status: pending()});
+    await vi.advanceTimersByTimeAsync(SLOW_MS + 2 * POLL_MS);
+    expect(notStoppingOf(context.controller), 'precondition: the server never stopped').toBe(true);
+    return context;
+}
+
+describe('B-16 — a server that never stops: notStopping', () => {
+    it('up all along, the restore pending at every read: false until slowAfterMs after the restart, true after — counted from the restart, not from the fast read —; outcome still waiting, the probing and the reads go on', async () => {
+        const {controller, api} = await restartAccepted('up');
+        api.restoreOutcome.mockResolvedValue({kind: 'status', status: pending()});
+
+        await vi.advanceTimersByTimeAsync(SLOW_MS - 1);
+        expect(api.restoreOutcome, 'precondition: read since fastRestartMs, pending').toHaveBeenCalled();
+        expect(notStoppingOf(controller), 'not before slowAfterMs after the restart').toBe(false);
+        expect(controller.outcome).toBe('waiting');
+
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS + 1);
+        expect(notStoppingOf(controller), 'slowAfterMs after the restart, never seen down: the server has not stopped').toBe(true);
+        expect(controller.outcome, 'still waiting: a late stop may come yet').toBe('waiting');
+        expect(controller.state).toBe('restarting');
+        expect(controller.slow, 'never seen down: not slow').toBe(false);
+
+        const probes = api.probeServer.mock.calls.length;
+        const reads = api.restoreOutcome.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(5 * POLL_MS);
+        expect(api.probeServer.mock.calls.length, 'the probing goes on').toBeGreaterThan(probes);
+        expect(api.restoreOutcome.mock.calls.length, 'and so do the reads of the outcome').toBeGreaterThan(reads);
+        expect(notStoppingOf(controller)).toBe(true);
+        expect(controller.outcome).toBe('waiting');
+    });
+
+    it('then the server goes down: false at once, slow only slowAfterMs after it went down (as today), never both; then up, signed out: restored, toSignIn() once — the late stop proceeds as today', async () => {
+        const {controller, api, server, events, toSignIn} = await notStoppingShown();
+
+        server.state = 'down';
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+        expect(notStoppingOf(controller), 'seen down: the server is stopping after all').toBe(false);
+        expect(controller.slow, 'just gone down: not slow yet').toBe(false);
+        expect(controller.outcome).toBe('waiting');
+
+        await vi.advanceTimersByTimeAsync(SLOW_MS - 1);
+        expect(controller.slow, 'not before slowAfterMs down').toBe(false);
+        expect(notStoppingOf(controller)).toBe(false);
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS + 1);
+        expect(controller.slow, 'slowAfterMs down: slow, as today').toBe(true);
+        expect(notStoppingOf(controller), 'never both').toBe(false);
+
+        api.restoreOutcome.mockResolvedValue({kind: 'signed_out'});
+        server.state = 'up';
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+
+        expect(controller.outcome).toBe('restored');
+        expect(toSignIn).toHaveBeenCalledTimes(1);
+        expect(events()).toEqual([['backup.restore.restored', {}]]);
+        expect(notStoppingOf(controller)).toBe(false);
+        expect(controller.slow).toBe(false);
+    });
+
+    it.each<[string, RestoreOutcomeAnswer, RestartOutcome]>([
+        ['signed out: restored', {kind: 'signed_out'}, 'restored'],
+        ['committed: restored', {kind: 'status', status: committed()}, 'restored'],
+        ['rolled back', {kind: 'status', status: rolledBack('first_start_failed')}, 'rolled_back'],
+        ['blocked: still_pending', {kind: 'blocked'}, 'still_pending'],
+    ])('a read that settles the outcome while the server never stopped (%s): false', async (_case, answer, outcome) => {
+        const {controller, api} = await notStoppingShown();
+        api.restoreOutcome.mockResolvedValue(answer);
+
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+
+        expect(controller.outcome, 'precondition: the outcome is known').toBe(outcome);
+        expect(notStoppingOf(controller), 'an outcome known: nothing left to say of the stop').toBe(false);
+    });
+
+    it('load() clears it, and nothing is probed after it', async () => {
+        const {controller, api} = await notStoppingShown();
+        api.status.mockResolvedValueOnce(pending());
+
+        await controller.load();
+        await flush();
+
+        expect(notStoppingOf(controller)).toBe(false);
+        expect(controller.state, 'back to the tab: the restore still waits').toBe('pending');
+        expect(controller.outcome).toBeNull();
+        const probes = api.probeServer.mock.calls.length;
+        const reads = api.restoreOutcome.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+        expect(api.probeServer.mock.calls.length, 'a probe of the restart load() ended').toBe(probes);
+        expect(api.restoreOutcome.mock.calls.length).toBe(reads);
+        expect(notStoppingOf(controller)).toBe(false);
+    });
+
+    it('restartNow() after load(): starts with it false, and counts slowAfterMs from its own restart', async () => {
+        const {controller, api} = await notStoppingShown();
+        api.status.mockResolvedValueOnce(pending());
+        await controller.load();
+        await flush();
+        expect(controller.state, 'precondition: the restore waits').toBe('pending');
+
+        api.restart.mockResolvedValueOnce(accepted(OTHER_TICKET));
+        void controller.restartNow();
+        await flush();
+        expect(controller.outcome, 'precondition: the new restart was accepted').toBe('waiting');
+        expect(notStoppingOf(controller), 'a new restart starts afresh').toBe(false);
+
+        await vi.advanceTimersByTimeAsync(SLOW_MS - 1);
+        expect(notStoppingOf(controller), 'not before slowAfterMs after this restart').toBe(false);
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS + 1);
+        expect(notStoppingOf(controller), 'slowAfterMs after this restart').toBe(true);
+    });
+
+    it('never once the server was seen down: down past slowAfterMs, then up with the restore pending — still_pending as today, false all along', async () => {
+        const {controller, api, server} = await restartAccepted('down');
+
+        await vi.advanceTimersByTimeAsync(SLOW_MS + 2 * POLL_MS);
+        expect(controller.slow, 'precondition: down for slowAfterMs').toBe(true);
+        expect(notStoppingOf(controller)).toBe(false);
+
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: pending()});
+        server.state = 'up';
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+
+        expect(controller.outcome, 'pending after a stop seen: not applied, as today').toBe('still_pending');
+        expect(notStoppingOf(controller)).toBe(false);
+        expect(controller.slow).toBe(false);
+    });
+
+    it('never once the server was seen down, even up long after: seen down at once, then up with a start applying the restore at every read — the probing goes on, false past slowAfterMs', async () => {
+        const {controller, api, server} = await restartAccepted('down');
+        api.restoreOutcome.mockResolvedValue({kind: 'status', status: inProgress()});
+
+        await vi.advanceTimersByTimeAsync(3 * POLL_MS);
+        server.state = 'up';
+        await vi.advanceTimersByTimeAsync(SLOW_MS + 5 * POLL_MS);
+
+        expect(api.restoreOutcome, 'precondition: read since the server came back').toHaveBeenCalled();
+        expect(controller.outcome, 'a start applies the restore: still waiting').toBe('waiting');
+        expect(notStoppingOf(controller), 'the server was seen down: it did stop').toBe(false);
+        const probes = api.probeServer.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(5 * POLL_MS);
+        expect(api.probeServer.mock.calls.length, 'the probing goes on').toBeGreaterThan(probes);
+        expect(notStoppingOf(controller)).toBe(false);
+    });
+
+    it('never while the restart request is out: nothing probed, false past slowAfterMs, the server up all along', async () => {
+        const context = await pendingRestore();
+        const {controller, api} = context;
+        serve(context, 'up');
+        const request = deferred<RestoreRestartAccepted>();
+        api.restart.mockReturnValueOnce(request.promise);
+        void controller.restartNow();
+        await flush();
+        expect(controller.state, 'precondition: the restart request is out').toBe('restarting');
+
+        await vi.advanceTimersByTimeAsync(SLOW_MS + 5 * POLL_MS);
+
+        expect(api.probeServer, 'nothing is probed before the restart is accepted').not.toHaveBeenCalled();
+        expect(notStoppingOf(controller)).toBe(false);
+    });
+
+    it('never after a refused restart: the restore pending with the error, nothing probed, false past slowAfterMs', async () => {
+        const context = await pendingRestore();
+        const {controller, api} = context;
+        serve(context, 'up');
+        api.restart.mockRejectedValueOnce(noAnswer());
+        void controller.restartNow();
+        await flush();
+        expect(controller.state, 'precondition: refused, the restore still waits').toBe('pending');
+        expect(controller.failure).toBe('restart');
+
+        await vi.advanceTimersByTimeAsync(SLOW_MS + 5 * POLL_MS);
+
+        expect(api.probeServer).not.toHaveBeenCalled();
+        expect(notStoppingOf(controller)).toBe(false);
+    });
+});
+
+// =====================================================================================================================
 describe('the outcome ticket (B5c): the ticket of the accepted restart goes with every read of its outcome, held in memory only', () => {
     it('seen down, then up: the outcome read with the ticket the accepted restart answered, and settled as it is answered', async () => {
         const {controller, api, server, events, toSignIn} = await restartAccepted('down');
