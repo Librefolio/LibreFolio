@@ -83,7 +83,9 @@ same way, before P7 (§11), and those of (n) before B5c (``instance_backup/outco
     after ``data-directories`` and before ``risk-scenarios`` and ``database`` (held before any data is read);
     ``restore-commit`` between ``global-settings`` and ``provider-prewarm``, and after ``admin-bootstrap`` (decision N57:
     a bootstrap that fails on the restored data still rolls the restore back at the next start); each reaches
-    ``app_lifespan.<its function>`` when its awaitable runs, once, without arguments, off the event loop.
+    ``app_lifespan.<its function>`` when its awaitable runs, once, without arguments, off the event loop. Lot B4b, N66:
+    ``backup-leftovers`` after ``restore-commit``, the leftovers of killed runs removed once the restore is settled, by a
+    step that never raises (``test_backup_leftovers.py`` tests the step itself).
 (k) §4 ``restart.py``: ``server_pid`` (this process without a multiprocessing parent, the parent in a spawn child; §10:
     this process when its parent no longer runs, the pid it had may be another process's);
     ``request_restart`` sends ``SIGTERM`` through ``send_signal`` (``os.kill`` by default, read when it runs) to the pid
@@ -2758,7 +2760,9 @@ def test_the_restore_steps_stand_where_the_contract_puts_them():
     administrator, sets ``registration_mode`` to invitations only) and can raise on a data error: before
     ``restore-commit`` such a failure rolls the restore back at the next start (``first_start_failed``); after it, the
     restore would already be kept and the server would fall at every start. Relative only: ``test_admin_bootstrap.py``
-    (STEP-001) pins ``admin-bootstrap`` right after ``global-settings``."""
+    (STEP-001) pins ``admin-bootstrap`` right after ``global-settings``. Lot B4b, N66: ``backup-leftovers`` after
+    ``restore-commit``: the leftovers are removed once the restore is settled, and since a step that raises after
+    ``restore-commit`` would stop every start, that one never raises."""
     print_section("(j) The startup steps")
     from backend.app.services.platform import app_lifespan  # noqa: PLC0415 — the app's whole startup: kept out of the spawn children that import this module
 
@@ -2771,7 +2775,12 @@ def test_the_restore_steps_stand_where_the_contract_puts_them():
         ("admin-bootstrap", "restore-commit"),
         why="admin-bootstrap reads and writes the restored data and can raise on a data error: before restore-commit the next start rolls the restore back (first_start_failed); after it, the restore would already be kept and the server would fall at every start",
     )
-    print_success("tool-catalog < pending-restore < data-directories < serving-lock < risk-scenarios; serving-lock < database; global-settings < restore-commit < provider-prewarm; admin-bootstrap < restore-commit")
+    assert_in_relative_order(
+        app_lifespan.STARTUP_STEPS,
+        ("restore-commit", "backup-leftovers"),
+        why="the leftovers are removed once the restore is settled; after restore-commit a step that raises would stop every start, so this one never raises (N66)",
+    )
+    print_success("tool-catalog < pending-restore < data-directories < serving-lock < risk-scenarios; serving-lock < database; global-settings < restore-commit < provider-prewarm; admin-bootstrap < restore-commit; restore-commit < backup-leftovers")
 
 
 @pytest.mark.asyncio

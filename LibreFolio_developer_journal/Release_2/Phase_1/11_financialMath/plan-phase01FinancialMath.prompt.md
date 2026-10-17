@@ -1452,3 +1452,290 @@ Quattro commit, uno per lotto che cambia numeri:
   `PIPENV_PIPFILE` del mio worktree, nessun `Pipfile` vagante). Il resto è **E1b** (T-B8 + v3: `portfolio_broker.py`
   restante, `broker_financial.py`, `portfolio_financial.py`, `catalog.py`, `snapshotDataRenderer.ts` e il suo test, i due
   test dell'AI Export, `ai_export_composition.md`) + giornale.
+
+#### E1 committato; aggiornamento di base 5 (17/10, 01:49) — HEAD `0c198968c`
+- Coordinatore: `dc91c2ac0` (E1a, toppa `d7c950c6…`), `570af3d09` (E1b + giornale); merge di dev `5beecac3d` (CP-10b,
+  X-R35/37, H) pulito → HEAD `0c198968c` verificata. La sonda AI Export la esegue J su dev dopo l'ingresso (copia
+  privata e credenziali, come per J-26).
+- ✅ **Validazione combinata** (01:50-02:03, `files/e1.sh combined`): `front-ai-export unit` 568, `financial-math` 825,
+  `lots-analysis-pure` 177, `api portfolio` 51, `ai-export` 345 + 647. Verde → ingresso con la riga 🐛 di E1b.
+- **Y (P4)**: le percentuali dei componenti nel tooltip della Performance (`PerformanceChart.svelte:548`) → scelta
+  **(a)**: quattro frazioni in `AssetPeriodContribution` (`period_unrealized_delta_percent`,
+  `period_realized_gain_loss_percent`, `period_income_percent`, `period_fees_taxes_percent`; base |start_value|,
+  4 decimali come `period_pnl_percent`, None senza base o senza componente; costi positivi). **MF-P4b**, commit proprio,
+  prima di J1 (detto al coordinatore).
+- **E1 entrato** (coordinatore): dev `e43dfae68`, riga 🐛 `f32a04f46`; HEAD ff a `f32a04f46` verificata.
+
+##### MF-P4b — le frazioni dei componenti (17/10, dalle 02:05)
+- ✅ **Codice**: `AssetPeriodContribution` + `period_unrealized_delta_percent`, `period_realized_gain_loss_percent`,
+  `period_income_percent`, `period_fees_taxes_percent` (descrizioni: base |start_value|, 4 decimali, ognuno arrotondato
+  da sé — la somma può differire da `period_pnl_percent` nell'ultima cifra); `get_positions_contribution` li riempie con
+  `contributions.period_return_on_start` sui valori mostrati dalla riga; docstring della funzione della casa.
+- ✅ **Test** (test-author `mf-p4b-tests`): `TestComponentPercents` in `test_positions_contribution_engine.py` (3 × 2
+  percorsi: tenuto all'inizio — 0.0373 / 0.0500 / 0.0123 / 0.0026, uno arrotonda su e uno giù —, aperto nel periodo,
+  riga di soli proventi → None).
+- ✅ **Rossi** (02:08, `files/p4b.sh red`, toppa `4c08ae2b…`, ripristino identico): **6/6**. ✅ **Verde mirato**
+  (02:09): 6/6.
+- ⏸️ **Congelamento della galleria fino a ~03:30** (coordinatore): niente `api`, E2E, `all-backend` né `ai-export`
+  grande; leggere solo sotto 50. Il resto dei verdi (`roi-fifo-utils`, `financial-math`, poi `api portfolio` e
+  `ai-export` a pezzi) fermato a carico 163 e rimandato.
+
+##### MF-J1 — `DailyStateBuilder` più lineare (17/10, dalle 02:20; codice durante il congelamento, nessuna prova)
+- **Lettura**: il pre-frame (≈100 righe) è una seconda replica «solo contabile» con approssimazioni proprie (il ricavo
+  intero d'una SELL in K, un arrivo di cassa in K); `frame_start` non è mai passato dal motore, e **ogni chiamante di
+  produzione passa `date_from=None`** (il motore parte dal primo movimento): il pre-frame serve solo ai test che
+  chiamano il motore o il costruttore con un `date_from` più tardo.
+- ✅ **Codice**: `daily_state.py` — via `frame_start` e il pre-frame; **una replica sola**, con le stesse regole ogni
+  giorno, da `replay_from = min(date_from, primo movimento)` a `date_to`, **stati emessi da `date_from`**;
+  `period_start` di default `date_from`; `_collect_dirty_days(...)` (stessa raccolta, la soglia «inizio» ora
+  `replay_from`; i tre confini del transito in un insieme filtrato, per la complessità); `_apply_pool_rule(...)`
+  statico (le regole K/R/W d'un movimento, con W restituito e la spesa d'un BUY da K/R); giorno pulito con
+  `dataclasses.replace` (verificato: il vecchio giorno pulito passava **tutti** i campi del modello, quindi `replace`
+  dà lo stesso stato; i contenitori copiati come prima). `engine.py`: via il ramo vuoto «estensione in avanti» della
+  cache del blob. Ruff/black puliti, import verde. Copie pre-J1 in `files/j1/`.
+- **Numeri**: produzione nessuno (`replay_from` = `date_from` = primo movimento: stessi giorni sporchi, stessa
+  replica). Cambiano solo le chiamate con `date_from` più tardo (test): K/R/W esatti invece delle approssimazioni.
+- **Prova** (test-author `mf-j1-tests`): test con `frame_start` riscritti sul comportamento equivalente; invariante
+  «stati da D = stati della replica dal primo movimento» (rossa su HEAD dove il pre-frame approssimava);
+  contenitori non condivisi; `_apply_pool_rule`. Prove quando il carico e il congelamento lo permettono.
+- ✅ **Test J1** (test-author `mf-j1-tests`): riscritti sul comportamento equivalente (`date_from` più tardo) i test con
+  `frame_start` — `test_portfolio_engine_vnext.py` (classe `TestDateFromAfterTheFirstMovement`),
+  `test_broker_pnl_contributions.py`, `test_broker_internal_flows.py` (casi 09/10 `*_date_from`), e anche
+  `test_daily_state_builder.py`, `test_signed_income.py`, `test_acquisition_funding.py`, docstring di
+  `test_native_cash.py`, `test_foreign_cash_revaluation.py`, `test_fx_only_days.py`; nuovo
+  `test_portfolio_engine/test_single_replay.py` (50: finestra = replica intera su sette libri × D quieto/D di movimento,
+  tutti i campi; numeri esatti; contenitori non condivisi; `_apply_pool_rule` ×30). **Previsione smentita**: un arrivo
+  di cassa collegato prima di D è verde su HEAD (pre-frame e frame avevano la stessa regola «tutto in K», che è J2);
+  le differenze vere del pre-frame: l'ordine delle regole del giorno (caricamento invece di aggiunte prima) e la
+  mancata clamp di fine giorno — fissate entrambe.
+- ✅ **Rossi J1** (02:47, `files/j1.sh red`: `daily_state.py`/`engine.py` rovesciati, P4b tenuto; toppa `65ebdbfe…`,
+  ripristino identico): `test_single_replay` **39 rossi / 11 verdi**; `portfolio-engine` 41 verdi (riscritti, verdi
+  anche su HEAD).
+- ✅ **Verdi leggeri** (02:48-03:15): `portfolio-engine` 41; `financial-math` 825; `roi-fifo-utils` 1052 + **1 rosso
+  atteso**: il golden EUR-only. Classificato per percorso JSON: 56 aggiunte (i quattro `*_percent` di P4b in
+  `get_positions_contribution` e `get_report`, nulli perché `start_value` 0) + **4 valori di J1** in
+  `W2/engine.calculate` (la chiamata diretta col `date_from` della finestra, cioè il vecchio percorso del pre-frame):
+  contribuito 12047.586 → 12020.610, generato 9.590 → 36.566 — **ora uguali a `W2/get_history`** (replica da t=0) per
+  gli stessi giorni: J1 chiude una divergenza. Rigenerato (`golden.final` sha `696716ad…`); variante «solo P4b»
+  (`files/j1/golden.p4b.json`, sha `52d41ef3…`, generata coi due file di J1 messi da parte e ripristinati) per il commit
+  di P4b. Poi `roi-fifo-utils` **1053** verde.
+- Pesanti (`api portfolio`, `ai-export` a pezzi) dopo la fine del congelamento della galleria. Doc J1 al docs-writer
+  (`mf-j1-docs`): `financial_math.md:129,150`, `wac.md:302`, teoria `portfolio-engine/index.en.md:291-294` (debito di
+  traduzione). Due descrizioni del runner (`_backend_services.py` ~:959 e ~:2033) dicono ancora «pre-frame/frame»: al
+  coordinatore (superficie condivisa).
+
+##### MF-J2 — disegno (17/10, 03:0x; codice dopo il commit di J1)
+- **Regola (D-MF4 = (a))**: la gamba in partenza d'un CASH_TRANSFER / FX_CONVERSION interno collegato registra la sua
+  ripartizione (`from_r`, `from_k` sull'importo di partenza); la gamba d'arrivo la riprende in proporzione:
+  `R += importo_arrivo × from_r / importo_partenza`, il resto in K. Lo stesso broker (cambio valuta) o due broker.
+- **Ordine nel giorno**: un arrivo la cui partenza non è ancora stata vista quel giorno (ordine degli id) è rinviato
+  alla fine del giorno; senza partenza (dati incoerenti) resta il ripiego di oggi, tutto in K.
+- **Riscalamento dei pool** (`# 4g`, `scale = cash_like / pool_sum` quando la somma dei pool si scosta dalla cassa di
+  più di 0,01): dopo J2 misurare se scatta ancora sul corpus (golden, DB di prova popolato); se mai → toglierlo, con
+  un test che lo dimostri; altrimenti lasciarlo e documentare quando scatta.
+- **Numeri**: la scomposizione della cassa fra capitale versato e rendimenti generati (Dashboard) dopo trasferimenti
+  interni e cambi valuta: più rendimenti, meno capitale, totale invariato. CHANGELOG 🐛 già proposto nella carta.
+- ✅ **Doc J1** (docs-writer `mf-j1-docs`): `financial_math.md:118,128-137,155,163-168`, `wac.md:280,302,303`,
+  `portfolio-engine/index.en.md` §9 «One Daily Replay» (`:287-294`), `performance-metrics/index.en.md:28`. Debito: §9
+  e `:28` in it/fr/es. Nota del docs-writer verificata: `_preload_fx_rates()` carica i cambi da `date_from`; con un
+  `date_from` più tardo i giorni rigiocati prima non trovano i cambi di valutazione, ma non sono emessi e `date_from` è
+  sempre ricalcolato: nessun effetto sugli stati restituiti (in produzione `date_from` = primo movimento). Docstring di
+  `engine.calculate` (`period_start` senza nome → lo stato di `date_from`) corretto.
+- ✅ Statici: ruff/black (16 `.py`), `mkdocs build` strict 0, `git diff --check` pulito.
+- **Toppa P4b** (`files/j1/P4b.patch`, sha `7deeebc1…`, 5 file: schema, `contributions.py`, `portfolio_service.py`, test
+  di P4b, golden «solo P4b»): si applica a HEAD su un indice temporaneo. Il resto è J1 (+ golden finale).
+- Pesanti: slot 2 se avanza ≥ 20 min prima delle 03:50, altrimenti dopo le 04:45 (coordinatore).
+
+#### P4b e J1 committati; aggiornamento di base 6 (17/10, 03:2x) — HEAD `ca2f00c35`
+- Coordinatore: `5e30d875e` (P4b, toppa `7deeebc1…`), `d5096b925` (J1); merge di dev `8ef48dedb` pulito → HEAD
+  `ca2f00c35` verificata. `api portfolio` + `ai-export` a pezzi nello slot dopo le 04:45 (o prima delle 03:50), poi
+  l'ingresso. Le due righe del runner («pre-frame/frame», `_backend_services.py:959`, `:2033`) le correggo io nel
+  checkpoint di MF-W56: fatto (solo testo).
+
+##### MF-W56 — il WAC dell'anteprima arrotondato alla colonna (17/10, dalle 03:15)
+- Rossi al test-author (`mf-w56-tests`): facciata con WAC periodico (dentro il limite della colonna, uguale a
+  `round_computed_value`), WAC esatto che tiene la forma, costo automatico dal batch letto **prima** del salvataggio
+  (avviso di W: `RealDecimal` rilegge già a 12 decimali), eventualmente il «congela».
+- ✅ **Slot 2 su `ca2f00c35`** (P4b + J1; W56 tolto dall'albero per la corsa e rimesso, sha identico): `api portfolio`
+  51, `ai-export` 345 + 647. **⚠️ Fuori pista**: l'avviso del blocco della galleria (anticipato alle 03:35) mi è
+  arrivato a corsa finita; due pezzi di `ai-export` sono partiti alle 03:36 e 03:38, dentro il blocco. Detto al
+  coordinatore; d'ora in poi controllo i messaggi fra un pezzo e l'altro.
+- ✅ **MF-W56 — codice**: `compute_wac_iterative` arrotonda `wac.amount` con `round_computed_value(…, Transaction,
+  "cost_basis_override")` (333.333…3 → 333.333333333333; `100.00` resta `100.00`); `average_cost` resta esatto;
+  `running_wac` dei passi resta esatto (serie del grafico, non un input — d'accordo col test-author). Doc:
+  `developer/backend/transactions/wac.md` passo 9.
+- ✅ **Test W56** (test-author `mf-w56-tests`): `test_financial/test_wac_rounded_to_column.py` (19: facciata periodica
+  ×4 — anche 1000000/3, il limite delle 15 cifre —, esatta ×3 che tiene la forma, batch `auto`/`auto-detail` creato o
+  aggiornato ×8 letto con una spia prima del salvataggio, «congela» ×4).
+- ✅ **Rossi** (03:25, toppa `12bc994e…`): **16 rossi / 3 verdi** (gli esatti). ✅ **Verdi** (03:26-03:30): nuovi 19,
+  `roi-fifo-utils` 1072, `transaction-cost-basis-rule` 80, `portfolio-allocation-source` 98,
+  `pac-planner-wire-numbers` 39. **Da fare dopo il blocco (04:35)**: `api portfolio-wac`.
+- **P4b + J1 entrati** (coordinatore): dev `d93de2899`. Sovrapposizione col blocco annotata, «nessun danno». MF-W56:
+  `api portfolio-wac` dopo il blocco, nello slot 1 dopo B. Y avvisato per le quattro frazioni.
+
+##### MF-J2 — codice e misura (17/10, dalle 03:45)
+- ✅ **Codice** (`daily_state.py`): `_move_linked_cash(...)` — la partenza d'un CASH_TRANSFER / FX_CONVERSION interno
+  collegato esce da R poi da K e registra `(da R, importo)` col suo id in `transfer_splits`; l'arrivo (`paired_tx.id`)
+  porta la stessa **quota** in R (`importo_arrivo × da_R / importo_partenza`) e il resto in K; arrivo senza partenza
+  nota → K, come prima. Nel giorno gli arrivi la cui partenza è dello stesso giorno vanno in fondo
+  (`_is_linked_cash_arrival`). `_apply_pool_rule(..., transfer_splits=None)`: senza dizionario il comportamento di J1
+  (i suoi test restano verdi). Complessità: il ramo dei trasferimenti in una funzione propria. Ruff/black puliti.
+- ✅ **Misura del riscalamento dei pool** (strumento temporaneo `LIBREFOLIO_TEST_MF_RESCALE_LOG`, rimosso; registro in
+  `files/j2/rescale_triggers.log`): **186 scatti** su `portfolio-engine` + `roi-fifo-utils` dopo J2 — la maggior parte
+  con cassa in transito (`it_cash` 200, 400, 475, 1000: la partenza ha già lasciato i pool, la cassa la conta ancora),
+  il resto con cassa negativa (scoperto: K tenuto a zero). La deriva **non è 0** → secondo la carta il riscalamento
+  **resta**; da documentare quando scatta.
+- **Golden EUR-only**: rosso atteso — dopo il trasferimento interno dello scenario W1 il generato passa da 0.750 a
+  18.658 e il versato da 11556.426 a 11538.518, totale 11557.176 invariato: è D-MF4 (a). Da rigenerare dopo i rossi.
+- Rossi al test-author (`mf-j2-tests`).
+- **⚠️ Fuori pista — doc e codice divergevano già**: la teoria (`portfolio-engine/index.en.md` §6, riga del CASH
+  TRANSFER: «Arrival Leg: K_d += κ, R_d += ρ») e `deposited-capital.en.md:229` («move R and K from source to
+  destination») descrivevano già il trasporto della ripartizione; il codice metteva l'arrivo tutto in K
+  («Approximate»). J2 allinea il codice alla doc (D-MF4). Da aggiungere alla doc solo la quota quando le due gambe
+  hanno importi diversi (cambio valuta, due date) e il cambio valuta nello stesso broker; il «proportional
+  reconciliation» del transito è il riscalamento misurato sopra.
+- ✅ **Rossi di J2** (2026-10-17, test-author `mf-j2-tests`): `test_portfolio_engine/test_transfer_keeps_returns.py`,
+  37 casi. `files/j2.sh red` (patch `daily_state.py` sha `2c28164d…`, `git apply -R`, rossi, riapplicata, stesso sha):
+  **33 failed / 4 passed** sul `daily_state.py` di HEAD, per i motivi giusti (15 `TypeError` di `_apply_pool_rule` senza
+  `transfer_splits`, 11 `AttributeError` di `_move_linked_cash`, 7 asserzioni «versato 1300 / generato 0» invece di
+  1000 / 300 e simili); verdi i 4 perni di parità (finestra di transito, partenza ignota, arrivo da fuori perimetro,
+  partenza senza rendimenti).
+- ✅ **Verdi di J2** (`files/j2.sh green`): nuovi 37; `portfolio-engine` 41; `financial-math` 825; `roi-fifo-utils`
+  1108 + 1 rosso atteso, il golden.
+- ✅ **Golden rigenerato e rivisto per percorso JSON** (`files/j2.sh regen`, `files/golden_diff.py`): 106 percorsi,
+  **solo** `cash_from_contributed_capital`/`cash_from_generated_returns` (W1 giorni 11–24, W2 4–6, in
+  `engine.calculate`, `get_history`, `get_report.history`: 11556.426 → 11538.518 e 0.750 → 18.658, somma 11557.176
+  invariata) e i pool di fine di B (K 949.75 → 931.842, R 0.75 → 18.658: ±17.908). `native_cash_guard` verde.
+- ⚠️ **Fuori pista — lo scarto fra le due gambe** (segnalato da docs-writer): con la regola «la quota viaggia» il
+  divario Y − X (lo spread d'una conversione rispetto al cambio di riferimento, o il movimento del cambio durante il
+  transito) finiva in parte in K, cioè un risultato di cambio contato come capitale versato, contro il §6 («an exchange
+  result is a result, not a contribution»: un utile in R, una perdita da R poi da K come una FEE). **Correzione**:
+  l'arrivo riporta in K ciò che la partenza ha preso da K (κ) e in R ciò che ha preso da R (ρ); il divario va in R con
+  la regola del risultato di cambio (se R < 0, K assorbe). Con Y = X è identica alla quota: golden EUR invariato. Caso
+  della conversione 650 EUR → 715 USD a 0,92: versato **1000** / generato **307,80** (prima della correzione
+  1004,20 / 303,60): il versato torna uguale al capitale di riferimento. Test (test-author) e doc (docs-writer)
+  riallineati in corso.
+- ⚠️ **Fuori pista — MF-J3, difetto separato, pre-esistente** (segnalato da test-author e docs-writer, provato con
+  `files/j2/probe_external_inflow.py` su HEAD e su J2, stessi numeri): una gamba `linked_external_*` (trasferimento che
+  attraversa il confine del perimetro, vista filtrata per broker: `portfolioStore` manda `broker_ids`) entra nel
+  capitale di riferimento ma non nei pool. Perimetro {B}, 650 da A: versato 0 / generato 650; B con K 100, R 100 prima:
+  425 / 425 invece di 750 / 100. Non dentro J2 (altro comportamento, decisione del developer): riga **MF-J3** nel
+  backlog.
+- ✅ **Regola del risultato** (2026-10-17, `_move_linked_cash`): l'arrivo con una partenza nota `(ρ, X)`:
+  `K_d += X − ρ`, `R_d += ρ + (Y − X)`, se `R_d < 0` allora `K_d += R_d`, `R_d = 0`; partenza ignota o `X = 0` → tutto
+  in K. Test riallineati (test-author, 43 casi): `j2.sh red` (patch `defd7613…`) **38 failed / 5 passed** su HEAD;
+  verdi nuovi 43, `portfolio-engine` 41, `financial-math` 825, `roi-fifo-utils` 1114 + golden.
+- ⚠️ **Fuori pista — la terza fonte del divario: le quote di proprietà** (dal golden). In W1 il trasferimento va da A
+  (100 %) a B (50 %): ogni gamba è pesata dalla quota del suo broker, quindi X = 400 e Y = 200. Nessuna gamba è un flusso
+  esterno: il capitale di riferimento resta 13700 e il **P&L totale del motore scende di 200 all'arrivo** (01-12: +15,82
+  → −184,18, letto nel golden). Con la regola della quota la cassa da rendimenti restava 18,66 con un P&L di −184; con
+  la regola del risultato la perdita consuma R (35,816 portati + 0,75 di B) e poi 163,434 di K: generato 0, versato
+  11557,176 (somma invariata). Rispetto a prima di J2 il golden cambia di poco: 0,75 di B da generato a versato
+  (W1 giorni 11–24, W2 4–6; pool di fine di B: K 949,75 → 950,50, R 0,75 → 0); conti rifatti a mano. La regola del
+  risultato è coerente col P&L del motore in tutti e tre i casi (spread di conversione, cambio in transito, quote
+  diverse). Docstring generalizzato («a result», tre fonti); doc (docs-writer) e un caso di quote diverse (test-author)
+  in corso.
+- **CHANGELOG proposto (🐛 Fixed)**: «Dashboard cash breakdown: cash moved between brokers or converted between
+  currencies keeps the returns it carried, instead of being counted as contributed capital; a gain or loss between the
+  two legs (exchange rate, ownership share) counts as a result.»
+- ✅ **J2 chiuso in corsia** (2026-10-17, 04:26–04:27, carico 20): test-author ha aggiunto
+  `TestBrokersOwnedAtDifferentShares` (perdita: A 100 % → B 50 %, ρ 300, divario −200 → B K 100 / R 100, generato = P&L
+  100; guadagno: B → A, divario +200 in R; perdita oltre i rendimenti: K assorbe). `j2.sh red` (patch `d76d7706…`):
+  **40 failed / 6 passed** su HEAD, patch riapplicata con lo stesso sha; verdi: nuovi **46**, `roi-fifo-utils`
+  **1118** (golden compreso), `portfolio-engine` 41, `financial-math` 825; ruff/black puliti. Mutazioni (test-author):
+  «la quota al posto dei pool» → 13 rossi; «senza il travaso in K» → 5; «senza riordino nello stesso giorno» → 1.
+  Doc (docs-writer): `portfolio-engine/index.en.md` riga 157 (trasferimento e conversione, formule dell'arrivo, le tre
+  fonti del divario), 159–163 (esempi, partenza ignota, stesso giorno, transito), 204–207 (due derive del
+  riscalamento: transito, scoperto); `deposited-capital.en.md:229`; `financial_math.md` 132–140. `mkdocs build`
+  stretto exit 0, `check-links` exit 0 (97). Debito di traduzione it/fr/es: la riga del trasferimento, i due paragrafi
+  dopo, l'esempio del transito, la riga 229 (con un link e un'icona nuovi).
+- **Non toccati, verificato**: i test AI Export che leggono la scomposizione
+  (`portfolio_broker_integration`, `portfolio_broker_financial`) non hanno trasferimenti né conversioni;
+  `frontend/e2e/dashboard-report.json` è una risposta registrata.
+- ⚠️ **Fuori pista — MF-J4** (test-author): l'avviso «share mismatch» del classificatore scatta solo per le coppie su
+  giorni diversi. Riga nel backlog, non toccato.
+- **Da fare in slot**: `api portfolio` (combinato W56 + J2), `api portfolio-wac` (W56).
+
+#### W56 e J2 committati; aggiornamento di base 7 (17/10, 04:29) — MF-D resto
+
+- Coordinatore: `c129e82a9` (W56), `4a99eb8be` (J2 + giornale); merge di dev `ec6aa2007` pulito → HEAD **`b05b80201`**
+  verificata, albero pulito. `api portfolio-wac` + `api portfolio` nello slot 1 dopo la gallery; MF-J3 al developer,
+  MF-J4 a J. Prossimi: **MF-D resto** (sblocca CP-10d di J: lo spostamento di `series_preparation.py` in
+  `services/market_series.py`), poi MF-P2.
+- **Riverifica sul codice** (b05b80201):
+  - `series_preparation.py:67-82` `observed_annualization` e `:173-178` `_price_return_value` (già su
+    `returns.price_return`): la matematica che J vuole fuori prima dello spostamento (piano J, «Fuori da CP-10»).
+    Chiamanti di `observed_annualization`: `risk/results.py:92` (`portfolio_twrr_returns`, R6 di CP-9a),
+    `risk_plugins/comparison/plugin.py:234`; test `test_series_preparation.py:447`.
+  - `drawdown_context.py:498` **è già protetto**: i prezzi ≤ 0 danno la riga `UNAVAILABLE` prima (`:490`); l'audit
+    («senza guardia sullo zero») era impreciso. Resta una copia di `price_return` in float.
+  - Nota di J (18:40) confermata: CP-13a lascia `remaining_to_peak_ratio` null su una perdita totale (avviso
+    `total_loss_no_recovery`, `risk/metrics.py:400`), ma `DrawdownContextPayload._SUCCESS_REQUIRED_FIELDS` (`:151`) e
+    `PortfolioAssetDrawdownRow._validate_row` (`:446`) lo vogliono non null → la sezione cade. Raggiungibile solo per
+    arrotondamento (un rendimento che in float vale −1,0: prezzo che crolla di oltre 16 ordini; TWRR a −1 + 1e-16).
+  - R7–R9 (`risk/metrics.py`: `compounded_return`, `period_returns_from_cumulative`, `daily_risk_free_rate`,
+    `wealth_index`): nessuna pagina dev le nomina (grep vuoto).
+  - Versioni a v1.2.1 dei 4 componenti del drawdown: tutte 1 (`git show v1.2.1:…drawdown_context.py`).
+- **Proposta** (a J e al coordinatore, 04:3x):
+  - **D1, numeri identici**: `observed_annualization` (verbatim) e `float_price_return` (l'ex `_price_return_value`,
+    pubblico) in `financial_math/returns.py`; chiamanti `series_preparation.py`, `risk/results.py`,
+    `comparison/plugin.py`; nessuna riesportazione; test spostato (test-author); doc: mappa della casa + le gemelle
+    float del rischio dichiarate (docs-writer).
+  - **D2, AI Export**: perdita totale accettata (null solo con `current_drawdown_ratio <= -1`) nei due validatori;
+    `:498` → `float_price_return` sui close Decimal (stessa strada della serie del rischio); 4 componenti 1 → 2,
+    mappa compatta `[1, 2]` ×4 (annunciata al coordinatore prima di scriverla), segnaposto del catalogo, casi di
+    ripiego del renderer v2 → v3. Rossi prima.
+- **Via** (coordinatore, 04:3x): D1 e D2, comprese le 4 voci della mappa compatta («nessun altro ha
+  `snapshotDataRenderer.ts` aperto»); dopo l'ingresso di D2, J fa la sonda (un caso portafoglio + uno broker col
+  drawdown), come per E1. **J** (04:3x): D1 e D2 vanno bene, niente incrocia CP-10c, CP-10d, CP-13a; ordine **D1 prima,
+  poi CP-10d**; **non rinominare `_MIN_ANNUALIZATION_DAYS`** in `returns.py` (il test di parità di CP-14b,
+  `measureSignal.test.ts`, legge quel nome dal testo del file).
+- ✅ **Codice D1** (2026-10-17):
+  - `financial_math/returns.py`: `float_price_return(start, end) -> float` (l'ex `_price_return_value`, pubblico; il
+    messaggio dell'errore è nuovo, nessun test lo legge) e `observed_annualization` (verbatim); docstring del modulo.
+  - `series_preparation.py`: tolte le due funzioni, importate dalla casa; `__all__` senza `observed_annualization`
+    (nessuna riesportazione). `risk/results.py`, `risk_plugins/comparison/plugin.py`: import dalla casa. Import ordinati
+    (ruff I001), ruff/black puliti.
+  - Mappe della casa: `financial-math.instructions.md` (riga `returns.py`), `backend.instructions.md` (riga 80),
+    `financial_math/__init__.py`.
+- ✅ **Codice D2** (2026-10-17):
+  - `drawdown_context.py`: `_is_total_loss(current_drawdown_ratio)` (≤ −1); `DrawdownContextPayload._validate_success`
+    salta `remaining_to_peak_ratio` solo sulla perdita totale; `PortfolioAssetDrawdownRow._validate_row` idem (gruppi
+    con nome, non indici: un primo tentativo con `is not` sul valore era sbagliato — con il campo None avrebbe tolto ogni
+    None — corretto prima di ogni prova); `_observed_price_points` tiene i close Decimal; il rendimento di `:498` →
+    `float_price_return`; docstring del payload; 4 `ComponentSpec` `version=2`.
+  - `catalog.py`: `version=2` sui 4 segnaposto. `snapshotDataRenderer.ts`: 4 voci `[1, 2]` e il commento. ruff/black e
+    Prettier puliti.
+- In corso: test-author `mf-d-tests` (D1 `test_financial_math/test_series_returns.py`, spostamento del test di
+  `observed_annualization`; D2 rossi del drawdown, versioni, casi del renderer v2/v3), docs-writer `mf-d-docs`
+  (`financial_math.md` con le gemelle float R7–R9, `risk/architecture.md`, `ai_export_composition.md`). Script
+  `files/d.sh` (red1, red2, green1, green2, lint).
+- ⚠️ **Fuori pista — la caduta oltre 2⁵³** (test-author): la fixture 1e6 → 1e-11 dà un rendimento float di −1,0
+  esatto, la ricchezza va a 0 e `drawdown_episodes` solleva `ValueError` (`underwater_drawdown`, «finite and
+  positive»), già su HEAD: **una sola quotazione cattiva faceva cadere tutta la sezione** dello snapshot. Cura in D2
+  (stessa funzione, stesso aumento): la riga di quell'asset diventa `failed` con `risk_execution_error`, senza metriche,
+  e `logger.exception` — la regola del rischio per un guasto non dichiarato (`risk/service.py:218`: «nostro», loggato,
+  mai un verdetto sui dati); le altre righe e la sezione restano. Un primo giro la marcava `unavailable` con
+  `invalid_observed_prices`: corretto prima di ogni prova per coerenza col rischio. La fixture della perdita totale per
+  arrotondamento (riga OK con `remaining_to_peak_ratio` null) è quella già convalidata da CP-13a: 1 → 1E-10 → 1E-20.
+- **Riga del runner** (dichiarata): `AI_EXPORT_PURE_TEST_PATHS` (`services ai-export-pure`) + 
+  `test_ai_export_components_drawdown_total_loss.py`, primo elemento.
+- ✅ **Rossi** (2026-10-17, `files/d.sh`, carico < 50): **D1** (`red1`, patch D2 `9b1876ea…` e D1 `e3032ee3…` tolte,
+  rimesse con lo stesso sha): `financial-math test_series_returns` → errore di raccolta, `ImportError` di
+  `float_price_return` (atteso). **D2** (`red2`, solo D2 tolta): `ai-export-pure drawdown` **13 failed / 7 passed**
+  (4 `ValidationError` della perdita totale, 3 `ValueError` della caduta profonda, punti float, i 16 ulp del percorso
+  del rendimento −0.05296734734142261 vs …272, 4 versioni); `ai-export "drawdown or catalog"` **5 failed** (versioni);
+  `front-ai-export unit` **8 failed** (v2 → YAML di ripiego). Tutti per il motivo giusto.
+- ✅ **Verdi**: D1 — `financial-math` **847**, `series-preparation` **22**, `risk-all` (comparison, results,
+  annualizzazione, TWRR, KPI storici) **198**; D2 — `ai-export-pure` **323**, `ai-export "drawdown or catalog or
+  registry or version"` **183**, `front-ai-export unit` **585**; pezzi `ai-export` «portfolio or broker» **348**, «resto»
+  **648** (`structural_invariants` al cancello del coordinatore). ruff/black (8 file), Prettier puliti.
+- ✅ **Doc** (docs-writer): `financial_math.md` :41–58 (gemelle float dichiarate, `#float-twins`), :69, :111–122, :509,
+  :532; `risk/architecture.md` :59, :356–358; `ai_export_composition.md` :171 (ancora), :210–220, :226–238 (perdita
+  totale, percorso del rendimento, riga `failed`). `mkdocs build` stretto exit 0, `check-links` exit 0. Solo pagine dev
+  (nessun debito di traduzione).
+- **Copie rimaste** (grep): `schemas/risk.py:514`, `:595` ricalcolano il fattore per l'invariante del contratto (gli
+  schemi non importano servizi) → riga **MF-D3** nel backlog. `signals/risk_adapters.observed_annualization_factor`
+  legge il fattore preparato (non è una copia); `risk/quant/resampling.py:235` converte una lunghezza di blocco (altro).
+- ✅ **Slot 1** (05:05–05:11, su `b05b80201`, patch D messa da parte e rimessa, sha `1895560c…`): `api portfolio-wac`
+  **12**, `api portfolio` **51**; porta 6190 libera. W56 + J2 pronti all'ingresso.

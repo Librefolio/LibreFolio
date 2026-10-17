@@ -20,7 +20,7 @@ The **App & UI State** category contains stores responsible for the global user 
 | **Page busy** | `app/pageBusy.svelte.ts` | The «big» requests the page on screen has in flight, which its Refresh button waits for (`busy`). Scoped to the page: reset on a route change and when the client session ends. See [Page busy](#page-busy). |
 | **Instance configuration** | `$lib/features/instance/instanceConfig.svelte.ts` | The public configuration of the instance (`GET /api/v1/system/instance`), read once per page load, before the sign-in. See [Instance configuration](#instance-config). |
 | **Instance notices** | `$lib/features/instance/instanceNotices.svelte.ts` | The messages about the instance that features register, shown above every page of the app shell. See [Instance notices](#instance-notices). |
-| **Instance block** | `$lib/features/instance/instanceBlock.svelte.ts` | Whether the hosting provider blocked the instance: the first `423` `instance_blocked` from the API turns it on, and the `(app)` layout then shows the block page instead of the app. See [Instance block](#instance-block). |
+| **Instance block** | `$lib/features/instance/instanceBlockState.ts`, `$lib/features/instance/instanceBlock.svelte.ts` | Whether the hosting provider blocked the instance: the first `423` `instance_blocked` from the API turns it on, and the `(app)` layout then shows the block page instead of the app. The plain module (no runes) holds the state, which the API client marks; the `.svelte.ts` module is its reactive face, which the layout reads. See [Instance block](#instance-block). |
 | **Chart Settings** | `chartSettingsStore.svelte.ts` | Chart preferences of the FX and Assets pages: line colouring, area fill, grid lines, stale-data gradient, axis scales, the asset Calendar Return window and overlay signals. Kept per user in `localStorage` (`lf_{userId}_chartSettingsStore`), never on the server, in two separate scopes, `fx` and `assets`: each has its own global settings plus per-item overrides (pair slug, `asset-{id}`), and applying a scope's global settings clears that scope's per-item overrides. The chart period is not stored here: it lives in `sessionStorage` (Date Range, below). |
 | **Date Range** | `dateRangeStore.svelte.ts` | The date range (start, end) shared by the Dashboard (through `dateRangeController.svelte.ts`), the broker detail page, and the Assets and FX pages, list and detail. It lives in `sessionStorage` (`librefolio_dateRange`), so it belongs to the browser tab and survives a reload; on a full page load, `start` and `end` in the URL win, and it falls back to the last three months when the account changes. |
 
@@ -190,19 +190,35 @@ How `InstanceNotices.svelte` renders them:
 
 ## 🔒 Instance block {: #instance-block }
 
-`instanceBlock` (`lib/features/instance/instanceBlock.svelte.ts`, Svelte 5 runes) is a flag: whether
-the hosting provider blocked this instance (backend side: [Instance Block](../../architecture/security.md#instance-block)).
+The instance block is a flag: whether the hosting provider blocked this instance (backend side:
+[Instance Block](../../architecture/security.md#instance-block)). Two modules of
+`lib/features/instance/` hold it, so that the API client, which turns it on, imports no module with
+runes: the AI Export probe loads the client without Svelte's compiler, and a gate keeps the client
+rune-free ([the probe's frontend bridge](../../architecture/patterns/ai_export_probe_workflow.md#frontend-bridge)).
 
-- **Who turns it on**: the error interceptor of `lib/api/zodios-client.ts` calls `markBlocked()` when
-  `isInstanceBlockedError(status, data)` is true: status `423` (`INSTANCE_BLOCKED_STATUS`) and
-  `detail.code` `instance_blocked` (`INSTANCE_BLOCKED_CODE`). The error still reaches its caller. The
-  module imports nothing from the API, so the interceptor imports it without a cycle.
+- **The state**: `instanceBlockState` (`instanceBlockState.ts`), a plain module without runes. It
+  holds `blocked`, which `markBlocked()` and `clear()` change, and `subscribe(listener)`, which calls
+  the listener synchronously after every change and returns the function that stops it. The module
+  also exports `isInstanceBlockedError()`, `INSTANCE_BLOCKED_STATUS` and `INSTANCE_BLOCKED_CODE`, and
+  imports nothing from the API, so the client imports it without a cycle.
+- **The reactive face**: `instanceBlock` (`instanceBlock.svelte.ts`, Svelte 5 runes), which the
+  `(app)` layout reads. Its `$state` starts from `instanceBlockState.blocked` when the module loads —
+  a block marked before the layout loaded shows at once — and only its subscription writes it
+  afterwards, synchronously: a change shows in `instanceBlock.blocked` in the same tick. Its
+  `markBlocked()` and `clear()` are the plain module's own, and it re-exports the two constants and
+  `isInstanceBlockedError()`: a page or a feature may take all it needs from the face, while a module
+  on the API client's import graph imports the plain module.
+- **Who turns it on**: the error interceptor of `lib/api/zodios-client.ts` calls
+  `instanceBlockState.markBlocked()` when `isInstanceBlockedError(status, data)` is true: status `423`
+  (`INSTANCE_BLOCKED_STATUS`) and `detail.code` `instance_blocked` (`INSTANCE_BLOCKED_CODE`). The
+  error still reaches its caller.
 - **Who reads it**: in `routes/(app)/+layout.svelte`, the branch `$isAuthenticated && instanceBlock.blocked`
   comes before the bootstrap ones, so `InstanceBlockedPage` replaces the app and the app shell never
   starts: its requests never pile up refusals.
 - **Who turns it off**: `clear()`, which also runs when the signed-in account changes, signing out
-  included (`registerClientSessionReset('instanceBlock', …)`). A page load starts with the flag off.
-- **Getter**: `blocked`.
+  included: `instanceBlockState.ts` registers the reset (`registerClientSessionReset('instanceBlock', …)`),
+  and the face, which follows the state, registers none. A page load starts with the flag off.
+- **Getter**: `blocked`, on both.
 
 The backend answers `423` only to a signed-in user; anyone else gets the `401` of `get_current_user()`,
 which the interceptor turns into the login as usual — except on `/`, where the login already is, and
@@ -233,8 +249,9 @@ on the anonymous pages of a link, which handle the `401` themselves
   [Instance Block](../../architecture/security.md#instance-block)); the page never guesses it from the
   role, so a `false`, a missing field, a pending or a failed request mean no card, for an
   administrator too. The section stays outside the `role="alert"` one, so a screen reader announces
-  the block, not the card and its progress. The card's four routes already answer on a blocked
-  instance.
+  the block, not the card and its progress. The card's routes already answer on a blocked instance:
+  the four of the backup, and `GET /backup/instance/options`, the rules of a secure backup's password
+  ([Instance Block](../../architecture/security.md#instance-block)).
 - The page mounts its own `ToastContainer`: the `(app)` layout mounts one only with the app shell,
   which this page replaces, and the card reports its errors and a backup with warnings by toast.
 - Colours are colour roles only. The test ids are `instance-blocked`, `instance-blocked-description`,
@@ -243,15 +260,24 @@ on the anonymous pages of a link, which handle the `401` themselves
   the others).
 
 ```ts
-import {instanceBlock, isInstanceBlockedError} from '$lib/features/instance/instanceBlock.svelte';
+// lib/api/zodios-client.ts marks the plain state: no runes on the API client's import graph
+import {instanceBlockState, isInstanceBlockedError} from '$lib/features/instance/instanceBlockState';
 
-if (isInstanceBlockedError(error.response?.status, error.response?.data)) instanceBlock.markBlocked();
-instanceBlock.blocked; // true: the (app) layout shows InstanceBlockedPage
+if (isInstanceBlockedError(error.response?.status, error.response?.data)) instanceBlockState.markBlocked();
+
+// a page or a component reads the reactive face
+import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
+
+instanceBlock.blocked; // true, in the same tick: the (app) layout shows InstanceBlockedPage
 ```
 
 Tests: `./dev.py test front-utility component-unit` runs `InstanceBlockedPage.test.ts`, which mounts
 `BackupDownloadCardStub` (`frontend/src/__tests__/harness/`) in place of the card: it checks where the
 card goes and when, while `lib/features/backup/BackupDownloadCard.test.ts` covers what the card does.
+`./dev.py test front-utility core-unit` runs `instanceBlock.test.ts`: `isInstanceBlockedError()`, the
+flag and its reset at a change of account, and the face — a change through `instanceBlockState` shows
+in `instanceBlock.blocked` with nothing awaited, a block marked before the face loads is on from its
+first read, and one session reset, the plain module's, clears both.
 
 ## 🙈 Privacy masking {: #privacy-masking }
 
@@ -493,10 +519,11 @@ the call where the user's request arrives:
 
 | Trigger | Examples |
 |:--------|:---------|
-| The first load, in `onMount` | `dashboard-first-load` (`routes/(app)/dashboard/+page.svelte:832`), `broker-first-load` (`routes/(app)/brokers/[id]/+page.svelte:279`) |
-| The Refresh handler | `handleSync()` → `dashboard-refresh` (`dashboard/+page.svelte:711`), `handleRefresh()` → `broker-refresh` (`brokers/[id]/+page.svelte:434`) |
-| A change of period, currency, scope, filter or tab | `createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()))` (`dashboard/+page.svelte:175`), `dashboard-scope` after the broker filter's debounce (`dashboard/+page.svelte:706`), `broker-period` in `handleDateChange()` (`brokers/[id]/+page.svelte:431`) |
-| A panel that opens, changes its inputs, or follows the page's Refresh | `lib/features/brokers/lots/LotsAnalysisPanel.svelte:343-371` (`lots-panel-load`, `lots-selection-load`, and `lots-*-refresh` on `refreshVersion`); `lib/features/risk/riskPanelController.svelte.ts` (`risk-load` in `applyBaseSignature()`, l.594; `risk-refresh` on `refreshVersion`, l.658) |
+| The first load, in `onMount` | `dashboard-first-load` (`routes/(app)/dashboard/+page.svelte:832`), `broker-first-load` (`routes/(app)/brokers/[id]/+page.svelte:279`), `asset-first-load` (`routes/(app)/assets/[id]/+page.svelte:1112`) |
+| The Refresh handler | `handleSync()` → `dashboard-refresh` (`dashboard/+page.svelte:711`), `handleRefresh()` → `broker-refresh` (`brokers/[id]/+page.svelte:434`). On an asset's page the token sits on the button's `onrefresh`, `asset-refresh` (`assets/[id]/+page.svelte:2279`), because `handleRefresh()` also runs after a sync |
+| A change of period, currency, scope, filter or tab | `createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()))` (`dashboard/+page.svelte:175`), `dashboard-scope` after the broker filter's debounce (`dashboard/+page.svelte:706`), `broker-period` in `handleDateChange()` (`brokers/[id]/+page.svelte:431`); on an asset's page `asset-period`, `asset-currency`, and the chart's view and calendar window, `asset-mode` and `asset-calendar-window` (`assets/[id]/+page.svelte:1769`, `:1181`, `:391`, `:419`) |
+| A reload after a save in a window | `assets-reload` after a create, an edit or a merge on the Assets list (`routes/(app)/assets/+page.svelte:897`, `:1898`, `:1914`); `asset-reload` after an edit, a new FX pair or the data editor's save on an asset's page (`assets/[id]/+page.svelte:2758`, `:1748`, `:2642`): the page rebuilds what the user just changed |
+| A panel that opens, changes its inputs, or follows the page's Refresh | `lib/features/brokers/lots/LotsAnalysisPanel.svelte:343-371` (`lots-panel-load`, `lots-selection-load`, and `lots-*-refresh` on `refreshVersion`); `lib/features/risk/riskPanelController.svelte.ts` (`risk-load` in `applyBaseSignature()`, l.594; `risk-refresh` on `refreshVersion`, l.658); on the Assets list's Correlation tab, `AssetSetRiskPanel.reload()` (`lib/features/risk/AssetSetRiskPanel.svelte:224`) hands each section a new `refreshVersion`, so «Reload All» waits for their `risk-refresh` |
 | A lazy load a panel asks by itself: `join` | `dashboard-pnl-candles`, `dashboard-contribution` (`dashboard/+page.svelte:1040`, `:1057`); `broker-pnl-candles`, `broker-contribution` (`brokers/[id]/+page.svelte:675`, `:704`) |
 
 Inside an `$effect`, read the inputs tracked and start the load untracked, as the lots panel does:
@@ -520,6 +547,12 @@ $effect(() => {
   (`dashboard/+page.svelte:729`, `brokers/[id]/+page.svelte:449`), and the risk controller's own sync,
   `handleSynced()` (l.612), reloads without a token too. See
   [How a page uses the cache](domain-state.md#how-a-page-uses-the-cache).
+- the reload after a sync on an asset's page: `handlePageSyncComplete()` and
+  `handleFxPairCreationSynced()` call `handleRefresh()` without a token
+  (`assets/[id]/+page.svelte:1715`, `:1743`). A sync can still make the button wait for a panel: the
+  Dashboard's banner syncs bump `refreshVersion` (`dashboard/+page.svelte:389`, `:465`) and the asset
+  page's `handleRefresh()` bumps `riskRefreshVersion`, so an open lots panel or Risk tab reloads under
+  its own token.
 
 **`join` (N55).** A new report drops the P&L candles of the growth chart and the contribution of the
 positions panel, and a panel left on that view asks for them again at once. After the user's period,
@@ -560,10 +593,12 @@ icon. Trimmed from the Dashboard's:
 | Broker detail | `broker-refresh` | `routes/(app)/brokers/[id]/+page.svelte:624` |
 | Brokers list | `brokers-refresh` | `routes/(app)/brokers/+page.svelte:384` |
 | Transactions | `tx-refresh-button` | `routes/(app)/transactions/+page.svelte:768` |
-| Files | `files-refresh-button` | `routes/(app)/files/+page.svelte:784` |
+| Files | `files-refresh-button` | `routes/(app)/files/+page.svelte:783` |
 | FX list | `fx-refresh-all-button` | `routes/(app)/fx/+page.svelte:1113` |
 | FX detail | `fx-detail-refresh-btn` | `routes/(app)/fx/[pair]/+page.svelte:1338` |
-| Assets list | `assets-refresh-button` | `routes/(app)/assets/+page.svelte:1642` |
+| Asset detail | `asset-detail-refresh-btn` | `lib/components/assets/detail/AssetDetailToolbarActions.svelte:92`, with `busy={pageBusy.busy}` from `routes/(app)/assets/[id]/+page.svelte:2278` |
+| Assets list | `assets-refresh-button` | `routes/(app)/assets/+page.svelte:1645` |
+| Assets list, Correlation tab | `risk-reload-button` («Reload All») | `routes/(app)/assets/+page.svelte:1595`, in place of the list's button on that tab |
 | Tools hub | `tools-hub-refresh` | `lib/features/tools/ToolsHub.svelte:162` |
 | Tool page | `tool-host-refresh` | `lib/features/tools/ToolHost.svelte:263` |
 
@@ -588,19 +623,23 @@ no `data-busy` on its root.
 - **The pages**: `frontend/e2e/portfolio/page-busy.spec.ts` (`./dev.py test front-portfolio page-busy`).
   A localhost answer lands before an assertion can look, so each case owns the busy state by holding
   the request that causes it:
-    1. `hold()` (l.165) parks, through `page.route`, the request the trigger sends — picked by method,
-       path and body — and lets every other one through. `heldRequest()` (l.201) fails by name when the
+    1. `hold()` (l.178) parks, through `page.route`, the request the trigger sends — picked by method,
+       path and body — and lets every other one through. `heldRequest()` (l.214) fails by name when the
        trigger never reaches the network. `release()` lets the request go with `route.fallback()`, not
        `continue()`, so it still crosses the page's other routes; `dispose()` runs in `finally`.
-    2. `expectBusy()` and `expectIdle()` (l.207, l.213) read only `data-busy` and `disabled`: never the
+    2. `expectBusy()` and `expectIdle()` (l.220, l.226) read only `data-busy` and `disabled`: never the
        spin class, a colour or a text.
-    3. For a request the button must **not** wait for, `recordBusy()` (l.355) keeps every value the
+    3. For a request the button must **not** wait for, `recordBusy()` (l.368) keeps every value the
        button's `data-busy` takes, through a `MutationObserver` in the page, so «it never waited» means
-       never, not «not when the test looked». `simulateCatchUp()` (l.325) stubs the catch-up status so
+       never, not «not when the test looked». `simulateCatchUp()` (l.338) stubs the catch-up status so
        the tracker sends `{kind: 'prices'}`.
     4. Then the **control**, in the same page under the same recording: a period change (the 6M preset)
-       must make the button wait, and the record must now contain `true` (l.666-678). Without it, the
+       must make the button wait, and the record must now contain `true` (l.679-691). Without it, the
        silence of step 3 proves nothing.
     5. The N55 cases also hold the cascaded P&L candles or contribution: after a background reload the
        button stays idle while they are held; after a period change it waits for them once the
        period's own report is back.
+    6. The asset pages' cases (l.1184): an asset's Refresh and a period change hold the chart's price
+       query; the reload after the page's own Sync — answered in the browser, nothing written — must
+       leave the button idle, with a period change as its control; on the Correlation tab, «Reload
+       All» holds the sections' base wave.

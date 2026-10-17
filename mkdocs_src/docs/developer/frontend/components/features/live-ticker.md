@@ -532,6 +532,16 @@ tracker, `priceRefresh`, built with the defaults: the `fetch` above, `instanceNo
 are called, not when the module loads: the API client imports this module, and a test that mocks one
 of them only in part, such as the client's own tests, must still load it.
 
+The default `notices` goes further: it loads the registry on first use. `instanceNotices.svelte.ts`
+holds runes, so `priceRefresh.ts` imports only its `InstanceNotice` type (`import type`); the first
+`show()` or `hide()` loads the module with `import()`, through one promise that every later call
+shares, which keeps a `hide()` from overtaking its `show()`. The API client imports `priceRefresh`,
+and the client must stay free of runes: the AI Export probe loads it without Svelte's compiler, and a
+gate checks it ([the probe's frontend bridge](../../../architecture/patterns/ai_export_probe_workflow.md#frontend-bridge)).
+The notice thus reaches `instanceNotices` a few microtasks after the tracker shows or hides it, which
+nothing visible depends on; a tracker built with `deps.notices`, as the tests build theirs, calls its
+sink at once.
+
 ## 🧪 How it is tested {: #testing }
 
 | Test | Runner action | What it pins |
@@ -539,7 +549,8 @@ of them only in part, such as the client's own tests, must still load it.
 | `lib/features/live-updates/activePolling.test.ts` (Vitest, node, fake timers) | `./dev.py test front-utility core-unit` | Every rule of [`startActivePolling`](#active-polling) on a clock and a tracker the test owns, [failures and provider pauses](#backoff) included, and the four numbers of `cadence.ts` |
 | `lib/services/livePriceService.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | `toLivePriceResult`, `fetchCurrentPrices` on a faked axios adapter, `livePollOutcome`, `livePollFailure` and `computeDirection` |
 | `lib/features/live-updates/activityTracker.test.ts` (Vitest, node, fake clock) | `./dev.py test front-utility core-unit` | The five input events, `hidden` and `visible`, `touch()`, the subscribers, and no listener left after `dispose()` |
-| `lib/features/price-refresh/priceRefresh.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | [Updating prices…](#price-refresh): `readPriceRefreshHeader`; the tracking that a header starts, one at a time; the notice; the ends of a tracking (`idle`, ten `starting`, five failures); a `4xx`, after which the headers are ignored until `reset()`; the portfolio refresh, only after a job seen running and with `last_refreshed`; `stop()`, and `reset()` at a change of account; the defaults, the `fetch` of the status route included, and the refresh of the app's tracker: `notifyPricesCaughtUp()` once a catch-up that updated something is over, never `requestPortfolioRefresh()`, and neither signal when nothing was updated or no job was seen running |
+| `lib/features/price-refresh/priceRefresh.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | [Updating prices…](#price-refresh): `readPriceRefreshHeader`; the tracking that a header starts, one at a time; the notice; the ends of a tracking (`idle`, ten `starting`, five failures); a `4xx`, after which the headers are ignored until `reset()`; the portfolio refresh, only after a job seen running and with `last_refreshed`; `stop()`, and `reset()` at a change of account; the defaults, the `fetch` of the status route included, and the refresh of the app's tracker: `notifyPricesCaughtUp()` once a catch-up that updated something is over, never `requestPortfolioRefresh()`, and neither signal when nothing was updated or no job was seen running; the default `notices`: importing the module or building a tracker loads no `instanceNotices.svelte.ts`, the first notice loads it, once, and a `show()` and a `hide()` issued while it is loading reach it in their order |
+| `lib/api/apiClientRuneFree.gate.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | The rule behind the lazy `notices` ([the probe's frontend bridge](../../../architecture/patterns/ai_export_probe_workflow.md#frontend-bridge)): from `lib/api/index.ts` and from `frontend/scripts/ai-export-render-prompt-probe.ts`, no static import reaches a `.svelte.ts` module or a `.svelte` component, each one reported with the chain of imports that reaches it, and `lib/api/zodios-client.ts` imports none directly. Imports are read on TypeScript's syntax tree: `import type` and `export type` are erased, `import {type X}` counts, since `verbatimModuleSyntax` keeps it, and a dynamic `import()` is not followed. It reads the generated client (`lib/api/generated.ts`, from `./dev.py api sync`): a local import that names no file fails it instead of being skipped. Synthetic graphs, and a real site that imports the instance block's face (`lib/features/email/verificationApi.ts`), check that the scanner reports what it must |
 | `lib/stores/portfolio/portfolioMutation.test.ts`, `lib/stores/portfolio/portfolioStore.test.ts`, `lib/features/brokers/lots/lotsAnalysisStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio store-unit` | The cases of [Updating prices…](#price-refresh): `notifyPricesCaughtUp()` gives every listener exactly `{kind: 'prices'}`, once, kept apart from `refresh` and `mutation`; a listener that throws keeps none of the others from hearing it and is logged; a removed listener hears nothing. The report and lots caches mark their answers stale on it, keep them and ask nothing; the next report fetch without `force` asks the stale one again |
 | `lib/features/risk/riskStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio risk-unit` | The case of [Updating prices…](#price-refresh): the risk answers marked stale on `{kind: 'prices'}`, kept, and nothing asked |
 | `lib/stores/__tests__/TimeSeriesStore.test.ts`, `lib/stores/__tests__/fxStoreRegistry.test.ts` (Vitest, node) | `./dev.py test front-fx fx-unit` | The stale price and rate caches of [Updating prices…](#price-refresh) (Z-14). `markStale()` keeps every point readable (`get`, `has`, `size`, `getRange().data`, `getAllSorted()`) and reports a loaded range missing whole, points or not; a merge covers nothing, only `markFetched` does; the fetches made after the mark add up, and what they leave uncovered comes back as contiguous intervals in date order; a fetch of the whole range makes the store fresh, a second mark stale again; `invalidateAll()` ends the state, and `invalidateRange()` still works in it; without a mark the gaps are the ones of before. On `{kind: 'prices'}` the FX registry marks every pair stale: `ensureFxRangeLoaded`, `ensureFxRangeLoadedBulk` and `loadFxRatesAndSignalsBulk` without signals ask a range loaded before again, in one interval for the whole range, then answer from the cache; `lookupFxRate` takes a stale day for a miss, asks it once and makes only that day fresh; `lookupFxRateSync` still returns the stale point and asks nothing; a `mutation` (the live poll's `POST /assets/prices/current`, a commit) or a `refresh` changes nothing |
@@ -584,29 +595,44 @@ sequenceDiagram
     participant DB as PriceHistory
 
     Page->>API: [asset_ids]
-    alt provider assigned
-        API->>Prov: get_current_value(), 2-min cache, 10 s timeout
+    opt provider assigned, no quote in the 2-min cache
+        API->>Prov: get_current_value(), 10 s timeout
         Prov-->>API: value, currency, as_of_date
-    else no provider, the provider failed, or it is paused
-        API->>DB: last stored close
+    end
+    alt quote, fresh or cached, kept by storable_current_value()
+        Note over API: served as the price columns keep it, a fresh quote cached 2 min
+    else no provider, the provider failed or is paused, or its quote is refused
+        API->>DB: latest stored close that reads a number
         DB-->>API: value, source db:last_known
     end
     API->>DB: upsert today's row, fresh provider quotes dated today only
     API-->>Page: results with asset_id, value, currency, as_of_date, source, error, error_code, retry_after
 ```
 
-- A provider answer has `source: "provider:<code>"` and is cached for two minutes
-  (`_asset_current_cache`, `backend/app/services/assets/core.py`).
-- An asset with no price at all comes back with `value: null` and an `error`.
+- A provider answer has `source: "provider:<code>"` and is served as the price columns keep it
+  (`storable_current_value()`, `backend/app/services/assets/price_store.py`; X-R40, W-B62): in
+  its own form when the history's truncation leaves it unchanged (`101.5` stays `101.5`),
+  truncated otherwise (`65432.1234567890999` → `65432.123456789`). Only such a quote is cached,
+  for two minutes (`_asset_current_cache`, `backend/app/services/assets/core.py`, shared with
+  the price sync), and a cached one is served the same way.
+- **A refused quote**, one no price column can keep (not finite, more than 12 digits before the
+  decimal point, or non-zero but 0 once truncated to 12 decimal places, such as `1E-13`), is
+  neither served, cached nor written: the asset falls back to the database exactly as after a
+  provider failure, with no `error_code`, and the next poll asks the provider again. The backend
+  logs it once per asset, provider and value:
+  [Current Quotes and Today's OHLC](../../../backend/assets/architecture.md#current-quotes-and-todays-ohlc).
+- The database fallback is the latest stored close that reads a number, with
+  `source: "db:last_known"`: a close the file holds as ±inf reads as no value and is passed over.
+  An asset with no price at all comes back with `value: null` and an `error`.
 - **A paused provider** is not called: while the asset's provider is paused after «too many
   requests», or when it refuses this call, the answer is the last stored price
   (`source: "db:last_known"`, still HTTP 200) with `error_code: "RATE_LIMITED"` and `retry_after`,
   the seconds until the provider may be called again; with no stored price, an `error` and the same
   two fields. The pauses are the backend's:
   [Provider Pauses](../../../backend/assets/architecture.md#provider-pauses).
-- **Side effect**: a provider quote dated today creates or extends today's `PriceHistory` row. A
-  database fallback is never written back. This write is why the frontend treats the call as a
-  portfolio mutation.
+- **Side effect**: a provider quote dated today creates or extends today's `PriceHistory` row, with
+  the value served. A database fallback is never written back. This write is why the frontend
+  treats the call as a portfolio mutation.
 
 ## 🔗 Related
 

@@ -6,7 +6,7 @@ only) and ``backend/app/api/v1/backup/__init__.py`` (``backup_router``, composed
 ``exports.py``), on the lane's server. The jobs underneath (``services/platform/instance_backup/``) have suites of
 their own, ``services backup-jobs`` and ``services backup-archive``; so do the per-series exports.
 
-- BACKUP-001, pure (C2): ``backup_router`` registers the four routes of ``instance.py``, the four of ``panel.py``, the
+- BACKUP-001, pure (C2): ``backup_router`` registers the five routes of ``instance.py``, the four of ``panel.py``, the
   nine of ``restore.py``, then the three exports of ``exports.py``, in that order, each with its method and its endpoint, under the single tag Backup & Export.
 - BACKUP-002: without a session each of the four routes answers 401; BACKUP-003: an ordinary user gets 403 from each.
   Both on an existing job and its archive; a refused DELETE leaves the job in place.
@@ -461,6 +461,7 @@ def created_jobs(accounts) -> Iterator[list[str]]:
 #: as <module>.<function> under backend.app.api.v1.backup.
 BACKUP_ROUTES = [
     ("POST", "/backup/instance", "instance.start_instance_backup"),
+    ("GET", "/backup/instance/options", "instance.get_instance_backup_options"),
     ("GET", "/backup/instance/jobs/{job_id}", "instance.get_instance_backup_job"),
     ("GET", "/backup/instance/jobs/{job_id}/file", "instance.download_instance_backup"),
     ("DELETE", "/backup/instance/jobs/{job_id}", "instance.delete_instance_backup_job"),
@@ -484,11 +485,11 @@ BACKUP_ROUTES = [
 
 
 def test_the_backup_router_registers_its_routes_in_order():
-    """BACKUP-001 (C2): backup_router registers the four routes of instance.py, the four of panel.py, the nine of restore.py, then the three exports of exports.py, in that order, each with its method and endpoint, under the single tag Backup & Export."""
+    """BACKUP-001 (C2): backup_router registers the five routes of instance.py, the four of panel.py, the nine of restore.py, then the three exports of exports.py, in that order, each with its method and endpoint, under the single tag Backup & Export."""
     print_section("BACKUP-001: the /backup router registers its routes in order (C2)")
     contexts = list(iter_route_contexts(backup_module.backup_router.routes))
     served = [(",".join(sorted(ctx.methods or ())), ctx.path, f"{getattr(ctx.endpoint, '__module__', '?').removeprefix(backup_module.__name__ + '.')}.{getattr(ctx.endpoint, '__name__', '?')}") for ctx in contexts]
-    assert served == BACKUP_ROUTES, f"the /backup router changed: it must register the four routes of instance.py, the four of panel.py, the nine of restore.py, then the three exports of exports.py, in this order:\n  expected {BACKUP_ROUTES}\n  got      {served}"
+    assert served == BACKUP_ROUTES, f"the /backup router changed: it must register the five routes of instance.py, the four of panel.py, the nine of restore.py, then the three exports of exports.py, in this order:\n  expected {BACKUP_ROUTES}\n  got      {served}"
     tags = [(ctx.path, list(getattr(ctx, "tags", []))) for ctx in contexts]
     assert all(route_tags == ["Backup & Export"] for _path, route_tags in tags), f"each route of the /backup router must carry the single tag Backup & Export, and no other:\n  expected ['Backup & Export'] on each route\n  got      {tags}"
     print_success(f"{len(served)} routes, in their order: {[f'{method} {path}' for method, path, _endpoint in served]}")

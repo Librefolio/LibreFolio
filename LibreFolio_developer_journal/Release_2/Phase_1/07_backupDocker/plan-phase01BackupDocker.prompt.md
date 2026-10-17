@@ -3535,6 +3535,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >     `tool-catalog`, `serving-lock` dopo `data-directories`, `restore-commit` dopo `admin-bootstrap`, con la regola di
 >     N57), rinumerata: 21 passi, gli stessi del codice e nello stesso ordine (confrontati con `STARTUP_STEPS`).
 >   - Pagine solo in inglese: nessun debito di traduzione.
+> - Controlli della doc: fermati prima di partire (carico ~100) per farli una volta sola, dopo anche H-17 (sotto).
 > - **B è entrato in `dev`** (coordinatore, 21:45): merge **`0cd910a7e`** (treno 141: B3, P7, B5b, B5c, B-17, N53, N57;
 >   64 file), nessun conflitto. **CHANGELOG**: mandato il blocco finale in inglese (`files/next-checkpoint/
 >   changelog-block.md` della sessione): in `✨ Added` sostituisce il punto di B2 («Check a backup before restoring it»)
@@ -3558,7 +3559,1106 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   `hasattr` coglie solo il vecchio nome; mettere nella tabella un valore di prova e verificare che la funzione lo segua
 >   chiuderebbe anche un 500 scritto a mano.
 > - **22:32, handoff del checkpoint** al coordinatore, 🧊 FROZEN: 7 file tracciati, nessuno nuovo.
-> - Controlli della doc: fermati prima di partire (carico ~100) per farli una volta sola, dopo anche H-17 (sotto).
+> - **Committato** dal coordinatore: `fix(backup)` H-17, `docs(backup)`, `docs(journal)`; HEAD `e3a96d9da`. La nota del
+>   test-author (un valore di prova nella tabella di H, la funzione che lo segue): **sì**, nel prossimo lotto.
+
+### Terzo aggiornamento di base — merge di `dev_release2` `cd617824e` (2026-10-16, 22:32-23:04) ✅ — handoff, in attesa del commit
+
+> - Merge aperto dal coordinatore (HEAD `e3a96d9da`, MERGE_HEAD `cd617824e`): la decisione 47 di W aggiunge il passo
+>   `lone-transfer-legs` (dopo `post-migration-fixes`, prima di `global-settings`) e la sua voce nella lista numerata di
+>   `developer/architecture/overview.md`, dove io avevo appena messo i miei tre passi: un conflitto, solo quello.
+> - **Risolto con uno script** (non a mano): la lista dei passi nell'ordine di `STARTUP_STEPS` del codice unito (22
+>   passi, contati da `app_lifespan.py`), il testo di ogni passo dal lato che lo ha (i miei tre da HEAD, quello di W dal
+>   suo lato; nessun passo comune con testi diversi), numerata da capo: **lista = codice, 22 su 22**. Nessun marcatore,
+>   `git diff --check` pulito; in staging solo `overview.md`, fuori staging solo questo piano.
+> - Riordinata qui sopra la nota delle 21:40 (i controlli fermati col carico a ~100), finita per sbaglio dopo l'handoff
+>   delle 22:32.
+> - Prova (22:55-23:03, dopo l'attesa del carico): `mkdocs build` stretta **exit 0** (238 s, ogni URL relativo del sito
+>   risolto), `mkdocs check-links` valido, `utils gate-docs-links` **63 passati**; porta 6187 libera. `git diff --cached
+>   --check` pulito, nessun file non risolto.
+> - **23:04, handoff del merge** al coordinatore: in staging, oltre al merge, solo `overview.md`. Fuori staging resta
+>   questo piano; i file dei test di B4 che i test-author stanno scrivendo non vanno nel commit del merge.
+> - **Committato** dal coordinatore: `6c72f0efe` (solo l'indice; genitori `e3a96d9da` e `cd617824e`). H-17 e la doc sono
+>   entrati in dev. Via a B4: rossi, poi codice.
+> - **Prossimo lotto: B4** (password e chiave dell'archivio; P12 deciso: scrypt `n = 2^15`, la password con le regole e
+>   l'indicatore della registrazione, almeno 12 caratteri), prima l'analisi; più il test della nota di H-17. B7 e B9
+>   aspettano Docker; BZ alla fine. Di notte: una domanda che solo il developer può sciogliere va nel piano e al
+>   coordinatore, e si va avanti.
+
+### B4 — analisi sulla base nuova (2026-10-16, 22:36-22:47) — inviata al coordinatore ✅ — via alle 22:55 — codice, verdi e revisioni ✅ (17/10, 02:10) — 🧊 FROZEN, checkpoint pronto
+
+> **Via del coordinatore (22:55)**, sui tre punti:
+>
+> 1. sui file degli altri scrivo io e il proprietario rivede, in sola lettura, prima del mio checkpoint:
+>    - A: `password_policy.py` (le tre funzioni con `rules=`) e `PasswordStrength.svelte` (la prop `rules`);
+>    - X: `_NoInputEchoRoute` in un modulo comune;
+>    - H: la riga della docstring di `derive_key_from` e la revisione delle righe che leggono la chiave.
+>
+>    Il coordinatore avvisa tutti e tre. Non toccare `zodios-client.ts` né `settings/users/**` (A7b aperto).
+> 2. B4a + B4b in un lotto solo.
+> 3. Lo slot E2E per FBKP-108/109 si chiede quando è pronto.
+>
+> Più:
+>
+> - la domanda per il developer resta per il mattino: si procede con «in chiaro»;
+> - B-18 (`restore --instance-key-file`) va nel backlog;
+> - l'eco del 422 su registrazione, cambio e reset della password diventa una voce di sicurezza di A (A-30), da
+>   correggere col modulo comune una volta entrato.
+>
+> **Avvio (22:55-23:05)**:
+>
+> - contratto congelato per i test: `files/b4-test-brief.md` della sessione. Una correzione rispetto all'analisi: in
+>   `password_policy.py` `rules=None` vuol dire le regole lette al momento della chiamata, mai un default fissato
+>   all'import;
+> - sei test-author in parallelo, ognuno sui suoi file e senza eseguire niente; i rossi li lancio io, uno alla volta:
+>   - la busta: `services backup-envelope`;
+>   - le regole, il 422 e `secure.py`: la sezione B4 di `test_password_policy.py`, `services backup-secure-rules`,
+>     `api no-echo-route`, più la guardia di H-17 in `test_backup_restore.py`;
+>   - i servizi: `services backup-secure`;
+>   - l'API: `api backup-secure`;
+>   - la CLI: `utils backup-cli-secure`;
+>   - il frontend: Vitest della cartella backup e di `PasswordStrength`.
+>
+>   Il codice lo preparo intanto fuori dal worktree (`files/b4-wip/`), e entra solo dopo i rossi e dopo il commit del
+>   merge 3.
+>
+> **⚠️ Fuori pista (23:25), una regola del contratto rivista scrivendo il codice**: il contratto rifiutava
+> (`unexpected_entry`) uno zip in chiaro con dentro la chiave d'istanza. Ma lo zip che `dev.py backup decrypt` estrae da
+> una busta è proprio questo: `inspect` e `restore` avrebbero rifiutato un file scritto da LibreFolio stessa, sulla strada
+> manuale «Porta a casa». Rifiutarlo in lettura non protegge niente, perché un archivio costruito ad arte porta comunque i
+> segreti che vuole; la regola che conta è in scrittura: la chiave la scrive solo un backup con la password. Nuova
+> regola: la chiave annunciata dal manifest si accetta in ogni archivio, ma non si estrae mai nella copia. Brief
+> aggiornato; il test-author dei servizi corregge il suo caso 8.
+>
+> **⚠️ Fuori pista (23:40), i codici di fine di un controllo**: il test esistente «prodotto = dichiarato» di
+> `test_backup_restore.py` vuole in `RestoreErrorCode` solo i codici con cui un controllo in background può finire.
+> `wrong_password` ed `envelope_unsupported` sono risposte sincrone di `POST /restore/stage` (400 e 409, descritte nelle
+> sue risposte), mai la fine di un controllo. Nell'enum entrano quindi solo `password_required` ed `envelope_damaged`,
+> scritti come letterali (`StagingError("envelope_damaged", …)`), così il test li vede. In più, in `start_check` si legge
+> l'intestazione prima di chiedere la password: una busta che non si può aprire non chiede una password.
+>
+> **Rossi, eseguiti uno alla volta nella corsia** (23:20-23:50), tutti rossi per il motivo giusto:
+>
+> - `services backup-envelope`: 100 errori al setup (`ModuleNotFoundError` di `envelope`);
+> - `services backup-secure-rules`: errore di raccolta (manca `secure`);
+> - `services password-policy`: 21 falliti (i nuovi), 53 passati (quelli di A);
+> - `api no-echo-route`: errore di raccolta (manca `no_echo`); la categoria `api` ha ricostruito il frontend prima di
+>   avviare il server (comportamento del runner: le sorgenti erano cambiate col merge e coi test di TA-F);
+> - `services backup-secure`: 52 falliti (moduli, parametri e campi mancanti);
+> - `utils backup-cli-secure`: 42 falliti (argparse exit 2, modulo mancante).
+>
+> I sei test-author: busta 28 funzioni (100 casi), regole e 422 21 + 24 + 8 più la guardia di H-17, servizi 26 (52
+> casi), API 14 (24 casi) più BACKUP-001, CLI 18 (42 casi), frontend 8 file. Selettori nuovi registrati nel runner
+> (aggiunte): `services backup-envelope`, `backup-secure-rules`, `backup-secure`; `api backup-secure` (esclusivo: fa
+> backup veri sul server della corsia), `api no-echo-route`; `utils backup-cli-secure`.
+>
+> **Codice applicato (00:10)**, dagli script preparati fuori dal worktree (`files/b4-wip/apply_b4_*.py`), ognuno
+> verificato prima con `--check`:
+>
+> - backend: `envelope.py`, `secure.py`, `api/no_echo.py` (nuovi); `paths`, `manifest`, `archive` (la voce della chiave,
+>   `read_instance_key`), `jobs` (cifratura, fase `encrypting`), `staging` (decifratura, voce della chiave, rekey e
+>   conteggi), `restore_jobs` (password sincrona, upload tenuto, `kind`), gli schemi, le due rotte, `job_views`, la CLI
+>   (`--encrypt`, `--password-file`, `--password-stdin`, `decrypt`, niente abbreviazioni delle opzioni);
+> - sui file degli altri, per la loro revisione: A (`password_policy.py`: `rules=`, `rules_with_minimum_length`;
+>   `PasswordStrength.svelte`: la prop `rules`), X (`plugin_settings.py` importa la classe spostata), H (la riga della
+>   docstring di `derive_key_from`; `instance_block.py` e il suo test: `get_instance_backup_options` permessa sull'istanza
+>   bloccata, come le altre rotte del backup);
+> - frontend: `backupApi`, `backupJob`, `restoreFlow` (stato `password`), le due card, la modale del report,
+>   `restoreText`, i quattro cataloghi di `backup/` (19 chiavi di TA-F più `mode.legend`, `password.intro`,
+>   `readyEncrypted`, `warnings.instance_key_unusable`; aggiornati `download.description` e `report.keyIncluded`).
+>
+> Poi: import senza cicli; ruff (due ordini di import corretti, due C901 risolti estraendo `_print_written` e
+> `_print_key_and_secrets` nella CLI), black; `api sync`; `i18n build` e `i18n check` (4935 chiavi × 4, rigoroso);
+> Prettier senza modifiche. Le fixture E2E con i campi nuovi le aggiorna TA-F.
+>
+> **Verdi (00:08-00:29)**, uno alla volta nella corsia:
+>
+> - `services`: `backup-envelope` 100, `backup-secure-rules` 24, `password-policy` 74, `backup-secure` 52, `backup-jobs`
+>   69, `backup-archive` 155 (+1 salto voluto), `backup-staging` 145;
+> - `utils`: `backup-cli-secure` 42, `backup-cli` 102, `backup-cli-restore` 77;
+> - Vitest: 928 (logica, `PasswordStrength`, i suoi usi in registrazione, reset e cambio password) e 159 (le tre card).
+>
+> **⚠️ Fuori pista**:
+>
+> - `utils backup-cli` al primo giro: 22 rossi. I test esistenti costruiscono a mano un `Namespace` senza le opzioni
+>   nuove, e `cmd_create` leggeva `args.encrypt`. Corretto nel codice, non nei test: le tre opzioni si leggono con
+>   `getattr` e un default (chi costruisce il suo `Namespace` resta senza password, come prima di B4). Poi 102 verdi.
+> - Vitest, un rosso: TA-F vuole che `getInstanceBackupOptions()` restituisca la risposta così com'è (identità), e io
+>   la ricostruivo per restringere il tipo. Ora la funzione fa un cast unico dopo lo schema zod, come
+>   `startRestoreCheck`. Poi 259 verdi.
+> - Sotto carico (~65) e con otto file in parallelo, il `beforeAll` di due file di card è andato in timeout (import
+>   dinamico oltre 60 s): rilanciati da soli, si caricano. Non è un esito sul codice: ora le card girano in un lotto a
+>   parte.
+>
+> In corso: i verdi `api`, poi `services backup-apply`; revisione di sicurezza (agente, in sola lettura); doc
+> (docs-writer). Righe sui file degli altri mandate al coordinatore per la revisione di A, X e H (00:31).
+>
+> **Revisioni (00:31-00:45)**:
+>
+> - **sicurezza** (agente, in sola lettura): nessuna vulnerabilità; ogni area è sana per un motivo detto (nonce, AAD,
+>   valore di controllo, limiti prima di scrypt, voce della chiave, rekey, password mai in stato, log, 422 o argomenti,
+>   symlink, file in chiaro rimossi). Due note:
+>   - `2^15` sta sotto il minimo OWASP (`2^17`), scelta P12 del developer: scrivere `2^16` è possibile (i lettori lo
+>     accettano già). Nota al developer, non bloccante;
+>   - una cartella `backups/.decrypt-*` lasciata da un `inspect` ucciso non la toglie nessuno. Correzione nel lotto:
+>     prima il test rosso (TA-E), poi il codice (`apply_b4_cli_sweep.py`: tolte quelle più vecchie di un'ora, mai link
+>     né file);
+> - **X: OK.** Una correzione: `patterns/plugin_settings.md:425` nominava `_NoInputEchoRoute` (fatta);
+> - **A: OK.** Una nota facoltativa: `PasswordStrength` leggeva una lista vuota come «assente»; ora `rules != null`,
+>   come `rules=[]` nella policy (commento e documentazione della prop);
+> - **H: OK sul codice.** Le correzioni:
+>   - la docstring di `instance.py` («the five routes», fatta);
+>   - la docstring di `derive_key_from` con la sua formula («a clear archive, or a key the environment gives», fatta);
+>   - le righe di `security.md` (tabella di `ALLOWED_WHEN_BLOCKED`) e di `hosting_providers.en.md` sulla rotta
+>     `options`, passate al docs-writer;
+> - **coordinatore (X-R22)**: `backup_restore.en.md:33` si allinea all'ordine di H-3, passato al docs-writer.
+>
+> **⚠️ Fuori pista: un errore di svelte-check nella build**, invisibile a Vitest, che non controlla i tipi. Il client
+> rigenerato tipizza il corpo facoltativo di `POST /backup/instance` come `InstanceBackupRequest | null`, quindi
+> `undefined` non va più. Ora `startInstanceBackup()` passa `null`, come fa già `UsersTab`. Il client dell'app valida
+> solo le risposte: `null` e `undefined` partono entrambi senza corpo. Le asserzioni che fissavano `undefined` le
+> ripara TA-F.
+>
+> **Verdi `api` (00:34-01:13)**: `no-echo-route` 8, `backup-secure` 24, `backup-restore-apply` 136, `plugin-settings`
+> 14. **⚠️ Fuori pista**:
+>
+> - `api backup`: il server condiviso non ha risposto in 300 s. Mentre girava la costruzione dei prerequisiti erano
+>   cambiate le sorgenti del frontend (le riparazioni di TA-F e la mia di `backupApi.ts`), e l'avvio ha rifatto la build
+>   di debug sotto carico. È infrastruttura, non un esito: si rilancia alla fine, senza modifiche in volo. Regola per me:
+>   niente modifiche al frontend mentre gira un selettore `api`;
+> - `api backup-panel` (6 rossi) e `api backup-restore` (2 rossi): i doppi di test scritti prima di B4 non accettano le
+>   parole chiave nuove (`start_backup(…, password=)`, `stage_archive(…, key=)`), e un test fissava la risposta
+>   dell'upload a `{upload_id, size}`. Il codice di produzione passa le parole chiave in modo esplicito, ed è giusto
+>   così: le riparazioni dei doppi (anche quello di `test_instance_block.py`, di H) le fa TA-D.
+>
+> **Dopo la revisione di sicurezza e la doc, due correzioni piccole, prima i rossi**:
+>
+> - la pulizia delle cartelle `backups/.decrypt-*` lasciate da un `inspect` ucciso (test di TA-E);
+> - il download di un `.lfbk` servito come `application/octet-stream` e non come zip (trovato dal docs-writer; test di
+>   TA-D). Il tipo si sceglie dal nome del file, non rileggendo il job: PANEL-019 fissa le chiamate del download;
+> - in più, l'aiuto di `--password-file` diceva «la prima riga», ma `read_secret_file` legge tutto il file: corretto il
+>   testo.
+>
+> **Doc (docs-writer, 01:00)**:
+>
+> - `admin/backup_restore.en.md`: una sezione nuova `#secure` e una tabella `#secure-problems`, più tutte le sezioni
+>   toccate da B4; dentro anche la correzione X-R22 (l'ordine di H-3);
+> - `developer/architecture/security.md`: la sezione nuova `#secure-backups`, più le righe di A (`#password-rules`) e
+>   di H (`#instance-key` e la tabella di `ALLOWED_WHEN_BLOCKED`);
+> - `admin/hosting_providers.en.md`: la rotta `options` sull'istanza bloccata;
+> - una frase ciascuna in `configuration`, `filesystem` e `docker_advanced`;
+> - `cli_tools.en.md` (fuori dal brief, giusto: ripeteva quattro volte che la chiave non è mai nell'archivio);
+> - `frontend/state/app-state.md`, `features/auth.md` e `core-ui/atoms.md`.
+>
+> Debito di traduzione preesistente: `cli_tools`, `configuration`, `filesystem`, `docker_advanced`. Nel backlog B-19:
+> `decrypt` lanciato da root scrive uno zip di root (la guida lo dice).
+>
+> **Fine del giro `api` (01:11-01:18)**: `api instance-block` 2 rossi e `api backup-instance-errors` 6 rossi, per gli
+> stessi doppi di prima di B4; `services backup-apply` 228 verdi. **⚠️ Fuori pista**: `api backup-roundtrip` non
+> esiste, il selettore è `e2e backup-roundtrip`. Errore mio nella lista: argparse esce con 2 prima di partire, nessun
+> dato toccato.
+>
+> **Doppi riparati da TA-D (01:20)**, cinque, senza cambiare il senso dei test:
+>
+> - `test_backup_panel.py`: il finto `start_backup` accetta `password` e la registra a parte (`start_passwords`).
+>   PANEL-013 e PANEL-018 verificano `[None]`, perché il pannello non cifra mai. Le tuple fissate da altri test non
+>   cambiano;
+> - `test_backup_instance_errors.py:68` e `test_instance_block.py:821` (di H): solo la firma, `password=None`;
+> - `test_backup_restore.py`: il finto `stage_archive` accetta `key=None`. La risposta dell'upload ora è
+>   `{upload_id, size, kind}`, con `kind == "zip"`.
+>
+> Il grep di tutti gli altri doppi (`build_archive`, `archive_name`, `_run`, `start_job`, `_run_check`, `_stage`, le
+> regole, gli helper della CLI) non trova altro da riparare: accettano già `**kwargs`, oppure B4 li chiama come prima.
+>
+> **I rossi delle due correzioni (01:18-01:20)**, per il motivo giusto:
+>
+> - `utils backup-cli-secure`, 1 rosso su 43: `.decrypt-killed` e `.decrypt-old` restano;
+> - `api backup-secure`, 2 rossi su 24:
+>   - `test_a_secure_backup_is_an_envelope_its_password_opens`: l'`.lfbk` esce come `application/zip`;
+>   - `test_openapi_documents_the_secure_backup`: l'OpenAPI dichiara solo `application/zip`.
+>
+> **Codice (01:22)**, ogni script verificato prima con `--check`:
+>
+> - `apply_b4_cli_sweep.py`, 3 operazioni: `_remove_stale_decrypt_folders`, che con `lstat` toglie solo le cartelle
+>   vere più vecchie di 3600 s, mai un link né un file;
+> - `apply_b4_download_type.py`, 4 operazioni: il tipo scelto dal suffisso (`FILE_SUFFIX`), `FILE_RESPONSES` con i due
+>   tipi, e l'aiuto di `--password-file`.
+>
+> Ruff e black puliti, poi `api sync`. Nel client generato la risposta del download resta `z.void()`, e la UI scarica
+> con un link `download`: per il frontend non cambia niente.
+>
+> **In corso (dalle 01:25)**: la catena finale `files/scripts/b4_final_chain.sh`, un passo alla volta:
+>
+> - i verdi `utils` e `api` della lista, più `e2e backup-roundtrip` e `api registration` (prova sul percorso di A);
+> - Vitest in quattro lotti: logica, schermate di A con `PasswordStrength`, card, client;
+> - i controlli statici;
+> - la doc.
+>
+> **Verdi backend (01:25-01:49)**, uno alla volta nella corsia, carico < 50:
+>
+> - `utils`: `backup-cli-secure` 43, `backup-cli` 102, `backup-cli-restore` 77;
+> - `api`: `backup-secure` 24, `backup` 23, `backup-restore` 122, `backup-panel` 59, `instance-block` 62,
+>   `backup-instance-errors` 6. `backup-secure` ha rifatto la build del frontend per il client rigenerato (7 minuti, fuori
+>   dal tempo di avvio), svelte-check 0 errori;
+> - `e2e backup-roundtrip` 3.
+>
+> **⚠️ Fuori pista: slot.** Alle 01:49 il coordinatore ha visto un `dev.py test` sulla mia corsia. I selettori `api` e
+> `e2e` chiedono uno slot anche se sono mirati, e io li avevo contati come leggeri. Erano già finiti tutti, e la corsia
+> era libera dalle 01:49. Ho fermato la catena per PID mentre aspettava il carico prima di `api registration` (la prova
+> facoltativa sul percorso di A: tolta). Il resto non usa la corsia: `files/scripts/b4_final_rest.sh`, cioè Vitest, i
+> controlli statici e la doc. Regola per me: ogni `api`/`e2e`, anche di un solo file, solo in uno slot chiesto prima.
+>
+> **Metà leggera (01:50-01:58)**, senza server di corsia:
+>
+> - Vitest: 799 (9 file: logica del backup, `PasswordStrength`, `PasswordInput`, ICU, regole), 184 (le 4 schermate di A
+>   con l'indicatore), 159 (le tre card), 17 (il client);
+> - `theme-roles` pulito, gate 215, `front check` 0 errori e 0 avvisi, `i18n check` 4935 chiavi, rigoroso;
+> - `lint --dead-code` rosso come prima (era rosso già alle 13:07 del 16/10, per voci di altri). B4 non aggiunge nulla.
+>   L'unica voce di B è di B5c, `RESTORE_TICKET_HEADER`: il test lo legge con un cast → backlog B-20;
+> - check-links valido, `gate-docs-links` 63.
+>
+> **⚠️ Fuori pista: la build rigorosa della doc è rossa, con 4 avvisi.** `admin/backup_restore.en.md` esiste solo in
+> inglese, e quattro link nuovi puntano ad ancore che esistono solo nelle pagine inglesi di destinazione:
+> `configuration.md#instance-key`, `#secret-files`, `#startup-checks` e `cli_tools.md#backup-decrypt`. La build tradotta
+> rende la pagina inglese con i link risolti verso le pagine tradotte, e lì quelle ancore mancano. La regola c'è già
+> (devWiki `decisions/docs-anchors-from-the-render.md`): una pagina solo inglese linka le pagine tradotte senza ancora,
+> salvo un id esplicito presente in tutte e quattro le lingue. La correzione la fa il docs-writer, solo nella pagina; la
+> build la rilancio io.
+>
+> **Correzione della doc (docs-writer, 02:00)**: sei link senza ancora (`#startup-checks` compariva tre volte). Ora
+> ogni link va alla pagina, e la frase nomina la sezione («The Instance Key» in [Environment Variables](…)), nella
+> forma che la pagina usava già. Le ancore rimaste esistono in tutte e quattro le lingue (`#updating`,
+> `#start-the-server`, `#session-persistence`, `#reset-a-password-or-lock-an-account`), oppure portano a pagine senza
+> traduzione. Nota del docs-writer, preesistente e non di B4: in inglese `#reset-a-password-or-lock-an-account` è solo
+> lo slug del titolo. Funziona, ma si rompe se il titolo cambia. Lasciata com'è.
+>
+> **Verdi della doc (02:03-02:06)**: build rigorosa exit 0 (80 s, 3084 URL di asset risolti), check-links valido,
+> `gate-docs-links` 63. Poi una parola nella docstring della pulizia («older than an hour», com'è il confronto), ruff e
+> black puliti, `utils backup-cli-secure` 43. `git diff --check` pulito, porta 6187 libera.
+>
+> **Handoff (02:10)**: CHECKPOINT READY al coordinatore, con i percorsi per proprietario e i tre OK (A, X, H), più la
+> riga nuova per H (la firma del finto `start_backup` in `test_instance_block.py:821`). Insieme: il blocco finale del
+> CHANGELOG (`files/next-checkpoint/changelog-b4.md`), le due note per il developer (il default «in chiaro»; scrypt
+> `2^16`, già leggibile da ogni lettore), il debito di traduzione e B-18/19/20. Restano per dopo il checkpoint: gli E2E
+> FBKP-108/109 in uno slot. 🧊 FROZEN.
+
+> Sola lettura, nessun codice. Il contratto intero è nella cartella della sessione (`files/b4-contract.md`: §2-§6
+> aggiornati a P12, §9 nuovo); qui il riassunto.
+
+**Stato reale** (HEAD `e3a96d9da` + merge aperto di `cd617824e`):
+
+- H: `derive_key_from(key, purpose, length)` **è in base** (`instance_key.py:85`). La sua docstring dice «l'archivio
+  lascia fuori la chiave»: vero solo per gli archivi in chiaro di oggi. L'analisi H-3 di H dice già «solo un archivio
+  protetto da password potrà contenerla (B4)». La decisione 39 resta; una riga della docstring va aggiornata (file di H,
+  sua revisione).
+- Nessuna lettura pubblica della chiave generata. Bastano però due funzioni pubbliche:
+  - `instance_key_status()` (`generated`, senza `problem`);
+  - `read_secret_file(path)`, come la docstring di `derive_key_from` dice di leggere un file di chiave.
+
+  Proposta: nessuna funzione nuova nel modulo di H, che rivede le ~10 righe di B. Così **B4a e B4b diventano un lotto
+  solo**.
+- X: invariato (`count_unreadable_secrets`, `rekey_plugin_secrets`, `settings_subkey`).
+- A6c:
+  - `password_policy.py`: 5 regole, minimo 8; `failed_rules()`, `password_rules_public()` in `GET /system/instance`;
+  - `PasswordStrength.svelte` legge le regole solo da lì, senza una prop.
+- `cryptography` 50.0.2.
+
+**Scoperte sul codice**
+
+1. `_run_check` toglie l'upload nel `finally` (`restore_jobs.py:254`): una password sbagliata trovata dal thread
+   costerebbe un nuovo upload, fino a 500 MB.
+   - → La password si controlla **subito, nella richiesta** `POST /restore/stage`: l'intestazione di 52 byte più scrypt
+     2^15, circa 0,1 s. La rotta è `def` e il controllo gira sotto il lock dei controlli.
+   - `password_required`, `wrong_password` ed `envelope_unsupported` rispondono subito e **tengono l'upload**.
+   - Al thread va la chiave AES derivata, mai la password.
+2. Un 422 di FastAPI ripete il corpo (`input`): con un campo mancante ripete anche la password (provato con pydantic,
+   errore `missing`). X lo toglie già con `_NoInputEchoRoute`, privato in `api/v1/plugin_settings.py:35`.
+   - → Spostarlo in un modulo comune (X rivede) e usarlo sulle rotte del backup che ricevono una password.
+   - Osservazione per il backlog di A: registrazione, cambio e reset della password hanno lo stesso eco.
+3. La pulizia del job (`_remove_work_files`, `jobs.py:265`) toglie già lo zip in chiaro quando il file tenuto è la
+   busta, anche in caso di errore: nessuna pulizia nuova.
+4. B3 non prende nessuna impronta della copia controllata: il rekey dopo l'upgrade non rompe niente.
+5. I traceback del log non stampano le variabili locali (`format_exc_info`).
+
+**P12 senza copiare le regole**
+
+- Backend (file di A: scrivo io, A rivede): `failed_rules(password, rules=…)`, `password_rules_public(rules=…)` e
+  `rules_with_minimum_length(n)`. B usa le regole di A con il minimo a `max(minimo di A, 12)`.
+- `GET /backup/instance/options` → `{password_rules}`, per la scheda.
+- `PasswordStrength` riceve una prop facoltativa `rules` (componente comune: A rivede).
+- Limiti dell'intestazione in lettura: `log2(n)` da 14 a **16**, cioè al massimo 64 MiB, il doppio di quello che
+  scriviamo. Anche in lettura una busta ostile o futura non satura la RAM delle macchine piccole.
+
+**Superfici**
+
+- nuove: `instance_backup/envelope.py`, il modulo comune del 422 senza eco;
+- di B: `jobs.py`, `staging.py`, `restore_jobs.py`, `manifest.py`, `schemas/backup.py`,
+  `api/v1/backup/{instance,restore,job_views}.py`, `scripts/backup_cli.py`, `features/backup/*`, i18n `backup` (4
+  lingue), `admin/backup_restore.en.md`;
+- condivise:
+  - di A: `password_policy.py` e `PasswordStrength.svelte`;
+  - di X: `api/v1/plugin_settings.py`;
+  - di H: la docstring di `instance_key.py`;
+  - il catalogo del runner (`backup-envelope`, un'aggiunta) e il client generato (`api sync`);
+  - del coordinatore: `CHANGELOG.md`.
+
+**Conflitti previsti**: bassi. `password_policy.py` e `PasswordStrength.svelte` se A li tocca ancora,
+`plugin_settings.py` se X ha un lotto in volo.
+
+**Rischi**
+
+- la crittografia la montiamo noi: servono vettori fissi e la revisione di sicurezza, obbligatoria;
+- spazio: zip + busta durante la creazione (2×), busta + zip + copia durante il controllo (3×), controllati prima;
+- lo zip in chiaro resta un momento su disco durante la creazione (P12 §3: accettato), `0600`;
+- P24 (opzione A di H-3, aperto): oggi nessun effetto. Se entra, `settings_subkey()` può sollevare: niente rekey, tutti
+  i segreti contati illeggibili, e il ripristino va avanti.
+
+**Passi** (prima i rossi, col test-author)
+
+1. La busta: `envelope.py` e `services backup-envelope`:
+   - il giro completo;
+   - un vettore fisso calcolato a parte, con le primitive di `cryptography`;
+   - ogni manomissione;
+   - un'intestazione ostile rifiutata prima di scrypt;
+   - NFC, e il `.part` tolto.
+2. Regole e 422: le righe di A con i loro test, lo spostamento della classe di X.
+3. Creazione:
+   - il corpo della richiesta;
+   - nel job `encrypted` e la fase `encrypting`;
+   - la chiave generata dentro l'archivio (B4b);
+   - `options`.
+4. Ripristino:
+   - `kind` dell'upload;
+   - il controllo sincrono della password e la fase `decrypting`;
+   - la chiave tenuta in memoria, mai scritta nella copia;
+   - il rekey;
+   - nel report `secrets_unreadable` e `secrets_rekeyed`.
+5. CLI:
+   - la password da `--password-file`, da `--password-stdin` o da due `getpass`;
+   - `decrypt`;
+   - `inspect` e `restore` di una busta.
+6. UI:
+   - la scelta «in chiaro» / «sicuro» col testo della decisione 39;
+   - la password due volte, con l'indicatore;
+   - al ripristino la password chiesta prima dell'upload, e una nuova prova senza ricaricare;
+   - le righe del report.
+7. Chiusura:
+   - doc (docs-writer) e `api sync`;
+   - i controlli e la revisione di sicurezza;
+   - in uno slot gli E2E FBKP-108 (il giro sicuro) e FBKP-109 (la password sbagliata).
+
+Più il test di guardia di H-17: un valore di prova nella tabella di H, e la funzione che lo segue.
+
+**Selettori**
+
+- backend:
+  - `services`: `backup-envelope` (nuovo), `backup-jobs`, `backup-staging`, `backup-apply`, `password-policy`,
+    `plugin-settings-crypto`, `profile-defaults`;
+  - `api`: `backup`, `backup-instance-errors`, `backup-panel`, `backup-restore`, `backup-restore-apply`,
+    `backup-roundtrip`, `plugin-settings`;
+  - `utils`: `backup-cli`, `backup-cli-restore`;
+- frontend: Vitest su `features/backup/*` e `PasswordStrength`;
+- E2E: `front-utility backup` in uno slot.
+
+**Fatto quando**:
+
+- un backup sicuro, creato dalla UI o dalla CLI, si apre solo con la sua password;
+- si ripristina con le chiavi dei fornitori ricifrate con la chiave dell'istanza;
+- una busta manomessa, o una password sbagliata, si rifiuta senza perdere l'upload;
+- nessuna password finisce nel log, nello stato o in una risposta;
+- la revisione di sicurezza non lascia rilievi aperti.
+
+**Domande**
+
+- *Per il developer* (non bloccante; di notte vado avanti con la mia scelta): la scelta della scheda parte da «in
+  chiaro» o da «sicuro»? Propongo «in chiaro»: è il comportamento di oggi, e la specifica dice «opzione».
+- *Per il coordinatore*:
+  - gli scrittori delle righe di A, X e H (propongo: scrivo io, il proprietario rivede, come per le righe di H);
+  - il lotto unico B4a+B4b;
+  - più avanti, uno slot per gli E2E.
+- *Facoltativo, non proposto ora* (→ backlog B-18): `restore --instance-key-file` nella CLI. Con la copia della chiave
+  vecchia dell'admin si ricifra anche un archivio in chiaro, per esempio all'uscita dal cloud se il pannello consegna la
+  sua chiave.
+
+### B4 committato; validazione combinata su `33275d9a6` e gli E2E FBKP-108/109 (2026-10-17, 02:07-03:27) ✅ — 🧊 FROZEN, checkpoint pronto
+
+> **Il coordinatore (02:07)**:
+>
+> - B4 è committato in tre commit: `df1f0d52c` (codice, test, runner), `0ff310355` (doc), `97037bb2e` (journal);
+> - base aggiornata: merge pulito di dev `b1b4960c4`, HEAD **`33275d9a6`**;
+> - la riga in più di H (`test_instance_block.py:821`, solo la firma) l'ha controllata lui: OK;
+> - A7b-2 (il gestore globale del 422 senza `input`, `api/validation_errors.py`) entra in dev dopo il suo
+>   `all-backend`. Copre anche le rotte di B; `NoInputEchoRoute` resta, A-37 lo toglie più avanti;
+> - la domanda su scrypt è passata al developer. Il default «in chiaro» c'era già.
+>
+> Validazione combinata in due metà:
+>
+> 1. **leggera**, a carico < 50: `api sync`, `front check`, il Vitest del backup, `services backup-*`,
+>    `password-policy`, mkdocs rigoroso e check-links;
+> 2. **in uno slot** (lo dà lui, fra 30-40 minuti): `api backup-secure backup backup-restore instance-block`,
+>    `e2e backup-roundtrip` e `front-utility backup` con FBKP-108/109.
+>
+> Prima, il freeze FE8b (W, una rinomina): nessuno tocca `components/transactions/**`, `utils/transactions/**`,
+> `stores/transactions/**`, né `_frontend_transaction.py` e `_frontend_utility.py`. Controllato in sola lettura: B4 non
+> tocca quei percorsi, e nessun file di B importa da quelle cartelle.
+>
+> **HEAD verificata (02:12)**: `33275d9a6`, pulita.
+>
+> **⚠️ Fuori pista: FBKP-108/109 non esistono.** La spec si ferma a FBKP-107. L'analisi li nominava per la chiusura
+> (passo 7), e nel mio handoff li avevo dati per «non eseguiti», come se ci fossero. Corretto col coordinatore (02:15).
+> Li scrive ora TA-F, solo in `backup.spec.ts`:
+>
+> - **FBKP-108**: un backup sicuro dalla UI, il download dell'`.lfbk` (comincia con `LFBK`), il controllo con la
+>   password, il report di un archivio cifrato, poi «Drop this archive»; nessuna password resta in `localStorage` o in
+>   `sessionStorage`;
+> - **FBKP-109**: un `.lfbk` fatto via API. Una password sbagliata lo chiede di nuovo con un solo upload (un `PUT`, due
+>   `POST` del controllo), poi quella giusta e «Drop this archive».
+>
+> Nessuna riga nuova nel runner: `front-utility backup` gira tutto il file, e `_frontend_utility.py` è congelato. Sono
+> gli E2E di chiusura previsti dall'analisi, scritti dopo il codice: non sono rossi prima. TA-F non lancia nulla nella
+> corsia: solo `tsc -p tsconfig.e2e.json` e Prettier sul suo file.
+>
+> Verificato nel codice, per il brief: `cancelPassword()` non chiama il server. Un upload lasciato dopo una password
+> sbagliata lo toglie l'upload seguente (`_remove_replaced_uploads`) o `prune` dopo `STAGE_LIFETIME`: niente perdite.
+>
+> **Metà leggera (dalle 02:16)**: `files/scripts/b4_combined_light.sh`, un passo alla volta, col carico che aspetta
+> sotto 50 (alle 02:14 era 117):
+>
+> - `api sync`;
+> - `services`: `password-policy` e i nove `backup-*`;
+> - `utils`: i tre `backup-cli*`;
+> - Vitest in quattro lotti;
+> - `front check`, `theme-roles` e i gate (il merge può muovere la baseline dei colori), `i18n check`;
+> - mkdocs rigoroso, check-links e `gate-docs-links`.
+>
+> **Freeze della galleria fino alle ~03:30** (coordinatore, 02:17; il gruppo dei colori, carico a 170): nessun passo
+> pesante nuovo (`api`, E2E, `all-backend`, `--workers`) fino al suo via; solo controlli leggeri sotto 50. Lo slot di B
+> (~30 minuti) viene dopo il freeze, dopo Y e J. La metà leggera aspetta il carico (alle 02:17: 181, nessun passo
+> partito); TA-F intanto scrive FBKP-108/109.
+>
+> **FBKP-108/109 scritti (TA-F, 02:40)**, solo in `backup.spec.ts`, in coda al blocco seriale `restoreTest` (240 s per
+> test, dopo FBKP-107: un rosso lì non salta nessun caso). Nessun file sotto `frontend/src/`, nessuna riga del runner.
+> Prettier `--check` pulito senza `--write`; `tsc -p tsconfig.e2e.json` 0 errori nel file (4 altrove, preesistenti).
+>
+> - **FBKP-108**:
+>   - la password è costruita dalle regole di `GET /backup/instance/options`: un codice sconosciuto fallisce per nome, e
+>     il minimo deve essere ≥ 12;
+>   - una password lunga un carattere meno del minimo tiene spento «crea». Il caso aspetta così anche l'arrivo delle
+>     opzioni, perché le regole degli account chiedono meno caratteri;
+>   - poi il backup sicuro: `backup.created` e il job dicono `encrypted`, il nome è `.lfbk`, il file comincia con `LFBK`;
+>   - nella card del ripristino: la password chiesta prima di inviare qualcosa, la fase `decrypting`, un `PUT` e un
+>     `POST` con `{upload_id, password}`, il report del server `encrypted: true`, le righe della chiave e dei segreti
+>     uguali al report del server;
+>   - «Drop this archive», e nessuna delle due password resta negli storage, nell'anello degli eventi o nei cookie;
+> - **FBKP-109**:
+>   - l'archivio sicuro è fatto via API, col job registrato per la pulizia e poi cancellato;
+>   - una password sbagliata dà `restore-password-error` con `data-error-code="wrong_password"`, e il campo si
+>     svuota;
+>   - con la password giusta: un `PUT` e due `POST` sullo stesso `upload_id`, il primo 400 `wrong_password`;
+>   - dopo «Drop this archive», un nuovo `POST` dello stesso upload risponde 404 `backup_upload_not_found`: l'upload è
+>     andato via col suo controllo.
+>
+> Rivisti da me sul codice: i testid (`backup-mode`/`data-mode`, `backup-encrypted-note`, `PasswordInput` mette il
+> testid sull'`<input>`, `data-passed` del misuratore, `restore-password-error`, `data-phase`), il 201 dell'upload e il
+> codice `backup_upload_not_found`. Anche l'helper condiviso `createBackup`: non fissa il dettaglio intero di
+> `backup.created`, quindi il campo `encrypted` aggiunto da B4 non rompe FBKP-002.
+>
+> **Le due segnalazioni di TA-F, decise**:
+>
+> - il report del ripristino non mostra se l'archivio era cifrato (nessun attributo). Il contratto (§7, «Report modal»)
+>   chiedeva solo le righe dei segreti, quindi la UI è conforme. L'E2E verifica `encrypted` sul report del server dello
+>   stesso controllo, più la password chiesta prima e la fase `decrypting`. Nessun gancio solo per il test;
+> - finché le opzioni non arrivano, il misuratore usa le regole degli account (minimo 8): «crea» si può accendere per
+>   una password che il server rifiuta con `password_too_weak`. È la scelta scritta nel commento della card: il server
+>   controlla comunque, la finestra dura millisecondi, e se le opzioni falliscono l'errore ha il suo messaggio. Lasciato
+>   così.
+>
+> **B-21 nel backlog (coordinatore, 02:50; da H, H-27 in dev `bfdc1f72c`)**. `profile_default()` solleva
+> `ProfileDefaultError` (un `TypeError`) su una tabella sbagliata. Le due rotte di `restore.py` prendono solo
+> `BackupConfigError`, e sono le sole che chiamano `backup_max_upload_mb()`:
+>
+> - l'upload darebbe 500 invece del 503;
+> - `GET /restore/status` darebbe 500 invece di `upload_limit_mb: null`. Questo è peggio di quanto detto: la scheda non
+>   leggerebbe più lo stato.
+>
+> Da fare dopo l'ingresso di H-27 nel ramo. Il test di guardia H-17 usa `123`, un intero: compatibile.
+>
+> **Metà leggera, tutta verde (02:28-03:06)**, su `33275d9a6`, un passo alla volta a carico < 50 (con lunghe attese:
+> carico fino a 181):
+>
+> - `api sync`;
+> - `services`: `password-policy` 74, `backup-envelope` 100, `backup-secure-rules` 24, `backup-secure` 52,
+>   `backup-archive` 155 (+1 salto voluto), `backup-jobs` 69, `backup-staging` 145, `backup-apply` 228,
+>   `backup-outcome` 97, `backup-totals` 84;
+> - `utils`: `backup-cli` 102, `backup-cli-restore` 77, `backup-cli-secure` 43;
+> - Vitest: 799, 184, 159, 41. Il client passa da 17 a 41 test: sono quelli arrivati col merge di dev;
+> - `front check` 0 errori e 0 avvisi, `theme-roles` pulito, gate 215, `i18n check` 4967 chiavi (rigoroso);
+> - mkdocs rigoroso exit 0, check-links valido, `gate-docs-links` 63. Porta 6187 libera.
+>
+> **⚠️ Fuori pista: un annuncio in anticipo.** Alle 02:50 ho scritto al coordinatore «tutti e 10 i `services` verdi»,
+> ma `backup-totals` non era ancora partito (lo era alle 02:47, verde). Lo correggo nel resoconto. Regola per me: un
+> risultato si annuncia dopo averlo letto, mai prima.
+>
+> **Lo slot (coordinatore, 03:06)**: il freeze è finito; un nuovo blocco della galleria va dalle ~03:50 alle ~04:45. Lo
+> slot di B4 (~30 minuti) è il secondo, appena finisce l'`all-backend` di A. Se non può chiudersi prima delle 03:50, si
+> sposta a dopo le 04:45. Lo script dello slot è pronto: `files/scripts/b4_slot.sh`, senza attesa del carico, un
+> selettore alla volta:
+>
+> - `api backup-secure` (rifà la build del frontend), poi `api backup`, `backup-restore` e `instance-block`;
+> - `e2e backup-roundtrip`;
+> - `front-utility backup`, coi worker di default (1, seriale): tutta la spec, FBKP-108/109 compresi.
+>
+> **Slot 2 (03:12-03:27) ✅, tutto verde.** L'ordine è cambiato: prima `front-utility backup`, il pezzo più nuovo e più
+> lungo; ogni pezzo partiva solo se la sua stima stava prima delle 03:50.
+>
+> - `front-utility backup`, primo giro (03:12-03:20, con la build di debug del frontend): 12 passati, **FBKP-108
+>   rosso**, FBKP-109 non eseguito (spec seriale);
+> - `api`: `backup-secure` 24, `backup` 23, `backup-restore` 122, `instance-block` 62;
+> - `e2e backup-roundtrip` 3;
+> - `front-utility backup`, secondo giro dopo la riparazione (03:24-03:27): **14 passati**, FBKP-108 e FBKP-109
+>   compresi (1,8 minuti). Porta 6187 libera alle 03:27.
+>
+> **⚠️ Fuori pista: il rosso di FBKP-108 era del banco di prova, non del prodotto.** FBKP-108 era arrivato quasi in
+> fondo: backup sicuro, download, password, controllo e report. Si è fermato su `schemas.RestoreUpload.parse(upload?.json)`
+> (riga 1559): lo stato era 201, ma `response.json()` di Playwright non riusciva a leggere il corpo della risposta
+> all'upload della pagina, un XHR (axios con `onUploadProgress`) che porta la busta, decine di MB. La pagina invece
+> l'aveva letta:
+>
+> - il controllo era partito con l'id giusto ed era arrivato al report;
+> - `lane.checks` corrispondeva;
+> - il JSON della risposta al `POST` si leggeva.
+>
+> Riparazione (TA-F, 03:23, solo la spec; `tsc` e Prettier puliti): l'id dell'upload si prende dal corpo della prima
+> richiesta del controllo (`sent[1].body`, 32 esadecimali) e i corpi restano verificati esattamente. In FBKP-109 i due
+> `POST` portano lo stesso id, prima la password sbagliata e poi quella giusta, e il nuovo `POST` dopo «Drop this
+> archive» usa quell'id. Tolte `kind` e `size` della risposta all'upload: le fissa `api backup-secure`, e FBKP-108
+> verifica già `encrypted` sul report del server. Un commento spiega il perché. La spec E2E non conta per la build: il
+> controllo delle sorgenti guarda solo `frontend/src` e i file di configurazione, quindi nessuna ricostruzione.
+
+### B4b — le note di E (R13-SEC4) e di J (2026-10-17, 03:10-04:55) ✅ — 🧊 FROZEN, checkpoint pronto
+
+> **Il coordinatore (03:08 e 03:10)**:
+>
+> - la revisione di E su B4 (R13-SEC4, piano 08 in dev `110125350`) non trova niente sopra la soglia, e la crittografia
+>   è solida. Quattro note per un lotto B4b subito dopo l'ingresso di B4, prima di B-21;
+> - J (J-27): `ledger_totals._as_amount` (la casa) accetta solo testo decimale semplice. Così `_plain` e `_PLAIN_AMOUNT`
+>   di `totals.py` ripetono lo stesso controllo, e la scelta è di B.
+>
+> Il nome «B4b» è del coordinatore. Il B4b dell'analisi (la chiave dentro l'archivio) è confluito in B4.
+>
+> **Verifica sul codice, in sola lettura (HEAD `33275d9a6`)**. Le note reggono tutte:
+>
+> 1. **Chiaro lasciato da un crash.** La pulizia gira solo quando parte un nuovo controllo (`restore_jobs.prune`,
+>    chiamata solo da `start_check`) o un nuovo backup (`remove_expired_jobs`, chiamata solo da `_prepare`). Fra i passi
+>    di avvio nessuno pulisce: `pending-restore` e `restore-commit` lavorano solo su un ripristino in attesa. Quindi:
+>    - (a) `.restore/stage/<id>/archive.zip` (`STAGE_DECRYPTED_ARCHIVE`) resta finché non parte un altro controllo;
+>    - (b) `backups/.decrypt-*` resta finché non parte un altro `inspect`;
+>    - (c) **in più, non nella nota di E**: un job di backup interrotto lascia lo zip in chiaro e la copia del DB in
+>      `backups/.jobs/<id>/`. `get_job` segna `backup_interrupted` senza toglierli, e `remove_expired_jobs` toglie la
+>      cartella solo dopo un'ora e solo al backup seguente. È la stessa classe di (b): per un backup sicuro è proprio
+>      il chiaro che l'utente non voleva su disco.
+>
+>    → **B-23**: una pulizia all'avvio di (a), (b) e (c), con le regole della pulizia di B4 (cartelle vere, mai link; per
+>    `.decrypt-*` l'ora, perché un `inspect` può girare mentre il server parte). Tocca `STARTUP_STEPS` e `overview.md`,
+>    condivisi.
+> 2. **Il messaggio di `decrypt`** (`cmd_decrypt`): «It holds every user's data in clear: keep it private, and remove it
+>    once used.» Non nomina la chiave d'istanza, che lo zip contiene se il backup la portava, e che apre ogni chiave
+>    salvata → **B-24**, messaggio e guida.
+> 3. **`--password-stdin`** legge con `sys.stdin.readline()` (`backup_cli.py:100`) senza guardare `isatty()`: su un
+>    terminale la password si vede. I due campi della creazione hanno `autocomplete="off"` (`BackupDownloadCard.svelte`)
+>    → **B-25**: `getpass` con `isatty()`, e `new-password`.
+> 4. **La chiave d'istanza**:
+>    - (a) staging accetta la chiave anche da uno `.zip` in chiaro. **Voluto, nessun cambiamento**: è la revisione del
+>      contratto delle 23:25 (16/10). Lo zip che `backup decrypt` scrive porta la chiave, e il suo ripristino deve
+>      poterla usare. Uno zip costruito ad arte con DB e chiave propri non dà nulla in più a chi lo carica, che è già
+>      admin;
+>    - (b) la creazione legge `secrets/instance.key` con `read_secret_file`, fino a `SECRET_FILE_MAX_BYTES` (64 KiB), ma
+>      ogni lettura dall'archivio si ferma a `INSTANCE_KEY_MAX_BYTES` (4096) → **B-26**: rifiutarlo già all'esportazione,
+>      con l'avviso `instance_key_unusable`.
+>
+> **J-27 → B-22, deciso.** J-27 è già nella base di B: `7336722ad` «fix(ledger-totals): read only plain decimal
+> amounts», entrato con `e221a0544`. La regola è identica: `_EXACT.prec` = 60, la stessa di `-?[0-9]{1,60}(\.[0-9]{1,60})?`
+> di B. `from_json` rifiuta con un `ValueError` anche tutto il resto che `_plain` controllava (righe che non sono una
+> lista, una riga che non è un oggetto, un importo che non è una stringa). `compare_totals` lo traduce già in `absent`.
+> L'unico motivo di `_plain` era il pericolo dell'esponente espanso prima della casa, e ora la casa lo evita da sé.
+> Decisione: **si tolgono `_plain` e `_PLAIN_AMOUNT`** («una regola, una casa»; regola fondamentale 10). Lo stato
+> resta `absent` in ogni caso. I test di B-13 che fissano «deciso prima che `from_json` veda il documento» diventano
+> «rifiutato da J», e il fixture `j_reads` resta la difesa contro l'espansione nel processo di test.
+>
+> **Lotto B4b proposto** (dopo l'ingresso di B4 e il riallineamento alla punta, prima di B-21): B-23 (il più
+> importante), B-24, B-25, B-26 e B-22. Prima l'analisi, poi i rossi.
+>
+> **B4 entrato (coordinatore, 03:28)**: dev `339a59142`, con `8b56f4a62` (FBKP-108/109) e `4d16d583e` (journal); il
+> blocco del CHANGELOG (3 ✨ + 3 🔒) in `0a45e45de`. La mia HEAD è portata in avanti a **`0a45e45de`**, pulita. Dentro
+> ci sono anche H-27 (`bfdc1f72c`) e J-27 (`7336722ad`).
+>
+> **Analisi B4b (03:30-03:45), in sola lettura**:
+>
+> - **B-23 (N66), la pulizia all'avvio.**
+>   - (a) I controlli del server. `read_check` chiude come `restore_interrupted` un controllo rimasto `running` senza il
+>     lucchetto, e toglie copia e upload. `prune` lo fa quando nessun controllo gira, ma oggi la chiama solo
+>     `start_check` → all'avvio basta chiamare `prune(data_dir)`. I controlli della CLI (`restore`, `--dry-run`) lasciano
+>     invece cartelle di stage non registrate, che `_prune_unrecorded` toglie solo dopo `STAGE_LIFETIME` (24 h).
+>     L'`archive.zip` decifrato vive solo durante lo staging: lo si toglie dopo lo spacchettamento, e su ogni eccezione
+>     `rmtree` toglie tutta la cartella. Lo staging tiene sempre il lucchetto dello stage. Quindi, se nessuno lo tiene,
+>     ogni `stage/*/archive.zip` è il resto di un kill: all'avvio si toglie (un file vero, `lstat`, mai un link). Il
+>     resto della copia segue le 24 h di oggi.
+>   - (b) `_remove_stale_decrypt_folders` passa dalla CLI al backend, perché la regola deve avere una sola casa. La CLI
+>     la importa, e l'avvio la chiama su `backups/` (se è una cartella vera). La regola dell'ora resta: un `inspect` può
+>     girare mentre il server parte.
+>   - (c) Nel ramo «interrotto» di `get_job` si aggiunge `_remove_work_files(folder, keep=None)`. È la stessa regola
+>     anche senza riavvio, per esempio con un `backup create` della CLI ucciso mentre il server gira. All'avvio: `get_job`
+>     su ogni job, che segna e pulisce se il lucchetto è libero, poi `remove_expired_jobs`. La conservazione resta di
+>     un'ora; si applica anche all'avvio e non più solo al backup seguente.
+>   - Il passo: `Step("backup-leftovers", lambda: asyncio.to_thread(sweep_backup_leftovers))`, subito dopo
+>     `restore-commit`. Le tre parti stanno ciascuna in un `try` col suo log e **non sollevano mai**: dopo
+>     `restore-commit` un'eccezione fermerebbe ogni avvio (N57). Il passo è idempotente fra più worker, rispetta i
+>     lucchetti (della corsa e dello stage) e non segue i link. Modulo nuovo: `instance_backup/leftovers.py`.
+>   - La fissazione dell'ordine va in `test_backup_apply.py` (j): `("restore-commit", "backup-leftovers")`.
+>     `test_app_lifecycle.py` fissa solo l'ordine dei passi di base, quindi lì nulla cambia. Doc: `overview.md` passa da
+>     22 a 23 passi (il nuovo è il 17) e `security.md` (`.decrypt-*` e l'avvio).
+> - **B-24.** Dopo la scrittura, `cmd_decrypt` legge il manifesto dello zip appena scritto (`archive.read_manifest`). Se
+>   `instance_key.included`, aggiunge una riga: lo zip contiene anche la chiave d'istanza, che apre ogni chiave salvata.
+>   Doc: `cli_tools.en.md` (riga 591) e `backup_restore.en.md` (riga 351).
+> - **B-25.** In `_password`, `--password-stdin` con `sys.stdin.isatty()` prende la strada del terminale: `getpass`, e
+>   due volte quando si sceglie la password (`create`). In una pipe resta com'è. Nella scheda, i due campi della
+>   creazione passano a `autocomplete="new-password"`, così un gestore non riempie la password dell'account. Il campo
+>   del ripristino resta `off`: è una password esistente ma non quella dell'account, e `current-password` proporrebbe
+>   quella dell'account. Doc: `cli_tools.en.md` (riga 353).
+> - **B-26.** `exportable_instance_key()` (`secure.py:35`) dà `None` anche quando
+>   `len(key.encode("utf-8")) > INSTANCE_KEY_MAX_BYTES`. Anche `generated_key_unusable()` deve dire sì in quel caso,
+>   altrimenti la chiave sparisce senza avviso: oggi segue solo lo stato di H, che controlla solo il minimo
+>   (`_length_problem`). Importare `INSTANCE_KEY_MAX_BYTES` da `archive.py` non crea un ciclo: `archive.py` non importa
+>   né `secure` né `jobs` (verificato).
+> - **B-22.** Via `_plain`, `_PLAIN_AMOUNT` e `import re` se resta inutile. `compare_totals` passa il documento a
+>   `ControlTotals.from_json`, il cui `ValueError` è già `absent`. Nel test
+>   `test_what_is_not_plain_text_in_lines_of_objects_is_absent_before_j_reads_it` l'asserzione si capovolge: non più «J
+>   non l'ha mai visto», ma «J l'ha avuto e l'ha rifiutato». Il wrapper `j_reads` continua a rifiutare il testo non
+>   semplice, così nel processo di test niente si espande anche se J regredisse. Aggiornare la docstring (b) del modulo
+>   e `security.md:1278`, che dice chi controlla.
+> - **B-21, in opzione.** H-27 è nella HEAD: due `except` in `restore.py` più due casi API. Propongo di metterlo nello
+>   stesso lotto; chiede uno slot per `api backup-restore`.
+>
+> **Superfici**:
+>
+> - di B: `instance_backup/{leftovers (nuovo), restore_jobs, jobs, secure, totals}.py`, `scripts/backup_cli.py`,
+>   `BackupDownloadCard.svelte`, i test, `backup_restore.en.md`, `cli_tools.en.md`;
+> - condivise:
+>   - `app_lifespan.py`: `STARTUP_STEPS`, scrittore B per N66;
+>   - `overview.md`, l'elenco numerato;
+>   - `security.md`;
+>   - il runner, un selettore nuovo `services backup-leftovers`;
+>   - `CHANGELOG.md`, del coordinatore.
+>
+> **Conflitti previsti**: `app_lifespan.py` e `overview.md` se un altro flusso aggiunge un passo d'avvio insieme a noi
+> (medio-basso); il resto basso.
+>
+> **Rischi**: la pulizia gira a ogni avvio di ogni installazione, quindi:
+>
+> - deve essere rapida e silenziosa su una cartella pulita;
+> - non deve mai sollevare né seguire un link;
+> - deve rispettare una CLI che gira insieme.
+>
+> Togliere all'avvio gli archivi scaduti da più di un'ora cambia poco il comportamento: la regola è la stessa, si
+> applica prima. Va detto nel CHANGELOG.
+>
+> **Passi**:
+>
+> 1. I rossi, con tre test-author:
+>    - servizi: la pulizia, `get_job`, la chiave, i totali, la fissazione dell'ordine;
+>    - utilità: `--password-stdin` su un TTY, la riga di `decrypt`, la pulizia spostata;
+>    - Vitest: `new-password`;
+> 2. il codice;
+> 3. la doc (docs-writer);
+> 4. i verdi, i controlli statici, mkdocs rigoroso;
+> 5. il blocco del CHANGELOG (🔒);
+> 6. il checkpoint.
+>
+> Senza B-21 non serve uno slot: solo `services`, `utils` e Vitest.
+>
+> **Selettori**:
+>
+> - `services`: `backup-leftovers` (nuovo), `backup-jobs`, `backup-secure`, `backup-totals`, `backup-apply`,
+>   `app-lifecycle`;
+> - `utils`: `backup-cli-secure`, `backup-cli`;
+> - Vitest: `BackupDownloadCard`;
+> - mkdocs rigoroso e check-links;
+> - con B-21 anche `api backup-restore`, in uno slot.
+>
+> **Fatto quando**:
+>
+> - un avvio dopo un kill non trova un archivio decifrato in `.restore/stage/`, né `.decrypt-*` più vecchie di un'ora,
+>   né i file di lavoro di un job interrotto;
+> - nulla si tocca sotto un lucchetto preso o attraverso un link, e il passo non solleva mai;
+> - `decrypt` dice che lo zip apre le chiavi salvate, quando porta la chiave;
+> - `--password-stdin` su un terminale non mostra mai la password, e i campi della creazione sono `new-password`;
+> - una chiave oltre 4096 byte non si esporta, e il job avvisa con `instance_key_unusable`;
+> - `totals.py` non ha più una copia della regola di J, e lo stato non cambia;
+> - doc e CHANGELOG sono a posto.
+>
+> **Domande al coordinatore**: B-21 nello stesso lotto (propongo sì)? Il nome del passo, `backup-leftovers`? Nessuna
+> domanda per il developer. 🧊 FROZEN in attesa del via.
+>
+> **Via (coordinatore, 03:34)**: B4b approvato com'è scritto, **B-21 dentro**, il nome `backup-leftovers` va bene.
+> Prima i rossi. Lo slot breve per `api backup-restore` (B-21: il rosso, poi il verde) viene dopo il blocco della
+> galleria, verso le 04:35. Il codice di B-21 resta fuori dal worktree fino al suo rosso.
+>
+> **Rossi in scrittura (03:40)**: il contratto congelato è in `files/b4b-test-brief.md` (§1-§7). I quattro test-author,
+> ciascuno sui suoi file:
+>
+> - servizi: §1, cioè `test_backup_leftovers.py` (nuovo) e la fissazione in `test_backup_apply.py` (j); §4 in
+>   `test_backup_secure.py`;
+> - API e totali: §6 in `test_backup_restore.py`, §5 in `test_backup_totals.py`;
+> - CLI: §2 e §3 in `test_backup_cli_secure.py`;
+> - frontend: §3 in `BackupDownloadCard.test.ts` e `RestoreCard.test.ts`. **Fatto alle 03:47**: un caso rosso (i due
+>   campi a `new-password`) e una guardia verde (`restore-password` resta `off`).
+>
+> Intanto:
+>
+> - il codice è pronto fuori dal worktree, in `files/b4b-wip/`. Lo verifica `--check`, tutti verdi sull'albero:
+>   - `apply_b4b_core.py`: `leftovers.py` nuovo, `restore_jobs`, `jobs`, il passo in `app_lifespan.py`;
+>   - `apply_b4b_cli.py`;
+>   - `apply_b4b_misc.py`: `secure`, `totals`, la card;
+>   - `apply_b4b_b21.py`, tenuto fuori fino al rosso nello slot;
+> - registrato il selettore `services backup-leftovers` (`_backend_services.py`, un'aggiunta; ruff e black puliti).
+>
+> **Rossi eseguiti (03:47-03:50)**, uno alla volta, a carico < 50, tutti rossi per il motivo giusto:
+>
+> - `services backup-totals` (B-22): 19 falliti e 65 passati. Fallisce solo il test capovolto, ora
+>   `…_is_refused_by_j_and_absent`: «0 documents given to J», perché `_plain` decide ancora prima di J;
+> - Vitest sulle card (B-25 UI): 1 fallito e 114 passati. I due campi sono ancora a `off`; la guardia del campo del
+>   ripristino è verde;
+> - `utils backup-cli-secure` (B-24, B-25 CLI): 11 falliti e 47 passati:
+>   - B-24: la riga 🔑 (1), e i tre casi senza riga (3): la loro precondizione vuole che un archivio con la chiave abbia
+>     la riga;
+>   - B-25: `--password-stdin` a un terminale (4), le sue tre risposte di rifiuto (3).
+>
+>   Le guardie della pipe e il caso (j) restano verdi.
+>
+> Due cose dai test-author:
+>
+> - TA-E: il difetto di oggi è peggio dell'eco. A un terminale, `create --password-stdin` legge una sola riga senza
+>   conferma, e un errore di battitura sigillerebbe il backup con una password che nessuno conosce. La strada del
+>   terminale chiede la password due volte;
+> - TA-B: la descrizione del selettore `backup-totals` nel runner dice ancora «decided before J's from_json». La
+>   correggo col codice.
+>
+> I rossi di B-21 (8 casi, `api backup-restore`) aspettano lo slot.
+>
+> **⚠️ Fuori pista: tre buchi del contratto trovati da TA-S (03:55), corretti nel lotto (revisione delle 03:58)**:
+>
+> 1. **`archive.zip.part`.** `decrypt_file` scrive attraverso `<nome>.part`. Una `restore` della CLI uccisa mentre
+>    decifra lascia quindi un archivio in chiaro parziale, che può già contenere la chiave, e `prune` lo toglierebbe
+>    solo dopo 24 h. Ora `remove_stray_decrypted_archives` toglie sia `archive.zip` sia `archive.zip.part`, solo file
+>    veri;
+> 2. **`remove_expired_jobs` seguiva un link.** Usava `folder.is_dir()`. Al backup seguente era innocuo, perché
+>    `_prepare` passa prima da `ensure_private_dir`, che rifiuta i link. Ma ora la funzione gira da sola a ogni avvio,
+>    quindi controlla `is_plain_dir` su `backups/` e su `.jobs/`. È codice di B1, ma legato al mio cambiamento;
+> 3. **Un controllo chiuso all'avvio non si contava**, perché `prune` restituiva `None`: proprio il caso più importante
+>    della nota di E non avrebbe lasciato traccia nel log. Ora `prune` restituisce quanti controlli ha chiuso come
+>    `restore_interrupted`, e il riassunto INFO comincia con `checks_interrupted`. Tutti i chiamanti ignoravano il
+>    valore restituito, e `_prune_checks` è privata.
+>
+> Codice aggiornato in `files/b4b-wip/` (`apply_b4b_core.py`: 15 operazioni, `--check` verde). TA-S estende i suoi test.
+>
+> TA-S ha trovato un altro caso: con `backups/` come link, `.jobs` nel suo bersaglio sembra una cartella vera. Il mio
+> `end_interrupted_jobs` controllava già entrambi i livelli, ma il contratto lo diceva male: corretto, e aggiunto il
+> caso (`test_while_backups_or_its_jobs_folder_is_a_link_no_job_is_ended`, 4 casi).
+>
+> **Gli ultimi rossi (04:26-04:28)**, per il motivo giusto:
+>
+> - `services backup-secure` (B-26): 6 falliti, 62 passati. Falliscono i casi oltre il limite: due chiavi da 4097 byte
+>   (ASCII, e caratteri da due byte) in `exportable_instance_key`, in `generated_key_unusable` e nel backup sicuro. I
+>   casi da 4096 byte sono verdi già oggi, di proposito: fanno da guardia all'errore di uno;
+> - `services backup-apply` (N66): 1 fallito, 227 passati. La fissazione dell'ordine dà «missing from STARTUP_STEPS»;
+> - `services backup-leftovers` (B-23): 44 falliti su 44:
+>   - il modulo `leftovers` mancante: 26 casi;
+>   - le funzioni nuove: `end_interrupted_jobs` 5, `remove_stray_decrypted_archives` 4;
+>   - `prune` che restituisce `None`: 5 casi;
+>   - i link: `remove_expired_jobs` toglie ancora attraverso un link, 2 casi;
+>   - `get_job`, che lascia i file di lavoro: 1 caso;
+>   - l'import nel lifespan: 1 caso.
+>
+> **Codice applicato (04:29)**: `apply_b4b_core.py` (15 operazioni più `leftovers.py`), `apply_b4b_cli.py` (6) e
+> `apply_b4b_misc.py` (10). `apply_b4b_b21.py` resta fuori. Ruff e black puliti sui 7 file. Gli import non hanno cicli:
+> il passo `backup-leftovers` sta subito dopo `restore-commit`, e i passi sono 23. Nel runner, la descrizione di
+> `backup-totals` ora dice «refused by J's from_json» (nota di TA-B).
+>
+> **In corso (dalle 04:30)**:
+>
+> - i verdi leggeri, `files/scripts/b4b_greens.sh`: 8 selettori `services`, 3 `utils`, il Vitest delle card;
+> - la doc: il docs-writer col brief `files/b4b-docs-brief.md` e la revisione delle 03:58.
+>
+> **Verdi leggeri (04:28-04:31), tutti verdi**:
+>
+> - `services`: `backup-leftovers` 44, `backup-secure` 68, `backup-apply` 228, `backup-totals` 84, `backup-jobs` 69,
+>   `backup-staging` 145, `app-lifecycle` 51, `backup-secure-rules` 24;
+> - `utils`: `backup-cli-secure` 58, `backup-cli` 102, `backup-cli-restore` 77;
+> - Vitest delle tre card: 161;
+> - `front check` (04:33): 0 errori e 0 avvisi.
+>
+> BACKUP-007 (`api backup`) legge un job interrotto che ha solo `state.json`: la pulizia dei file di lavoro in `get_job`
+> non lo tocca. Nello slot basta quindi `api backup-restore`, più `api backup` come prova.
+>
+> **Slot (coordinatore, 04:35)**: è lo slot 1 dopo X (~25 minuti), poi J e MF. Circa 10 minuti:
+>
+> 1. `api backup-restore`, il rosso di B-21. Ricostruisce il frontend per `autocomplete`;
+> 2. `apply_b4b_b21.py`;
+> 3. `api backup-restore`, il verde;
+> 4. `api backup`.
+>
+> Intanto la bozza del blocco del CHANGELOG è in `files/next-checkpoint/changelog-b4b.md`: 3 🔒 e 1 🐛. B-22 e B-21 sono
+> interni, quindi senza voce.
+>
+> **Doc (docs-writer, 04:40)**, solo pagine inglesi, nessun timbro:
+>
+> - `overview.md`: 23 passi, uguali a `STARTUP_STEPS`;
+> - `security.md`: dentro `#secure-backups` le righe di B-23..B-26, e la sottosezione nuova `#backup-leftovers`; il
+>   paragrafo dei totali (B-22) e quello del limite di upload (B-21);
+> - `backup_restore.en.md`: `#command-line`, `#secure`, `#check`, `#by-hand`, `#secure-problems`;
+> - `cli_tools.en.md`: il debito di traduzione di B4 cresce nelle stesse sezioni.
+>
+> Le sue cinque note, decise:
+>
+> 1. B-21 è documentato prima del codice: il codice entra nello slot. Se lo slot salta, tolgo quelle righe;
+> 2. il messaggio della CLI «the next backup after that removes it» resta vero, solo non è più l'unica via. Lasciato:
+>    un test fissa quel testo;
+> 3. lo stato di un job interrotto resta un'ora in più: è voluto, ed è documentato;
+> 4. togliere `archive.zip` aggiorna il tempo di modifica della cartella di stage, quindi le 24 h della copia ripartono
+>    una volta, a quell'avvio; gli avvii seguenti non toccano nulla. Accettato: la copia è dati in chiaro come il DB
+>    vivo, nella stessa cartella privata;
+> 5. `get_job()` aiuta solo i job che qualcuno segue. Il resto lo fa l'avvio, e la doc promette solo questo.
+>
+> **Verdi della doc (04:42-04:44)**: build rigorosa exit 0 (68 s), check-links valido, `gate-docs-links` 63.
+>
+> **Slot 1 (coordinatore, 04:45)**: partito con `files/scripts/b4b_slot.sh`.
+>
+> **Slot (04:44-04:49) ✅**:
+>
+> - `api backup-restore` rosso: 8 falliti, proprio i casi di B-21 (un 500 dove si aspettano 503 o un limite nullo), e
+>   122 verdi. Anche il nuovo valore restituito da `prune` non rompe nulla;
+> - `apply_b4b_b21.py`, 3 operazioni; ruff e black puliti;
+> - `api backup-restore` verde: 130;
+> - `api backup`: 23.
+>
+> La porta 6187 è libera alle 04:48:52, ed è stato detto al coordinatore.
+>
+> **Backlog**: B-21..B-26 chiusi con ✅ («Fatto il 17/10 in B4b»). B-27 resta per il lotto seguente.
+>
+> **Checkpoint (04:55)**: 21 file modificati e 2 nuovi, `git diff --check` pulito, porta libera. Inviato col blocco del
+> CHANGELOG (`files/next-checkpoint/changelog-b4b.md`, 3 🔒 e 1 🐛). 🧊 FROZEN. Il prossimo lotto è B-27.
+>
+> **Approvato (coordinatore, 03:12)**: prima l'analisi, dopo l'ingresso di B4. Il passo di avvio nuovo dopo
+> `restore-commit` è la sua decisione **N66**, un'estensione di N57: aggiornare `STARTUP_STEPS` e `overview.md`.
+>
+> **G-20, domanda di G (03:11), solo la risposta**: dopo un ripristino `committed` la scheda Backup mostra un avviso
+> «ultimo ripristino: applicato il …», come `restore-last-result` per `rolled_back`?
+>
+> - **No.** `lastResult` vale solo per `rolled_back` (`RestoreCard.svelte:64`).
+> - Il server ha già tutto. `GET /restore/status` risponde `committed` con `finished_at`, `backup_created_at`,
+>   `backup_app_version` e `confirmed_by`. Lo stato resta in `restore.json` fino al ripristino confermato seguente: lo
+>   toglie solo `cancel_restore`, e solo per uno in attesa.
+> - **Costo**: piccolo, solo frontend, circa un'ora coi rossi:
+>   - il caso nel derivato e l'avviso, in un ruolo info;
+>   - una chiave i18n in 4 lingue;
+>   - 2-3 casi Vitest;
+>   - un E2E su uno stato finto, come FBKP-103 (dà anche la foto a G);
+>   - una riga nella guida.
+>
+> Le domande per il developer, passate al coordinatore:
+>
+> 1. lo vogliamo?
+> 2. per quanto: fino al ripristino seguente, come `rolled_back` (proposta), o N giorni?
+> 3. il testo: data dell'applicazione, data e versione del backup, chi l'ha confermato.
+>
+> **Deciso (coordinatore, 03:20)**: sì, decisione notturna **N67**, che il developer rivede → **B-27**, dopo B4b.
+> L'avviso resta fino al ripristino seguente, come `rolled_back`. Il testo è quello proposto, il ruolo è info, e l'E2E
+> gira su uno stato finto, così dà anche la foto a G.
+
+### B-27 — l'avviso di un ripristino riuscito: analisi (2026-10-17, 04:55-05:05) — chiuso, non da fare (P8)
+
+> **B4b entrato (coordinatore, 04:55)**: commit `964ecf434`, `70d515552` e `b3d4a81db`; dev `c7dd3934a`; il CHANGELOG
+> (3 🔒 e 1 🐛) in `8b15a6c6c`. La mia HEAD è portata in avanti a **`8b15a6c6c`**, pulita. Il via è per B-27 (N67),
+> analisi prima.
+>
+> **Nel backlog anche B-28** (coordinatore, 04:50: la nota di E dalla revisione di B3, che lui chiamava «B-19»; quell'ID
+> è già di `decrypt` da root). I trigger di un DB caricato scattano quando il controllo scrive sulla copia: l'`alembic
+> upgrade`, `_post_migration_fixes` (`staging.py:550`, non la riga 464 citata) e il rekey dei segreti. Non hanno limite
+> di tempo. Direzione: `set_progress_handler` o un sottoprocesso con un tempo massimo, più `trusted_schema=OFF`.
+>
+> **⚠️ Il conflitto, prima di tutto.** N67 contraddice una decisione esplicita del developer, **P8** (16/10, 11:25, in
+> «Decisioni del developer su P7, P8 e P12»): «**successo senza messaggio** ("se ha funzionato lo vedi"): la pagina va
+> dritta al login, poi alla solita pagina iniziale; la scheda non mostra "ripristino applicato"». Lo dice anche il codice,
+> `RestoreCard.svelte:63`: «Developer decision P8: a restore kept says nothing (the data shows it); one rolled back says
+> why». Nella mia risposta a G-20 (03:12) ho scritto solo «oggi non c'è», senza dire che il silenzio era una scelta del
+> developer. **Errore mio**: il coordinatore ha deciso N67 senza quell'informazione. È una domanda che solo il developer
+> può decidere, quindi, con la regola della notte, va nel piano e al coordinatore, e si passa ad altro. Propongo di
+> fermare B-27 finché il developer non sceglie fra P8 e N67.
+>
+> **L'analisi, pronta se il developer conferma N67**:
+>
+> - Stato reale:
+>   - `lastResult` vale solo per `rolled_back` (`RestoreCard.svelte:64`). L'avviso usa `restore-last-result`,
+>     `data-result`, `data-reason`, il ruolo warning e `TriangleAlert`;
+>   - il server ha già tutto. Uno stato `committed` porta sempre `finished_at`, `confirmed_by` (il nome dell'admin, o
+>     `cli`), `backup_created_at` e `backup_app_version`: in `RestoreState` non sono opzionali. Lo stato resta fino al
+>     ripristino confermato seguente;
+>   - il ruolo info esiste (`bg-lf-info-soft`, `border-lf-info-line`, `text-lf-info-on-soft`).
+> - Superfici, tutte di B:
+>   - `RestoreCard.svelte`: il derivato per `committed`; lo stesso `restore-last-result` con `data-result="committed"`,
+>     il ruolo info, un'icona (`History` o `CircleCheck`); e il commento P8 aggiornato;
+>   - i18n `backup/{en,it,fr,es}.json`: due chiavi, `backup.restore.last.committed` («applied on {date}, backup of
+>     {backupDate} (LibreFolio {version}), confirmed by {user}») e `committedCli` («… confirmed from the command line»).
+>     Niente `select` ICU, per il controllo dei segnaposto;
+>   - i test: `RestoreCard.test.ts` (l'avviso con i quattro valori; `cli`; niente avviso per `none`, `pending` o fuori da
+>     `idle`), `restoreI18n.test.ts` (le chiavi in 4 lingue), e FBKP-110 in `backup.spec.ts` su uno stato finto come
+>     FBKP-103, che dà anche la foto a G;
+>   - la doc: `backup_restore.en.md` (`#restore-settings`) ed eventualmente la pagina sviluppatore della scheda.
+> - Costo: circa un'ora coi rossi. Uno slot E2E breve per FBKP-110.
+>
+> **Mentre B-27 aspetta**, propongo l'analisi di B-28: un indurimento di sicurezza del controllo, «dopo B4», e B4 è
+> entrato. In alternativa un lotto minimo con B-19 (`decrypt` da root) e B-20 (knip).
+>
+> **Deciso (coordinatore, 05:00)**: N67 ritirato, **P8 resta**. B-27 è chiuso come «non da fare, P8» (nel backlog con
+> ✅ e la nota) e va nell'elenco del developer solo come nota. Si procede con (a), l'analisi di B-28.
+
+### B-28 — i trigger del DB caricato durante il controllo (2026-10-17, 05:00-05:50) ✅ — 🧊 FROZEN, checkpoint pronto
+
+> Sola lettura, HEAD `8b15a6c6c` pulita.
+>
+> **Stato reale**:
+>
+> - L'`alembic upgrade` della copia gira già **in un processo a sé, con un tempo massimo** (`_upgrade`,
+>   `UPGRADE_TIMEOUT_SECONDS` = 3600). Su questa strada la nota di E è già coperta.
+> - Nel processo del server girano invece:
+>   - le correzioni post-migrazione, `run_post_migration_fixes`. È codice condiviso (`backend/app/db/post_migration/`)
+>     e apre una sua connessione `sqlite3`;
+>   - il rekey dei segreti, `_plugin_secrets` (`sqlite3`);
+>   - `_administrators`;
+>   - i totali, `ledger_totals_of`, con aiosqlite e SQLAlchemy;
+>   - `describe_database`, in sola lettura, sulle sole `type = 'table'`.
+>
+>   Le scritture fanno scattare i trigger del DB caricato; una vista con lo stesso nome di una tabella dell'app
+>   girerebbe a ogni lettura per nome.
+> - **Lo schema di LibreFolio non ha né trigger, né viste, né tabelle virtuali.** Lo dice un grep di `backend/alembic`
+>   e `backend/app` per `CREATE TRIGGER` e `CREATE VIEW`. In SQLite solo trigger e viste possono contenere una query
+>   qualsiasi, cioè una CTE ricorsiva: CHECK, DEFAULT, colonne generate e indici su espressioni non ammettono
+>   sottoquery. Le tabelle virtuali eseguono il codice del loro modulo.
+>
+> **Due strade**:
+>
+> - **(A), la direzione di E alla lettera**: un tempo massimo su ogni connessione alla copia nel processo del server
+>   (`set_progress_handler`, oppure le correzioni in un sottoprocesso come alembic), più `trusted_schema=OFF`. Bisogna
+>   agganciarsi a quattro tipi di connessione, una delle quali nel codice condiviso delle correzioni. Il codice ostile
+>   gira comunque fino al limite, e dopo un ripristino i trigger stranieri resterebbero nel DB vivo: girerebbero a ogni
+>   scrittura del server, e al primo avvio delle correzioni.
+> - **(B), la causa (la mia proposta)**: subito dopo lo spacchettamento, e prima di ogni altro accesso, il controllo
+>   legge `sqlite_master` in sola lettura, dove nessun codice dell'utente gira. Se il DB ha anche un solo trigger, una
+>   vista o una tabella virtuale (`CREATE VIRTUAL TABLE`), l'archivio si rifiuta con un codice nuovo,
+>   `database_foreign_objects`: un backup di LibreFolio non li ha mai. Questo copre il controllo, la CLI (`inspect` non
+>   apre il DB; `restore` e `--dry-run` passano dallo stesso staging) e quello che un ripristino porterebbe nel server.
+>   Un test di guardia fissa che lo schema all'ultima revisione non ha oggetti di quei tipi: se una migrazione futura ne
+>   aggiunge uno, il test lo dice e la lista dei permessi si aggiorna. In più, `trusted_schema=OFF` sulle connessioni di
+>   B alla copia, una riga ciascuna, come difesa in più. Non serve un tempo massimo: senza trigger e viste non resta
+>   codice che possa girare all'infinito.
+>
+> **Superfici di (B)**:
+>
+> - `staging.py`, una funzione e la sua chiamata prima di `describe_database`;
+> - il `Literal` dei codici di errore in `schemas/backup.py`, poi `api sync`;
+> - `restoreText.ts`, e la chiave i18n `backup.restore.errors.database_foreign_objects` in 4 lingue;
+> - la doc: le tabelle dei problemi in `backup_restore.en.md` e `cli_tools.en.md`, e `security.md`;
+> - i test:
+>   - `services backup-staging`: un trigger, una vista, una tabella virtuale, ciascuno rifiutato senza che nulla giri;
+>     un DB vero passa; la guardia dello schema alla testa;
+>   - il test «prodotti = dichiarati» dei codici;
+>   - `restoreI18n`.
+>
+> **Costo**: piccolo-medio. Rischio basso: nessun backup vero ha quegli oggetti. Conflitti: nessuno, i file sono di B
+> più `api sync`. Se il test «prodotti = dichiarati» è nella categoria `api`, serve uno slot breve.
+>
+> **Domande al coordinatore**: (A) o (B)? Propongo (B) più `trusted_schema=OFF`. E il nome del codice,
+> `database_foreign_objects`.
+>
+> **Via (coordinatore, 05:20)**: **(B) più `trusted_schema=OFF`**; il codice `database_foreign_objects` va bene
+> («meglio la causa di un tempo massimo»). Prima i rossi, poi uno slot breve per `api backup-restore` quando sono
+> pronto.
+>
+> **Rossi in scrittura (05:25)**: il contratto congelato è in `files/b28-test-brief.md`. TA-S scrive in
+> `test_backup_staging.py` (§4), TA-F in `restoreI18n.test.ts`. Il codice è pronto fuori dal worktree:
+> `files/b28-wip/apply_b28.py`, 13 operazioni, `--check` verde:
+>
+> - `staging.py`: la classificazione per testo SQL (`_leading_words`, `_schema_object_kind`) e
+>   `_refuse_foreign_objects`, chiamata prima di `describe_database`; `trusted_schema=OFF` su `_plugin_secrets` e
+>   `_administrators`;
+> - `snapshot.py` e `totals.py`: `trusted_schema=OFF`;
+> - il codice nello schema, in `restoreText.ts` e nei quattro cataloghi, inserito come testo per non toccare la
+>   formattazione dei JSON.
+>
+> **⚠️ Fuori pista, verificato su SQLite 3.54.0 (05:28)**: una riga di `sqlite_master` travestita (un trigger con
+> `type` table, index o view, qualunque rootpage) fa rifiutare a SQLite tutto lo schema, «malformed database schema».
+> Un trigger si carica solo con `type = 'trigger'`. Il caso del contratto quindi si aspetta `database_damaged`
+> (revisione delle 05:30), sempre rifiutato prima di ogni altro accesso. La lettura per testo SQL resta: non costa nulla
+> e non dipende da questa verifica di SQLite. Prova fatta su un DB di prova in `/tmp`, poi tolto.
+>
+> **Rossi scritti**:
+>
+> - TA-F, `restoreI18n.test.ts`: due casi. La chiave nei 4 cataloghi, e il codice nella lista scritta a mano
+>   `CODE_LISTS`, perché quella lista non deriva dal client generato. Il rosso è stato eseguito alle 05:03: 2 falliti e
+>   121 passati;
+> - TA-S, `test_backup_staging.py`, nuova sezione (l), 6 test e 15 casi:
+>   - i cinque oggetti stranieri rifiutati prima che `describe_database` sia chiamata;
+>   - il WARNING senza nomi né SQL (un marcatore `b28_untrusted` in ogni nome);
+>   - lo schema che SQLite rifiuta, cioè la riga travestita e la riga che non si analizza, dà `database_damaged`;
+>   - la guardia dello schema alla testa;
+>   - `trusted_schema=OFF` per primo su ognuna delle 5 connessioni;
+>   - la prima connessione sulla copia è la lettura in sola lettura di §1.
+>
+> **⚠️ Fuori pista, da TA-S**:
+>
+> - un test esistente si sarebbe rotto: `test_an_upgrade_that_fails_in_alembic_is_refused_and_leaves_nothing` fa
+>   fallire alembic con un trigger su `alembic_version`, e dopo B-28 quell'archivio si rifiuterebbe prima. Riscritto
+>   ora con il meccanismo di TA-S: una tabella che una migrazione in sospeso crea esiste già, e `op.create_table`
+>   fallisce. Una precondizione prova che l'archivio non ha oggetti stranieri;
+> - con `PRAGMA writable_schema=ON` SQLite carica comunque un trigger travestito, e `VACUUM` lo accende internamente.
+>   Nessun codice di LibreFolio lo usa sulle connessioni del controllo;
+> - il testo d'errore di SQLite nomina la riga, ed è testo dell'archivio. Il mio codice usa un messaggio fisso e non
+>   registra l'eccezione.
+>
+> **Il rosso (05:34)**: `services backup-staging` dà 15 falliti, proprio i casi nuovi, e 145 passati, compreso il test
+> riscritto. Per farlo fallire TA-S ha usato un indice, non una tabella: 007 salta le tabelle che esistono già, ma un
+> indice chiamato `plugin_system_settings` fa fallire il suo `op.create_table`.
+>
+> **Codice applicato (05:35)**: `apply_b28.py`, 13 operazioni. Ruff e black puliti; `api sync` (il client generato ha
+> il codice); `i18n build` e `i18n check`, 4968 chiavi, rigoroso. La descrizione del selettore `backup-staging` nomina
+> B-28.
+>
+> **Verdi leggeri (05:36-05:40)**:
+>
+> - `services`: `backup-staging` 160, `backup-secure` 68, `backup-totals` 84, `backup-apply` 228;
+> - `utils`: `backup-cli-restore` 77, `backup-cli-secure` 58;
+> - Vitest: `restoreI18n`, `backupApi`, `restoreFlow` e `RestoreCard`, 573 in tutto;
+> - `front check`: 0 errori e 0 avvisi.
+>
+> **In corso**: la doc (docs-writer); lo slot breve chiesto al coordinatore (05:41) per `api backup-restore` (il test
+> «prodotti = dichiarati») e `api backup-restore-apply`.
+>
+> **Slot 2 (05:41-05:46) ✅**: `api backup-restore` 130 e `api backup-restore-apply` 136. Porta libera.
+>
+> **Doc (docs-writer, 05:45)**:
+>
+> - `backup_restore.en.md`, `#check-refused`: una riga per `database_foreign_objects`, e anche quella di
+>   `database_damaged`, che mancava;
+> - `cli_tools.en.md`: la tabella dei codici e una frase nella prova su copia;
+> - `security.md`: la sottosezione nuova `#backup-restore-foreign-objects`.
+>
+> **⚠️ Fuori pista**: il docs-writer ha notato «holds 1 triggers»: il messaggio del rifiuto aveva un conteggio al
+> plurale. Ora il messaggio è senza numero, che resta nel log. Nessun test fissava quel testo; corretta anche la
+> citazione in `security.md`. Poi `services backup-staging` 160.
+>
+> **Verdi della doc (05:46-05:48)**: build rigorosa exit 0, check-links valido, `gate-docs-links` 63.
+>
+> **Backlog**: B-28 chiuso con ✅. **Checkpoint (05:50)**, col blocco del CHANGELOG. 🧊 FROZEN.
 
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 

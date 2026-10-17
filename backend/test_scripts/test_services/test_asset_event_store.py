@@ -33,6 +33,13 @@ What is pinned (W E1a is not written yet; each test says how it fails before the
   provider event through ``DELETE``, and the next sync writes it back); an id that is not an event
   of that asset is EVENT_NOT_DELETABLE, and an event a transaction realises, provider ones
   included, is EVENT_IN_USE. Before: ``delete_ids`` is an unknown field.
+* Retyping a SPLIT (workstream J, lot CP-14a, P-10, developer decision 27 option A) -- an edit
+  whose stored row is a SPLIT and whose new type is not is refused while an incoming ADJUSTMENT
+  (quantity > 0) without ``cost_basis_override`` is linked to the event: retyped, that row would stop
+  being a split rescale and become an acquisition of unknown cost (MISSING_COST_BASIS).
+  EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, ``details`` {"event_id", "date" of the stored SPLIT,
+  "transaction_ids" sorted}, for the first such edit in request order, before the first write.
+  Before: every retype is accepted.
 
 "Nothing persisted" is read on a fresh connection (the engine has no pool) with raw SQL, so a
 row stored with an invalid type cannot crash the check. A refused request runs as the
@@ -186,17 +193,25 @@ async def _add_provider(owned: _Owned, offset: int, kind: AssetEventType, amount
     return ids[0]
 
 
-async def _link_tx(owned: _Owned, event_id: int, offset: int) -> int:
-    """A DIVIDEND on this unit's broker realising ``event_id``: what pins the event under ON DELETE RESTRICT."""
+async def _link_tx(owned: _Owned, event_id: int, offset: int, *, kind: TransactionType = TransactionType.DIVIDEND, quantity: str = "0", cost: str | None = None) -> int:
+    """A transaction on this unit's broker realising ``event_id``: what pins the event under ON DELETE RESTRICT.
+
+    By default a DIVIDEND of 1.00 USD. An ADJUSTMENT moves ``quantity`` units and no cash, as a split's adjustment
+    does; ``cost`` is its per-unit ``cost_basis_override`` in USD, None for no cost (what Auto mode stores on a row
+    linked to a SPLIT).
+    """
+    moves_cash = kind != TransactionType.ADJUSTMENT
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         tx = Transaction(
             broker_id=owned.broker_id,
             asset_id=owned.asset_id,
-            type=TransactionType.DIVIDEND,
+            type=kind,
             date=_day(offset),
-            quantity=Decimal("0"),
-            amount=Decimal("1.00"),
-            currency="USD",
+            quantity=Decimal(quantity),
+            amount=Decimal("1.00") if moves_cash else Decimal("0"),
+            currency="USD" if moves_cash else None,
+            cost_basis_override=None if cost is None else Decimal(cost),
+            cost_basis_currency=None if cost is None else "USD",
             asset_event_id=event_id,
         )
         session.add(tx)
@@ -223,15 +238,28 @@ async def _unknown_event_id() -> int:
 # --------------------------------------------------------------------------- #
 
 _RAW_EVENTS = text("SELECT id, asset_id, date, type, value, currency, provider_assignment_id, notes FROM asset_events WHERE asset_id IN :asset_ids ORDER BY id").bindparams(bindparam("asset_ids", expanding=True))
+_RAW_EVENTS_STAMPED = text("SELECT id, asset_id, date, type, value, currency, provider_assignment_id, notes, updated_at FROM asset_events WHERE asset_id IN :asset_ids ORDER BY id").bindparams(bindparam("asset_ids", expanding=True))
+_RAW_TRANSACTIONS = text("SELECT id, asset_id, type, date, quantity, amount, currency, cost_basis_override, cost_basis_currency, asset_event_id, updated_at FROM transactions WHERE broker_id = :broker_id ORDER BY id")
 
 
-async def _snapshot(owned: _Owned) -> dict[int, tuple]:
+async def _snapshot(owned: _Owned, *, stamped: bool = False) -> dict[int, tuple]:
     """id -> (asset_id, date, type, value, currency, provider_assignment_id, notes) of every event of this unit's assets.
 
-    Raw SQL on a fresh connection: what is committed, with the type as stored (no enum decoding).
+    Raw SQL on a fresh connection: what is committed, with the type as stored (no enum decoding). ``stamped`` appends
+    ``updated_at``: a write that puts every value back as it was still moves it.
     """
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        rows = (await session.execute(_RAW_EVENTS, {"asset_ids": owned.asset_ids})).all()
+        rows = (await session.execute(_RAW_EVENTS_STAMPED if stamped else _RAW_EVENTS, {"asset_ids": owned.asset_ids})).all()
+    return {row[0]: tuple(row[1:]) for row in rows}
+
+
+async def _tx_snapshot(owned: _Owned) -> dict[int, tuple]:
+    """id -> (asset_id, type, date, quantity, amount, currency, cost basis, its currency, asset_event_id, updated_at).
+
+    Every transaction on this unit's broker, read as ``_snapshot`` reads the events: raw SQL on a fresh connection.
+    """
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        rows = (await session.execute(_RAW_TRANSACTIONS, {"broker_id": owned.broker_id})).all()
     return {row[0]: tuple(row[1:]) for row in rows}
 
 
@@ -1229,3 +1257,194 @@ async def test_a_create_item_sees_the_key_an_earlier_item_freed(owned):
     first, second = _results(result)
     assert (_field(first, "deleted_ids"), _field(second, "event_ids")) == ([a_id], [new_id])
     assert [(r.id, r.notes) for r in await _rows(owned.asset_id)] == [(new_id, "created")]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Retyping a SPLIT whose incoming adjustments have no cost (workstream J, lot CP-14a, P-10,
+# developer decision 27 option A)
+#
+# An ADJUSTMENT +q linked to a SPLIT (``Transaction.asset_event_id``) and saved in Auto stores no cost:
+# while the event is a SPLIT, the row only rescales the pool. Once the event is retyped (to a
+# PRICE_ADJUSTMENT, say) the row is no longer a split rescale but an acquisition of UNKNOWN cost:
+# MISSING_COST_BASIS on the Dashboard and in the lots. So ``_apply_manual_event_edits`` refuses an edit
+# whose STORED row is a SPLIT and whose NEW type is not, when at least one transaction linked to that
+# event is an ADJUSTMENT with quantity > 0 and ``cost_basis_override IS NULL``. The check runs before
+# the first write: the request writes nothing. Code EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST; ``details``
+# {"event_id", "date" of the stored SPLIT, "transaction_ids": those adjustments, sorted}, for the first
+# such edit in request order (``_write_manual_item`` adds ``asset_id`` and ``item_index``, as for every
+# refusal).
+#
+# Allowed, before and after P-10 (the GUARD tests): an incoming adjustment with a known cost, 0
+# included; a reverse split's outgoing row, which never carries a cost and, retyped, becomes a plain
+# reduction at average cost (test A4 of test_portfolio_wac.py); a SPLIT nothing links to; an edit that
+# keeps the type SPLIT.
+#
+# Before P-10 every retype is accepted: the reds fail in ``_upsert_refused`` («accepted a request it
+# must refuse») with the retype committed, which ``owned`` wipes.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def _add_split(owned: _Owned, offset: int, ratio: str, *, notes: str | None = None) -> int:
+    """A manual SPLIT of this unit's asset: its value is the ratio ("2" a 2-for-1, "0.5" a reverse 1-for-2)."""
+    return await _add_manual(owned.asset_id, offset, AssetEventType.SPLIT, ratio, notes=notes)
+
+
+async def _link_adjustment(owned: _Owned, split_id: int, offset: int, quantity: str, *, cost: str | None = None) -> int:
+    """An ADJUSTMENT of ``quantity`` units linked to ``split_id``; ``cost`` per unit in USD, None for none (Auto's way)."""
+    return await _link_tx(owned, split_id, offset, kind=TransactionType.ADJUSTMENT, quantity=quantity, cost=cost)
+
+
+def _split_refusal(owned: _Owned, split_id: int, offset: int, transaction_ids: list[int]) -> dict:
+    """The ``details`` of EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST for a one-item request, as ``_plain`` renders them."""
+    return {"asset_id": owned.asset_id, "item_index": 0, "event_id": split_id, "date": _day(offset).isoformat(), "transaction_ids": sorted(transaction_ids)}
+
+
+@pytest.mark.asyncio
+async def test_retyping_a_split_with_an_incoming_adjustment_without_cost_is_refused(owned):
+    """A forward SPLIT and an ADJUSTMENT +10 linked to it with no cost: the SPLIT cannot become a PRICE_ADJUSTMENT.
+
+    Before: accepted — the event becomes a PRICE_ADJUSTMENT, and the +10 an acquisition of unknown cost.
+    Contract: EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST; details {"asset_id", "item_index": 0, "event_id": the SPLIT,
+    "date": its date, "transaction_ids": [the ADJUSTMENT]}; the event (type, value, date, notes, updated_at) and the
+    transaction as they were.
+    """
+    split_id = await _add_split(owned, 200, "2", notes="2-for-1")
+    adjustment_id = await _link_adjustment(owned, split_id, 200, "10")
+    events_before = await _snapshot(owned, stamped=True)
+    transactions_before = await _tx_snapshot(owned)
+
+    refused = await _upsert_refused([_item(owned.asset_id, [_ev(200, "PRICE_ADJUSTMENT", "2", event_id=split_id, notes="relabelled")])])
+
+    assert refused.error_code == "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST", (refused.error_code, refused.details)
+    assert _plain(refused.details) == _split_refusal(owned, split_id, 200, [adjustment_id])
+    assert await _snapshot(owned, stamped=True) == events_before, f"SPLIT {split_id} was written although its retype was refused"
+    assert await _tx_snapshot(owned) == transactions_before, f"ADJUSTMENT {adjustment_id} changed although the retype was refused"
+
+
+@pytest.mark.asyncio
+async def test_a_refused_split_retype_writes_nothing_of_its_item(owned):
+    """All or nothing: the valid edit before the refused retype, in the same item, is not written either.
+
+    Item: 0 changes a DIVIDEND's amount and notes (valid on its own), 1 retypes a SPLIT that has an incoming
+    ADJUSTMENT without cost.
+    Before: both edits accepted and written.
+    Contract: EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST naming the SPLIT; neither event written (updated_at included); the
+    transaction as it was.
+    """
+    dividend_id = await _add_manual(owned.asset_id, 210, AssetEventType.DIVIDEND, "1.00", notes="before")
+    split_id = await _add_split(owned, 211, "2")
+    adjustment_id = await _link_adjustment(owned, split_id, 211, "10")
+    events_before = await _snapshot(owned, stamped=True)
+    transactions_before = await _tx_snapshot(owned)
+    request = [_item(owned.asset_id, [_ev(210, "DIVIDEND", "1.25", event_id=dividend_id, notes="after"), _ev(211, "PRICE_ADJUSTMENT", "2", event_id=split_id)])]
+
+    refused = await _upsert_refused(request)
+
+    assert refused.error_code == "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST", (refused.error_code, refused.details)
+    assert _plain(refused.details) == _split_refusal(owned, split_id, 211, [adjustment_id])
+    assert await _snapshot(owned, stamped=True) == events_before, f"DIVIDEND {dividend_id} or SPLIT {split_id} was written although the item was refused"
+    assert await _tx_snapshot(owned) == transactions_before
+
+
+@pytest.mark.asyncio
+async def test_a_refused_split_retype_names_the_first_offending_edit_and_only_its_costless_incoming_adjustments(owned):
+    """The details follow the contract to the letter: which SPLIT, which date, which transactions.
+
+    Two SPLITs, A then B (B has the higher id); the item retypes B (and moves it two days later), then A.
+    Linked to B: two ADJUSTMENTs in without cost, the first created dated a day after the second (their dates do not
+    give the order of their ids), one in with a cost of 0 and one out without cost. Linked to A: one ADJUSTMENT in
+    without cost.
+    Before: accepted, both SPLITs retyped.
+    Contract: details name B, the first offending edit in request order, with B's STORED date, and only B's two
+    costless incoming ADJUSTMENTs, sorted by id; nothing written.
+    """
+    split_a = await _add_split(owned, 220, "2")
+    split_b = await _add_split(owned, 222, "3")
+    assert split_a < split_b, "precondition: B is the newer row, so request order and id order disagree"
+    await _link_adjustment(owned, split_a, 220, "10")
+    later_costless = await _link_adjustment(owned, split_b, 223, "20")
+    earlier_costless = await _link_adjustment(owned, split_b, 222, "5")
+    await _link_adjustment(owned, split_b, 222, "7", cost="0")
+    await _link_adjustment(owned, split_b, 222, "-4")
+    events_before = await _snapshot(owned, stamped=True)
+    transactions_before = await _tx_snapshot(owned)
+    request = [_item(owned.asset_id, [_ev(224, "PRICE_ADJUSTMENT", "3", event_id=split_b), _ev(220, "PRICE_ADJUSTMENT", "2", event_id=split_a)])]
+
+    refused = await _upsert_refused(request)
+
+    assert refused.error_code == "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST", (refused.error_code, refused.details)
+    assert _plain(refused.details) == _split_refusal(owned, split_b, 222, [later_costless, earlier_costless])
+    assert await _snapshot(owned, stamped=True) == events_before
+    assert await _tx_snapshot(owned) == transactions_before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cost", [pytest.param("12.5", id="cost"), pytest.param("0", id="zero-cost")])
+async def test_guard_a_split_whose_incoming_adjustment_has_a_cost_can_be_retyped(owned, cost):
+    """GUARD (green before and after P-10): a known cost — 0 is one — leaves nothing unknown after the retype.
+
+    Contract: accepted; the event, under its id, is a PRICE_ADJUSTMENT; the ADJUSTMENT still linked, its cost as it was.
+    """
+    split_id = await _add_split(owned, 230, "2")
+    await _link_adjustment(owned, split_id, 230, "10", cost=cost)
+    transactions_before = await _tx_snapshot(owned)
+
+    await _upsert([_item(owned.asset_id, [_ev(230, "PRICE_ADJUSTMENT", "2", event_id=split_id)])])
+
+    assert [(row.id, row.date, row.type, row.value) for row in await _rows(owned.asset_id)] == [(split_id, _day(230), AssetEventType.PRICE_ADJUSTMENT, Decimal("2"))]
+    assert await _tx_snapshot(owned) == transactions_before
+
+
+@pytest.mark.asyncio
+async def test_guard_a_reverse_split_whose_outgoing_adjustment_has_no_cost_can_be_retyped(owned):
+    """GUARD (green before and after P-10): a reverse split's −q row never carries a cost, and retyped it becomes a plain
+    reduction at average cost — intended (test A4 of test_portfolio_wac.py).
+
+    Contract: accepted; the event, under its id, is a PRICE_ADJUSTMENT; the ADJUSTMENT as it was.
+    """
+    split_id = await _add_split(owned, 240, "0.5")
+    await _link_adjustment(owned, split_id, 240, "-10")
+    transactions_before = await _tx_snapshot(owned)
+
+    await _upsert([_item(owned.asset_id, [_ev(240, "PRICE_ADJUSTMENT", "0.5", event_id=split_id)])])
+
+    assert [(row.id, row.date, row.type, row.value) for row in await _rows(owned.asset_id)] == [(split_id, _day(240), AssetEventType.PRICE_ADJUSTMENT, Decimal("0.5"))]
+    assert await _tx_snapshot(owned) == transactions_before
+
+
+@pytest.mark.asyncio
+async def test_guard_a_split_nothing_links_to_can_be_retyped(owned):
+    """GUARD (green before and after P-10): without linked rows there is no cost to lose.
+
+    Contract: accepted; the event, under its id, is a PRICE_ADJUSTMENT.
+    """
+    split_id = await _add_split(owned, 245, "2")
+
+    await _upsert([_item(owned.asset_id, [_ev(245, "PRICE_ADJUSTMENT", "2", event_id=split_id)])])
+
+    assert [(row.id, row.date, row.type, row.value) for row in await _rows(owned.asset_id)] == [(split_id, _day(245), AssetEventType.PRICE_ADJUSTMENT, Decimal("2"))]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("offset", "ratio", "notes"),
+    [
+        pytest.param(250, "3", None, id="ratio"),
+        pytest.param(250, "2", "ratio checked", id="notes"),
+        pytest.param(251, "2", None, id="date"),
+    ],
+)
+async def test_guard_editing_a_split_without_changing_its_type_is_allowed(owned, offset, ratio, notes):
+    """GUARD (green before and after P-10): an edit that keeps the type SPLIT — its ratio, its notes, even its date —
+    is allowed with an incoming ADJUSTMENT without cost linked: the row stays a split rescale.
+
+    Contract: accepted; the SPLIT, under its id, holds the sent values; the ADJUSTMENT as it was.
+    """
+    split_id = await _add_split(owned, 250, "2")
+    await _link_adjustment(owned, split_id, 250, "10")
+    transactions_before = await _tx_snapshot(owned)
+
+    await _upsert([_item(owned.asset_id, [_ev(offset, "SPLIT", ratio, event_id=split_id, notes=notes)])])
+
+    assert [(row.id, row.date, row.type, row.value, row.notes) for row in await _rows(owned.asset_id)] == [(split_id, _day(offset), AssetEventType.SPLIT, Decimal(ratio), notes)]
+    assert await _tx_snapshot(owned) == transactions_before

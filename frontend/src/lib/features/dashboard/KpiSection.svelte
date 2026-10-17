@@ -75,31 +75,19 @@
 
     const lastHistoryPoint = $derived(history.length > 0 ? history[history.length - 1] : null);
     const firstHistoryPoint = $derived(history.length > 0 ? history[0] : null);
-    const prevHistoryPoint = $derived(history.length > 1 ? history[history.length - 2] : null);
 
+    /** The day's change of the Total P&L, from the calendar day before (`pnl_change_1d`, R17): the backend's, never the history's. */
     const pnlDeltaDay = $derived.by(() => {
-        if (!lastHistoryPoint || !prevHistoryPoint) return null;
-        const last = parseFloat(lastHistoryPoint.total_pnl.amount);
-        const prev = parseFloat(prevHistoryPoint.total_pnl.amount);
-        return last - prev;
+        const change = summary ? safeCurrency(summary.pnl_change_1d) : null;
+        if (!change) return null;
+        const amount = parseFloat(change.amount);
+        return Number.isFinite(amount) ? amount : null;
     });
     /** Direction of the day's change, published as `data-direction`; the colour agrees (up and flat green, down red). */
     const pnlDeltaDayDirection = $derived(pnlDeltaDay == null ? undefined : pnlDeltaDay > 0 ? 'up' : pnlDeltaDay < 0 ? 'down' : 'flat');
 
-    /**
-     * `change` as a percentage of `|base|`: the sign is the direction of the change even when the
-     * base is negative (a loss that shrinks is a rise). Null only on a zero or unreadable base.
-     */
-    function dayChangePct(change: number, base: number): number | null {
-        if (!Number.isFinite(change) || !Number.isFinite(base) || base === 0) return null;
-        return (change / Math.abs(base)) * 100;
-    }
-
-    /** Card 2: the day change as a share of yesterday's NAV. */
-    const pnlDeltaDayPct = $derived.by(() => {
-        if (!prevHistoryPoint || pnlDeltaDay == null) return null;
-        return dayChangePct(pnlDeltaDay, parseFloat(prevHistoryPoint.nav_value.amount));
-    });
+    /** Card 2: the day change as a share of yesterday's NAV (`pnl_change_1d_vs_nav_percent`). */
+    const pnlDeltaDayPct = $derived(summary ? returnPct(summary.pnl_change_1d_vs_nav_percent) : null);
 
     const cashContribAmt = $derived(lastHistoryPoint?.cash_from_contributed_capital != null ? parseFloat(lastHistoryPoint.cash_from_contributed_capital.amount) : null);
     const cashGeneratedAmt = $derived(lastHistoryPoint?.cash_from_generated_returns != null ? parseFloat(lastHistoryPoint.cash_from_generated_returns.amount) : null);
@@ -127,11 +115,8 @@
         const amount = parseFloat(totalPnlCur.amount);
         return Number.isFinite(amount) ? amount : null;
     });
-    /** Card 1: the day change as a share of yesterday's total P&L. */
-    const pnlDeltaDayVsPrevTotalPct = $derived.by(() => {
-        if (!prevHistoryPoint || pnlDeltaDay == null) return null;
-        return dayChangePct(pnlDeltaDay, parseFloat(prevHistoryPoint.total_pnl.amount));
-    });
+    /** Card 1: the day change as a share of yesterday's total P&L (`pnl_change_1d_vs_total_pnl_percent`). */
+    const pnlDeltaDayVsPrevTotalPct = $derived(summary ? returnPct(summary.pnl_change_1d_vs_total_pnl_percent) : null);
     // Absolute (since-inception) ROI next to the absolute total P&L in Card 3 —
     // period ROI (simple_roi_percent) belongs to Card 2's period-based returns only.
     const absRoiPct = $derived.by(() => {
@@ -239,8 +224,8 @@
     const twrrCumVal = $derived(summary ? returnPct(summary.twrr_percent) : null);
     const mwrrCumVal = $derived(summary ? returnPct(summary.mwrr_cumulative_percent) : null);
     const mwrrAnnVal = $derived(summary ? returnPct(summary.mwrr_annualized_percent) : null);
-    // Timing effect needs both returns: a missing one counted as 0 would show a difference that does not exist.
-    const timingEffectVal = $derived(twrrCumVal != null && mwrrCumVal != null ? mwrrCumVal - twrrCumVal : null);
+    // The timing effect is the backend's (`timing_effect_percent`, null when either return is missing), in percentage points.
+    const timingEffectVal = $derived(summary ? returnPct(summary.timing_effect_percent) : null);
     const timingIntensity = $derived(timingEffectVal != null ? Math.min(Math.abs(timingEffectVal) / 3, 1) : 0);
     const timingLabel = $derived.by(() => {
         if (timingEffectVal == null) return '';

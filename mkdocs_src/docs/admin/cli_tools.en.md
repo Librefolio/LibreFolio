@@ -5,7 +5,7 @@
 !!! tip "Where to run the commands"
 
     - **Host installation**: in the Pipenv environment, with the `pipenv run` prefix used on this page, or after `pipenv shell`.
-    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`, which runs it as the server's user instead of root). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current`, `db check`, `backup create`, `backup inspect`, `backup restore` and `backup pending` work there ([Back Up with Docker](#backup-docker)); `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
+    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`, which runs it as the server's user instead of root). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current`, `db check`, `backup create`, `backup inspect`, `backup restore`, `backup decrypt` and `backup pending` work there ([Back Up with Docker](#backup-docker)); `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
 
 ---
 
@@ -31,6 +31,7 @@ pipenv run ./dev.py server --force
 - 🧮 More workers serve more requests at once: use them on any machine with more than one CPU. `auto` starts $\max(1,\ 2\,(n-1))$ workers on $n$ CPUs.
 - ⏳ The server first builds the web interface and this documentation when they are missing or out of date, so the first start takes a few minutes. If the interface does not build, the server does not start.
 - 🔑 A restart signs everybody out, unless `JWT_SECRET` is set in `.env` (see [Configuration](configuration.md)).
+- ⏹️ Ctrl+C stops the server cleanly: `dev.py` gives it up to the [shutdown budget](configuration.md#shutdown) plus 2 seconds to stop (10 seconds by default), then ends it; a second Ctrl+C ends it at once. A SIGTERM sent to `dev.py` alone, by a process supervisor for example, gets the same wait: `dev.py` passes it on to the server.
 
 ??? note "⚙️ Other server options — rarely needed"
 
@@ -105,6 +106,7 @@ pipenv run ./dev.py user activate <username>
 - 👑 `deactivate` refuses the last active administrator: it stops with the error `User '<username>' is the last active administrator: promote or activate another administrator first` and exits with `1`.
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `activate` of a deactivated account warns `… the command line reactivates the account anyway`, then reactivates it.
 - 📬 With email verification on, `activate` lets an account that waits for its email in at once — with no limit warning while its link is live, since its place is already counted — and `deactivate` ends its wait: either way, the verification links it was sent stop working. See *Email Verification* in [Email](email.md).
+- 🏁 On the [initial administrator](configuration.md#initial-admin) still waiting for its setup link, `reset` and `activate` work as on any account: they set it up without its link. Either one ends the wait for good: its setup links stop working, the one of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` included, and neither [`user setup-link`](#setup-link) nor a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives it another one. `activate` alone leaves an active account whose password nobody knows, until `reset` or a [reset link](#reset-link) gives it one; `reset` alone leaves it inactive, until `activate`.
 - 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front. When your instance can email a reset link, the screen shows the email form first and keeps the commands in a panel closed by default ([Forgotten Passwords](email.md#forgot-password)).
 
 ### 🔗 Send a Password-Reset Link {: #reset-link }
@@ -128,6 +130,8 @@ pipenv run ./dev.py user setup-link
 When LibreFolio created the administrator from `LIBREFOLIO_ADMIN_EMAIL` at its first start ([The Initial Administrator](configuration.md#initial-admin)) and nobody has used its setup link yet, this command prints a new one: the administrator opens it, chooses the password and is signed in. Use it when the link has expired or got lost.
 
 - ⏱️ The link works once, for 72 hours. The setup links issued before stop working, the one of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` included.
+- 📮 A new address for the waiting administrator — `LIBREFOLIO_ADMIN_EMAIL` changed before a restart, or [`user set-email`](#set-email) — stops its setup links, which went to the old address. The administrator still waits: this command gives it a link for the new address. The same address with other capitals of the letters A to Z is no change, and the link keeps working.
+- 🔚 Set up another way — activated with `user activate`, or given a password with `user reset` or a [reset link](#reset-link) — the administrator waits no more: its setup links stop working for good, and this command stops with the error below.
 - 🌐 As for [invitations](#invite), the link is complete when `LIBREFOLIO_PUBLIC_URL` is set, and the path only (`/setup#token=…`) when it is not.
 - 📧 The command only prints the link: it sends no email.
 - ❌ When no administrator is waiting for its setup, the command stops with the error `No administrator account is waiting for its setup link` and exits with `1`.
@@ -142,6 +146,7 @@ The same change as a new email in the user's [Profile](../user/settings/profile.
 
 - 🔤 An address belongs to one account only, whatever its capitals: `Anna@example.com` and `anna@example.com` are the same address. Only the letters A to Z are matched this way, accented letters are not: `Émile@example.com` and `émile@example.com` are two different addresses.
 - 🚪 A new address signs the account out of every device, cancels any password-reset link still open, and is recorded as not verified; the account can still sign in. The account's own address with other capitals is the same address: only the way it is written changes, nobody is signed out, and it stays verified.
+- 👑 On the initial administrator still waiting for its setup link, a new address also stops that link, which went to the old address: the account still waits, and [`user setup-link`](#setup-link) gives it a new one. While `LIBREFOLIO_ADMIN_EMAIL` is set, each start of the server gives the waiting account that address again: change the variable as well, or the next start brings the old address back and stops the new link too.
 - ❌ An address another account already has, in any capitals, is refused: the command stops with the error `Email already registered` and exits with `1`, changing nothing. So does an address that is not valid (`Not an email address`) or an unknown username (`User '<username>' not found`).
 
 ### 👑 Grant or Remove Administrator Rights
@@ -277,7 +282,7 @@ pipenv run ./dev.py db create-clean
 
 ## 💾 Back Up the Instance {: #backup }
 
-`backup create` puts the whole instance in one zip archive, while the server keeps running: the database, the uploaded files, the broker reports and your own stress scenarios. `backup inspect` checks an archive and shows what it holds, `backup restore --dry-run` tries a restore of it on a copy, leaving the instance as it is, and `backup restore` restores it at the next start of the server. To copy the data directory by hand instead, see [Backup](filesystem.md#backup).
+`backup create` puts the whole instance in one zip archive, while the server keeps running: the database, the uploaded files, the broker reports and your own stress scenarios. With `--encrypt`, it makes a [secure archive](#backup-secure), encrypted with a password you choose, which `backup decrypt` turns back into its zip. `backup inspect` checks an archive and shows what it holds, `backup restore --dry-run` tries a restore of it on a copy, leaving the instance as it is, and `backup restore` restores it at the next start of the server. To copy the data directory by hand instead, see [Backup](filesystem.md#backup).
 
 ### 📦 Create an Archive
 
@@ -290,16 +295,19 @@ pipenv run ./dev.py backup create -o /mnt/nas/librefolio/
 
 # Or give the archive a name of your own
 pipenv run ./dev.py backup create -o /mnt/nas/librefolio/before-update.zip
+
+# A secure archive (.lfbk): the password is asked twice
+pipenv run ./dev.py backup create --encrypt -o /mnt/nas/librefolio/
 ```
 
 - 🟢 The server keeps working, and writing, during the backup: the database is copied with SQLite's `VACUUM INTO`, a consistent snapshot, then SQLite's integrity check and foreign-key check run on the copy.
-- 🏷️ The archive is named after the moment the backup starts, in UTC: `librefolio-backup-20261015-121500.zip`. In a folder that already holds a file with that name, after two backups in the same second for instance, it becomes `librefolio-backup-20261015-121500-2.zip`, then `-3`, and so on: an archive never replaces a file.
+- 🏷️ The archive is named after the moment the backup starts, in UTC: `librefolio-backup-20261015-121500.zip`, or `.lfbk` for a [secure archive](#backup-secure). In a folder that already holds a file with that name, after two backups in the same second for instance, it becomes `librefolio-backup-20261015-121500-2.zip`, then `-3`, and so on: an archive never replaces a file.
 - 📁 `--output` (`-o`) is checked before the backup starts, and the command must be able to write there. An existing folder receives the archive under its default name. Any other path is the archive's file, even one that ends with `/`: a folder that does not exist yet becomes the archive's name. That file must not exist yet, and its name is never changed. Its missing folders are created only when the archive is moved there, so a failed backup leaves no empty folder behind. Prefer absolute paths: a relative one starts at the project root, wherever you run the command from.
 - 💽 Before writing anything, the command checks the free space where it builds the archive, in the data directory's `backups/` folder, even with `-o`: about twice the size of the database, plus the files, plus a small margin. When it is short, or when the disk or a quota fills up during the backup all the same, the command stops with `❌ Backup failed (backup_no_space): not enough free space`. When `-o` is on another disk, the space there is checked once the archive is built and its size known.
 - 🛟 If the finished archive cannot go to `-o` (a file with that name appeared meanwhile, its folders cannot be created, the other disk is short of space, a write error), it is put in `backups/` instead, and the command exits with `1`. A move that fails half-way leaves no partial file behind.
 - 🚦 One backup runs at a time: while another one is running, the command stops and asks you to try again when it ends.
-- ✅ It ends with `✅ Backup written: <path>`, the size and the time taken, any warnings, and a reminder that the archive holds every user's data. It exits with `0` when the archive is where you asked, warnings included, and `1` otherwise.
-- 🔒 The archive is not encrypted and has no password: LibreFolio writes it so that only its owner can read and write it (`0600`). Keep it, and every copy, as private as the data directory.
+- ✅ It ends with `✅ Backup written: <path>`, the size and the time taken, any warnings, and a reminder: `🔒 The archive holds every user's data: keep it private.`, or for a secure archive `🔐 Encrypted with your password: only that password opens it, and LibreFolio cannot recover a lost one.` It exits with `0` when the archive is where you asked, warnings included, and `1` otherwise.
+- 🔒 Without a password, the archive is not encrypted: LibreFolio writes it, like a secure one, so that only its owner can read and write it (`0600`). Keep it, and every copy, as private as the data directory.
 - 🗑️ LibreFolio never deletes the archives it puts in `backups/`: they stay there until you remove them. That folder is on the same disk as the data, so copy them to another disk, a NAS or off-site, or write them there directly with `-o`.
 - 🔗 Keep `backups/` a real folder, never a link to a NAS or another disk: every archive is built inside it first, even with `-o`. A link, or a file, in its place stops the command with `❌ <data dir>/backups is not a plain folder (a link, or a file): …`.
 - 🧪 `backup --test-db create` backs up the test data directory instead: a development option.
@@ -310,11 +318,12 @@ pipenv run ./dev.py backup create -o /mnt/nas/librefolio/before-update.zip
 
     - `The database failed its integrity check` or `The database has foreign-key violations`: the archive keeps the database as it is, and `backup inspect` shows the integrity result.
     - `Left out (<n>): links, special files, files or folders that could not be read, or files removed during the backup`, followed by the entries, at most 50: they are not in the archive. Links are never followed, even when a whole folder such as `custom-uploads/` is a link to another disk.
+    - `The instance key cannot be used: the secure backup was made without it, so saved provider keys must be entered again after a restore`: a [secure archive](#backup-secure) without the key.
 
     **Not where you asked**: the archive is written, and the command exits with `1`.
 
     - `⚠️ <reason>: the archive was written to <path> instead`, followed by the usual lines: `-o` could not take the finished archive, so it is in `backups/`. Move it where you want it.
-    - `❌ <reason>: the archive stays in <path>. Move it within the hour: the next backup after that removes it.`: `backups/` could not take it either. It is still in the backup's work folder, inside `backups/.jobs/`, which the first backup started after that hour removes: move the archive out before then.
+    - `❌ <reason>: the archive stays in <path>. Move it within the hour: the next backup after that removes it.`: `backups/` could not take it either. It is still in the backup's work folder, inside `backups/.jobs/`, which the first backup started after that hour, or the first start of LibreFolio after it, removes: move the archive out before then.
 
     **Errors**: no archive is written, and the command exits with `1`.
 
@@ -323,6 +332,45 @@ pipenv run ./dev.py backup create -o /mnt/nas/librefolio/before-update.zip
     - `❌ <data dir>/backups is not a plain folder (a link, or a file): …`: make `backups/` a real folder again. `❌ The backup could not run in <data dir>/backups: <reason>`: the command could not prepare its work folder there, for example because it cannot write into the data directory.
     - `❌ Backup failed (backup_no_space): not enough free space`: the free space was short at the start, or the disk or a quota filled up during the backup, even in the middle of a file. Free some space on the disk of the data directory.
     - `❌ Backup failed (backup_failed): the cause is in the log above`: any other failure. One of them is a file that fails while it is being copied into the archive, such as a read error in the middle of the file: part of a file cannot be taken back out of a zip, so the whole backup stops. A file that fails before its copy starts is left out with the warning above instead.
+
+### 🔐 A Secure Archive {: #backup-secure }
+
+```bash
+# The password is asked twice at the terminal
+pipenv run ./dev.py backup create --encrypt
+
+# The password read from a file that holds it alone (with Docker, a secret: /run/secrets/…)
+pipenv run ./dev.py backup create --password-file ~/.librefolio-backup-password
+
+# The password read from the standard input, such as from a password manager
+pass show librefolio/backup | pipenv run ./dev.py backup create --password-stdin
+```
+
+A secure archive, `librefolio-backup-20261015-121500.lfbk`, is the zip that `backup create` writes without a password, encrypted with a password you choose: only that password opens it, and LibreFolio cannot recover a lost one. What it protects, and what it does not: [Secure Backups](backup_restore.md#secure).
+
+- 🔑 **Where the password comes from**, never from the command line, which every user of the server can read (`ps`) and the shell keeps in its history: there is no `--password` option, and the commands that take a password accept no abbreviated option.
+    - `--encrypt` alone: typed at the terminal, twice.
+    - `--password-file FILE`: the text of the file, without the byte order mark at its start and the line breaks at its end, as for [Secrets in Files](configuration.md#secret-files): a file that holds the password alone, such as a Docker secret. A relative path starts at the project root.
+    - `--password-stdin`: one line of the standard input, without its line break, such as from a pipe. At a terminal, the password is asked as without the option, without being shown, twice for `create`: typed there as a line, it would show.
+
+    `--password-file` and `--password-stdin` exclude each other, and either one makes the archive secure without `--encrypt`.
+
+- 📏 **The rules** are those of an account's password with at least 12 characters: an uppercase and a lowercase letter, a digit and a symbol, each class counted in Unicode as for the accounts; at most 1024 characters. They are checked before the backup starts: a password that misses one writes nothing.
+- 🗝️ **The instance key.** The archive carries `secrets/instance.key` when LibreFolio generated the key and can use it; never a key set with `LIBREFOLIO_INSTANCE_KEY` or `LIBREFOLIO_INSTANCE_KEY_FILE`. A generated key that cannot be used, damaged, out of reach, or longer than 4096 bytes, more than a restore reads back, is left out, with the warning `⚠️ The instance key cannot be used: the secure backup was made without it, so saved provider keys must be entered again after a restore`, and the archive is written all the same.
+- 🔐 **The encryption** comes after the usual phases, as `… encrypting`. It writes the `.lfbk` beside the zip in `backups/`, so it needs the zip's size again there, plus 64 MB: when that is short, `❌ Backup failed (backup_no_space): not enough free space`. The zip is removed once encrypted, or when the backup fails. A backup killed outright, by a power cut or `kill -9`, cannot remove it: the next start of LibreFolio ends that backup as interrupted and removes what it left in `backups/.jobs/`, the zip and the copy of the database included.
+- ✅ It ends as above, the reminder being `🔐 Encrypted with your password: only that password opens it, and LibreFolio cannot recover a lost one.`
+
+??? note "❌ Password errors — what the messages mean"
+
+    Nothing is written, and the command exits with `1`.
+
+    - `❌ A password is needed: give it with --password-file or --password-stdin, or run the command at a terminal (password_required)`: `--encrypt` without a terminal to ask on, such as in cron. An empty password typed at the terminal ends with `❌ No password was typed (password_required)`, an empty line from a pipe with `--password-stdin` with `❌ The standard input carried no password (password_required)`.
+    - `❌ The two passwords differ (password_mismatch)`.
+    - `❌ The password of a backup needs at least 12 characters, with an uppercase and a lowercase letter, a digit and a symbol (password_too_weak: <rules>)`: the codes of the rules it misses, in this order: `min_length`, `uppercase`, `lowercase`, `digit`, `special`.
+    - `❌ The password is longer than 1024 characters (password_too_long)`.
+    - `❌ password file: <path> does not exist (password_unreadable)`, or `cannot be read (…)`, `is empty or blank`, `is not UTF-8 text`, `is larger than 65536 bytes, too large for a secret`.
+
+    Both password options at once, or an option that does not exist, such as `--password`, stop the command before it starts, with its usage line and the exit code `2`.
 
 ### 🗂️ What the Archive Holds
 
@@ -335,12 +383,13 @@ The archive has the layout of the data directory, and holds only:
 | `custom-uploads/` | The files uploaded in the app |
 | `broker_reports/` | The broker reports |
 | `scenario_catalog/` | Your own stress scenarios, if you added any |
+| `secrets/instance.key` | In a [secure archive](#backup-secure) only, when LibreFolio generated the instance key: its text, outside the manifest's list of files. A restore reads it to re-encrypt the saved secrets, and never unpacks it |
 
-Everything else stays out: `secrets/`, `logs/`, `scheduler_state.json`, the `backups/` folder itself, the `.librefolio-production-data` marker, and SQLite's working files next to the database: `app.db-wal`, `app.db-shm`, `app.db.post-migration.lock` and the `.bak` copies of the [post-migration fixes](#post-migration-fixes). The copy of the database already holds what was waiting in `app.db-wal`. Symbolic links and special files are never followed nor archived.
+Everything else stays out: `secrets/` (but `secrets/instance.key` in a secure archive), `logs/`, `scheduler_state.json`, the `backups/` folder itself, the `.librefolio-production-data` marker, and SQLite's working files next to the database: `app.db-wal`, `app.db-shm`, `app.db.post-migration.lock` and the `.bak` copies of the [post-migration fixes](#post-migration-fixes). The copy of the database already holds what was waiting in `app.db-wal`. Symbolic links and special files are never followed nor archived.
 
-!!! warning "🔑 The instance key is not in the archive"
+!!! warning "🔑 The instance key is in a secure archive only"
 
-    The archive leaves out `secrets/`, which holds the [instance key](configuration.md#instance-key). Back it up separately, as [Filesystem Structure → What to Back Up](filesystem.md#what-to-back-up) explains, and keep the copy as private as the archives. Before you start LibreFolio on the data of an archive, put `secrets/` back with it: without its key, what LibreFolio encrypted can no longer be read.
+    A clear archive leaves out `secrets/`, which holds the [instance key](configuration.md#instance-key). Back it up separately, as [Filesystem Structure → What to Back Up](filesystem.md#what-to-back-up) explains, and keep the copy as private as the archives. Before you start LibreFolio on the data of a clear archive, put `secrets/` back with it: without its key, what LibreFolio encrypted can no longer be read. A [secure archive](#backup-secure) carries the key LibreFolio generated, never one set with `LIBREFOLIO_INSTANCE_KEY` or `LIBREFOLIO_INSTANCE_KEY_FILE`: keep that one where you set it.
 
 ??? info "📋 `manifest.json` — what it records"
 
@@ -348,7 +397,7 @@ Everything else stays out: `secrets/`, `logs/`, `scheduler_state.json`, the `bac
     - the LibreFolio version that made the archive, how (`cli` for this command, `ui` for the web interface, `panel` for a [hosting panel](hosting_providers.md#panel-backups)) and when, in UTC;
     - the database: its migration (Alembic) revision, the result of SQLite's integrity check, the number of foreign-key violations, the rows in each table and the ledger's control totals, the cash of every broker in each currency and the quantity of every position (an archive made before them has none);
     - every entry, the database first, with its path, its size and its SHA-256;
-    - whether the instance key is included: it is not.
+    - whether the archive carries the instance key, and the SHA-256 of that entry: only a secure archive does.
 
 ### 🔍 Check an Archive
 
@@ -360,9 +409,10 @@ pipenv run ./dev.py backup inspect /mnt/nas/librefolio/librefolio-backup-2026101
 pipenv run ./dev.py backup inspect /mnt/nas/librefolio/librefolio-backup-20261015-121500.zip --no-verify
 ```
 
-- 🟢 It works on any archive, with the server running or stopped, and needs no data directory. As with `-o`, a relative path starts at the project root.
+- 🟢 It works on any archive, with the server running or stopped, and needs no data directory, but for a secure archive (below). As with `-o`, a relative path starts at the project root.
 - 📋 It shows who made the archive and when (`Made by LibreFolio <version> (cli) on <date> UTC`), the database's migration revision, size and integrity check, its rows and tables, the number and size of the files, and whether the instance key is included.
 - 🔎 It compares the size and SHA-256 of every entry with the manifest, and ends with `✅ Every entry matches the manifest`. `--no-verify` compares only the entry names, without reading the entries, and ends with `ℹ️ The entry names match the manifest; their contents were not read (--no-verify)`.
+- 🔐 A secure archive, recognised by its first bytes whatever its name, asks its password first, once, from the same sources as `create` ([A Secure Archive](#backup-secure)). It is then decrypted (`🔓 Decrypting <path>`) into a private folder `.decrypt-…` of the data directory's `backups/`, removed at the end, also when the command fails: the command needs that data directory, and room in it for the decrypted archive, about the size of the `.lfbk`. A folder that an `inspect` killed outright (a power cut, `kill -9`) left behind is removed by the next `inspect`, or by the next start of LibreFolio, once it is an hour old: a younger one may be another `inspect`'s, still running. Its report adds `Secure backup: decrypted with its password`. A wrong password ends with `❌ The password does not open this backup (wrong_password)`; see also `password_required`, `envelope_damaged` and `envelope_unsupported` in the refusals of [Try a Restore on a Copy](#backup-restore-dry-run). A `.zip` ignores the password options.
 - ❌ It exits with `1` when entries are missing, differ from the manifest or are not in it (it names the first five of each), and when the file is not an archive it can read: the message then ends with a code, such as `archive_unreadable` (not a zip file, or one cut short), `manifest_missing`, `manifest_unknown_format` (not a LibreFolio backup) or `manifest_newer_format` (made by a newer LibreFolio: check it with that version or a newer one).
 
 ### 🧪 Try a Restore on a Copy {: #backup-restore-dry-run }
@@ -374,10 +424,10 @@ pipenv run ./dev.py backup restore /mnt/nas/librefolio/librefolio-backup-2026101
 
 `backup restore --dry-run` unpacks the archive into a copy, brings it up to date and checks it, then tells you what a restore would do. The copy is made in the data directory, in `.restore/stage/<id>/`, and removed at the end: the database and the files of the instance are never touched, so the server can keep running. Without `--dry-run`, the same check is the first half of a restore: see [Restore an Archive](#backup-restore).
 
-The check goes through five steps, and stops at the first one that refuses the archive:
+A [secure archive](#backup-secure) asks its password first, as `inspect` does, and is decrypted into the folder of the copy, as `.restore/stage/<id>/archive.zip`, which is removed once unpacked. A check killed outright leaves that decrypted archive, or its part `archive.zip.part`: the next start of LibreFolio removes it. Then the check goes through six steps, and stops at the first one that refuses the archive:
 
-1. **A LibreFolio archive.** Only an archive LibreFolio wrote, with its `manifest.json`, is accepted: a data directory zipped by hand is not. Every entry is checked before a byte is written: the manifest lists it, it is a plain file (not a folder, a link or an encrypted entry), its name appears only once, even ignoring upper and lower case, its size is the one in the manifest, and the whole fits in the free space.
-2. **Unpacked.** Each entry is written into a new file of the copy, never through a link nor over another file, and its SHA-256 is compared with the manifest's.
+1. **A LibreFolio archive.** Only an archive LibreFolio wrote, with its `manifest.json`, is accepted: a data directory zipped by hand is not. Every entry is checked before a byte is written: the manifest lists it (or announces it, for the instance key of a secure archive), it is a plain file (not a folder, a link or an encrypted entry), its name appears only once, even ignoring upper and lower case, its size is the one in the manifest, and the whole fits in the free space.
+2. **Unpacked.** Each entry is written into a new file of the copy, never through a link nor over another file, and its SHA-256 is compared with the manifest's. Then, before anything else opens the copy, the schema of its database is read, and nothing of it runs: a trigger, a view or a virtual table, which LibreFolio never creates and whose SQL would run during the check and in the server after a restore, refuses the archive (`database_foreign_objects`).
 3. **The revision decides.** The migration (Alembic) revision of the database, given by the manifest and confirmed by the database itself:
     - this LibreFolio's own revision: the database is restored as it is;
     - an older one: the copy is upgraded to this LibreFolio's revision, in a process of its own, which is stopped if it lasts more than an hour;
@@ -387,13 +437,14 @@ The check goes through five steps, and stops at the first one that refuses the a
 
 4. **Checked before and after.** Before the upgrade, the copy passes SQLite's integrity check and holds exactly the rows the manifest counted. After it, the copy passes the integrity check again, at this LibreFolio's revision. A migration may change data, so rows that changed are a warning, not a refusal, and so are broken references (foreign keys), kept as they are.
 5. **Administrators.** The report names the active administrators of the backup. Without any, the restore is blocked: nobody could manage the instance after it.
+6. **Saved secrets.** The instance keeps its own [instance key](configuration.md#instance-key). When the archive carries the key that encrypted its saved plugin secrets, such as the API key of a data source, they are re-encrypted on the copy with this instance's key; the others are counted, to enter again after the restore. A copy without secrets does not even read this instance's key.
 
-It shows the steps as it goes (`… checking`, `… unpacking`, `… upgrading`, `… verifying`), then its report:
+It shows the steps as it goes (`… decrypting` for a secure archive, `… checking`, `… unpacking`, `… upgrading`, `… verifying`), then its report:
 
 - 📦 Who made the archive and when (`Made by LibreFolio <version> (<how>) on <date> UTC`), and what a restore does with the database: `this LibreFolio's own: restored as it is`, or `upgraded on the copy to <revision> (<n> migrations)`, followed by each migration with the first line of its description.
 - 🩹 The post-migration fixes that changed something on the copy, if any.
 - 🔢 The rows, the tables and the size of the database, then the tables whose rows the upgrade changed, as `<table> (<before> → <after>)`, with `—` for a table that did not exist.
-- 📁 The number and size of the files, and whether the instance key is included.
+- 📁 The number and size of the files; `Secure backup: decrypted with its password` for a secure archive; `Instance key: included` or `Instance key: not included`; and the saved keys of the data providers: `Saved provider keys: <n> re-encrypted with this instance's key`, and `⚠️ <n> saved provider keys cannot be read with this instance's key: enter them again after the restore` for those the archive's key did not read, or when it carries none.
 - ⚖️ The ledger's control totals: the cash of every broker in each currency and the quantity of every position, summed from the transactions alone, with no price, exchange rate, cost or date. The backup recorded them in its manifest, and the check reads them again on the copy once it is up to date. A difference is a warning, never a refusal: a migration may correct data. The report says one of:
     - `Ledger totals: the same as when the backup was made`;
     - `⚠️ Ledger totals differ from the backup's (<n> lines):`, then the lines that differ, cash first, at most 20: `broker <id>, <currency> cash: <before> → <after>` or `broker <id>, asset <id> quantity: <before> → <after>`, the backup's amount before the arrow and the copy's after it, with `—` for zero. `… and <n> more` counts the lines left out;
@@ -406,7 +457,7 @@ It shows the steps as it goes (`… checking`, `… unpacking`, `… upgrading`,
 
 It ends with `✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed.` and exits with `0`. It exits with `1` when the archive is refused or the restore blocked. A refusal is one line, the reason followed by a code in parentheses, such as `❌ The file is not a LibreFolio backup (not_a_backup)`, and nothing of the copy is left.
 
-- 💽 The copy needs free space on the disk of the data directory: everything the archive holds once unpacked, plus twice the size of its database for the upgrade, plus 64 MB. `backup inspect` shows those sizes; the archive itself is read where it is, never copied. When the space is short, the check stops before it unpacks anything, with the number of bytes it needs (`no_space`); a disk that fills up during the check stops it too.
+- 💽 The copy needs free space on the disk of the data directory: everything the archive holds once unpacked, plus twice the size of its database for the upgrade, plus 64 MB. `backup inspect` shows those sizes; the archive itself is read where it is, never copied. A secure archive also needs room for its decrypted archive, about its own size, until it is unpacked. When the space is short, the check stops before it unpacks anything, with the number of bytes it needs (`no_space`); a disk that fills up during the check stops it too.
 - 🚦 One archive is checked at a time: while another check runs, the command stops with `❌ Another archive is being checked (from the web interface or another command): try again when it ends`.
 - 🆕 It never uses the database of the instance: any installation can check an archive, a new one included, as long as its data directory exists (otherwise `❌ No data directory at <path>`). As with `-o`, a relative path starts at the project root.
 - 🔗 Keep `.restore/` and `.restore/stage/` real folders: a link, or a file, in their place stops the command with `❌ <path> is not a plain folder (a link, or a file): the copy is made in a folder of the data directory`.
@@ -416,17 +467,22 @@ It ends with `✅ The archive can be restored. Dry run: the instance was left as
     | Code | Why the archive is refused |
     | --- | --- |
     | `not_a_backup` | Not a zip, or a zip without the manifest LibreFolio writes, such as a data directory zipped by hand |
+    | `password_required` | A secure archive, and no password: no terminal to ask on, and neither `--password-file` nor `--password-stdin` |
+    | `wrong_password` | The password does not open the secure archive: not the one it was made with, or the start of the file was changed |
+    | `envelope_damaged` | The secure archive is damaged, cut short, or was changed after it was made |
+    | `envelope_unsupported` | The secure archive comes from a newer LibreFolio, or asks for settings this one does not accept: update LibreFolio first |
     | `archive_unreadable`, `archive_damaged` | The file cannot be read, or the zip is damaged |
     | `manifest_newer_format` | The archive format is newer than this LibreFolio reads: update LibreFolio first |
     | `manifest_invalid`, `manifest_unreadable`, `manifest_too_large` | The manifest is damaged or not valid |
-    | `unexpected_entry`, `missing_entry` | The archive holds an entry its manifest does not list, or lacks entries the manifest lists |
+    | `unexpected_entry`, `missing_entry` | The archive holds an entry its manifest does not list, or lacks entries the manifest lists; for the instance key, an entry the manifest does not announce, or one it announces and the archive lacks |
     | `duplicate_entry` | An entry appears twice, even when only the case of its name changes, or stands where the folder of another entry must be |
     | `not_a_file`, `encrypted_entry`, `unsupported_entry` | An entry is a folder or a link, is encrypted, or uses a compression LibreFolio does not write |
     | `too_many_entries` | The archive holds more than 500,000 entries |
     | `checksum_mismatch` | An entry's size or SHA-256 differs from the manifest: the archive is damaged or was changed |
     | `no_space` | Not enough free space for the copy |
     | `stage_failed` | The copy could not be written: the error printed just above gives the cause |
-    | `database_damaged` | The backup's database fails SQLite's integrity check, before or after the upgrade |
+    | `database_damaged` | The backup's database fails SQLite's integrity check, before or after the upgrade, or SQLite cannot read its schema |
+    | `database_foreign_objects` | The backup's database holds a trigger, a view or a virtual table, which LibreFolio never creates: it was not made by LibreFolio, or was changed. Use another backup |
     | `manifest_mismatch` | The backup's database is not the one its manifest describes |
     | `revision_missing` | The backup's database records no migration revision |
     | `revision_unknown` | The backup comes from a newer LibreFolio, or not from this one: update LibreFolio, then check it again |
@@ -448,7 +504,7 @@ Without `--dry-run`, `backup restore` runs the same check on a copy and shows th
 ```
 
 - ⌨️ Type `restore`, in lower case; spaces around it do not count. Anything else, `Restore` or an empty line included, ends with `Nothing restored: the copy was removed.` and exit code `1`.
-- 🤖 `--yes` (`-y`) confirms without asking. Without a terminal to ask on, in a script for instance, it is required: otherwise the command stops with `❌ No terminal to ask on: add --yes to confirm the restore. Nothing restored: the copy was removed.` and exits with `1`.
+- 🤖 `--yes` (`-y`) confirms without asking. Without a terminal to ask on, in a script for instance, it is required: otherwise the command stops with `❌ No terminal to ask on: add --yes to confirm the restore. Nothing restored: the copy was removed.` and exits with `1`. A [secure archive](#backup-secure) needs its password there too: add `--password-file` or `--password-stdin`.
 
 Once confirmed, the command exits with `0` and says:
 
@@ -483,7 +539,7 @@ Good to know:
 - 📍 Run it where the server runs, in the container with Docker: the restore is recorded for the path of the data directory, and a server that finds its data directory under another path does not apply it.
 - 🔗 Keep the four folders real folders of the data directory: one that is a link, or that is mounted on its own, cannot be swapped. The start then leaves the data as it is, and records the restore as rolled back with `swap_failed`.
 - 💽 The swap needs no space of its own: the copy the check made becomes the instance's data, and the former data is removed once the first start completes.
-- 🗝️ An archive made by another installation brings no instance key, and the restore keeps this one's: what the other installation encrypted cannot be read with it. See «The instance key is not in the archive» above.
+- 🗝️ The restore keeps this installation's instance key. When the archive carries the key of the installation that made it (a [secure archive](#backup-secure), when LibreFolio generated that key), the check has already re-encrypted its saved secrets with this installation's key. From any other archive of another installation, they cannot be read here: the report counts them, to enter again after the restore, unless you put that installation's key back first ([Saved Secrets and the Instance Key](configuration.md#plugin-secrets)). See «The instance key is in a secure archive only» above.
 
 ### ⏳ Follow or Cancel a Restore {: #backup-pending }
 
@@ -523,13 +579,28 @@ A rollback also removes the restored data and the copy: to try again, run `backu
 
 `--cancel` drops the restore waiting, with its checked copy, whoever confirmed it: `✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is`, exit code `0`. When no restore waits, or one is already being applied: `❌ No restore waits for the next start: nothing to cancel (restore_not_pending)`, exit code `1`.
 
+### 🔓 Decrypt a Secure Archive {: #backup-decrypt }
+
+```bash
+# The zip inside a secure archive, to use it by hand
+pipenv run ./dev.py backup decrypt /mnt/nas/librefolio/librefolio-backup-20261015-121500.lfbk -o /mnt/nas/librefolio/librefolio-backup-20261015-121500.zip
+```
+
+`backup decrypt` writes the zip that a [secure archive](#backup-secure) holds: the archive `backup create` writes without a password, with `secrets/instance.key` when the secure archive carries the key. `inspect` and `restore` take that zip as any other, and its key still re-encrypts the saved secrets. To restore a secure archive, you do not need it: `backup restore` takes the `.lfbk` as it is.
+
+- 🔑 It asks the password once, or reads it with `--password-file` or `--password-stdin` ([A Secure Archive](#backup-secure)).
+- 🆕 `-o` (`--output`) is required, and is the zip's file: it must not exist yet. One that does is refused before the password is asked, `❌ <path> already exists: choose another name`, and nothing is written. As with `create`, a relative path starts at the project root.
+- 🔒 The zip holds every user's data in clear, and only the user who ran the command can read it (`0600`). It ends with `✅ Decrypted: <path> (<size>)` and `🔒 It holds every user's data in clear: keep it private, and remove it once used.` When the secure archive carries the instance key, a last line adds `🔑 It also holds the instance key: with it, every saved provider key can be read.`
+- 🟢 It needs no data directory, and works with the server running or stopped.
+- ❌ It exits with `1` when the file is not a secure archive (`❌ <path> is not a secure backup: a plain .zip needs no decrypting (not_an_envelope)`), when the password does not open it (`wrong_password`), when it is damaged (`envelope_damaged`: nothing is left at `-o`) or comes from a newer LibreFolio (`envelope_unsupported`).
+
 ### 🚚 Use an Archive on Another Installation
 
 [`backup restore`](#backup-restore) restores an archive on the installation where you run it, and keeps that installation's `secrets/`. To start another installation on the data of an archive by hand instead, with the `secrets/` of the installation that made it, such as when you move LibreFolio:
 
 1. **Stop LibreFolio** on the installation that receives the data.
-2. **Unzip the archive into an empty [data directory](filesystem.md)** (`LibreFolio-data/` with Docker Compose): if it holds anything, move it aside first. Nothing of the old data may mix with the archive's, not even SQLite's `app.db-wal` and `app.db-shm`.
-3. **Put `secrets/` back** in the data directory, from the copy you saved separately.
+2. **Unzip the archive into an empty [data directory](filesystem.md)** (`LibreFolio-data/` with Docker Compose): if it holds anything, move it aside first. Nothing of the old data may mix with the archive's, not even SQLite's `app.db-wal` and `app.db-shm`. A secure archive is decrypted into its zip first ([Decrypt a Secure Archive](#backup-decrypt)).
+3. **Put `secrets/` back** in the data directory, from the copy you saved separately. The zip of a secure archive that carries the key brings `secrets/instance.key` already: give the folder mode `0700` and the file `0600` (`chmod`), or the start log has a warning.
 4. **Start LibreFolio**, the version that made the archive or a newer one: the pending migrations run by themselves at start.
 
 Good to know:
@@ -538,6 +609,7 @@ Good to know:
 - ⛔ LibreFolio never downgrades a database: an archive made by a newer version needs that version or a newer one, and an older one does not start on it. `backup inspect` shows which version made the archive, and `backup restore --dry-run` refuses such an archive with `revision_unknown`.
 - 🧹 The `manifest.json` left at the root of the data directory is harmless: you can delete it.
 - 👤 With Docker, the container gives the data directory to its user at every start, so the owner of the unzipped files does not matter. On a host installation, unzip as the user that runs LibreFolio, so that the files belong to it.
+- 🗝️ The key of a secure archive works only where neither `LIBREFOLIO_INSTANCE_KEY` nor `LIBREFOLIO_INSTANCE_KEY_FILE` is set: a key set there wins over `secrets/instance.key`. Never put it in place of a key already in use: what was saved under that key would become unreadable. An installation with its own key takes the archive with [`backup restore`](#backup-restore), which re-encrypts the saved secrets.
 
 ### 🐳 Back Up with Docker {: #backup-docker }
 
@@ -565,6 +637,7 @@ docker compose exec librefolio python dev.py backup pending
 - 📂 `-o` and the archives of `inspect` and `restore` are paths inside the container, where the data directory is `/app/backend/data/prod-docker`. To check an archive that is on the host, copy it into `LibreFolio-data/` first, such as into `LibreFolio-data/backups/`. To write the archive elsewhere than `LibreFolio-data/backups/`, use a folder mounted from the host that the server's user can write to: anywhere else, it stays inside the container and is lost when the container is recreated.
 - 🔑 `restore` also reads the archive as the server's user: an archive that `backup create` wrote is fine, but one you copied in yourself must be readable by that user, or the check stops with `archive_unreadable`. With the official image, `sudo chown 1000:1000 <archive>` on the host gives it to that user.
 - ⌨️ `docker compose exec` gives the command a terminal to ask on. Without one, such as with `docker compose exec -T` in a script, add `--yes`.
+- 🔐 For a [secure archive](#backup-secure), `--encrypt` asks the password on that terminal. With `-T`, from cron for instance, give it with `--password-file` and a Docker secret, such as `/run/secrets/backup_password`: [the example](backup_restore.md#command-line) in Backup, Restore and Moving Your Instance shows the lines to add to `docker-compose.yml`. `backup decrypt` does not switch to the owner of the data directory as the other commands do: with `docker compose exec`, its zip belongs to root.
 - 🔁 After a first start that fails on the restored data, the container starts again by itself (`restart: unless-stopped`, in both compose files LibreFolio ships), and that start puts the data as it was before back.
 - 🔒 On the host, the archives belong to the container's user, and only that user can read them: if your host user is another one, copy them with `sudo cp -a`.
 - 💻 From a source checkout, `./dev.py docker exec backup create` does the same.
