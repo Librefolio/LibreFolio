@@ -1,6 +1,7 @@
 /**
  * Colour roles in the browser: every migrated element draws the colour of its role, as the browser itself resolves it,
- * in the light and in the dark theme — and the page content not migrated yet keeps today's look (colour programme,
+ * in the light and in the dark theme — and, in dark, what is not migrated yet keeps today's look from the legacy remap
+ * of src/app.css, proven on probes of the spec's own rather than on a component of a page (colour programme,
  * workstream T: step T-2, the login/registration pilot; step T-3, the app shell; step T-5, the login background; then
  * the designer's round 2 of the palette, «Pietra e Salvia» in light and «Ardesia e Salvia» in dark, approved whole by
  * the developer on 15/10 — decision D-T17, step T-8: the sidebar is green in both themes, drawn from a family of roles
@@ -85,13 +86,21 @@
  *     it stands; and a Tab from `nav-dashboard` lands on the next control of the sidebar, read back as inside the
  *     `<nav>` and `:focus-visible`, which draws a solid outline in --lf-bar-focus.
  *
- * (c) The other side of the line, in dark, where the remap acts. The page content stays legacy on purpose (decision
- * D-T3), so a card of it must still be painted by the remap, not by a role: `dashboard-cash-balances` (`bg-white`, drawn
- * on both projects whatever the data — an empty account gets its «no cash» line in the same card) has the background of
- * `var(--theme-bg-card)`, the legacy variable, and not the one of --lf-surface-card. Meanwhile the language menu opened
- * over that page, migrated, draws its own roles: `language-selector-panel` on --lf-surface-card, with a
- * --lf-border-raised border (N3), checked to differ from --lf-border-subtle first. A migration that leaked into the
- * page, or a remap that stopped repainting it, shows here.
+ * (c) The other side of the line, in dark, where the remap acts. What is not migrated yet keeps today's look (D-T3),
+ * but the waves migrate the page content area by area (D-T28) — DV's took the dashboard on 16/10, the cash card this
+ * case used to read included — so no component of a page is legacy for sure any more: the remap is proven on probes of
+ * the spec's own instead, appended to the page content, the shell's one `<main>`, and removed in the task that reads
+ * them. A container with no role utility, `<div class="rounded-xl">`, takes the remap's border,
+ * `var(--theme-border-primary)`, the legacy variable, and its twin with one escapes the remap through
+ * `:where(:not([class*='-lf-']))`: `<div class="rounded-xl border-lf-subtle">` draws --lf-border-subtle — the legacy
+ * variable checked first to differ from --lf-border-subtle and from --lf-border-raised, the borders a migrated
+ * container takes. The rule probed is a structural one, `html.dark .rounded-xl`, not a class rule such as
+ * `html.dark .bg-white`: C4 (themeTokens.gate.test.ts) retires a class rule in the change that removes the class's last
+ * use, so a `bg-white` probe would go red inside someone else's wave again; a structural rule keys on an element or a
+ * shape, which a migration keeps, and leaves app.css only with the clean-up (B6), which removes the remap and must
+ * rewrite this half anyway. Meanwhile the language menu opened over the page, migrated, draws its own roles:
+ * `language-selector-panel` on --lf-surface-card, with a --lf-border-raised border (N3), checked to differ from
+ * --lf-border-subtle first. A remap that stopped repainting a legacy container, or caught a migrated one, shows here.
  *
  * (d) Signed out, on `/`, in each theme, the login background, `animated-background`:
  *   - its root: background --lf-surface-page;
@@ -161,8 +170,11 @@
  *     are not, so a computed colour holds at any frame — but the opacity of a line, animated from 0 to 1 and back, is
  *     not read, so its strength is checked only as the alpha of --lf-art-line; and a retired colour that came back in
  *     another form (a mix of it) would not be recognised as one;
+ *   - the remap at work but on one rule: (c) reads, on probes, the border it gives a rounded container; what its class
+ *     rules (`html.dark .bg-white` …) and its rules on a legacy field paint is not read in a browser;
  *   - any page but `/` and `/dashboard` — the error page included, which draws the same login background and a card in
- *     relief: the rest of the content is legacy by decision (D-T3), and the migration waves bring their own cases.
+ *     relief — and the content of `/dashboard` itself, where (c) reads probes of its own instead: the pages are the
+ *     migration waves' own cases, and the gallery's.
  *
  * The test writes nothing server-side. The signed-out cases never sign in or register; the registration link needs
  * `registration_mode` 'open': open by default, read by the login card from GET /api/v1/system/instance, and changed by no
@@ -253,6 +265,28 @@ async function role(page: Page, name: string, property: ColourProperty, theme: T
 /** An element's computed colour; with `pseudo`, the colour of that pseudo-element of it. */
 function computed(target: Locator, property: ColourProperty, pseudo = ''): Promise<string> {
     return target.evaluate((element, {property, pseudo}) => getComputedStyle(element, pseudo || null).getPropertyValue(property), {property, pseudo});
+}
+
+/**
+ * What the browser computes as `property` for a `<div>` with the classes `className`, appended to `container`, read and
+ * removed within the same task, so the page never paints it. Unlike probe(), which states its colour in a style, it
+ * takes the colour the page's own rules give those classes there — the remap of app.css included — as they would to a
+ * container of the page. A new element has no transition to settle, so it is read once.
+ */
+function probeIn(container: Locator, className: string, property: ColourProperty): Promise<string> {
+    return container.evaluate(
+        (host, {className, property}) => {
+            const element = document.createElement('div');
+            element.className = className;
+            host.appendChild(element);
+            try {
+                return getComputedStyle(element).getPropertyValue(property);
+            } finally {
+                element.remove();
+            }
+        },
+        {className, property},
+    );
 }
 
 /**
@@ -610,17 +644,29 @@ test.describe('Colour roles in the app shell — signed in as TEST_USER, on /das
         });
     }
 
-    test('(c) dark theme: the page content keeps the legacy remap, and a migrated menu over it draws its roles', async ({page}) => {
+    test('(c) dark theme: in the page content a legacy container takes the remap and its twin with a role escapes it, and a migrated menu over the page draws its roles', async ({page}) => {
         await openDashboard(page, 'dark');
 
-        // A card of the page content, legacy by decision (D-T3): `bg-white`, which the remap of app.css repaints in dark.
-        const legacyCard = page.getByTestId('dashboard-cash-balances');
-        await expect(legacyCard).toBeVisible({timeout: SHELL_MS});
-        await expectRole(page, legacyCard, 'background-color', '--theme-bg-card', 'dashboard-cash-balances, legacy: the remap paints it with the legacy variable');
-        const cardRole = await role(page, '--lf-surface-card', 'background-color');
-        expect(await computed(legacyCard, 'background-color'), 'the legacy card does not take the card role: the page content is not migrated yet (D-T3)').not.toBe(cardRole);
+        // The page content, the shell's one <main>: the waves migrate it area by area (D-T28), so no component of it is
+        // legacy for sure, and the remap is proven on two probes appended to it, twins but for a role utility.
+        const content = page.getByTestId('app-shell').getByRole('main');
+        await expect(content, 'the app shell holds one <main>, the page content').toHaveCount(1);
+        // Positive control: the remap's border differs from the two a migrated container takes, or the probes below
+        // could not tell legacy from migrated.
+        const remapBorder = await role(page, '--theme-border-primary', 'border-top-color');
+        for (const name of ['--lf-border-subtle', '--lf-border-raised']) {
+            const migrated = await role(page, name, 'border-top-color');
+            expect(remapBorder, `positive control: the remap's border, --theme-border-primary, is not ${name} (${migrated}), the border of a migrated container, so the probes below tell legacy from migrated`).not.toBe(migrated);
+        }
+        // A container with no role utility takes the remap's border — a structural rule, which only the clean-up (B6)
+        // retires, where C4 retires a class rule such as html.dark .bg-white with the class's last use. Without the
+        // remap, Tailwind's preflight would draw the border in currentColor, the probe's text colour.
+        expect(await probeIn(content, 'rounded-xl', 'border-top-color'), `a legacy container in the page content, <div class="rounded-xl"> (html.dark .rounded-xl must repaint it): border-top-color must be --theme-border-primary, ${remapBorder}`).toBe(remapBorder);
+        // Its twin with a role utility escapes the remap through :where(:not([class*='-lf-'])), and draws its role.
+        const roleBorder = await role(page, '--lf-border-subtle', 'border-top-color');
+        expect(await probeIn(content, 'rounded-xl border-lf-subtle', 'border-top-color'), `a migrated container in the page content, <div class="rounded-xl border-lf-subtle"> (html.dark .rounded-xl must exempt it): border-top-color must be --lf-border-subtle, ${roleBorder}`).toBe(roleBorder);
 
-        // A migrated menu, opened over that legacy page: on the card, in relief (N3).
+        // A migrated menu, opened over the page: on the card, in relief (N3).
         const languageButton = page.getByTestId('language-selector-button');
         await expect(languageButton, 'the language menu starts closed').toHaveAttribute('aria-expanded', 'false');
         await languageButton.click();
