@@ -1475,6 +1475,32 @@ both by default; a finite value too large for its column is another matter: see
   `List[dict]`, and the service validates them one by one afterwards, each with its own model: a `SafeDecimal` there
   refuses infinity and NaN.
 
+### 🧯 Error Answers {: #error-answers }
+
+A `500` of the asset and FX routes never carries the error's text, which can name the database schema (an SQL error
+quotes its statement): the answer is a fixed message naming the action, such as «Internal error while assigning
+providers», and the error goes to the log with its exception (`logger.exception(...)`).
+
+- **Where.** First the price routes (`backend/app/api/v1/assets/prices.py`): R13-SEC9-3 for the query and the
+  [current prices](../backend/assets/architecture.md#current-quotes-and-todays-ohlc), then MF-SEC9a for the writes and
+  the sync, and for the FX rates' delete. Since X-R74 (release 1.3), the 26 sites of the other asset and FX routes that
+  still echoed the error (`detail=str(e)`, or `f"…: {e!s}"`): `providers.py`, `crud.py`, `events.py` and
+  `market_data.py` in `backend/app/api/v1/assets/`, `providers.py` and `currencies.py` (the sync's catch-all) in
+  `backend/app/api/v1/fx/`. The provider probe and the five FX sites did not log the error at all before.
+- **What stays.** The refusals the routes author answer as before: a `400` or `404` with an authored message, the coded
+  refusals `{"error_code", "message", "params"}` (the `409`s, and the events' `400`s), the `422`s with a code, and the
+  FX sync's `502` «Failed to sync rates: …» for an `FXServiceError`.
+- **A failed merge.** `merge_assets` answers an `AssetSourceError` with its text, `404` or `400`, and its messages are
+  authored. `MERGE_FAILED` is the one that wraps an unexpected error: `AssetCRUDService.merge_assets()`
+  (`backend/app/services/assets/crud.py`) raises it for any error that stops the merge, a database error included, and
+  logs that error with its exception. Since X-R74 it stays a `400` with its code, but its text is the fixed «Merge
+  failed: internal error».
+
+Tests: `./dev.py test services routes-generic-500` (`backend/test_scripts/test_services/test_routes_generic_500.py`),
+parametrized over the 26 failure paths, each a `500` that holds no word of the error while the error is logged with its
+exception; a failed merge, a `400` that holds no word of the error while the service logs it; and guards that the
+authored refusals answer as before.
+
 ### 📁 Uploaded Files: Common and Personal {: #upload-scope }
 
 Each uploaded static file (`<data directory>/custom-uploads/<uuid>.<ext>`, with its JSON sidecar `<uuid>.json`, see
