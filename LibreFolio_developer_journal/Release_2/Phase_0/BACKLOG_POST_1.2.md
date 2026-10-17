@@ -7524,6 +7524,27 @@ sulla base `23f6578f3`.
   - È precedente a B-43. Da decidere: tenerlo, perché serve a capire un upgrade fallito di un archivio vero, o ridurlo
     alla classe dell'ultima eccezione.
   Dettagli: piano 07, «B-43 + B-44».
+- **B-47 · Nel Bulk, un focus e un blur sulla cassa del Form fanno chiedere di scartare** — minimo, chiarezza; B,
+  17/10 (W-B64 + W-B65, dalla lettura del codice; area di W).
+  - Le somme tornano dall'API con almeno 6 decimali (`READ_MIN_SCALE`, `db/real_decimal.py`: `0.010000`). Il Bulk le
+    tiene così, e `CompactCashCell` le mostra formattate (`0.01`). Al blur, però, emette sempre il valore formattato
+    (`handleBlur` → `emit`) e `setCash` del Form lo prende senza confronto. Così un «Applica» dopo un focus sulla cassa,
+    senza cambiare nulla, riscrive la riga come `0.01`, e la guardia della chiusura (`serializeOps`, che confronta il
+    testo) chiede di scartare. Precedente a W-B65, che ha tolto le altre due cause (il segno, il `null` del
+    suggerimento WAC).
+  - Cura possibile: `CompactCashCell` emette al blur solo se il valore cambia (`exactDecimalEqual` con quello
+    ricevuto), oppure la chiave della guardia legge i decimali per valore e non per testo.
+  - Nello stesso giro: l'ingresso dell'import (`txCreateItemToPendingOp`) passa ancora la cassa da `Number`, e
+    `isDraftReadyForValidation` legge `amount === '0'`.
+  Dettagli: piano 07, «W-B64 + W-B65 (per W)».
+- **B-48 · Il Form accetta una quantità che il backend rifiuta per le cifre significative** — minimo, chiarezza; B,
+  17/10 (W-B64, nota del test-author; area di W).
+  - Con W-B64 il Form tiene 15 cifre intere e 10 decimali, ma il backend ne tiene al massimo 15 significative in tutto
+    (`REAL_SIGNIFICANT_DIGITS`). `999999999999999.5` passa il Form e si ferma solo alla validazione
+    (`significantDigitsExceeded`, con un messaggio chiaro). Era già così a 12 + 10.
+  - Un commento vecchio in `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` dice ancora «the form
+    (12 integer digits, 6 decimals)».
+  Dettagli: piano 07, «W-B64 + W-B65 (per W)».
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
