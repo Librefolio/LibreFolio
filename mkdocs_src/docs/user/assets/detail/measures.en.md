@@ -25,8 +25,8 @@ Measures are not saved: reloading the page empties the panel. **Prices** and **R
 The table has a row for the asset (a second one in its own currency when the chart is converted) and one for each line drawn on the price axis, such as a comparison asset or a moving average. Next to the **Start** and **End** values:
 
 - **Δ Abs** — the difference $V_{end} - V_{start}$, in the line's unit.
-- **Δ %** — the change $\frac{V_{end} - V_{start}}{V_{start}}$ → [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)
-- **Δ%/yr** — the same change as a yearly rate over the $d$ calendar days between the points, $(1 + \Delta\%)^{365/d} - 1$ → [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)
+- **Δ %** — the change $\frac{V_{end} - V_{start}}{V_{start}}$, or `—` when the line starts at 0 → [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)
+- **Δ%/yr** — the same change as a yearly rate over the $d$ calendar days between the points, $(1 + \Delta\%)^{365/d} - 1$, from 30 days on: `—` on a shorter span, without a **Δ %**, or when the line ends on the other side of zero → [Returns & Growth Rates](../../../financial-theory/fundamentals/returns.md)
 
 The measure's summary line adds the number of days.
 
