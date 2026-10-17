@@ -112,12 +112,16 @@ sync time from a multi-step chain route, which stores the composite rate under t
 
 `POST /api/v1/fx/currencies/convert` expands each conversion's `date_range` into one `convert_bulk()`
 item per day, both ends included; with signals, a second series of one-unit items runs from the start
-of their warm-up to the same end. Both ends have a limit (X-R55, `backend/app/utils/date_range_limits.py`):
-the end is cut at `latest_range_end()`, tomorrow in UTC (a day of margin for a user whose calendar is
-ahead of UTC), and the start, the warm-up included, goes back at most `RANGE_SPAN_LIMIT_DAYS`
-(36,525 days, 100 years) before that end (`range_span_floor()`, never before `date.min`). A conversion
-that starts after the cut asks for nothing: no result, no error, and its signals run on an empty
-series; the other conversions are unaffected. Before, nothing bounded the expansion: from 0001-01-01 to
+of their warm-up to the same end. Both ends have a limit (X-R55). The end is cut at tomorrow by the
+server's calendar (`datetime_utils.latest_range_end()`, the helper
+[R13-SEC7-1](../financial_math.md#portfolio-package) also uses), a day of margin for a user whose
+today is already the server's tomorrow. The start, the warm-up included, goes back at most
+`RANGE_SPAN_LIMIT_DAYS` (36,525 days, 100 years) before that end (`range_span_floor()`, never before
+`date.min`; both in `backend/app/utils/date_range_limits.py`). A conversion that starts after the cut
+asks for nothing: no result, no error, and its signals run on an empty series; the other conversions
+are unaffected. The `date_range` of each `signal_results` item (`FXSignalQueryResult`) is the range
+its signals cover, the cut one; a conversion that starts after the cut echoes its requested range
+there, with no points. Before, nothing bounded the expansion: from 0001-01-01 to
 9999-12-31 it built about 3.65 million items, then failed with a 500 (`OverflowError`). The ceiling is
 the endpoint's: `convert_bulk()` itself, which the other callers use directly, has none.
 {: #convert-range-ceiling }

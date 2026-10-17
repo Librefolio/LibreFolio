@@ -244,9 +244,10 @@ Each query item can request:
 `refresh.py` through `POST /assets/prices/sync`; the query path remains DB-only while retaining
 its warm-up, event, FX-conversion, signal-computation, and final response-slicing passes.
 
-Each item's range has a ceiling (X-R55, `backend/app/utils/date_range_limits.py`). Before any pass,
-`get_prices_bulk()` cuts it to end at `latest_range_end()` at the latest: tomorrow in UTC, a day of
-margin for a user whose calendar is ahead of UTC. The series, the comparison series, the signals and
+Each item's range has a ceiling (X-R55). Before any pass, `get_prices_bulk()` cuts it to end no later
+than tomorrow by the server's calendar (`datetime_utils.latest_range_end()`, the helper
+[R13-SEC7-1](../financial_math.md#portfolio-package) also uses), a day of margin for a user whose
+today is already the server's tomorrow. The series, the comparison series, the signals and
 the events see the cut range; an item that starts after it gets an empty result in its place (its
 `asset_id`, no price, event, error or signal), and the other items are unaffected.
 `POST /assets/prices/query`, the risk preparation and AI Export all read through this method, so a
@@ -254,9 +255,9 @@ range of theirs that reaches past tomorrow stops there. Before, the last price w
 the end, one point per day: about 2.9 million from a recent price to 9999-12-31, followed by a 500
 (`OverflowError`). Without a seed price (none stored before the range), `_build_backward_filled_series()`
 also starts its walk at the first stored price of the range instead of its start: the days before it
-cost nothing, and the points emitted are the same. The module's span limit, `RANGE_SPAN_LIMIT_DAYS`
-(36,525 days, 100 years) back from an end (`range_span_floor()`), bounds the
-[history-cache walk](#history-cache-walk) of a sync and the
+cost nothing, and the points emitted are the same. X-R55's own module, `backend/app/utils/date_range_limits.py`,
+keeps the span limit: `RANGE_SPAN_LIMIT_DAYS` (36,525 days, 100 years) back from an end
+(`range_span_floor()`), which bounds the [history-cache walk](#history-cache-walk) of a sync and the
 [FX conversion ranges](../fx/architecture.md#convert-range-ceiling).
 {: #price-query-range-ceiling }
 
@@ -486,7 +487,7 @@ What a caller returns while a provider is paused, or after it refused:
 
 Financial markets are closed on weekends and holidays. To provide a continuous price series for charts, LibreFolio uses a **backward-fill** strategy.
 
-If a price is requested for a date where no data exists (e.g., Sunday), the system looks back to find the most recent available price (e.g., Friday's close) and uses that. The `backward_fill_info` field in `FAPricePoint` indicates the actual date and staleness (`days_back`). The fill stops at tomorrow in UTC, the query's [range ceiling](#price-query-range-ceiling).
+If a price is requested for a date where no data exists (e.g., Sunday), the system looks back to find the most recent available price (e.g., Friday's close) and uses that. The `backward_fill_info` field in `FAPricePoint` indicates the actual date and staleness (`days_back`). The fill stops at tomorrow by the server's calendar (`datetime_utils.latest_range_end()`, the helper R13-SEC7-1 also uses), the query's [range ceiling](#price-query-range-ceiling).
 
 Backward fill reuses stored market prices only, and valuation adds no separate
 last-purchase-price fallback: the portfolio engine values each holding through the

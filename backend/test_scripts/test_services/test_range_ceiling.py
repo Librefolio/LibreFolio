@@ -6,11 +6,14 @@ The defect: a request whose ``end`` is 9999-12-31 made the backend build one ite
 from as far back as 0001-01-01), and the refresh walked every day from the requested start to find the gaps of its
 history cache. A denial of service any logged-in user could send — and a useless one to wait for: a walk ending on
 9999-12-31 finally steps past the last day a date can hold, so after the whole cost the answer is a 500 «date value out
-of range». The contract pinned here (N75, with its revision):
+of range». The contract pinned here (N75, its revision, and the alignment on R13-SEC7-1):
 
-1. ``backend/app/utils/date_range_limits.py``: ``RANGE_SPAN_LIMIT_DAYS = 36_525`` (100 years); ``latest_range_end()``,
-   ``today_date() + 1 day`` (UTC), read at each call; ``range_span_floor(end)``, ``end - RANGE_SPAN_LIMIT_DAYS days``.
-   These tests freeze the day by patching ``date_range_limits.today_date`` (``FROZEN_TODAY``).
+1. One helper for the ceiling: ``datetime_utils.latest_range_end()`` (R13-SEC7-1, workstream J), tomorrow by the
+   server's calendar, imported by name where X-R55 reads it: ``price_query`` and ``currencies`` (``CEILING_CONSUMERS``).
+   ``backend/app/utils/date_range_limits.py`` has no ceiling of its own: it keeps ``RANGE_SPAN_LIMIT_DAYS = 36_525``
+   (100 years) and ``range_span_floor(end)``, ``end - RANGE_SPAN_LIMIT_DAYS days``, never before ``date.min``. These
+   tests freeze the ceiling the way ``_range_bounds.lift_range_bound`` lifts it, by replacing the name in each consumer
+   (``frozen_ceiling``: ``CEILING``, the day after ``FROZEN_TODAY``); and that lift reaches both consumers.
 2. ``get_prices_bulk``: each item's end becomes ``min(end or start, latest_range_end())`` before anything else; the
    series, the comparison series, the signal context, the load ranges and the events all see the clamped range. An item
    starting after it gives an empty result at its own position (its asset id, no price, no event, no error); the other
@@ -20,7 +23,9 @@ of range». The contract pinned here (N75, with its revision):
 4. ``convert_currency_bulk``, per conversion: the end clamped as in 2; ``start = max(start, range_span_floor(clamped
    end))``; the signal warm-up never starts before ``range_span_floor(clamped end)``. A conversion entirely after the
    ceiling gives no result and no error, and its signals, if any, run on an empty series as for a pair without rates;
-   the other conversions of the call are unaffected.
+   the other conversions of the call are unaffected. Each signal result's ``date_range`` is the range its signals
+   cover: the requested one cut at the ceiling, its start raised to the floor; a conversion entirely after the ceiling
+   echoes the requested range (X's review).
 5. The refresh with a history cache: the walk for the missing days covers ``max(start, floor) … history_end`` only,
    ``floor = range_span_floor(history_end)``; a start before the floor adds itself and the day before the floor to the
    missing days, so the provider is never asked less than before (more, in that extreme case only).
@@ -35,14 +40,17 @@ Isolation: PURE — no lane database, no server, no network. The price queries r
 in-process converter that records every day it is handed; the refresh step runs with an in-process provider double and
 stand-ins for the two core caches it reads.
 
-Red today (HEAD 3d13fbcdc), each for the reason its docstring gives: RC-000, RC-B02…B04, RC-A01…A06, RC-F01…F05, RC-S01,
-RC-S04. Green today — behaviour the change must keep: RC-B01, RC-S02, RC-S03.
+Red before the change (HEAD 3d13fbcdc), each for the reason its docstring gives ("Red before X-R55"): RC-000,
+RC-B02…B04, RC-A01…A06, RC-F01…F05, RC-S01, RC-S04. Green then too — behaviour the change had to keep: RC-B01, RC-S02,
+RC-S03. Written green, with no red phase: RC-001 (the lift reaches X-R55's consumers) and RC-F06 (the signal ranges
+echoed, a review fix).
 """
 
 from __future__ import annotations
 
 import asyncio
 import dataclasses
+import importlib
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
@@ -66,17 +74,15 @@ from backend.app.schemas.signals import SignalRequest
 from backend.app.services.assets import core, price_query, refresh
 from backend.app.services.assets.price_query import PriceQueryOperations
 from backend.app.services.signals.service import SignalService
+from backend.app.utils import date_range_limits, datetime_utils
+from backend.test_scripts.test_services._range_bounds import RANGE_BOUND_CONSUMERS, lift_range_bound
 
-try:
-    import backend.app.utils.date_range_limits as _limits
-except ModuleNotFoundError as _missing:
-    if _missing.name != "backend.app.utils.date_range_limits":
-        raise
-    # N75 not implemented: every case still runs and fails on its own assertion; RC-000 says what is missing.
-    _limits = None
+#: Where X-R55 reads its ceiling: the modules that import ``latest_range_end`` by name. The name is replaced there, as
+#: ``lift_range_bound`` does it: replacing it in ``datetime_utils`` would change nothing.
+CEILING_CONSUMERS = ("backend.app.services.assets.price_query", "backend.app.api.v1.fx.currencies")
 
-FROZEN_TODAY = date(2025, 6, 18)  # any day: date_range_limits.today_date and refresh's date_type are patched to it
-CEILING = FROZEN_TODAY + timedelta(days=1)  # latest_range_end() on that day
+FROZEN_TODAY = date(2025, 6, 18)  # any day: the ceiling is frozen at the day after it, refresh's date_type at it
+CEILING = FROZEN_TODAY + timedelta(days=1)  # latest_range_end(), frozen: tomorrow of FROZEN_TODAY
 RANGE_SPAN_LIMIT_DAYS = 36_525  # the contract's 100 years, written here and not read from the module under test
 WALK_BOUND = RANGE_SPAN_LIMIT_DAYS + 3  # days a capped sync walk may test: floor … history_end, the start, floor - 1
 FUSE_DAY_STEPS = 200_000  # > 2.5 × the longest capped loop below; 1/18 of the unbounded 0001-01-01 … 9999-12-31 one
@@ -97,8 +103,8 @@ def _days(first: date, last: date) -> list[date]:
 
 
 def _floor(end: date) -> date:
-    """``range_span_floor(end)`` as the contract defines it."""
-    return end - timedelta(days=RANGE_SPAN_LIMIT_DAYS)
+    """``range_span_floor(end)`` as the contract defines it: ``RANGE_SPAN_LIMIT_DAYS`` before ``end``, never before ``date.min``."""
+    return end - timedelta(days=RANGE_SPAN_LIMIT_DAYS) if (end - date.min).days > RANGE_SPAN_LIMIT_DAYS else date.min
 
 
 def _span(days: list[date]) -> str:
@@ -157,37 +163,66 @@ async def _within_guard[ResultT](make_call: Callable[[], Awaitable[ResultT]]) ->
     return result
 
 
-@pytest.fixture(autouse=True)
-def _frozen_ceiling(monkeypatch: pytest.MonkeyPatch) -> date:
-    """Today for ``latest_range_end()``, frozen through the contract's hook, ``date_range_limits.today_date``.
+def _freeze_ceiling(monkeypatch: pytest.MonkeyPatch, ceiling: date) -> None:
+    """``latest_range_end()`` answers ``ceiling`` in every consumer: ``setattr`` raises for one that stops reading the name."""
+    for module in CEILING_CONSUMERS:
+        monkeypatch.setattr(f"{module}.latest_range_end", lambda: ceiling)
 
-    Today the module does not exist and nothing reads a ceiling: the cases then fail on their own assertions.
-    """
-    if _limits is not None:
-        monkeypatch.setattr(_limits, "today_date", lambda: FROZEN_TODAY)
-    return FROZEN_TODAY
+
+@pytest.fixture
+def frozen_ceiling(monkeypatch: pytest.MonkeyPatch) -> date:
+    """The ceiling of the price and FX cases: ``CEILING``, whatever the day the suite runs."""
+    _freeze_ceiling(monkeypatch, CEILING)
+    return CEILING
 
 
 # =============================================================================
-# RC-000 — THE SHARED LIMITS
+# RC-000 / RC-001 — ONE CEILING HELPER, ONE SPAN MODULE, ONE LIFT
 # =============================================================================
 
 
-def test_rc000_date_range_limits_module():
-    """RC-000: the module every clamp shares — the span, the ceiling read at each call, the floor.
+def test_rc000_one_ceiling_helper_and_the_span():
+    """RC-000: the price query and the conversions read R13-SEC7-1's ``datetime_utils.latest_range_end`` itself, imported
+    by name, and ``date_range_limits`` has no ceiling of its own; it keeps the 100-year span and its floor, which never
+    goes before ``date.min``.
 
-    Red today: ``backend/app/utils/date_range_limits.py`` does not exist.
+    Two helpers for one day could drift apart (one in UTC, one by the server's calendar), and a name imported by value
+    is the one a test or ``lift_range_bound`` replaces: a consumer reading the ceiling some other way escapes both.
+    Red before X-R55: ``date_range_limits`` did not exist, and neither consumer read a ceiling.
     """
-    if _limits is None:
-        pytest.fail("backend/app/utils/date_range_limits.py does not exist (N75, contract 1)")
-    assert _limits.RANGE_SPAN_LIMIT_DAYS == RANGE_SPAN_LIMIT_DAYS
-    assert _limits.latest_range_end() == CEILING, "latest_range_end() must be date_range_limits.today_date() + 1 day"
-    with pytest.MonkeyPatch.context() as later:
-        later.setattr(_limits, "today_date", lambda: date(2030, 1, 31))
-        assert _limits.latest_range_end() == date(2030, 2, 1), "latest_range_end() must read today_date() at each call"
-    assert _limits.range_span_floor(date(2025, 6, 19)) == date(1925, 6, 19)
-    for end in (date(2000, 2, 29), FROZEN_TODAY, LAST_DAY):
-        assert _limits.range_span_floor(end) == end - timedelta(days=RANGE_SPAN_LIMIT_DAYS), end
+    for name in CEILING_CONSUMERS:
+        assert importlib.import_module(name).latest_range_end is datetime_utils.latest_range_end, f"{name} must read datetime_utils.latest_range_end"
+    assert not hasattr(date_range_limits, "latest_range_end"), "date_range_limits must not define a second ceiling"
+    assert date_range_limits.RANGE_SPAN_LIMIT_DAYS == RANGE_SPAN_LIMIT_DAYS
+    assert date_range_limits.range_span_floor(date(2025, 6, 19)) == date(1925, 6, 19)
+    assert date_range_limits.range_span_floor(date(50, 1, 1)) == date.min
+    edges = (date.min, date.min + timedelta(days=RANGE_SPAN_LIMIT_DAYS), date.min + timedelta(days=RANGE_SPAN_LIMIT_DAYS + 1))
+    for end in (*edges, date(2000, 2, 29), FROZEN_TODAY, LAST_DAY):
+        assert date_range_limits.range_span_floor(end) == _floor(end), end
+    assert _floor(edges[-1]) == date.min + timedelta(days=1)
+
+
+@pytest.mark.asyncio
+async def test_rc001_lift_range_bound_lifts_the_ceiling(private_db, monkeypatch, frozen_ceiling):
+    """RC-001: ``_range_bounds.lift_range_bound`` lifts X-R55's ceiling too, in both modules that read it.
+
+    The suites whose scenarios live in 2032–2091 lift R13-SEC7-1's bound with it; the price query and the conversions
+    read the same helper, so without the lift those suites would see their prices and rates cut at tomorrow. The ceiling
+    is frozen at ``CEILING``, then lifted: a price query and a conversion up to ``CEILING`` + 9 days run to that day.
+    No red phase: written with the alignment on R13-SEC7-1, it pins the two consumers added to
+    ``RANGE_BOUND_CONSUMERS``.
+    """
+    missing = [name for name in CEILING_CONSUMERS if name not in RANGE_BOUND_CONSUMERS]
+    assert not missing, f"lift_range_bound does not reach {missing}: far-future suites would be cut at tomorrow"
+    lift_range_bound(monkeypatch)
+    for name in CEILING_CONSUMERS:
+        assert importlib.import_module(name).latest_range_end() == date.max, name
+    end = CEILING + timedelta(days=9)
+    asset_id = await _asset(private_db, prices=_days(_day(-5), _day(-1)))
+    (result,) = await _query(private_db, _item(asset_id, _day(-3), end))
+    assert _price_days(result) == _days(_day(-3), end), f"got {_span(_price_days(result))}"
+    response = await _convert(monkeypatch, _Converter(), _conversion("100", _day(-5), end))
+    assert _result_days(response) == _days(_day(-5), end), f"got {_span(_result_days(response))}"
 
 
 # =============================================================================
@@ -288,7 +323,7 @@ def test_rcb01_points_emitted_do_not_change(days, start, end, seed):
     reference): from the first price of the range without a seed (a row before ``start`` is never emitted), from
     ``start`` with one, each empty day carrying the last known row with its day and distance.
 
-    Green today: it pins the output the change to the walk's start must keep.
+    Green before X-R55 too: it pins the output the change to the walk's start had to keep.
     """
     rows = _rows(days)
     points = _build({row.date: row for row in rows}, start, end, seed)
@@ -299,7 +334,7 @@ def test_rcb02_walk_starts_at_the_first_price_without_seed():
     """RC-B02: no seed, prices on the five days before today, asked from 1900-01-01: the walk starts at the first price.
 
     The map counts the days looked up: at most the 7 days from the first price to the end, not one per day since 1900.
-    Red today: the walk looks up every day from 1900-01-01, 45 826 of them, to emit the same 7 points.
+    Red before X-R55: the walk looked up every day from 1900-01-01, 45 826 of them, to emit the same 7 points.
     """
     rows = _rows(_days(_day(-5), _day(-1)))
     price_map = _CountingPriceMap(rows)
@@ -314,7 +349,7 @@ def test_rcb02_walk_starts_at_the_first_price_without_seed():
 def test_rcb03_empty_map_without_seed_returns_at_once():
     """RC-B03: an empty map and no seed: ``[]`` at once, not one day looked up.
 
-    Red today: the walk looks up each of the 3 652 days of the range, to emit nothing.
+    Red before X-R55: the walk looked up each of the 3 652 days of the range, to emit nothing.
     """
     price_map = _CountingPriceMap()
     assert _build(price_map, _day(-3650), CEILING) == []
@@ -326,8 +361,8 @@ def test_rcb04_extreme_empty_range_guard():
     """RC-B04 (guard): 0001-01-01 … 9999-12-31, an empty map, no seed: ``[]`` at once, within ``GUARD_SECONDS``.
 
     The fuse in the map stops a walk past ``FUSE_DAY_STEPS`` days.
-    Red today: the walk would look up 3 652 059 days to emit nothing, then fail stepping past 9999-12-31
-    (OverflowError); the fuse stops it first.
+    Red before X-R55: the walk would have looked up 3 652 059 days to emit nothing, then failed stepping past
+    9999-12-31 (OverflowError); the fuse stopped it first.
     """
     price_map = _CountingPriceMap(fuse=FUSE_DAY_STEPS)
     started = time.perf_counter()
@@ -386,11 +421,11 @@ def _price_days(result: FAPriceQueryResult) -> list[date]:
 
 
 @pytest.mark.asyncio
-async def test_rca01_series_stops_at_the_ceiling(private_db):
+async def test_rca01_series_stops_at_the_ceiling(private_db, frozen_ceiling):
     """RC-A01: the last stored price yesterday, asked from today-3 up to today+10: the series ends on today+1, its last
     two days backward-filled from yesterday.
 
-    Red today: the series runs on to today+10, nine backward-filled days past the ceiling.
+    Red before X-R55: the series ran on to today+10, nine backward-filled days past the ceiling.
     """
     asset_id = await _asset(private_db, prices=_days(_day(-5), _day(-1)))
     (result,) = await _query(private_db, _item(asset_id, _day(-3), _day(10)))
@@ -407,11 +442,11 @@ async def test_rca01_series_stops_at_the_ceiling(private_db):
     ("start_offset", "expected_offsets"),
     [pytest.param(1, [1], id="start-on-the-ceiling"), pytest.param(2, [], id="start-the-day-after-the-ceiling")],
 )
-async def test_rca02_range_after_the_ceiling(private_db, start_offset, expected_offsets):
+async def test_rca02_range_after_the_ceiling(private_db, frozen_ceiling, start_offset, expected_offsets):
     """RC-A02: up to today+30, starting on the ceiling (today+1): that one day, backward-filled; starting the day after
     it: an empty series, and no error.
 
-    Red today: both run on to today+30, backward-filled from yesterday's price (30 and 29 points).
+    Red before X-R55: both ran on to today+30, backward-filled from yesterday's price (30 and 29 points).
     """
     asset_id = await _asset(private_db, prices=_days(_day(-5), _day(-1)))
     (result,) = await _query(private_db, _item(asset_id, _day(start_offset), _day(30)))
@@ -421,11 +456,11 @@ async def test_rca02_range_after_the_ceiling(private_db, start_offset, expected_
 
 
 @pytest.mark.asyncio
-async def test_rca03_events_follow_the_clamped_range(private_db):
+async def test_rca03_events_follow_the_clamped_range(private_db, frozen_ceiling):
     """RC-A03 (N75 revision): events dated today-2, today, today+1, today+2 and today+5, asked up to today+10: the
     ones after today+1 are not returned though the requested range covers them; today's and today+1's still are.
 
-    Red today: the events of today+2 and today+5 come back too.
+    Red before X-R55: the events of today+2 and today+5 came back too.
     """
     asset_id = await _asset(private_db, prices=_days(_day(-5), _day(-1)), events=[_day(offset) for offset in (-2, 0, 1, 2, 5)])
     (result,) = await _query(private_db, _item(asset_id, _day(-3), _day(10), include_events=True))
@@ -434,12 +469,12 @@ async def test_rca03_events_follow_the_clamped_range(private_db):
 
 
 @pytest.mark.asyncio
-async def test_rca04_item_after_the_ceiling_is_empty_in_its_place(private_db):
+async def test_rca04_item_after_the_ceiling_is_empty_in_its_place(private_db, frozen_ceiling):
     """RC-A04 (N75 revision): three items in one call — a past one, one wholly after the ceiling, a past one — give,
     in that order: the first as when asked alone; an empty result at position 1 (its asset id, no price, no event, no
     error), though that asset has prices before and an event inside the requested range; the third as when asked alone.
 
-    Red today: position 1 holds 11 points backward-filled up to today+30, and the event of today+25.
+    Red before X-R55: position 1 held 11 points backward-filled up to today+30, and the event of today+25.
     """
     first = await _asset(private_db, prices=_days(_day(-15), _day(-1)), events=[_day(-8)])
     second = await _asset(private_db, prices=_days(_day(-15), _day(-1)), events=[_day(-3), _day(25)])
@@ -460,12 +495,12 @@ async def test_rca04_item_after_the_ceiling_is_empty_in_its_place(private_db):
 
 
 @pytest.mark.asyncio
-async def test_rca05_signal_input_stops_at_the_ceiling(private_db, monkeypatch):
+async def test_rca05_signal_input_stops_at_the_ceiling(private_db, monkeypatch, frozen_ceiling):
     """RC-A05: a signal on a range reaching today+10 computes on a series that ends on today+1 (the signal context and
     the load range see the clamped range). Read through ``availability.input_coverage.last_available_date``, the last
     day of the series the signal was handed.
 
-    Red today: the signal reads the backward-filled days up to today+10.
+    Red before X-R55: the signal read the backward-filled days up to today+10.
     """
 
     async def _no_market_holidays() -> frozenset[date]:
@@ -481,13 +516,13 @@ async def test_rca05_signal_input_stops_at_the_ceiling(private_db, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rca06_extreme_range_guard(private_db, monkeypatch):
+async def test_rca06_extreme_range_guard(private_db, monkeypatch, frozen_ceiling):
     """RC-A06 (guard): 0001-01-01 … 9999-12-31 answers within ``GUARD_SECONDS`` with the three stored days and the two
     backward-filled ones up to the ceiling — at most ``latest_range_end() - first point + 1`` points.
 
-    Red today: the builder walks the 739 416 empty days from 0001-01-01, then would backward-fill 2 912 640 points and
-    fail stepping past 9999-12-31 (OverflowError); the fuse on ``price_query.timedelta`` stops the walk first, after
-    ``FUSE_DAY_STEPS`` steps.
+    Red before X-R55: the builder walked the 739 416 empty days from 0001-01-01, then would have backward-filled
+    2 912 640 points and failed stepping past 9999-12-31 (OverflowError); the fuse on ``price_query.timedelta`` stopped
+    the walk first, after ``FUSE_DAY_STEPS`` steps.
     """
     asset_id = await _asset(private_db, prices=_days(_day(-3), _day(-1)))
     _install_fuse(monkeypatch, price_query)
@@ -550,10 +585,10 @@ def _dumps(models: Iterable[Any]) -> list[dict]:
 
 
 @pytest.mark.asyncio
-async def test_rcf01_conversion_stops_at_the_ceiling(monkeypatch):
+async def test_rcf01_conversion_stops_at_the_ceiling(monkeypatch, frozen_ceiling):
     """RC-F01: a conversion asked from today-5 up to today+10 gives its last result on today+1.
 
-    Red today: one result a day up to today+10.
+    Red before X-R55: one result a day up to today+10.
     """
     response = await _convert(monkeypatch, _Converter(), _conversion("100", _day(-5), _day(10)))
     days = _result_days(response)
@@ -564,11 +599,12 @@ async def test_rcf01_conversion_stops_at_the_ceiling(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rcf02_start_before_the_floor_is_raised_to_it(monkeypatch):
+async def test_rcf02_start_before_the_floor_is_raised_to_it(monkeypatch, frozen_ceiling):
     """RC-F02: from 1900-01-01 to yesterday, with a signal: the daily results start on ``range_span_floor(yesterday)``,
     100 years back, and no day before that floor reaches the converter, the signal's warm-up included.
 
-    Red today: the converter is handed days from 1899-12-26 on (1900-01-01 less the warm-up), and 45 824 daily results.
+    Red before X-R55: the converter was handed days from 1899-12-26 on (1900-01-01 less the warm-up), and 45 824 daily
+    results.
     """
     converter = _Converter()
     end = _day(-1)
@@ -586,7 +622,7 @@ class _FullHistoryPlans(SignalService):
 
     No FX signal plugin is full-history today (RISK_DRAWDOWN, the one there is, is ASSET-only), so the plan stands in:
     ``requires_full_history`` set, and a warm-up of more calendar days than lie between 0001-01-01 and 9999-12-31 —
-    the handler then starts the warm-up on 0001-01-01. The computations are the real ones.
+    without the floor, the handler would start the warm-up on 0001-01-01. The computations are the real ones.
     """
 
     def prepare_plan(self, requests, context, annotation_requests=()):
@@ -596,11 +632,12 @@ class _FullHistoryPlans(SignalService):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("start", [pytest.param(date(1900, 1, 1), id="start-1900"), pytest.param(_day(-30), id="start-a-month-ago")])
-async def test_rcf03_full_history_warmup_stops_at_the_floor(monkeypatch, start):
+async def test_rcf03_full_history_warmup_stops_at_the_floor(monkeypatch, frozen_ceiling, start):
     """RC-F03: a full-history signal up to yesterday hands the converter no day before ``range_span_floor(yesterday)``;
     the daily results run from ``max(start, floor)`` to yesterday, and the signal result is there.
 
-    Red today: the warm-up starts on 0001-01-01, about 739 000 days; the fuse on the handler's ``timedelta`` stops it.
+    Red before X-R55: the warm-up started on 0001-01-01, about 739 000 days; the fuse on the handler's ``timedelta``
+    stopped it.
     """
     monkeypatch.setattr(currencies, "SignalService", _FullHistoryPlans)
     _install_fuse(monkeypatch, currencies)
@@ -617,13 +654,13 @@ async def test_rcf03_full_history_warmup_stops_at_the_floor(monkeypatch, start):
 
 
 @pytest.mark.asyncio
-async def test_rcf04_conversion_after_the_ceiling_is_empty_others_unaffected(monkeypatch):
+async def test_rcf04_conversion_after_the_ceiling_is_empty_others_unaffected(monkeypatch, frozen_ceiling):
     """RC-F04 (N75 revision): a past conversion, one wholly after the ceiling with a signal, a past one with a signal,
     in one call. The one after the ceiling gives no result and no error; its signal result is there, equal to what the
     same request gets from a converter without rates for its pair (an empty series). The other two give what they give
     alone, signal included.
 
-    Red today: the conversion after the ceiling gives 11 results, backward-filled up to today+30.
+    Red before X-R55: the conversion after the ceiling gave 11 results, backward-filled up to today+30.
     """
     past = _conversion("100", _day(-6), _day(-2))
     after_ceiling = _conversion("200", _day(20), _day(30), signals=[SMA3])
@@ -649,13 +686,14 @@ async def test_rcf04_conversion_after_the_ceiling_is_empty_others_unaffected(mon
 
 
 @pytest.mark.asyncio
-async def test_rcf05_extreme_range_guard(monkeypatch):
+async def test_rcf05_extreme_range_guard(monkeypatch, frozen_ceiling):
     """RC-F05 (guard): 0001-01-01 … 9999-12-31 answers within ``GUARD_SECONDS`` with one result a day from
     ``range_span_floor(today+1)`` to today+1 — 36 526 results, at most ``latest_range_end() - first + 1`` — no error,
     and nothing outside that span handed to the converter.
 
-    Red today: 3 652 059 daily conversions, built before the converter is even called, and an OverflowError stepping
-    past 9999-12-31; the fuse on the handler's ``timedelta`` stops the expansion first, after ``FUSE_DAY_STEPS`` days.
+    Red before X-R55: 3 652 059 daily conversions, built before the converter was even called, and an OverflowError
+    stepping past 9999-12-31; the fuse on the handler's ``timedelta`` stopped the expansion first, after
+    ``FUSE_DAY_STEPS`` days.
     """
     _install_fuse(monkeypatch, currencies)
     converter = _Converter()
@@ -667,6 +705,40 @@ async def test_rcf05_extreme_range_guard(monkeypatch):
     assert (days[0], days[-1], len(days), len(set(days))) == (floor, CEILING, RANGE_SPAN_LIMIT_DAYS + 1, RANGE_SPAN_LIMIT_DAYS + 1), f"daily results: {_span(days)}"
     assert response.errors == []
     assert floor <= min(converter.handed) and max(converter.handed) <= CEILING
+
+
+@pytest.mark.asyncio
+async def test_rcf06_signal_results_echo_the_range_they_cover(monkeypatch, frozen_ceiling):
+    """RC-F06 (X's review, LOW): each signal result's ``date_range`` is the range its signals cover, not the one asked.
+
+    Four conversions with a signal in one call, so each echo is read at its own ``request_index``: (a) up to the ceiling
+    + 9 days → the requested start to ``CEILING``; (b) from 1800-01-01 to the same end → ``range_span_floor(CEILING)``
+    to ``CEILING``; (c) wholly after the ceiling → the requested range, as asked (its signals see no point); (d) a range
+    the ceiling does not cut → as asked.
+    No red phase: written after the fix, it pins X's review of X-R55. Until then every signal result echoed the requested
+    range, even where the signals stopped at the ceiling or started at the floor.
+    """
+    asked = {
+        "cut-at-the-ceiling": _conversion("100", _day(-6), CEILING + timedelta(days=9), signals=[SMA3]),
+        "start-raised-to-the-floor": _conversion("200", date(1800, 1, 1), CEILING + timedelta(days=9), signals=[SMA3]),
+        "wholly-after-the-ceiling": _conversion("300", _day(20), _day(30), signals=[SMA3]),
+        "not-cut": _conversion("400", _day(-9), _day(-2), signals=[SMA3]),
+    }
+    expected = {
+        "cut-at-the-ceiling": DateRangeModel(start=_day(-6), end=CEILING),
+        "start-raised-to-the-floor": DateRangeModel(start=_floor(CEILING), end=CEILING),
+        "wholly-after-the-ceiling": DateRangeModel(start=_day(20), end=_day(30)),
+        "not-cut": DateRangeModel(start=_day(-9), end=_day(-2)),
+    }
+
+    response = await _convert(monkeypatch, _Converter(), *asked.values())
+
+    by_index = {result.request_index: result for result in response.signal_results}
+    assert sorted(by_index) == [0, 1, 2, 3], f"signal results at {sorted(by_index)}"
+    echoed = {label: by_index[index].date_range for index, label in enumerate(asked)}
+    assert echoed == expected
+    for index, conversion in enumerate(asked.values()):
+        assert (by_index[index].from_currency, by_index[index].to_currency) == (conversion.from_amount.code, conversion.to_currency)
 
 
 # =============================================================================
@@ -819,7 +891,7 @@ async def test_rcs01_walk_is_bounded_and_the_start_still_asked(fetch_step):
     1800-01-01 up to today, as before, but the walk tests at most ``RANGE_SPAN_LIMIT_DAYS + 3`` days against the cache
     (the 100 years up to yesterday, both ends included, then the start and the day before the floor).
 
-    Red today: the walk tests every day from 1800-01-01 to yesterday, 82 348 of them.
+    Red before X-R55: the walk tested every day from 1800-01-01 to yesterday, 82 348 of them.
     """
     cached = _cached((-30, -1))
     outcome = await fetch_step(date(1800, 1, 1), FROZEN_TODAY, cached)
@@ -844,7 +916,7 @@ async def test_rcs02_fetch_window_unchanged_from_the_floor_on(fetch_step, start,
     missing day (up to today when the range reaches today), or nothing on a full hit. A start on the floor itself is
     not before it: neither it nor the day before the floor is added.
 
-    Green today: these windows are today's.
+    Green before X-R55 too: these windows are the ones it asked.
     """
     outcome = await fetch_step(_day(start), _day(end), _cached(*spans))
     assert outcome.provider.history_calls == ([] if expected is None else [(_day(expected[0]), _day(expected[1]))])
@@ -864,7 +936,7 @@ async def test_rcs03_start_before_the_floor_is_never_asked_less(fetch_step, end,
     asked before N75 (never less). With the whole span from the floor cached, that is exactly the start to the day
     before the floor — the day the contract adds — or to today when the range reaches today.
 
-    Green today: today's window is the reference itself.
+    Green before X-R55 too: its window was the reference itself.
     """
     start = _day(_FLOOR_OFFSET - 100)
     cached = _cached(*spans)
@@ -884,8 +956,9 @@ async def test_rcs04_extreme_range_guard(fetch_step):
     """RC-S04 (guard): 0001-01-01 … 9999-12-31 with a history cache: within ``GUARD_SECONDS`` the provider is asked
     from 0001-01-01 up to today, the walk testing at most ``RANGE_SPAN_LIMIT_DAYS + 3`` days against the cache.
 
-    Red today: the walk tests every day from 0001-01-01 to yesterday, 739 419 of them; a fuse in the cached days stops it
-    after 4 × ``RANGE_SPAN_LIMIT_DAYS`` tests — the refresh takes that for a failed history fetch, and never asks.
+    Red before X-R55: the walk tested every day from 0001-01-01 to yesterday, 739 419 of them; a fuse in the cached days
+    stopped it after 4 × ``RANGE_SPAN_LIMIT_DAYS`` tests — the refresh took that for a failed history fetch, and never
+    asked.
     """
     cached = _cached((-30, -1), fuse=4 * RANGE_SPAN_LIMIT_DAYS)
     started = time.perf_counter()
