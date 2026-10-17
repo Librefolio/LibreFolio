@@ -371,3 +371,20 @@ describe('B-28 — the refusal of a database holding objects LibreFolio never cr
         expectMessage('backup.restore.errors.database_foreign_objects');
     });
 });
+
+// =====================================================================================================================
+// B-16 — the hint of a server that never stops (written red first)
+// =====================================================================================================================
+
+/*
+ * RestartOverlay.svelte words the hint `restart-not-stopped` by `backup.restore.restart.notStopped` (B-16 brief §2,
+ * §3): a message of the four catalogues, naming no placeholder. Once the overlay names it, the scan of the restore
+ * modules above requires it too. Red today: it does not exist.
+ */
+describe('B-16 — the hint of a server that never stops', () => {
+    it('backup.restore.restart.notStopped is a message of the four catalogues, naming no placeholder', () => {
+        expectMessage('backup.restore.restart.notStopped');
+
+        expect(placeholdersOf(messageOf(en, 'backup.restore.restart.notStopped') as string)).toEqual([]);
+    });
+});
