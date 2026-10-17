@@ -1385,7 +1385,10 @@ it connects (`set_sqlite_pragma`, `db/session.py`), which a plain read-only conn
 refuses. The totals the manifest recorded go as they are to J's `ControlTotals.from_json()`, which reads an amount only
 as plain decimal text, at most 60 digits on each side of the point, and refuses any other before reading it (J-27): an
 exponent an archive recorded is never expanded, and the comparison is then `absent`. The rule has one home, J's:
-`compare_totals()` does not repeat it (B-22).
+`compare_totals()` does not repeat it (B-22). The copy's own totals go through the same reader: an amount J computes but
+cannot read back (more than 60 digits, as an exact huge quantity of an old or hand-edited database gives) makes the
+comparison `unreadable`, with the warning «The control totals of the copy cannot be read: they are not compared», never
+a failed check (B-29).
 
 ### 🧱 Triggers, Views and Virtual Tables {: #backup-restore-foreign-objects }
 

@@ -4522,7 +4522,7 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Deciso (coordinatore, 05:00)**: N67 ritirato, **P8 resta**. B-27 è chiuso come «non da fare, P8» (nel backlog con
 > ✅ e la nota) e va nell'elenco del developer solo come nota. Si procede con (a), l'analisi di B-28.
 
-### B-28 — i trigger del DB caricato durante il controllo (2026-10-17, 05:00-05:50) ✅ — 🧊 FROZEN, checkpoint pronto
+### B-28 — i trigger del DB caricato durante il controllo (2026-10-17, 05:00-05:50) ✅ — entrato in dev `01f36e79d`
 
 > Sola lettura, HEAD `8b15a6c6c` pulita.
 >
@@ -4659,6 +4659,50 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Verdi della doc (05:46-05:48)**: build rigorosa exit 0, check-links valido, `gate-docs-links` 63.
 >
 > **Backlog**: B-28 chiuso con ✅. **Checkpoint (05:50)**, col blocco del CHANGELOG. 🧊 FROZEN.
+
+### B-29 — un totale della copia che J non rilegge (2026-10-17, 05:50-06:10) ✅ — 🧊 FROZEN, checkpoint pronto
+
+> **B-28 entrato (coordinatore, 05:49)**: commit `9403ecda0`, `fe1183750` e `910e185b6`; dev `01f36e79d`; il CHANGELOG
+> 🔒 in `1c2bac918`. HEAD portata in avanti a **`1c2bac918`**, pulita. Il via è per **B-29**: prima il rosso, poi
+> `current` letto dentro un `try` che risponde `unreadable`, con run leggeri nella corsia. Poi **B-16** (l'overlay che
+> aspetta per sempre dopo «Restore and restart»), salvo una decisione del developer, altrimenti **B-9**. Un checkpoint
+> per lotto.
+>
+> **Il difetto** (E, R13-SEC2; nel backlog come B-29): in `compare_totals`, `ControlTotals.from_json(current)` sta fuori
+> dal `try`. `to_json` di J scrive testo semplice: un importo esatto ma enorme, come 1E+70, diventa 71 cifre, oltre le
+> 60 che `from_json` accetta (J-27). Il `ValueError` esce, e il controllo finisce `stage_failed`.
+>
+> **Il contratto** (al test-author TA-B, 05:52):
+>
+> - `current` rifiutato da J → `unreadable`, senza differenze, conteggio 0, nessuna eccezione;
+> - un WARNING «The control totals of the copy cannot be read: they are not compared», senza valori;
+> - l'ordine delle decisioni resta: assente → `absent`; `other_version`; registrato rifiutato da J → `absent`; `current`
+>   None → `unreadable`; **`current` rifiutato da J → `unreadable`** (nuovo); poi `same` o `changed`.
+>
+> I test vanno in `test_backup_totals.py`. Facoltativo, se semplice: un caso di staging con un registro che J scrive
+> oltre 60 cifre.
+>
+> **Rossi (TA-B, 05:58)**:
+>
+> - `test_backup_totals.py`: 4 casi di `current` rifiutato da J (61 cifre, un esponente, una riga che non è un oggetto,
+>   una riga senza importo), più una riga in `DECISIONS`; più due guardie che `absent` vince;
+> - `test_backup_staging.py`: il caso facoltativo, un registro con una quantità esatta 1e70 che J scrive in 71 cifre.
+>
+> Eseguiti alle 06:00: totali 5 falliti e 86 passati, staging 1 fallito e 160 passati.
+>
+> **Gravità, da TA-B**: il crollo richiedeva totali registrati che J legge accanto a una copia che J non rilegge, cioè
+> un manifesto riscritto. Il manifesto non è nella sua lista di checksum, e un backup vero registra la stessa riga: lì
+> vince `absent`. La sorgente realistica è `transactions.quantity` (`RealDecimal`, rilegge esatto un double) di un DB
+> 1.2 o modificato a mano.
+>
+> **Codice (06:02)**: `apply_b29.py`; ruff e black puliti. **Verdi**: `backup-totals` 91, `backup-staging` 161,
+> `backup-apply` 228.
+>
+> **Doc (06:05)**: una frase in `security.md`, nel paragrafo dei totali (la copia passa dallo stesso lettore, e diventa
+> `unreadable`). In `backup_restore.en.md` gli esiti elencano già «unreadable». Build rigorosa exit 0, check-links
+> valido, `gate-docs-links` 63.
+>
+> **Backlog**: B-29 chiuso con ✅. **Checkpoint (06:10)**. 🧊 FROZEN. Il prossimo è B-16, con l'analisi prima.
 
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
