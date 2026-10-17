@@ -5232,3 +5232,160 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
    > suo filtro accanto a `_quote_in_minor_unit_assets`; ordine: il suo codice dopo `QUOTE_IN_MINOR_UNIT`, il suo
    > parametro dopo `quote_in_minor_unit_assets`, il suo blocco dopo il mio. Il mio avviso non ha `suggestion` (solo
    > `count`, fissato dai test); nessun cambio del modello dell'avviso né del banner.
+
+### Z-33 — le date Yahoo delle borse a est di UTC: analisi (17/10 ~18:00, sola lettura, HEAD `80cef0e43`)
+- yfinance 1.7.0 (anche nel lock di v1.2.0 e v1.2.1: le installazioni rilasciate hanno righe spostate) data quote,
+  dividendi e split a mezzanotte del fuso della borsa (`scrapers/history.py:494–501`); `_normalize_yahoo_date`
+  (`plugin.py:146–150`) li porta in UTC: Milano tutto l'anno, Londra con l'ora legale, Tokyo → il giorno prima.
+  Anche il valore corrente: `as_of_date` è la data UTC di `regularMarketTime` (`plugin.py:489–493`), sbagliata se la
+  seduta attraversa la mezzanotte UTC (Sydney, Auckland).
+- Prezzi: l'upsert fonde per data (unico `asset_id+date`); righe del provider con `source_plugin_key="yfinance"`, una
+  modifica a mano le ritagga `MANUAL`. Dopo la correzione una risincronizzazione riscrive i feriali ma lascia le
+  righe dei giorni senza borsa (domeniche, vigilie dei festivi), con la chiusura della seduta dopo.
+- Eventi: `_upsert_asset_events` confronta solo (asset, data, tipo) della stessa fonte → a una risincronizzazione il
+  dividendo o lo split giusto si **aggiunge** accanto a quello spostato: al primo giro dello scheduler (orizzonte 14
+  giorni) e su tutta la storia a ogni sincronizzazione completa. Gli split contano solo tramite righe ADJUSTMENT
+  **collegate** (`load_split_links`): un doppione scollegato non cambia cifre; due volte solo se l'utente collega
+  entrambi. `transactions.asset_event_id` è `ON DELETE RESTRICT`.
+- Fuso della borsa: in linea `info["exchangeTimezoneName"]` (il plugin legge già `ticker.info`) o il fuso dell'indice;
+  fuori linea nulla (né yfinance né LibreFolio hanno una tabella dei suffissi).
+- Strade: (A) cancellare e rileggere (no: lo scheduler rilegge 14 giorni, link in RESTRICT, rete); (B) ridatare fuori
+  linea in post-migrazione (esatto solo con una tabella dei suffissi); (C) un comando manuale; (D) ridatare una volta,
+  in linea, dentro il refresh (consigliata).
+
+> **Decisione** (coordinatore, 17/10 ~18:05, N86, per lo sviluppatore): «D1 = (D), the one-time online re-date
+> inside the refresh. The code fix and the repair ship together, otherwise the first scheduler run creates duplicate
+> events. (C) as a report goes post-1.3 in your section. D2 = a new migration 011,
+> `asset_provider_assignments.exchange_timezone`. Don't fold it into 010. D3 = yes, the current-value date in the
+> same lot. D4: file it (the rows of assets whose yfinance assignment was removed), with (C).» Test obbligatori: i
+> giorni del cambio d'ora, la collisione col ricollegamento delle transazioni, le righe manuali intatte, il secondo
+> giro senza effetto, il ripristino di un backup vecchio. Revisori: X (plugin), H (migrazione e refresh), MF
+> (`price_store`), W (la ridatazione degli eventi). GO alle ~18:20, dopo l'ingresso di Z-32 (c) (dev `46ea09b02`).
+
+### Z-33 — le date Yahoo delle borse a est di UTC: lavoro (17/10 ~18:20, HEAD `22b9b90ce`)
+
+**Contratto.**
+- Plugin: `_normalize_yahoo_date` dà la data locale dell'indice; la storia dichiara il fuso della borsa (quello
+  dell'indice, altrimenti `info["exchangeTimezoneName"]`) in `FAHistoricalData.exchange_timezone` (facoltativo,
+  grezzo); il valore corrente ha `as_of_date` nel fuso della borsa e dichiara anche lui `exchange_timezone`
+  (`FACurrentValue`). Nessuno dei due schemi è in OpenAPI: niente `api sync`.
+- Migrazione 011 (`011_provider_exchange_timezone`): la colonna `exchange_timezone` (nullable) e il **segno sulle
+  assegnazioni yfinance esistenti**, `'legacy-utc'`: solo le loro righe sono state salvate con la regola vecchia.
+  > **⚠️ Fuori pista**: la mia proposta (D) usava NULL come «da ridatare»; un'assegnazione yfinance cancellata e
+  > rimessa dopo la riparazione nasce NULL → seconda ridatazione → righe spostate due volte. Corretto col segno
+  > messo dalla migrazione (coordinatore informato alle ~18:20; H rivede).
+- Refresh, tre stati: segno → ridatare una volta col fuso riportato, poi salvare il fuso; NULL (assegnazione nata
+  nella 1.3) → salvare il fuso, nessuna ridatazione; un fuso → aggiornarlo se cambia, nessuna ridatazione. La
+  ridatazione avviene **prima di ogni scrittura** (anche la riga del valore corrente), nella stessa transazione del
+  segno; un'assegnazione col segno e senza fuso noto non scrive nulla (lo dice nel risultato). Il cambio di provider
+  o identificativo tiene il segno.
+- Regola per riga, data salvata S e fuso noto: T = S+1 se l'offset UTC a mezzanotte locale di S+1 è > 0, altrimenti
+  S. Prezzi: le righe con `source_plugin_key` del provider; eventi: quelli dell'assegnazione; dalla più recente;
+  collisione in T: vince la riga che c'è già (qualunque fonte); un evento spostato che incontra in T uno della stessa
+  fonte e dello stesso tipo gli passa le sue transazioni, poi è cancellato.
+- Restano a D4/(C): asset la cui assegnazione yfinance è stata tolta prima dell'aggiornamento o prima del primo
+  giro dopo; un cambio di identificativo fra fusi di segno diverso prima del primo giro.
+
+**Passi.**
+1. ✅ 17/10 ~18:22–19:15 — Rossi di test-author: `test_yahoo_finance_errors.py` (51 nuovi: date per fuso, i cambi
+   d'ora di Londra, Beirut senza mezzanotte, il fuso dichiarato, il valore corrente di Sydney, la regola: 19 casi
+   nominati e un anno intero per 12 fusi), `test_migration_011_exchange_timezone.py` (nuovo, MIG011-001…014, anche il
+   ripristino da 004 e da 010 con `staging._upgrade`), 21 `test_z33_*` in `test_asset_source_refresh.py`, 10 in
+   `test_assets_provider.py`. Conti: provider-errors 197 → 248 (48 rossi), asset-source-refresh 26 → 47 (21 rossi),
+   migrazione 15 rossi, assets-provider 30 → 40 (10 rossi). Un test esistente fissava la regola UTC: riscritto
+   (`…_inclusive_exchange_dates`, mezzanotti di Milano).
+   > **⚠️ Fuori pista**: la domanda 1 di test-author è vera. Il vecchio valore corrente era datato in UTC, cioè giusto
+   > per le sedute di giorno, e ogni sincronizzazione lo scrive come riga di oggi: nelle serie vecchie restano righe
+   > **giuste** (ogni venerdì e vigilia di festivo sincronizzati: la barra del venerdì va al giovedì e nessuna barra
+   > le sovrascrive; le ultime una o due righe). La ridatazione per regola le porterebbe a sabati, festivi e domani.
+   > Proposta (D′) al coordinatore (~19:20): al primo giro la storia intera da Yahoo; prezzi del provider sostituiti
+   > nel suo intervallo (le date di altre fonti saltate), eventi spostati solo se la storia fresca e la regola sono
+   > d'accordo; idempotente. In attesa della decisione, nessun codice.
+   > **⚠️ Fuori pista**: Yield on Cost scarta un collegamento di split se `transaction_date != event_date`
+   > (`yield_on_cost.py:404`) e il motore riporta i prezzi alla data dell'evento: spostare solo l'evento SPLIT
+   > romperebbe i collegamenti delle righe ADJUSTMENT nate sulla sua data vecchia. Regola aggiunta al contratto: uno
+   > SPLIT che va da S a T porta con sé le sue ADJUSTMENT collegate datate S; quelle su altre date restano; i
+   > collegamenti dei DIVIDEND (e degli altri tipi) non spostano mai una transazione. Coordinatore informato (~18:35),
+   > W rivede; casi chiesti a test-author.
+   > **Decisione** (coordinatore, ~18:40): la regola degli split «accepted, and recorded in N86 for the developer as
+   > the one place where the repair moves transactions. Pin in the tests that only ADJUSTMENTs linked to the moved
+   > SPLIT and dated on its old day S move, never any other transaction.» Chiesto a test-author, con `fetched_at` e
+   > `updated_at` nuovi sulle righe spostate (la cache del portafoglio usa COUNT + MAX(`fetched_at`) dei prezzi e
+   > `updated_at` delle transazioni, `portfolio/engine.py:571–594`).
+2. ✅ 17/10 ~18:45–19:30 — Bozza (fuori dal repo, `files/z33-draft/`): `exchange_dates.py` (`LEGACY_UTC_DATES`,
+   `LEGACY_UTC_PROVIDER`, `exchange_zone`, `local_date_of_legacy_utc_date`) e la migrazione 011 (colonna, segno sulle
+   assegnazioni `yfinance` ancora NULL, `DROP COLUMN` nativo; il downgrade dopo la ridatazione è un limite scritto).
+   La regola provata in processo: Roma e Tokyo +1, Londra 03-30 → 03-31, 10-23 → 10-24, 10-27 resta, New York e UTC
+   restano.
+   > **⚠️ Fuori pista**: il segno blocca le scritture solo per il provider le cui righe vecchie sono datate in UTC
+   > (`yfinance`): un asset passato a un altro provider col segno ancora su non resterebbe fermo per sempre; il segno
+   > resta (se torna a yfinance la ridatazione si fa allora).
+
+> **Decisione** (coordinatore, 17/10 ~19:00): «D′, approved: exact, idempotent, manual dates untouched. One condition
+> to verify and pin before the code. D′ replaces every stored yfinance close within the fresh range, so confirm the
+> plugin fetches unadjusted closes […]. Also keep the logging of rows older than Yahoo's range: per asset, count only,
+> no values.»
+   > **⚠️ Fuori pista**: la condizione non regge. `plugin.py:162`/`:168` chiamano `ticker.history(...)` senza
+   > `auto_adjust`, e yfinance 1.7.0 ha `auto_adjust=True` di default (`scrapers/history.py:105–107`): le chiusure
+   > salvate sono rettificate per dividendi e split al momento di ogni lettura (una toppa: lo scheduler rilegge solo 14
+   > giorni). Sostituirle riscriverebbe tutta la storia alla rettifica di oggi. Proposta D″ (~19:10): la storia
+   > intera solo come calendario di sedute ed eventi; una riga del provider va da S a S+1 se la regola lo dice, se la
+   > storia fresca ha una seduta in S+1 e se S ≤ (data locale dell'ultimo `last_fetch_at` prima dell'aggiornamento)
+   > − 2; l'upsert scrive solo l'intervallo chiesto; i valori non cambiano mai. In attesa della decisione.
+
+> **Decisione** (coordinatore, 17/10 ~19:02): «Z-33: D″ approved. Values never change; dates move only with
+> session-calendar confirmation and before the last pre-upgrade fetch day; the limits are documented. Go. The
+> adjustment patchwork is a separate, pre-existing finding: file it as Z-35 (owner X + MF, post-1.3, developer
+> decision).» Nota: in dev `series_preparation.py` è diventato `market_series.py` (CP-10d): nessun mio import nuovo.
+   > **Note implementazione** (D″): `apply_z33.py` da HEAD `22b9b90ce`: il plugin (data locale, fuso dichiarato, data
+   > del valore corrente nel fuso), i due campi degli schemi, il campo del modello, i due file nuovi, nel refresh il
+   > passo 0 (la storia intera come calendario, solo per il controllo una tantum), la cattura del fuso (storia, cache,
+   > valore corrente) e `_settle_exchange_timezone` prima di ogni scrittura; `PriceStoreOperations.redate_provider_rows`
+   > (MF) e `EventStoreOperations.redate_provider_events` (W, con la regola degli split); l'azione `migration-011`.
+   > Provata su copie: compilazione, black (dopo aver unito tre righe come vuole il limite di 300), inverso esatto.
+3. ✅ 17/10 ~19:30–20:05 — Rossi del refresh ripinzati da test-author secondo D″: 31 `test_z33_*` rossi sulla stessa
+   verifica di contratto, i 26 esistenti verdi (asset-source-refresh 26 → 57). Il cancello col provider non patchato,
+   **una sola** lettura `"min"` che salta la cache e scrive solo l'intervallo chiesto, i prezzi (seduta in S+1, S ≤
+   D_f − 2, nessuna mossa senza `last_fetch_at`), gli eventi (la storia fresca in S+1 e non in S), il conto delle
+   righe più vecchie nel log (`capture_logs`), i quattro fallimenti che non scrivono nulla (nemmeno `last_fetch_at`),
+   il venerdì giusto che resta e il giovedì spostato che gli cede il posto, i limiti D_f − 2 / D_f − 1, Londra.
+   > **Note implementazione**: le scelte di test-author accettate: una sola chiamata (la storia intera sostituisce
+   > quella dell'intervallo), gli eventi non guardano D_f, `last_fetch_at` non si scrive in un fallimento. La sua
+   > domanda 1 (fine del calendario) era già coperta: la lettura arriva sempre a oggi. La 2 (DB di sviluppo che hanno
+   > fatto girare X-R12 prima di questa correzione) non tocca i dati rilasciati.
+   > **⚠️ Fuori pista**: la mia bozza faceva due chiamate (calendario + intervallo): rifatta, il passo 0 ricava anche
+   > i dati dell'intervallo chiesto dalla storia intera e il passo 1 non parte per un controllo.
+4. ✅ 17/10 ~20:10 — Codice applicato (`apply_z33.py`, da HEAD `22b9b90ce`): ruff e black puliti nel repo.
+5. ⏳ 17/10 ~19:40 — Corse leggere (`files/z33_light.sh`, carico < 50, una alla volta): `services provider-errors` 248,
+   `db migration-011` 15, `services asset-source-refresh` 57, `api assets-provider` 40, `api assets-price` 22,
+   `db validate` 17; due rossi.
+   > **⚠️ Fuori pista**: `db migration-010`, 1 rosso: il suo test «un database nuovo alla testa» dava per scontato che
+   > la testa fosse 010; ora c'è 011 → riparazione a test-author (costruire a `010_provider_reported_currency`).
+   > **⚠️ Fuori pista**: `services asset-source`, 1 rosso (`test_bulk_refresh_prices_current_only_marks_partial`):
+   > il suo provider finto risponde con un `SimpleNamespace` senza `exchange_timezone`; l'`AttributeError` (preso
+   > dal `try`) faceva perdere il valore corrente → FAILED invece di PARTIAL. I campi nuovi ora si leggono con
+   > `getattr` (anche la mia riga di Z-32 su `hist_data.currency`, che con quei finti alzava in silenzio). Script
+   > rifatto e riapplicato, ruff e black puliti. Docs a docs-writer intanto.
+   > **Note implementazione** (~20:20): test-author ha riparato MIG010-002/003 (costruiti a `010_provider_reported_
+   > currency`, non alla testa; MIG010-004 resta alla testa di proposito) e ha fatto lo stesso nel file di 011:
+   > `db migration-010` 13, `db migration-011` 15. Col `getattr`: `services asset-source` 61, `asset-source-refresh` 57.
+6. ✅ 17/10 ~20:20–21:00 — Docs (docs-writer), 8 pagine: `developer/backend/assets/architecture.md`
+   (`#exchange-timezone`,
+   limiti in `#exchange-timezone-limits`), `provider_yahoo_finance.md`, `events.md` (`#yahoo-redate`), DB
+   `assets_pricing.md` e `index.md` (riga 011), `scheduler.md` (il controllo legge la storia intera ma scrive solo la
+   finestra), `asset_plugin_guide.md` (le righe del giorno di borsa, `exchange_timezone` facoltativo), per l'utente
+   `assets/providers/yahoo-finance.en.md` (una nota; debito di traduzione vero, nessun timbro).
+   > **⚠️ Fuori pista**: dalla revisione delle docs, `_settle_exchange_timezone()` stava fuori dal `try` di
+   > `_persist_refresh_item()`: un errore del database faceva fallire tutta la chiamata. Rosso di test-author
+   > (`test_z33_a_failing_check_fails_its_asset_alone`: «the check's error escaped bulk_refresh_prices…»), poi v2 dello
+   > script (`apply_z33_v2.py`; la v1 resta in `apply_z33_v1_superseded.py`): il controllo che alza fa fallire solo il
+   > suo asset (la sessione torna indietro, il segno resta); i docstring dicono «Before release 1.3». Su v2:
+   > `services asset-source-refresh` 58, `services asset-source` 61, `services provider-errors` 248, `db migration-011`
+   > 15; ruff e black puliti; porta libera.
+   > **Note implementazione**: le release toccate sono anche 1.0.x e 1.1.0 (docs-writer: «up to 1.2.1»); la migrazione
+   > segna comunque tutte le assegnazioni yfinance. Un ultimo full sync rilasciato fatto il giorno D lascia la barra
+   > di D su D − 1 (S > D_f − 2, non spostata): la prima finestra dello scheduler la riscrive giusta.
+   > **Note implementazione** (~21:10): docs-writer ha aggiunto il fallimento isolato e il test in
+   > `#exchange-timezone`. Build stretta (`files/z33_build.sh`) rc 0, 0 avvisi; `check-links` 97 validi.
+7. ✅ 17/10 ~21:15 — Checkpoint FROZEN al coordinatore (revisori X: plugin e schemi; H: migrazione e refresh; MF:
+   `price_store`; W: `event_store`). Backlog: Z-33 ✅.

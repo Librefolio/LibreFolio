@@ -43,6 +43,7 @@ erDiagram
         string identifier
         json provider_params
         string reported_currency "VARCHAR(8), nullable, as reported"
+        string exchange_timezone "VARCHAR(64), nullable, IANA zone or legacy-utc mark"
     }
 
     ASSET_EVENT {
@@ -102,6 +103,7 @@ Decouples the asset from its data source. This table configures which provider t
 - 📋 Example: "Use Yahoo Finance (`yfinance`) for Apple (`AAPL`)"
 - ⚙️ **`provider_params`** (JSON): Provider-specific configuration (e.g., exchange suffix, custom identifier).
 - 🪙 **`reported_currency`** (`VARCHAR(8)`, nullable): the quote currency the provider reported with the asset's history, as it reported it, at the last history fetch that reported one — Yahoo's `GBp` for a London line quoted in pence, whose prices are stored as `GBP`. NULL until that fetch, and on every row right after migration `010_provider_reported_currency`; cleared when the assignment's provider, identifier or identifier type changes. The portfolio data-quality report warns from it (`QUOTE_IN_MINOR_UNIT`): see [The Provider's Own Quote Currency](../../backend/assets/architecture.md#reported-currency).
+- 🕛 **`exchange_timezone`** (`VARCHAR(64)`, nullable): the IANA timezone of the exchange the provider dates the asset's rows in (Yahoo's `Europe/Rome`), stored by the first refresh that reports one and replaced when a later one reports another; NULL until then. Migration `011_provider_exchange_timezone` wrote `'legacy-utc'` instead on every `yfinance` assignment it found: not a timezone, the mark of rows that release 1.2.1 or earlier dated by UTC, a day early for an exchange east of UTC. The next refresh of such an assignment re-dates its rows once, then replaces the mark with the timezone. Unlike `reported_currency`, a change of provider, identifier or identifier type keeps the value, mark included. See [The Exchange's Timezone](../../backend/assets/architecture.md#exchange-timezone).
 
 The provider system uses the [Registry Pattern](../patterns/registry_pattern.md) for extensibility.
 
