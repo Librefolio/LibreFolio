@@ -3860,6 +3860,25 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Strada possibile: un'opzione del runner, per esempio `--lane-setting NOME=VALORE` con una lista di nomi ammessi,
     applicata dopo le rimozioni, con i suoi test e documenti. Così gli E2E esistenti girerebbero sul profilo del cloud.
 
+  ✅ **Fase 1 fatta il 17/10** (checkpoint delle 19:20; decisioni del coordinatore D1–D4).
+  - `--lane-setting NOME=VALORE`, su `dev.py test` e `dev.py server --test`, per i tre nomi di `TEST_LANE_SETTABLE`
+    (`LIBREFOLIO_PROFILE`, `LIBREFOLIO_FRAME_PROTECTION`, `LIBREFOLIO_CSP_REPORT_ONLY`). Arriva a ogni processo della
+    corsia con `LIBREFOLIO_TEST_LANE_SETTINGS`, e viene rifiutata quando sta in `.env`, anche sotto `pipenv run`.
+  - Il raccoglitore delle violazioni della CSP, sempre acceso nella fixture condivisa, con l'interruttore
+    `E2E_CSP_COLLECTOR=0` e la baseline `e2e/csp-baseline.json` (quattro voci con proprietario; una risorsa si nomina
+    per `blockedURI` o per `blockedPath`).
+  - Le azioni `front-utility csp-collector` (in `all`) e `front-utility cloud-smoke`: 13 spec su una corsia managed,
+    `named_only`, quindi fuori da ogni `all` anche nel passo consolidato.
+  - Prove: il cloud smoke è verde (225 + 1 skipped); il campione self-hosted è verde col raccoglitore acceso
+    (`front-broker all` 57 E2E, `front-ai-export all` 18 E2E).
+  - **Fase 2**: una volta sola, nel cancello della release candidate, nella corsia del coordinatore
+    (`all-frontend --lane-setting LIBREFOLIO_PROFILE=managed`). Prima va fatta la riga di A su LGM-E-01 e LGM-E-03 di
+    `legal-and-managed.spec.ts`: provano la risposta della corsia con una corsia self-hosted come precondizione, quindi
+    su una managed falliscono per costruzione.
+  - Residui: H-52 (gli hash, D4, con la restrizione della voce `eval`), H-53 (la sonda dell'indirizzo con una
+    `connect-src` applicata). `named_only` lo legge solo il passo consolidato del frontend: un'azione del backend che ne
+    avesse bisogno vorrebbe lo stesso filtro in `_consolidate_backend.py` e nel passo parallelo.
+
   Dettagli: piano H, §14, lotto «H-42», analisi punto 4.
 - **H-44 · Il ripiego dell'anteprima PDF probabilmente scarica il file invece di mostrarlo** — basso, file; trovato nel
   lotto H-42 (dal docs-writer), via coordinatore, 17/10. Il proprietario lo assegna il coordinatore al prossimo treno.
@@ -4034,6 +4053,32 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - La frase di B-18 in `security.md` è riscritta, insieme alla doc dei motori.
   - Test: `db session-pragmas` (15).
   Dettagli: piano H, §14, «Review di B-36/B-37» e il lotto H-51.
+- **H-52 · Gli script inline di `index.html` nella CSP per hash (D4 di H-43)** — basso, sicurezza; H, deciso dal
+  coordinatore il 17/10 (D4): un lotto H dopo la fase 1 di H-43, nella 1.3 se c'è tempo.
+  - Oggi `CSP_REPORT_ONLY_POLICY` (`security_headers.py`) ha `script-src 'self' 'wasm-unsafe-eval'`. I due script
+    inline dell'`index.html` costruito (l'anti-FOUC di `app.html`, 1459 caratteri, e il bootstrap di SvelteKit, 373)
+    sono segnalati su ogni pagina, e la baseline del raccoglitore li conosce (`index-inline-script-0/1`).
+  - Cura: gli `sha256-…` dei due script nella policy, calcolati dall'HTML servito (`index.html` e `200.html`, che oggi
+    hanno gli stessi script). Poi via le due voci dalla baseline, e il test 5 della spec del raccoglitore si aggiorna
+    (la sua copia della policy).
+  - Nello stesso lotto, `'report-sample'` nella `script-src` report-only, e la voce `cheetah-grid-global-probe` si
+    restringe al campione «return this». Oggi conosce ogni `eval`.
+  - Nota: le voci con `indexInlineScript` si cercano nell'`index.html` servito su `/`, mentre un link profondo riceve
+    `200.html`. Gli script stanno alle stesse righe perché vengono dallo stesso `app.html`; con gli hash la dipendenza
+    sparisce.
+
+  Dettagli: piano H, §14, lotto «H-43, fase 1», decisioni D4 e passo 4 (F1).
+- **H-53 · La sonda dell'indirizzo di un link, con una `connect-src` applicata (F3 di H-43, metà sicurezza)** — basso,
+  sicurezza; trovato dal primo cloud smoke, deciso dal coordinatore il 17/10. La metà dell'esperienza è di A.
+  - Il controllo dell'indirizzo di un link (Impostazioni › Utenti) prende `<indirizzo scritto dall'admin>/api/v1/auth/
+    address-probe?nonce=…` dal browser, di qualunque origine. Con la policy report-only di managed sono segnalazioni
+    `connect-src` (AUSR-E-07 scrive apposta altre origini); la baseline le conosce con la voce
+    `address-probe-other-origin` (confronto sul percorso, proprietari A e H).
+  - Con una `connect-src 'self'` applicata la sonda di un'origine diversa dalla pagina verrebbe bloccata: un admin che
+    naviga da un indirizzo interno vedrebbe «non verificabile».
+  - Cura, quando la CSP si applica: l'origine pubblica configurata in `connect-src`, oppure la sonda dal server.
+
+  Dettagli: piano H, §14, lotto «H-43, fase 1», passo 4 (F3).
 
 ## A · Account e accessi (fase 01)
 
