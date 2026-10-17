@@ -71,7 +71,8 @@
     },
     "notFound": "Asset #{id} not found",
     "loadFailed": "Failed to load asset info",
-    "pricesLoadFailed": "Failed to load prices"
+    "pricesLoadFailed": "Failed to load prices",
+    "manualChip": "Manual"
   },
   "assets": {
     "create": "New asset",
@@ -99,15 +100,16 @@
     },
     "delete": {
       "confirmQuestion": "Delete \"{name}\"?",
-      "confirmWarning": "Provider assignments and price history will be removed. ⚠️",
+      "confirmWarning": "Provider assignments, price history and events (dividends, splits…) will be removed. ⚠️",
       "toastOk": "{name} deleted",
       "toastFailed": "Failed to delete {name}",
       "hasTransactions": "Cannot delete \"{name}\": has existing transactions",
       "bulkOk": "{n} assets deleted",
       "bulkPartial": "{failed} assets could not be deleted (have transactions)",
-      "bulkConfirmMessage": "Delete {n} assets? Provider assignments and price history will be removed.",
+      "bulkConfirmMessage": "Delete {n, plural, one {# asset} other {# assets}}? Provider assignments, price history and events (dividends, splits…) will be removed.",
       "resultDeleted": "deleted",
-      "resultHasTransactions": "has existing transactions"
+      "resultHasTransactions": "has existing transactions",
+      "itemsLabel": "{count, plural, one {# asset} other {# assets}}"
     },
     "merge": {
       "title": "Merge assets",
@@ -345,7 +347,8 @@
         "github": "Opens a public GitHub issue with the details of this search: review it before sending it"
       },
       "reportCopied": "Search details copied: paste them into the support page.",
-      "reportCopyFailed": "Could not copy the search details: describe your search on the support page."
+      "reportCopyFailed": "Could not copy the search details: describe your search on the support page.",
+      "failed": "The search failed. Please try again."
     },
     "comparison": {
       "title": "Provider Data Comparison",

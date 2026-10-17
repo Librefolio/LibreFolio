@@ -9,6 +9,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, FxRate
+from backend.app.db.precision import usable_fx_rate_clause
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceIssue,
@@ -47,6 +48,8 @@ async def _load_wac_fx_rows(
             await session.execute(
                 select(FxRate).where(
                     or_(*[and_(FxRate.base == base, FxRate.quote == quote, FxRate.date == rate_date) for base, quote, rate_date in chunk]),
+                    # X-R45: a rate an older version stored as inf or past the limits is a missing rate, never a value
+                    usable_fx_rate_clause(),
                 )
             )
         ).scalars()

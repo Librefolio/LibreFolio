@@ -44,6 +44,24 @@ sales (``portfolio_service.py``, ``sale.proceeds - sale.cost``) and the lots' cl
 ``convert_closure``) call it. Red by absence, like the names above: ``returns.realized_gain`` is read while each test
 runs, so before CP-7a each of its tests fails on the missing attribute and the rest of the file still collects.
 
+MF-A12 (workstream MF, «one home»; coordinator's decision N92): a Dashboard holding's one-day columns
+(``portfolio_service.get_summary``, a holding valued at its market price) take their ratio from ``change_ratio``.
+``price_change_1d`` is ``change_ratio(current_price - prev_price_base, prev_price_base)`` rounded to 4 decimals, where
+HEAD ``efef5c876`` wrote ``((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))``;
+``gain_loss_change_1d_percent`` is ``change_ratio(gain_loss_change_1d, previous_position_value) × 100`` rounded to 2,
+where HEAD wrote ``(gain_loss_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))``. The
+materiality guard ``|previous_position_value| > 0.01`` stays the caller's. Both HEAD expressions are copied below
+(``*_today``). The percent is HEAD's to the bit (``a / b * 100`` is ``(a / b) * 100``). On a positive price the price
+change is HEAD's to the bit too, rounding ties included: ``(c − p) / |p|`` is ``(c − p) / p``, the same two operations.
+``price_return``'s ``c / p − 1`` would not be: it rounds the quotient to 28 digits before subtracting, and on a price
+converted by a division it lands exactly on a half-way return that HEAD sees 1E-28 below, so it rounds the other way
+(the reason for N92; ``test_ties_are_today_s_where_end_over_start_minus_one_is_not``). The one value change is a
+negative price: the change now keeps the move's sign (−10 → −12.5 is −25 %, HEAD said +25 %), as the percent column
+always did; and an unmoved negative price now reads ``0.0000`` where HEAD's zero carried the price's sign
+(``-0.0000``). The call site is locked in ``test_financial/test_summary_day_change_house.py``, where the negative price
+is the red on HEAD; every test here is green on HEAD too: ``returns.py`` did not change, and these pin the formula, not
+the service.
+
 Pure: no database, no server, no network.
 """
 
@@ -51,13 +69,16 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+from collections import Counter
 from datetime import date
 from decimal import Decimal
+from fractions import Fraction
 
 import pytest
 
 from backend.app.services.financial_math import returns
 from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot
+from backend.app.services.financial_math.valuation import compute_holding_value
 
 D1 = date(2025, 3, 1)
 D2 = date(2025, 3, 2)
@@ -656,3 +677,304 @@ class TestRealizedGain:
         assert returns.realized_gain(Decimal("100"), Decimal("90")) == Decimal("10")
         assert returns.realized_gain(proceeds=Decimal("100"), cost=Decimal("90")) == Decimal("10")
         assert returns.realized_gain(cost=Decimal("90"), proceeds=Decimal("100")) == Decimal("10")
+
+
+# =============================================================================
+# A Dashboard holding's one-day columns (MF-A12, N92)
+# =============================================================================
+
+_PRICE_STEP = Decimal("0.0001")
+_PERCENT_STEP = Decimal("0.01")
+#: The caller's materiality guard on the previous position value (``get_summary``: ``abs(previous_position_value) > 0.01``).
+_MATERIALITY = Decimal("0.01")
+
+
+def _price_change_1d_today(prev_price_base: Decimal, current_price: Decimal) -> Decimal:
+    """``get_summary``'s ``price_change_1d`` at HEAD ``efef5c876`` (``portfolio_service.py:745``), as written."""
+    return ((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))
+
+
+def _change_1d_percent_today(gain_loss_change_1d: Decimal, previous_position_value: Decimal) -> Decimal:
+    """``get_summary``'s ``gain_loss_change_1d_percent`` at HEAD ``efef5c876`` (``portfolio_service.py:759``), as written."""
+    return (gain_loss_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))
+
+
+def _price_change_1d_house(prev_price_base: Decimal, current_price: Decimal) -> Decimal | None:
+    """The call site since MF-A12 (N92): the change over the size of the previous price, rounded for the column."""
+    ratio = returns.change_ratio(current_price - prev_price_base, prev_price_base)
+    return ratio.quantize(_PRICE_STEP) if ratio is not None else None
+
+
+def _price_change_1d_by_price_return(prev_price_base: Decimal, current_price: Decimal) -> Decimal:
+    """The alternative N92 set aside: ``price_return``'s ``end / start − 1``, rounded for the column."""
+    return returns.price_return(prev_price_base, current_price).quantize(_PRICE_STEP)
+
+
+def _change_1d_percent_house(gain_loss_change_1d: Decimal, previous_position_value: Decimal) -> Decimal | None:
+    """The call site since MF-A12: the house's change ratio, as a percent rounded for the column."""
+    ratio = returns.change_ratio(gain_loss_change_1d, previous_position_value)
+    return (ratio * 100).quantize(_PERCENT_STEP) if ratio is not None else None
+
+
+#: EUR/USD-like rates of 3 to 10 significant digits, as ``fx_rates.rate`` keeps them (NUMERIC(24, 10)).
+_RATES = (Decimal("1.0876543219"), Decimal("0.8571428571"), Decimal("157.2345678"), Decimal("7.45893"), Decimal("1.08"))
+#: The second leg of a route through a third currency (``fx/conversion.compute_chain_rate``: ``rate × (1 / rate)``).
+_CHAIN_LEG = Decimal("1.0876543219")
+
+
+def _convert(amount: Decimal, rate: Decimal, mode: str) -> Decimal:
+    """``amount`` in the report currency, as ``fx/conversion.convert_bulk`` converts it: ``same`` (no conversion),
+    ``times`` (the pair's base into its quote), ``over`` (the quote into the base), ``chain`` (times a chained rate)."""
+    if mode == "same":
+        return amount
+    if mode == "times":
+        return amount * rate
+    if mode == "over":
+        return amount / rate
+    return amount * (rate * (Decimal("1") / _CHAIN_LEG))
+
+
+def _routes() -> list[tuple[str, Decimal, Decimal]]:
+    """(mode, the day before's rate, today's rate): no conversion; each rate the same on both days, by multiplication,
+    division and a chain; and rates that moved between the two days."""
+    routes = [("same", Decimal("1"), Decimal("1"))]
+    routes += [(mode, rate, rate) for mode in ("times", "over", "chain") for rate in _RATES]
+    routes += [(mode, before, after) for mode in ("times", "over") for before, after in itertools.pairwise(_RATES)]
+    return routes
+
+
+def _decimals(value: Decimal) -> int:
+    return max(0, -value.as_tuple().exponent)
+
+
+def _on_a_half(value: Decimal) -> bool:
+    """``value`` is exactly half-way between two steps of the column: an odd number of half-steps."""
+    halves = value / (_PRICE_STEP / 2)
+    return halves == halves.to_integral_value() and int(halves) % 2 == 1
+
+
+def _half_even(fraction: Fraction) -> Decimal:
+    """An exact fraction rounded to the column's 4 decimals, half to even."""
+    scaled = fraction * 10_000
+    floor = scaled.numerator // scaled.denominator
+    rest = scaled - floor
+    if rest > Fraction(1, 2) or (rest == Fraction(1, 2) and floor % 2 == 1):
+        floor += 1
+    return Decimal(floor).scaleb(-4)
+
+
+#: The day before's raw prices (≤ 10 decimals, as ``price_history.close`` keeps them) and the moves to today's.
+_PREV_PRICES = ("0.0001234", "1.5", "12.3456", "98.51", "187.4523", "1234.5678901234", "65432.1")
+_MOVES = ("0", "0.0123456", "-0.0345678", "0.1", "-0.5", "0.00004", "-0.00004", "2.5", "0.0157", "-0.0001")
+
+
+def _price_grid(sign: int) -> list[tuple[str, Decimal, Decimal]]:
+    """(case, the day before's price, today's price) in the report currency, every price of ``sign``: every raw price,
+    move and route. Today's raw price is the day before's times (1 + move), cut to at most 10 decimals."""
+    cases = []
+    for prev_text, move, (mode, rate_before, rate_after) in itertools.product(_PREV_PRICES, _MOVES, _routes()):
+        prev_raw = Decimal(prev_text) * sign
+        current_raw = (prev_raw * (1 + Decimal(move))).quantize(Decimal(1).scaleb(-min(10, _decimals(prev_raw) + 2)))
+        case = f"{prev_raw} -> {current_raw} ({mode} {rate_before} -> {rate_after})"
+        cases.append((case, _convert(prev_raw, rate_before, mode), _convert(current_raw, rate_after, mode)))
+    return cases
+
+
+#: Raw prices whose moves by an odd number of half-steps of the column stay within 10 decimals.
+_TIE_PREV_PRICES = ("1.00", "40.00", "200.00", "1234.5600", "0.5000")
+#: Half-way returns: ±0.00005, ±0.00015, ±0.01225, ±0.01235, ±0.04995, ±0.12345, ±0.33335.
+_HALF_POINTS = tuple(sign * (Decimal(k) + Decimal("0.5")) * _PRICE_STEP for k in (0, 1, 122, 123, 499, 1234, 3333) for sign in (1, -1))
+
+
+def _tie_grid() -> list[tuple[str, str, Decimal, Decimal, Fraction]]:
+    """(case, mode, the day before's price, today's price, exact return) for a positive raw price moved by exactly a
+    half-way return, converted at one rate on both days by every route: the converted prices' exact return is the half."""
+    cases = []
+    for prev_text, half, (mode, rate_before, rate_after) in itertools.product(_TIE_PREV_PRICES, _HALF_POINTS, _routes()):
+        if rate_before != rate_after:
+            continue
+        prev_raw = Decimal(prev_text)
+        current_raw = prev_raw * (1 + half)
+        exact = Fraction(current_raw) / Fraction(prev_raw) - 1
+        assert exact == Fraction(half) and _decimals(current_raw) <= 10, f"precondition: an exact half-way move, {prev_raw} -> {current_raw}"
+        cases.append((f"{prev_raw} -> {current_raw} ({mode} {rate_before})", mode, _convert(prev_raw, rate_before, mode), _convert(current_raw, rate_after, mode), exact))
+    return cases
+
+
+def _percent_grid() -> list[tuple[str, Decimal, Decimal]]:
+    """(case, gain_loss_change_1d, previous_position_value): the edges of the guard and of a negative base, by hand;
+    then as ``get_summary`` computes them — ``compute_holding_value`` of today's and the day before's converted prices —
+    whenever the caller's guard lets the percent through."""
+    edges = (
+        ("0.011", "-0.011"),  # a negative base just over the guard: +100.00
+        ("50", "-100"),  # a loss that shrinks: the change's sign
+        ("-50", "-100"),
+        ("0", "-100"),
+        ("0.004", "0.0100000000000000000000000001"),  # just over the guard
+        ("-0.0002", "0.0101"),
+        ("0.005", "0.010000001"),
+        ("0", "250"),
+    )
+    cases = [(f"edge {change} over {base}", Decimal(change), Decimal(base)) for change, base in edges]
+    quantities = ("1", "12.5", "0.001", "10000", "0.123456789")
+    for quantity, quote_base, prev_text, move, (mode, rate_before, rate_after), sign in itertools.product(quantities, (None, 100), _PREV_PRICES[1:6], _MOVES[:6], _routes()[::3], (1, -1)):
+        prev_raw = Decimal(prev_text) * sign
+        current_raw = (prev_raw * (1 + Decimal(move))).quantize(Decimal(1).scaleb(-min(10, _decimals(prev_raw) + 2)))
+        previous_value = compute_holding_value(Decimal(quantity), _convert(prev_raw, rate_before, mode), quote_base)
+        change = compute_holding_value(Decimal(quantity), _convert(current_raw, rate_after, mode), quote_base) - previous_value
+        if abs(previous_value) > _MATERIALITY:
+            cases.append((f"{quantity} x {prev_raw} -> {current_raw} /{quote_base} ({mode} {rate_before} -> {rate_after})", change, previous_value))
+    return cases
+
+
+class TestDayChangeColumnsFromTheHouse:
+    """MF-A12 (N92): both columns from ``change_ratio``, against HEAD's two expressions (``*_today``). Parity guards, green
+    on HEAD too (``returns.py`` did not change); the call site is locked in
+    ``test_financial/test_summary_day_change_house.py``. A negative price is ``TestADayChangeOfANegativePrice``'s."""
+
+    def test_the_percent_is_today_s_to_the_bit(self):
+        """``change_ratio(change, base) × 100`` rounded to 2 decimals is HEAD's ``change / |base| * 100`` to the bit —
+        digits, exponent and sign — on long-digit converted values, both signs of the change, a negative base and
+        values just over the guard: the same two operations in the same order."""
+        cases = _percent_grid()
+        assert sum(base < 0 for _, _, base in cases) >= 100, "precondition: negative previous values"
+        assert sum(len(base.as_tuple().digits) >= 20 for _, _, base in cases) >= 100, "precondition: long-digit converted values"
+        assert sum(abs(base) < Decimal("0.02") for _, _, base in cases) >= 5, "precondition: values just over the guard"
+
+        for case, change, base in cases:
+            house = _change_1d_percent_house(change, base)
+            today = _change_1d_percent_today(change, base)
+            assert house is not None and house.as_tuple() == today.as_tuple(), f"{case}: house {house}, today {today}"
+
+    def test_a_positive_price_change_is_today_s_to_the_bit(self):
+        """On a positive price ``(c − p) / |p|`` is ``(c − p) / p``: the column is HEAD's to the bit — digits, exponent
+        and sign — on every raw price, move (none included) and route of the grid (no conversion, a rate the same on
+        both days by multiplication, division or a chain, rates that moved), and on every half-way move of the tie grid,
+        where ``end / start − 1`` would not be (asserted: the grid has teeth against it)."""
+        grid = [(case, prev, current) for case, prev, current in _price_grid(1)] + [(case, prev, current) for case, _, prev, current, _ in _tie_grid()]
+        assert len(grid) >= 2_000, f"precondition: a big grid, got {len(grid)}"
+        assert sum(len(prev.as_tuple().digits) >= 20 for _, prev, _ in grid) >= 500, "precondition: long-digit converted prices"
+        assert sum(_price_change_1d_by_price_return(prev, current) != _price_change_1d_today(prev, current) for _, prev, current in grid) >= 100, "precondition: ties where end / start − 1 rounds the other way"
+
+        for case, prev_price_base, current_price in grid:
+            house = _price_change_1d_house(prev_price_base, current_price)
+            today = _price_change_1d_today(prev_price_base, current_price)
+            assert house is not None and house.as_tuple() == today.as_tuple(), f"{case}: house {house}, today {today}"
+
+    def test_ties_are_today_s_where_end_over_start_minus_one_is_not(self):
+        """Why N92 chose ``change_ratio``: on the tie grid (positive raw prices moved by exactly a half-way return, one
+        rate on both days) the column is HEAD's everywhere, while ``price_return`` differs wherever a division brought
+        28 digits of noise: there ``c / p`` rounded to 28 digits lands exactly on the half and is rounded half-even —
+        the exact return's own rounding —, while ``(c − p) / p`` keeps the noise, within 1E-27 of the half, and goes the
+        other way. Without a conversion, or converted exactly (a multiplication within 28 digits), none differs."""
+        differences: Counter[str] = Counter()
+        cases: Counter[str] = Counter()
+        for case, mode, prev_price_base, current_price, exact in _tie_grid():
+            cases[mode] += 1
+            house = _price_change_1d_house(prev_price_base, current_price)
+            today = _price_change_1d_today(prev_price_base, current_price)
+            assert house is not None and house.as_tuple() == today.as_tuple(), f"{case}: house {house}, today {today}"
+            alternative = _price_change_1d_by_price_return(prev_price_base, current_price)
+            if alternative == today:
+                continue
+            differences[mode] += 1
+            assert returns.price_return(prev_price_base, current_price) == Decimal(exact.numerator) / Decimal(exact.denominator), f"{case}: price_return off the half"
+            assert abs((current_price - prev_price_base) / prev_price_base - Decimal(exact.numerator) / Decimal(exact.denominator)) < Decimal("1E-27"), f"{case}: HEAD far from the half"
+            assert alternative == _half_even(exact) and abs(alternative - today) == _PRICE_STEP, f"{case}: price_return {alternative}, today {today}"
+
+        assert cases["same"] and cases["times"] and differences["same"] == differences["times"] == 0, f"exact quotients never differ: {differences}"
+        assert differences["over"] > 0 and differences["chain"] > 0, f"price_return differs under a division: {differences} of {cases}"
+
+    @pytest.mark.parametrize(
+        ("prev_raw", "current_raw", "rate_before", "rate_after", "today_text", "alternative_text", "today_raw_text"),
+        [
+            pytest.param("200.00", "202.47", "1.08", "1.08", "0.0123", "0.0124", "0.01234999999999999999999999980", id="rise-of-1.235%-at-one-rate"),
+            pytest.param("200.00", "197.53", "1.1234", "1.1234", "-0.0123", "-0.0124", "-0.01234999999999999999999999996", id="fall-of-1.235%-at-one-rate"),
+            pytest.param("200.00", "200.01", "1.16", "1.16", "0.0001", "0.0000", "0.00005000000000000000000000030001", id="rise-of-0.005%-at-one-rate"),
+            pytest.param("10.00", "10.020687", "1.0500", "1.0537", "-0.0015", "-0.0014", "-0.001450000000000000000000000020", id="fall-of-0.145%-across-two-rates"),
+        ],
+    )
+    def test_the_declared_tie(self, prev_raw, current_raw, rate_before, rate_after, today_text, alternative_text, today_raw_text):
+        """USD prices converted into EUR (``amount / EUR-USD rate``) whose exact return is half-way between two steps of
+        the column: the house's column is HEAD's, unrounded and rounded, text and exponent; ``price_return`` would have
+        rounded the other way. The last case is a tie across two different rates."""
+        prev_price_base = Decimal(prev_raw) / Decimal(rate_before)
+        current_price = Decimal(current_raw) / Decimal(rate_after)
+        exact = Fraction(current_raw) / Fraction(rate_after) / (Fraction(prev_raw) / Fraction(rate_before)) - 1
+        assert _on_a_half(Decimal(exact.numerator) / Decimal(exact.denominator)), f"precondition: a half-way return, {exact}"
+
+        assert str(returns.change_ratio(current_price - prev_price_base, prev_price_base)) == str((current_price - prev_price_base) / prev_price_base) == today_raw_text
+        assert str(_price_change_1d_house(prev_price_base, current_price)) == str(_price_change_1d_today(prev_price_base, current_price)) == today_text
+        assert str(_price_change_1d_by_price_return(prev_price_base, current_price)) == alternative_text
+
+    @pytest.mark.parametrize(("quantity", "percent_text"), [("10", "1.23"), ("1", "1.23"), ("10000", "1.23"), ("12.5", "1.24")])
+    def test_on_the_tie_row_the_columns_agree_for_some_quantities_only(self, quantity, percent_text):
+        """200.00 → 202.47 USD at EUR/USD 1.08, a long position: ``price_change_1d`` is 0.0123 whatever the quantity, but
+        the percent is the change of two converted VALUES, each rounded to 28 digits, whose noise depends on the
+        quantity: 10 units give 1.23 / 1.23, 12.5 units 1.23 / 1.24 — as on HEAD, both columns being HEAD's. Row
+        coherence at a tie is a property of the row, not a guarantee; the two columns stay within the 0.0101 two
+        roundings allow. (A short position's percent has the opposite sign by design: |previous value| is its base.)"""
+        prev_price_base, current_price = Decimal("200.00") / Decimal("1.08"), Decimal("202.47") / Decimal("1.08")
+        previous_value = compute_holding_value(Decimal(quantity), prev_price_base, None)
+        change = compute_holding_value(Decimal(quantity), current_price, None) - previous_value
+
+        price_change = _price_change_1d_house(prev_price_base, current_price)
+        percent = _change_1d_percent_house(change, previous_value)
+
+        assert str(price_change) == "0.0123"
+        assert str(percent) == str(_change_1d_percent_today(change, previous_value)) == percent_text
+        assert abs(price_change * 100 - percent) <= Decimal("0.0101")
+
+    def test_change_ratio_is_not_the_materiality_guard(self):
+        """The guard ``|previous value| > 0.01`` is the caller's: the house answers on any non-zero base, 0.004 and
+        −0.01 included."""
+        assert returns.change_ratio(Decimal("0.0004"), Decimal("0.004")) == Decimal("0.1")
+        assert returns.change_ratio(Decimal("0.0004"), Decimal("-0.01")) == Decimal("0.04")
+
+
+class TestADayChangeOfANegativePrice:
+    """N92's one value change: a negative price's change keeps the move's direction (``(c − p) / |p|``), as the percent
+    column always did; HEAD's ``(c − p) / p`` gave it the opposite sign. Pure pins of the formula, green on HEAD too: the
+    service's red is ``test_summary_day_change_house.py``'s ``test_a_negative_price_keeps_the_move_s_sign``."""
+
+    @pytest.mark.parametrize(
+        ("prev_price", "current_price", "house_text", "today_text"),
+        [
+            pytest.param("-10", "-12.5", "-0.2500", "0.2500", id="falls-further"),
+            pytest.param("-10", "-5", "0.5000", "-0.5000", id="rises-toward-zero"),
+            pytest.param("-37.5", "12.25", "1.3267", "-1.3267", id="turns-positive"),
+            pytest.param("-0.0001234", "-0.0001301", "-0.0543", "0.0543", id="a-small-price-falls"),
+        ],
+    )
+    def test_the_change_keeps_the_move_s_sign(self, prev_price, current_price, house_text, today_text):
+        prev, current = Decimal(prev_price), Decimal(current_price)
+        today = _price_change_1d_today(prev, current)
+        assert str(today) == today_text, f"precondition: HEAD's value, got {today}"
+
+        house = _price_change_1d_house(prev, current)
+
+        assert str(house) == house_text, f"{prev} -> {current}: expected {house_text} (the move's sign), got {house}; HEAD gave {today}"
+
+    def test_every_negative_price_change_is_today_s_with_the_sign_flipped(self):
+        """On the negative half of the grid (every raw price, move and route) the house's column is HEAD's with its sign
+        flipped — ``(c − p) / (−p)`` is ``−((c − p) / p)`` exactly, and half-even is symmetric —, digits and exponent
+        kept, a rounded-away zero's sign included."""
+        cases = _price_grid(-1)
+        assert all(prev < 0 for _, prev, _ in cases) and len(cases) >= 1_000, "precondition: negative prices"
+
+        for case, prev_price_base, current_price in cases:
+            house = _price_change_1d_house(prev_price_base, current_price)
+            today = _price_change_1d_today(prev_price_base, current_price)
+            assert house is not None and house.as_tuple() == today.copy_negate().as_tuple(), f"{case}: house {house}, HEAD {today}"
+
+    @pytest.mark.parametrize(("price", "today_text"), [("-10", "-0.0000"), ("-187.4523", "-0.0000"), ("10", "0.0000")])
+    def test_an_unmoved_price_reads_a_plain_zero(self, price, today_text):
+        """A price that did not move: ``0 / |p|`` is a plain zero, ``"0.0000"`` in the JSON. HEAD's ``0 / p`` carried a
+        negative price's sign, ``"-0.0000"``: equal as numbers, not as text (the CP-4a rule above: the sign of a zero is
+        not part of the contract)."""
+        start = Decimal(price)
+        house, today = _price_change_1d_house(start, start), _price_change_1d_today(start, start)
+
+        assert house == today == 0
+        assert str(today) == today_text, f"precondition: HEAD's text, got {today}"
+        assert str(house) == "0.0000", f"HEAD said {today}"

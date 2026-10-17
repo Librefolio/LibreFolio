@@ -106,7 +106,7 @@
 
             {#if providerAssignment}
                 <div>
-                    <h4 class="text-xs font-semibold text-lf-muted uppercase mb-2">Provider</h4>
+                    <h4 class="text-xs font-semibold text-lf-muted uppercase mb-2">{$t('common.provider')}</h4>
                     <div class="flex items-center gap-3 text-sm flex-wrap">
                         <span class="inline-flex items-center gap-1.5 font-medium text-lf-secondary">
                             {#if providerIconUrl}

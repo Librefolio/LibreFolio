@@ -260,6 +260,7 @@ class FACurrentValue(StrictModel):
     currency: str
     as_of_date: date_type
     source: Optional[str] = None
+    exchange_timezone: Optional[str] = Field(None, max_length=64, description="The exchange's IANA timezone, as `FAHistoricalData.exchange_timezone` (Z-33)")
 
     @field_validator("value", mode="before")
     @classmethod
@@ -286,6 +287,11 @@ class FAHistoricalData(StrictModel):
         ),
     )
     source: Optional[str] = None
+    exchange_timezone: Optional[str] = Field(
+        None,
+        max_length=64,
+        description="The exchange's IANA timezone, the one the provider dated its rows in (Yahoo: `Europe/Rome`). The refresh keeps it on the provider assignment, and checks once the rows an older version dated by UTC (Z-33).",
+    )
 
 
 # ============================================================================
