@@ -22,17 +22,27 @@ own conversion, at its own date, is still asked: the rows before the floor are r
     3 652 days before the floor); after the cure the only days before the floor are the movements' own (1890-01-01,
     1890-01-02), and the transit's rates run from 1900-01-01 exactly to its last day;
   * GREEN on HEAD and after: a transit after the floor asks every day of its own, from its start.
+- MF-SEC8-2a — the rows before the floor are replayed, but the histories start on it, silently: the engine counts them
+  for a WARNING of the data-quality report (``data_quality.build_data_quality_report(rows_before_floor=…)``, pinned in
+  ``test_data_quality_report.py``). Red on HEAD f4a1e374f (no ``RowsBeforeFloor``, no ``rows_before_floor``):
+  * ``TestRowsBeforeFloorRecord`` (pure): ``models.RowsBeforeFloor(count, earliest)``, a frozen dataclass, and
+    ``PortfolioCalculationResult.rows_before_floor``, None by default;
+  * ``TestTheRowsBeforeTheFloorAreCounted`` — through ``calculate``, same private database as above: two rows before
+    the floor (0001-01-01 and 1890-01-01; one on 1900-01-01 is not before it) give ``RowsBeforeFloor(2, 0001-01-01)``,
+    for a window after the floor too; a book from the floor on gives None; only the scope's brokers' rows count.
 
-Isolation. ``TestTheRangeStartsAtTheFloor`` writes only to its own in-memory database (``SQLModel.metadata.create_all``,
-one per test, closed and disposed at teardown): nothing reaches the lane's database, no server, no network. Its rows
-predate the write floor N74: ``PRAGMA ignore_check_constraints`` keeps a CHECK that floor may add to the schema from
-refusing them, as a stored row was never refused. The book is all in EUR, so no rate is asked. The engine's blob cache
-is emptied around each test (a cached blob would answer without a replay). ``TestTransitRatesStartAtTheFloor`` replaces
-``convert_bulk`` on the engine module through ``monkeypatch``; its engine has no session.
+Isolation. ``TestTheRangeStartsAtTheFloor`` and ``TestTheRowsBeforeTheFloorAreCounted`` write only to their own in-memory
+database (``SQLModel.metadata.create_all``, one per test, closed and disposed at teardown): nothing reaches the lane's
+database, no server, no network. Their rows predate the write floor N74: ``PRAGMA ignore_check_constraints`` keeps a
+CHECK that floor may add to the schema from refusing them, as a stored row was never refused. The books are all in EUR,
+so no rate is asked. The engine's blob cache is emptied around each test (a cached blob would answer without a replay).
+``TestTransitRatesStartAtTheFloor`` replaces ``convert_bulk`` on the engine module through ``monkeypatch``; its engine
+has no session. ``TestRowsBeforeFloorRecord`` touches no database.
 
 Reference: backend/app/services/financial_math/portfolio/engine.py (calculate step 5, _preload_fx_rates).
 """
 
+import dataclasses
 from collections.abc import AsyncIterator
 from datetime import date, timedelta
 from decimal import Decimal
@@ -44,6 +54,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
+import backend.app.services.financial_math.portfolio.models as portfolio_models
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
@@ -229,3 +240,129 @@ class TestTransitRatesStartAtTheFloor:
 
         assert requested == {("USD", day) for day in _days(date(1900, 1, 3), date(1900, 1, 6))}
         print_success("1900-01-03 to 1900-01-06")
+
+
+# =============================================================================
+# MF-SEC8-2a: calculate() COUNTS THE SCOPE'S ROWS BEFORE THE FLOOR
+# =============================================================================
+
+#: ``date.min``: the oldest day a stored row can carry (the calendar has no day before it).
+DAY_ONE = date(1, 1, 1)
+
+
+def _rows_before_floor_record() -> type:
+    record = getattr(portfolio_models, "RowsBeforeFloor", None)
+    if record is None:
+        pytest.fail("financial_math.portfolio.models has no RowsBeforeFloor (MF-SEC8-2a): the engine has nowhere to count the rows dated before 1900")
+    return record
+
+
+def _rows_before_floor_of(result) -> object:
+    """``result.rows_before_floor``, failing the test (never erroring) on a result that has no such field."""
+    if not hasattr(result, "rows_before_floor"):
+        pytest.fail("PortfolioCalculationResult has no rows_before_floor (MF-SEC8-2a): the report cannot warn that the histories start on 1900-01-01")
+    return result.rows_before_floor
+
+
+async def _owner_of(session: AsyncSession, *broker_names: str) -> tuple[int, list[int], int]:
+    """User U owning each named broker at 100 %, and X, a EUR stock. Returns (U's id, the brokers' ids in order, X's id)."""
+    user = User(username="sec8_2a_user", email="sec8_2a_user@test.com", hashed_password="fakehash", is_active=True)
+    brokers = [Broker(name=name) for name in broker_names]
+    asset = Asset(display_name="SEC8-2a X", currency="EUR", asset_type=AssetType.STOCK)
+    session.add_all([user, *brokers, asset])
+    await session.flush()
+    session.add_all([BrokerUserAccess(broker_id=broker.id, user_id=user.id, role=UserRole.OWNER, share_percentage=Decimal("1")) for broker in brokers])
+    return user.id, [broker.id for broker in brokers], asset.id
+
+
+def _deposit(broker_id: int, day: date, amount: str = "1000") -> Transaction:
+    return Transaction(broker_id=broker_id, type=TransactionType.DEPOSIT, date=day, amount=Decimal(amount), currency="EUR")
+
+
+def _buy(broker_id: int, asset_id: int, day: date) -> Transaction:
+    """10 X for 400 EUR."""
+    return Transaction(broker_id=broker_id, asset_id=asset_id, type=TransactionType.BUY, date=day, quantity=Decimal("10"), amount=Decimal("-400"), currency="EUR")
+
+
+class TestRowsBeforeFloorRecord:
+    """Pure: the record the engine fills and the data-quality report reads."""
+
+    def test_it_is_a_frozen_dataclass_of_count_and_earliest(self):
+        """Red on HEAD f4a1e374f (no RowsBeforeFloor). Frozen, compared by value: it travels in the blob cache with the
+        result, shared by every caller of that blob."""
+        record = _rows_before_floor_record()
+        assert dataclasses.is_dataclass(record), f"RowsBeforeFloor is {record!r}, not a dataclass"
+        assert [field.name for field in dataclasses.fields(record)] == ["count", "earliest"]
+        value = record(count=2, earliest=DAY_ONE)
+        assert value == record(count=2, earliest=DAY_ONE)
+        assert value != record(count=2, earliest=OLD)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            value.count = 3  # type: ignore[misc]
+
+    def test_a_result_has_none_by_default(self):
+        """Red on HEAD (no field). A result built without it — the early returns of ``calculate``, an empty scope — says
+        "none" rather than lacking the field."""
+        result = portfolio_models.PortfolioCalculationResult(daily_states=[])
+        assert _rows_before_floor_of(result) is None
+
+
+class TestTheRowsBeforeTheFloorAreCounted:
+    """MF-SEC8-2a, through ``calculate`` on this test's own in-memory database (same isolation as
+    ``TestTheRangeStartsAtTheFloor``). ``result.rows_before_floor`` is ``RowsBeforeFloor(count, earliest)`` over the
+    scope's transactions dated before 1900-01-01 — whatever the requested window, since they are all replayed — and None
+    when there is none. A row on the floor itself is not before it.
+
+    Red on HEAD f4a1e374f: the result has no ``rows_before_floor`` (and ``models`` no ``RowsBeforeFloor``); the replay
+    itself runs on HEAD, a row on ``date.min`` included (measured).
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("date_from", [pytest.param(None, id="dashboard-t0"), pytest.param(date(1900, 1, 5), id="window-after-the-floor")])
+    async def test_two_rows_before_the_floor_are_counted_with_the_earliest(self, session, date_from):
+        """A deposits 1000 on 0001-01-01 and buys 10 X on 1890-01-01, then deposits 50 on 1900-01-01 (the floor: not
+        before it) and 70 on 1900-01-03. Barrier: the replay ran, the old rows in it. Then two rows, the earliest on
+        0001-01-01 — for a window after the floor too: the count is the scope's, not the window's."""
+        print_section(f"MF-SEC8-2a: rows before the floor, calculate(date_from={date_from})")
+        user_id, (broker_a,), asset_id = await _owner_of(session, "SEC8-2a A")
+        session.add_all([_deposit(broker_a, DAY_ONE), _buy(broker_a, asset_id, OLD), _deposit(broker_a, FLOOR, "50"), _deposit(broker_a, date(1900, 1, 3), "70")])
+        await session.commit()
+
+        result = await PortfolioCalculationEngine(session).calculate(user_id=user_id, date_from=date_from, date_to=END, target_currency="EUR")
+
+        assert result.daily_states, "precondition: the replay emitted states"
+        assert result.daily_states[-1].cumulative_external_cash_flow == Decimal("1120"), "precondition: every deposit is replayed, the 0001-01-01 one included"
+        assert _rows_before_floor_of(result) == _rows_before_floor_record()(count=2, earliest=DAY_ONE)
+        print_success("RowsBeforeFloor(count=2, earliest=0001-01-01)")
+
+    @pytest.mark.asyncio
+    async def test_a_book_from_the_floor_on_has_none(self, session):
+        """A deposits 1000 on 1900-01-01 exactly and buys 10 X on 1900-01-02: nothing before the floor, None — not a
+        record counting 0."""
+        print_section("MF-SEC8-2a: a book from the floor on")
+        user_id, (broker_a,), asset_id = await _owner_of(session, "SEC8-2a A")
+        session.add_all([_deposit(broker_a, FLOOR), _buy(broker_a, asset_id, date(1900, 1, 2))])
+        await session.commit()
+
+        result = await PortfolioCalculationEngine(session).calculate(user_id=user_id, date_to=END, target_currency="EUR")
+
+        assert [state.date for state in result.daily_states][:1] == [FLOOR], "precondition: the replay emitted states from the floor"
+        assert _rows_before_floor_of(result) is None
+        print_success("rows_before_floor is None")
+
+    @pytest.mark.asyncio
+    async def test_only_the_scope_s_rows_are_counted(self, session):
+        """U owns A (a deposit on 0001-01-01, a BUY on 1890-01-01) and B (a deposit on 1850-06-01, one on 1900-01-03).
+        Scope B: one row, on 1850-06-01 — A's rows are not in B's histories, so they are not B's warning. The whole
+        scope: three, the earliest on 0001-01-01."""
+        print_section("MF-SEC8-2a: rows before the floor, per scope")
+        user_id, (broker_a, broker_b), asset_id = await _owner_of(session, "SEC8-2a A", "SEC8-2a B")
+        session.add_all([_deposit(broker_a, DAY_ONE), _buy(broker_a, asset_id, OLD), _deposit(broker_b, date(1850, 6, 1)), _deposit(broker_b, date(1900, 1, 3))])
+        await session.commit()
+        engine = PortfolioCalculationEngine(session)
+        record = _rows_before_floor_record()
+
+        only_b = await engine.calculate(user_id=user_id, broker_ids=[broker_b], date_to=END, target_currency="EUR")
+        both = await engine.calculate(user_id=user_id, date_to=END, target_currency="EUR")
+
+        assert (_rows_before_floor_of(only_b), _rows_before_floor_of(both)) == (record(count=1, earliest=date(1850, 6, 1)), record(count=3, earliest=DAY_ONE))
+        print_success("B: 1 from 1850-06-01; A and B: 3 from 0001-01-01")

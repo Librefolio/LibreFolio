@@ -135,6 +135,18 @@ def shift_date(value: date, days: int) -> date:
         return date.max if days > 0 else date.min
 
 
+def day_before(day: date) -> date | None:
+    """The calendar day before ``day``; None for ``date.min`` (0001-01-01), which has none (MF-SEC8-2b).
+
+    Not ``shift_date(day, -1)``: saturating would answer ``date.min`` itself, and a caller asking what was held at the
+    end of the day before would count the movements of ``date.min`` as already held then. Use ``shift_date`` for a
+    window's edge, which may stop at the calendar's end; use ``day_before`` where "the day before" must exist — the
+    holdings an income or a cost on that day is allocated to (FIFO economic events, Yield on Cost), read as nothing held
+    when it does not. A row stored on ``date.min`` by an older version made ``day - timedelta(days=1)`` raise.
+    """
+    return None if day == date.min else day - timedelta(days=1)
+
+
 def parse_ISO_date(v) -> date:
     if isinstance(v, date):
         return v

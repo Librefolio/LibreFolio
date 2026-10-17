@@ -5,18 +5,20 @@ import uuid
 from collections import defaultdict
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
 import pytest
 from fastapi import FastAPI, HTTPException
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1 import portfolio_api
 from backend.app.api.v1.auth import get_current_user
 from backend.app.config import get_settings
-from backend.app.db.models import UserRole
+from backend.app.db.models import Transaction, TransactionType, UserRole
 from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
@@ -31,7 +33,7 @@ from backend.app.services.pac_allocator.source.portfolio_allocation_source impor
     PortfolioPlannerSourceAssetNotFoundError,
     PortfolioPlannerSourceBrokerNotFoundError,
 )
-from backend.test_scripts.test_db_config import verify_test_database
+from backend.test_scripts.test_db_config import get_test_db_path, verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -2211,3 +2213,147 @@ class TestIssue32PurchaseCostInReportCurrency:
         assert response.status_code == 200, response.text
         assert Decimal(response.json()["summary"]["open_cost_basis"]["amount"]) == Decimal("60000")
         print_success("60000 UZS = 100×150 + 150×140 + 150×160")
+
+
+# ---------------------------------------------------------------------------
+# MF-SEC8-2a — transactions dated before 1900 in the report's data quality
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestTransactionsBeforeFloorDataQuality:
+    """POST /portfolio/report warns once about the scope's transactions dated before 1 January 1900 (MF-SEC8-2a).
+
+    The engine replays such a row on its own date but emits no state before ``EARLIEST_RANGE_START`` (1900-01-01), so the
+    histories start there; ``data_quality`` says so with one WARNING ``TRANSACTIONS_BEFORE_FLOOR`` — ``count`` and
+    ``message_params`` ``{count, earliest}``, no CTA. Proven on the HTTP pass-through, both ways it is built: with the
+    summary (``get_summary``: ``summary.data_quality``, repeated as the top-level ``data_quality``) and without it
+    (``get_report`` builds the top-level ``data_quality`` itself).
+
+    The rows before 1900 are seeded with the ORM, in the lane's test database only: since N74 (R13-SEC7-3) the API refuses
+    dates before 1900, so the warning exists for rows written before that rule.
+
+    One new user, two new brokers, reported in EUR (the rows' currency: no rate is asked) on 1900 alone (the engine runs
+    from the floor to the range's end). ``floor``: a DEPOSIT on 1900-01-01 through the API, then two DEPOSITs seeded on
+    1899-12-15 and 1899-03-01 (the earliest written last). ``control``: only the API DEPOSIT on 1900-01-01 — the floor's
+    own day, not before it — and no such issue. Cleanup: the seeded rows by id with the ORM, then both brokers (force:
+    their API rows), then the user.
+
+    Red before 871f75a38: ``IssueCode`` has no ``TRANSACTIONS_BEFORE_FLOOR``, so ``floor``'s three ``data_quality``
+    sections hold no such issue; the barriers and the control are green there too.
+    """
+
+    FLOOR_DAY = "1900-01-01"
+    SEEDED = ((date(1899, 12, 15), "500"), (date(1899, 3, 1), "250"))  # (day, EUR amount), in writing order
+    WHERE = ("summary.data_quality", "data_quality with the summary", "data_quality without the summary")
+
+    @staticmethod
+    def _lane_engine():
+        """The engine of the runner's test database, never another: the seeded rows bypass every API check."""
+        is_test_db, database_url = verify_test_database()
+        assert is_test_db, f"Refusing to write transactions outside the test database ({database_url})"
+        engine = get_async_engine()
+        assert engine.url.database and Path(engine.url.database).resolve() == get_test_db_path().resolve(), f"Refusing to write through a non-test engine ({engine.url})"
+        return engine
+
+    async def _seed_before_floor(self, broker_id: int, marker: str) -> list[int]:
+        """Write ``SEEDED`` on ``broker_id`` — the dates the API refuses; their ids, once committed."""
+        async with AsyncSession(self._lane_engine()) as session:
+            rows = [Transaction(broker_id=broker_id, type=TransactionType.DEPOSIT, date=day, quantity=Decimal("0"), amount=Decimal(amount), currency="EUR", description=marker) for day, amount in self.SEEDED]
+            session.add_all(rows)
+            await session.flush()
+            ids = [row.id for row in rows]
+            await session.commit()
+        return ids
+
+    async def _delete_seeded(self, ids: list[int]) -> int:
+        """Delete the seeded rows by id; how many went."""
+        async with AsyncSession(self._lane_engine()) as session:
+            result = await session.execute(delete(Transaction).where(Transaction.id.in_(ids)))
+            deleted = result.rowcount
+            await session.commit()
+        return deleted
+
+    async def _cleanup(self, client: httpx.AsyncClient, seeded_ids: list[int], broker_ids: list[int], cleanup_errors: list[str]) -> None:
+        """The seeded rows first, then the brokers (force: their API rows). A failure is recorded, never raised, so the
+        brokers and the user are still deleted."""
+        if seeded_ids:
+            try:
+                deleted = await self._delete_seeded(seeded_ids)
+            except Exception as exc:  # recorded: the test fails on it after the rest of the cleanup ran
+                cleanup_errors.append(f"seeded rows {seeded_ids}: {exc!r}")
+            else:
+                if deleted != len(seeded_ids):
+                    cleanup_errors.append(f"seeded rows {seeded_ids}: {deleted} deleted")
+        if broker_ids:
+            response = await client.delete(f"{API_BASE}/brokers", params={"ids": broker_ids, "force": True}, timeout=TIMEOUT)
+            if response.status_code != 200 or not all(row["success"] for row in response.json()["results"]):
+                cleanup_errors.append(f"brokers {broker_ids}: {response.status_code} {response.text}")
+
+    async def _data_quality(self, client: httpx.AsyncClient, broker_id: int) -> dict[str, dict | None]:
+        """The scope's ``data_quality`` sections, keyed as ``WHERE``: one report with the summary, one without."""
+        found: dict[str, dict | None] = {}
+        for include_summary in (True, False):
+            response = await post_portfolio_report(
+                client,
+                {
+                    "broker_ids": [broker_id],
+                    "target_currency": "EUR",
+                    "date_range": {"start": self.FLOOR_DAY, "end": "1900-12-31"},
+                    "include_summary": include_summary,
+                    "include_history": False,
+                    "include_allocation_history": False,
+                },
+            )
+            assert response.status_code == 200, response.text
+            report = response.json()
+            # Presence barrier: the scope's rows were replayed, from the floor (a scope read empty has no first day).
+            assert report["metadata"]["computed_date_from"] == self.FLOOR_DAY, report["metadata"]
+            if include_summary:
+                found["summary.data_quality"] = report["summary"]["data_quality"]
+                found["data_quality with the summary"] = report["data_quality"]
+            else:
+                assert report["summary"] is None, "include_summary=False built a summary: the report's own data_quality path is not reached"
+                found["data_quality without the summary"] = report["data_quality"]
+        return found
+
+    @staticmethod
+    def _floor_issues(quality: dict | None) -> list[dict] | None:
+        """The ``TRANSACTIONS_BEFORE_FLOOR`` issues of a section, reduced to the contract's fields (None: no section)."""
+        if quality is None:
+            return None
+        return [{key: issue[key] for key in ("severity", "count", "message_params", "cta_action", "cta_target")} for issue in quality["issues"] if issue["code"] == "TRANSACTIONS_BEFORE_FLOOR"]
+
+    async def test_rows_before_1900_give_one_warning_on_the_summary_and_the_report(self, test_server):
+        """RED before 871f75a38: the floor scope gets one TRANSACTIONS_BEFORE_FLOOR (2 rows, earliest 1899-03-01) in each
+        section; the control scope, from 1900-01-01 on, none."""
+        print_section("Portfolio Report: transactions before 1900 (MF-SEC8-2a)")
+        marker = f"MF-SEC8-2a {uuid.uuid4().hex}"
+        cleanup_errors: list[str] = []
+        broker_ids: list[int] = []
+        seeded_ids: list[int] = []
+        floor_quality: dict[str, dict | None] = {}
+        control_quality: dict[str, dict | None] = {}
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                floor_id = await create_broker(client, f"Floor {uuid.uuid4().hex[:12]}")
+                broker_ids.append(floor_id)
+                control_id = await create_broker(client, f"Floor control {uuid.uuid4().hex[:12]}")
+                broker_ids.append(control_id)
+                await commit_batch(client, creates=[{"broker_id": broker_id, "type": "DEPOSIT", "date": self.FLOOR_DAY, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}} for broker_id in broker_ids])
+                seeded_ids = await self._seed_before_floor(floor_id, marker)
+
+                floor_quality = await self._data_quality(client, floor_id)
+                control_quality = await self._data_quality(client, control_id)
+            finally:
+                await self._cleanup(client, seeded_ids, broker_ids, cleanup_errors)
+                await delete_current_test_user(client, user_id)
+        assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
+
+        earliest = min(day for day, _ in self.SEEDED).isoformat()
+        expected = {"severity": "warning", "count": len(self.SEEDED), "message_params": {"count": len(self.SEEDED), "earliest": earliest}, "cta_action": None, "cta_target": None}
+        assert {where: self._floor_issues(quality) for where, quality in floor_quality.items()} == {where: [expected] for where in self.WHERE}
+        assert {where: self._floor_issues(quality) for where, quality in control_quality.items()} == {where: [] for where in self.WHERE}
+        print_success(f"{len(self.SEEDED)} rows before 1900 (earliest {earliest}): one warning in every data_quality section; none from the floor on")

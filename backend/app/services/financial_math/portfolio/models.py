@@ -393,6 +393,19 @@ class InvalidSplitEvent:
     date: date_type
 
 
+@dataclass(frozen=True, slots=True)
+class RowsBeforeFloor:
+    """The scope's transactions dated before ``EARLIEST_RANGE_START`` (1 January 1900; MF-SEC8-2a).
+
+    Written by an older version or by hand (N74 refuses new ones). They are replayed on their own dates, but no state is
+    emitted before the floor: the histories start on it. The data-quality report warns, with their number and the
+    earliest date, so the user corrects them.
+    """
+
+    count: int
+    earliest: date_type
+
+
 @dataclass
 class PortfolioCalculationResult:
     """Complete result from the portfolio calculation engine."""
@@ -423,6 +436,8 @@ class PortfolioCalculationResult:
     realized_sales: list[RealizedSale] = field(default_factory=list)
     # MF-D4: the SPLIT events whose stored ratio is unusable, counted as missing (one per event, by event id).
     invalid_split_events: list[InvalidSplitEvent] = field(default_factory=list)
+    # MF-SEC8-2a: the scope's transactions dated before EARLIEST_RANGE_START (None when there is none).
+    rows_before_floor: RowsBeforeFloor | None = None
     # Conversions a movement (cost, cash, external flow, in-transit cost) needed and could not
     # get: pair "FROM/TO" -> dates. Valuation failures are per day in DailyPortfolioState.missing_fx_pairs.
     missing_fx: dict[str, set[date_type]] = field(default_factory=dict)

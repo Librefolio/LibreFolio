@@ -6493,6 +6493,10 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     allora le carte senza prezzi: l'errore arriva solo alla console (il `catch` di `fetchAllPriceData`).
   - Seguito: dividere la richiesta in lotti (Y, X). Il messaggio esplicito lo fa X (con X-R53), per non avere due
     scrittori sulle stesse pagine.
+  - **Anche i cambi a periodo fisso** (MF, 17/10, X-R59; decisione del coordinatore): `POST /assets/prices/period-changes`
+    e `POST /fx/currencies/period-changes` hanno lo stesso tetto (`MAX_BULK_ITEMS`, 422 `bulk_too_many_items`), più
+    ≤ 5 giorni `as_of`/`range_start` distinti (422 `period_changes_too_many_days`): la stessa regola di divisione in
+    lotti da 1 000 vale per loro, con un `as_of` per richiesta.
   - **Chiusa il 17/10 per la parte di Z** (il commit è del coordinatore; decisioni D1–D4): l'aiuto
     `lib/api/bulkBatches.ts` e i chiamanti A (lista asset) e C (lista cambi), con R13-SEC9-2 (il budget a 1 000 000,
     800 000 nel web app). Le colonne Δ (D/B) le passa X all'aiuto, con X-R59 e X-R60; il messaggio di X-R58 viene
@@ -7580,3 +7584,20 @@ punto di partenza, l'audit dello stesso giorno:
   MF-SEC8-2). Una coppia con l'arrivo datato `0001-01-01` (`portfolio/classifier.py:217`, `arrival.date − 1`) e un
   provento datato `0001-01-01` (`financial_math/yield_on_cost.py:631`) sollevano `OverflowError`. Cura: confrontare prima
   di sottrarre, o partire da `EARLIEST_RANGE_START`. Rossi prima. Dettagli: piano MF, sezione «MF-SEC8-2».
+- **MF-SEC9a · Altri 500 dei prezzi che ripetono l'errore; `DELETE /prices` senza tetto** — basso, sicurezza;
+  test-author di MF, 17/10 (R13-SEC9). In `api/v1/assets/prices.py` restano `detail=str(e)` sui 500 di `POST /prices`
+  (~:90), `DELETE /prices` (~:104) e `POST /prices/sync` (~:249). `DELETE /prices` costruisce un termine OR per
+  intervallo senza tetto agli elementi: da ~1000 intervalli SQLite risponde «Expression tree is too large», un 500 che
+  ripete l'SQL. Altre query con un termine OR per elemento, da verificare se raggiungibili con tanti elementi:
+  `fx/storage.py:262`, `brim_provider.py:2030`, `fx/sync.py:234`, `pac_allocator/source/wac.py:44`. Cura: messaggio
+  generico + log, `MAX_BULK_ITEMS`, blocchi come `FX_PAIRS_PER_QUERY`. Dettagli: piano MF, sezione «R13-SEC9».
+- **MF-SEC9b · `Currency.validate_code` accetta nomi e codici numerici** — basso, preesistente, tutta l'app;
+  test-author di MF, 17/10 (Y D1). La ricerca generale di pycountry accetta `EURO`, `978`, `US Dollar` e restituisce
+  l'input in maiuscolo (`EURO`, `978`, `US DOLLAR`), non il codice a tre lettere: ogni campo valuta li lascia passare
+  (con D1 finiscono in `convert_bulk`, nessun cambio, variazioni null; nessun 500). Cura: solo alpha-3, cambio di
+  contratto da decidere. Dettagli: piano MF, sezione «R13-SEC9».
+- **MF-SEC9c · Il ripiego dal DB del prezzo corrente usa una sessione sola da task paralleli** — basso, preesistente;
+  test-author di MF, 17/10 (R13-SEC9). `get_current_prices_bulk` (`services/assets/price_query.py` ~:929) lancia i recuperi
+  con `asyncio.gather`, e i ripieghi sul prezzo salvato interrogano la stessa `AsyncSession`, che SQLAlchemy non
+  ammette fra task concorrenti. La deduplica degli id (SEC9-1) lo rende più raro, non lo toglie. Cura: le letture del
+  ripiego in una query sola dopo il `gather`. Dettagli: piano MF, sezione «R13-SEC9».
