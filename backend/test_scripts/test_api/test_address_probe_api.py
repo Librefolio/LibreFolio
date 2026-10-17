@@ -14,6 +14,17 @@ issued it answers ``match``. The nonce is signed with a key derived from the ins
    true or false: a page on another origin reads a «no» only with the header too. ``match`` is true for a nonce of this
    instance not yet expired, as many times as it is asked; false for anything else — altered, another instance's,
    expired, empty, garbage, oversized (still 200, never 422). A session cookie, valid or not, changes nothing.
+3. H-19, in process: when the instance key cannot be used, ``POST /users/address-probe`` answers 503 and issues
+   nothing. ``derive_key`` raises ``InstanceKeyError`` then: at runtime, once a generated ``secrets/instance.key`` goes
+   bad or loses its permissions (a configured key that cannot be used already stops the start). The body is exactly
+   ``{"detail": {"error_code": "INSTANCE_KEY_UNAVAILABLE", "message": <the message below>}}``, with the message «The
+   instance key cannot be used: see the configuration checks» — no nonce and no ``expires_at`` anywhere —, and the
+   module logger of ``users.py`` writes one warning, «Address probe: the instance key cannot be used, no nonce issued»,
+   with the administrator's ``admin_id``, neither the reason nor exception info. Red until H-19: the route let the
+   error out, a plain 500 with its traceback in the server log (in process, the error itself reaches the test). The
+   public check already tolerates that state: 200 ``{"match": false}`` with both headers, even for a nonce this
+   instance issued. Both cases replace the probe module's ``derive_key`` with ``monkeypatch`` for the test only: no key
+   file is touched, and the lane's server is not asked meanwhile.
 
 The cross-origin promise is checked where it can break: on the lane's server, which runs the whole middleware stack of
 ``main.py``, its global ``CORSMiddleware`` included (``allow_credentials=True``, no allowed origin). A GET carrying
@@ -59,10 +70,14 @@ from uuid import uuid4
 
 import httpx
 import pytest
+import structlog
 from fastapi import FastAPI
+from structlog.testing import capture_logs
 
 from backend.app.api.v1 import auth as auth_api
+from backend.app.api.v1 import users as users_api
 from backend.app.config import API_V1_PREFIX, get_settings, is_test_mode
+from backend.app.services.platform.instance_key import InstanceKeyError
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -501,3 +516,91 @@ async def test_another_instance_answers_no_in_process(app, monkeypatch):
         _assert_probe(await _probe_in_process(app, nonce_a), True, "in process, instance A asked its own nonce again: the «no» came from the key, from nothing else")
         _assert_probe(await _probe_in_process(app, nonce_b), False, "in process, instance A asked a nonce of instance B")
     print_success("each instance matches its own nonces only")
+
+
+# =============================================================================
+# 5. An instance key that cannot be used (H-19), in process
+# =============================================================================
+
+#: H-19: the whole ``detail`` of the administrator's route when the instance key cannot be used, and its one warning.
+UNAVAILABLE_DETAIL = {"error_code": "INSTANCE_KEY_UNAVAILABLE", "message": "The instance key cannot be used: see the configuration checks"}
+UNAVAILABLE_WARNING = "Address probe: the instance key cannot be used, no nonce issued"
+#: Logged through the module logger of users.py first, inside the capture: a capture that sees nothing proves nothing.
+LOG_CANARY = "AP-API-12 canary: the module logger of users.py reaches the capture"
+#: The reason the stand-in of derive_key gives, worded as H's errors word an unreadable key file. The answer and the
+#: warning are pinned exactly, so neither can carry it.
+UNUSABLE_KEY_REASON = "/srv/librefolio-ap-api-12/secrets/instance.key: the instance key cannot be reached (Permission denied), raised by this test"
+
+
+def _make_the_instance_key_unusable(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Until the test ends, in this process: the probe module's ``derive_key`` raises ``InstanceKeyError``, as the real
+    one does once a generated ``secrets/instance.key`` goes bad or loses its permissions. No key file is touched. Never
+    ask the lane's server meanwhile: without a shared backend, it runs in this very process. Returns the purposes the
+    stand-in is asked for, so that a test can prove the key was asked."""
+    asked: list[str] = []
+
+    def unusable(purpose: str, length: int = 32) -> bytes:
+        asked.append(purpose)
+        raise InstanceKeyError(UNUSABLE_KEY_REASON)
+
+    monkeypatch.setattr(_address_probe(), "derive_key", unusable)
+    return asked
+
+
+async def _admin_in_process(app: FastAPI) -> tuple[dict[str, str], int]:
+    """``e2e_test_admin`` signed in on the app in process: the Cookie header of its session, and its id."""
+    login = await _in_process(app, "POST", "/auth/login", json={"username": E2E_ADMIN[0], "password": E2E_ADMIN[1]})
+    admin = _session_of(login, E2E_ADMIN[0], superuser=True)
+    admin_id = login.json()["user"].get("id")
+    assert isinstance(admin_id, int), f"Setup: the login of {E2E_ADMIN[0]} must answer its id: {login.json()!r}"
+    return admin, admin_id
+
+
+@pytest.mark.asyncio
+async def test_issue_answers_503_when_the_instance_key_cannot_be_used(app, monkeypatch):
+    """AP-API-12 (H-19), in process: ``derive_key`` raising ``InstanceKeyError``, the administrator's route answers 503
+    with the body exactly ``{"detail": UNAVAILABLE_DETAIL}`` — no nonce, no expires_at — and the module logger of
+    users.py writes exactly one warning, «Address probe: the instance key cannot be used, no nonce issued», with the
+    administrator's ``admin_id`` and nothing else: no reason, no exception info. Nothing at error level.
+
+    The traceback in a server log is uvicorn's, written when an exception leaves the app. In process, ``_in_process``
+    (httpx's default ``raise_app_exceptions``) raises that exception in the test instead: red until H-19, turned into
+    a failure that says so. Barriers first: the same call with the key usable issues a nonce (the session and the route
+    work, so a 503 can only come from the key); a canary through the module logger of users.py reaches the capture."""
+    print_section(f"AP-API-12: POST {ISSUE_PATH} when the instance key cannot be used")
+    admin, admin_id = await _admin_in_process(app)
+    with _instance_key(monkeypatch, KEY_A):
+        _issued(await _in_process(app, "POST", ISSUE_PATH, headers=admin), "in process, Barrier: the same call with the instance key usable")
+        asked = _make_the_instance_key_unusable(monkeypatch)
+        with capture_logs(processors=[structlog.stdlib.add_logger_name]) as events:
+            users_api.logger.info(LOG_CANARY)
+            try:
+                response = await _in_process(app, "POST", ISSUE_PATH, headers=admin)
+            except InstanceKeyError as escaped:
+                pytest.fail(f"POST {ISSUE_PATH}, the instance key unusable: {type(escaped).__name__} left the app ({escaped}) — a client gets a plain 500 and the server logs its traceback; expected 503 with detail {UNAVAILABLE_DETAIL!r}")
+    assert any(event.get("event") == LOG_CANARY for event in events), f"barrier: the module logger of users.py does not reach capture_logs, so what this test reads of the log proves nothing: {events!r}"
+    assert asked, "Precondition: the route asked the probe's derive_key for its key, so the answer comes from a key that cannot be used"
+    status, body = _answer(response)
+    assert (status, body) == (503, {"detail": UNAVAILABLE_DETAIL}), f"POST {ISSUE_PATH} as an administrator, the instance key unusable: expected 503 with the body exactly {{'detail': {UNAVAILABLE_DETAIL!r}}} — no nonce, no expires_at —, got {status} {body!r}"
+    expected = {"event": UNAVAILABLE_WARNING, "admin_id": admin_id, "logger": users_api.__name__, "log_level": "warning"}
+    logged = [event for event in events if event.get("event") == UNAVAILABLE_WARNING]
+    assert logged == [expected], f"exactly one warning {expected!r}: the administrator's id, neither the reason nor exception info; logged: {logged!r}"
+    loud = [event for event in events if event.get("log_level") in ("error", "critical") or event.get("exc_info") or event.get("stack_info")]
+    assert loud == [], f"nothing at error level, no exception info, no stack while the route answers: {loud!r}"
+    print_success(f"503 {UNAVAILABLE_DETAIL['error_code']}, one warning with admin_id {admin_id}")
+
+
+@pytest.mark.asyncio
+async def test_probe_answers_no_when_the_instance_key_cannot_be_used(app, monkeypatch):
+    """AP-API-13 (H-19), in process: the public check already tolerates a key that cannot be used — 200
+    ``{"match": false}`` with both headers, never an error — even for a nonce this instance issued. The control: the
+    same nonce, the key usable, matches."""
+    print_section(f"AP-API-13: GET {PROBE_PATH} when the instance key cannot be used")
+    nonce = _mint(monkeypatch, key=KEY_A)
+    with _instance_key(monkeypatch, KEY_A):
+        _assert_probe(await _probe_in_process(app, nonce), True, "Control: in process, instance A asked its own nonce, the key usable")
+        asked = _make_the_instance_key_unusable(monkeypatch)
+        response = await _probe_in_process(app, nonce)
+    assert asked, "Precondition: the check asked the probe's derive_key for its key: the nonce reached the signature check"
+    _assert_probe(response, False, "in process, instance A asked its own nonce, the instance key unusable")
+    print_success("match: true with the key usable, false without it, with both headers")
