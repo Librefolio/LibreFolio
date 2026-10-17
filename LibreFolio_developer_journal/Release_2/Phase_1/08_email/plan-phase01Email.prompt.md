@@ -5721,3 +5721,184 @@ non sposti il registro.
 >   4. **Nit.** Il CHANGELOG nomina la serie di prezzi inventata ma non la rotta FX (`MOCKFX`: 1,2345 in ogni
 >      conversione di tutti), che la docstring del commit stesso descrive.
 > - Verdetto mandato al coordinatore alle 10:5x.
+> - **Addendum** (11:3x, la richiesta del coordinatore delle 11:28, incrociata col verdetto): **resta OK**, con una
+>   correzione.
+>   - **⚠️ Fuori pista, un errore mio**: avevo scritto «nessun codice legge `_providers`/`_plugins` direttamente».
+>     L'espressione usava `\b`, che `git grep -E` qui non onora, e la ricerca è tornata vuota senza errori.
+>   - Rifatta senza `\b`, legge la memoria direttamente:
+>     - il registro BRIM (`auto_detect_plugin`, `get_compatible_plugins`, `list_plugin_info`);
+>     - i cataloghi di risk e signals;
+>     - il registro dei tools, la cui `get_plugin_instance` passa dal suo snapshot.
+>   - Solo `mockprov`, `MOCKFX` e `MOCKFX_FAIL` hanno il flag: oggi nessuna esposizione.
+>   - Latente (LOW): un plugin di test futuro in quelle famiglie sarebbe servito. Proposto un test di guardia: solo
+>     asset e FX dichiarano `test_only`.
+>   - **Regola d'ora in poi**: in `git grep -E` niente `\b` né `\s`. Si scrive `[^A-Za-z_]`, `[[:space:]]` o una
+>     ricerca semplice, e ogni assenza va provata con un controllo che dovrebbe trovare qualcosa.
+>   - **Il CHANGELOG 🔒** sottovaluta la portata. `POST /fx/providers/routes` chiede solo `get_current_user`, quindi
+>     prima della cura qualunque utente poteva instradare una coppia su `MOCKFX`, cioè 1,2345 nei cambi di tutti.
+>     Proposta una frase con le due vie.
+>   - Confermati gli altri punti chiesti:
+>     - nessun import diretto delle classi;
+>     - il catalogo delle impostazioni è filtrato;
+>     - la catena FX usa solo porte filtrate.
+
+> **La revisione di H-42** (11:4x, sola lettura dagli oggetti git, ramo di H: `7903bbe72` il codice, `84c71a0c7` la
+> guardia E2E, `fb8661dd2` i docs; più H-45, il seguito SVG/XHTML che H mi ha girato): **OK, nessun reperto
+> bloccante.**
+> - **Verificato**:
+>   - `_is_html()` riconosce `text/html` in ogni maiuscola e con ogni parametro;
+>   - le risposte non HTML tengono solo `frame-ancestors`;
+>   - la CSP messa da una rotta resta;
+>   - i test coprono ogni grafia, più PDF, immagine, JS, CSS, JSON, 204, gzip, Swagger, ReDoc e il 404 HTML.
+> - **Ogni pagina riceve sempre la politica**:
+>   - pagine e docs passano da `_revalidated_file()`, un `FileResponse` semplice, che in Starlette 1.6 non gestisce le
+>     richieste condizionali: risponde sempre 200 con `text/html`;
+>   - i soli 304 vengono da `StaticFiles` su `/_app`, dove non c'è HTML;
+>   - il service worker (`static/sw.js`) fa passare le navigazioni da `fetch()`, con un `offline.html` in cache che
+>     tiene i suoi header.
+> - **I docs** sono esatti e dichiarano la lacuna SVG/XHTML.
+> - **La nota di H su Chromium** (un `<object>` d'immagine senza tipo, caricato senza controllo se un form parte
+>   nello stesso task): d'accordo, non è un buco. È un'immagine, che un `<img>` caricherebbe comunque. Il controllo
+>   tipizzato `application/pdf` prova ciò per cui `object-src` esiste.
+> - **H-45, il mio giudizio**: da fare, LOW, non bloccante.
+>   - Oggi nessuna esposizione, verificato da me:
+>     - `uploads/file` è sempre `attachment`;
+>     - `img_preview` serve l'originale solo dopo che Pillow l'ha aperto, e un SVG non si apre (500);
+>     - l'anteprima di testo è `text/plain` con nosniff;
+>     - `INLINE_SAFE_MEDIA_TYPES` dei broker non ha SVG, HTML né XML;
+>     - gli asset dei plugin vengono dall'immagine.
+>   - Proposto: allargare a `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml` e ai tipi `+xml`.
+>     I PDF restano fuori, e il report-only resta su `text/html`.
+> - **Nota latente** (info): se un aggiornamento di Starlette desse i 304 a `FileResponse`, il 304 di una pagina
+>   avrebbe il solo `frame-ancestors`. Il browser aggiorna gli header salvati da un 304 (RFC 9111 §3.2), quindi la
+>   politica sparirebbe ai caricamenti rivalidati. Non provato in un browser. La guardia: nessuna CSP su un 304.
+> - Verdetto mandato alle 11:4x.
+
+> **La revisione di A9 `ForgotPasswordCard`** (`b1b647edc`, già in dev; 11:5x): **OK per E, un reperto LOW di UX.**
+> - **OK**:
+>   - il form di E è intatto, e resta il primo quando i link per email ci sono;
+>   - in managed «chiedi all'amministratore» prende il posto del pannello dei comandi;
+>   - il self-hosted non cambia;
+>   - prima della risposta del server non compare nessuno dei due.
+> - **Vitest** su `da02ed816`, 5 file, **331 / 331**: `ForgotPasswordCard.email`, `ForgotPasswordCard.managed`,
+>   `ForgotPasswordEmailForm`, `forgotPasswordApi` ed `emailText`. A9 era entrato dopo il mio run dei vicini di E-8.5.
+> - **Reperto, LOW** (file di A): se `GET /system/instance` fallisce, lo store mette `failed` ma mai `loaded`, e la
+>   scheda resta vuota.
+>   - L'utente vede solo il logo e «Back to login».
+>   - Prima di A9 il ramo `{:else}` mostrava l'avviso e i comandi.
+>   - FPM-03 fissa «prima della risposta, nessuno dei due», e nessun test usa `failed: true`.
+>   - Proposto: con `failed`, mostrare `askAdmin`, vero in entrambi i profili, più un FPM-08.
+> - Il coordinatore (11:4x): il LOW va ad A come correzione in avanti.
+
+> **H-42, punto 4 del coordinatore** (11:39, la stessa richiesta incrociata col mio verdetto): **i bundle CDN sono
+> puliti.**
+> - Scaricati i bundle esatti che FastAPI 0.141 carica: `swagger-ui-dist@5/swagger-ui-bundle.js` e
+>   `redoc@2/bundles/redoc.standalone.js`. Cercati, poi cancellati.
+> - **Nessun `<object>`, `<embed>` o `<base>` creato.** Le stringhe `"object"`/`"embed"` sono i casi degli eventi di
+>   React DOM e le liste di tag di DOMPurify.
+> - **I soli form**:
+>   - il modale Authorize di Swagger (`createElement("form", {onSubmit: this.submitAuth})`, senza `action`), e
+>     `submitAuth` comincia con `preventDefault()`;
+>   - l'elemento staccato di DOMPurify, che non viene mai inviato.
+> - Resta solo il rischio dei tag mobili (`@5`, `@2`): un bundle futuro può cambiare.
+
+### R13-SEC9 — Revisione di sicurezza delle entrate di oggi non ancora riviste (2026-10-17, 11:4x–12:3x)
+> **Il compito del coordinatore** (11:4x, sola lettura, stesso formato di SEC7 e SEC8: reperti con gravità e
+> proprietario, niente codice):
+> - **A9** (dev `ba8f3b06e`): gli URL legali e il profilo managed;
+> - **Z-25** (`d0bc7a547`) e **MF-P2b** (`c9b1162d4`): i limiti delle richieste in blocco e dei period-changes;
+> - **MF X-R59** (`a8de6b584`, sul ramo di MF, non ancora entrato): `/prices/current?range_start`;
+> - **W-B71** (`1431e20df`, la saturazione delle date) e **la metà batch di W-B69** (`eee5dad17`);
+> - **J-47** (`647efcc28`);
+> - **B-32** (`7af21a5c1`) e **B-18** (`5c4d7456a`), solo una scorsa: B fa la sua revisione dei backup.
+>
+> **⚠️ Fuori pista, un errore mio**: nel primo comando ho messo un `git fetch -q` che non serviva, perché gli oggetti
+> sono nel deposito locale condiviso. L'ho fermato dopo 30 s. Tocca solo i riferimenti remoti, mai un ramo locale, e non
+> è rimasto nessun processo. D'ora in poi: mai `fetch` in una revisione.
+>
+> **Come**: l'agente `security-review` in background (`041059bc`) ha fatto il giro sistematico, e io in parallelo il
+> mio. Ho guardato gli URL legali di A9, il nuovo `range_start` di X-R59, W-B71, W-B69, J-47 e la scorsa di B. Poi ho
+> verificato i suoi reperti nel codice.
+> - Durante la mia lettura ho trovato `/prices/current` senza limite e l'ho segnalato all'agente da misurare.
+> - **⚠️ Fuori pista dell'agente**, dichiarato da lui: una taratura è partita col carico a 55,8 (la lettura prima era
+>   38,7), e un run è arrivato al suo timeout di 100 s, oltre i 60 s che gli avevo dato. Nessun file scritto, solo DB in
+>   memoria.
+>
+> **Esito: nessun reperto di injection, XSS, authz, segreti, percorsi, file, stato o TOCTOU. Due reperti MEDIUM di
+> esaurimento, misurati.**
+>
+> | ID | Gravità | Proprietario | Dove | Il problema | La cura proposta |
+> |---|---|---|---|---|---|
+> | **SEC9-1** | MEDIUM 9/10 | **Z** (i limiti di Z-25); **MF** tocca la stessa funzione con X-R59 | `api/v1/assets/prices.py:144-187`, `price_query.py:837-935` e `_live_quote_item` (:88) | `POST /assets/prices/current` è l'unica lista in blocco senza limite (Z-25 ha limitato `/prices/query`, `convert` e period-changes) e senza dedup. | 422 `bulk_too_many_items` oltre `MAX_BULK_ITEMS`, prima di ogni lettura. Poi una richiesta per id distinto, rimappata nell'ordine. Infine la cache riletta dopo il semaforo, o un single-flight per chiave. X-R59: `range_change` una volta per id distinto. Insieme o prima di X-R59. |
+> | **SEC9-2** | MEDIUM 8/10 | **Z** | `utils/date_range_limits.py:21` (`MAX_BULK_ITEM_DAYS = 5_000_000`); i controlli in `price_query.py:397` e `fx/currencies.py:483` | Il limite di Z-25 tiene esatto (`_fill_span` coincide con il riempimento), ma il **livello** è troppo alto: a 5 000 000 punti costa circa 120 s di riempimento più 130 s di serializzazione sul loop, e da 11,7 a circa 35 GB. | Abbassare il budget di uno o due ordini di grandezza, e dividere o paginare la lista degli asset nella web app. Già il «All, 300 asset ≈ 2,9 M punti» della docstring chiede circa 7 GB. |
+>
+> - **SEC9-1, il dettaglio** (verificato da me nel codice):
+>   - ogni voce è un task, una query propria nel ripiego sul DB e, sulla strada del provider, una chiamata in uscita;
+>   - `_live_quote_item` legge la cache di 2 minuti **prima** di `async with semaphore`, e non la rilegge dopo: un
+>     `gather` di N duplicati la manca tutto insieme, poi chiama il provider N volte, 5 alla volta, 10 s di timeout
+>     ciascuna;
+>   - così arriva al 429 del provider, e il raffreddamento condiviso ferma quel provider **per tutti gli utenti**;
+>   - il limite da solo non basta: 1 000 duplicati sono ancora 1 000 chiamate;
+>   - N è limitato solo dalle variabili di SQLite nella `IN` (32 766 di default, 250 000 nelle build Debian come
+>     l'immagine);
+>   - misurato sul codice vero, ripiego DB, un id ripetuto: 8k id → 7,9 s e +382 MB; 16k → 44,5 s e +754 MB, con stalli
+>     del loop fino a 1,9 s; 32 766 → oltre 89 s. Circa 48 KB per voce, quindi 250k ≈ 11,8 GB, fuori memoria;
+>   - F.2/F.3 con duplicati non corrompe niente: il vincolo unico respinge la riga doppia, che viene annullata e
+>     annotata; F.3 è un solo UPDATE.
+> - **SEC9-2, il calcolo** coincide con la mia misura di SEC8 (25,5 µs e circa 1,9 KB per giorno). L'innesco: 1 000 voci
+>   per un asset, 5 000 giorni ciascuna, con un prezzo più vecchio dell'inizio. Sono 5,0 M punti esatti, accettati.
+>
+> **Note sotto la soglia** (con il proprietario):
+> - **MF/Z**:
+>   - `convert_bulk` aggiunge un termine OR per coppia distinta (`fx/conversion.py:207`): da circa 990 coppie SQLite
+>     risponde «Expression tree is too large», un 500 non gestito su `period-changes` e `convert` FX, limitati a 1 000;
+>   - `_first_rate_days_inside` di X-R59 (`fx/period_changes.py:40`) ripete lo schema;
+>   - misurato: 980 coppie OK, 990 → 500;
+>   - cura: blocchi da 500 o meno, oppure una join su `VALUES`.
+> - **Z**: `/prices/query` e `/prices/current` rispondono a un'eccezione inattesa con un 500 il cui `detail` è
+>   `str(e)`: un errore SQL ripete il testo della query. Schema pubblico, nessun segreto, ma un messaggio generico è
+>   meglio.
+> - **Z**: `/prices/query` carica tutte le righe salvate degli asset chiesti (da `date.min` se un segnale vuole tutta la
+>   storia) prima del controllo del budget. È limitato dal contenuto del DB, non dalla richiesta.
+> - **Z/H**: un plugin con impostazioni SYSTEM aprirebbe una connessione SQLite per voce di `/current` in
+>   `configure_instance`, prima del semaforo. Oggi solo `mockprov`; si somma a SEC9-1.
+> - **MF (X-R59)**: `/prices/current?range_start` ha il pavimento del 1900 ma nessun tetto. Una data futura dà solo
+>   cambi vuoti (verificato: la lista dei prezzati si svuota prima di ogni query); un 422 sarebbe coerente con
+>   period-changes.
+> - **A**: gli interruttori del profilo managed (F05) sono solo nella UI. `GET /system/container-image-status` resta
+>   chiamabile in managed; va solo su GHCR con un tag controllato da regex, quindi niente esposto.
+> - **B**: l'anonimo `GET /backup/restore/outcome` legge lo stato prima del ticket. Con lo stato illeggibile ogni
+>   chiamata annota un errore: solo rumore nei log, come prima di B-32.
+>
+> **Controllati e puliti** (agente più me):
+> - **A9**:
+>   - `env_url` accetta solo `http(s)://` con un host, rifiuta ogni spazio (Unicode compreso), userinfo e `@`, e se non
+>     riesce a leggere chiude. Provati `javascript:` (anche con spazio o `\x01` davanti), `//`, `https:evil`,
+>     `https:\\`, `data:`, `vbscript:`, userinfo, backslash con `@`, U+3000, U+2028 e tab: tutti `null`;
+>   - i link sono resi solo come `href` con `target=_blank rel="noopener noreferrer"`, e niente `{@html}`;
+>   - il prompt dell'AI aggiunge solo testo del catalogo, mai un URL;
+>   - l'endpoint pubblico aggiunge solo i due URL legali, e `_report_invalid` (in cache) annota un valore invalido una
+>     volta per processo.
+> - **Z-25**: i limiti di voci e giorni su `/prices/query` e `/convert` sono controllati prima di costruire; il riscaldo
+>   FX è limitato a `date.min`; i 422 portano solo numeri.
+> - **MF-P2b**: il pavimento di `as_of` è un AfterValidator (422, mai 500), al massimo 5 giorni `as_of` distinti, e
+>   10 001 voci → 422.
+> - **X-R59**:
+>   - `range_start` ha il pavimento (422), e su period-changes dev'essere ≤ `as_of`;
+>   - `range_change` controlla None e valori ≤ 0, quindi niente ZeroDivision né InvalidOperation;
+>   - su `/current` aggiunge due query raggruppate per richiesta, dentro un try/except;
+>   - period-changes resta limitato: al massimo 55 query di giorno più 25 coppie inizio/`as_of`.
+> - **W-B71**:
+>   - `shift_date` prende anche l'overflow del `timedelta` stesso;
+>   - le tolleranze sono limitate (0–30 e 0–7);
+>   - `through=True` legge le stesse righe di prima;
+>   - promote filtra sui broker accessibili, e il gap-fix vuole l'editor del broker.
+> - **W-B69 metà batch**: N74 (dal 1900-01-01 a oggi più un anno) vale su creazioni, aggiornamenti con una data e date
+>   di promote. Ogni riga passa da `batch_creates` o da `execute_batch`, e il pool illeggibile riporta solo un conteggio.
+> - **J-47**: le gambe tardive vengono solo dai broker del chiamante e dall'asset chiesto, vanno solo al motore e sono
+>   tagliate da `replay_until`. Nessuna nuova camminata.
+> - **B-32/B-18** (scorsa):
+>   - le rotte sono `require_admin`, e `outcome` confronta il ticket in HMAC;
+>   - il file della chiave è letto da `read_secret_file` (64 KiB al massimo, gli errori nominano il percorso, mai il
+>     contenuto), mai stampato né salvato;
+>   - il file di stato è letto con `lstat` e `O_NOFOLLOW`.
