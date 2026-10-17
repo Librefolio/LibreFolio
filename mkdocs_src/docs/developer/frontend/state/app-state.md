@@ -141,7 +141,9 @@ and readable without a session (backend side:
       cache ([Container Image Check](../../architecture/security.md#container-image-check)).
     - [`ForgotPasswordCard`](../components/features/auth.md#forgotpasswordcard) draws the server
       commands once the answer says `selfhosted`, `forgot-ask-admin` once it says `managed`, and
-      neither before.
+      neither while the request is pending. When the request failed before any answer (`failed`
+      true, `loaded` false), it draws `forgot-ask-admin`, the advice that holds in both profiles,
+      and still no command (FPM-08).
     - `AssetSearchAutocomplete` (workstream H) offers the GitHub fallback of «Let us know» only once
       the answer says `selfhosted` ([Asset Search & Link-Finder](../../backend/assets/search_link_finder.md)).
     - `ChangelogModal` draws **Check for updates** (`changelog-check-update`) by the same rule: not

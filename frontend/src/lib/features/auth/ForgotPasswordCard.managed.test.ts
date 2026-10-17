@@ -4,8 +4,10 @@
  * docker and CLI commands (`forgot-reset-commands`: `docker compose exec … dev.py user reset`, `./dev.py user reset`)
  * only once the configuration is loaded and self-hosted. On a managed instance nobody who reads the card runs the
  * server: in place of the commands, an element `forgot-ask-admin` saying the key `auth.askAdminToResetPassword`. Before
- * the answer, neither: no flash of commands on a managed instance while its `GET /system/instance` is in flight. E's
- * email form (`forgot-email-form`, when `email.links`) does not depend on the profile.
+ * the answer, neither: no flash of commands on a managed instance while its `GET /system/instance` is in flight. If that
+ * request fails before any answer, `forgot-ask-admin` — the advice that holds on both profiles —, so the card is never
+ * a dead end with «back to login» alone (A9 fix-forward). E's email form (`forgot-email-form`, when `email.links`) does
+ * not depend on the profile.
  *
  * The contract under test:
  *   - FPM-01 (positive control, green today): self-hosted, no email links — the commands, under their heading; no
@@ -13,13 +15,24 @@
  *   - FPM-02: managed, no email links — `forgot-ask-admin` on view with its key; no command box, no docker or CLI
  *     command anywhere in the card, and no «run this command on the server» heading over nothing (my reading of
  *     «no docker/CLI hints»: the heading introduces the commands and goes with them);
- *   - FPM-03: before the answer — neither the commands nor `forgot-ask-admin`, no command anywhere, no heading;
+ *   - FPM-03: before the answer, the request in flight (`loaded: false`, `failed: false`) — neither the commands nor
+ *     `forgot-ask-admin`, no command anywhere, no heading. It is also the guard that FPM-08's fix leaves this state
+ *     alone: a fix showing `forgot-ask-admin` whenever `loaded` is false turns it red;
  *   - FPM-04: managed with email links — E's form, unchanged; `forgot-ask-admin` in place of the closed panel of
  *     commands (in the document: whether on view or folded is not part of the contract); no command, no heading;
  *   - FPM-05 (positive control, green today): self-hosted with email links — E's form and the panel of commands, as
  *     today (`ForgotPasswordCard.email.test.ts` owns the rest of that branch);
  *   - FPM-06/07: drawn before the answer, the card — a legacy component — follows it in place: `forgot-ask-admin`
- *     appears once the answer says managed, the commands once it says self-hosted, never before.
+ *     appears once the answer says managed, the commands once it says self-hosted, never before;
+ *   - FPM-08 (A9 fix-forward): the request failed before any answer (`loaded: false`, `failed: true`, the defaults in
+ *     force: self-hosted, no `email`) — `forgot-ask-admin` on view, saying its key; no command, no heading, no
+ *     `forgot-email-unavailable`;
+ *   - FPM-09/10 (guards, green before the fix too): FPM-06/07 after a failure — drawn in FPM-08's state, the card follows
+ *     the answer that lands next, which sets `failed: false` as the store does: `forgot-ask-admin` for managed, the
+ *     commands and no `forgot-ask-admin` for self-hosted;
+ *   - FPM-11 (guard, green before the fix too): answered self-hosted, then a later request failed (`loaded` and `failed`
+ *     both true, the answer still in force) — the commands, no `forgot-ask-admin`, with or without email links. FPM-08's
+ *     rule is about a failure *before any answer*: a fix keyed on `failed` alone would pass FPM-08 and break this.
  * And the key itself (CAT-01/02): `auth.askAdminToResetPassword` is a sentence in the four generated catalogues
  * (`src/lib/i18n/{en,it,fr,es}.json`), and names no docker or CLI command.
  *
@@ -132,6 +145,24 @@ async function serverAnswers(config: InstanceConfig): Promise<void> {
     await tick();
 }
 
+/**
+ * The sign-in page's request failed before any answer, as the store's failure handler leaves it: `failed`, with the
+ * defaults still in force (`DEFAULT_INSTANCE_CONFIG`: self-hosted, no `email` part) and `loaded` still false. The
+ * card's own `load()` on mount asks again; the fake leaves the state as it is — that request in flight, or failed too.
+ */
+function requestFailedBeforeAnyAnswer(): void {
+    mocks.instance.config = mocks.BEFORE_ANSWER;
+    mocks.instance.loaded = false;
+    mocks.instance.failed = true;
+    flushSync();
+}
+
+/** A request failed after an answer, as the store's failure handler leaves it: `failed`, the answer still in force. */
+function aLaterRequestFailed(): void {
+    mocks.instance.failed = true;
+    flushSync();
+}
+
 /** Draws the card; ends on it drawn, its «back to login» on view — the barrier of every absence below. */
 async function mount(): Promise<void> {
     render(component(), {props: {}});
@@ -146,6 +177,7 @@ function cardText(): string {
 
 const commands = () => screen.queryByTestId('forgot-reset-commands');
 const askAdmin = () => screen.queryByTestId('forgot-ask-admin');
+const emailUnavailable = () => screen.queryByTestId('forgot-email-unavailable');
 
 /** No command box, no docker or CLI command anywhere in the card, no heading announcing one. */
 function expectNoServerHint(): void {
@@ -250,6 +282,65 @@ describe('ForgotPasswordCard — drawn before the answer, it follows it in place
 
         expect(commands(), 'the answer said self-hosted').toBeVisible();
         expect(askAdmin()).toBeNull();
+    });
+});
+
+describe('ForgotPasswordCard — the request failed before any answer: no dead end (A9 fix-forward)', () => {
+    // red until A9 fix-forward (FPM-08)
+    it('FPM-08: the request failed before any answer — forgot-ask-admin on view, saying its key; no command, no heading, no forgot-email-unavailable', async () => {
+        requestFailedBeforeAnyAnswer();
+
+        await mount();
+
+        expect(askAdmin(), 'the advice that holds on both profiles, not «back to login» alone').toBeVisible();
+        expect(askAdmin()).toHaveTextContent(`⟦${ASK_ADMIN_KEY}⟧`);
+        expectNoServerHint();
+        expect(emailUnavailable(), 'no word about email: nothing is known about this instance yet').toBeNull();
+    });
+
+    // FPM-09/10 are guards, green before the fix too: what the card shows *before* the answer here is FPM-08's subject,
+    // so only «no command» — true with or without the fix — is asserted there; what follows the answer is FPM-06/07's.
+    it('FPM-09: an answer then says managed — forgot-ask-admin on view, saying its key; no command before, none after (FPM-06 after a failure)', async () => {
+        requestFailedBeforeAnyAnswer();
+        await mount();
+        expectNoServerHint();
+
+        await serverAnswers(MANAGED);
+
+        expect(askAdmin(), 'the answer said managed').toBeVisible();
+        expect(askAdmin()).toHaveTextContent(`⟦${ASK_ADMIN_KEY}⟧`);
+        expectNoServerHint();
+    });
+
+    it('FPM-10: an answer then says self-hosted — the commands on view, no forgot-ask-admin left (FPM-07 after a failure)', async () => {
+        requestFailedBeforeAnyAnswer();
+        await mount();
+        expectNoServerHint();
+
+        await serverAnswers(SELFHOSTED);
+
+        expect(commands(), 'the answer said self-hosted').toBeVisible();
+        expect(askAdmin(), 'the advice of the failure goes with it').toBeNull();
+    });
+});
+
+describe('ForgotPasswordCard — a request failed after an answer: the answer in force decides', () => {
+    const ANSWERED_SELFHOSTED: Array<{label: string; config: InstanceConfig}> = [
+        {label: 'no email links', config: SELFHOSTED},
+        {label: 'email links', config: {...SELFHOSTED, email: WITH_LINKS}},
+    ];
+
+    // A guard, green before the fix too: `loaded` stays true when a later request fails, and the store keeps the last
+    // answer in force — so the card keeps what that answer says. With email links the box sits in the closed panel:
+    // in the document, not on view.
+    it.each(ANSWERED_SELFHOSTED)('FPM-11: answered self-hosted ($label), then a later request failed — the command box, no forgot-ask-admin', async ({config}) => {
+        await serverAnswers(config);
+        aLaterRequestFailed();
+
+        await mount();
+
+        expect(commands(), 'the commands of the answer in force').toBeInTheDocument();
+        expect(askAdmin(), 'FPM-08’s advice is for a failure before any answer').toBeNull();
     });
 });
 
