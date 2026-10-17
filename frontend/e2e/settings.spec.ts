@@ -5,6 +5,7 @@ import {eventSeq, waitForEvent} from './fixtures/app-events';
 import {optionsClosed} from './fixtures/probe';
 import {uniqueSuffix} from './fixtures/unique';
 import {deleteDisposableUser, type DisposableUser, registerDisposableUser, skipDueFlowsExcept} from './fixtures/onboarding-accounts';
+import {ADMINISTRATION_GROUP_ID, ADMINISTRATION_TAB_IDS, openSettingsTab} from './fixtures/settings-tabs';
 
 test.describe('Runes parity', () => {
     // The preference case owns its account; the admin case changes only a local
@@ -110,7 +111,7 @@ test.describe('Runes parity', () => {
     test('global lock rejects then accepts discarding a local draft without persisting it', async ({page}) => {
         await login(page, TEST_ADMIN);
         await navigateTo(page, '/settings');
-        await page.getByTestId('settings-tab-admin').click();
+        await openSettingsTab(page, 'admin');
         const tab = page.getByTestId('global-settings-tab');
         await expect(tab).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
         const field = tab.getByTestId('global-setting-session_ttl_hours').getByRole('spinbutton');
@@ -177,7 +178,7 @@ test.describe('Runes parity', () => {
             expect(nativeDialogs).toEqual([]);
 
             await navigateTo(page, '/settings');
-            await page.getByTestId('settings-tab-admin').click();
+            await openSettingsTab(page, 'admin');
             await expect(tab).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
             await expect(field).toBeDisabled();
             await expect(field).toHaveValue(baseline);
@@ -202,10 +203,16 @@ test.describe('Settings', () => {
 
         test('shows all settings tabs', async ({page}) => {
             await navigateTo(page, '/settings');
-            await expect(page.getByTestId('settings-tab-profile')).toBeVisible();
-            await expect(page.getByTestId('settings-tab-preferences')).toBeVisible();
-            await expect(page.getByTestId('settings-tab-about')).toBeVisible();
-            await expect(page.getByTestId('settings-tab-admin')).toBeVisible();
+            // The top bar a member sees (decision P13 b): «Administration» stands for Global Settings, its one member here,
+            // so there is no second bar and no Global Settings tab of its own.
+            const topBar = page.getByRole('tablist').filter({has: page.getByTestId('settings-tab-profile')});
+            await expect(topBar).toHaveCount(1);
+            await expect(topBar.getByTestId('settings-tab-profile')).toBeVisible();
+            await expect(topBar.getByTestId('settings-tab-preferences')).toBeVisible();
+            await expect(topBar.getByTestId('settings-tab-plugins')).toBeVisible();
+            await expect(topBar.getByTestId('settings-tab-about')).toBeVisible();
+            await expect(topBar.getByTestId('settings-tab-administration')).toBeVisible();
+            await expect(page.getByTestId('settings-tab-admin')).toHaveCount(0);
         });
 
         test('profile tab is active by default', async ({page}) => {
@@ -500,16 +507,19 @@ test.describe('Settings', () => {
         test('admin can view and access global settings', async ({page}) => {
             await login(page, TEST_ADMIN);
             await navigateTo(page, '/settings');
-            await page.getByTestId('settings-tab-admin').click();
+            // Global Settings is a member of «Administration» (decision P13 b): opened through the group, in its second bar.
+            await openSettingsTab(page, 'admin');
 
-            await expect(page.getByTestId('settings-tab-admin')).toHaveAttribute('aria-selected', 'true');
+            await expect(page.getByTestId('settings-tab-administration')).toHaveAttribute('aria-selected', 'true');
+            await expect(page.getByTestId('settings-subtabs').getByTestId('settings-tab-admin')).toHaveAttribute('aria-selected', 'true');
             await expect(page.getByTestId('global-settings-tab')).toBeVisible();
         });
 
         test('non-admin can view but not edit global settings', async ({page}) => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
-            await page.getByTestId('settings-tab-admin').click();
+            // A member's «Administration» has Global Settings alone: the group's tab opens it, with no second bar.
+            await openSettingsTab(page, 'admin');
 
             const tab = page.getByTestId('global-settings-tab');
             await expect(tab).toBeVisible();
@@ -525,7 +535,7 @@ test.describe('Settings', () => {
         test.beforeEach(async ({page}) => {
             await login(page, TEST_ADMIN);
             await navigateTo(page, '/settings');
-            await page.getByTestId('settings-tab-admin').click();
+            await openSettingsTab(page, 'admin');
             await expect(page.getByTestId('global-settings-tab')).toBeVisible();
             // The tab publishes its load on its root: `data-busy` is 'true' from the first render until the settings
             // are in. Wait for that state, not for a row's CSS class to turn up.
@@ -681,7 +691,7 @@ test.describe('Settings', () => {
         test('non-admin sees disabled toggles and inputs', async ({page}) => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
-            await page.getByTestId('settings-tab-admin').click();
+            await openSettingsTab(page, 'admin');
             const gs = page.getByTestId('global-settings-tab');
             await expect(gs).toBeVisible();
             // The tab's load state, not a row's CSS class.
@@ -1134,27 +1144,36 @@ test.describe('Onboarding replay controls', () => {
 });
 
 // ---------------------------------------------------------------------------
-// G-15: the tab bar keeps every tab reachable (workstream A, release 1.3)
+// G-15: the tab bars keep every tab reachable (workstream A, release 1.3)
 // ---------------------------------------------------------------------------
 //
 // The defect, found by workstream G. The Settings page draws its TabBar inside a card with `overflow-hidden`. From
-// `sm` (640 px) up the tabs keep their natural width (`flex-1 sm:flex-none`) and the row does not scroll, so the seven
-// tabs of an administrator can be wider than the card: at 1280 px in Spanish the last one, `email`, is pushed past the
-// card's edge — only its first letter shows, even while it is the active tab — and between 640 and ~1200 px the same
-// happens in the other languages. A clipped tab is reachable only through `?tab=` or the keyboard.
+// `sm` (640 px) up the tabs keep their natural width (`flex-1 sm:flex-none`) and the row did not scroll, so the seven
+// tabs of an administrator could be wider than the card: at 1280 px in Spanish the last one, `email`, was pushed past
+// the card's edge — only its first letter showed, even while it was the active tab — and between 640 and ~1200 px the
+// same happened in the other languages. A clipped tab is reachable only through `?tab=` or the keyboard.
 //
 // The cure (TabBar's opt-in `scrollable`, which the page passes) wraps the row in a sideways scroll container and keeps
-// the active tab scrolled whole into view. These cases do not depend on that markup: they measure the tab against
-// everything that can hide it — the viewport, the card around the bar, and every ancestor that clips (today the card,
-// after the cure the scroller too) — with 1 px of rounding. The scroller's own testid and layout are pinned by the
-// component test (`TabBar.test.ts`, G-15).
+// the active tab scrolled whole into view. Since lot A8b (decision P13 b) the page has two bars, both scrollable: the
+// top one — Profile, Preferences, Plugins, About, and «Administration» standing for its members — and, while a member is
+// open, the group's own inside `settings-subtabs` — Global Settings, Users, Backup, Email and Security. These cases do
+// not depend on that markup: they measure the tab against everything that can hide it — the viewport, the card around
+// the bars, and every ancestor that clips (the card, and the scroller of the tab's own bar) — with 1 px of rounding. The
+// scroller's own testid and layout are pinned by the component test (`TabBar.test.ts`, G-15).
 //
 // Why the second case reads the bar before it clicks. Playwright scrolls a target into view before clicking it, and
 // it scrolls an `overflow: hidden` box as readily as a scroll container: a script can, a user cannot. A click alone
-// would therefore reach every tab today, and prove nothing. What tells the two apart is the reading taken first: a tab
-// is whole inside the bar, or some container between it and the card scrolls sideways (`overflow-x: auto | scroll`)
-// and has more to show — something a user can scroll. Today neither holds for a clipped tab: that is the red, at the
-// first clipped tab in bar order, before any click has scrolled the card.
+// would therefore reach every tab, and prove nothing. What tells the two apart is the reading taken first: a tab is
+// whole inside its bar, or some container between it and the card scrolls sideways (`overflow-x: auto | scroll`) and
+// has more to show — something a user can scroll. Without the cure neither held for a clipped tab: that was the red, at
+// the first clipped tab in bar order, before any click had scrolled the card.
+//
+// The fades (the designer's point 33). A side of a bar that hides tabs fades out over its outer 1.5rem — TabBar's
+// `FADE_CLASSES`, `mask-l-from-[calc(100%-1.5rem)]` and `mask-r-from-[calc(100%-1.5rem)]` — and the bar's scroller says
+// which sides do in `data-fade` (none, start, end or both). A picked tab must not lie under an active fade: once picked,
+// its edge on a faded side lies at least the fade's width inside the scroller's edge, with the same 1 px of rounding.
+// Read on the scroller of the tab's own bar (`tab-bar-scroller`), after the pick. Soft: one run lists every pick that
+// lies under a fade, with its numbers, and goes on to the next; reaching a tab and seeing it whole stay hard.
 //
 // Nothing is written. The language goes through the header's selector, which writes `librefolio-locale` in this
 // context's localStorage and nothing on the server (the account's saved language is applied only at login, which is
@@ -1167,14 +1186,22 @@ const G15_VIEWPORTS = [
 ] as const;
 /** Boxes are fractional: a tab up to this far past an edge is rounding, not a cut label. */
 const G15_TOLERANCE_PX = 1;
-/** Every tab an administrator sees, in the order of the registry (`settingsTabs.ts`): `email` is the last. */
-const G15_ADMIN_TABS = ['profile', 'preferences', 'about', 'admin', 'users', 'backup', 'email'].map((id) => `settings-tab-${id}`);
+/** The group's tab, in the top bar: picked last, since its pick opens the second bar. */
+const G15_GROUP_TAB = `settings-tab-${ADMINISTRATION_GROUP_ID}`;
+/** The top bar of an administrator, in the registry's order (`settingsTabs.ts`): the group stands where its first member would. */
+const G15_TOP_BAR_TABS = ['settings-tab-profile', 'settings-tab-preferences', 'settings-tab-plugins', 'settings-tab-about', G15_GROUP_TAB];
+/** The second bar: the members of «Administration» an administrator sees, in the same order — `security` is the last. */
+const G15_GROUP_BAR_TABS = ADMINISTRATION_TAB_IDS.map((id) => `settings-tab-${id}`);
+/** How far a fade reaches into its bar, in rem: `calc(100%-1.5rem)` in TabBar.svelte's `FADE_CLASSES`, 24 px at a 16 px root. */
+const G15_FADE_REM = 1.5;
 /** A tab is revealed a frame or two after its change: a deadline on a loaded lane, never a delay. */
 const G15_REVEAL_MS = 5_000;
 /** What {@link g15WholeInView} returns when nothing hides the tab. */
 const G15_WHOLE = 'whole inside the bar';
 /** What {@link g15Reachable} returns when the tab is inside the bar, or the user can scroll the bar to it. */
 const G15_REACHABLE = 'reachable';
+/** What {@link g15ClearOfFades} returns when no active fade covers the tab. */
+const G15_CLEAR = 'clear of the fades';
 
 /** Where one Settings tab sits against everything that can hide it. Crosses `evaluate`, so plain data only. */
 interface G15Placement {
@@ -1269,8 +1296,78 @@ async function g15Reachable(page: Page, testId: string): Promise<string> {
 }
 
 /**
- * Sign the administrator in, switch the interface to Spanish, and open `/settings?tab=email` at `viewport`. Returns
- * once the email tab is the active one, the Spanish dictionary is in and the fonts are loaded.
+ * Runs inside the page: {@link G15_CLEAR}, or the active fade of the tab's own bar that covers the tab, in pixels.
+ * Serialised by `evaluate`, so it references nothing outside itself.
+ */
+function g15FadesInPage(tab: Element, args: {fadeRem: number; tolerancePx: number; clear: string}): string {
+    const scroller = tab.closest('[data-testid="tab-bar-scroller"]');
+    if (!scroller) return 'the tab is not inside a [data-testid="tab-bar-scroller"]';
+    const fade = scroller.getAttribute('data-fade');
+    if (fade !== 'none' && fade !== 'start' && fade !== 'end' && fade !== 'both') return `its scroller publishes data-fade=${JSON.stringify(fade)}, where none, start, end or both is expected`;
+    // The fade's width as the page draws it: 1.5rem at the page's own root font size.
+    const fadePx = args.fadeRem * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const bar = scroller.getBoundingClientRect();
+    const box = tab.getBoundingClientRect();
+    const covered: string[] = [];
+    if (fade === 'start' || fade === 'both') {
+        const inset = box.left - bar.left;
+        if (inset < fadePx - args.tolerancePx) covered.push(`its left edge lies ${inset.toFixed(1)} px inside the scroller's left edge, under the start fade of ${fadePx.toFixed(1)} px`);
+    }
+    if (fade === 'end' || fade === 'both') {
+        const inset = bar.right - box.right;
+        if (inset < fadePx - args.tolerancePx) covered.push(`its right edge lies ${inset.toFixed(1)} px inside the scroller's right edge, under the end fade of ${fadePx.toFixed(1)} px`);
+    }
+    if (covered.length === 0) return args.clear;
+    const scrolled = `scrolled ${scroller.scrollLeft.toFixed(1)} of ${scroller.scrollWidth - scroller.clientWidth} px`;
+    return `data-fade="${fade}": ${covered.join('; ')} (the tab spans ${box.left.toFixed(1)}–${box.right.toFixed(1)} px, the scroller ${bar.left.toFixed(1)}–${bar.right.toFixed(1)} px, ${scrolled})`;
+}
+
+/** {@link G15_CLEAR}, or the fade that covers the tab and by how much: a plain value `expect.poll` can retry and print. */
+async function g15ClearOfFades(page: Page, testId: string): Promise<string> {
+    return page.getByTestId(testId).evaluate(g15FadesInPage, {fadeRem: G15_FADE_REM, tolerancePx: G15_TOLERANCE_PX, clear: G15_CLEAR});
+}
+
+/** The test ids of the tabs `bar` holds, in bar order, read at once: a bar's tabs are drawn together. */
+async function g15TabIds(bar: Locator): Promise<string[]> {
+    return bar.getByRole('tab').evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute('data-testid') ?? '(a tab without a data-testid)'));
+}
+
+/**
+ * Pick each of `testIds`, in order, as a user would: reachable before its click — read first, since the click would
+ * scroll even a box that only clips (see above) —, then selected, whole inside its bar, and clear of its bar's fades.
+ */
+async function g15PickEach(page: Page, at: string, testIds: readonly string[]): Promise<void> {
+    for (const testId of testIds) {
+        await test.step(testId, async () => {
+            await expect
+                .poll(() => g15Reachable(page, testId), {
+                    message: `G-15 (${at}): ${testId} lies whole inside its bar, or a container of the bar scrolls sideways to it — received: what hides it`,
+                    timeout: G15_REVEAL_MS,
+                })
+                .toBe(G15_REACHABLE);
+            const tab = page.getByTestId(testId);
+            await tab.click();
+            await expect(tab).toHaveAttribute('aria-selected', 'true');
+            await expect
+                .poll(() => g15WholeInView(page, testId), {
+                    message: `G-15 (${at}): ${testId}, once picked, lies whole inside the visible box of its bar — received: the edge it runs past`,
+                    timeout: G15_REVEAL_MS,
+                })
+                .toBe(G15_WHOLE);
+            await expect.soft
+                .poll(() => g15ClearOfFades(page, testId), {
+                    message: `G-15 (${at}), the designer's point 33: ${testId}, once picked, lies clear of its bar's active fades — received: the fade that covers it`,
+                    timeout: G15_REVEAL_MS,
+                })
+                .toBe(G15_CLEAR);
+        });
+    }
+}
+
+/**
+ * Sign the administrator in, switch the interface to Spanish, and open `/settings?tab=email` at `viewport`. Returns once
+ * Email is the open tab — «Administration» selected in the top bar, Email in the second —, the Spanish dictionary is in
+ * and the fonts are loaded.
  */
 async function g15OpenEmailTabInSpanish(page: Page, viewport: {width: number; height: number}): Promise<void> {
     await login(page, TEST_ADMIN);
@@ -1283,59 +1380,55 @@ async function g15OpenEmailTabInSpanish(page: Page, viewport: {width: number; he
     await expect(html, 'precondition: Settings renders in Spanish').toHaveAttribute('lang', 'es');
     await expect(html, 'precondition: the Spanish dictionary has landed').toHaveAttribute('data-i18n-ready', 'true');
     // ?tab= is applied once the tab is visible, that is once the page knows an administrator is signed in.
-    await expect(page.getByTestId('settings-tab-email'), 'precondition: ?tab=email opened the last tab of an administrator').toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+    await expect(page.getByTestId(G15_GROUP_TAB), 'precondition: ?tab=email selects its group in the top bar').toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+    await expect(page.getByTestId('settings-subtabs').getByTestId('settings-tab-email'), 'precondition: ?tab=email opened Email, in the second bar of an administrator').toHaveAttribute('aria-selected', 'true');
     // The labels are measured in their own font, not in a fallback about to swap.
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
-test.describe('G-15: the tab bar keeps every tab reachable', () => {
+test.describe('G-15: the tab bars keep every tab reachable', () => {
     test.skip(({isMobile}) => isMobile, 'Desktop widths, set by each case: the mobile project emulates a phone (touch, DPR 3), where the bar shows icons only and fills its row');
-    // A sign-in on a loaded lane can take most of the default 30 s by itself (login()'s ARRIVAL_MS, V-27), and the
-    // second case then opens seven tabs.
-    test.setTimeout(45_000);
+    // A sign-in on a loaded lane can take most of the default 30 s by itself (login()'s ARRIVAL_MS, V-27); the second
+    // case then picks the ten tabs of both bars, and a pick under a fade spends its 5 s poll before the run goes on.
+    test.setTimeout(90_000);
 
     for (const viewport of G15_VIEWPORTS) {
         const at = `es, ${viewport.width}x${viewport.height}`;
 
-        test(`the active tab opened by ?tab=email lies whole inside the bar (${at})`, async ({page}) => {
+        test(`the tabs selected by ?tab=email lie whole inside their bars (${at})`, async ({page}) => {
             await g15OpenEmailTabInSpanish(page, viewport);
 
-            await expect
-                .poll(() => g15WholeInView(page, 'settings-tab-email'), {
-                    message: `G-15 (${at}): settings-tab-email, the active tab, lies whole inside the visible box of the bar — received: the edge it runs past`,
-                    timeout: G15_REVEAL_MS,
-                })
-                .toBe(G15_WHOLE);
+            // Each bar reveals its own selection, without a click: «Administration» in the top bar, Email in the second.
+            for (const testId of [G15_GROUP_TAB, 'settings-tab-email']) {
+                await expect
+                    .poll(() => g15WholeInView(page, testId), {
+                        message: `G-15 (${at}): ${testId}, selected by ?tab=email, lies whole inside the visible box of its bar — received: the edge it runs past`,
+                        timeout: G15_REVEAL_MS,
+                    })
+                    .toBe(G15_WHOLE);
+            }
         });
 
-        test(`every tab fits the bar or the bar scrolls to it, and a picked tab lies whole in view (${at})`, async ({page}) => {
+        test(`every tab of both bars fits its bar or the bar scrolls to it, and a picked tab lies whole in view, clear of the fades (${at})`, async ({page}) => {
             await g15OpenEmailTabInSpanish(page, viewport);
-            const bar = page.getByRole('tablist').filter({has: page.getByTestId('settings-tab-email')});
-            await expect(bar, 'precondition: one tab bar holds the email tab').toHaveCount(1);
-            // All read at once: the tabs of an administrator are drawn together, with the email tab already active.
-            const tabIds = await bar.getByRole('tab').evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute('data-testid') ?? '(a tab without a data-testid)'));
-            expect(tabIds, 'precondition: the bar holds every tab an administrator sees').toEqual(expect.arrayContaining(G15_ADMIN_TABS));
 
-            for (const testId of tabIds) {
-                await test.step(testId, async () => {
-                    // Read before the click, which would scroll even a box that only clips (see above).
-                    await expect
-                        .poll(() => g15Reachable(page, testId), {
-                            message: `G-15 (${at}): ${testId} lies whole inside the bar, or a container of the bar scrolls sideways to it — received: what hides it`,
-                            timeout: G15_REVEAL_MS,
-                        })
-                        .toBe(G15_REACHABLE);
-                    const tab = page.getByTestId(testId);
-                    await tab.click();
-                    await expect(tab).toHaveAttribute('aria-selected', 'true');
-                    await expect
-                        .poll(() => g15WholeInView(page, testId), {
-                            message: `G-15 (${at}): ${testId}, once picked, lies whole inside the visible box of the bar — received: the edge it runs past`,
-                            timeout: G15_REVEAL_MS,
-                        })
-                        .toBe(G15_WHOLE);
-                });
-            }
+            const topBar = page.getByRole('tablist').filter({has: page.getByTestId(G15_GROUP_TAB)});
+            await expect(topBar, 'precondition: one tab bar holds «Administration»').toHaveCount(1);
+            const topIds = await g15TabIds(topBar);
+            expect(topIds, 'precondition: the top bar holds every top tab an administrator sees').toEqual(expect.arrayContaining(G15_TOP_BAR_TABS));
+            expect(
+                topIds.filter((id) => G15_GROUP_BAR_TABS.includes(id)),
+                'precondition: the members of «Administration» stand in its own bar, not in the top one',
+            ).toEqual([]);
+            // In bar order, the group last: its pick opens the second bar, on its first member.
+            await g15PickEach(page, at, [...topIds.filter((id) => id !== G15_GROUP_TAB), G15_GROUP_TAB]);
+
+            const groupBar = page.getByTestId('settings-subtabs').getByRole('tablist');
+            await expect(groupBar, 'picking «Administration» draws its second bar').toHaveCount(1);
+            await expect(groupBar.getByTestId('settings-tab-admin'), 'the group opens on its first member, Global Settings').toHaveAttribute('aria-selected', 'true');
+            const groupIds = await g15TabIds(groupBar);
+            expect(groupIds, 'precondition: the second bar holds every member of «Administration» an administrator sees').toEqual(expect.arrayContaining(G15_GROUP_BAR_TABS));
+            await g15PickEach(page, at, groupIds);
         });
     }
 });

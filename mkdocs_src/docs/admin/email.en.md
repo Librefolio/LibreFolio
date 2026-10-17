@@ -6,8 +6,8 @@ password-reset links are copied by hand.
 
 What LibreFolio sends:
 
-- **A test email**, which an administrator sends to their own address from **Settings › Email**,
-  to check that everything works.
+- **A test email**, which an administrator sends to their own address from
+  **Settings › Administration › Email**, to check that everything works.
 - **The invitation and password-reset links an administrator creates**, with **Send by email** in
   their dialogs, instead of copied by hand: [Links Sent by an Administrator](#admin-links).
 - **A reset link for a forgotten password**, to whoever asks for one for their account from the
@@ -31,7 +31,7 @@ To set it up:
    cases.
 2. For the emails with a link, set `LIBREFOLIO_PUBLIC_URL` too ([Emails with a Link](#public-url)).
 3. Restart LibreFolio.
-4. Open **Settings › Email**: the state reads **Ready**. Send yourself a test email.
+4. Open **Settings › Administration › Email**: the state reads **Ready**. Send yourself a test email.
 
 ---
 
@@ -43,8 +43,8 @@ secret file.
 - **Never stored.** LibreFolio never writes it anywhere: it is not in the database, and a backup of
   LibreFolio's data does not contain it. Keep your own copy of `.env` and of the password file.
 - **Never shown.** No page of the interface shows the server, the port, the user, the sender or the
-  password: [Settings › Email](#email-tab) says whether email works and, when it does not, which
-  variable to fix; of the `LIBREFOLIO_SMTP_*` values, it shows only the hourly limit.
+  password: [Settings › Administration › Email](#email-tab) says whether email works and, when it
+  does not, which variable to fix; of the `LIBREFOLIO_SMTP_*` values, it shows only the hourly limit.
 - **Public: only whether email is ready.** `/api/v1/system/instance`, which anyone who can reach the
   server may read, says whether this instance can send email: `"available": true` when the state is
   **Ready** and no hosting provider blocks the instance, and `"links": true` when, on top of that,
@@ -214,7 +214,7 @@ Replace `smtp.example.com`, the addresses and the password with your own, then r
     - The relay delivers the mail: it must be allowed to send for the domain of
       `LIBREFOLIO_SMTP_FROM`.
     - `none` sends in clear: use it only towards your own machine or network. Towards any other
-      server, Settings › Email and the start log show a [warning](#security).
+      server, Settings › Administration › Email and the start log show a [warning](#security).
 
 ---
 
@@ -242,7 +242,7 @@ used, nor from anything else in a request.
   once.
 - **The secret part** of the link comes after `#`: browsers never send it to the server, so it
   stays out of server and proxy logs.
-- **To check it**: with email **Ready**, Settings › Email shows a notice when
+- **To check it**: with email **Ready**, Settings › Administration › Email shows a notice when
   `LIBREFOLIO_PUBLIC_URL` is not set or cannot be used, and the start log has a line
   ([What the Log Says](#logs)). Once it can be used, the tab shows the address and checks, from
   your browser, that this instance answers there: see [The Address in Emailed Links](#links-check).
@@ -251,11 +251,11 @@ used, nor from anything else in a request.
 
 ---
 
-## 🖥️ Settings › Email {: #email-tab }
+## 🖥️ Settings › Administration › Email {: #email-tab }
 
-Open **Settings** (gear icon in the sidebar), then the **Email** tab, after **Backup** (on a phone,
-the tab with the envelope icon). Only administrators see it. The book icon at its top opens this
-page.
+Open **Settings** (gear icon in the sidebar), then **Administration** and its **Email** tab, after
+**Backup** (on a phone, the shield icon, then the envelope icon). Only administrators see it. The
+book icon at its top opens this page.
 
 ### 🚦 The State {: #state }
 
@@ -373,8 +373,8 @@ while emails with a link can go out: email **Ready** and a usable `LIBREFOLIO_PU
 form, a panel closed until clicked keeps the command an administrator can run on the server.
 Otherwise the page shows that command, open, under the warning *Email recovery is not available on
 this instance. Reset your password from the server terminal, or ask your administrator for a
-password-reset link.* An administrator creates that link in **Settings › Users**, even without email
-([Password-Reset Links](users.md#reset-links)).
+password-reset link.* An administrator creates that link in **Settings › Administration › Users**,
+even without email ([Password-Reset Links](users.md#reset-links)).
 
 It is safe because changing an account's email address asks for its current password
 ([Profile](../user/settings/profile.md)): see [Security Notes](#security).
@@ -444,8 +444,9 @@ the instance holds those back.
 ## ✅ Email Verification {: #verification }
 
 With **Require Email Verification** on, a new account cannot sign in until its owner opens a link
-that LibreFolio emails to the address of the account. The switch is in **Settings › Admin**, in the
-**Security** category ([Global Settings](settings.md)), and it is off by default.
+that LibreFolio emails to the address of the account. The switch is in
+**Settings › Administration › Global Settings**, in the **Security** category
+([Global Settings](settings.md)), and it is off by default.
 
 - **Who waits**: every account created from the registration page while the switch is on, the
   ones opened with an invitation included. The first account of a new instance, its administrator,
@@ -477,8 +478,9 @@ that LibreFolio emails to the address of the account. The switch is in **Setting
 ### 🔀 Turning It On and Off {: #verification-switch }
 
 - **It turns on only while emails with a link can go out**: email **Ready**
-  ([Settings › Email](#email-tab)), a usable `LIBREFOLIO_PUBLIC_URL` ([Emails with a Link](#public-url)),
-  and an instance that no hosting provider blocks. Until then, while it is off, the switch is greyed
+  ([Settings › Administration › Email](#email-tab)), a usable `LIBREFOLIO_PUBLIC_URL`
+  ([Emails with a Link](#public-url)), and an instance that no hosting provider blocks. Until then,
+  while it is off, the switch is greyed
   out, with the hint *Needs an email with a link to go out: set up SMTP and LIBREFOLIO_PUBLIC_URL
   first (Settings › Email).* Should that change between the moment you open the tab and your save,
   the save is refused — *Email verification needs an email with a link to go out, and none can go
@@ -497,8 +499,8 @@ that LibreFolio emails to the address of the account. The switch is in **Setting
 
 ### ⏳ Waiting Accounts {: #verification-waiting }
 
-In **Settings › Users**, a waiting account shows as **Deactivated**: this version does not tell it
-apart from an account an administrator deactivated.
+In **Settings › Administration › Users**, a waiting account shows as **Deactivated**: this version
+does not tell it apart from an account an administrator deactivated.
 
 - **It takes a place** of the user limit (`LIBREFOLIO_MAX_USERS`) while its link is live, like an
   open invitation. When the last link sent expires, 24 hours later, the place is free again, and
@@ -620,7 +622,7 @@ the page and, if it lasts, look at the log.
 
 | The dialog says | Code | What to do |
 | --- | --- | --- |
-| Email is off or not working on this instance. | `EMAIL_UNAVAILABLE` | The configuration changed since the dialog opened, for example after a restart: look at [Settings › Email](#email-tab). |
+| Email is off or not working on this instance. | `EMAIL_UNAVAILABLE` | The configuration changed since the dialog opened, for example after a restart: look at [Settings › Administration › Email](#email-tab). |
 | Emails cannot carry links: LIBREFOLIO_PUBLIC_URL is not set, or cannot start a link. | `EMAIL_LINKS_UNAVAILABLE` | Set it, then restart: see [Emails with a Link](#public-url). |
 | This link no longer works: create a new one. | `EMAIL_LINK_INVALID` | The link has expired, was used or was revoked: create a new link, and send that one. |
 | The account is not active: activate it before sending it a reset link. | `EMAIL_ACCOUNT_INACTIVE` | **Reactivate** the account in [Users & Invitations](users.md#actions), or run `user activate` on the [command line](cli_tools.md), then send the link again. |
@@ -643,7 +645,9 @@ At every start, right after `Starting LibreFolio`, the server checks its configu
 included (*Startup Checks* in [Configuration](configuration.md)). A configuration that cannot be
 used shows there in two lines, the first two below; `none` towards a server outside your local
 network, and a missing or invalid `LIBREFOLIO_PUBLIC_URL`, in one line each. None of them stops
-the start.
+the start. The same three checks are in the **Security** tab of **Settings › Administration**,
+read again when you ask, where a finding links to the [Email tab](#email-tab) (see «Security» in
+[Global Settings](settings.md)).
 
 | The log says | Level | When |
 | --- | --- | --- |
@@ -702,9 +706,10 @@ notice of an email change names neither the old address nor the new one.
 - **The certificate is always checked**, with `starttls` and with `tls`: there is no option to skip
   the check.
 - **`none` sends everything in clear**: the messages, their links and the SMTP password. Keep it for
-  a relay on your own machine or network. Towards any other server, Settings › Email shows a
-  warning: *Emails, their links and the SMTP password travel unencrypted to a server outside the
-  local network*; the start log has one too ([What the Log Says](#logs)).
+  a relay on your own machine or network. Towards any other server,
+  Settings › Administration › Email shows a warning: *Emails, their links and the SMTP password
+  travel unencrypted to a server outside the local network*; the start log has one too
+  ([What the Log Says](#logs)).
 - **Keep the password in a secret file** (`LIBREFOLIO_SMTP_PASSWORD_FILE`) that only the user
   running LibreFolio can read, out of `.env` and out of the data folder. Use an app password, or an
   account just for LibreFolio, that you can revoke on its own.

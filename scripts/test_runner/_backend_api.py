@@ -615,6 +615,16 @@ def api_login_throttle(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Login throttle API tests", verbose=verbose)
 
 
+def api_username_rules(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the API tests of A-21a, in-process: the @ in new usernames, addresses that are usernames, the sign-in's lookup."""
+    print_section("Username Rules API Tests")
+    print_info("Testing POST /auth/register, PUT /auth/profile and POST /auth/login under the rules of A-21a, workstream E's scenes")
+    print_info("In-process on private databases with legacy accounts written as rows: never the lane's server")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_username_rules_api.py", test_names)
+    return run_command(cmd, "Username rules API tests", verbose=verbose)
+
+
 def api_security_checks(verbose: bool = False, test_names: list = None) -> bool:
     """Run the lane's tests of GET /security/checks: administrators only, the login limit off on the lane."""
     print_section("Security Checks API Tests")
@@ -1142,6 +1152,16 @@ Tests for REST API endpoints (server auto-started):
         desc="F15 (A8a): 429 TOO_MANY_ATTEMPTS with an exact Retry-After before any password check, the same for an unknown identifier; per address; change of password and of address under the account's username; the switch; GET /security/checks admin-only, every check once, no secret in the body",
         # PURE: in-process apps on private SQLite files under tmp_path, limiters of their own on a fake clock; no lane DB,
         # no server.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "username-rules",
+        api_username_rules,
+        name="Username Rules API",
+        desc="A-21a over HTTP: register and profile refuse a new username with an @ (400 USERNAME_INVALID) and an address that is a legacy username (400 Email already registered); the sign-in reads an address first, then the exact legacy name (E's point c, both orders)",
+        # PURE: in-process apps on private SQLite files under tmp_path, legacy accounts written as rows, limiters of their
+        # own; no lane DB, no server reached (the api category still starts the lane's backend around it).
         isolation="pure",
     )
     add_test(

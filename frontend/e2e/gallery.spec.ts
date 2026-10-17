@@ -136,6 +136,7 @@ import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
 import {expectDrawnUnder, setBrowserLocale, stampDocumentLocale} from './fixtures/galleryLocale';
 import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
+import {openSettingsTab} from './fixtures/settings-tabs';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY, TEST_USER} from './fixtures/test-users';
 import {goToFxDetailPage, goToFxPage, openAddPairModal} from './fx/fx-helpers';
 import {goToAssetsPage} from './assets/assets-helpers';
@@ -1984,12 +1985,14 @@ test.describe('Gallery Screenshots', () => {
     test.describe('Settings', () => {
         /**
          * Open the admin tab of Settings and return it loaded: the tab selected (`aria-selected`) and its settings in — the tab
-         * says so with `data-busy` (GlobalSettingsTab: loading or saving). The tests used to wait for its spinner to leave and
-         * swallow the timeout (`.catch(() => {})`), then 200 ms (`waitForNetworkSettled`) and 500 ms more.
+         * says so with `data-busy` (GlobalSettingsTab: loading or saving). Global Settings is a member of «Administration»
+         * (decision P13 b): `openSettingsTab` opens the group, then the tab in its second bar, an administrator's — every
+         * caller signs TEST_ADMIN in. The tests used to wait for its spinner to leave and swallow the timeout
+         * (`.catch(() => {})`), then 200 ms (`waitForNetworkSettled`) and 500 ms more.
          */
         async function openGlobalSettings(page: Page): Promise<Locator> {
+            await openSettingsTab(page, 'admin');
             const tab = page.getByTestId('settings-tab-admin');
-            await tab.click();
             await expect(tab).toHaveAttribute('aria-selected', 'true');
             const globalSettings = page.getByTestId('global-settings-tab');
             await expect(globalSettings).toBeVisible({timeout: 10_000});

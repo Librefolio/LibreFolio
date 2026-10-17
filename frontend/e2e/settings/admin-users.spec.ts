@@ -25,8 +25,10 @@
  * refused by a closed registration or a full instance, the error codes (LAST_ADMIN, ACCOUNT_PROTECTED…), the copy itself
  * and `accounts.link.copied` (a clipboard is a browser permission), `accounts.address.checked`.
  *
- * Red today: the registry has no `users` tab yet (`settingsTabs.ts`), so `settings-tab-users` never shows and every test
- * stops at its first look for it — AUSR-E-01 in its administrator half, every other test in `openUsersTab`.
+ * The Users tab is a member of «Administration» (decision P13 b, lot A8b): an administrator opens the group in the top
+ * bar, then Users in its second bar (`settings-subtabs`, through `openSettingsTab` of fixtures/settings-tabs.ts), or goes
+ * straight to it with `?tab=users`, which opens it inside its group. A member's «Administration» holds Global Settings
+ * alone: no second bar, and no `settings-tab-users` anywhere.
  *
  * Ownership. `e2e_test_admin` only acts: no test changes its role or state, nor those of any other fixture user. Each
  * test registers its own disposable accounts anonymously (the lane registers openly: checked first, and no spec changes
@@ -43,6 +45,7 @@ import {expect, test as base, type APIRequestContext, type Locator, type Page} f
 import {eventSeq, waitForEvent, type AppEvent} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {INSTANCE_CONFIG_PATH} from '../fixtures/instance-config';
+import {openSettingsTab} from '../fixtures/settings-tabs';
 import {TEST_ADMIN, TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 
@@ -457,10 +460,10 @@ test.describe('Who has the Users tab', () => {
             await login(page, TEST_ADMIN);
             expect(await signedInAs(page), `${TEST_ADMIN.username} must be an administrator`).toMatchObject({username: TEST_ADMIN.username, is_superuser: true});
             await navigateTo(page, '/settings');
-            const button = page.getByTestId('settings-tab-users');
-            await expect(button, `${TEST_ADMIN.username} sees the Users tab: SETTINGS_TABS holds an entry 'users', visible to administrators`).toBeVisible({timeout: LOAD_MS});
-            await button.click();
-            await expect(button).toHaveAttribute('aria-selected', 'true', {timeout: UI_MS});
+            // Users is a member of «Administration» (decision P13 b): opened through the group, in its second bar.
+            await openSettingsTab(page, 'users');
+            const button = page.getByTestId('settings-subtabs').getByTestId('settings-tab-users');
+            await expect(button, `${TEST_ADMIN.username} sees the Users tab, in the second bar of «Administration»: SETTINGS_TABS holds an entry 'users', visible to administrators`).toHaveAttribute('aria-selected', 'true', {timeout: UI_MS});
             const tab = page.getByTestId('users-tab');
             await expect(tab).toBeVisible({timeout: UI_MS});
             await expect(tab, 'The tab settles: GET /users and GET /users/invites are in').toHaveAttribute('data-busy', 'false', {timeout: LOAD_MS});
@@ -475,9 +478,11 @@ test.describe('Who has the Users tab', () => {
             expect(await signedInAs(page), `${TEST_USER.username} must be an ordinary member`).toMatchObject({username: TEST_USER.username, is_superuser: false});
             await navigateTo(page, '/settings?tab=users');
             const profile = page.getByTestId('settings-tab-profile');
-            // Presence barrier: the tab bar is drawn, with the tabs a member does see — Admin is everyone's.
+            // Presence barrier: the tab bar is drawn, with the tabs a member does see — «Administration» is everyone's,
+            // standing for Global Settings alone: a member has no second bar, and no Global Settings tab of its own.
             await expect(profile, 'The tab bar is drawn for the member').toBeVisible({timeout: LOAD_MS});
-            await expect(page.getByTestId('settings-tab-admin')).toBeVisible({timeout: UI_MS});
+            await expect(page.getByTestId('settings-tab-administration')).toBeVisible({timeout: UI_MS});
+            await expect(page.getByTestId('settings-tab-admin')).toHaveCount(0, {timeout: UI_MS});
             await expect(page.getByTestId('settings-tab-users'), 'A member has no Users tab: the registry does not draw it').toHaveCount(0, {timeout: UI_MS});
             await expect(profile, '?tab=users names no tab of a member: the first one, Profile, opens').toHaveAttribute('aria-selected', 'true', {timeout: UI_MS});
             await expect(page.getByTestId('profile-tab')).toBeVisible({timeout: UI_MS});
