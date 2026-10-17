@@ -20,9 +20,9 @@ off. The contract pinned here:
    function then works on that one alone, and the instance it replaced keeps its own.
 6. ``wait_before_call`` is ``check``; ``record_refusal`` is ``refused`` with the base and max of
    ``provider_cooldown_settings()`` read at each call and ``retry_after`` passed on; ``record_success`` is ``succeeded``;
-   ``record_no_verdict`` is ``released``; ``cooldown_snapshot`` is the snapshot. So the answers of calls already in
-   flight when a pause began — a burst of 429s, a late success — change nothing (``Cooldowns``' rule for a running
-   pause): refusals in a row are those of calls made after each pause ended.
+   ``record_no_verdict`` is ``released``. So the answers of calls already in flight when a pause began — a burst of
+   429s, a late success — change nothing (``Cooldowns``' rule for a running pause): refusals in a row are those of
+   calls made after each pause ended.
 7. Pauses off (base 0): nothing is skipped — ``wait_before_call`` is always 0, even for a pause recorded before — and
    nothing is recorded — ``record_refusal`` returns 0 —; ``record_success`` and ``record_no_verdict`` do nothing.
 8. An invalid configuration never makes a function raise: they work on the defaults, 60 and 3600, and the fault is
@@ -32,9 +32,11 @@ off. The contract pinned here:
 Pure: no database, no server, no network. An autouse fixture removes every ``LIBREFOLIO_PROVIDER_COOLDOWN_*`` the lane
 may have inherited, and each test sets its own with ``monkeypatch``; another replaces
 ``provider_cooldown.PROVIDER_COOLDOWNS`` with a private ``Cooldowns(60, 3600)`` on a fake clock and a random source
-fixed at 0, so the process's instance is never paused by a test. "Once per process" is checked in a fresh interpreter
-(``sys.executable``, run in ``tmp_path``), where nothing was logged before: its environment is a copy of this one, and
-it is the only test that waits for anything — that interpreter's start, about half a second.
+fixed at 0, so the process's instance is never paused by a test. What the functions recorded is read on the instance
+they wrote to, ``snapshot()`` and ``len()`` of the one in place: the module has no function that reads its pauses
+(N58). "Once per process" is checked in a fresh interpreter (``sys.executable``, run in ``tmp_path``), where nothing
+was logged before: its environment is a copy of this one, and it is the only test that waits for anything — that
+interpreter's start, about half a second.
 
 Red until ``backend/app/config/sleep_wake.py``, ``backend/app/utils/runtime/cooldown.py`` and
 ``backend/app/services/platform/provider_cooldown.py`` exist: the modules do not import.
@@ -64,7 +66,6 @@ from backend.app.config.sleep_wake import (
 )
 from backend.app.services.platform import provider_cooldown
 from backend.app.services.platform.provider_cooldown import (
-    cooldown_snapshot,
     record_no_verdict,
     record_refusal,
     record_success,
@@ -349,7 +350,7 @@ def test_the_process_instance_is_a_cooldowns_built_with_the_defaults() -> None:
 
 
 def test_the_functions_use_the_instance_of_the_moment_keyed_by_domain_provider_scope(monkeypatch: pytest.MonkeyPatch, cooldowns: Cooldowns, clock: FakeClock) -> None:
-    """PCD-012 — contracts 5 and 6: the instance put in place after the import receives the refusals, under ``(domain, provider, scope)``; ``cooldown_snapshot`` is its snapshot; replaced again mid-test, the next call goes to the new one. The shipped instance is never touched."""
+    """PCD-012 — contracts 5 and 6: the instance put in place after the import receives the refusals, under ``(domain, provider, scope)``, and ``wait_before_call`` reads its pauses; replaced again mid-test, the next call goes to the new one — nothing to wait for there, the next refusal recorded there — and the one replaced keeps its two keys. The shipped instance is never touched."""
     print_section("PCD-012: the instance of the moment, (domain, provider, scope)")
     shipped_keys = len(SHIPPED_COOLDOWNS)
 
@@ -357,14 +358,13 @@ def test_the_functions_use_the_instance_of_the_moment_keyed_by_domain_provider_s
     assert record_refusal("asset", "css_scraper", scope="example.com") == 60.0
     assert {state.key for state in cooldowns.snapshot()} == {("asset", "yfinance", None), ("asset", "css_scraper", "example.com")}
     assert cooldowns.check(("asset", "yfinance", None)) == 60.0
-    assert cooldown_snapshot() == cooldowns.snapshot()
+    assert wait_before_call("asset", "yfinance") == 60.0
 
     replacement = Cooldowns(60, 3600, clock=clock, rng=lambda: 0.0)
     monkeypatch.setattr(provider_cooldown, "PROVIDER_COOLDOWNS", replacement)
     assert wait_before_call("asset", "yfinance") == 0.0
     assert record_refusal("fx", "ECB") == 60.0
     assert [state.key for state in replacement.snapshot()] == [("fx", "ECB", None)]
-    assert cooldown_snapshot() == replacement.snapshot()
     assert len(cooldowns) == 2
     assert len(SHIPPED_COOLDOWNS) == shipped_keys
     print_success("keys (domain, provider, scope); the instance read at each call")
@@ -383,7 +383,7 @@ def test_wait_before_call_counts_the_pause_down_and_lets_one_trial_through(coold
     assert wait_before_call("asset", "yfinance") == 60.0
     assert record_success("asset", "yfinance") is None
     assert (wait_before_call("asset", "yfinance"), wait_before_call("asset", "yfinance")) == (0.0, 0.0)
-    assert cooldown_snapshot() == ()
+    assert cooldowns.snapshot() == ()
     print_success("60, 45, a trial, then forgotten on success")
 
 
@@ -444,19 +444,19 @@ def test_answers_of_calls_in_flight_when_a_pause_began_change_nothing(cooldowns:
     print_section("PCD-023: a burst of 429s and a late success")
 
     assert [record_refusal("asset", "yfinance") for _ in range(5)] == [60.0] * 5
-    assert [(state.key, state.refusals) for state in cooldown_snapshot()] == [(("asset", "yfinance", None), 1)]
+    assert [(state.key, state.refusals) for state in cooldowns.snapshot()] == [(("asset", "yfinance", None), 1)]
     clock.now = 1_030.0
     assert record_success("asset", "yfinance") is None
     assert wait_before_call("asset", "yfinance") == 30.0
 
     clock.now = 1_060.0
     assert _refusals(clock, "asset", "yfinance", 1) == [120.0]
-    assert [state.refusals for state in cooldown_snapshot()] == [2]
+    assert [state.refusals for state in cooldowns.snapshot()] == [2]
     print_success("five 429s, one refusal; the late success ignored; then 120 s")
 
 
 def test_a_fresh_instance_put_in_place_forgets_every_pause(monkeypatch: pytest.MonkeyPatch, cooldowns: Cooldowns, clock: FakeClock) -> None:
-    """PCD-018 — contract 5: the module has no function that forgets the pauses (N58): a test puts a fresh ``Cooldowns`` in place of ``PROVIDER_COOLDOWNS``, and every function reads that one. Pauses in both domains, with and without a scope, a second refusal in a row among them, are gone from every function's view — nothing to wait for, an empty snapshot, nothing for a success or an outcome without a verdict to find, and the next refusal the first in a row, 60 s, not the third, 240 s —; the instance replaced keeps them all."""
+    """PCD-018 — contract 5: the module has no function that forgets the pauses (N58): a test puts a fresh ``Cooldowns`` in place of ``PROVIDER_COOLDOWNS``, and every function reads that one. Pauses in both domains, with and without a scope, a second refusal in a row among them, are gone from every function's view — nothing to wait for, nothing for a success or an outcome without a verdict to find, and the next refusal the first in a row, 60 s, not the third, 240 s —; the instance replaced keeps them all."""
     print_section("PCD-018: a fresh instance in place forgets every pause")
     keys = [("asset", "yfinance", None), ("fx", "ECB", None), ("asset", "css_scraper", "example.com")]
     for domain, provider, scope in keys:
@@ -469,7 +469,6 @@ def test_a_fresh_instance_put_in_place_forgets_every_pause(monkeypatch: pytest.M
     fresh = Cooldowns(60, 3600, clock=clock, rng=lambda: 0.0)
     monkeypatch.setattr(provider_cooldown, "PROVIDER_COOLDOWNS", fresh)
 
-    assert cooldown_snapshot() == ()
     assert [wait_before_call(domain, provider, scope=scope) for domain, provider, scope in keys] == [0.0] * len(keys)
     assert record_success("asset", "yfinance") is None
     assert record_no_verdict("fx", "ECB") is None
@@ -492,7 +491,7 @@ def test_with_pauses_off_nothing_is_recorded_and_nothing_skipped(monkeypatch: py
 
     assert record_refusal("asset", "yfinance") == 0.0
     assert record_refusal("asset", "yfinance", retry_after=500.0) == 0.0
-    assert (len(cooldowns), cooldown_snapshot()) == (0, ())
+    assert (len(cooldowns), cooldowns.snapshot()) == (0, ())
     assert wait_before_call("asset", "yfinance") == 0.0
     assert record_success("asset", "yfinance") is None
     assert record_no_verdict("asset", "yfinance") is None
@@ -530,7 +529,7 @@ def test_an_invalid_configuration_never_raises_and_falls_back_to_the_defaults(mo
     assert wait_before_call("asset", "yfinance") == 60.0
     assert record_no_verdict("asset", "yfinance") is None
     assert record_success("asset", "yfinance") is None
-    assert cooldown_snapshot() == ()
+    assert cooldowns.snapshot() == ()
     print_success("no exception; 60 → 3600 as by default")
 
 
@@ -572,7 +571,6 @@ with capture_logs() as events:
         waits.append(provider_cooldown.record_refusal("asset", provider))
         provider_cooldown.record_no_verdict("asset", provider)
         provider_cooldown.record_success("asset", provider)
-        provider_cooldown.cooldown_snapshot()
         errors_after_step.append(sum(1 for event in events if event.get("log_level") == "error"))
 errors = [event for event in events if event.get("log_level") == "error"]
 print("RESULT_MARKER" + json.dumps({"waits": waits, "errors_after_step": errors_after_step, "errors": errors}, default=repr))
