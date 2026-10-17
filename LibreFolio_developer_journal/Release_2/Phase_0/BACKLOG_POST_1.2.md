@@ -6920,7 +6920,7 @@ sulla base `23f6578f3`.
   - `_row_counts` quota i nomi raddoppiando `"`.
   - `run_post_migration_fixes` spegne `trusted_schema` per primo; `env.py` lo fa con un listener `connect`, per ogni URL.
   Dettagli: piano 07, «B-36 + B-37».
-- **B-38 · La CLI da root legge i file della password e della chiave attraverso link e FIFO** — ⚪ basso, rafforzamento;
+- ✅ **B-38 · La CLI da root legge i file della password e della chiave attraverso link e FIFO** — ⚪ basso, rafforzamento;
   BZ parte 1, F4.
   - `read_secret_file` apre con `path.open("rb")`.
   - La guida di B-18 suggerisce `LibreFolio-data/backups/` per la chiave vecchia, una cartella dell'utente del server.
@@ -6931,6 +6931,11 @@ sulla base `23f6578f3`.
       `read_secret_file`, che è di H);
     - nella guida, la chiave fuori dalla cartella dei dati.
     Test: un link o una FIFO come `--instance-key-file` da root → ❌, niente letto.
+  ✅ **Fatto il 17/10** (B-38, checkpoint delle 13:58), con la rifinitura approvata dal coordinatore.
+  - Ovunque, un file regolare aperto con `O_NONBLOCK`.
+  - Da root, nessun componente del percorso è un link dentro la cartella dei dati; fuori si seguono (Kubernetes).
+  - La guida usa `/root` del container.
+  - La corsa fra le due aperture è nella riga H-47 di H. Dettagli: piano 07, «B-38».
 - ✅ **B-39 · Formule nei CSV esportati** — ⚪ basso; BZ parte 1, F5.
   - Ogni utente può scrivere le `notes` degli eventi di un asset (`POST /assets/events`), e ogni utente può esportarle
     in CSV (`GET /backup/asset/{id}/events`, `series_export.stream_rows_as_csv`).

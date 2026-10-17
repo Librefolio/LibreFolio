@@ -853,6 +853,21 @@ ends it and removes them ([What a Run Killed Outright Leaves](#backup-leftovers)
   there would show the password as it is typed, and for `create` it would not be asked twice. The subparsers of
   `create`, `inspect`, `restore` and `decrypt` set `allow_abbrev=False`, so `--password` is refused instead of being
   taken for one of the two options.
+- **Secret files read as root.** Started as root (`docker compose exec`), the commands that work on a data directory
+  switch to its owner (`_drop_root_privileges()`; `decrypt` too since lot B-19, `_decrypt_as_owner()`), but read
+  `--password-file` and `--instance-key-file` before the switch (`_password()`, `_instance_key_from_file()`), so that a
+  Docker secret only root can read works. Root then opens a path the server's user may have prepared, so before
+  `read_secret_file()` the command opens the file with `O_RDONLY|O_NONBLOCK`, following links, and `fstat` must find a
+  regular file: a FIFO, a folder or a device is refused at once, `<label>: <path> is not a regular file`, never waited
+  on nor read. As root, a path that goes through a link at any component from the data directory down, where that user
+  owns every folder, is refused too (`os.lstat` of each component; the data directory read as `_decrypt_as_owner()`
+  reads it, `--test-db` included, and a setting it cannot use skips this check), its target never read:
+  `<label>: <path> goes through a link inside the data directory: give the file itself, from outside it`. A link elsewhere is
+  followed, as Kubernetes mounts its secrets (`/etc/secret/pw` → `..data/pw`), and Docker and Compose secrets are plain
+  files. Not root, there is no privilege to borrow: no link check. Both refusals keep the codes of an unreadable file,
+  `password_unreadable` and `instance_key_unreadable` (lot B-38). Residual: the check and `read_secret_file()`'s own
+  open are two opens, so a file swapped between them is still read, until `read_secret_file()` takes a descriptor or
+  the flags (H's backlog, H-47).
 - **In the app.** The Backup tab empties its password fields as soon as a password is submitted
   (`BackupDownloadCard.svelte`, `RestoreCard.svelte`). The two fields of a new secure backup are
   `autocomplete="new-password"`, so that a password manager does not fill in the account's password;
