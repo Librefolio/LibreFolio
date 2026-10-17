@@ -1014,6 +1014,17 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
 
 
+def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
+    print_section("Services: Bulk Reads Chunked (MF-SEC9a)")
+    print_info("Testing: services/brim/brim_provider.py (search_asset_candidates_bulk vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows)")
+    print_info(
+        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_reads_chunked.py", test_names)
+    return run_command(cmd, "Bulk reads chunked tests", verbose=verbose)
+
+
 def services_bulk_writes_chunked(verbose: bool = False, test_names: list = None) -> bool:
     """MF-SEC9a: bulk writes of rates and prices in chunks SQLite can parse, a 10 000-item cap, no echoed error (private in-memory DB)."""
     print_section("Services: Bulk Writes Chunked (MF-SEC9a)")
@@ -2361,10 +2372,19 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "bulk-reads-chunked",
+        services_bulk_reads_chunked,
+        name="Bulk Reads Chunked (MF-SEC9a)",
+        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no service replaced.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "bulk-writes-chunked",
         services_bulk_writes_chunked,
         name="Bulk Writes Chunked (MF-SEC9a)",
-        desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused",
+        desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused; delete_rates_bulk matches by bisection (≤ 4⌈log₂(D+1)⌉ counted comparisons per deletion, 2 000 × 2 000) and equals a brute-force scan on random requests (overlaps, end < start, missing pair, single days)",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; services, the FX provider lookup
         # and route loggers replaced by monkeypatch; the cap/failure cases hand the routes stand-in sessions.
         isolation="pure",
@@ -2374,7 +2394,7 @@ Note: No backend server required.
         "current-prices-bulk",
         services_current_prices_bulk,
         name="Current Prices Bulk (R13-SEC9)",
-        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (1900…tomorrow) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error",
+        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (1900…tomorrow) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error; MF-SEC9c: the DB fallbacks read after the live quotes, one grouped read (an unreadable latest close looked up alone), never two statements in flight on the session",
         # PURE: the service on a private in-memory SQLite (create_all), the provider a double behind core.configured_provider,
         # a private current-value cache, the route called directly or through a fresh in-process app (httpx.ASGITransport),
         # its service and live_range_changes replaced by recorders, all by monkeypatch.
