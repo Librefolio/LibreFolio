@@ -256,6 +256,42 @@ LIBREFOLIO_CLIENT_IP_HEADER=Fly-Client-IP
 - **The indicator does not use it**: it keeps reading `X-Forwarded-For`, as
   [The Server's View](#server-view) explains.
 
+**When LibreFolio does not trust your proxy**, because it learns the visitor's address neither
+through `FORWARDED_ALLOW_IPS` nor through `LIBREFOLIO_CLIENT_IP_HEADER`, it cannot tell the visitors
+behind the proxy apart, and neither can its limits per visitor's address. It recognises such a
+proxy by its requests: they come from a local address (`loopback`, `lan` or `vpn` in
+[The Server's View](#server-view), such as `172.18.0.2` on a Docker network) and carry a forwarding
+header (`X-Forwarded-For`, `Forwarded` or `X-Real-IP`) that gave LibreFolio no visitor's address.
+Then:
+
+- **The limits per visitor's address leave those requests out**, so that one visitor cannot lock
+  everyone out. The limits per account or per email address still count them.
+- **The log has one warning per server process**, the first time such a request meets a limit per
+  visitor's address:
+  `Requests come through a reverse proxy that LibreFolio does not trust: the limits per client address skip them. List the proxy in FORWARDED_ALLOW_IPS, or name the header it sets in LIBREFOLIO_CLIENT_IP_HEADER`,
+  with the names of the headers in `headers`, such as `X-Forwarded-For, X-Real-IP`, never an
+  address.
+- **The security checks** report it too, as a warning of `platform.client_address`. This check
+  tells what the server has met since its last start: after a restart it reads `ok` until such a
+  request comes again, so it never appears among the [startup checks](configuration.md#startup-checks).
+- **To fix it**, list your proxy in `FORWARDED_ALLOW_IPS`, as «Forgotten Passwords» in
+  [Email](email.md#forgot-password) explains, or name the header it sets itself in
+  `LIBREFOLIO_CLIENT_IP_HEADER`, as above, if every request crosses it. In `FORWARDED_ALLOW_IPS`,
+  give the proxy's address as LibreFolio sees it: with Docker, the proxy container's address, or
+  its Docker network, such as `FORWARDED_ALLOW_IPS=172.18.0.0/16` (`docker network inspect`, with
+  the network's name, shows both). Trust only addresses your proxy alone uses. Set either variable
+  in `.env` or in the container's environment, then restart, as above: with Docker,
+  `docker compose up -d`. No proxy of yours in front of LibreFolio? Then a visitor on your own
+  network or VPN sent the header, or, with Docker Desktop exposed directly, any visitor
+  ([Limits](#limits)): list nothing.
+
+**Forwarding headers from a public address** only get an `info`, in the log once per server process,
+`Forwarding headers from a public address were ignored: if a proxy on a public address forwards the requests, list it in FORWARDED_ALLOW_IPS`,
+with `headers` too, and in the security checks, where `platform.client_address` stays a warning if
+a proxy as above was met too. Those requests keep counting with the connection's address. They are
+harmless when no proxy of yours has a public address: a visitor, or a proxy of their own, may add
+such headers.
+
 ---
 
 ## 🛠️ When a Check Fails {: #when-a-check-fails }
