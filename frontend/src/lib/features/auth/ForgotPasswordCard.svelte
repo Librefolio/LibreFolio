@@ -4,6 +4,7 @@
     import {_} from '$lib/i18n';
     import ForgotPasswordEmailForm from '$lib/features/email/ForgotPasswordEmailForm.svelte';
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+    import {managedConfirmed} from '$lib/features/instance/profile';
 
     type _DispatchEvents = {
         gotoLogin: void;
@@ -60,7 +61,7 @@
             <!-- Reset link by email (workstream E) -->
             <ForgotPasswordEmailForm />
 
-            {#if instanceConfig.loaded && instanceConfig.config.profile === 'managed'}
+            {#if managedConfirmed()}
                 {@render askAdmin()}
             {:else if instanceConfig.loaded}
                 <!-- The server commands, in a panel closed by default (developer's decision P1) -->
@@ -77,7 +78,7 @@
                     </div>
                 </details>
             {/if}
-        {:else if (instanceConfig.loaded && instanceConfig.config.profile === 'managed') || (!instanceConfig.loaded && instanceConfig.failed)}
+        {:else if managedConfirmed() || (!instanceConfig.loaded && instanceConfig.failed)}
             {@render askAdmin()}
         {:else if instanceConfig.loaded}
             <!-- Warning Box -->

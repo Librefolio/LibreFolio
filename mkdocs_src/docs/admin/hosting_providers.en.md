@@ -273,7 +273,8 @@ administrator of the instance can do the same with **Cancel setup link** in
 [Users & Invitations](users.md#cancel-setup). The link you sent stops working at once, and every
 other setup link of the account with it, while the account keeps waiting for its setup: when you
 are ready, give a new link in one of the two ways above. Until then, each start logs the warning
-above. Restarting with the same `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives no new link: the instance
+`The initial administrator's setup link was withdrawn (cancelled, or its address changed): run ./dev.py user setup-link, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`.
+Restarting with the same `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives no new link: the instance
 has already seen that token.
 
 To change the address or the username before your customer activates the account, change
@@ -286,10 +287,11 @@ working at the start that gives the account its new one. Put a new token in
 `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` together with the new `LIBREFOLIO_ADMIN_EMAIL`, restart, then
 send the new link to the new address. Without a new token, that start logs
 `The initial administrator's address changed: the setup link handed over before no longer works; run ./dev.py user setup-link, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`;
-the starts after it log the warning of an expired link, until you give a new link in one of the two
-ways above. The same address with other capitals of the letters A to Z, such as `Anna@example.com`
-for `anna@example.com`, is not a new address: the account takes the new spelling and its link keeps
-working, as it does when only the username changes.
+the starts after it log the same warning as after a cancellation, that the link was withdrawn,
+until you give a new link in one of the two ways above. The same address with other capitals of
+the letters A to Z, such as `Anna@example.com` for `anna@example.com`, is not a new address: the
+account takes the new spelling and its link keeps working, as it does when only the username
+changes.
 
 ### ✅ Once the Account Is Active {: #initial-admin-active }
 
