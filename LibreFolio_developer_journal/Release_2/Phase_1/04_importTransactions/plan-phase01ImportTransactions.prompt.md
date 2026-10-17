@@ -6079,3 +6079,140 @@ Doc: dove `developer/` descrive la scrittura degli eventi dei provider (W-B58, W
 5. ✅ **Simulazione** (17/10, 15:09–15:11): `sim_cherry_pick.sh dev_release2 --docs` sui 6 file, dev `79d4ca239` (HEAD
    `731140500` antenato; dev ha cambiato dei miei file solo il backlog, in altre sezioni). 0 conflitti; ruff e black puliti;
    `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito. `git diff --check` pulito; porta 6184 libera. Handoff FROZEN.
+
+### C-97c — la visualizzazione di quantità e prezzi: analisi (2026-10-17, sola lettura, HEAD `cc2e9307c`)
+
+**Base**: HEAD `cc2e9307c` = dev con W-B68 (`f3836e99b` → `06e9d2c20`, CHANGELOG `cc2e9307c`). Ordine del coordinatore (15:11):
+le due revisioni in coda (W-B75 di H, il chunking BRIM di MF, ai loro checkpoint), poi **C-97c**, poi W-B70.
+
+**Perimetro** (dal punto 7 dell'analisi di C-97, più due resti):
+- quantità mostrate a 10 decimali, non 6 o 8;
+- un formatter dei prezzi a cifre significative: almeno 2 decimali, abbastanza per 4 cifre significative, al più 12;
+- dai resti: il toast di «+ New event» (W-B66 punto 3) e la vista a 4 decimali del data editor.
+
+**Stato a HEAD** (riverificato; i file si sono spostati con FE8 e Y5/Y6; elenco completo in
+`files/c97c_sites.txt`):
+
+| Area | Sito | Oggi |
+|---|---|---|
+| TR | `features/transactions/txDisplayHelpers.ts:21` | quantità a 6 |
+| TR | `resolveValidationMessage.ts:203-205` | saldo d'asset a 6 |
+| TR | `wac/WacPreviewSection.svelte:545-575` | costo unitario e PMC a 2–4 (prezzi) |
+| TR | `events/EventCreateMiniModal.svelte:197` | toast `formatFixed(parseFloat(…), 2)` |
+| IW | `import/GapFixStep.svelte:72` | quantità a 8 |
+| IW | `import/FixFlaggedStep.svelte:427` | a 2…`decimals` |
+| T (mio) | `ui/data-editor/DataEditor.svelte:212` | `Number(val)…maximumFractionDigits: 4`: prezzi, cambi ed eventi |
+| BK | `features/brokers/lots/unifiedLotsTableHelpers.ts:69` | 6 |
+| BK | `lotGanttChartHelpers.ts:108, :119` | 6 |
+| BK | `LotWacPriceChart.svelte:501, :1372` | 8 |
+| BK | `LotCustodyModal.svelte:78, :145, :161, :192` | 8 |
+| DV | `features/dashboard/ExposureTable.svelte:154` | 6 |
+| AF | `components/assets/AssetTable.svelte:117` | prezzi a 2 |
+| AF | `AssetPriceSummary.svelte:99, :112` | 2 |
+| AF | `AssetCard.svelte:226, :233` | 2 |
+| AF | `ProviderAssignmentSection.svelte:381` | 2 |
+| AF | `providerProbe.ts:124, :135` | 2 |
+| DV | `components/charts/candlestickChartHelpers.ts:94-97` | 2/4/6 |
+| DV | `priceChartHelpers.ts:608` | 4 |
+| DV | `PriceChartFull.svelte:820, :823, :888, :1051` | 4 |
+| DV | `LineChart.svelte:744-746, :826, :837` | 2/4 |
+| DV | `MeasurePanel.svelte:300-305, :534` | 4/6 |
+
+Quel che c'è già:
+- `formatExactDecimal` (`utils/core/formatFixed.ts:60`): decimale esatto, localizzato, `minFrac`/`maxFrac`. Le quantità sono
+  quasi solo un cambio d'argomento.
+- Nessun formatter dei prezzi a cifre significative fuori dal planner PAC, che tiene tutte le cifre di un prezzo
+  (`planner/format.ts`): serve un aiuto nuovo in `utils/core`.
+- Test da aggiornare: `lotGanttChartHelpers.test.ts`, `unifiedLotsTableHelpers.test.ts` (fissano i 6).
+
+**Proposta**:
+- **D-C97c-1, la regola del prezzo**: decimali = min(12, max(2, quanti servono per 4 cifre significative)), zeri finali tolti oltre
+  i 2. Esempi: `0.0000034573` → `0,000003457`; `1.2345` → `1,235` (con l'arrotondamento di `Intl`); `123.45` → `123,45`;
+  `65000.123` → `65.000,12`; `0.5` → `0,50`. Gli assi dei grafici restano compatti (`k`, `M`): la regola vale per i valori, non
+  per le etichette degli assi.
+- **Lotti**: C-97c-1 mio subito (l'aiuto `formatPrice` in `utils/core`, i siti TR, IW e il data editor); C-97c-2 i siti BK, e
+  C-97c-3 AF e DV, ai loro proprietari o a me con l'assegnazione.
+
+### C-97c-1 — l'aiuto dei prezzi e i siti TR, IW, data editor: cura ✅ (2026-10-17) — 🧊 FROZEN
+
+1. ✅ **Decisioni del coordinatore** (17/10, 15:14):
+   - **D-C97c-1**, la mia regola con un emendamento perché nulla mostri *meno* decimali di oggi:
+     `formatPrice(value, {minDecimals = 2})`, decimali = min(12, max(minDecimals, quelli di 4 cifre significative)), zeri tolti
+     oltre `minDecimals`; un sito a 4 decimali (cambi, data editor) passa `minDecimals: 4`; gli assi restano compatti; esempi
+     fissati in Vitest con un caso di cambio a `minDecimals: 4`;
+   - **i tre lotti sono miei**, col suo via sui `.svelte` di TR, IW, BK, AF e DV, solo la formattazione dei numeri (nessuna classe
+     o markup oltre la chiamata);
+   - C-97c-1 subito; C-97c-2 (BK) dopo, con la revisione di J; C-97c-3 (AF e DV) dopo l'ingresso di X-R59 A/B di Y, con le
+     revisioni di X (AF) e di Y (DV).
+2. ✅ **Dettaglio d'implementazione** (comunicato al coordinatore, 15:30 circa): un `floorDecimals` facoltativo (di default
+   `minDecimals`), perché un sito che oggi mostra un *intervallo* di decimali tenga la sua forma.
+   - Decimali = min(12, max(floorDecimals, quelli di 4 cifre)); zeri aggiunti solo fino a `minDecimals`.
+   - Data editor `{0, 4}`: `1.5` resta `1,5`, non `1,5000`. PMC corrente `{2, 4}`. Cambi `{minDecimals: 4}`.
+   - `formatPrice` restituisce `''` per un input che non è un numero e non lo ripete mai: resta un formatter puro di numeri, da
+     mettere fra i `NUMERIC_FORMAT_CALLS` del cancello dell'HTML con C-97c-3 (i tooltip).
+   - Il sito del data editor passa `Number(val)`, che il cancello già scarta: nessun cambio al cancello in C-97c-1.
+   - `FixFlaggedStep.svelte:427` esce dal perimetro: è un importo di cassa che mostra i suoi decimali fino a 8, più dei 6 della
+     colonna.
+3. ✅ **Rossi** (test-author `f6656189`, Vitest): 54 rossi e 269 verdi in 7 file, tutti rossi di C-97c-1.
+
+   | File | Rossi / verdi | Oggi |
+   |---|---|---|
+   | `formatFixed` | 43 / 57 | «non esportato» |
+   | `txDisplayHelpers` (nuovo, in `core-unit`) | 2 / 7 | `+0.123457 📈`, `+123,456,789.123457 📈` |
+   | `resolveValidationMessage` | 2 / 54 | `-0 📉` |
+   | `WacPreviewSection` | 4 / 6 | `0.12345678`, `0.00 €`, `0.0000`, `= 0.0001 €` |
+   | `EventCreateMiniModal` | 1 / 5 | `0.12 USD` |
+   | `GapFixStep` | 1 / 28 | `0.12345678` (troncato, non arrotondato) |
+   | `DataEditor` | 1 / 112 | `0` |
+
+   Il test-author ha portato a 8 decimali le quantità di due test di lingua (M-18) in `WacPreviewSection` e `GapFixStep`, con
+   l'attesa del taglio a 10: provano solo il locale e restano verdi prima e dopo.
+   > **⚠️ Fuori pista**, i buchi del contratto che ha segnalato, già coperti dalla cura:
+   > - `floorDecimals` sotto `minDecimals`, o `minDecimals` sopra 12: il massimo include `minDecimals` e il minimo è limitato al
+   >   massimo, quindi nessun `RangeError` di Intl;
+   > - la stringa `'-0'` passa dal ramo `number === 0` e dà `0.00`;
+   > - il costo unitario della riga in un'altra valuta e quello senza valuta sono anche loro nella cura, senza un rosso proprio.
+4. ✅ **Cura applicata** (17/10, 15:40 circa): `files/scripts/c97c1_cure.py --apply` su 8 file (7 di prodotto più il frammento del
+   cancello del denaro), poi `prettier --write` su `WacPreviewSection.svelte` (solo le mie righe: la cella della PMC divisa). Doc:
+   in `developer/frontend/i18n.md` la riga `formatPrice` / `priceFractionDigits` nella tabella dei formatter (pagina senza
+   traduzioni).
+5. ✅ **Verdi** (carico < 50; log `files/logs/c97c1_*.log`):
+
+   | Prova | Esito |
+   |---|---|
+   | Vitest, i 7 file più il cancello del denaro e quello dell'HTML | 356 verdi |
+   | `dev.py test check-orphans` | ogni test registrato raggiungibile |
+   | `front-utility core-unit` | 210 file, 8 647 verdi |
+   | `front-utility component-unit` | 179 file, 4 832 verdi |
+   | `front-transaction tx-unit` | 23 file, 915 verdi |
+   | `dev.py front check` | svelte-check 0/0 |
+
+   > **⚠️ Fuori pista**: il primo `tx-unit` (carico 49) ha dato 3 file «Hook timed out in 60000ms»: `GapFixStep`,
+   > `ParseDetailModal`, `ReportSetCard`, gli ultimi due non toccati. Nessun test fallito: 823 verdi, 92 saltati per il timeout.
+   > Rilanciati da soli a carico 28: 92 verdi; poi l'azione intera a carico 27: 915 verdi. Carico, non un rosso.
+6. ✅ **Simulazione** (17/10, 16:02–16:04): `sim_cherry_pick.sh dev_release2 --docs` sui 19 file (il test nuovo, non
+   tracciato, compreso), dev `e9746b959` (HEAD `cc2e9307c` antenato; dev ha cambiato il backlog e una riga del runner
+   `_frontend_utility.py`, che si unisce da sola con la registrazione del test nuovo). 0 conflitti; `mkdocs build` stretto e
+   `check-links` con uscita 0 sull'albero unito. `git diff --check` pulito. Handoff FROZEN.
+
+   La cura è pronta, `files/scripts/c97c1_cure.py`, dry run pulito su 8 file. `formatPrice` è verificato con node
+   (`--experimental-strip-types`) su tutti gli esempi del contratto, `it` compreso, `-0` e i vuoti.
+   > **⚠️ Fuori pista**: il **cancello del denaro** (`lib/utils/privacy/moneyRenderSites.test.ts`) registra per file e frammento
+   > il toast di `EventCreateMiniModal` (`` `${formatFixed(amt, 2)} ${assetCurrency}` ``, `public`: un evento è dell'asset, non
+   > dell'utente). La riscrittura deve aggiornare il frammento nello stesso cambio, come dice `developer/frontend/i18n.md` («Two
+   > source gates»): è nella cura. Gli altri siti non cambiano forma di denaro: tengono `formatCurrencyAmountPlain`, o scrivono
+   > senza valuta.
+
+**Siti di C-97c-1**:
+
+| Sito | Oggi | Dopo |
+|---|---|---|
+| `txDisplayHelpers.formatTxQuantity` | `toLocaleString` a 6 | `formatExactDecimal(…, {maxFrac: 10})` |
+| `resolveValidationMessage.ts:203` (saldo d'asset) | 6 | 10, esatto |
+| `WacPreviewSection`: quantità | `formatExactDecimal` di default, 8 | 10 |
+| `WacPreviewSection`: costi unitari | 2 | `formatPrice` |
+| `WacPreviewSection`: PMC corrente | 2–4 | `{2, 4}` |
+| `WacPreviewSection`: cambio | `formatFixed(…, 4)` | `{minDecimals: 4}` |
+| `EventCreateMiniModal`, toast | `formatFixed(parseFloat(…), 2)` | il valore esatto, 2–6 |
+| `GapFixStep:72` | quantità a 8 | 10 |
+| `DataEditor:212`, riga di sola lettura | `Number(val)…max 4` | `formatPrice(Number(val), {minDecimals: 0, floorDecimals: 4})` |
