@@ -324,6 +324,8 @@ Expose LibreFolio securely through **Tailscale** (recommended, and the simplest 
 
 Once LibreFolio is exposed, [Checking Connection Security](connection_checks.md) shows how to verify that your users connect securely and, [behind a reverse proxy](connection_checks.md#reverse-proxy), that the session cookie is marked `Secure`.
 
+Behind a classic reverse proxy, also tell LibreFolio which proxy to trust (`FORWARDED_ALLOW_IPS`) or which header holds the visitor's address (`LIBREFOLIO_CLIENT_IP_HEADER`): otherwise LibreFolio sees every visitor with the proxy's address, and warns about it in its log and in its security checks. See [The Visitor's Address](connection_checks.md#client-address).
+
 LibreFolio already gzip-compresses its responses (API JSON, the web app's JavaScript and CSS, documentation pages) and sends images and the live asset-search stream as they are: the proxy does not need to compress them again.
 
 ### 💾 3. Database Backup
