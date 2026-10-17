@@ -6044,7 +6044,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `user/dashboard/kpi-cards`. `translate-validate` (16/10): 63 errori strutturali nuovi da J-24. `adjustment`, `fifo-engine/index` e
   `fifo-lot-analysis` avevano già debito (J-25). Tradurle nello stesso giro, con `index` (l'ancora del §8). Dettagli: piano
   J, §10 «J-24».
-- **J-33 · Lo storico della performance dei lotti salta i giorni senza prezzo, la Dashboard li valuta al costo** —
+- ✅ **J-33 · Lo storico della performance dei lotti salta i giorni senza prezzo, la Dashboard li valuta al costo** —
   medio-basso, numeri; J, 16/10, trovata in CP-7b.
   - Dove: `lots/histories.py::build_performance_history` (ROI e TWRR dei lotti, `PERFORMANCE_HISTORY`). Fa la NAV solo
     nei giorni con un prezzo; i flussi di prima li porta al primo giorno con la NAV.
@@ -6060,6 +6060,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     aperti (costo noto, cambio all'apertura; un giorno con un lotto SHORT aperto o un costo ignoto resta senza punto), con
     le stesse `at_cost_until`; rosso prima. Dichiarare prima i valori che cambiano.
   - Dettagli: piano J, §10 «CP-7b — codice».
+  - ✅ 17/10: fatta da J (checkpoint J-33). Nei giorni senza osservazione la NAV è al costo dei lotti LONG aperti (cambio
+    d'apertura) e un trasferimento sposta il costo delle sue unità; il TWRR comprende il salto dal costo al primo
+    prezzo, come il ROI. Una rettifica senza costo conta 0 come nella storia del valore (J-35 resta al developer).
+    Dettagli: piano 05, sezione «J-33».
 - **J-34 · Debito di traduzione di CP-7b (il riferimento dei lotti e i giorni al costo)** — basso, documentazione; J,
   16/10. Pagine EN cambiate di senso, senza stamp:
   - `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`:
@@ -6272,6 +6276,12 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   La cura naturale è la lettura al confine di J-10 (`financial_math/lots/scope_boundary.py`), applicata ai broker
   visibili al posto della gamba aggiunta. Prima un rosso. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+- **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
+  alla revisione di SEC8-1b (17/10), facoltativa. Per una richiesta fuori dai limiti la finestra preparata
+  (`requested_range`, che fa da ripiego di `metadata.analyzed_range`) è quella limitata, mentre `output.replay_range` e
+  `metadata.params` ripetono la richiesta. Visibile solo fuori dai limiti. Da scegliere una convenzione sola, o da dire
+  nella pagina. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione
+  «SEC8-1b».
 
 ## Z · Sospensione e risveglio (fase 01)
 
