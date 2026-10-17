@@ -3822,4 +3822,9 @@ A lots analysis gets only its scope's rows, so a TRANSFER whose partner sat at a
 on a broker's page, on a filtered Dashboard, for a co-owner, and in AI Export `broker.fifo_summary`. The leg is now read at the scope's
 edge, in at its own cost and out at the market value of its day, from detached copies and the partner's pairing columns only (N76).
 Filed: [[problems/lots-failed-when-a-transfer-crossed-the-broker-scope]].
+## [2026-10-17] file | DataTable pruned the saved preferences of columns absent for a moment
+Since X-R53 the Assets and FX tables' Δ period columns arrive after the backend lists the periods, and DataTable treated
+a column missing at the first render as gone: it rewrote the saved order without it and dropped its visibility override
+and width, so every load reset them. Y-27 keeps the preferences of absent columns and filters them only when drawing.
+Filed: [[problems/datatable-pruned-preferences-of-absent-columns]].
 Graph: not updated; graphify is not available in this worktree.

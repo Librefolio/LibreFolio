@@ -717,3 +717,123 @@ describe('compareRowsByColumn — a column that brings its own order', () => {
         expect([...nums].sort((x, y) => compareRowsByColumn(plain, x, y, 'asc')).map((r) => r.n)).toEqual([1, 2, 3]);
     });
 });
+
+/*
+ * Y-27 — the column order of a column that is absent for a moment.
+ *
+ * Since X-R53 the Assets and FX tables build their Δ period columns (`delta_1W` …
+ * `delta_5Y`) from the backend's period list, which is empty until the first
+ * answer: the first render has none of them. DataTable's sync effect drops from
+ * the saved order every id it does not see, and saves at once; `reorderColumns`
+ * saves the order it is handed, which holds only the columns drawn (that is all
+ * ColumnVisibilityToggle lists). Either way the periods lose their place on every
+ * page load. The fix moves the two order decisions here, as plain functions:
+ *
+ *   - withNewColumns(order, columnIds): `order` with every id of `columnIds` it
+ *     lacks inserted at its natural place — right after the last id of the
+ *     result that precedes it in `columnIds`, at the start when none does — in
+ *     `columnIds` order. Ids of `order` absent from `columnIds` stay where they
+ *     are. Nothing new gives back the same contents (and the effect saves nothing).
+ *   - reorderKeepingAbsent(previousOrder, newOrder, columnIds): `newOrder` with
+ *     every id of `previousOrder` absent from `columnIds` put back right after the
+ *     id it followed (the nearest earlier id of `previousOrder` already in the
+ *     result), at the start when none precedes it. A present id that `newOrder`
+ *     leaves out is not added: the sync effect places it, as it does today.
+ *
+ * Red today because neither exists. Each case reads its function through a
+ * dynamic import, so while the exports are missing only these cases fail and the
+ * rest of the file still loads (the pattern of measureSignal.test.ts, J-44); the
+ * barrier names Y-27. The inputs are frozen: the caller hands in its `$state`
+ * order, which must not be edited in place. The ids are the real ones of the
+ * Assets table, so each expectation reads as a layout a user could have saved.
+ * The component wiring (what onMount loads, what the effect saves, the widths
+ * and the visibility overrides) is in DataTable.test.ts, block "Y-27".
+ */
+
+/** The two helpers Y-27 adds to dataTableLogic.ts, with the signatures the fix gives them. */
+interface OrderHelpers {
+    withNewColumns: (order: readonly string[], columnIds: readonly string[]) => string[];
+    reorderKeepingAbsent: (previousOrder: readonly string[], newOrder: readonly string[], columnIds: readonly string[]) => string[];
+}
+
+/**
+ * One of the two helpers, read from the module when the case runs. The cast holds both before and after the export
+ * exists, so svelte-check has nothing to say about a name the module does not declare yet.
+ */
+async function orderHelper<K extends keyof OrderHelpers>(name: K): Promise<OrderHelpers[K]> {
+    const logic = (await import('./dataTableLogic')) as unknown as Partial<OrderHelpers>;
+    expect(logic[name], `barrier (Y-27): dataTableLogic.ts exports ${name}`).toBeTypeOf('function');
+    return logic[name] as OrderHelpers[K];
+}
+
+/** An order as the caller holds it: read-only, so an in-place edit throws instead of corrupting the caller's state. */
+const frozen = (...ids: string[]): readonly string[] => Object.freeze(ids);
+
+describe('withNewColumns — Y-27: the sync adds new columns and keeps absent ones', () => {
+    it('keeps an absent id where it is while a never-seen id goes to its natural place', async () => {
+        const withNewColumns = await orderHelper('withNewColumns');
+        // The user moved provider first and delta_1Y after it. This render has no period column, and isin is new.
+        const order = frozen('provider', 'delta_1Y', 'name', 'delta_1D');
+
+        expect(withNewColumns(order, frozen('name', 'isin', 'delta_1D', 'provider')), 'Y-27: delta_1Y stays after provider; isin goes right after name, its predecessor in the columns').toEqual(['provider', 'delta_1Y', 'name', 'isin', 'delta_1D']);
+    });
+
+    it('puts a never-seen id that has no predecessor at the start', async () => {
+        const withNewColumns = await orderHelper('withNewColumns');
+
+        expect(withNewColumns(frozen('provider', 'delta_1Y', 'name'), frozen('isin', 'name', 'provider')), 'Y-27: isin comes before every column, so it opens the order; delta_1Y stays after provider').toEqual(['isin', 'provider', 'delta_1Y', 'name']);
+    });
+
+    it('inserts several new ids in a row in the order of the columns, after a predecessor or at the start', async () => {
+        const withNewColumns = await orderHelper('withNewColumns');
+
+        // The periods arrive together and follow delta_1D wherever the user put it: delta_1M's predecessor is
+        // delta_1W, which is only in the result, not in the order handed in.
+        expect(withNewColumns(frozen('name', 'provider', 'delta_1D'), frozen('name', 'delta_1D', 'delta_1W', 'delta_1M', 'provider')), 'Y-27: delta_1W then delta_1M, right after delta_1D').toEqual(['name', 'provider', 'delta_1D', 'delta_1W', 'delta_1M']);
+        expect(withNewColumns(frozen('provider'), frozen('isin', 'name', 'provider')), 'Y-27: two new ids at the start keep the order of the columns').toEqual(['isin', 'name', 'provider']);
+        expect(withNewColumns(frozen(), frozen('name', 'delta_1D', 'provider')), 'Y-27: from an empty order, the order of the columns').toEqual(['name', 'delta_1D', 'provider']);
+    });
+
+    it('gives back the same contents when nothing is new', async () => {
+        const withNewColumns = await orderHelper('withNewColumns');
+
+        // delta_1Y is absent and everything drawn is known: nothing to add, and nothing may be dropped.
+        expect(withNewColumns(frozen('provider', 'delta_1Y', 'name', 'delta_1D'), frozen('name', 'delta_1D', 'provider')), 'Y-27: an absent id is kept, not pruned').toEqual(['provider', 'delta_1Y', 'name', 'delta_1D']);
+    });
+});
+
+describe('reorderKeepingAbsent — Y-27: a reorder made while a column is absent keeps it', () => {
+    it('puts an absent id back right after the id it followed', async () => {
+        const reorderKeepingAbsent = await orderHelper('reorderKeepingAbsent');
+        const drawn = frozen('name', 'delta_1D', 'provider');
+
+        expect(reorderKeepingAbsent(frozen('name', 'delta_1D', 'provider'), frozen('provider', 'name', 'delta_1D'), drawn), 'control: with nothing absent, the new order as handed in').toEqual(['provider', 'name', 'delta_1D']);
+        // The visibility menu lists the drawn columns only, so the order it hands in has no delta_1Y.
+        expect(reorderKeepingAbsent(frozen('name', 'delta_1Y', 'delta_1D', 'provider'), frozen('provider', 'name', 'delta_1D'), drawn), 'Y-27: delta_1Y followed name, so it goes back right after name').toEqual(['provider', 'name', 'delta_1Y', 'delta_1D']);
+    });
+
+    it('puts an absent id that followed nothing back at the start', async () => {
+        const reorderKeepingAbsent = await orderHelper('reorderKeepingAbsent');
+
+        expect(reorderKeepingAbsent(frozen('delta_1Y', 'name', 'provider'), frozen('provider', 'name'), frozen('name', 'provider')), 'Y-27: delta_1Y opened the order, so it opens it again').toEqual(['delta_1Y', 'provider', 'name']);
+    });
+
+    it('keeps several absent ids in their relative order, at the start and after a column', async () => {
+        const reorderKeepingAbsent = await orderHelper('reorderKeepingAbsent');
+        // Two runs of absent ids: one opening the order, one after delta_1D. The second id of each run followed the
+        // first, an id that is in the result only once it has been put back.
+        const previous = frozen('delta_1W', 'delta_1M', 'name', 'delta_1D', 'delta_1Y', 'delta_5Y', 'provider');
+        const drawn = frozen('name', 'delta_1D', 'provider');
+
+        expect(reorderKeepingAbsent(previous, frozen('provider', 'delta_1D', 'name'), drawn), 'Y-27: delta_1W, delta_1M still open the order; delta_1Y, delta_5Y still follow delta_1D, in that order').toEqual(['delta_1W', 'delta_1M', 'provider', 'delta_1D', 'delta_1Y', 'delta_5Y', 'name']);
+    });
+
+    it('does not add a present id that the new order leaves out', async () => {
+        const reorderKeepingAbsent = await orderHelper('reorderKeepingAbsent');
+        // `select` is drawn but unlabelled, so the visibility menu does not list it: the sync effect places it.
+        const drawn = frozen('select', 'name', 'provider');
+
+        expect(reorderKeepingAbsent(frozen('select', 'name', 'delta_1Y', 'provider'), frozen('provider', 'name'), drawn), 'Y-27: select is not put back; delta_1Y is, after name').toEqual(['provider', 'name', 'delta_1Y']);
+        expect(reorderKeepingAbsent(frozen('name', 'select', 'delta_1Y', 'provider'), frozen('provider', 'name'), drawn), 'Y-27: delta_1Y followed select, which is not in the result: it goes after name, the nearest earlier id that is').toEqual(['provider', 'name', 'delta_1Y']);
+    });
+});
