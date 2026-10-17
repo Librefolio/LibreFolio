@@ -5563,3 +5563,234 @@ già consumato), **A-43** (ritirare i link anche alla disattivazione, per i data
 - Revisioni da fare al checkpoint: H (`dev.py`, `config_audit.py`, `conftest.py`, `test_config_audit.py`), il
   coordinatore (`router.py`), E (resend in `verification.py` e `email.py`, le righe delle sue pagine di doc).
 - Stato: **FROZEN** 🧊 dopo l'handoff.
+
+### A8a — Committato; aggiornamento di base con un conflitto (17/10, 04:55–05:02)
+
+- Commit del coordinatore: `dc38b9f8c` (test di A-35), `66873b0c9` (feat), `4a93f1f54` (doc), `e7984dd46` (diario);
+  `router.py` rivisto da lui, OK. A-36 (backlog) è arrivato dopo il commit del diario: resta da committare.
+- Merge di dev (`fd6886bb0`) nel mio ramo, aperto dal coordinatore; un conflitto, `developer/backend/email.md`, con
+  E-11 (il 401 del resend col codice `INVALID_CREDENTIALS`, il 502 senza `smtp_code`, il paragrafo sul 401 del
+  blocco). Risolto unendo i due lati: la riga di `emailText.ts` di dev **più** «the limit on failed sign-ins» fra i
+  429 (prenderla intera da dev avrebbe tolto l'aggiunta di A8a); il 401 codificato di E-11 «counted as a failed
+  sign-in» col link; il 429 con i due limiti prima della password, gli altri per account e il budget orario; il 502
+  senza `smtp_code`; la frase «Only the 401 and the two 429s before the password…»; il paragrafo di E-11 sul blocco.
+- Rivisti anche i file condivisi uniti da Git senza conflitto: `auth.py` (docstring di E-9), `email.py` (401 di E-11;
+  le mie righe del 429 intatte), `verification.py` (chiave della casella di E; le mie righe del resend intatte),
+  `dev.py` (H-24), `admin/email.en.md` (la riga della casella di E-11 accanto alla mia), `security.md` («Secure
+  Backups» di B, «Numbers in Requests» di H-32: coerente col mio paragrafo sui `Decimal` non finiti). I miei test del
+  resend guardano solo lo stato, quindi il 401 codificato di E-11 non li tocca.
+- Cancelli sull'albero unito: `mkdocs build` strict e `check-links` verdi; `test_login_throttle_api.py` in processo
+  32/32; servizi `email-verification` 127, `login-throttle` 33, `accounts-checks` 76, `config-audit` 91,
+  `session-version` 56. Porta libera. Messo in stage solo `email.md`; il merge commit lo fa il coordinatore.
+
+## A8b — Contratto (17/10, 05:05; base `125c19f0e`)
+
+Rispetto all'analisi A8 (C6–C10) nulla è cambiato nei file: `settingsTabs.ts`, `TabBar.svelte`, la pagina e i loro test
+sono come a `c9cb27e4c`; le spec E2E che cliccano le schede del gruppo sono sempre 8. In più: **C11** (il 429 nuovo
+del cambio password e del profilo). Dettagli fissati ora (scelte mie nel perimetro approvato, dette al coordinatore):
+
+- **Registro** (`settingsTabs.ts`): `SettingsTab` prende `group?: 'administration'`, `badge?: (ctx) => number`,
+  `prefetch?: (ctx) => void`; `SETTINGS_TAB_GROUPS` = `administration` (`settings.administration`, icona `Shield`,
+  `alignEnd`). Membri: `admin` (etichetta ora `settings.globalSettings`, icona `Settings2`, perde `alignEnd`), `users`,
+  `backup`, `email`, e la nuova `security` (`settings.security`, `ShieldCheck`, 140, solo admin, badge e prefetch dal
+  negozio dei controlli). `settingsBar(tabs, groups, ctx)`, pura: le voci della barra alta (schede senza gruppo, e un
+  gruppo dove ha almeno un membro visibile, al posto del suo primo membro).
+- **Pagina**: barra alta con `settings-tab-administration` (badge = somma dei membri); seconda barra
+  (`settings-subtabs`) solo con ≥ 2 membri visibili, coi `settings-tab-{id}` di oggi; clic sul gruppo → il primo
+  membro visibile (nulla se ce n'è già uno attivo); `?tab=<membro>` apre il gruppo su quel membro, `?tab=administration`
+  sul primo; un non admin ha solo `admin` → niente seconda barra; `prefetch(ctx)` delle schede visibili all'avvio e a
+  ogni cambio di contesto; il titolo del telefono è l'etichetta del membro attivo.
+- **Sfumatura** (`TabBar`, solo `scrollable`): `data-fade` = `none|start|end|both` sul contenitore che scorre
+  (`start` se c'è altro a sinistra, `end` a destra), aggiornato a scorrimento, ridimensionamento e cambio di schede;
+  la maschera con le utilità `mask-l-*`/`mask-r-*` di Tailwind 4.1, nessun colore.
+- **Scheda Sicurezza** (`features/settings/security/`): `securityChecksApi.ts` (il client generato),
+  `securityFindings.ts` puro (i controlli non `ok` per gravità error > warning > info, poi quelli `ok`; il controllo del
+  browser `accounts.openRegistration` da `openRegistrationNoticeFor`; azioni interne: `email.*` → scheda Email,
+  `platform.plugin_secrets` → Plugin; `attentionCount` = error + warning), `securityChecks.svelte.ts` (stato, una
+  lettura, `reload()`), `SecurityTab.svelte` (caricamento, errore con riprova, elenco, «tutto a posto», i superati in
+  un `<details>`, «controlla di nuovo»); solo ruoli colore.
+- **C11**: `TOO_MANY_ATTEMPTS` → `settings.tooManyPasswordAttempts` in `PasswordChangeModal` e in `ProfileTab`.
+- **i18n** (4 lingue): `settings.administration`, `settings.securityTab.*`, `settings.tooManyPasswordAttempts`.
+- **E2E (C9)**: per ultime, con l'aiuto `openSettingsTab`, dopo il congelamento annunciato dal coordinatore.
+
+### A8b.1 — Rossi (17/10, 05:10–)
+
+- Quattro `test-author` in parallelo su file distinti: registro e pagina (`settingsTabs.test.ts`,
+  `page.tabs.test.ts`); sfumatura (`TabBar.test.ts`); Sicurezza (nuovi `security/*.test.ts` e le loro righe nel
+  runner); C11 (`PasswordChangeModal.test.ts`, `tabs/ProfileTab.test.ts`).
+- **Coordinatore (05:12)**: contratto di A8b OK. Ha chiesto alla squadra dei colori («IM», i colori delle impostazioni)
+  di `TabBar`, `settingsTabs` e della pagina: i rossi sì, ma **prima di toccare `TabBar` e il markup della pagina**
+  aspetto la sua parola. Per prudenza aspetto anche per `settingsTabs.ts`, `PasswordChangeModal` e `ProfileTab` (sono
+  impostazioni: potrebbero essere nel lotto IM); i file nuovi di `security/` si possono scrivere.
+- **Via della squadra dei colori (05:16)**: IM non ha lotti aperti su `settingsTabs.ts`, `TabBar.svelte`, la pagina e
+  `SettingsLayout.svelte` (tutti a zero classi di tavolozza nel ratchet). Regole: `settings-subtabs` con gli stessi
+  ruoli della barra principale (un aspetto diverso solo con ruoli esistenti, da dire al coordinatore per il punto 33);
+  `SecurityTab` segue la convenzione degli stati di `STATUS_TONES`, scritta nel componente (tinta `bg-lf-X-soft
+  text-lf-X-on-soft` + `border-lf-X-line`, chip neutro `bg-lf-neutral text-lf-secondary`), **nessuna tabella nuova**
+  in `toneClasses.ts` senza chiedere. All'ingresso il coordinatore avvisa i colori (punto 33, una corsa G filtrata).
+- **Bozze del codice** (`work/a8b/`, a secco pulite, non applicate finché i rossi non sono osservati):
+  `new/{securityChecksApi.ts, securityFindings.ts, securityChecks.svelte.ts, SecurityTab.svelte}` (tinte per gravità
+  `bg-lf-X-soft text-lf-X-on-soft border-lf-X-line` scritte nel componente, chip neutro per i superati, chiavi intere
+  per le etichette delle gravità), `new/settingsTabs.ts` (gruppo, `badge`, `prefetch`, `settingsBar`),
+  `new/page.svelte` (barra alta, `settings-subtabs`, `?tab=` di gruppo, `prefetch` non tracciato: un prefetch legge lo
+  stato che riempie, e un errore persistente lo farebbe ripartire in un ciclo), `apply_a8b.py` (sfumatura di `TabBar`
+  con `mask-l-from-[calc(100%-1.5rem)]`/`mask-r-from-…`: verificato col compilatore di Tailwind 4.1.18 che generano
+  `linear-gradient(to left|right, black X, transparent 100%)` composte in `intersect`, nessun colore nostro; G4 del
+  cancello dei colori guarda solo i valori arbitrari con un colore; C11 in `PasswordChangeModal` e `ProfileTab`),
+  `i18n_add.py` (15 chiavi nelle 4 lingue).
+
+## A8a-N70 — Il limite per indirizzo dietro un proxy locale non fidato (17/10, 05:14–)
+
+- **Da E (R13-SEC6, MEDIO 8/10)**: dietro un proxy inverso non configurato (l'immagine Docker: uvicorn senza
+  `--forwarded-allow-ips`, `LIBREFOLIO_CLIENT_IP_HEADER` vuota) tutti i visitatori hanno l'indirizzo del proxy: 50
+  tentativi sbagliati di chiunque, ~1 al secondo, rifiutano **tutti** gli accessi (anche con la password giusta), il
+  cambio password, il cambio d'indirizzo e il resend. A8a resta fuori da dev finché non è curato.
+- **Decisione notturna N70** (coordinatore) e **punti vincolanti di E**:
+  1. Il limite per indirizzo **non si applica** quando il pari è **locale** (RFC 1918, `fc00::/7`, `127/8`, `::1`,
+     `169.254/16`, `fe80::/10`) **e** c'è un'intestazione d'inoltro (`X-Forwarded-For`, `Forwarded`, `X-Real-IP`) che
+     uvicorn non ha applicato; valutato per richiesta. Un pari pubblico non lo fa scattare: su un'istanza esposta
+     direttamente l'intestazione falsa di un attaccante non cambia nulla (il mio punto 1, uguale a quello di E). Il
+     limite per identificativo resta. Un avviso per processo, senza indirizzi.
+  2. La rilevazione è di H: `forwarded_by_untrusted_proxy(request)` in `services/platform/client_address.py`, col
+     controllo «locale» dentro (H-36). I proxy pubblici restano alla configurazione; il controllo di sicurezza che
+     informa quando le intestazioni arrivano da un pari pubblico non fidato è di H.
+  3. Mio: `login_throttle.limit_address(request)` = `client_address(request)`, oppure `None` (salta il limite per
+     indirizzo) quando l'aiuto di H dice vero, con l'avviso una volta per processo; `auth.py` lo usa nei tre punti, il
+     resend di E lo riceve con un kwarg nuovo `limit_address` di `resend_verification` (la rotta lo calcola).
+  4. **LRU** in `rate_window.py` (di E, sua revisione): si sfratta la chiave meno usata **non piena** (piena = conteggio
+     vivo ≥ il limite predefinito); se tutte sono piene, la più vecchia piena. Mai rifiutare chiavi nuove, mai senza
+     limite. Ne beneficiano anche i limitatori di E.
+  5. Doc: l'avvertenza del proxy in «Failed Sign-ins» (`admin/configuration.en.md`).
+  6. Poi lo slot sulla revisione unita, con anche `services email-verification`, `api email-verification`,
+     `api email`, `api email-change-notice` (le mie prove erano prima del merge con E-9/E-11).
+- I «cookie del dispositivo» (un browser già entrato salta i limiti): scelta di prodotto, al developer.
+- **Coordinatore (05:16)**: punto 1 OK (uguale a E); punto 2 OK, `forwarded_by_untrusted_proxy(request)` nel file di
+  H, col controllo locale dentro (lo scrive H); `limit_address(request)` mio, il resend col kwarg; punto 3 OK (LRU nel
+  file di E, sua revisione). Via ai rossi di N70.
+- **Punti di E su `rate_window.py`** (05:18, li controlla al checkpoint): «piena» solo sui colpi vivi dopo la potatura,
+  contro il `limit` del costruttore; **scansione limitata**: al più K voci dal fondo LRU (nuovo parametro solo-chiave
+  `eviction_scan=32`, `< 1` → `ValueError`), altrimenti la più vecchia — senza tetto una pioggia di chiavi piene farebbe
+  ogni colpo O(`max_keys`) sotto il lucchetto, e i `FORGOT_BY_*` di E contano prima di bcrypt (amplificatore di CPU);
+  aggiornare nello stesso lotto il contratto 8 e RWL-014…016 di `test_rate_window.py`, un caso nuovo (spazio per 2, una
+  piena e più vecchia, una non piena: la nuova sfratta la non piena), e `developer/backend/email.md` `#rate-window`.
+- Rossi in scrittura: `test-author` LRU (`test_rate_window.py`, aggiornato coi punti di E) e `test-author` proxy
+  (`test_login_throttle.py` unitario con l'aiuto di H finto, `test_login_throttle_api.py` con l'aiuto vero: rossi
+  finché l'aiuto di H non arriva nel mio ramo).
+- **Bozza** `work/a8a/apply_n70.py` (a secco pulita): `rate_window.py` (`eviction_scan=32`, `_evict_one()`: la prima
+  non piena fra le K meno usate, altrimenti la più vecchia; la chiave nuova mai; `None` è una chiave, quindi un
+  segnaposto proprio), `login_throttle.limit_address(request)` (l'aiuto di H cercato sul modulo al momento della
+  chiamata: il codice si importa anche prima che l'aiuto arrivi; avviso una volta per processo, senza indirizzi),
+  `auth.py` (i tre punti), `verification.py` (`limit_address` con `...` come «non dato» → `address`, così un chiamante
+  che lo dimentica resta col limite per indirizzo, il lato sicuro), la rotta di E (`email.py`).
+- **Rossi C11 scritti** (`test-author`, 05:28): `PasswordChangeModal.test.ts` (1 rosso: la chiave al posto del
+  `message` inglese; guardie: campi intatti e abilitati, nessun successo né toast; un 429 con un altro codice, una frase
+  semplice, una pagina HTML di un proxy, e `TOO_MANY_ATTEMPTS` su un 400 restano come oggi), `ProfileTab.test.ts` (2
+  rossi, salvataggio della riga e «salva tutto»: `data-error-code="TOO_MANY_ATTEMPTS"`, la chiave, l'indirizzo e la
+  password tenuti; 6 guardie). Oggi 3 rossi, 151 verdi. Nella bozza: in `ProfileTab` il 429 tiene **anche la password**
+  (oggi ogni rifiuto con codice la svuota): `refusal.code && refusal.code !== 'TOO_MANY_ATTEMPTS'`; il messaggio sparisce
+  dopo 5 s come gli altri (non fissato).
+- **Rossi della sfumatura scritti** (`test-author`, 05:30): `TabBar.test.ts`, 19 casi in un `describe` annidato nel
+  blocco G-15 (ne riusa il modello di layout, il ResizeObserver e i frame finti): 18 rossi (`data-fade` assente), 1
+  guardia verde (senza `scrollable` nessun `data-fade`); i 16 casi di prima verdi. Fissano: tolleranza di 1 px ai due
+  lati, aggiornamento dopo lo scorrimento dell'utente (senza saltare indietro alla scheda attiva), dopo un
+  ridimensionamento **dopo** il riallineamento, dopo un cambio di scheda e di etichette **anche senza scorrimento**;
+  maschere `mask-l-`/`mask-r-` presenti solo dal loro lato, ogni classe che cambia contiene `mask`, nessun colore,
+  nessun elemento in più. La bozza le rispetta (classi per stato, `updateFade()` dopo `revealActiveTab()` nel
+  ResizeObserver e nel frame, `onscroll`).
+- **Rossi della LRU scritti e osservati** (`test-author` 05:30; io dal runner 05:31, carico 48): `utils rate-window`
+  **12 rossi**, 27 verdi (contratto 2 con `eviction_scan`, contratto 8 riscritto; RWL-002/003, RWL-018…024 nuovi o
+  riscritti; RWL-014…016 restano veri, RWL-016 come ripiego). Il `test-author` ha provato in memoria una versione di
+  riferimento (39/39) e 12 versioni sbagliate, tutte prese (fra cui «`None` come segnaposto»: la bozza ha `_NO_KEY`).
+  Note per l'handoff: la descrizione dell'unità nel runner (`_backend_utils.py`, «LRU eviction at max_keys») e
+  `developer/backend/email.md#rate-window` da aggiornare; il prezzo di `eviction_scan=32` (chi blocca 31 identificativi
+  suoi subito dopo quello della vittima e poi riempie la mappa la spinge fuori col ripiego: ~310 errori in più contro
+  ~100 000 senza tetto; dietro un proxy locale non fidato, dove N70 salta il limite per indirizzo, diventa realistico):
+  scelta di E, fissata com'è.
+- **Semplificazione del contratto (coordinatore da E, 05:34)**: H aggiunge `client_address.rate_limit_address(request)`
+  (`None` dietro un proxy locale non fidato, «locale» = `classify_ip` loopback|vpn|lan, CGNAT compreso; altrimenti
+  `client_address`; l'avviso una volta per processo nel suo aiuto). Io lo chiamo nei miei tre punti di `auth.py`; nessun
+  `login_throttle.limit_address`, nessun secondo avviso, l'API di `login_throttle` non cambia. **Il resend è di E**
+  (E-13, stessa funzione): tolti dalla mia bozza `verification.py` ed `email.py`; detto al `test-author` del proxy di
+  togliere il caso del resend e i test unitari di `limit_address`. Bozza divisa: `apply_n70_part.py lru|auth`; la parte
+  `auth` aspetta H-36 nel mio ramo (l'import fallirebbe).
+- **LRU applicata** (05:35): `rate_window.py` (`eviction_scan`, `_evict_one`), `ruff`/`black` puliti. Verdi:
+  `utils rate-window` **39/39**; `services login-throttle` 33, `email-verification` 127, `email-flows` 149,
+  `email-delivery` 124, `email-verification-hooks` 32 (tutti gli utenti del limitatore). Descrizione dell'unità
+  `rate-window` nel runner aggiornata (revisione di E).
+- **Ordine deciso dal coordinatore (05:39, filoni dipendenti)**: 1) entra H-36, il coordinatore me lo porta nel ramo e
+  mi dà lo SHA; 2) completo N70 (la parte `auth`) → CHECKPOINT; 3) il coordinatore unisce il mio ramo in quello di E;
+  4) E fa E-13 su quella base (resend, «password dimenticata» e la riga di `/auth/register`, che rivedo io); 5) i due
+  lotti entrano uno dopo l'altro nello stesso treno, dopo uno slot combinato sul ramo di E (le suite email, le LT-API,
+  login-throttle). La nota sul prezzo di `eviction_scan` va a E per la sua revisione.
+- **Rossi della scheda Sicurezza scritti** (`test-author`, 05:45): 4 file nuovi in `features/settings/security/`
+  (`securityChecksApi` 3, `securityFindings` 33, `securityChecks` 18, `SecurityTab` 16): **70 rossi**, ciascuno per
+  conto suo (moduli caricati dentro i test; il primo import del barile delle icone di `lucide-svelte` costa ~27 s col
+  carico alto, quindi la scheda li carica una volta in un `beforeAll` da 120 s, come `GapFixStep.test.ts`). Righe nel
+  runner (`_frontend_utility.py`: 3 nel core, 1 nel component, una frase in coda alle due `desc`). Letture fissate e
+  rispettate dalla bozza: il controllo del browser con `params: {}` e i soli campi del contratto (niente
+  `dismissible`); nessun nuovo tentativo automatico dopo un errore; il segnaposto solo prima della prima risposta, il
+  «controlla di nuovo» presente e disabilitato durante il primo caricamento; un `info` non è «tutto a posto».
+  Aggiunto alla bozza `data-busy`/`aria-busy` sulla radice (regola di casa per i contenitori che ricaricano, non
+  fissato). ⚠️ Il `test-author` riporta **una** corsa di Vitest partita a carico 55 (sopra il 50), le altre col
+  controllo.
+- **Rossi del registro e della pagina scritti** (`test-author`, 05:46): `settingsTabs.test.ts` (24 rossi, 21 verdi;
+  STAB-03…13 e SBAR-01…05 nuovi) e `page.tabs.test.ts` (32 rossi, 17 verdi; SPAGE-01…21: barra alta =
+  `settingsBar`, gruppo e seconda barra, `?tab=` di membro e di gruppo, distintivi reattivi e sommati sui membri
+  visibili, `prefetch` una volta all'avvio e a ogni cambio di contesto e **mai** altrimenti); nuovo aiuto
+  `__tests__/harness/SettingsIconProbe.svelte`. Commenti superati segnalati: `settingsTabs.ts:12-13` (la bozza lo
+  riscrive), `TabBar.svelte:28` e `:37` (da aggiornare nella bozza).
+- **Rossi di A8b osservati da me** (Vitest, 9 file, 05:46–05:47, carico 36): **147 rossi**, 206 verdi (353): C11 3,
+  sfumatura 18, Sicurezza 70, registro e pagina 56.
+- **Rossi del proxy (N70) scritti e osservati** (`test-author` 05:47; io in processo 05:47–05:48, carico 39):
+  `test_login_throttle_api.py` sezione 8 `TestUntrustedLocalProxy`: **12 rossi** (LT-API-20 ×6 pari locali
+  lan/loopback/CGNAT con XFF/Forwarded/X-Real-IP, LT-API-24 ×3 e LT-API-25 ×3 i tre punti di `auth.py`), 11 guardie
+  (identificativo sempre limitato, pari pubblico e pari locale senza intestazione limitati per indirizzo); tutti
+  rossi su 429, nessun errore d'import. `test_login_throttle.py` invariato (LT-010 copre già `address=None`). Per E
+  (E-13): il caso del resend dietro proxy deve controllare il conteggio dell'indirizzo, altrimenti passa col solo login.
+
+### A8b.2 — Codice e verdi del frontend ✅ (17/10, 05:50–06:00)
+
+- `apply_a8b.py` applicato (sfumatura, C11, registro, pagina, i 4 file di `security/`, e i commenti superati di
+  `TabBar.svelte` :28 e :37); `i18n_add.py`: **14 chiavi** (`settings.administration`, `settings.securityTab.*`,
+  `settings.tooManyPasswordAttempts`) in `frontend/src/lib/i18n/settings/*.json`; `settings.admin` («Admin») non era più
+  usata (l'`i18n audit` la segnalava): tolta con `dev.py i18n remove` dalle 4 lingue.
+- Verdi: i 9 file di Vitest **353/353** al primo colpo; `prettier --check` pulito sui 9 file; `theme-roles.mjs --check`
+  «clean»; `i18n check` e `i18n audit` (4 983 chiavi, 0 incomplete, 0 inutilizzate, 0 mancanti).
+> **⚠️ Fuori pista**: il primo `front check` dava 13 errori, tutti in `features/backup/*` (endpoint e campi di B4 assenti
+> dal client): il mio `generated.ts` era quello di prima del merge di dev. `dev.py api sync` sull'albero unito, poi
+> `front check` **0 errori, 0 avvisi**.
+- Vitest completo (519 file) lanciato a carico < 45; doc in scrittura (`docs-writer`: «Settings › Admin» → «Settings ›
+  Administration › …» in ~11 pagine EN, la sezione `#security-tab` in `admin/settings`, la barra in `user/settings`, il
+  429 nel profilo, il registro, la sfumatura e il modulo `security/` nelle pagine developer).
+- **Note di H per N70** (via coordinatore, 06:11; H-36 committato, in ingresso): chiamare
+  `client_address.rate_limit_address(request)`; testi che diventano falsi dietro un proxy locale non fidato: la riga
+  di A sotto «Callers.» in `security.md` (la prima frase ora nomina `rate_limit_address`), il primo paragrafo di
+  `connection_checks` e di `configuration.en.md` («50 attempts… would refuse every sign-in»), e la riga dell'`i18n_key`
+  dove «15 messages» diventa **18**; un test che manda intestazioni d'inoltro da un pari locale deve svuotare **sul
+  posto** `client_address._untrusted_forwarding` prima e dopo (nessuna funzione di reset, per N58).
+- **Vitest completo** (519 file, 05:59–06:15, carico 26–45): 17 252 verdi, **1 rosso**:
+  `dashboard/growthLadderAxis.test.ts` L14-self.4, «Test timed out in 5000ms» (il file intero 19,4 s). Triage
+  (`test-triage` §2, l'orologio): un controllo positivo pesante oltre i 5 s sotto carico, in un file che A8b non tocca;
+  rilanciato da solo (carico 39) **138/138** in 19,2 s. Verdetto: **lentezza dell'ambiente**, non un difetto di A8b.
+- **H-36 in dev** (`d107b6f26`, 06:20): il coordinatore deve unire dev nel mio ramo, ma tre percorsi aperti si
+  sovrappongono (`BACKLOG_POST_1.2.md`, `_backend_utils.py`, `_frontend_utility.py`): chiede un CHECKPOINT a un punto
+  stabile con due elenchi separati (N70 finora; A8b finora). Aspetto la fine del `docs-writer` di A8b (sta scrivendo).
+
+### A8b.3 — Doc ✅ e CHECKPOINT (17/10, 06:20–06:35)
+
+- `docs-writer`: 23 pagine EN (utente `settings/index` con `#administration` e `#tabs-overflow`, `settings/profile`;
+  admin `settings` con `#administration` e `#security-tab` (+ quattro sotto-ancore), `configuration`, `index`,
+  `cli_tools`, e le pagine solo inglesi `email`, `backup_restore`, `hosting_providers`, `users`; developer
+  `features/settings` (`#tab-groups`, `#settings-page`, `#securitytab`), `core-ui/toolbar` (`#tabbar-scrollable`, la
+  sfumatura), `architecture/security` (la scheda ora esiste), e i percorsi «Settings › Administration › …» in altre
+  dieci pagine developer). Le ancore nuove delle pagine tradotte si linkano solo dalla loro pagina.
+- Contraddizioni trovate: la descrizione della scheda diceva «controllata quando apri questa scheda», ma la lettura
+  avviene all'apertura delle Impostazioni (il prefetch del distintivo) → testo corretto nelle 4 lingue con
+  `i18n update` («checked when Settings opens… «Check again» reads it anew»). Fuori da A8b, da dire al coordinatore:
+  le stringhe di E `email/en.json:113-114` dicono ancora «Settings › Email» (le doc le citano alla lettera); i commenti
+  `BackupTab.svelte:2`, `EmailSettingsTab.svelte:2`, `instance_backup/apply.py:3` nominano i posti vecchi; nessuna
+  schermata della galleria per la scheda Sicurezza (G); le righe del limitatore in `security.md:426` e
+  `backend/email.md:1335` sono di N70 (dopo il merge).
+- `dev.py mkdocs build` strict **verde**, `check-links` **verde** (97). `git diff --check` pulito; porta libera.
+- **CHECKPOINT READY** al coordinatore, due elenchi (N70 finora, con diario; A8b finora, sul ramo laterale
+  `e-alfy-a-a8b`). Stato: **FROZEN** 🧊.

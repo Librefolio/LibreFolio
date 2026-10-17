@@ -3994,6 +3994,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     propria (`_NoInputEchoRoute` in `api/v1/plugin_settings.py`).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
     contratto».
+- **A-36 · Il Profilo nasconde la password attuale che il server chiede** — basso (UX, nessun aggiramento); dalla
+  revisione di E di A-25 («R13-SEC3»), tramite il coordinatore (17/10, 04:54). Dopo A7b-2.
+  - `ProfileTab` decide se l'indirizzo cambia sul testo grezzo (`sameEmail` di `features/auth/emailCase.ts`: solo
+    A–Z ripiegate); il server confronta il valore già normalizzato da `EmailStr` (spazi, NFC, IDNA) con quello salvato
+    (`user_service.same_email`). Dove divergono — spazi, una forma NFD, un dominio internazionale, un indirizzo salvato
+    prima della normalizzazione — il server risponde 400 `CURRENT_PASSWORD_REQUIRED` mentre il campo resta nascosto:
+    un vicolo cieco. Direzione: il client chiede la password anche quando il 400 arriva (mostrare il campo su quel
+    codice), oppure confronta come il server.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-25».
 - **A-37 · Togliere `NoInputEchoRoute` dopo l'ingresso di B4 e di A7b-2** — minimo; dal coordinatore (17/10).
   B4 sposta la `route_class` delle impostazioni dei plugin in `backend/app/api/no_echo.py` (`NoInputEchoRoute`, con
   `test_no_echo_route.py`); il gestore globale di A-35 (`api/validation_errors.py`) la rende un doppione. Quando sono
