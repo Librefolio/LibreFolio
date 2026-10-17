@@ -1824,3 +1824,113 @@ Quattro commit, uno per lotto che cambia numeri:
   L87–88, L143–162; `financial_math.md` L69, L124–134, L552. `mkdocs build` stretto exit 0, `check-links` exit 0. Due
   docstring corretti dopo il suo appunto («routes»: `convert_bulk` non triangola).
 - **Da fare in slot**: `api period-changes`, `api assets-price` (le rotte nuove stanno nello stesso router).
+
+#### MF-P2 entrato; R13-SEC7-2 — DoS della Scheduled Investment (17/10, 06:0x)
+- Coordinatore: MF-P2 committato `ed954008e`, base `ba2cd3cf6` (slot 2: `api period-changes` 6, `api assets-price` 18,
+  `financial-math` 871, `period-changes` 20, `fx-core` 42), **entrato** in dev `aa4370905`, HEAD ff **`aa4370905`**.
+  **MF-D4 fermo** (J unico scrittore di `engine.py`, `data_quality.py`, `schemas/portfolio.py`, `portfolio_service.py`,
+  i18n `dataQuality.*` per J-43b e SEC7-1): riparte sulla base con l'ingresso di J, accordo con J tenuto — (a) le righe
+  restano il riscalamento, cade solo il rapporto; `IssueCode.INVALID_SPLIT_RATIO`, `group_key="invalid_split_ratio"`,
+  `dataQuality.invalidSplitRatio` `{count}`, `affected_asset_ids/names`, CTA `navigate_asset`; `InvalidSplitEvent(event_id,
+  asset_id, date)` in `models.py`, `PortfolioCalculationResult.invalid_split_events`; la chiave i18n la scrivo io con
+  `dev.py i18n`; punti dei pezzi suggeriti da J (dopo `MISSING_COST_BASIS`, campo prima di `missing_fx`, ecc.).
+- **R13-SEC7-2** (E, MEDIUM 8/10): le date dei periodi sono controllate solo in ordine
+  (`schemas/assets/scheduled_investment.py:220-241`); `_accrual_days` (`scheduled_investment/plugin.py:168-211`) cammina
+  un giorno alla volta; `POST /assets/provider/probe` (prova a secco, ogni utente) con un piano dall'anno 1 al 9999
+  DAILY → ~3,65 M giorni due volte (storia + `_compute_value_at`), in thread che il timeout di 15 s non ferma, e ~0,7 GB
+  in cache per piano; salvato su un asset condiviso blocca anche la sincronizzazione.
+- **Riverifica** (`aa4370905`):
+  - schema: `FAInterestRatePeriod` solo `end ≥ start`; `FAScheduledInvestmentSchedule.validate_schedule_continuity`
+    solo sovrapposizioni/buchi; `grace_period_days` solo ≥ 0; nessun limite al numero di periodi.
+  - `_compute_maturation_dates` DAILY costruisce un insieme di tutti i giorni; `_generate_schedule_values` mette in
+    cache (`maxsize=256`, 48 h) un dict con un valore per data di maturazione: DAILY = un valore al giorno.
+  - **Quadratico**: in `get_history_value` ogni data di maturazione del periodo di mora chiama
+    `_compute_late_interest_value`, che col COMPOUND rifà il ciclo giornaliero dalla scadenza a quella data.
+  - La sonda: storia dagli ultimi 7 giorni a oggi; `validate_params` gira **dentro** il thread (errore
+    `INVALID_PARAMS` per operazione, HTTP 200); l'assegnazione (`bulk_assign_providers`) non valida i parametri; la
+    sincronizzazione sì (`refresh.py:148`): con lo schema limitato un piano salvato fuori misura fallisce subito, non
+    blocca.
+- **Decisione notturna N73** (da rivedere; mia, su delega del coordinatore):
+  - periodi con le date in **[1900-01-01, 2200-12-31]**; durata dal primo inizio all'ultima fine **≤ 100 anni**
+    (36 525 giorni); **≤ 1 200 periodi** (100 anni mensili); `grace_period_days` **≤ 36 525**;
+  - la mora si valuta al massimo fino al **2200-12-31** (le date oltre non si emettono);
+  - in cache solo i risultati **≤ 3 660 punti** (10 anni giornalieri); oltre, ricalcolati a ogni chiamata, mai salvati.
+  - Perché: 100 anni coprono ogni titolo a scadenza reale e il modello di un perpetuo; 1900–2200 esclude solo date
+    impossibili per un titolo vivo; il tetto della cache tiene il caso peggiore a ~256 × 1 MB.
+- **Piano di cura**: limiti nello schema (`ValueError` → `INVALID_PARAMS` come oggi; dove lo schema è un modello
+  dell'API, 422); in `financial_math/interest.py` una forma chiusa del composto giornaliero
+  `compound_growth(start, end, annual_rate, convention)` = Π (1 + r · frazione del giorno) — ACT/365 e ACT/360 una
+  potenza, ACT/ACT una potenza per anno, 30/360 per mese (passi da 0, 1, 2, 3 trecentosessantesimi); la mora COMPOUND
+  con la forma chiusa (valore corrente) e incrementale fra date consecutive (storia): lineare; nessuna cache sopra il
+  tetto. Rossi prima (test-author); rivedono J (CP-14) ed E.
+- ✅ **Codice SEC7-2** (2026-10-17, solo scrittura, poi i rossi):
+  - `schemas/assets/scheduled_investment.py`: costanti `SCHEDULE_MIN_DATE`, `SCHEDULE_MAX_DATE`, `SCHEDULE_MAX_SPAN_DAYS`,
+    `SCHEDULE_MAX_PERIODS`, `LATE_INTEREST_MAX_GRACE_DAYS` (N73); validatori sulle date del periodo, sul numero dei
+    periodi e sulla durata (in `validate_schedule_continuity`), sulla mora.
+  - `financial_math/interest.py`: `compound_growth(start, end, annual_rate, convention)` = Π (1 + r · f(d−1, d)) in forma
+    chiusa (ACT/365 e ACT/360 una potenza; ACT/ACT una per anno, l'anno di d−1; 30/360 per mese, passi da 0/1/2/3
+    trecentosessantesimi, `_thirty_360_daily_steps`). **Verifica** (script mio, 1 200 intervalli casuali, 4 convenzioni,
+    contro il prodotto giorno per giorno a precisione 60): scarto relativo massimo **4,1·10⁻²⁵**.
+  - plugin: `_late_compound_growth` (grazia al tasso dell'ultimo periodo, poi quello di mora), `_compute_late_interest_value`
+    COMPOUND = V · crescita in forma chiusa; `_late_interest_values` (COMPOUND incrementale fra date emesse
+    consecutive: una passata; SIMPLE in forma chiusa per data); la storia della mora fino a `SCHEDULE_MAX_DATE` al
+    massimo; `_CACHE_MAX_POINTS = 3 660` (sopra, calcolato e mai salvato).
+  - Effetto sul golden dell'accrual (di J, CP-14a/b): `services synthetic-yield` 1 rosso, `accrual_golden`, **solo** le
+    chiavi `late_interest_value_at` dei casi COMPOUND, alle ultime 2–3 cifre su 28 (~10⁻²³ relativo; es. 14072,65031608087426483844185
+    → …844314): la forma chiusa è più esatta dell'arrotondamento a ogni passo; da rigenerare dichiarato. Verdi
+    `synthetic-yield-integration` 15, `scheduled-investment-param-change` 3.
+  - **Il «422»**: lo schema rifiuta con `ValueError`; dalla sonda arriva come `INVALID_PARAMS` per operazione (HTTP 200,
+    come ogni altro parametro non valido), dalla sincronizzazione come errore dell'asset, subito: nessun lavoro lungo. Un
+    422 sulla sonda chiederebbe di validare prima dei thread (cambio di contratto della sonda per tutti i fornitori):
+    da decidere con E/J, non fatto.
+- ✅ **Rossi e reperti di test-author** (primo giro): 3 file nuovi —
+  `test_schemas/test_scheduled_investment_bounds.py` (limiti, `INVALID_PARAMS`), `test_financial_math/test_compound_growth.py`
+  (forma chiusa vs prodotto giorno per giorno, 169 casi), `test_services/test_scheduled_investment_cost_bounds.py`
+  (mora COMPOUND = vecchio ciclo, storia = valore per data, guardia di costo deterministica sulle chiamate di
+  `calculate_day_count_fraction`, tetto della cache, orizzonte); 221 verdi sull'albero, 22 rossi su HEAD per il motivo
+  giusto. Righe del runner aggiunte (dichiarate): `_backend_schemas.py` → `scheduled-investment-bounds`,
+  `_backend_services.py` → `scheduled-investment-cost-bounds` (dopo `synthetic-yield-integration`).
+- ⚠️ **Fuori pista — tre buchi della mia prima cura** (trovati da test-author): (1) scadenza esattamente sul 2200-12-31 →
+  il ramo «senza mora» emetteva un punto dopo l'orizzonte → ora `elif … and not schedule.late_interest`; (2) la mora
+  SIMPLE in ACT/ACT restava super-lineare (la frazione cicla gli anni dalla scadenza: 41 s fino al 2200) → (3) l'importo
+  del `MATURITY_SETTLEMENT` di mora differiva dall'ultimo prezzo nelle ultime cifre → ora il valore stesso della griglia.
+  Per (2) avevo scritto un ACT/ACT O(1) (una divisione esatta, arrotondata una volta): **rompeva** il contratto di J
+  (`test_day_count_conventions.py::TestACTACTYearEnds::test_span_across_a_leap_year_end`, somma per anno cifra per cifra) e
+  l'additività al 1° gennaio (22 270 intervalli su 148 840 a 1 ulp) → **tornato indietro**: la stessa somma anno per
+  anno, nello stesso ordine, con il prefisso degli anni interi in `lru_cache(4096)` (`_act_act_years_before`): cifre
+  identiche (20 000 intervalli casuali, `str` uguali a HEAD), costo ammortizzato. In più la storia COMPOUND della mora
+  cresce dalla scadenza su tutta la griglia (il valore d'una data non dipende più dalla finestra letta); la SIMPLE
+  valuta solo le date emesse e l'ultima.
+- **Misure** (un processo, `nice 10`, carico ~35): piano tipico 5 anni MONTHLY 13 ms la prima volta, poi in cache; il
+  caso peggiore ammesso (100 anni DAILY, fuori cache) ~130 ms il valore corrente, ~250 ms la storia intera; scadenza 1950
+  con mora DAILY COMPOUND fino a oggi ~70 ms (7 giorni) / ~150 ms (intera); **l'attacco anno 1–9999 DAILY rifiutato in
+  0,6 ms** (`INVALID_PARAMS`).
+- `start_date="min"` di `get_history_value` solleva su HEAD e sull'albero (`start_date < min(cached)` col letterale):
+  difetto preesistente, fuori perimetro → riga **MF-SI1** nel backlog.
+- ⚠️ **Fuori pista — il memo e il contesto Decimal** (test-author): `_act_act_years_before` in cache restituiva la
+  somma arrotondata nel contesto di chi l'aveva riempita per primo (60 cifre in un `localcontext`, poi 60 cifre anche nel
+  contesto normale). Nessun effetto oggi nel prodotto (l'unico `localcontext` di `backend/app`, `ledger_totals`, non
+  chiama le frazioni), ma un accoppiamento nascosto → `precision` e `rounding` del chiamante nella chiave del memo.
+  Riprova: 60 cifre nel `localcontext`, 28 fuori.
+- ✅ **Test finali** (test-author, terzo giro): `test_act_act_fraction.py` riscritto (uguaglianza `str` col ciclo di HEAD
+  su 18 intervalli e 8 490 coppie, lunghe serie da un inizio, additività al 1° gennaio su ~13 000 tagli, costo
+  ammortizzato), sezione H (indipendenza dalla finestra, 4 convenzioni × DAILY/MONTHLY), guardia di costo SIMPLE ACT/ACT
+  col memo. Mutazioni: (a) tolta → gli 8 casi H rossi; memo spento → i 5 test di costo rossi, le cifre verdi.
+- ✅ **Rossi** (`files/sec7.sh red`, 06:38, patch prodotto `78587084…`, rimessa con lo stesso sha):
+  `schemas scheduled-investment-bounds` **13 failed / 5 passed**; `financial-math "test_compound_growth or act_act"` →
+  errore di raccolta (`ImportError` di `compound_growth`); `services scheduled-investment-cost-bounds` **13 failed / 50
+  passed** (costo, cache, orizzonte).
+- ✅ **Verdi** (06:39–06:41): `scheduled-investment-bounds` 18, `schemas assets` 70, `financial-math` **1076**,
+  `scheduled-investment-cost-bounds` 63, `synthetic-yield-integration` 15, `scheduled-investment-param-change` 3,
+  `utils day-count` **43** (il contratto ACT/ACT di J verde), `utils provider-core-cache` 46; `synthetic-yield` 23 + il
+  golden rosso atteso.
+- ✅ **Golden rigenerato e rivisto** (`files/sec7.sh regen`): **44 percorsi**, tutti `late_interest_value_at` dei casi con
+  mora COMPOUND (s2 ×8, s3 compound ×4), scarto relativo massimo **1,05·10⁻²⁵**; nient'altro (values, value_at,
+  auto_events, mora SIMPLE). Cambio dichiarato nel commento del golden in `test_synthetic_yield.py` (come CP-14b).
+  `synthetic-yield` **24** verde.
+- ✅ **Doc** (docs-writer, due giri): `provider_scheduled_investment.md` (L36–56 «Bounds», L122, L136–154 mora, L156–175
+  cache con il tetto e i tempi misurati, L214 ACT/ACT col memo), `financial_math.md` (L71, L555 — anche
+  `test_act_act_fraction.py`, ritocco mio —, L583), utente `scheduled-investment.en.md` L40–47 (nota «Limits of a
+  schedule»). `mkdocs build` stretto exit 0 (anche dopo il mio ritocco), `check-links` exit 0. **Debito di traduzione**
+  it/fr/es della pagina utente: una nota in più (`admonition-count`, `admonition-type`, link `#late-interest`).
+- ruff/black (11 file) puliti, `git diff --check` pulito, porta libera.

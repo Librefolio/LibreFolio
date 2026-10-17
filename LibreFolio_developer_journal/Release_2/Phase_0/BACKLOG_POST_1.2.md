@@ -6567,3 +6567,8 @@ punto di partenza, l'audit dello stesso giorno:
   schemi non importano servizi per scelta: oggi è un controllo dichiarato, non una seconda implementazione. Da
   decidere se resta così (riga nella pagina dev) o se la formula scende in un modulo che entrambi possono leggere.
   Dettagli: piano MF, sezione «MF-D resto».
+- **MF-SI1 · La storia della Scheduled Investment da «min» solleva** — basso, preesistente; test-author di MF, 17/10
+  (R13-SEC7-2). `get_history_value(start_date="min")` confronta il letterale `"min"` con le date
+  (`start_date < min(cached.keys())`) e filtra gli eventi con `start_date` invece di `effective_start`: solleva
+  `CALCULATION_ERROR`, su HEAD come dopo SEC7-2. La via del refresh può passare `"min"`. Cura: `effective_start` in quei
+  due punti, rossi prima. Dettagli: piano MF, sezione «R13-SEC7-2».
