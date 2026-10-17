@@ -5634,6 +5634,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Resta giusta anche se H darà un codice al rifiuto anonimo del blocco.
     - EVA-017 fissa `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`.
     - Dettagli: piano 08, «E-11.0» e seguenti.
+    - Commit `18d945d2e` (codice), `f2b459ebe` (docs), `fdd4acc6d` (journal); in `dev_release2` col merge `bca4bd6d3`.
 - **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
   `mailbox_budget_key()` unisce gli alias `+tag` e i punti di Gmail. Restano due casi:
   - un dominio catch-all, dove ogni parte locale arriva alla stessa casella;
