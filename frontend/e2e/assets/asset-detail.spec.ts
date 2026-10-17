@@ -103,13 +103,21 @@ async function mockDetailAssetWithGlobalTransactions(page: Page, assetId: number
  *
  * Kept as one helper because the "Asset Detail Page" suite and other sibling suites in
  * this file (e.g. the live price flash tests below) can share it.
+ *
+ * Y-33: the click is a cold client-side navigation, and SvelteKit changes the URL only
+ * once the detail route's chunk is imported — the slow part in a fresh context under
+ * load — so the URL gets its own 30 s ceiling and the root keeps 10 s for the render.
+ * On 17/10, at a 1-minute load of 93, one 10 s wait covering both expired with the page
+ * still on the list, while the same test passed alone in 4.1 s. The click is not
+ * retried: a swallowed click must fail here, on the URL.
  */
 async function goToSeededAssetDetail(page: import('@playwright/test').Page) {
     await goToAssetsPage(page);
     const card = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
     await expect(card, 'the seeded Apple asset must be on the list').toBeVisible({timeout: 10_000});
     await card.click();
-    await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
+    await expect(page, 'the card click navigates to the asset detail page').toHaveURL(/\/assets\/\d+(?:\?|$)/, {timeout: 30_000});
+    await expect(page.getByTestId('asset-detail-page'), 'the asset detail page renders once its URL has landed').toBeVisible({timeout: 10_000});
     await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
 }
 
@@ -321,7 +329,8 @@ test.describe('Asset Detail Page', () => {
     });
 
     test('the calendar Rolling Return from the risk tree is queried with its 30-day window and shows no error', async ({page}) => {
-        // Navigation is budgeted up to ~40 s by goToSeededAssetDetail, then one signal round-trip.
+        // Raised for a cold navigation through goToSeededAssetDetail, slow under load, then one signal round-trip.
+        // The helper's waits are ceilings: this test timeout, not their sum, bounds the navigation.
         test.setTimeout(60_000);
         // Decision 29 published ASSET_CALENDAR_ROLLING_RETURN in the catalog. Until then it fed only the
         // page's primary calendar mode (instance `asset-calendar-return`, driven by «calendar-return primary
@@ -8561,8 +8570,10 @@ test.describe('All-range event markers on a price-cache hit', () => {
         const card = page.getByTestId(`asset-card-${assetId}`);
         await expect(card).toBeVisible({timeout: 10_000});
         await card.click();
+        // The URL, then the root, each with its own ceiling — why: goToSeededAssetDetail's Y-33 paragraph.
+        await expect(page, 'the card click navigates to the detail page of this asset').toHaveURL(new RegExp(`/assets/${assetId}(?:\\?|$)`), {timeout: 30_000});
         const detail = page.getByTestId('asset-detail-page');
-        await expect(detail).toBeVisible({timeout: 10_000});
+        await expect(detail, 'the asset detail page renders once its URL has landed').toBeVisible({timeout: 10_000});
         await waitForSettled(detail, 20_000);
 
         const eventsOnly = await waitForDeliveredPriceQuery(log, detailMark, (entry) => entry.assetId === assetId && entry.includePrice === false && entry.includeEvents === true, 'the detail must reuse the list cache and ask only for events');
