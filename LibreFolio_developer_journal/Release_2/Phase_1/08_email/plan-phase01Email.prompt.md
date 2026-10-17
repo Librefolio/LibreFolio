@@ -6000,6 +6000,106 @@ non sposti il registro.
 >
 > Pagine solo inglesi: niente traduzioni né stamp.
 
+### X-R49 — La vista del chiamante (2026-10-17, 12:2x; dopo l'ingresso, sola lettura dagli oggetti git)
+> **Il compito del coordinatore** (12:25): X-R49 (dev `e710cf552`, commit `589f15607`). Il controllo
+> `_reject_wipes_of_costless_split_adjustments()` di `provider_management.py` gira prima della prima scrittura, e il
+> 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` porta `params.splits` con gli id visibili al chiamante e un
+> conteggio dei nascosti, come X-R48.
+>
+> **Esito: OK, nessun reperto.**
+> - **La vista del chiamante**: `split_guard.splits_with_costless_adjustments` nomina solo le transazioni di un broker
+>   dove il chiamante ha una riga `BrokerUserAccess`, di qualunque ruolo, e conta le altre.
+>   - È la regola del progetto (`get_accessible_broker_ids`).
+>   - Il modello non ha accessi in attesa o rifiutati: una riga è un accesso.
+>   - Senza chiamante non nomina nessuno.
+>   - L'unica rotta (`assign_providers_bulk`) passa il chiamante, e anche X-R48 (`currency_change.py`) lo passa ora
+>     dall'aiuto condiviso.
+> - **Il messaggio** dà solo i totali. `asset_id` e `item_index` vengono dalla richiesta del chiamante; `event_id` e
+>   `date` sono eventi di un asset globale.
+> - Il conteggio dei nascosti dice che altri utenti hanno aggiustamenti senza costo su un asset globale: è il minimo,
+>   per scelta (X-R48, R13-SEC7).
+> - **Nessuna scrittura prima del rifiuto**, nemmeno per le voci precedenti della richiesta. Un asset nominato due volte
+>   è confrontato con la sua voce precedente, come fa il ciclo di scrittura.
+> - **Il frontend**: il rifiuto è una frase i18n con valori, dentro `formError`. Nessun `{@html}` nel commit, e solo i
+>   codici propri della mappa (`hasOwnProperty`).
+> - Un provider solo per i test fuori dal test mode non è parametrico (X-R44 dà `None`), quindi nessun motivo di
+>   cancellazione.
+>
+> **Nota** (info, la stessa classe di A-42 e di X-R48): il controllo legge prima del BEGIN differito. Un aggiustamento
+> senza costo collegato a uno SPLIT generato, salvato da un altro utente nella finestra fra il controllo e la
+> cancellazione, sfugge.
+> - La finestra è di millisecondi.
+> - La cura, se la si vuole: ripetere il controllo dopo la prima scrittura, sotto il lock, come A-42.
+
+### H-45 — La revisione (2026-10-17, 12:3x; sola lettura, ramo di H: `3553c7870` codice e test, `77e9611e0` docs)
+> **Esito: OK, nessun reperto.** È il seguito che avevo proposto in H-42, più la mia nota latente sul 304.
+> - **`_is_document()`**: il tipo della risposta (il primo `content-type`, senza parametri, in minuscolo) è in
+>   `DOCUMENT_MEDIA_TYPES` (`text/html`, XHTML, SVG, `application/xml`, `text/xml`) o finisce in `+xml`.
+>   - PDF, JSON e `+json` restano fuori.
+>   - Il report-only vuole `text/html` esatto.
+> - **Il 304 non riceve nessuna CSP**: resta quella della copia in cache, e il report-only lo stesso. `X-Frame-Options`
+>   su un 304 è inerte. Chromium 149 sostituisce la CSP salvata con quella di un 304: H l'ha provato nel browser, io
+>   l'avevo detto solo dalla RFC.
+> - **Le note di H**:
+>   - il 206 multi-range (`multipart/byteranges`) tiene il solo `frame-ancestors`, ma non si raggiunge come documento:
+>     una navigazione non manda `Range`, e con nosniff quel tipo non si rende come markup. Accettato;
+>   - il sitemap (`text/xml`, e `.xml.gz` con lo stesso tipo) ha ora la politica, innocua: niente `<object>`, `<base>`
+>     o form, e il visore XML non ne risente;
+>   - la frase dei docs «nessun SVG servito oggi» regge, verificata: l'unico SVG nei sorgenti,
+>     `frontend/src/lib/assets/favicon.svg` (quello del modello di SvelteKit), non lo importa nessuno, quindi non è
+>     nella build.
+> - **HEAD**: una risposta HEAD porta il suo `content-type`, quindi la stessa politica del 200; nessuna perdita da lì.
+> - Il cambio dello spec E2E è solo nella JSDoc.
+
+### E-17 — Due errori di `tsc -p frontend/tsconfig.e2e.json` (2026-10-17, 12:3x–12:5x)
+> **Il compito del coordinatore** (12:35, un riempitivo in attesa di A-42/A-43): due errori preesistenti, di nessun
+> ramo attivo.
+> - `e2e/onboarding-tour.spec.ts:863` TS2322 (da `580bd504f`, onboarding).
+> - `src/lib/types/files.ts:9` TS2307 `$lib/api/generated` (da `ff38088b9`): `tsconfig.e2e.json` non ha `$lib`.
+> - La richiesta: correggerli al minimo (solo tipi nella spec; `paths` o `include` nel tsconfig), senza cambi a
+>   runtime, fino a `tsc` pulito, più Prettier; poi FROZEN. Nessun E2E se cambiano solo tipi e configurazione.
+>
+> **Riprodotto** (HEAD `ac3c03177`): **5 errori**, non 2. Gli altri 3 sono TS2769 in `e2e/assets/asset-list.spec.ts:1046`
+> e `e2e/fixtures/sync-overwrite.ts:89,125`.
+> - Prima ipotesi: il mio `generated.ts` (09:49) era vecchio. Rigenerato con `dev.py api sync` (36 s; scrive solo file
+>   ignorati, verificato con `git check-ignore` e `git status`): i 3 restano.
+> - **La causa**: `schemas.FAPriceQueryResponse.parse()` porta l'allargamento di E-2 (`backward_fill_info` diventa
+>   `X | (X | null)[] | null`). Contro di lui va il parametro di `isStoredPoint` di C-66 (`c18517e31`, 11:03, in dev).
+> - Sono di un ramo attivo: non li tocco, li segnalo.
+>
+> **Le cure**:
+> - **TS2322** (riga 863): `TRANSACTION_FORM_GUIDE_STEPS` è `as const`, e nessuno dei quattro passi ha `placement`.
+>   Quindi `'placement' in guideStep` restringe a `Record<"placement", unknown>`: il codice era scritto per un passo
+>   futuro.
+>   - La cura senza cast: tipizzare la lista con le opzioni della funzione che la riceve,
+>     `ReadonlyArray<Pick<Parameters<typeof expectGuideStep>[1], 'stepId' | 'pointer' | 'highlight' | 'placement' |
+>     'allowTargetOverlap'> & {targetId: string}>`.
+>   - **⚠️ Fuori pista**: corretto quello, `tsc` mostra l'errore che copriva, TS2345 alla riga 858. La chiamata non
+>     passa `backdrop`, che `expectGuideStep` vuole. Oggi `options.backdrop` è `undefined`, e la funzione lo legge solo
+>     in `if (options.backdrop)`, quindi va nel ramo «nessun backdrop».
+>   - **`backdrop: false`** prende lo stesso ramo: comportamento identico, ed è quello che passano esplicitamente gli
+>     altri 18 chiamanti.
+>   - Renderlo facoltativo nella firma avrebbe indebolito il tipo di tutti e 19.
+> - **TS2307**: `"paths": {"$lib": ["./src/lib"], "$lib/*": ["./src/lib/*"]}` in `tsconfig.e2e.json`, come i `$lib` di
+>   `.svelte-kit/tsconfig.json`. TypeScript 5.9.3 non vuole `baseUrl`.
+> - **Nessun cambio a runtime**:
+>   - `playwright.config.ts` non nomina un tsconfig, quindi a runtime Playwright risolve `$lib` da `tsconfig.json`, che
+>     estende quello di SvelteKit;
+>   - `files.ts` è raggiunto solo da un `import type` (`e2e/files-uploader.spec.ts:14`);
+>   - nessun runner, gate o script di `package.json` usa `tsconfig.e2e.json`.
+>
+> **Prove** (12:4x–12:5x, carico sotto 50):
+>
+> | Controllo | Esito |
+> |---|---|
+> | `tsc -p tsconfig.e2e.json`, prima | 5 errori (`files/logs/e17_tsc_before.log`) |
+> | dopo `api sync` | gli stessi 5 |
+> | dopo le cure | **3**, solo i TS2769 di C-66 (`e17_tsc_after2.log`); i due assegnati spariti, e nessuno nuovo |
+> | Prettier su spec e tsconfig | pulito; `--write` ha anche raccolto l'array `include` su una riga (il file non era conforme) |
+> | `git diff --check` | pulito |
+>
+> **Non eseguito**: nessun E2E (solo tipi, configurazione e un `false` che prende lo stesso ramo di `undefined`).
+
 ### A-42/A-43 — La revisione preparata (2026-10-17, 12:2x; sola lettura, A sta scrivendo il codice)
 > **Il compito del coordinatore**: guardare ora A-42/A-43, cioè le mie note 1, 2 e 6 di R13-SEC4, così la revisione è
 > pronta al checkpoint di A. Niente codice.
