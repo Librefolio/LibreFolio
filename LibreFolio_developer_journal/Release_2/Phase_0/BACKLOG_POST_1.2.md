@@ -6309,7 +6309,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   La matrice dei plugin lo fissa (`test_period_params_declare_their_unit_and_tooltip`). Commit: il checkpoint di CP-10a.
 
   Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati».
-- **J-14 · Copie del realizzato e della G/L % da portare alla regola del punto 26** — medio, numeri; J, 15/10. Il
+- ✅ **J-14 · Copie del realizzato e della G/L % da portare alla regola del punto 26** — medio, numeri; J, 15/10. Il
   developer (punto 26): «se ci sono altre aree di codice che fanno una cosa simile, magari duplicando, segna che bisogna
   fattorizzare e ottenere il meglio dalle 2 con la policy corretta». Regola: costo al cambio dell'acquisto, proventi al
   cambio della vendita; il motore della Dashboard la applica già.
@@ -6323,6 +6323,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     dal coordinatore. ✅ Fatta da CP-7a (`gain_loss_ratio`, treno 107, `4f9e94420`).
 
   Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati», «Inventario del punto 26».
+  ✅ **Chiusa il 17/10** (coordinatore, mappatura di MF): i punti 2, 3 e 7 da CP-7a, il 6 da CP-4 (`gain_loss_ratio`), il 4 ereditato (somma valori già convertiti); il 5 (residuo d'identità dell'AI Export) e il 5b (`period_other_result` in `get_positions_contribution`) dal lotto J-14 di MF: `period_identity_residual` e `is_reconciled` in `financial_math/portfolio/period.py`, nessun valore cambia (`8cc5661bc`, dev `f44340118`).
 - **J-15 · La galleria ristampa l'output di Playwright senza flush** — basso, strumenti (programma colori); J, 15/10,
   nella prova di C-94. `dev.py`, `cmd_mkdocs_gallery`, `print(line, end='')` nel ciclo su `proc.stdout`: su una pipe
   (il `tee` di `gallery_snapshot.sh`, i log) Python bufferizza a blocchi, e l'avanzamento di Playwright arriva a pezzi da
