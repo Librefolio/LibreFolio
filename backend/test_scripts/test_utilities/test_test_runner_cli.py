@@ -113,6 +113,16 @@ names; otherwise the refusal, which names the category and every name given, the
 arguments come from the real parsers; every seam an entry reaches before or instead of
 a run, ``subprocess.run`` and ``Popen`` included, fails the test if reached; ``dev`` is
 imported by its one case only, with the working directory and ``sys.path`` put back.
+
+The H-30 regressions pin that a body that raises still leaves the lane's database
+snapshotted next to the logs. With ``--log-file``, the standalone ``main()`` called
+``_snapshot_log_dir_db()`` after ``_timed_run``, outside any ``finally``: a body that
+raised skipped it, and the run that crashed, the one whose database is evidence, left
+none. ``_dispatch_test_command`` (``dev.py test``) has the ``finally`` in both branches.
+Both entries, with ``--log-file`` or without, call ``_snapshot_log_dir_db`` once, after
+the body, inside the log's tee when there is one, and let the body's exception through.
+Pure: H-26's ``entry_steps`` (every seam closed, the entry's steps recorded), a
+``tee_output`` that only records, and a body answering 0 or raising ``H30BodyCrash``.
 """
 
 from __future__ import annotations
@@ -2219,6 +2229,124 @@ class TestDevPyExitsWithTheRefusal:
 
         assert rc == 2, f"H-26: dev.py test services all {' '.join(H26_NAMES)} must exit 2: dev.py's main() returns what the test entry returns (got {rc!r})"
         _assert_refusal(capsys.readouterr().out, "services", "all", H26_NAMES, "stdout")
+
+
+# ── H-30: with --log-file too, a body that raises still leaves the lane's database next to the logs ───────────────────
+# ``main()`` (``python -m scripts.test_runner``) took the snapshot of the lane's database (``_snapshot_log_dir_db``)
+# in a ``finally`` only without ``--log-file``: with it, the call came after ``_timed_run``, so a body that raised
+# skipped it, and the run that crashed, the one whose database is evidence, left none. ``_dispatch_test_command``
+# (``dev.py test``) has the ``finally`` in both branches. Every case drives a real entry with H-26's ``entry_steps``
+# (every seam closed, the entry's steps recorded), ``tee_output`` recorded instead of teeing, and a body that answers
+# 0 or raises ``H30BodyCrash``. Today's code fails one case, the body raising through ``main()`` with ``--log-file``
+# ("H-30: … the lane's database must still be snapshotted …"); the others are guards, green before and after.
+
+#: The action every case runs: this file's own, given no test names, so the H-26 rule lets it through to the body.
+H30_ACTION = ("utils", H25_UTILS_ACTION)
+#: What the recorded ``tee_output`` adds to the steps: entering the block it wraps, and exiting it, raising or not.
+H30_TEE_ENTERED = "tee_output entered"
+H30_TEE_EXITED = "tee_output exited"
+#: Both entries, as ``(the function the words go through, its body, the command it serves)``.
+H30_ENTRIES = [
+    pytest.param("main", "_main_body", "python -m scripts.test_runner", id="main"),
+    pytest.param("_dispatch_test_command", "_dispatch_test_command_body", "dev.py test", id="dev-py-test"),
+]
+
+
+class H30BodyCrash(RuntimeError):
+    """What a crashing body raises: a class of its own, so that ``pytest.raises`` catches this crash and no other."""
+
+
+def _h30_args(entry: str, *words: str) -> argparse.Namespace:
+    """``words`` read by ``entry``'s parser, nothing run: ``create_parser()`` for ``main``, ``dev.py``'s ``test`` parser otherwise."""
+    return _runner_args(*words) if entry == "main" else _dev_test_args(*words)
+
+
+def _h30_run(monkeypatch, entry: str, *words: str):
+    """``words`` through the real ``entry``: ``main()`` reads them from ``sys.argv``, ``_dispatch_test_command`` gets them parsed."""
+    if entry == "main":
+        return _run_runner_main(monkeypatch, *words)
+    return runner_cli._dispatch_test_command(_dev_test_args(*words))
+
+
+def _teed(steps: list[str]) -> list[str]:
+    """``steps`` as an entry runs them with ``--log-file``: inside the log's tee, entered first and exited last."""
+    return [H30_TEE_ENTERED, *steps, H30_TEE_EXITED]
+
+
+def _crash_the_body(monkeypatch, steps, body: str) -> None:
+    """``body`` replaced, where the entry looks it up, by a stand-in that records itself in ``steps.events`` and raises."""
+
+    def crash(*_call_args):
+        steps.events.append(body)
+        raise H30BodyCrash(f"H-30: {body} crashed, as a category that raises would")
+
+    monkeypatch.setattr(runner_cli, body, crash)
+
+
+@pytest.fixture
+def teed_entry_steps(monkeypatch, entry_steps):
+    """``entry_steps``, with ``_common.tee_output`` recorded in the same ``events``: entered, then exited.
+
+    The stand-in tees nothing and writes no file. Like the real one, it exits whether the block returns or raises, and
+    it lets the exception through. Both entries look it up on ``_common`` when ``--log-file`` is given; without it, it is
+    never entered.
+    """
+
+    @contextlib.contextmanager
+    def tee_output(log_path):
+        entry_steps.events.append(H30_TEE_ENTERED)
+        try:
+            yield log_path
+        finally:
+            entry_steps.events.append(H30_TEE_EXITED)
+
+    monkeypatch.setattr(_common, "tee_output", tee_output)
+    return entry_steps
+
+
+@pytest.mark.parametrize(("entry", "body", "command"), H30_ENTRIES)
+class TestTheLaneDatabaseIsSnapshottedWhateverTheBodyDoes:
+    """Contract: an entry snapshots the lane's database once, after its body, whether the body answers or raises.
+
+    With ``--log-file`` it does so inside the log's tee, as ``_dispatch_test_command`` does, so the snapshot's line lands
+    in the log; the body's exception goes through the entry unchanged. Every case runs through both entries: ``main()``,
+    the H-30 defect, and ``_dispatch_test_command``, which has the ``finally`` in both branches already.
+    """
+
+    def test_with_a_log_file_a_body_that_raises_still_leaves_the_database_snapshotted(self, monkeypatch, tmp_path, teed_entry_steps, entry, body, command):
+        log_file = tmp_path / "run.log"
+        words = ("--log-file", str(log_file), *H30_ACTION)
+        _assert_parsed(_h30_args(entry, *words), *H30_ACTION, (), {"log_file": str(log_file)})
+        _crash_the_body(monkeypatch, teed_entry_steps, body)
+
+        with pytest.raises(H30BodyCrash):
+            _h30_run(monkeypatch, entry, *words)
+
+        events = teed_entry_steps.events
+        shown = f"{command} {' '.join(words)}"
+        assert events.count("_snapshot_log_dir_db") == 1, f"H-30: {shown}: the body raised, and the lane's database must still be snapshotted next to the logs, once: the run that crashed is the one whose database is evidence (ran: {events})"
+        assert events == _teed(_steps_of(body)), f"H-30: {shown}: the snapshot comes after the body and before the log's tee exits, the other steps in today's order (ran: {events})"
+
+    def test_with_a_log_file_a_body_answering_0_runs_todays_steps(self, monkeypatch, tmp_path, teed_entry_steps, entry, body, command):
+        """Guard, green before and after: the body answers 0, and the snapshot follows it, once, inside the log's tee."""
+        log_file = tmp_path / "run.log"
+        words = ("--log-file", str(log_file), *H30_ACTION)
+        _assert_parsed(_h30_args(entry, *words), *H30_ACTION, (), {"log_file": str(log_file)})
+
+        rc = _h30_run(monkeypatch, entry, *words)
+
+        assert rc == 0, f"the body answered 0, and so must {command} {' '.join(words)} (got {rc!r})"
+        assert teed_entry_steps.events == _teed(_steps_of(body)), f"{command} {' '.join(words)} runs today's steps, in today's order, inside the log's tee (ran: {teed_entry_steps.events})"
+
+    def test_without_a_log_file_a_body_that_raises_still_leaves_the_database_snapshotted(self, monkeypatch, teed_entry_steps, entry, body, command):
+        """Guard, green before and after: without ``--log-file``, both entries already snapshot in a ``finally``."""
+        _assert_parsed(_h30_args(entry, *H30_ACTION), *H30_ACTION, (), {"log_file": None})
+        _crash_the_body(monkeypatch, teed_entry_steps, body)
+
+        with pytest.raises(H30BodyCrash):
+            _h30_run(monkeypatch, entry, *H30_ACTION)
+
+        assert teed_entry_steps.events == _steps_of(body), f"{command} {' '.join(H30_ACTION)}: the body raised, and the lane's database is still snapshotted, once, after the body, with no log tee entered (ran: {teed_entry_steps.events})"
 
 
 if __name__ == "__main__":
