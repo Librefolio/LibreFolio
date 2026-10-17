@@ -60,9 +60,15 @@ export interface ShownInPeriod {
  * Whether a point answered by `POST /assets/prices/query` or `POST /fx/currencies/convert` is a stored row: not
  * filled backward from an earlier date, i.e. no `backward_fill_info`, or one with `days_back` 0 (a stored price
  * converted with an older FX rate).
+ *
+ * The generated client types `backward_fill_info` wider than the wire (which sends an object or null): its TypeScript
+ * union also holds a list. Read as the pages read it (`extractDaysBack`): only an object's numeric `days_back` counts,
+ * anything else is 0.
  */
-export function isStoredPoint(point: {backward_fill_info?: {days_back?: number | null} | null}): boolean {
-    return (point.backward_fill_info?.days_back ?? 0) === 0;
+export function isStoredPoint(point: {backward_fill_info?: unknown}): boolean {
+    const info = point.backward_fill_info;
+    const daysBack = info !== null && typeof info === 'object' && 'days_back' in info ? info.days_back : 0;
+    return (typeof daysBack === 'number' ? daysBack : 0) === 0;
 }
 
 function inPeriod(date: string, period: SyncPeriod): boolean {
