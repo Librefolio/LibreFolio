@@ -3892,6 +3892,59 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   Oggi l'admin iniziale in attesa riceve un link nuovo solo da `dev.py user setup-link` (o dal pannello di chi ospita):
   la scheda Utenti mostra il suggerimento, nessun pulsante. Dettagli: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b — Analisi e contratto».
+- **A-31 · Il ripristino revoca il link di setup che l'avvio ha appena riarmato** — basso, non è un difetto della 1.3;
+  da B tramite il coordinatore (16/10); A e B insieme.
+  - Il caso: un archivio con l'admin iniziale ancora in attesa **e** un altro admin attivo, ripristinato su
+    un'istanza con `LIBREFOLIO_ADMIN_EMAIL` e un token mai visto. Con l'ordine d'avvio della decisione N57
+    (`global-settings` → `admin-bootstrap` → `restore-commit` → `plugin-secrets-check`) il bootstrap riarma il link di
+    setup e il commit del ripristino, che revoca ogni link vivo di qualunque scopo, lo revoca subito: serve
+    `./dev.py user setup-link`, e il log dell'avvio successivo lo dice.
+  - Cura possibile (B): nel commit, risparmiare i link emessi dall'avvio in corso.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Dopo A7b — A-31».
+- ✅ **A-32 · Un admin iniziale disattivato si riattiva con il suo vecchio link di setup** — medio (sicurezza, confidenza
+  5/10); chiusa il 17/10 in A7b-2 (commit del coordinatore); dalla revisione di sicurezza di E («R13-SEC»), tramite il
+  coordinatore (16/10).
+  - Cura (N60): `token_service.retire_tokens` (revocato e consumato insieme) a ogni attivazione e a ogni password data,
+    e nel rifiuto di `complete_admin_setup`; per ogni account con un link di setup.
+  - `complete_admin_setup` rifiuta solo un account attivo; le altre attivazioni (PATCH dell'admin, `user activate`) e
+    gli altri modi di dare una password (`user reset`, link di reset, cambio password) non toccano i link
+    `ADMIN_SETUP`: attivato per altra via e poi disattivato entro le 72 h, l'account torna «in attesa» e chi ha il link
+    (anche dal log) lo riattiva con una password sua.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- ✅ **A-33 · Cambiare l'indirizzo dell'admin in attesa non revoca il link già mandato al vecchio** — basso (sicurezza,
+  confidenza 5/10); chiusa il 17/10 in A7b-2 (commit del coordinatore); dalla revisione di E («R13-SEC»), tramite il
+  coordinatore (16/10). Cura: un cambio vero dell'indirizzo revoca i link di setup (`_follow_variables`,
+  `update_profile`); l'account resta in attesa.
+  - `_follow_variables` cambia l'email dell'account in attesa quando cambia `LIBREFOLIO_ADMIN_EMAIL`, ma il link di
+    setup già consegnato al vecchio indirizzo resta buono; lo stesso per `user set-email` sull'account in attesa.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- **A-34 · `end_sessions` incrementa la copia in memoria: due incrementi concorrenti ne contano uno** — basso;
+  dalla revisione di E («R13-SEC»), tramite il coordinatore (16/10). Valutata in A7b-2 e lasciata: non costa poco
+  (`test_session_version.py` ne fissa la forma sincrona, contratto 5; 9 chiamate da rendere asincrone). Con A8.
+  - `user_service.end_sessions` fa `user.session_version += 1` sull'oggetto: due richieste quasi simultanee
+    scrivono lo stesso valore, e un cookie riemesso fra le due (cambio password) sopravvive alla seconda. Finestra
+    sotto il secondo. Cura: l'incremento in SQL (`session_version = session_version + 1`), 9 chiamate.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- ✅ **A-35 · Una risposta 422 rimanda indietro la password** — medio (sicurezza); chiusa il 17/10 in A7b-2 (commit del
+  coordinatore); dal coordinatore (16/10). Cura (D2): `api/validation_errors.py`, `install_validation_error_handler`
+  in `main.py`, toglie `input` da ogni errore del 422 di tutta l'app.
+  - Il gestore predefinito di FastAPI mette `input` in ogni errore di validazione: un campo troppo corto rimanda il suo
+    valore, e un campo **mancante** rimanda tutto il corpo, password e token compresi (provato in processo con
+    FastAPI 0.141.1). Vale per login, registrazione, cambio password, reset, setup, profilo, eliminazione dell'account,
+    e per le rotte degli altri con segreti nel corpo. Le impostazioni dei plugin lo evitano già con una `route_class`
+    propria (`_NoInputEchoRoute` in `api/v1/plugin_settings.py`).
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
+    contratto».
+- **A-37 · Togliere `NoInputEchoRoute` dopo l'ingresso di B4 e di A7b-2** — minimo; dal coordinatore (17/10).
+  B4 sposta la `route_class` delle impostazioni dei plugin in `backend/app/api/no_echo.py` (`NoInputEchoRoute`, con
+  `test_no_echo_route.py`); il gestore globale di A-35 (`api/validation_errors.py`) la rende un doppione. Quando sono
+  dentro entrambi: togliere la classe e il suo uso in `api/v1/plugin_settings.py`, adattare `test_no_echo_route.py`,
+  aggiornare `developer/architecture/patterns/plugin_settings.md` (riga sulla classe). Il test di
+  `test_plugin_settings_api.py` resta: passa dal server vero. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Decisioni del coordinatore».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
