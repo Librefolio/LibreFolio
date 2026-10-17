@@ -6920,3 +6920,56 @@ prossimo checkpoint.
   - `front check` 0 errori, 0 avvisi;
   - `utils gate-i18n-catalog` 176, `gate-i18n-usage` 195.
   - Porta 6185 libera.
+
+#### J-42 e J-19 (17/10, dalle ~20:52; base `c80031659`)
+
+- ✅ **J-57 e J-21 bis entrati**: dev `539371064` (`b7e2bb3bd`, `def1d5259`, `203a36231`), CHANGELOG `c80031659`. W rivede
+  J-57, Y il tetto.
+- ✅ **Revisioni**: MF-A10 (`dddadd359`) OK; J-14 di MF (`8cc5661bc`) OK.
+- ✅ **J-42, già fatta** (tornata da X a J, verificata in sola lettura):
+  - La scrittura è **X-R47** (`5f68a8db0`): `bulk_upsert_events` → `_reject_invalid_split_ratios`
+    (`is_valid_split_ratio`). Copre creazione, inserimento o CSV, modifica per id (anche quella che tiene il tipo, che
+    P-10 lascia passare) e un dividendo trasformato in SPLIT; risponde 400 `EVENT_INVALID_SPLIT_RATIO`
+    (`eventSaveError.ts:130`, `assets.…invalidSplitRatio` in 4 lingue).
+  - L'aggiornamento del provider (`refresh.py:760` → `_storable_events`) scarta lo SPLIT con un avviso nel log; in
+    `api/v1/assets/events.py` non c'è un'altra via di scrittura.
+  - La lettura è **MF-D4**: un rapporto salvato non valido conta come mancante (`portfolio/engine.py:266-275`); il
+    riepilogo e il rapporto rispondono 200 con `INVALID_SPLIT_RATIO`, FIFO e YoC lo saltano.
+  - Verdi su HEAD: `services event-split-ratio` **78**, `roi-fifo-utils -k invalid_split` **69**.
+- **J-19, analisi** (sola lettura):
+  - `services/tools/executor.py`, `process_tree.py` e `schemas/tools.py` non hanno un proprietario nella 1.3:
+    invariati dal 16/09 (`4a38b9061`, la piattaforma dei Tool della 1.2), salvo il riordino del 12/10 (`2eed3d26c`).
+  - Esecutore e albero dei processi non scrivono nessuna riga di log.
+  - Il picco di memoria è già nelle metriche di ogni elemento (`resources.memory.peak_observed_bytes`, dalla pulizia).
+  - Il codice d'uscita va letto **prima** della pulizia: dopo, un figlio ancora vivo mostrerebbe la nostra
+    uccisione.
+  - Piano proposto: `ToolItemMetrics.worker_exit_code`, una riga di avviso su `worker_crashed`, rossi in
+    `tools-lifecycle`.
+- ✅ **J-19, via** del coordinatore: `schemas/tools.py` ed `executor.py` a J per il lotto; nessuna riga di CHANGELOG
+  (diagnostica per chi contribuisce).
+- ✅ **Rossi** (test-author, 17/10 ~21:00), `TestJ19CrashedWorkerExitStatus` in `test_tools_executor.py`:
+  - **4 rossi**: `crash` → 23; `signal_kill` → −9; `close_and_linger` → null; la riga di log con esattamente le sue chiavi
+    e nessun dato dell'elemento.
+  - **3 controlli**: successo, `invalid_output`, `oversize`.
+  - Scenari nuovi nel modulo di supporto (`_end_without_a_result`).
+  - Una sonda del test-author ha misurato prima e dopo la pulizia: `close_and_linger` passa da None a −15. Per questo
+    va letto prima.
+- ✅ **Correzione**: `patch_fix.py`, con due aggiunte venute dalle note del test-author:
+  - attesa di raccolta 0,5 s invece di 0,05 (`join` torna appena il figlio esce: aspetta tutto solo un figlio vivo);
+  - `_accept_result` scarta un `worker_exit_code` mandato dal worker.
+  - Più una frase in `tool_plugins.en.md` («Timing metrics», solo EN, senza traduzioni).
+- ⚠️ **Fuori pista (tre, tutti risolti)**:
+  - La docstring di `ToolItemMetrics`, resa su più righe con dei backtick, è finita nella descrizione OpenAPI, e il
+    generatore del client scrive le descrizioni su più righe come template literal JS senza proteggere i backtick:
+    `generated.ts` rotto, `front check` con 2 errori e molte suite di core-unit non caricate. Quelle su una riga
+    vanno tra apici singoli: per questo «``mode``» di `ToolMemoryMetrics` non ha mai rotto nulla. Docstring tornata a
+    una riga, campo spiegato in un commento.
+  - Un doppione di test dei processi (`_OwnedRunTree`) non ha `process`: `_crashed_exit_code` lo legge con `getattr`.
+  - `test_tools_api.py` fissa l'insieme esatto delle chiavi delle metriche: aggiunto `worker_exit_code` (il campo
+    nuovo è voluto).
+- ✅ **Verdi (17/10 21:20–21:26)**:
+  - `services tools-lifecycle` **98**, `tools-registry` 109;
+  - `api tools` 12, `api pac-planner-tool` 12;
+  - `api sync` (nessun file tracciato), `front check` 0/0, `front-utility core-unit` **9 244**;
+  - `mkdocs build` stretto ✓, `check-links` ✓.
+  - Porta 6185 libera.
