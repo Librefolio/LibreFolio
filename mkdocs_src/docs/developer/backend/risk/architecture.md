@@ -56,7 +56,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk_plugins/` | The analytics, one folder each: the code in `<analytic_code>/plugin.py`, the `risk.analytics.*` name and description in its `i18n/` fragment. |
 | `backend/app/services/risk/registry.py` | `RiskAnalyticRegistry`. |
 | `backend/app/services/provider_registry.py` | The `register_plugin` decorator and the folder discovery shared by every plugin registry. |
-| `backend/app/services/series_preparation.py` | Joint calendar, target-currency conversion, carried points. The simple returns (`float_price_return()`) and the observed annualization factor (`observed_annualization()`) come from `financial_math/returns.py` ([Financial Math Layer](../financial_math.md#package-map)). |
+| `backend/app/services/market_series.py` | Joint calendar, target-currency conversion, carried points. The simple returns (`float_price_return()`) and the observed annualization factor (`observed_annualization()`) come from `financial_math/returns.py` ([Financial Math Layer](../financial_math.md#package-map)). |
 | `backend/app/services/assets/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
 | `backend/app/services/platform/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
 | `backend/app/config/__init__.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
@@ -433,7 +433,7 @@ that moves on a Saturday, or a genuinely flat weekday, stays a quote.
   awaited by the first computation that needs it (`ensure_market_holidays`). A build has 120 s;
   after a failure, weekends alone apply for 10 minutes before the next attempt.
 - `RiskService` awaits the table once per request and passes it to every preparation.
-  `series_preparation.mark_market_closed_carries()` turns stored carries into carried points,
+  `market_series.mark_market_closed_carries()` turns stored carries into carried points,
   `eligibility.load_price_window_facts()` applies the same rule in SQL, and the signal price query
   (`backend/app/services/assets/price_query.py`) applies it when signals are requested.
 
