@@ -273,6 +273,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An Auto cost basis is no longer computed over transactions whose stored numbers cannot be read: the broker deletion and the repair of old transfer legs refuse instead of saving a wrong cost.
 - **The Δ columns of the Assets and FX lists (1D … 5Y) are computed by the server.** The browser counted the days in local time, so across a daylight-saving change a period could start one day early (a 1M change on 15 November compared with 15 October instead of 16 October). The server counts calendar days, so the figures no longer depend on the time zone; a one-day range now shows its 1D change too.
 - **Changing an asset's currency no longer turns split adjustments into purchases of unknown cost.** The change deletes the asset's events, splits included; when a split has linked adjustments without a purchase cost, the change is now refused and names the split: give those adjustments a cost first.
+- **Changing a Scheduled Investment plan no longer turns split adjustments into purchases of unknown cost.** New plan parameters, or another provider, delete the events the plan generated; when one of its splits has linked adjustments without a purchase cost, the change of plan or provider is now refused, the asset window says which split, and the plan stays as it was: give those adjustments a cost first.
 
 #### 🔒 Security
 
