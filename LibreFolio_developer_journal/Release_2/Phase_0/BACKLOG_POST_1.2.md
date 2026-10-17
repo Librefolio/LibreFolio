@@ -7838,6 +7838,10 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - un testo non UTF-8 diventa un reperto `X'…'` come un BLOB;
     - confrontare il messaggio solo per gli errori della `execute` (la preparazione), mai su quelli dei dati.
   - Cambia ciò che fissano SCA-036 e RNW-109: servirà un altro errore vero per il ramo del guasto.
+  - Con questi resti, il `GBp` del suggerimento: `suggested_iso_currency("GBp")` dà `GBP` (CSG e CCA lo fissano, perché
+    per una scrittura `GBp` si salva `GBP`), quindi l'endpoint `suggest` e il selettore di b1 direbbero a un `GBp` salvato
+    che vale GBP, cioè pence come sterline. b2 lo esclude con `minor_unit_factor()` di Z; l'endpoint no. Improbabile,
+    perché anche la vecchia regola portava `GBp` a `GBP`.
   - Il caso più ampio è di B: un testo non UTF-8 nei dati di un backup passa il controllo del ripristino (RNW-109, in
     quattro posti) e poi, con ogni probabilità, fa fallire le letture del server di quelle righe (pysqlite alza al
     `fetch`, come prova la barriera di SCA-036; non misurato sul server). Segnalato al coordinatore.
