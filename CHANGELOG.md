@@ -258,7 +258,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Numbers with an absurd exponent and transaction dates outside 1 January 1900 – one year from today are refused with a clear message, instead of slowing the server; the merged fields of a pair promotion are checked like a new transaction's.
 - The lots analysis no longer fails when shares moved by a transfer to or from a broker outside the view (a broker's page, a broker filter, a co-owner who sees one broker, AI Export): units received open a lot at the transfer's cost, units sent close at that day's market price.
 - A transaction dated far in the past (e.g. year 1) no longer makes every portfolio report recompute hundreds of thousands of days, nor fail: histories start no earlier than 1 January 1900.
-- The Assets and FX tables keep the place, visibility and width you gave the Δ 1W…5Y columns across reloads and date-range changes.
 - Zooming or panning a price chart with arrow-ended signals (the measure tool, or a signal styled with arrows) no longer stutters: the arrows are re-aimed once the gesture pauses.
 - Asset events: changing the type of a split whose adjustments have no purchase cost is refused with a message in your language that counts those adjustments, including any at a broker you cannot see.
 - Charts: the tooltip's change from the first point shows «—» instead of 0 % when the chart starts at zero.
