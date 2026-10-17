@@ -195,8 +195,10 @@ returned value on the object with `set_committed_value()`: two such requests rai
 Activation, promotion, logout and every refused operation leave the version alone: a new password that misses a
 [password rule](#password-rules), wherever it is chosen; a wrong current password, or a new password equal to it, on
 `change-password`; a missing or wrong current password, or an address or a username already
-taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; a
-reset or setup link that is not valid. So do issuing a reset or setup link, which ends nothing until it is spent, a
+taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; the
+demotion of the initial administrator waiting for its setup (lot A-43,
+[The Setup Link's Lifecycle](#setup-link-lifecycle)); a reset or setup link that is not valid, a link refused because
+its account was set up before included. So do issuing a reset or setup link, which ends nothing until it is spent, a
 `PATCH` whose values equal the current ones, and a profile change that changes no email (a new username, or the
 stored email sent again, as written or in another A–Z case).
 
@@ -1637,19 +1639,23 @@ Only `admin_setup` tokens are retired today, and there the difference matters. T
 setup links is consumed (`registration_service.pending_admin_filter()`): a revoked link leaves it waiting, for a new
 link; a retired one ends the wait, so an account set up another way never waits for its setup again, not even once
 deactivated. Every account that holds a setup link follows the same rules, waiting or not, in the transaction of the
-change:
+change; what each rule guards against is in [The Setup Link's Lifecycle](#setup-link-lifecycle):
 
 | Change | Entry point | Its setup links |
 |--------|-------------|-----------------|
 | An activation | `./dev.py user activate` → `user_service.set_user_active(…, True)`, the waiting administrator included; `PATCH /api/v1/users/{user_id}` with `is_active: true` → `user_service.update_user_status()`, which the waiting administrator never reaches (`409` `PENDING_SETUP` first) | Retired |
 | A new password | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent → `user_service.complete_password_reset()`; `POST /api/v1/auth/change-password` | Retired |
-| A setup link presented for an account already active | `POST /api/v1/auth/setup` → `bootstrap_admin_service.complete_admin_setup()`, which refuses it (`400` `TOKEN_INVALID`) | Every one retired, not only the one presented |
+| A setup link presented for an account already active, or for an account another of whose setup links was already consumed (lot A-42) | `POST /api/v1/auth/setup` → `bootstrap_admin_service.complete_admin_setup()`, which refuses it (`400` `TOKEN_INVALID`) | Every one not consumed retired, not only the one presented |
+| A deactivation of the initial administrator waiting for its setup: the cancellation of its link (lot A-43) | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()`, refused for a [protected account](access_control.md#account-protection) | Revoked, not retired: the account still waits, for a new link |
+| A deactivation of any other account (lot A-43) | The same entry points | Retired |
 | A new address, not the same one in another A–Z case (decision P18) | `LIBREFOLIO_ADMIN_EMAIL` at a start (`bootstrap_admin_service._follow_variables()`); `user_service.update_profile()`, behind `./dev.py user set-email` and `PUT /api/v1/auth/profile` | Revoked, not retired: they went to the earlier address, and the account still waits, for a link that reaches the new one |
 | The setup | A live setup link spent by `POST /api/v1/auth/setup` | That one consumed, the others revoked |
-| A new setup link | `./dev.py user setup-link` (`issue_setup_link()`); a `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` never stored, at a start | The earlier ones revoked |
+| A new setup link | `./dev.py user setup-link` (`issue_setup_link()`); a `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` never stored, at a start | The earlier ones revoked first; an account set up in the meantime gets no new link (lot A-42) |
 
-The retirements are logged as *Account tokens retired* (`count`, `user_id`, `purpose`); a refused setup adds the
-WARNING *Setup link refused and retired: the account is already active* (`user_id`).
+The retirements are logged as *Account tokens retired* (`count`, `user_id`, `purpose`); a refused setup adds a WARNING
+with the `user_id`, *Setup link refused and retired: the account is already active* or *Setup link refused and
+retired: the account was set up before*, and a cancellation the WARNING of
+[The Setup Link's Lifecycle](#setup-link-lifecycle).
 
 A restore revokes the live tokens of the whole restored database at once, at its first start
 ([Restoring a Backup](#backup-restore)): in the transaction that sets the session versions
@@ -1667,6 +1673,82 @@ it (`PATCH /users/{user_id}`, `email_verified_at` stays `NULL`), or deletes it s
 account never signed in, so it holds no data. Towards the administrator, the report of the check gives one notice only
 (developer decision P11, `scripts/backup_cli.py`): the invitations and links sent before the restore will have expired,
 and can be sent again.
+
+### ♻️ The Setup Link's Lifecycle {: #setup-link-lifecycle }
+
+Lots A-42 and A-43 (release 1.3) make sure that no setup link left behind sets its account up again, and that
+deactivating the [initial administrator](access_control.md#initial-admin) while it waits cancels the link handed over.
+Two words, as the code uses them:
+
+- **Revoke** (`revoke_tokens()`): the link stops working (`revoked_at`). The waiting administrator keeps waiting, for
+  a new link.
+- **Retire** (`retire_tokens()`): revoked and counted as used (`consumed_at` too). The account no longer counts as
+  waiting (`pending_admin_filter()`), so no new link is issued for it.
+
+**Issuing under the write lock** (A-42). `issue_setup_link()`, behind `./dev.py user setup-link`, and the re-arm of a
+start by a `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` never stored (`_keep_pending_admin()`) find the waiting administrator by
+a read, and a setup could commit between that read and their write: the new link would then be live on an account
+already set up, able to set its password again. Both now revoke the earlier setup links first, with one `UPDATE` that
+takes SQLite's write lock («Several workers» in [The Initial Administrator](access_control.md#initial-admin)), then
+read «waiting» again under that lock (`registration_service.is_pending_admin()`), where no setup can commit any more.
+An account set up in the meantime gets nothing, and the transaction is rolled back:
+
+- `issue_setup_link()` returns `None`, with the INFO line *No setup link issued: the initial administrator was set up
+  meanwhile*; the command prints `❌ No administrator account is waiting for its setup link` and exits with `1`;
+- the start answers `ignored`, with the INFO line *LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN not re-armed: the initial
+  administrator was set up meanwhile*: no link is stored, none is logged or emailed.
+
+«Waiting» is read on what the database holds under the lock, not on what the `UPDATE` changed: a rival that only
+revoked the links, as a new address does, leaves the account waiting, and the link is issued. So `revoke_tokens()`
+always runs its `UPDATE`, even when no live token can match: selecting the live ids first, and skipping the write when
+there are none, would give the lock up.
+
+**Spending refused once the account was set up** (A-42). `complete_admin_setup()` spends the link first
+(`consume_token()`, which takes the write lock too), then refuses it in two cases, with the same `400`
+`TOKEN_INVALID` as a link that is not valid: the account is already active (lot A7b-2), or another setup link of the
+account was already consumed (`_setup_spent_before()`): the setup done through it, or the links retired. A link left
+live by the race above, or in the database of an earlier 1.3 build, so sets no password. Either way the spending is
+rolled back, the account's setup links not consumed are retired, the one presented included, and a WARNING is logged
+with the `user_id`: *Setup link refused and retired: the account is already active*, or *Setup link refused and
+retired: the account was set up before*. Both refusals come before bcrypt, which a refused link never costs. Only a
+consumed sibling counts: a link re-armed after a revoked or an expired one still sets the account up.
+
+**Deactivating is the cancellation** (A-43). A deactivation ends the account's setup links in its own transaction,
+through `user_service._end_setup_links()`, behind `set_user_active(…, False)` (`./dev.py user deactivate`) and
+`update_user_status()` (`PATCH /api/v1/users/{user_id}` with `is_active: false`). Whether the account waits is read
+before anything changes:
+
+- **The initial administrator waiting for its setup**, inactive already: its setup links are **revoked**. That is the
+  cancellation of the link handed over, the **Cancel setup link** of the Users tab
+  ([UserRow](../frontend/components/features/settings.md#userrow)): whoever holds the link can no longer set the
+  account up, and the account keeps waiting, still `pending_setup` and still holding its place, for a new link from
+  `./dev.py user setup-link` or from a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`. The same token at a restart re-arms
+  nothing, its value being stored already (`_token_known()`): the start finds no live link and answers `expired`, with
+  its WARNING and its remedy. A cancellation that revokes a link logs the WARNING *Setup link of the initial
+  administrator revoked: its setup was cancelled; ./dev.py user setup-link gives a new one* (`user_id`).
+- **Any other account**: its setup links not consumed are **retired**, so that none sets it up again. An account that
+  holds a stray live setup link and no consumed one would otherwise start waiting for its setup once deactivated:
+  inactive, with a setup link, none of them consumed. `update_user_status()` retires directly the links of an account
+  it deactivates while active, which cannot be waiting.
+
+**Protection and the other actions.** A [protected account](access_control.md#account-protection) refuses the
+cancellation on the administrator API as it refuses a deactivation: `update_account()` reads «waiting» once, and asks
+the hook about a cancellation (`is_active: false` on the waiting administrator, inactive already) as about a
+deactivation or a demotion, before any other refusal. The answer is `409` `ACCOUNT_PROTECTED`, and nothing changes: the
+link handed over keeps working. The Users tab turns **Cancel setup link** off for such an account, with the reason
+`protected`. The command line stays above protection, as for every protected action.
+
+The waiting administrator keeps its role until its setup: its demotion is refused (`409` `PENDING_SETUP`;
+`./dev.py user demote` stops with an error), while its deletion needs no demotion first:
+`DELETE /api/v1/users/{user_id}` is the hard cancellation, its setup links going with it by the cascade of
+`account_tokens.user_id`. The routes and their answers are in
+[The Initial Administrator](access_control.md#initial-admin).
+
+Tests: A42-001 to A42-006 and A43-001 to A43-005 of `./dev.py test services admin-bootstrap`, SETUP-016 to SETUP-018
+of `./dev.py test api admin-setup`, and UADM-072 to UADM-079 of `./dev.py test api users-admin` (UADM-079: the
+cancellation of a protected waiting administrator refused, its link still working); the Users tab's side, UTAB-55 to
+UTAB-60 and UPS-12 to UPS-23, is in
+[Users Tab and Account Deletion Tests](../frontend/components/features/settings.md#users-tests).
 
 ### 🧾 Transactions and Logs
 
@@ -1705,11 +1787,14 @@ email verification in [Email Verification](../backend/email.md#verification); th
 - **Only the newest reset or setup link of an account works.** Issuing a reset link revokes the account's live
   reset links, and spending one revokes any other. Likewise, a setup link re-armed by a new
   `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, or issued by `setup-link`, revokes the earlier ones, and the setup revokes
-  any other. A password change, an email change and `./dev.py user reset` also revoke the account's live reset
-  links (lot A-27, [Session Revocation](#session-revocation)).
+  any other; a setup link left live beside a consumed one sets nothing
+  ([The Setup Link's Lifecycle](#setup-link-lifecycle)). A password change, an email change and
+  `./dev.py user reset` also revoke the account's live reset links (lot A-27,
+  [Session Revocation](#session-revocation)).
 - **A setup link works only while its account waits for it.** An activation or a new password, by any way but the
-  link, retires the account's setup links in the same commit, and a new address revokes them: the table of
-  [Revocation](#account-token-revocation) lists every case.
+  link, retires the account's setup links in the same commit, and a new address revokes them. A deactivation revokes
+  those of the waiting administrator, the cancellation after which it waits for a new link, and retires those of any
+  other account: the table of [Revocation](#account-token-revocation) lists every case.
 - **A verification link is never shown, only emailed, and only to the account's own address.** Registration
   issues a token without an address (the «hold»), whose text never leaves the server; the link itself goes by
   email, built from `LIBREFOLIO_PUBLIC_URL`, and «send the link again» asks for the account's password first.
@@ -1720,7 +1805,8 @@ email verification in [Email Verification](../backend/email.md#verification); th
   a reset link in the commit that sets the new password, raises the session version and revokes the other links;
   a setup link in the commit that sets the password, activates the account, raises the session version and revokes
   the other setup links. If the account cannot be created, the invitation stays unspent. A setup link presented
-  for an account already active is refused, and every setup link of that account retired.
+  for an account already active, or for an account another of whose setup links was consumed, is refused, and every
+  setup link of that account retired.
 - **Inspecting tells a guesser nothing.** `POST /api/v1/auth/tokens/inspect` is public and writes nothing. Only a
   valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset or
   setup link. Any other token gets its status alone, and a token presented for another purpose is `unknown`.
