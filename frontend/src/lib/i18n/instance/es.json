@@ -23,6 +23,11 @@
         "ok": "La cookie de sesión es Secure siempre que el navegador usa HTTPS.",
         "never": "La cookie de sesión también se envía por HTTP sin cifrar (SESSION_COOKIE_SECURE=never)."
       },
+      "clientAddress": {
+        "ok": "Desde que se inició el servidor, ninguna solicitud ha pasado por un proxy en el que LibreFolio no confía.",
+        "untrustedProxy": "Las solicitudes pasan por un proxy inverso en el que LibreFolio no confía ({headers}): los límites por dirección del visitante no se les aplican. Añade el proxy a FORWARDED_ALLOW_IPS, o indica en LIBREFOLIO_CLIENT_IP_HEADER la cabecera que establece.",
+        "publicForwarding": "Cabeceras de reenvío desde una dirección pública ignoradas ({headers}). Si un proxy con dirección pública reenvía las solicitudes, añádelo a FORWARDED_ALLOW_IPS; si no, no hay nada que hacer."
+      },
       "logLevel": {
         "ok": "El nivel de registro es adecuado para producción.",
         "verbose": "El nivel de registro es {log_level}: el registro guarda detalles de funcionamiento; en producción basta con INFO."

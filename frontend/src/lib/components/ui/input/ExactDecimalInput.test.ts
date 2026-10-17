@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
-import {describe, expect, it, vi} from 'vitest';
-import {fireEvent, render, screen, waitFor} from '$test/component';
+import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import ExactDecimalInput from './ExactDecimalInput.svelte';
 
 const TID = 'exact-decimal';
+
+// A fraction past the budget renders a translated message under the field (C-97b), and tests in every
+// describe below type one: svelte-i18n is booted once, for the whole file.
+beforeAll(async () => {
+    await setupI18n();
+});
 
 function setup(overrides: Record<string, unknown> = {}) {
     const onchange = vi.fn();
@@ -39,6 +45,40 @@ async function arrow(input: HTMLInputElement, key: 'ArrowUp' | 'ArrowDown', repe
     const event = new KeyboardEvent('keydown', {key, repeat, bubbles: true, cancelable: true, ...modifiers});
     await fireEvent(input, event);
     return event;
+}
+
+/**
+ * C-97b — the message that says why a value over the fractional budget is refused. Its id is the
+ * field's own followed by `-digits-error`; its text is the cure's choice and is never read here.
+ */
+function digitsError(testid: string): HTMLElement | null {
+    return screen.queryByTestId(`${testid}-digits-error`);
+}
+
+/** Over the budget: the field is flagged, and under it a visible message carries the budget it broke. */
+function expectDigitsError(input: HTMLInputElement, testid: string, max: number): void {
+    expect(input, `${JSON.stringify(input.value)} is over a budget of ${max} decimals`).toHaveAttribute('aria-invalid', 'true');
+    const message = digitsError(testid);
+    expect(message, `${testid}-digits-error must say why ${JSON.stringify(input.value)} is refused; no such element is rendered`).not.toBeNull();
+    if (!message) return;
+    expect(message).toBeVisible();
+    expect(message, 'the message carries the budget it enforces').toHaveAttribute('data-max', String(max));
+    expect(input.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING, 'the message sits under the field: after it in document order').not.toBe(0);
+}
+
+/** Within the budget: nothing to explain — the message is absent, or rendered hidden. */
+function expectNoDigitsError(input: HTMLInputElement, testid: string): void {
+    expect(input, `${JSON.stringify(input.value)} is within the budget`).toHaveAttribute('aria-invalid', 'false');
+    const message = digitsError(testid);
+    if (message) expect(message, `${testid}-digits-error shows for a value within the budget`).not.toBeVisible();
+}
+
+/**
+ * C-97b: no `maxlength`. A browser cuts a longer paste down to fit one, silently, so the user sees a
+ * number that is not the one pasted, and no reason. Soft, so the same test still reports the message.
+ */
+function expectNoMaxLength(input: HTMLInputElement): void {
+    expect.soft(input.getAttribute('maxlength'), 'no maxlength may cut a paste short: the budget is applied by the flag and its message').toBeNull();
 }
 
 describe('ExactDecimalInput', () => {
@@ -133,17 +173,36 @@ describe('ExactDecimalInput', () => {
         expect(signed.onchange).toHaveBeenLastCalledWith('-12,');
     });
 
-    it('publishes the configured digit budget through maxlength', () => {
+    /*
+     * C-97b rewrites the two pins of the old maxlength values (28 for 12+12, 23 for a signed 12+6): the
+     * budget is still applied — by the flag and by the message under the field — but no longer by a
+     * `maxlength`, which makes a browser truncate a longer paste silently.
+     * Red today: the field publishes maxlength 28 / 23, and no message element exists.
+     */
+    it('applies the configured digit budget by its flag and message, without a truncating maxlength', async () => {
         const {input} = setup();
-        expect(input).toHaveAttribute('maxlength', '28');
+        expectNoMaxLength(input);
+
+        await fireEvent.input(input, {target: {value: '999999999999.999999999999'}});
+        expectNoDigitsError(input, TID);
+
+        await fireEvent.input(input, {target: {value: '1.1234567890123'}});
+        expect(input).toHaveValue('1.1234567890123');
+        expectDigitsError(input, TID, 12);
     });
 
-    it('includes grouping punctuation and a sign in the maxlength budget', async () => {
+    it('keeps a sign and grouping punctuation inside the budget, with no maxlength to cut them', async () => {
         const {input} = setup({maxFractionDigits: 6, allowNegative: true});
-        expect(input).toHaveAttribute('maxlength', '23');
-        await fireEvent.input(input, {target: {value: '-999999999999.123456'}});
-        expect(input).toHaveValue('-999999999999.123456');
-        expect(input).toHaveAttribute('aria-invalid', 'false');
+        expectNoMaxLength(input);
+
+        // 23 characters: exactly what the old maxlength left for a signed, grouped 12+6.
+        await fireEvent.input(input, {target: {value: '-999.999.999.999,123456'}});
+        expect(input).toHaveValue('-999.999.999.999,123456');
+        expectNoDigitsError(input, TID);
+
+        await fireEvent.input(input, {target: {value: '-999999999999.1234567'}});
+        expect(input).toHaveValue('-999999999999.1234567');
+        expectDigitsError(input, TID, 6);
     });
 
     it('keeps typed out-of-range values visible, while arrows clamp exactly to min/max', async () => {
@@ -455,5 +514,77 @@ describe('ExactDecimalInput — Enter, and the form around it', () => {
         expect(onchange.mock.calls).toHaveLength(callsBeforeEnter);
         expect(input).toHaveValue(raw);
         expect(input).toHaveAttribute('aria-invalid', 'true');
+    });
+});
+
+/**
+ * C-97b — «the decimal places in input». Over the fractional budget the value is flagged
+ * (`digitsValid` false, `aria-invalid`), and today nothing tells the user why: a red border on a
+ * number that looks fine. The contract: a message under the field, `<testid>-digits-error`,
+ * carrying the budget in `data-max`; a value within the budget shows none; and a value longer than
+ * the old `maxlength` budget is kept whole — no `maxlength` lets the browser cut a paste down to
+ * something that looks valid.
+ *
+ * The message's text is the cure's choice (these inputs are generic UI, also used by the PAC
+ * planner), so it is never read: only its id, its `data-max`, its visibility and its place.
+ */
+describe('ExactDecimalInput — the digit budget says why it refuses (C-97b)', () => {
+    // Red today: no message element exists.
+    it.each([
+        [6, '0.1234567'],
+        [10, '0.12345678912'],
+        [12, '1.1234567890123'],
+    ])('a fraction longer than maxFractionDigits=%i (%j) is flagged and explained, with data-max', async (max, typed) => {
+        const {input, onchange} = setup({maxFractionDigits: max});
+
+        await fireEvent.input(input, {target: {value: typed}});
+
+        expect(input, 'the value stays as typed').toHaveValue(typed);
+        expect(onchange).toHaveBeenLastCalledWith(typed);
+        expectDigitsError(input, TID, max);
+    });
+
+    // Red today: the message never appears, so it cannot be withdrawn either.
+    it('withdraws the message as soon as the value is back within the budget', async () => {
+        const {input} = setup({maxFractionDigits: 6});
+
+        await fireEvent.input(input, {target: {value: '0.1234567'}});
+        expectDigitsError(input, TID, 6);
+
+        await fireEvent.input(input, {target: {value: '0.123456'}});
+        expectNoDigitsError(input, TID);
+    });
+
+    // Guard: green today (no message exists at all); after the cure a valid value must not grow one.
+    it.each([
+        [6, '0.123456'],
+        [10, '0.1234567891'],
+        [12, '999999999999.999999999999'],
+    ])('a value within maxFractionDigits=%i (%j) is valid and shows no message', async (max, typed) => {
+        const {input} = setup({maxFractionDigits: max});
+
+        await fireEvent.input(input, {target: {value: typed}});
+
+        expect(input).toHaveValue(typed);
+        expectNoDigitsError(input, TID);
+    });
+
+    // Red today: the field publishes maxlength="22" for 12+6, and no message exists. jsdom does not
+    // apply maxlength to a value set by script, so the attribute is the honest handle on the browser's
+    // cut; the value assertions pin that the component itself cuts nothing either, typed or blurred.
+    it('keeps a paste longer than the old maxlength budget whole, flagged and explained', async () => {
+        const {input, oncommit} = setup({maxFractionDigits: 6});
+        const pasted = `0.${'1234567890'.repeat(3)}`;
+        expect(pasted.length, 'premise: longer than the 22 characters the old maxlength left a 12+6 field').toBeGreaterThan(22);
+        expectNoMaxLength(input);
+
+        await fireEvent.input(input, {target: {value: pasted}});
+        expect(input).toHaveValue(pasted);
+        expectDigitsError(input, TID, 6);
+
+        await fireEvent.blur(input);
+        expect(input, 'a refused value is not coerced on blur').toHaveValue(pasted);
+        expect(oncommit).not.toHaveBeenCalled();
+        expectDigitsError(input, TID, 6);
     });
 });

@@ -53,13 +53,19 @@ Under test: ``backend/app/config/sleep_wake.py`` (``WAKE_TOKEN_VARIABLE``, ``wak
 - WAKE-027..028, through the real middleware stack (``install_middleware``): while its run lasts the wake-up is in
   flight but not the user's presence (D-S1); with ``Accept-Encoding: gzip`` its first chunk still leaves before the run
   ends, and decompresses to a space.
+- WAKE-029, Z-11 (night decision N71) with the real ``run_due_jobs``, on a worker whose ``am_i_leader`` answers no: with
+  ``fcntl`` (``cross_process_lock_available()``) the leader is never asked, the run takes the lock across processes and
+  runs its jobs: 200, ``status`` "ok", both jobs reported. Without ``fcntl``, the fallback: 200, ``status``
+  "not_leader", no job — the one way a run still answers "not_leader".
 
 Pure: an app of each test holds the system router under ``/api/v1``, as ``router.py`` mounts it, and nothing else;
 ``install_middleware`` is added where the stack is under test. In every test ``run_due_jobs`` is replaced on the wake
 module by a fake that records its reason and the task it runs in, may be held on an event until the test releases it
 (a bounded wait), records whether it was cancelled, and returns a real ``RunReport``; ``LIBREFOLIO_NO_SCHEDULER`` is
-set besides, so that not even the real one could reach anything. The one test of the real run (WAKE-024) puts it
-back, with the instance blocked, the settle a no-op and every collaborator past the switches a trap. The token
+set besides, so that not even the real one could reach anything. The tests of the real run (WAKE-024, WAKE-029) put it
+back: WAKE-024 with the instance blocked, the settle a no-op and every collaborator past the switches a trap; WAKE-029
+with the switches open, the settle a no-op, the settings, the state store, the due functions and the jobs fakes in
+memory, ``PRICE_REFRESH`` a tracker of the test, and the lock across processes a stand-in that writes no file. The token
 variables, the panel's included, are deleted before each test, then set through ``monkeypatch``; the process's
 ``ACTIVITY`` is a fresh ``Activity`` in each test. No data directory, database, server or network is reached.
 
@@ -72,7 +78,9 @@ ends, and every held run is released. The log is read with ``structlog.testing.c
 logged through the wake module's own ``logger`` must reach the capture, or "never in the log" would prove nothing.
 
 Red until the code of Z4 exists: ``backend.app.api.v1.system.wake`` does not import, nor do ``WAKE_TOKEN_VARIABLE`` and
-``wake_token``: a collection error.
+``wake_token``: a collection error. Since Z-11, WAKE-029's "cross-process-lock" case is red until ``_run_locked`` skips
+``am_i_leader`` where ``cross_process_lock_available()``: before, the worker answers "not_leader"; its fallback case
+passes before and after (the stand-ins are set with ``raising=False``).
 """
 
 from __future__ import annotations
@@ -102,6 +110,8 @@ from backend.app.config.sleep_wake import WAKE_TOKEN_VARIABLE, SleepWakeConfigEr
 from backend.app.services.platform.middleware import MIDDLEWARE_STACK, install_middleware
 from backend.app.services.platform.scheduler import scheduler
 from backend.app.services.platform.scheduler.scheduler import JobOutcome, RunReport
+from backend.app.services.platform.scheduler.settings import SchedulerSettings
+from backend.app.services.platform.scheduler.state import JobState, SchedulerState
 from backend.app.services.platform.sleep_wake import activity as activity_module
 from backend.app.services.platform.sleep_wake.activity import Activity
 from backend.test_scripts.test_utils import print_section, print_success
@@ -1109,6 +1119,8 @@ REPORTED = [
     pytest.param("partial", (RAN_PARTLY, NOT_DUE), id="partial"),
     pytest.param("error", (RAN_INTO_ERRORS, RAISED), id="error"),
     pytest.param("disabled", (), id="disabled"),
+    # Only without fcntl, where the leader election is the fallback (Z-11, N71): with the lock across processes no run
+    # answers not_leader any more (WAKE-029). The route mirrors it all the same.
     pytest.param("not_leader", (), id="not-leader"),
     pytest.param("blocked", (), id="blocked"),
 ]
@@ -1333,7 +1345,8 @@ def trap(name: str, reached: list[str]) -> Callable[..., NoReturn]:
 async def test_on_a_blocked_instance_the_real_run_answers_blocked_and_reaches_nothing_past_the_switches(app, monkeypatch, run):
     """WAKE-024 — D-W3, with the real ``run_due_jobs`` put back on the wake module: ``LIBREFOLIO_NO_SCHEDULER`` cleared,
     the instance blocked (``scheduler.instance_blocked``), the settle a no-op, and every collaborator past the two
-    switches a trap. The answer is 200 with ``status`` "blocked", no job and no error; no trap was reached."""
+    switches a trap — the lock across processes of Z-11 included. The answer is 200 with ``status`` "blocked", no job
+    and no error; no trap was reached."""
     print_section("Wake-up: a blocked instance, the real scheduler")
     assert SHIPPED_RUN_DUE_JOBS is REAL_RUN_DUE_JOBS, "Precondition: the wake module ships the scheduler's run_due_jobs, which this test puts back"
     monkeypatch.setattr(wake, "run_due_jobs", REAL_RUN_DUE_JOBS)
@@ -1343,6 +1356,8 @@ async def test_on_a_blocked_instance_the_real_run_answers_blocked_and_reaches_no
     reached: list[str] = []
     for name in PAST_THE_SWITCHES:
         monkeypatch.setattr(scheduler, name, trap(name, reached))
+    # Z-11 (N71): the lock across processes is past the switches too; raising=False, the name exists once Z-11 does.
+    monkeypatch.setattr(scheduler, "scheduler_run_lock", trap("scheduler_run_lock", reached), raising=False)
     token, bearer = with_token(monkeypatch)
 
     exchange = await send(app, authorization=bearer, never=[token])
@@ -1354,6 +1369,95 @@ async def test_on_a_blocked_instance_the_real_run_answers_blocked_and_reaches_no
     assert reached == [], f"nothing past the switches may be reached on a blocked instance: {reached}"
     assert run.reasons == [], f"the real run answered, not the fake: {run.reasons}"
     print_success("blocked: 200, status blocked, no job, nothing past the switches")
+
+
+class RunCollaborators:
+    """What the real run reaches past its switches, for WAKE-029, in memory: the settings enabled; a state store; both jobs
+    due until they ran, run as fakes that write their ``JobState``; ``am_i_leader`` answering no, its calls counted; the
+    lock across processes a stand-in that counts its entries and exits, and writes no file."""
+
+    def __init__(self) -> None:
+        self.stored = SchedulerState()
+        self.leader_asked = 0
+        self.locks_entered = 0
+        self.locks_left = 0
+
+    def install(self, monkeypatch: pytest.MonkeyPatch, *, lock_available: bool) -> None:
+        settings = SchedulerSettings(scheduler_enabled=True, current_price_frequency_minutes=10, history_sync_times=[], history_sync_days=["mon"], history_sync_horizon_days=14, scheduler_timezone="UTC")
+
+        async def enabled_settings() -> SchedulerSettings:
+            return settings
+
+        monkeypatch.setattr(scheduler, "instance_blocked", lambda: False)
+        monkeypatch.setattr(scheduler, "settle_clock", settled_at_once)
+        monkeypatch.setattr(scheduler, "PRICE_REFRESH", scheduler.PriceRefreshTracker())
+        monkeypatch.setattr(scheduler, "am_i_leader", self.am_i_leader)
+        monkeypatch.setattr(scheduler, "load_scheduler_settings", enabled_settings)
+        monkeypatch.setattr(scheduler, "load_state", lambda: replace(self.stored))
+        monkeypatch.setattr(scheduler, "save_state", self.save_state)
+        monkeypatch.setattr(scheduler, "due_current_price", lambda now, settings, state: state.current_price.last_run_at is None)
+        monkeypatch.setattr(scheduler, "due_history_sync", lambda now, settings, state: state.history_sync.last_run_at is None)
+        monkeypatch.setattr(scheduler, "run_current_price_refresh", self.current_price)
+        monkeypatch.setattr(scheduler, "run_history_sync", self.history_sync)
+        # Z-11 (N71): names the scheduler has only once the lock across processes exists, hence raising=False.
+        monkeypatch.setattr(scheduler, "cross_process_lock_available", lambda: lock_available, raising=False)
+        monkeypatch.setattr(scheduler, "scheduler_run_lock", self.scheduler_run_lock, raising=False)
+
+    def am_i_leader(self) -> bool:
+        self.leader_asked += 1
+        return False
+
+    def save_state(self, state: SchedulerState) -> None:
+        self.stored = replace(state)
+
+    @asynccontextmanager
+    async def scheduler_run_lock(self, *_args: object, **_kwargs: object) -> AsyncIterator[None]:
+        self.locks_entered += 1
+        try:
+            yield
+        finally:
+            self.locks_left += 1
+
+    async def current_price(self, state: SchedulerState) -> None:
+        state.current_price = JobState(last_run_at=datetime.now(UTC).isoformat(), last_duration_s=0.5, last_status="ok", last_items_ok=1)
+
+    async def history_sync(self, state: SchedulerState, horizon_days: object = None) -> None:
+        state.history_sync = JobState(last_run_at=datetime.now(UTC).isoformat(), last_duration_s=0.5, last_status="ok", last_items_ok=1)
+
+
+#: A worker whose ``am_i_leader`` answers no, with and without ``fcntl`` (Z-11, N71): whether the lock across processes is
+#: available; then the run's status, its jobs, how often the leader is asked and the lock entered.
+NOT_THE_LEADER = [
+    pytest.param(True, "ok", [("current_price", "ok"), ("history_sync", "ok")], 0, 1, id="cross-process-lock"),
+    pytest.param(False, "not_leader", [], 1, 0, id="fallback-not-the-leader"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("lock_available", "status", "jobs", "asked", "locked"), NOT_THE_LEADER)
+async def test_on_a_worker_that_is_not_the_leader_the_real_run_still_runs_its_jobs_behind_the_cross_process_lock(app, monkeypatch, run, lock_available, status, jobs, asked, locked):
+    """WAKE-029 — Z-11 (N71), with the real ``run_due_jobs`` put back on the wake module, ``LIBREFOLIO_NO_SCHEDULER``
+    cleared and every collaborator of the run past its switches a fake in memory (``RunCollaborators``), on a worker whose
+    ``am_i_leader`` answers no. With ``fcntl`` the leader is never asked: the run enters the lock across processes once and
+    runs its jobs, 200 with ``status`` "ok" and both jobs "ok". Without it, the fallback: the leader is asked once, 200
+    with ``status`` "not_leader", no job, the lock never entered."""
+    print_section(f"Wake-up: a worker that is not the leader, {'the cross-process lock' if lock_available else 'the fallback'}")
+    assert SHIPPED_RUN_DUE_JOBS is REAL_RUN_DUE_JOBS, "Precondition: the wake module ships the scheduler's run_due_jobs, which this test puts back"
+    monkeypatch.setattr(wake, "run_due_jobs", REAL_RUN_DUE_JOBS)
+    monkeypatch.delenv("LIBREFOLIO_NO_SCHEDULER", raising=False)
+    collaborators = RunCollaborators()
+    collaborators.install(monkeypatch, lock_available=lock_available)
+    token, bearer = with_token(monkeypatch)
+
+    exchange = await send(app, authorization=bearer, never=[token])
+
+    assert exchange.response.status_code == 200, f"the wake-up answers 200: {exchange.answer}"
+    body = read_result(exchange.response.content)
+    assert collaborators.leader_asked == asked, f"{'with fcntl available am_i_leader is never asked, the cross-process lock decides (Z-11, N71)' if lock_available else 'without fcntl the leader is asked once, the fallback'}: asked {collaborators.leader_asked} time(s); the body {body}"
+    assert (body["status"], [(job["name"], job["status"]) for job in body["jobs"]], body["error"]) == (status, jobs, None), f"the run's status and jobs: {body}"
+    assert (collaborators.locks_entered, collaborators.locks_left) == (locked, locked), f"the cross-process lock entered and left once with fcntl, never without: {collaborators.locks_entered}, {collaborators.locks_left}"
+    assert run.reasons == [], f"the real run answered, not the fake: {run.reasons}"
+    print_success(f"{status}, {len(jobs)} job(s); the leader asked {asked} time(s)")
 
 
 # =============================================================================

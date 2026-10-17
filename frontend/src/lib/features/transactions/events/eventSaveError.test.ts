@@ -20,6 +20,10 @@
  * `existingAmountText` is how a stored amount reads in the EVENT_EXISTS panel and in the form
  * «Edit this» opens: as written, with at least two decimals.
  *
+ * C-97b: EVENT_TOO_MANY_DIGITS (400, C-97a) — a value with more digits than an event keeps — gets a
+ * sentence of its own, `events.saveError.tooManyDigits`, naming the first event at fault, how many
+ * more, and the decimal places a value keeps (`max`). Every other code keeps its sentence.
+ *
  * `t` is a stand-in for svelte-i18n's `$t`: it records the key and the values and renders them the
  * way a template does (`String(value)`), so an object passed as a value would show as
  * `[object Object]` here exactly as it would on screen.
@@ -109,6 +113,8 @@ describe('existingEvents', () => {
         // A 409 listing events too: the events it cannot delete, not the ones a create would duplicate.
         ['EVENT_IN_USE', refusal(409, 'EVENT_IN_USE', {asset_id: 7, item_index: 0, events: [{id: 41, date: '2026-03-16', type: 'DIVIDEND', linked_transactions: 2}]})],
         ['EVENT_NOT_DELETABLE', refusal(400, 'EVENT_NOT_DELETABLE', {asset_id: 7, item_index: 0, ids: [41]})],
+        // C-97b guard: a 400 listing events too, the ones whose value has too many digits.
+        ['EVENT_TOO_MANY_DIGITS', refusal(400, 'EVENT_TOO_MANY_DIGITS', {asset_id: 7, item_index: 0, max_decimal_places: 6, max_significant_digits: 15, events: [{event_index: 0, date: '2026-01-15', type: 'DIVIDEND'}]})],
         ['a string detail', apiError(409, 'Conflict')],
         ['an error with no response', new Error('Network Error')],
     ])('is null for %s', (_label, err) => {
@@ -209,6 +215,84 @@ describe('eventSaveErrorMessage — the refusals of the deletions (E1b)', () => 
     });
 });
 
+/**
+ * C-97b — a value with more digits than an event keeps. C-97a refuses an event value over what
+ * `AssetEvent.value` keeps — 6 decimal places, 15 significant digits — with 400
+ * EVENT_TOO_MANY_DIGITS and rounds nothing (`event_store._reject_too_many_digits`):
+ * `params = {asset_id, item_index, max_decimal_places, max_significant_digits, events: [{event_index,
+ * date, type}, …]}`.
+ *
+ * The sentence has a key of its own, `events.saveError.tooManyDigits`, and names — like the file's
+ * other per-event refusals — the first event at fault by its date and type label and how many more
+ * (`more`), plus the decimal places a value keeps (`max`, the name
+ * `transactions.errors.decimalPlacesExceeded` already gives the same maximum), read from the params.
+ * The values are matched, not equated: the sentence may name `max_significant_digits` too.
+ *
+ * Red today: the code has no branch, so the user reads `events.saveError.generic` carrying the
+ * server's English sentence.
+ */
+describe('eventSaveErrorMessage — a value with more digits than an event keeps (C-97b)', () => {
+    function tooManyDigits(events: Array<Record<string, unknown>>, maxDecimalPlaces = 6) {
+        return refusal(400, 'EVENT_TOO_MANY_DIGITS', {asset_id: 7, item_index: 0, max_decimal_places: maxDecimalPlaces, max_significant_digits: 15, events});
+    }
+
+    it('EVENT_TOO_MANY_DIGITS has its own sentence: the first event at fault, how many more, and the decimal places a value keeps', () => {
+        const {t, calls} = fakeT();
+        const events = [
+            {event_index: 0, date: '2026-01-15', type: 'DIVIDEND'},
+            {event_index: 2, date: '2026-02-16', type: 'INTEREST'},
+            {event_index: 3, date: '2026-03-17', type: 'DIVIDEND'},
+        ];
+        const message = eventSaveErrorMessage(tooManyDigits(events), t, [], typeLabel, dateLabel);
+
+        const call = onlyCall(calls);
+        expect(call.key, 'a sentence of its own, not the generic one carrying the server text').toBe('events.saveError.tooManyDigits');
+        expect(call.values, 'the first event at fault, by its labels, and how many more').toMatchObject({date: 'D<2026-01-15>', type: 'T<DIVIDEND>', more: 2});
+        expect(String(call.values?.max), 'the sentence names the decimal places an event value keeps').toBe('6');
+        expectReadable(message, 'EVENT_TOO_MANY_DIGITS');
+    });
+
+    it('EVENT_TOO_MANY_DIGITS with a single event has no more', () => {
+        const {t, calls} = fakeT();
+        eventSaveErrorMessage(tooManyDigits([{event_index: 1, date: '2026-01-15', type: 'INTEREST'}]), t, [], typeLabel, dateLabel);
+
+        const call = onlyCall(calls);
+        expect(call.key).toBe('events.saveError.tooManyDigits');
+        expect(call.values).toMatchObject({date: 'D<2026-01-15>', type: 'T<INTEREST>', more: 0});
+    });
+
+    it('EVENT_TOO_MANY_DIGITS names the maximum the server sends, not a constant', () => {
+        const {t, calls} = fakeT();
+        eventSaveErrorMessage(tooManyDigits([{event_index: 0, date: '2026-01-15', type: 'DIVIDEND'}], 4), t, [], typeLabel, dateLabel);
+
+        const call = onlyCall(calls);
+        expect(call.key).toBe('events.saveError.tooManyDigits');
+        expect(String(call.values?.max), 'max is read from params.max_decimal_places').toBe('4');
+    });
+});
+
+/** C-97b guard: green today. The new branch changes no other refusal's key or values. */
+describe('eventSaveErrorMessage — the refusals that had a sentence keep it (C-97b guard)', () => {
+    it.each([
+        ['EVENT_KEY_CONFLICT', refusal(400, 'EVENT_KEY_CONFLICT', {asset_id: 7, item_index: 0, date: '2026-03-15', type: 'INTEREST'}), {key: 'events.saveError.keyConflict', values: {date: 'D<2026-03-15>', type: 'T<INTEREST>'}}],
+        [
+            'EVENT_CURRENCY_MISMATCH',
+            refusal(400, 'EVENT_CURRENCY_MISMATCH', {asset_id: 7, item_index: 0, expected: 'USD', events: [{event_index: 0, date: '2026-01-10', type: 'DIVIDEND', currency: 'EUR'}]}),
+            {key: 'events.saveError.currencyMismatch', values: {date: 'D<2026-01-10>', type: 'T<DIVIDEND>', currency: 'EUR', expected: 'USD', more: 0}},
+        ],
+        ['EVENT_NOT_EDITABLE', refusal(400, 'EVENT_NOT_EDITABLE', {asset_id: 7, item_index: 0, ids: [41]}), {key: 'events.saveError.notEditable', values: undefined}],
+        ['EVENT_NOT_DELETABLE', refusal(400, 'EVENT_NOT_DELETABLE', {asset_id: 7, item_index: 0, ids: [41]}), {key: 'events.saveError.notDeletable', values: undefined}],
+        ['EVENT_ASSET_NOT_FOUND', refusal(400, 'EVENT_ASSET_NOT_FOUND', {asset_id: 7, item_index: 0}), {key: 'events.saveError.assetNotFound', values: undefined}],
+        ['EVENT_IN_USE', refusal(409, 'EVENT_IN_USE', {asset_id: 7, item_index: 0, events: [{id: 41, date: '2026-03-16', type: 'DIVIDEND', linked_transactions: 2}]}), {key: 'events.saveError.inUse', values: {date: 'D<2026-03-16>', type: 'T<DIVIDEND>', n: 2, more: 0}}],
+        ['a code it does not know', refusal(400, 'EVENT_SOMETHING_NEW', {asset_id: 7, item_index: 0}, 'something new happened'), {key: 'events.saveError.generic', values: {message: 'something new happened'}}],
+    ])('%s: the same key, the same values', (_label, err, expected) => {
+        const {t, calls} = fakeT();
+        eventSaveErrorMessage(err, t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(calls)).toEqual(expected);
+    });
+});
+
 describe('eventSaveErrorMessage — a 422 on the type (decision 23)', () => {
     const sent = [
         {date: '2026-01-05', type: 'DIVIDEND'},
@@ -281,6 +365,9 @@ describe('eventSaveErrorMessage — never [object Object]', () => {
         ['EVENT_IN_USE', refusal(409, 'EVENT_IN_USE', {asset_id: 7, item_index: 0, events: [{id: 41, date: '2026-03-16', type: 'DIVIDEND', linked_transactions: 2}]})],
         ['EVENT_IN_USE with no events', refusal(409, 'EVENT_IN_USE', {asset_id: 7, item_index: 0})],
         ['EVENT_NOT_DELETABLE', refusal(400, 'EVENT_NOT_DELETABLE', {asset_id: 7, item_index: 0, ids: [41]})],
+        // C-97b guard: green today (the generic sentence carries a string), and after the cure too.
+        ['EVENT_TOO_MANY_DIGITS', refusal(400, 'EVENT_TOO_MANY_DIGITS', {asset_id: 7, item_index: 0, max_decimal_places: 6, max_significant_digits: 15, events: [{event_index: 0, date: '2026-01-15', type: 'DIVIDEND'}]})],
+        ['EVENT_TOO_MANY_DIGITS with no events', refusal(400, 'EVENT_TOO_MANY_DIGITS', {asset_id: 7, item_index: 0, max_decimal_places: 6, max_significant_digits: 15})],
         ['a refusal whose message is not a string', apiError(400, {error_code: 'EVENT_SOMETHING_NEW', message: {nested: true}, params: {}})],
         ['a 422 on the type', apiError(422, [{loc: ['body', 0, 'events', 0, 'type'], msg: 'unknown', input: 'bonus'}])],
         ['a 422 on the type of a row that was not sent', apiError(422, [{loc: ['body', 0, 'events', 5, 'type'], msg: 'unknown', input: 'bonus'}])],

@@ -31,6 +31,17 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     that cannot be read stops the start (``ValueError`` naming the variable), blocked or not, nothing logged first. A
     blocked instance is logged as a warning carrying the deletion date (ISO, or ``None``) before the checks; an instance
     that is not blocked logs nothing about the block, a deletion date alone included.
+(f) The client address check (H-36, decision N70). ``check_client_address`` reads what ``forwarded_by_untrusted_proxy``
+    noted (``untrusted_forwarding_seen`` of ``backend/app/services/platform/client_address.py``) and changes nothing.
+    Forwarding headers noted from a local peer are a warning, ``instance.checks.clientAddress.untrustedProxy``, whose
+    summary is ``UNTRUSTED_PROXY_SUMMARY`` word for word: requests come through a reverse proxy LibreFolio does not trust,
+    and the limits per client address skip them. Noted from a public peer only, they are info,
+    ``instance.checks.clientAddress.publicForwarding``, summary ``PUBLIC_FORWARDING_SUMMARY``. The detail ``headers``
+    lists the noted names in the order X-Forwarded-For, Forwarded, X-Real-IP, joined by ``", "``; when both classes are
+    noted the warning wins, with the local names only. Nothing noted is ok, ``instance.checks.clientAddress.ok`` with no
+    detail: the state at startup, since nothing is noted before the first request. The check runs right after
+    ``check_session_cookie``. Its tests set what was noted with ``monkeypatch.setitem`` on ``_untrusted_forwarding``, put
+    back after each test (H-22: no production reset).
 
 Pure: the data directory is in ``tmp_path``, every variable the checks read is set or removed through ``monkeypatch``
 (environment values win over a ``.env``), and the module's logger is replaced by a recorder. No database, no server, no
@@ -54,11 +65,13 @@ import pytest
 from backend.app.config import SECRET_FILE_MAX_BYTES, SecretFileError
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS, check_email_links, check_smtp_configuration, check_smtp_encryption  # updated in A8a (accounts check, H reviews)
 from backend.app.services.platform import config_audit
+from backend.app.services.platform.client_address import PUBLIC_FORWARDING_SUMMARY, UNTRUSTED_PROXY_SUMMARY, _untrusted_forwarding
 from backend.app.services.platform.config_audit import (
     CONFIG_CHECKS,
     JWT_SECRET_MIN_LENGTH,
     ConfigCheck,
     WeakSecretError,
+    check_client_address,
     check_instance_key,
     check_jwt_secret,
     check_log_level,
@@ -80,6 +93,7 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_secrets_set_twice: "platform.secrets_set_twice",
     check_instance_key: "platform.instance_key",
     check_session_cookie: "platform.session_cookie",
+    check_client_address: "platform.client_address",
     check_log_level: "platform.log_level",
     check_smtp_configuration: "email.smtp",
     check_smtp_encryption: "email.smtp_encryption",
@@ -778,3 +792,81 @@ def test_startup_logs_nothing_about_the_block_when_not_blocked(configuration, lo
 
     assert logged == [], f"an instance that is not blocked logs nothing about the block: {logged}"
     print_success(f"{variables or 'unset'}: nothing logged")
+
+
+# =============================================================================
+# (f) The client address check (H-36)
+# =============================================================================
+
+
+#: (f) The forwarding headers, as the check names them.
+XFF, FORWARDED, REAL_IP = "X-Forwarded-For", "Forwarded", "X-Real-IP"
+#: (f) The summaries of the check, word for word: the module's own texts, by the name the cases give them.
+SUMMARIES = {"UNTRUSTED_PROXY_SUMMARY": UNTRUSTED_PROXY_SUMMARY, "PUBLIC_FORWARDING_SUMMARY": PUBLIC_FORWARDING_SUMMARY}
+
+
+def _noted(monkeypatch: pytest.MonkeyPatch, local: set[str], public: set[str]) -> None:
+    """(f) What ``forwarded_by_untrusted_proxy`` noted, for this test only: both sets replaced by copies, put back after it."""
+    monkeypatch.setitem(_untrusted_forwarding, "local", set(local))
+    monkeypatch.setitem(_untrusted_forwarding, "public", set(public))
+
+
+@pytest.mark.parametrize(
+    ("local", "public", "severity", "message", "detail", "summary"),
+    [
+        pytest.param(set(), set(), "ok", "clientAddress.ok", {}, None, id="nothing-noted-ok-as-at-startup"),
+        pytest.param({REAL_IP}, set(), "warning", "clientAddress.untrustedProxy", {"headers": REAL_IP}, "UNTRUSTED_PROXY_SUMMARY", id="local-one-header-warning"),
+        pytest.param({REAL_IP, XFF, FORWARDED}, set(), "warning", "clientAddress.untrustedProxy", {"headers": "X-Forwarded-For, Forwarded, X-Real-IP"}, "UNTRUSTED_PROXY_SUMMARY", id="local-every-header-in-order"),
+        pytest.param(set(), {XFF}, "info", "clientAddress.publicForwarding", {"headers": XFF}, "PUBLIC_FORWARDING_SUMMARY", id="public-only-info"),
+        pytest.param(set(), {REAL_IP, XFF}, "info", "clientAddress.publicForwarding", {"headers": "X-Forwarded-For, X-Real-IP"}, "PUBLIC_FORWARDING_SUMMARY", id="public-two-headers-in-order"),
+        pytest.param({FORWARDED}, {XFF, REAL_IP}, "warning", "clientAddress.untrustedProxy", {"headers": FORWARDED}, "UNTRUSTED_PROXY_SUMMARY", id="local-wins-over-public-with-the-local-names-only"),
+    ],
+)
+def test_check_client_address_in_each_of_its_states(configuration, monkeypatch, local, public, severity, message, detail, summary):
+    """(f) What was noted decides: local a warning, public alone info, nothing ok; the detail lists the names in order, the
+    local ones only when both are noted, and the summary is the module's own text."""
+    _noted(monkeypatch, local, public)
+
+    result = check_client_address()
+
+    _assert_check(result, check_client_address, severity, message, detail)
+    if summary is not None:
+        expected = SUMMARIES[summary]
+        assert result.summary == expected, f"check_client_address() is {severity}: its summary must be {summary}, word for word:\n  expected {expected!r}\n  got      {result.summary!r}"
+    print_success(f"local {sorted(local)}, public {sorted(public)}: {severity} {result.i18n_key}")
+
+
+@pytest.mark.parametrize(
+    ("local", "public"),
+    [
+        pytest.param(set(), set(), id="nothing-noted"),
+        pytest.param({XFF, REAL_IP}, set(), id="local"),
+        pytest.param(set(), {FORWARDED}, id="public"),
+        pytest.param({FORWARDED}, {XFF, REAL_IP}, id="both"),
+    ],
+)
+def test_check_client_address_changes_nothing(configuration, monkeypatch, local, public):
+    """(f) The check reads what was noted and leaves it as it was: the same sets, holding the same names."""
+    _noted(monkeypatch, local, public)
+    state = _untrusted_forwarding
+    held = {peer_class: state[peer_class] for peer_class in ("local", "public")}
+    before = {peer_class: set(names) for peer_class, names in state.items()}
+
+    results = [check_client_address(), check_client_address()]
+
+    assert results[0] == results[1], f"the same state gives the same result: {results}"
+    after = {peer_class: set(names) for peer_class, names in state.items()}
+    assert after == before, f"check_client_address() changed what was noted: {before} became {after}"
+    replaced = [peer_class for peer_class, names in held.items() if state[peer_class] is not names]
+    assert not replaced, f"check_client_address() replaced the set of {replaced} in _untrusted_forwarding"
+    print_success(f"local {sorted(local)}, public {sorted(public)}: unchanged")
+
+
+def test_the_client_address_check_runs_right_after_the_session_cookie_check():
+    """(f) Registered in CONFIG_CHECKS right after check_session_cookie, before check_log_level."""
+    index = CONFIG_CHECKS.index(check_session_cookie)
+
+    following = CONFIG_CHECKS[index + 1 : index + 3]
+
+    assert following == (check_client_address, check_log_level), f"CONFIG_CHECKS must run check_client_address right after check_session_cookie and before check_log_level: {[check.__name__ for check in CONFIG_CHECKS]}"
+    print_success(f"{[check.__name__ for check in CONFIG_CHECKS[index : index + 3]]}")

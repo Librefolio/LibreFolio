@@ -23,6 +23,11 @@
         "ok": "Le cookie de session est Secure dès que le navigateur utilise HTTPS.",
         "never": "Le cookie de session est aussi envoyé en HTTP non chiffré (SESSION_COOKIE_SECURE=never)."
       },
+      "clientAddress": {
+        "ok": "Aucune requête n'est passée par un proxy auquel LibreFolio ne fait pas confiance depuis le démarrage du serveur.",
+        "untrustedProxy": "Les requêtes passent par un proxy inverse auquel LibreFolio ne fait pas confiance ({headers}) : les limites par adresse de visiteur ne s'y appliquent pas. Ajoutez le proxy à FORWARDED_ALLOW_IPS, ou indiquez dans LIBREFOLIO_CLIENT_IP_HEADER l'en-tête qu'il définit.",
+        "publicForwarding": "En-têtes de transfert reçus d'une adresse publique et ignorés ({headers}). Si un proxy à une adresse publique transmet les requêtes, ajoutez-le à FORWARDED_ALLOW_IPS ; sinon, il n'y a rien à faire."
+      },
       "logLevel": {
         "ok": "Le niveau de journalisation convient à la production.",
         "verbose": "Le niveau de journalisation est {log_level} : le journal enregistre des détails de fonctionnement ; INFO suffit en production."

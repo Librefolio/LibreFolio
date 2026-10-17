@@ -180,6 +180,8 @@ def capture_pre_bind_steps(monkeypatch, *, forced_rebuild: bool = False, fronten
     monkeypatch.setattr(dev, "update_js_cache", update_js_cache)
     for name in ("check_port_in_use", "run_command_live"):
         forbid(monkeypatch, dev, name, f"--build-only reached {name}: it must stop before the port check and never start the server")
+    # Z-10 moves the server launch to run_server_live, which dev.py does not define before it: raising=False.
+    forbid(monkeypatch, dev, "run_server_live", "--build-only reached run_server_live: it must stop before the port check and never start the server", raising=False)
     forbid(monkeypatch, dev.os, "execvpe", "--build-only exec'd the server: it must stop before uvicorn")
     return captured
 

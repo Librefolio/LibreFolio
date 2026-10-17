@@ -3746,4 +3746,26 @@ input and fails with a 500 on a non-finite value, and no handler for `ResponseVa
 Filed: [[problems/frontend-build-looked-stale-for-files-it-never-bundles]], [[problems/static-site-served-hidden-build-files]],
 [[decisions/test-runner-refuses-test-names-it-cannot-apply]], [[decisions/request-floats-refuse-inf-and-nan]],
 [[problems/response-validation-error-wrote-the-response-to-the-log]], [[concepts/fastapi-0141-routing-and-validation-gotchas]].
+## [2026-10-17] file | Vite HMR: dispose() runs only on the module an update is accepted through
+Workstream Z, Z-22 (release 1.3). H's review of Z-20 proposed `import.meta.hot?.dispose(stop)` for the listener that
+`instanceBlock.svelte.ts` adds at every hot update. Measured with the repo's Vite 7.3.5 (module runner, same
+`HMRClient` as the browser): `dispose` runs only on the accepted module, the `(app)` layout, so the leak stays (1→4
+listeners in three edits); handing the unsubscribe over through `import.meta.hot.data` keeps one. Also filed: Vitest
+4.1.11's `import.meta.hot` has no `data`, which made the first guard throw in 24 tests. Fix `d49263b0e`.
+Filed: [[problems/vite-hmr-dispose-only-on-the-accepted-module]].
+## [2026-10-17] update | CP-14a: day count and simple interest in the home, one accrual walk, P-10
+U10 (D-8): the day count conventions and simple interest moved, unchanged, from the Scheduled Investment provider into
+`financial_math/interest.py`. The provider's two duplicated day walks are one (`_accrual_days`), pinned by a golden
+test. P-10 (decision 27): the event store refuses to change a SPLIT's type while a linked incoming adjustment has no
+cost, asking `splits.py`.
+Updated: [[decisions/financial-math-one-home]], [[decisions/scheduled-investment-redesign]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | CP-14b: ACT/ACT ISDA, the maturity settlement after the final coupon, the measure tool's floor
+ACT/ACT counted one day short per year end crossed; the Scheduled Investment's maturity settlement counted the final
+coupon twice (J-39, the part without late interest); the chart measure tool annualised from one day and showed 0 % on a
+zero start. All three fixed red first, with the changed values declared before the code; two reds had failed on a
+mistyped literal, not on the behaviour, which the page on the settlement keeps as a lesson.
+Filed: [[problems/act-act-lost-a-day-per-year-end]], [[problems/maturity-settlement-counted-the-final-coupon-twice]].
+Updated: [[features/F-045]].
 Graph: not updated; graphify is not available in this worktree.

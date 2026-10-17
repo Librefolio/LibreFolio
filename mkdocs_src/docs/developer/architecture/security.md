@@ -913,7 +913,9 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
-A check changes nothing, never raises and never puts a secret value in its result.
+A check changes nothing, never raises and never puts a secret value in its result. Each judges the
+configuration, except `platform.client_address`, which reports what the running server has met since it
+started: it is `ok` at startup, so the startup audit never logs it.
 `run_config_checks()` evaluates the functions of `CONFIG_CHECKS`, in this order:
 
 | `check_id` | Not `ok` when | Severity |
@@ -925,6 +927,8 @@ A check changes nothing, never raises and never puts a secret value in its resul
 | `platform.instance_key` | `instance_key_status()` reports a `problem`: the key cannot be used, including a generated key file out of reach (`cannot be reached (Permission denied)`) | `error` |
 | `platform.instance_key` | The folder or the file of the generated key gives group or others any access: the folder should be `0700`, the file `0600` | `warning` |
 | `platform.session_cookie` | `SESSION_COOKIE_SECURE=never` | `warning` |
+| `platform.client_address` | Since the start, forwarding headers came from an untrusted local peer ([Behind a Proxy Nobody Trusts](#untrusted-proxy)): `instance.checks.clientAddress.untrustedProxy`, `detail` `{"headers": …}` with the names met, such as `"X-Forwarded-For, X-Real-IP"`, summary `UNTRUSTED_PROXY_SUMMARY` | `warning` |
+| `platform.client_address` | Since the start, they came from untrusted public peers only: `instance.checks.clientAddress.publicForwarding`, the names met in `headers`, summary `PUBLIC_FORWARDING_SUMMARY` | `info` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
 | `accounts.login_limit` | `LIBREFOLIO_LOGIN_LIMIT=off`, in any case: the [failed sign-in limit](#login-limit) is off. `auth.checks.loginLimit.off`, and one fixed summary however `off` is written: `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance` | `warning` |
 | `accounts.login_limit` | Any value other than `on` or `off`: `auth.checks.loginLimit.invalid`, `detail` `{"value": <the value, stripped>}`, as `login_limit_value()` reads it. `log_configuration_audit()` stops the start on such a value (below), so the error shows only for a value read after the start | `error` |
@@ -1556,7 +1560,54 @@ it connects (`set_sqlite_pragma`, `db/session.py`), which a plain read-only conn
 refuses. The totals the manifest recorded go as they are to J's `ControlTotals.from_json()`, which reads an amount only
 as plain decimal text, at most 60 digits on each side of the point, and refuses any other before reading it (J-27): an
 exponent an archive recorded is never expanded, and the comparison is then `absent`. The rule has one home, J's:
-`compare_totals()` does not repeat it (B-22).
+`compare_totals()` does not repeat it (B-22). The copy's own totals go through the same reader: an amount J computes but
+cannot read back (more than 60 digits, as an exact huge quantity of an old or hand-edited database gives) makes the
+comparison `unreadable`, with the warning «The control totals of the copy cannot be read: they are not compared», never
+a failed check (B-29).
+
+### 🧱 Triggers, Views and Virtual Tables {: #backup-restore-foreign-objects }
+
+The database of an uploaded archive brings its own schema, and a schema can hold SQL that runs by itself (lot B-28,
+after E's security review of B3). A trigger fires when the check writes the copy: the post-migration fixes, the rekey
+of the plugin secrets. A view that takes the name of an app table runs whenever that name is read. A recursive one
+never ends: it would hold the lock of the checks until a restart, and keep a managed instance awake. After a restore,
+they would run in the server. LibreFolio's migrations create none of them, only tables and their indexes: such an
+object means that LibreFolio did not make the database, or that it was changed, so the check refuses it before
+anything of it can run.
+
+- **First, before anything else opens the copy.** `_refuse_foreign_objects()` (`staging.py`) runs in `_stage()` right
+  after the unpacking, and after a secure backup's decrypted archive is removed: before `describe_database()` (the
+  integrity check, the rows), the upgrade, the post-migration fixes, the rekey, the administrators and the totals. It
+  opens the copy read only (`mode=ro`), turns `trusted_schema` off, and reads `SELECT sql FROM sqlite_master`, every
+  row: it runs nothing of the archive, and writes nothing.
+- **By the SQL text.** `_schema_object_kind()` reads each object from its SQL, since SQLite builds its schema from that
+  text whatever the row's `type` says. It takes the first words, past spaces and SQL comments (`-- …`, `/* … */`),
+  case-insensitive: `CREATE TABLE` is a table, `CREATE INDEX` or `CREATE UNIQUE INDEX` an index, and SQL `NULL` one of
+  SQLite's own automatic indexes. Anything else is foreign: `CREATE TRIGGER` (`trigger`), `CREATE VIEW` (`view`),
+  `CREATE VIRTUAL TABLE` (`virtual`), and any other text, `CREATE TEMP …` included (`other`). A comment between the
+  keywords, as in `CREATE/**/TRIGGER`, hides nothing.
+- **The refusal.** One foreign object or more: `StagingError` `database_foreign_objects`,
+  `The backup's database holds triggers, views or other objects LibreFolio never creates: it cannot be restored`,
+  and one warning in the log, `A backup's database holds schema objects LibreFolio never creates`, with `objects`
+  (their count) and `kinds`: never a name nor any SQL, which are the archive's text. As for every refusal, the whole
+  copy is removed. The code is in `RestoreErrorCode`; the restore card shows
+  `backup.restore.errors.database_foreign_objects`, and the command line prints `❌ … (database_foreign_objects)`.
+- **A schema SQLite refuses to read** is `database_damaged`: any `sqlite3.DatabaseError` of that read, such as a row
+  whose SQL does not parse, or a row that disguises its object, a trigger whose row says `type = 'table'` (SQLite then
+  refuses the whole schema, «malformed database schema», checked on 3.54.0).
+- **`trusted_schema` off on every connection to the copy.** Every connection B opens on the copy runs
+  `PRAGMA trusted_schema=OFF` before any other statement: this read, `describe_database()` (`snapshot.py`, which also
+  describes the backup's own snapshot), `_plugin_secrets()` and `_administrators()` (`staging.py`), and the totals'
+  `aiosqlite` connection (`totals.py`). The SQL the schema keeps in its tables and indexes (a `CHECK`, a `DEFAULT`, a
+  generated column, an index's expression) may then call only the functions SQLite marks innocuous. The post-migration
+  fixes keep their own connection, shared code that runs after the refusal, and the upgrade runs `alembic upgrade head`
+  in a process of its own, stopped after an hour (`UPGRADE_TIMEOUT_SECONDS`).
+
+Tests: `./dev.py test services backup-staging` (`backend/test_scripts/test_services/test_backup_staging.py`, section
+(l): a trigger, a recursive view, an `fts5` virtual table and a comment between the keywords, each refused before
+`describe_database()` runs, the log with the count and the kinds and no name; a disguised row and a row that does not
+parse, `database_damaged`; the head database, tables and indexes only, a guard for the day a migration adds a trigger
+or a view; `trusted_schema` off first on every connection of a whole check).
 
 ### 🔐 The Routes {: #backup-restore-routes }
 
@@ -2192,8 +2243,11 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
 
 | Function | Returns |
 |----------|---------|
-| `client_address(request)` | The header's address when the request carries the header once, holding one IP address (an IPv4-mapped IPv6 one as IPv4); otherwise the connection's, `request.client.host`, and `None` without one (a test client) |
+| `client_address(request)` | The header's address when the request carries the header once, holding one IP address (an IPv4-mapped IPv6 one as IPv4); otherwise the connection's, `request.client.host`, and `None` without one |
+| `forwarded_by_untrusted_proxy(request)` | `True` when the request came through a local proxy from which neither uvicorn nor `LIBREFOLIO_CLIENT_IP_HEADER` got the client's address, so that its address is the proxy's: see [Behind a Proxy Nobody Trusts](#untrusted-proxy). A Request or a WebSocket alike (Starlette's `HTTPConnection`) |
+| `rate_limit_address(request)` | The address a limit per address counts the request by: `client_address(request)`, called first so that its warning about an unusable header is never hidden, or `None` when `forwarded_by_untrusted_proxy(request)` is true |
 | `client_rate_key(address)` | The key of a limit per client: an IPv4 address whole, an IPv6 one by its /64, which one subscriber usually holds whole; anything else as written, and `None` without an address |
+| `untrusted_forwarding_seen(peer_class)` | The names of the forwarding headers noted since the process started from untrusted `"local"` or `"public"` peers, in the order `X-Forwarded-For`, `Forwarded`, `X-Real-IP`: what the check `platform.client_address` reports |
 
 - **Validated at startup.** The field's validator strips the value (empty: unset), then wants the name of one HTTP
   header, an RFC 9110 `token`, and refuses `X-Forwarded-For` and `Forwarded` in any case: lists whose first value the
@@ -2208,8 +2262,9 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
 - **Safety.** `client_address()` believes the header whoever sends it, so the variable is safe only when every request
   crosses that proxy: a client that reaches the app directly (a published port, another path) can choose its address,
   to get around a limit or to spend another client's.
-- **Callers.** A limit per client takes its address from `client_address(request)` and its key from
-  `client_rate_key()`. LibreFolio's own log records never hold a client's address (a refusal logs at most the account,
+- **Callers.** A limit per client takes its address from `rate_limit_address(request)`, `None` (no count per address)
+  behind a [proxy nobody trusts](#untrusted-proxy), and its key from `client_rate_key()`. LibreFolio's own log records
+  never hold a client's address (a refusal logs at most the account,
   never the address); uvicorn's access log, like any web server's, writes the connection's address on each request
   line (see [Request Logs](#request-logs)). The three per-address email limits read
   their address with `client_address()`: «forgot password» and «send the link again» in `backend/app/api/v1/email.py`,
@@ -2219,6 +2274,67 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
 - **Not the indicator.** `GET /system/connection` (`backend/app/api/v1/system/connection.py`) keeps
   `client_address(forwarded_for, peer)` of `backend/app/utils/runtime/network.py`, a different function that classifies
   the last `X-Forwarded-For` value: advisory only, it gates nothing.
+
+#### Behind a Proxy Nobody Trusts {: #untrusted-proxy }
+
+Lot H-36 (security review R13-SEC6, decision N70). The Docker image starts uvicorn with its defaults, so while
+`FORWARDED_ALLOW_IPS` is unset uvicorn follows `X-Forwarded-For` from `127.0.0.1` only. A proxy in front of the
+container connects from the Docker network, such as `172.18.0.2`: uvicorn does not trust it, every visitor has the
+proxy's address, and a limit per address counts them all together. With workstream A's limit on failed sign-ins per
+address, 50 wrong attempts from anyone would lock everyone out. Leaving such requests out of the limits per address is
+the lesser harm: `forwarded_by_untrusted_proxy()` recognises them, and `rate_limit_address()` gives them no address.
+`forwarded_by_untrusted_proxy()` decides in this order:
+
+1. **No forwarding header** (`X-Forwarded-For`, `Forwarded` or `X-Real-IP`, present whatever its value): `False`.
+2. **`LIBREFOLIO_CLIENT_IP_HEADER` gives the address**: it is set, and the request carries it once, holding one IP
+   address: `False`. Set but absent or unusable, the decision goes on as if it were unset; the helper logs nothing
+   about it, the warning stays `client_address()`'s.
+3. **A peer `classify_ip()` cannot read**, `unknown` (no client, the test client's `testclient`, an unspecified or
+   multicast address): `False`.
+4. **uvicorn already followed `X-Forwarded-For`**: `False`. The app cannot read uvicorn's trust list
+   (`--forwarded-allow-ips` is a flag of uvicorn's command line), so it infers it: uvicorn 0.52.4 rewrites
+   `scope["client"]` only for a trusted peer, and the client it writes is then one of the header's addresses, port and
+   brackets removed. "Followed" is thus: the peer equals, as an IP, one of the `X-Forwarded-For` values, both read by
+   `parse_ip()` of `backend/app/utils/runtime/network.py` (brackets, a port after a single `:` and a zone stripped, an
+   IPv4-mapped address read as IPv4; the private `_parse_ip()` before H-36). uvicorn reads neither `Forwarded` nor
+   `X-Real-IP`: a local proxy that sends only those goes on to step 5 even when `FORWARDED_ALLOW_IPS` lists it, and
+   rightly, since the client's address then reached neither uvicorn nor, past step 2, `LIBREFOLIO_CLIENT_IP_HEADER`.
+5. **Otherwise**, `True` for a local peer, one that `classify_ip()` classes `loopback`, `lan` or `vpn`: 127.0.0.0/8,
+   `::1`, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10 (CGNAT, Tailscale), `fc00::/7` and
+   `fe80::/10`. `False` for a `public` peer.
+
+- **Why only a local peer.** On an instance exposed directly, any client can add a forwarding header: "forwarding
+  headers from an untrusted peer" alone would let an attacker switch the limit per address off. A client on the
+  internet cannot make its connection come from a local address. A local client that sends such a header itself
+  leaves only its own requests out of the limits per address, and the limits per account or per email address still
+  count them. Where every visitor reaches LibreFolio from a local address (Docker Desktop's published ports, a
+  LAN-only or VPN-only install), any visitor can leave the limits per address this way, never those per account or
+  per email address; behind Docker Desktop's published ports, which give every visitor the same address, the limits
+  per address count every visitor together anyway.
+- **One home for "local".** Step 5 is `classify_ip()`, which the connection indicator and workstream E's SMTP check
+  (`backend/app/services/email/checks.py`) already use: no second list of ranges. Step 4 likewise makes `parse_ip()`
+  public rather than copy uvicorn's parsing.
+- **The notes.** Step 5 notes the names of the forwarding headers the request carried, never an address (N58), under
+  `local` or `public` in the module's `_untrusted_forwarding`, one set per class, which `untrusted_forwarding_seen()`
+  reads. The first note of each class in the process logs one record, with the names in `headers`, such as
+  `X-Forwarded-For, X-Real-IP`: for `local` a warning, `UNTRUSTED_PROXY_SUMMARY`,
+  `Requests come through a reverse proxy that LibreFolio does not trust: the limits per client address skip them. List the proxy in FORWARDED_ALLOW_IPS, or name the header it sets in LIBREFOLIO_CLIENT_IP_HEADER`;
+  for `public` an `info`, `PUBLIC_FORWARDING_SUMMARY`,
+  `Forwarding headers from a public address were ignored: if a proxy on a public address forwards the requests, list it in FORWARDED_ALLOW_IPS`.
+  The helper's callers are the limits per address, through `rate_limit_address()`, so only the requests that reach one
+  are noted. There is no reset function: a test empties the two sets in place, as it does `_warned` (N58).
+- **The check.** `check_client_address()` in `config_audit.py`, `platform.client_address`, right after
+  `platform.session_cookie` in `CONFIG_CHECKS`, reads the notes: `warning` (`instance.checks.clientAddress.untrustedProxy`)
+  once a local peer was noted, `info` (`…publicForwarding`) when only public ones were, `ok` (`…ok`) otherwise, with
+  the names in `detail` as `headers` and the two summaries above ([Configuration Checks](#configuration-checks)). It
+  reports what the running server has met, so it is `ok` at startup: the startup audit never logs it, and the log line
+  of the first note stands in for it. Like every check, it is evaluated again on demand by the administrators'
+  security checks (workstream A).
+- **Declined: the rightmost `X-Forwarded-For` value as the key behind a private peer.** Behind a private peer that does
+  not append its own entry, a LAN client or a proxy that passes the client's header through, that value is the
+  client's choice: rotating it gets around the limit, and writing someone else's address locks them out. Skipping
+  leaves the limit per address out as well, but locks nobody else out. The real cure is configuring the trust, which
+  the check asks for.
 
 For administrators: «The Visitor's Address» in
 [Checking Connection Security](../../admin/connection_checks.md#reverse-proxy).

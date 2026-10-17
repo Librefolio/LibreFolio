@@ -79,6 +79,43 @@ def _valued_at_cost(cost_value: Decimal) -> ValuationResult:
 # =============================================================================
 
 
+def _move_linked_cash(ctxn: ClassifiedTransaction, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], transfer_splits: dict[int, tuple[Decimal, Decimal]] | None) -> None:
+    """The pools of one leg of a linked-internal cash transfer or currency conversion (J2, D-MF4).
+
+    The departure leaves R first, then K, and records its ``(from R, amount)`` by its id; the arrival brings back what
+    the departure took from each pool. The two legs' amounts can differ — a conversion's spread, the rate move while the
+    cash travels, two brokers owned at different shares — and the engine's P&L already counts that gap (no leg is an
+    external flow): it is booked as a result, a gain to R, a loss out of R first and then of K, as a FEE.
+    An arrival whose departure is unknown arrives in K.
+    """
+    zero = Decimal("0")
+    tx = ctxn.tx
+    bid = tx.broker_id
+    if tx.amount < 0:
+        from_r = min(amount, max(R[bid], zero))
+        R[bid] -= from_r
+        K[bid] -= amount - from_r
+        if transfer_splits is not None and tx.id is not None:
+            transfer_splits[tx.id] = (from_r, amount)
+    elif tx.amount > 0:
+        departure = transfer_splits.pop(ctxn.paired_tx.id, None) if transfer_splits is not None and ctxn.paired_tx is not None else None
+        if departure is None or departure[1] == zero:
+            K[bid] += amount
+            return
+        from_r, sent = departure
+        K[bid] += sent - from_r
+        R[bid] += from_r + (amount - sent)
+        if R[bid] < zero:
+            K[bid] += R[bid]
+            R[bid] = zero
+
+
+def _is_linked_cash_arrival(ctxn: ClassifiedTransaction) -> bool:
+    """The incoming leg of a linked-internal CASH_TRANSFER or FX_CONVERSION."""
+    tx = ctxn.tx
+    return ctxn.classification == "linked_internal" and tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION) and tx.amount is not None and tx.amount > 0
+
+
 class DailyStateBuilder:
     """Builds a dense DailyPortfolioState[] vector for every calendar day.
 
@@ -249,6 +286,8 @@ class DailyStateBuilder:
         K: dict[int, Decimal] = defaultdict(lambda: zero)  # capital pool per broker
         R: dict[int, Decimal] = defaultdict(lambda: zero)  # returns pool per broker
         W: Decimal = zero  # withdrawn returns (global, exits system)
+        # J2: the K/R split of each linked cash departure, by its transaction id, until its arrival takes it up.
+        transfer_splits: dict[int, tuple[Decimal, Decimal]] = {}
         # Position state snapshots
         position_states_start: list[DailyPositionState] = []
         position_states_end: list[DailyPositionState] = []
@@ -319,6 +358,11 @@ class DailyStateBuilder:
             day_additions = [c for c in day_all_txs if c.tx.quantity and c.tx.quantity > 0 and c.tx.asset_id]
             day_reductions = [c for c in day_all_txs if c.tx.quantity and c.tx.quantity < 0 and c.tx.asset_id]
             day_non_position = [c for c in day_all_txs if not (c.tx.quantity and c.tx.quantity != 0 and c.tx.asset_id)]
+            # J2: a linked cash arrival takes up its departure's K/R split, so it comes after a departure of the same day.
+            day_ids = {c.tx.id for c in day_non_position}
+            same_day_arrivals = [c for c in day_non_position if _is_linked_cash_arrival(c) and c.paired_tx is not None and c.paired_tx.id in day_ids]
+            if same_day_arrivals:
+                day_non_position = [c for c in day_non_position if c not in same_day_arrivals] + same_day_arrivals
 
             for ctxn in day_additions + day_reductions + day_non_position:
                 tx = ctxn.tx
@@ -388,7 +432,7 @@ class DailyStateBuilder:
                 # ── 3-pool per-broker for the other movements ──
                 if amount_target is None:
                     continue
-                W, buy_from_k, buy_from_r = self._apply_pool_rule(ctxn, amount_target, K, R, W)
+                W, buy_from_k, buy_from_r = self._apply_pool_rule(ctxn, amount_target, K, R, W, transfer_splits)
                 if self.compute_acquisition_funding:
                     day_acq_from_r += buy_from_r
                     day_acq_from_k += buy_from_k
@@ -797,12 +841,22 @@ class DailyStateBuilder:
         return dirty_days
 
     @staticmethod
-    def _apply_pool_rule(ctxn: ClassifiedTransaction, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], withdrawn: Decimal) -> tuple[Decimal, Decimal, Decimal]:
+    def _apply_pool_rule(
+        ctxn: ClassifiedTransaction,
+        amount: Decimal,
+        K: dict[int, Decimal],
+        R: dict[int, Decimal],
+        withdrawn: Decimal,
+        transfer_splits: dict[int, tuple[Decimal, Decimal]] | None = None,
+    ) -> tuple[Decimal, Decimal, Decimal]:
         """The K/R/W pool rule of one cash movement that is not a position reduction; ``amount`` is in the target currency.
 
         Returns the withdrawn pool after it, and what a BUY drew from K and from R. A deposit first restores withdrawn
         returns; a withdrawal takes capital first; income (signed) feeds R; a fee or tax comes out of R, then of K; a BUY
-        spends R first; a linked-internal cash transfer leaves R first and arrives in K.
+        spends R first. A linked-internal cash transfer or currency conversion leaves R first, and its arrival brings back
+        what the departure took from each pool, the gap between the two legs booked as a result (J2, D-MF4):
+        ``transfer_splits`` keeps each departure's ``(from R, amount)`` by its id until its arrival takes it up. An arrival
+        whose departure is unknown arrives in K.
         """
         zero = Decimal("0")
         tx = ctxn.tx
@@ -835,14 +889,7 @@ class DailyStateBuilder:
             buy_from_k = amount - buy_from_r
             K[bid] -= buy_from_k
         elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION) and ctxn.classification == "linked_internal":
-            if tx.amount < 0:
-                # Departure leg: R exits first, then K
-                from_r = min(amount, max(R[bid], zero))
-                R[bid] -= from_r
-                K[bid] -= amount - from_r
-            elif tx.amount > 0:
-                # Arrival leg: receives from the paired broker. Approximate: all of it into K (J2 carries the split).
-                K[bid] += amount
+            _move_linked_cash(ctxn, amount, K, R, transfer_splits)
         return withdrawn, buy_from_k, buy_from_r
 
     def _valuation_rate_change_days(self) -> set[date_type]:
