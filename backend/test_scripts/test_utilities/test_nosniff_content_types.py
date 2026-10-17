@@ -23,9 +23,10 @@ Three checks:
     requested from a fresh app's static site at the three places that serve files: the SPA catch-all, the ``/_app``
     mount and ``/mkdocs``.
 (b) Every extension present in ``frontend/build/`` and ``mkdocs_src/site/``; a tree that is not there (no ``index.html``,
-    so the app serves none of it) is skipped, and says so; a hidden file of the build outside ``_app/`` is not sampled,
-    since the catch-all never serves it (H-28). One file of each extension, the smallest, is requested from a fresh
-    app's static site over the real trees, and its body checked against the file before its type is judged. The
+    so the app serves none of it) is skipped, and says so; no hidden file of either tree (a part of its path starting
+    with ``.``) is sampled, since no route serves one: the catch-all answers the SPA fallback (H-28), the ``/_app``
+    mount and ``/mkdocs`` a 404 (H-29). One file of each extension, the smallest, is requested from a fresh app's
+    static site over the real trees, and its body checked against the file before its type is judged. The
     extension of a compressed file keeps the suffix before it (``.xml.gz``): ``mimetypes`` types it by that one. The
     table of the extensions, their files and their types is printed in the test's output, whatever the verdict.
 (c) The same extensions on a machine without any ``mime.types`` file, as the ``python:3.13-slim`` image the app ships in,
@@ -220,11 +221,6 @@ TREES = {
 #: The SPA catch-all answers 404 to these paths (``static_site.frontend_catchall``): the app never serves such a file.
 CATCH_ALL_REFUSES = ("api/", "mkdocs")
 
-#: Nor does the catch-all serve a hidden file of the build, a path with a name starting with ``.`` (``.build-debug``):
-#: it answers the SPA fallback instead (H-28, ``static_site._hidden_in_build``). The ``/_app`` mount, which gets every
-#: path under this folder, serves a hidden file too.
-APP_MOUNT_FOLDER = "_app/"
-
 
 @dataclass(frozen=True)
 class Sample:
@@ -247,7 +243,10 @@ def samples_of(tree_key: str) -> tuple[Sample, ...]:
         relative = path.relative_to(tree.root).as_posix()
         if tree.url_prefix == "/" and relative.startswith(CATCH_ALL_REFUSES):
             continue
-        if tree.url_prefix == "/" and not relative.startswith(APP_MOUNT_FOLDER) and any(part.startswith(".") for part in relative.split("/")):
+        # Nor does any route serve a hidden file, one with a part of its path starting with ``.`` (``.build-debug``, a
+        # Finder ``.DS_Store``), in either tree: the catch-all answers the SPA fallback (H-28), the ``/_app`` mount and
+        # ``/mkdocs`` a 404 (H-29).
+        if any(part.startswith(".") for part in relative.split("/")):
             continue
         groups.setdefault(extension_of(path.name), []).append((path.stat().st_size, relative, path))
     samples = []
