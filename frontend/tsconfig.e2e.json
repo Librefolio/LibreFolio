@@ -8,10 +8,11 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "$lib": ["./src/lib"],
+      "$lib/*": ["./src/lib/*"]
+    }
   },
-  "include": [
-    "e2e/**/*.ts",
-    "playwright.config.ts"
-  ]
+  "include": ["e2e/**/*.ts", "playwright.config.ts"]
 }
