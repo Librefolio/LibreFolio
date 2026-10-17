@@ -20,7 +20,7 @@ import {debug} from '$lib/debug';
 import {loginUrl} from '$lib/utils/internalPath';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 import {priceRefresh} from '$lib/features/price-refresh/priceRefresh';
-import {instanceBlock, isInstanceBlockedError} from '$lib/features/instance/instanceBlock.svelte';
+import {instanceBlockState, isInstanceBlockedError} from '$lib/features/instance/instanceBlockState';
 
 // =============================================================================
 // CONFIGURATION
@@ -152,7 +152,7 @@ axiosInstance.interceptors.response.use(
 
         // A 423 `instance_blocked`: the hosting provider blocked this instance, and the layout shows the block page.
         if (isInstanceBlockedError(error.response?.status, error.response?.data)) {
-            instanceBlock.markBlocked();
+            instanceBlockState.markBlocked();
         }
 
         // Let the error propagate - Zodios will handle it
