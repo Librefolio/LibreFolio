@@ -116,7 +116,8 @@ class RestoreMigration(BaseModel):
 
 #: Why a check refused an archive, as stable codes (``services/platform/instance_backup/staging.py``), plus
 #: ``restore_interrupted`` (the server stopped during the check) and ``restore_folder_unusable`` (``.restore`` is not a
-#: plain folder).
+#: plain folder). ``instance_key_invalid`` comes only from ``dev.py backup restore --instance-key-file`` (B-18): the API
+#: gives a check no key, but the list stays the whole set ``stage_archive`` can raise.
 RestoreErrorCode = Literal[
     "not_a_backup",
     "archive_unreadable",
@@ -126,6 +127,7 @@ RestoreErrorCode = Literal[
     "manifest_unreadable",
     "manifest_too_large",
     "too_many_entries",
+    "unpacked_too_large",
     "duplicate_entry",
     "unexpected_entry",
     "not_a_file",
@@ -147,6 +149,7 @@ RestoreErrorCode = Literal[
     "restore_folder_unusable",
     "password_required",
     "envelope_damaged",
+    "instance_key_invalid",
 ]
 
 

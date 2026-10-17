@@ -71,6 +71,19 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
     ``control_totals_differences`` and ``control_totals_differences_count``, restorable all the same; a ``report.json``
     written before lot B-13 still reads, its totals ``absent`` (§7.6). OpenAPI documents the three fields, the five
     statuses, the two warnings and ``RestoreTotalsDifference``.
+(h) B-35, the restore limit: ``LIBREFOLIO_BACKUP_MAX_RESTORE_MB`` caps what an archive declares unpacked (its manifest's
+    sizes, which are its zip headers'), in MiB, 0 for none; unset, none self-hosted, and in the managed profile 8 times
+    the upload limit. An archive declaring more ends its check ``failed`` with ``unpacked_too_large``, a code
+    ``RestoreStage`` declares (the GET answers 200, never a 500): nothing unpacked (``done_bytes`` and ``total_bytes``
+    stay 0), its stage removed, its upload consumed, the lock free. Exactly at the cap, or below, it is checked as
+    before: the cap counts whole MiB and refuses only what is above it. Managed with an upload limit of 1 MB, the cap is
+    8 MiB: one byte past it is refused, at it and below checked; an explicit 0 lifts it. A limit that cannot be read
+    (the variable, or, unset in the managed profile, the upload limit it is a multiple of, its variable or H's table
+    entry): 503 ``backup_restore_unavailable``, «The restore limit of this instance cannot be read», one error logged
+    naming the variable, neither the value nor a path in the answer; no check started, the upload kept, and the same
+    start, the limit readable, is 202. OpenAPI: the start documents its 503 with its code, and ``RestoreStage.error_code``
+    allows ``unpacked_too_large``. The archives of a chosen size are the head archive's data directory with one more file
+    of zeros, which deflate to almost nothing: whatever they declare, they weigh far less than 1 MB.
 
 Pure: an app of each test holds ``backup_router`` under ``/api/v1``, as ``router.py`` mounts it; ``get_current_user`` is
 overridden by an administrator or a regular user, so the real ``require_admin`` decides and no session or database is
@@ -164,6 +177,8 @@ NO_SPACE = [pytest.param(errno.ENOSPC, id="ENOSPC"), pytest.param(EDQUOT, id="ED
 #: The variables of this lot, as .env.example and the deployments write them: spelled out here, so a rename shows.
 LIMIT_VARIABLE = "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"
 PROFILE_VARIABLE = "LIBREFOLIO_PROFILE"
+#: B-35: the largest restore, in megabytes of what an archive declares unpacked; 0 is no limit.
+MAX_RESTORE_VARIABLE = "LIBREFOLIO_BACKUP_MAX_RESTORE_MB"
 #: A megabyte of the limit, as the server counts it.
 MIB = 1024 * 1024
 #: An upload id, a stage id: what the routes make, and the only thing they take.
@@ -247,13 +262,15 @@ class Instance:
 @pytest.fixture(autouse=True)
 def instance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Instance]:
     """Every test, the unit tests included: the routes use a data directory of the test, the process is configured with
-    another one that must stay absent, a self-hosted profile without a limit is set, the checks run in fake threads.
+    another one that must stay absent, a self-hosted profile without an upload or a restore limit is set (B-35: whatever
+    the environment holds), the checks run in fake threads.
 
     At its end: the configured data directory was never created, the routes wrote nothing outside ``.restore``, and no
     check's thread raised. A check the test left running has its lock let go, as its server would."""
     configured = cases.configure(monkeypatch, tmp_path / "configured-data-dir")
     monkeypatch.setenv(PROFILE_VARIABLE, "selfhosted")
     monkeypatch.delenv(LIMIT_VARIABLE, raising=False)
+    monkeypatch.delenv(MAX_RESTORE_VARIABLE, raising=False)
     root = tmp_path / "instance"
     root.mkdir()
     monkeypatch.setattr(restore, "get_data_dir", lambda: root)
@@ -1042,7 +1059,7 @@ async def test_a_check_that_fails_otherwise_ends_failed_with_its_code(instance, 
     the upload is removed in any case, and the lock its request took is let go. ``stage_archive`` is replaced: it raises,
     and, as it does with a lock it was given, leaves the lock to its caller."""
 
-    def stage_archive(archive_path: Path, data_dir: Path, *, stage_id=None, progress=None, lock=None, key=None) -> None:
+    def stage_archive(archive_path: Path, data_dir: Path, *, stage_id=None, progress=None, lock=None, key=None, instance_key=None, max_unpacked=None) -> None:
         raise error(data_dir)
 
     monkeypatch.setattr(restore_jobs, "stage_archive", stage_archive)
@@ -1940,3 +1957,216 @@ def test_openapi_documents_the_totals_of_the_report():
     difference = schemas.get("RestoreTotalsDifference", {}).get("properties", {})
     assert set(difference) == TOTALS_DIFFERENCE_FIELDS, f"the six fields of a difference: {sorted(difference)}"
     assert enum_of(difference["kind"], schemas) == {"cash", "quantity"}, f"cash or quantity: {difference['kind']}"
+
+
+# =============================================================================
+# (h) B-35: the restore limit, on what an archive declares unpacked
+# =============================================================================
+
+
+#: B-35: what a start answers when the restore limit cannot be read.
+RESTORE_LIMIT_UNREADABLE = "The restore limit of this instance cannot be read"
+#: B-35: the file of zeros an archive of a chosen size carries beside ``FILES``: zeros deflate to almost nothing.
+ZEROS = "custom-uploads/b35-zeros.bin"
+#: B-35: the managed profile's restore limit for an upload limit of 1 MB: 8 times it (contract §1, K = 8), in MiB.
+EIGHT_MIB = 8 * MIB
+
+
+def declared_total(archive: cases.BuiltArchive) -> int:
+    """What an archive declares unpacked: the sizes its manifest gives its files, the database included."""
+    return sum(entry.size for entry in archive.manifest.files)
+
+
+def archive_declaring(databases: cases.Databases, head_archive: cases.BuiltArchive, root: Path, total: int) -> cases.BuiltArchive:
+    """The head archive's data directory (the database at the head, ``ACCOUNTS``, ``FILES``) and one more file of zeros,
+    sized so that the manifest declares exactly ``total`` bytes. ``VACUUM INTO`` copies the same database to the same
+    size, so the head archive tells what the rest declares; checked on the archive built, not assumed."""
+    rest = declared_total(head_archive)
+    assert total > rest, f"precondition: {total} bytes are more than the head archive declares ({rest})"
+    with pytest.MonkeyPatch.context() as patch:
+        cases.configure(patch, root / "configured-data-dir")
+        data = cases.make_data_dir(root / "data", databases.head)
+        (data / ZEROS).write_bytes(bytes(total - rest))
+        built = cases.build_into(data, root / "work")
+        get_git_version.cache_clear()
+    assert declared_total(built) == total, f"precondition: the archive declares exactly {total} bytes, not {declared_total(built)}"
+    return built
+
+
+@pytest.fixture(scope="module")
+def eight_mib_archive(databases, head_archive, tmp_path_factory) -> cases.BuiltArchive:
+    """B-35: an archive declaring exactly 8 MiB unpacked, built once."""
+    return archive_declaring(databases, head_archive, tmp_path_factory.mktemp("eight-mib-archive"), EIGHT_MIB)
+
+
+@pytest.fixture(scope="module")
+def past_eight_mib_archive(databases, head_archive, tmp_path_factory) -> cases.BuiltArchive:
+    """B-35: an archive declaring 8 MiB and one byte unpacked, built once."""
+    return archive_declaring(databases, head_archive, tmp_path_factory.mktemp("past-eight-mib-archive"), EIGHT_MIB + 1)
+
+
+def checked_as_before(state: dict) -> tuple:
+    """How a check ended, and what it unpacked: (status, code, restorable, done_bytes, total_bytes)."""
+    report = state["report"]
+    return state["status"], state["error_code"], report and report["restorable"], state["done_bytes"], state["total_bytes"]
+
+
+def within_the_upload_limit(archive: cases.BuiltArchive, limit_mb: int) -> None:
+    """Precondition: the archive fits the upload limit, so the check, not the upload, is what refuses it."""
+    size = archive.path.stat().st_size
+    assert size <= limit_mb * MIB, f"precondition: the archive fits the upload limit of {limit_mb} MB: {size} bytes"
+
+
+#: B-35 (r1, r2): restore limits, self-hosted, around an archive declaring exactly 8 MiB.
+CAPS_BELOW = [pytest.param("1", id="1-mb"), pytest.param("7", id="a-mib-below")]
+CAPS_AT_OR_ABOVE = [pytest.param("8", id="the-total-itself"), pytest.param("9", id="a-mib-above")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cap", CAPS_BELOW)
+async def test_an_archive_declaring_more_than_the_restore_limit_ends_failed_unpacked_too_large(instance, monkeypatch, eight_mib_archive, cap):
+    """(h) B-35 (r1): the restore limit below what the archive declares (8 MiB; a limit of 1 MB, or of a MiB less): the
+    start is 202, the limit being the check's to apply, and the check ends ``failed`` with ``unpacked_too_large``, its GET
+    answering 200 (a code ``RestoreStage`` declares, never the 500 of an answer that fails its own model). Refused before
+    anything is unpacked: ``done_bytes`` and ``total_bytes`` 0, no report. Its stage removed (no ``data/`` left), its
+    upload consumed, as any refused archive's; the lock free."""
+    print_section("B-35: the restore limit")
+    root = instance.root
+    monkeypatch.setenv(MAX_RESTORE_VARIABLE, cap)
+    response = await start(await uploaded(eight_mib_archive.path.read_bytes()))
+    assert response.status_code == 202, f"{MAX_RESTORE_VARIABLE}={cap}: the check starts, 202: {shown(response)}"
+    stage_id = response.json()["stage_id"]
+    polled = await poll(stage_id)
+    assert polled.status_code == 200, f"{MAX_RESTORE_VARIABLE}={cap}: the GET of the check answers 200, unpacked_too_large being a code RestoreStage declares, not {shown(polled)}"
+    state = polled.json()
+    ending = (state["status"], state["phase"], state["error_code"], state["report"] is None, state["done_bytes"], state["total_bytes"])
+    assert ending == ("failed", None, "unpacked_too_large", True, 0, 0), f"{MAX_RESTORE_VARIABLE}={cap}, 8 MiB declared: (status, phase, code, no report, done, total) = {ending}: refused before anything is unpacked"
+    assert state["finished_at"] is not None, "with the time it ended"
+    left = (os.path.lexists(stage_dir(root, stage_id)), cases.leftover_stages(root), files_in(uploads_dir(root)))
+    assert left == (False, [], []), f"its stage removed, no data/ left; its upload consumed: {left}"
+    assert cases.lock_is_free(root), "the lock let go"
+    print_success(f"{MAX_RESTORE_VARIABLE}={cap}, 8 MiB declared: failed unpacked_too_large, nothing unpacked, nothing left")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cap", CAPS_AT_OR_ABOVE)
+async def test_an_archive_declaring_the_restore_limit_or_less_is_checked_as_before(instance, monkeypatch, eight_mib_archive, cap):
+    """(h) B-35 (r2), a GUARD: green before the code, and so it must stay. The restore limit at what the archive declares
+    (8 MiB: the limit counts whole MiB, ×1024², and refuses only what is above it), or above: checked as before, done,
+    restorable, every declared byte unpacked."""
+    monkeypatch.setenv(MAX_RESTORE_VARIABLE, cap)
+    state = await ended(eight_mib_archive.path.read_bytes())
+    assert checked_as_before(state) == ("done", None, True, EIGHT_MIB, EIGHT_MIB), f"{MAX_RESTORE_VARIABLE}={cap}, 8 MiB declared: checked as before: {checked_as_before(state)}"
+    print_success(f"{MAX_RESTORE_VARIABLE}={cap}, 8 MiB declared: done")
+
+
+#: B-35 (r3): values of the restore limit that cannot be read: anything but a whole number of ASCII digits, an
+#: Arabic-Indic three included, which ``str.isdigit`` takes.
+INVALID_RESTORE_LIMITS = {"letters": "abc", "negative": "-1", "decimal": "1.5", "arabic-indic-digit": "\u0663"}
+#: B-35 (r3): the managed profile, the restore limit unset: a multiple of the upload limit, unreadable in turn, through
+#: its variable or through H's table entry (of another type: ``ProfileDefaultError``). By case, the value.
+UNREADABLE_UPLOAD_LIMITS = {"managed-upload-limit-letters": "abc", "managed-upload-limit-table-entry": "500"}
+
+
+def unreadable_restore_limit(monkeypatch: pytest.MonkeyPatch, case: str) -> tuple[str, str]:
+    """The restore limit made unreadable as ``case`` says: the variable its error must name, and the value no answer may
+    show. The table entry goes through ``wrong_table_entry``, which checks that the upload limit then raises H's
+    ``ProfileDefaultError``."""
+    if case in INVALID_RESTORE_LIMITS:
+        monkeypatch.setenv(MAX_RESTORE_VARIABLE, INVALID_RESTORE_LIMITS[case])
+        return MAX_RESTORE_VARIABLE, INVALID_RESTORE_LIMITS[case]
+    monkeypatch.delenv(MAX_RESTORE_VARIABLE, raising=False)
+    value = UNREADABLE_UPLOAD_LIMITS[case]
+    if case == "managed-upload-limit-table-entry":
+        wrong_table_entry(monkeypatch, value)
+    else:
+        monkeypatch.setenv(PROFILE_VARIABLE, "managed")
+        monkeypatch.setenv(LIMIT_VARIABLE, value)
+    return LIMIT_VARIABLE, value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", [*INVALID_RESTORE_LIMITS, *UNREADABLE_UPLOAD_LIMITS])
+async def test_a_restore_limit_that_cannot_be_read_is_503_starts_no_check_and_keeps_the_upload(instance, monkeypatch, case):
+    """(h) B-35 (r3): a restore limit that cannot be read is no limit to skip: the start answers 503
+    ``backup_restore_unavailable``, «The restore limit of this instance cannot be read», neither the value nor a path in
+    the answer; one error in the log, naming the variable that cannot be read (the restore limit's, or the upload limit's
+    it multiplies). No check started or recorded, the upload kept: the limit readable again, the same start is 202."""
+    root = instance.root
+    upload_id = await uploaded(b"an archive whose check waits for a limit that can be read")
+    variable, value = unreadable_restore_limit(monkeypatch, case)
+    with capture_logs() as events:
+        response = await start(upload_id)
+    assert refusal(response) == (503, "backup_restore_unavailable", RESTORE_LIMIT_UNREADABLE), f"{case}: 503 backup_restore_unavailable, not {shown(response)}"
+    shown_forms = sorted(form for form in {value, json.dumps(value)[1:-1], str(root), str(root.resolve())} if form in response.text)
+    assert shown_forms == [], f"{case}: neither the value nor a path in the answer: {shown_forms}"
+    errors = [event for event in events if event.get("log_level") == "error"]
+    assert len(errors) == 1 and variable in str(errors[0]), f"{case}: one error in the log, naming {variable}: {errors}"
+    nothing = (instance.threads.started, files_in(checks_dir(root)), upload_path(root, upload_id).is_file())
+    assert nothing == ([], [], True), f"{case}: no check started or recorded, the upload kept: {nothing}"
+    monkeypatch.setenv(PROFILE_VARIABLE, "selfhosted")
+    monkeypatch.delenv(MAX_RESTORE_VARIABLE, raising=False)
+    monkeypatch.delenv(LIMIT_VARIABLE, raising=False)
+    again = await start(upload_id)
+    assert again.status_code == 202, f"{case}: the limit readable again, the same upload starts its check: {shown(again)}"
+    print_success(f"{case}: 503 backup_restore_unavailable, the upload kept, then 202")
+
+
+#: B-35 (r4): the managed profile, the restore limit unset, the upload limit 1 MB: a cap of 8 MiB. Each archive by the
+#: name of its fixture, and the code its check ends with (``None``: done).
+MANAGED_CAP = [
+    pytest.param("head_archive", None, id="a-small-archive"),
+    pytest.param("eight_mib_archive", None, id="at-the-cap"),
+    pytest.param("past_eight_mib_archive", "unpacked_too_large", id="one-byte-past-the-cap"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("archive_fixture", "error_code"), MANAGED_CAP)
+async def test_the_managed_restore_limit_is_eight_times_the_upload_limit(instance, monkeypatch, request, archive_fixture, error_code):
+    """(h) B-35 (r4): managed, the restore limit unset, the upload limit 1 MB: the cap is 8 MiB, 8 times the upload limit
+    (never a figure of its own: H's table gives it none). One byte past it, the check ends ``failed``
+    ``unpacked_too_large`` before anything is unpacked (red before the code); at it, and a small archive, checked as before
+    (green before the code). Each archive fits the upload limit: the check, not the upload, refuses it."""
+    archive = request.getfixturevalue(archive_fixture)
+    monkeypatch.setenv(PROFILE_VARIABLE, "managed")
+    monkeypatch.setenv(LIMIT_VARIABLE, "1")
+    within_the_upload_limit(archive, 1)
+    total = declared_total(archive)
+    state = await ended(archive.path.read_bytes())
+    expected = ("done", None, True, total, total) if error_code is None else ("failed", error_code, None, 0, 0)
+    assert checked_as_before(state) == expected, f"managed, an upload limit of 1 MB, {total} bytes declared: (status, code, restorable, done, total) = {checked_as_before(state)}, not {expected}"
+    print_success(f"managed, upload limit 1 MB, {total} bytes declared: {error_code or 'done'}")
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_0_lifts_the_managed_restore_limit(instance, monkeypatch, past_eight_mib_archive):
+    """(h) B-35 (r5), a GUARD: green before the code, and so it must stay. Managed, the upload limit 1 MB, the restore
+    limit set to 0: no limit, the explicit value winning over the profile's 8 MiB. The archive one byte past them, which
+    the profile's cap refuses (r4), is checked as before."""
+    monkeypatch.setenv(PROFILE_VARIABLE, "managed")
+    monkeypatch.setenv(LIMIT_VARIABLE, "1")
+    monkeypatch.setenv(MAX_RESTORE_VARIABLE, "0")
+    within_the_upload_limit(past_eight_mib_archive, 1)
+    state = await ended(past_eight_mib_archive.path.read_bytes())
+    assert checked_as_before(state) == ("done", None, True, EIGHT_MIB + 1, EIGHT_MIB + 1), f"managed, {MAX_RESTORE_VARIABLE}=0: no limit, checked as before: {checked_as_before(state)}"
+    print_success(f"managed, {MAX_RESTORE_VARIABLE}=0: 8 MiB and a byte checked")
+
+
+def test_openapi_documents_the_restore_limit_that_cannot_be_read_and_the_archive_too_large_unpacked():
+    """(h) B-35 (r6): the start of a check documents its 503 with its code, ``backup_restore_unavailable``;
+    ``unpacked_too_large`` is a code ``RestoreErrorCode`` lists, so ``RestoreStage.error_code`` allows it in the document
+    the generated client reads."""
+    document = restore_app().openapi()
+    schemas = document["components"]["schemas"]
+    unavailable = document["paths"][STAGE]["post"]["responses"].get("503", {}).get("description", "")
+    error_code = schemas["RestoreStage"]["properties"]["error_code"]
+    allowed = {value for option in error_code.get("anyOf", [error_code]) for value in enum_of(option, schemas)}
+    assert "not_a_backup" in allowed, f"precondition: the codes of RestoreStage.error_code are read: {error_code}"
+    found = {
+        "POST /stage documents a 503 naming backup_restore_unavailable": "backup_restore_unavailable" in unavailable,
+        "RestoreErrorCode lists unpacked_too_large": "unpacked_too_large" in typing.get_args(RestoreErrorCode),
+        "RestoreStage.error_code allows unpacked_too_large": "unpacked_too_large" in allowed,
+    }
+    assert found == dict.fromkeys(found, True), f"missing: {sorted(name for name, present in found.items() if not present)}"
+    print_success("503 backup_restore_unavailable documented, unpacked_too_large declared")

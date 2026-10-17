@@ -19,7 +19,8 @@
 
     let commandsOpen = false;
     // The server commands are for whoever runs the server: shown once the server said self-hosted. A managed instance's
-    // users have no terminal: they ask their administrator for a reset link (F05). Before the answer, neither.
+    // users have no terminal: they ask their administrator for a reset link (F05). Before the answer, neither; when the
+    // request failed before any answer, the advice that holds for both profiles: ask the administrator (FPM-08).
 </script>
 
 <div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden flex flex-col font-sans" data-testid="forgot-modal">
@@ -76,7 +77,7 @@
                     </div>
                 </details>
             {/if}
-        {:else if instanceConfig.loaded && instanceConfig.config.profile === 'managed'}
+        {:else if (instanceConfig.loaded && instanceConfig.config.profile === 'managed') || (!instanceConfig.loaded && instanceConfig.failed)}
             {@render askAdmin()}
         {:else if instanceConfig.loaded}
             <!-- Warning Box -->

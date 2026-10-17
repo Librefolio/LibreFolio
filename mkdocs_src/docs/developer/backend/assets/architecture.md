@@ -12,10 +12,11 @@ responsibility:
 | `base.py` | Provider contract: `AssetSourceProvider`, `AssetSourceError`, history start-date types, and the OHLC guard; `AssetRateLimitedError` and the helpers that recognise a refusal for too many requests (`rate_limited_from_response()`, `rate_limited_from_exception()`, `raise_if_rate_limited()`). |
 | `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, refuses a paused one with `RATE_LIMITED` and pauses one that refuses ([Provider Pauses](#provider-pauses)), masks its secrets in the call's log lines and errors (hiding an error's texts whole when the call carries a personal secret), and runs the call in a thread of its own (`_run_provider_in_thread`); `public_asset_url()`, which withholds an asset URL that shows one of the provider's secrets; `cooldown_scope_for()`, the part of a provider a pause covers, from the plugin's `cooldown_scope()` hook; `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; `asset_cache_key()`, the one key of the history and current caches (provider, identifier, input type, parameter hash, settings), and `drop_asset_cache_entries()`, which drops both entries of an assignment; provider-parameter hashing; error sanitization. |
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
-| `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
+| `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation, refused, nothing of the request written, while a `SPLIT` it would delete has linked incoming adjustments without a cost ([Parametric Provider Change](events.md#parametric-provider-change)); and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
 | `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price or volume refused; a provider's truncated, and a provider's date with a value no column can keep skipped and reported), and bounded write chunks. |
 | `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked; refused, nothing written, while a `SPLIT` of the asset has linked incoming adjustments without a cost ([Market-Data Wipe](events.md#market-data-wipe)). |
+| `split_guard.py` | The `SPLIT`s among the events a wipe would delete that have linked incoming adjustments without a cost, named as the caller may see them (`splits_with_costless_adjustments()`, `adjustments_count()`): the refusal of the currency-change wipe and of the parametric provider change. |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
 | `period_changes.py` | The fixed-period changes of the Assets table, and on request the whole-range change of the Assets cards: each asset's price on the days the change needs, read in grouped queries and converted at each day's rate ([Fixed-Period Changes](#fixed-period-changes)). |
@@ -281,24 +282,36 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   first price after the end). The comparison series of a signal that needs a prepared asset series
   (a rolling beta against another asset) count too; a comparison against the item's own asset is
   not counted twice. An item that starts after the ceiling counts zero. Over `MAX_BULK_ITEM_DAYS`
-  (5,000,000) the method raises `BulkTooManyDaysError`, its `item_days` the request's exact total,
+  (1,000,000) the method raises `BulkTooManyDaysError`, its `item_days` the request's exact total,
   and the route answers 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
 
 The count follows the fill, not the requested range: a full-history signal (`RISK_DRAWDOWN`) loads
 from `date.min`, so its fill emits from the first stored price even when the visible range is one
-day. Without signals, 300 assets on the asset list's «All» (from 2000-01-01) fill at most about
-2.9 million points. The item cap is the route's, the budget `get_prices_bulk()`'s: the risk
-preparation and AI Export, which call the method directly, meet the budget too and get
-`BulkTooManyDaysError` itself, which only the price route turns into a 422.
+day. The budget was 5,000,000 until R13-SEC9-2 lowered it: a point costs about 25.5 µs to fill,
+about as much to serialize, and about 1.9 KB, so even a million is close to a minute of the event
+loop and a few GB. The item cap is the route's, the budget `get_prices_bulk()`'s: the risk
+preparation and AI Export call the method directly, once for their whole scope, and reach the
+budget too, at about 100 assets from 2000-01-01 to today (nearly 9,800 days each) or about 550 over
+five years. Since J-50 each turns `BulkTooManyDaysError` into a coded refusal: risk answers
+`unavailable` · `resource_limit`, `metric` `price_item_days`, remedy `period_or_assets`
+([Budgets](../risk/architecture.md#budgets)); AI Export, when a required component's prices pass
+the budget, a 422 `selection_not_applicable` with `reason_code` `too_many_price_days`
+([AI Export](../../architecture/patterns/ai_export_snapshot.md)).
 
-The web app does not split its requests yet. The asset list (`fetchAllPriceData()` in
-`frontend/src/routes/(app)/assets/+page.svelte`) sends a single `POST /assets/prices/query`, with
-one item per asset whose prices for the range are not cached, or that has backend signals. Past
-1,000 items it gets `bulk_too_many_items`: the assets whose prices it asked for get none, and
-nothing on the page names the cause. The error reaches only the browser console (`console.error`
-in the `catch` of `fetchAllPriceData()`); with backend signals selected, the signals section of the
-chart settings window shows its generic *Technical signals could not be updated*. An explicit
-message (workstream X) and splitting the request into batches (backlog Z-27) are follow-ups.
+The web app keeps its lists under both caps by sending them in batches (Z-27,
+[Bulk requests in batches](../../frontend/state/registries.md#bulk-requests-in-batches)). The asset
+list (`fetchPriceSeries()` in `frontend/src/routes/(app)/assets/+page.svelte`) builds one item per
+asset whose prices for the range are not cached, or that has backend signals, and hands them to
+`sendBulkBatches()` (`frontend/src/lib/api/bulkBatches.ts`): a single `POST /assets/prices/query`
+when they fit, as before, otherwise consecutive batches under an estimate with a margin, sent one
+after the other, a batch refused with `bulk_too_many_days` split again by the numbers of its
+refusal. A batch that still fails stops the sending: the assets of the batches answered before it
+get their prices, the others no new ones, and the error reaches only the browser console
+(`console.error`); when one of those has backend signals, the signals section of the chart settings
+window shows its generic *Technical signals could not be updated*. An explicit message is a
+follow-up (workstream X, X-R58). Batching bounds each request, not the total: on «All» each card
+still loads its asset's full daily history, and 300 assets without signals still fill about
+2.9 million points (backlog Z-29, post-1.3).
 
 With `target_currency`, the conversion pass converts every close not already in that currency
 through one `convert_bulk()` call per result, scales open, high and low by the same factor, keeps
@@ -678,7 +691,7 @@ cost unknown it stays `MISSING`.
 | `GET /api/v1/assets/provider/search` | GET | Multi-provider parallel search |
 | `GET /api/v1/assets/provider/search/stream` | GET | SSE streaming search results |
 | `POST /api/v1/assets/provider/probe` | POST | Dry-run provider config test |
-| `POST /api/v1/assets/provider` | POST | Bulk assign providers |
+| `POST /api/v1/assets/provider` | POST | Bulk assign providers. New `provider_params` for a parametric provider (Scheduled Investment), or leaving one, deletes every price of the asset and the events that assignment generated, their transactions unlinked; a 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`, nothing of the request written, while a `SPLIT` among those events has linked incoming adjustments without a cost; `params` names the refused item (`asset_id`, `item_index`) and, in `splits`, only the transactions the caller can see ([Parametric Provider Change](events.md#parametric-provider-change)) |
 | `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
 | `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |

@@ -60,7 +60,7 @@ from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buckets
 from backend.app.services.financial_math.lots.summary import residual_cost
 from backend.app.services.financial_math.returns import price_return
-from backend.app.services.lots_analysis_service import LotsAnalysisService
+from backend.app.services.lots_analysis_service import LotsAnalysisService, analysis_failure_codes
 from backend.app.services.portfolio_service import PortfolioService
 
 if TYPE_CHECKING:
@@ -72,6 +72,7 @@ __all__ = [
     "EffectRow",
     "FifoAssetSummaryRow",
     "FifoCustodyRow",
+    "FifoFailedReconstructionRow",
     "FifoLotRow",
     "PerformanceBucketRow",
     "PositionRow",
@@ -81,6 +82,7 @@ __all__ = [
     "build_uniform_performance_buckets",
     "count_unavailable_amount_lots",
     "discover_transacted_asset_ids",
+    "fifo_scope_totals",
     "has_nonzero_open_lot",
     "load_lots_results",
     "load_portfolio_report",
@@ -95,6 +97,7 @@ __all__ = [
     "map_unallocated_row",
     "performance_path_bucket_count",
     "resolve_accessible_broker_ids",
+    "split_failed_reconstructions",
     "summarize_fifo_asset_rows",
     "total_fifo_residual_cost_basis",
 ]
@@ -438,6 +441,19 @@ class FifoAssetSummaryRow(StrictModel):
     has_in_transit_custody: bool = False
 
 
+class FifoFailedReconstructionRow(StrictModel):
+    """An Asset whose lot reconstruction FAILED (J-12, N81): its identity and failure codes, never a figure.
+
+    The replay hit a quantitative failure, so every lot figure of the Asset would be wrong: it has no summary row and
+    no lot row, and its part of the scope totals is unknown. `failure_codes`: the sorted unique codes that failed it.
+    """
+
+    asset_id: int
+    asset_name: str
+    asset_ticker: str | None = None
+    failure_codes: list[str] = Field(default_factory=list)
+
+
 class FifoCustodyRow(StrictModel):
     """Current broker or in-transit custody slice for a public FIFO lot."""
 
@@ -643,6 +659,45 @@ def total_fifo_residual_cost_basis(rows: Sequence[FifoAssetSummaryRow], currency
     if any(amount is None for amount in amounts):
         return None
     return Currency(code=currency_code, amount=sum((amount.amount for amount in amounts), Decimal("0")))
+
+
+def fifo_scope_totals(rows: Sequence[FifoAssetSummaryRow], currency_code: str, *, failed_asset_count: int) -> dict[str, Any]:
+    """The four scope totals of a FIFO summary, over its Asset rows.
+
+    An Asset whose lot reconstruction FAILED is an unknown part of the scope, so every total is `None`, never a sum of
+    the reliable Assets alone (J-12, N81).
+    """
+
+    if failed_asset_count:
+        return dict.fromkeys(("total_open_lots", "total_partial_lots", "total_closed_lots", "total_residual_cost_basis"))
+    return {
+        "total_open_lots": sum(row.open_lot_count for row in rows),
+        "total_partial_lots": sum(row.partial_lot_count for row in rows),
+        "total_closed_lots": sum(row.closed_lot_count for row in rows),
+        "total_residual_cost_basis": total_fifo_residual_cost_basis(rows, currency_code),
+    }
+
+
+def split_failed_reconstructions(lots_resource: LotsResultsResource, assets_meta: Mapping[int, Any]) -> tuple[list[int], list[FifoFailedReconstructionRow]]:
+    """The Assets whose lots can be exported, sorted, and one row for each Asset whose lot reconstruction FAILED."""
+
+    exportable: list[int] = []
+    failed: list[FifoFailedReconstructionRow] = []
+    for asset_id in sorted(lots_resource.by_asset_id):
+        response = lots_resource.by_asset_id[asset_id]
+        if response.calculation_status != "FAILED":
+            exportable.append(asset_id)
+            continue
+        asset = assets_meta.get(asset_id)
+        failed.append(
+            FifoFailedReconstructionRow(
+                asset_id=asset_id,
+                asset_name=str(getattr(asset, "display_name", None) or f"Asset {asset_id}"),
+                asset_ticker=getattr(asset, "identifier_ticker", None),
+                failure_codes=analysis_failure_codes(response),
+            )
+        )
+    return exportable, failed
 
 
 # =============================================================================

@@ -32,7 +32,7 @@ from backend.app.api.no_echo import NoInputEchoRoute
 from backend.app.api.v1.backup.job_views import backup_error
 from backend.app.api.v1.settings import require_admin
 from backend.app.config import ProfileDefaultError, get_data_dir
-from backend.app.config.backup import BackupConfigError, backup_max_upload_mb
+from backend.app.config.backup import BackupConfigError, backup_max_restore_mb, backup_max_upload_mb
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
 from backend.app.schemas.backup import (
@@ -134,6 +134,16 @@ def _upload_limit() -> tuple[int, int | None]:
     return limit_mb, (limit_mb * _MEGABYTE if limit_mb else None)
 
 
+def _restore_limit() -> int | None:
+    """The most an archive may unpack to in a check, in bytes (``None``: none; B-35). 503 when it cannot be read."""
+    try:
+        limit_mb = backup_max_restore_mb()
+    except (BackupConfigError, ProfileDefaultError) as exc:
+        logger.error("The restore limit cannot be read", error=str(exc))
+        raise backup_error(status.HTTP_503_SERVICE_UNAVAILABLE, "backup_restore_unavailable", "The restore limit of this instance cannot be read") from None
+    return limit_mb * _MEGABYTE if limit_mb else None
+
+
 async def _receive(request: Request, writer: restore_jobs.UploadWriter) -> restore_jobs.RestoreUploaded:
     """Write the body as it comes, gathered in pieces of ``_WRITE_CHUNK``, each write in a worker thread."""
     buffer = bytearray()
@@ -224,6 +234,7 @@ def _stage_view(check: restore_jobs.RestoreCheck) -> RestoreStage:
         404: {"description": "No uploaded archive has this id: never received, replaced, or already checked (code `backup_upload_not_found`)"},
         409: {"description": "Another archive is being checked (code `restore_busy`), or a secure backup this LibreFolio cannot read: update it first (code `envelope_unsupported`)"},
         500: _STAGE_NOT_STARTED,
+        503: {"description": "The restore limit of this instance cannot be read (code `backup_restore_unavailable`): no check started, the upload kept"},
         507: {"description": "Not enough free space to start the check (code `no_space`, the code of a check that runs out of space)"},
     },
 )
@@ -232,11 +243,13 @@ def start_restore_check(body: RestoreStageRequest, _admin: User = Depends(requir
 
     A secure backup's password is checked first, in this request; it is never kept, logged or sent back. A full disk
     before the check starts answers 507 ``no_space``; any other failure to write its folders or its state, 500
-    ``stage_failed``, the cause in the log (B-30).
+    ``stage_failed``, the cause in the log (B-30). A restore limit that cannot be read answers 503
+    ``backup_restore_unavailable`` and starts nothing (B-35).
     """
     password = body.password.get_secret_value() if body.password is not None else None
+    max_unpacked = _restore_limit()
     try:
-        return _stage_view(restore_jobs.start_check(body.upload_id, password=password))
+        return _stage_view(restore_jobs.start_check(body.upload_id, password=password, max_unpacked=max_unpacked))
     except restore_jobs.UploadNotFoundError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "backup_upload_not_found", "No uploaded archive has this id") from None
     except StagingBusyError:

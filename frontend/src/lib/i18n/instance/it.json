@@ -45,6 +45,11 @@
       "pluginSecrets": {
         "ok": "I segreti dei plugin salvati si possono leggere con la chiave d'istanza.",
         "unreadable": "{count, plural, one {# segreto dei plugin salvato non si può leggere con la chiave d'istanza: inseriscilo di nuovo in Impostazioni → Plugin, o ripristina la chiave d'istanza con cui è stato salvato.} other {# segreti dei plugin salvati non si possono leggere con la chiave d'istanza: inseriscili di nuovo in Impostazioni → Plugin, o ripristina la chiave d'istanza con cui sono stati salvati.}}"
+      },
+      "testMode": {
+        "off": "La modalità di test è spenta.",
+        "testLane": "La modalità di test è accesa, in una corsia del runner dei test.",
+        "outsideTestLane": "La modalità di test è accesa fuori dal runner dei test: sono disponibili i fornitori di dati fatti per i test, i dati stanno in {data_dir} e il file .env non viene letto. Togli LIBREFOLIO_TEST_MODE."
       }
     },
     "block": {

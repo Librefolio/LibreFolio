@@ -23,16 +23,27 @@ lot B-9 froze them, its revision of 06:42 included (an unset token is ``ok``: a 
     documented errors, gives the error state, and was read.
 (d) No token in any result: a token holding a marker, in the variable or in a file, usable or not, in a file that is not
     UTF-8 or is too large, is in no field of either result, nor in a record or an event of the startup audit.
-(e) ``BACKUP_CONFIG_CHECKS`` is the two checks, in that order; ``config_audit.CONFIG_CHECKS`` holds them, the very
-    objects, once each, together, before the email checks, which still close the tuple, and ``run_config_checks()``
-    carries what each returns. Either
+(e) ``BACKUP_CONFIG_CHECKS`` is the three checks (lot B-35 adds the restore limit's, last), in that order;
+    ``config_audit.CONFIG_CHECKS`` holds them, the very objects, once each, together, before the email checks, which
+    still close the tuple, and ``run_config_checks()`` carries what each returns. Either
     module can be imported first: in a fresh interpreter, ``checks`` then ``config_audit`` and the reverse both import
-    and run the two checks (``ConfigCheck`` is imported only when a check runs).
-(f) The startup audit: an unusable token or upload limit is one ERROR record with the check's summary, id and detail,
-    and the start goes on (``log_configuration_audit()`` returns); a default self-hosted start, no token and no limit
-    set, logs nothing about either check.
-(g) The i18n: every key of (a) and (b) is a message in the four catalogues of ``frontend/src/lib/i18n/backup``, naming
-    exactly the placeholders of its detail (``{minimum}``, ``{reason}``, ``{limit_mb}``), and the others none.
+    and run the three checks (``ConfigCheck`` is imported only when a check runs).
+(f) The startup audit: an unusable token, upload limit or restore limit is one ERROR record per check in error, with
+    the check's summary, id and detail — two when the managed profile's restore limit derives from a broken upload limit
+    — and the start goes on (``log_configuration_audit()`` returns); a default self-hosted start, no token and no limit
+    set, logs nothing about the backup checks.
+(g) The i18n: every key of (a), (b) and (h) is a message in the four catalogues of ``frontend/src/lib/i18n/backup``,
+    naming exactly the placeholders of its detail (``{minimum}``, ``{reason}``, ``{limit_mb}``, ``{variable}``), and the
+    others none.
+(h) Lot B-35, the restore limit (``LIBREFOLIO_BACKUP_MAX_RESTORE_MB``, what an archive may unpack to). The reader,
+    ``config.backup.backup_max_restore_mb()``: ``MAX_RESTORE_VARIABLE``, ``RESTORE_TO_UPLOAD_RATIO`` 8, no entry of the
+    profiles' table. Set, a whole number of ASCII digits wins, ``0`` included, in any profile; anything else
+    ``BackupConfigError`` ``BACKUP_MAX_RESTORE_MB_INVALID``, naming the variable and the rule, never the value. Unset or
+    blank: ``0`` self-hosted; managed, 8 times the upload limit (4000 with the table's 500, 800 with a set 100, ``0``
+    with none), raising what the upload limit's reader raises (``ProfileDefaultError``, ``BackupConfigError``): fail
+    closed. The check, ``check_restore_limit()``, ``backup.restore_limit`` (§1b): limited ``{limit_mb}``, unlimited,
+    invalid ``{variable}`` (the variable the reader's error names: the restore limit's, or the upload limit's it derives
+    from), profileTable; never raises.
 
 Pure: no database, no server, no network. Every variable the checks read is removed by an autouse fixture, the profile
 set to self-hosted; each test sets its own with ``monkeypatch``, and token files live in ``tmp_path``. The startup audit
@@ -42,7 +53,10 @@ own events are captured beside it. The fresh interpreters run in test mode, thei
 bounded by a timeout that is never a wait. The catalogues are read from their sources, as §3 writes them.
 
 Red until lot B-9: ``instance_backup.checks`` is imported by each test that needs it (the ``checks`` fixture), never at
-collection, so each test fails on its own, saying so; the catalogues' test fails on the keys they do not hold yet.
+collection, so each test fails on its own, saying so; the catalogues' test fails on the keys they do not hold yet. Red
+until lot B-35, the same way: ``backup_max_restore_mb``, its constants and ``check_restore_limit`` are looked up by the
+tests that need them ("[new] …"); (e) fails on the tuple of two, (f) on the restore limit's records, (g) on the
+``restoreLimit`` messages the catalogues do not hold yet.
 """
 
 from __future__ import annotations
@@ -76,12 +90,16 @@ CHECKS_MODULE = "backend.app.services.platform.instance_backup.checks"
 TOKEN_VARIABLE = "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN"
 TOKEN_FILE_VARIABLE = "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE"
 LIMIT_VARIABLE = "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"
+#: (B-35) The restore limit: what an archive may unpack to, in megabytes; unset, 8 × the upload limit off self-hosted.
+RESTORE_VARIABLE = "LIBREFOLIO_BACKUP_MAX_RESTORE_MB"
+RATIO = 8
 PROFILE_VARIABLE = "LIBREFOLIO_PROFILE"
 #: The shortest token the panel's routes take.
 MINIMUM = 32
 
 PANEL_TOKEN_ID = "backup.panel_token"
 UPLOAD_LIMIT_ID = "backup.upload_limit"
+RESTORE_LIMIT_ID = "backup.restore_limit"
 PANEL_OFF = "backup.checks.panelToken.off"
 PANEL_OK = "backup.checks.panelToken.ok"
 NOT_VISIBLE_ASCII = "backup.checks.panelToken.notVisibleAscii"
@@ -91,7 +109,11 @@ LIMITED = "backup.checks.uploadLimit.limited"
 UNLIMITED = "backup.checks.uploadLimit.unlimited"
 INVALID = "backup.checks.uploadLimit.invalid"
 PROFILE_TABLE = "backup.checks.uploadLimit.profileTable"
-#: Every message of the two checks, with the placeholders it names: the keys of the detail that goes with it.
+RESTORE_LIMITED = "backup.checks.restoreLimit.limited"
+RESTORE_UNLIMITED = "backup.checks.restoreLimit.unlimited"
+RESTORE_INVALID = "backup.checks.restoreLimit.invalid"
+RESTORE_PROFILE_TABLE = "backup.checks.restoreLimit.profileTable"
+#: Every message of the checks, with the placeholders it names: the keys of the detail that goes with it.
 MESSAGES: dict[str, set[str]] = {
     PANEL_OFF: set(),
     PANEL_OK: set(),
@@ -102,6 +124,10 @@ MESSAGES: dict[str, set[str]] = {
     UNLIMITED: set(),
     INVALID: set(),
     PROFILE_TABLE: set(),
+    RESTORE_LIMITED: {"limit_mb"},
+    RESTORE_UNLIMITED: set(),
+    RESTORE_INVALID: {"variable"},
+    RESTORE_PROFILE_TABLE: set(),
 }
 
 #: A usable token: 64 visible ASCII characters, as ``openssl rand -hex 32`` gives one.
@@ -162,9 +188,9 @@ FRESH_IMPORT = textwrap.dedent("""
 
 @pytest.fixture(autouse=True)
 def _no_inherited_backup_variables(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every variable the two checks read is removed, and the profile set to self-hosted (the environment wins over a
-    ``.env``): a test sees only what it sets itself."""
-    for variable in (TOKEN_VARIABLE, TOKEN_FILE_VARIABLE, LIMIT_VARIABLE):
+    """Every variable the backup checks read is removed (the restore limit's included), and the profile set to
+    self-hosted (the environment wins over a ``.env``): a test sees only what it sets itself."""
+    for variable in (TOKEN_VARIABLE, TOKEN_FILE_VARIABLE, LIMIT_VARIABLE, RESTORE_VARIABLE):
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv(PROFILE_VARIABLE, "selfhosted")
 
@@ -294,7 +320,7 @@ def flattened(catalogue: object, prefix: str = "") -> dict[str, object]:
 def fresh_environment(tmp_path: Path) -> dict[str, str]:
     """This process's environment for a fresh interpreter: no backup variable, test mode, its data directory in
     ``tmp_path``, the self-hosted profile, the project root importable."""
-    environment = {name: value for name, value in os.environ.items() if name not in (TOKEN_VARIABLE, TOKEN_FILE_VARIABLE, LIMIT_VARIABLE)}
+    environment = {name: value for name, value in os.environ.items() if name not in (TOKEN_VARIABLE, TOKEN_FILE_VARIABLE, LIMIT_VARIABLE, RESTORE_VARIABLE)}
     environment.update(LIBREFOLIO_TEST_MODE="1", LIBREFOLIO_TEST_DATA_DIR=str(tmp_path / "data"), LIBREFOLIO_PROFILE="selfhosted")
     environment["PYTHONPATH"] = os.pathsep.join(filter(None, [str(PROJECT_ROOT), environment.get("PYTHONPATH")]))
     return environment
@@ -385,6 +411,162 @@ def test_the_upload_limit_check_in_each_state(checks, monkeypatch, profile, valu
 
 
 # =============================================================================
+# (h) Lot B-35: the restore limit, its reader and check_restore_limit
+# =============================================================================
+
+
+def restore_reader() -> Callable[[], int]:
+    """``config.backup.backup_max_restore_mb`` (lot B-35), looked up by the test that needs it, never at collection."""
+    reader = getattr(backup_config, "backup_max_restore_mb", None)
+    if reader is None:
+        pytest.fail("[new] config.backup.backup_max_restore_mb() does not exist yet: lot B-35 adds it (contract §1)")
+    return reader
+
+
+def restore_check(checks: ModuleType) -> Callable[[], ConfigCheck]:
+    """``checks.check_restore_limit`` (lot B-35), looked up the same way."""
+    check = getattr(checks, "check_restore_limit", None)
+    if check is None:
+        pytest.fail("[new] checks.check_restore_limit() does not exist yet: lot B-35 adds it (contract §1b)")
+    return check
+
+
+def configure_limits(monkeypatch: pytest.MonkeyPatch, profile: str, restore: str | None, upload: str | None, table: object) -> None:
+    """The profile, the restore limit and the upload limit (each set unless ``None``), H's managed entry for the upload
+    limit as ``set_managed_entry`` leaves it."""
+    monkeypatch.setenv(PROFILE_VARIABLE, profile)
+    if restore is not None:
+        monkeypatch.setenv(RESTORE_VARIABLE, restore)
+    if upload is not None:
+        monkeypatch.setenv(LIMIT_VARIABLE, upload)
+    set_managed_entry(monkeypatch, table)
+
+
+def test_the_restore_limit_is_its_own_variable_and_8_times_the_upload_limit():
+    """(h) §1 ``MAX_RESTORE_VARIABLE`` and ``RESTORE_TO_UPLOAD_RATIO`` (K = 8: a database deflates about 4:1, so a
+    legitimate archive near the upload limit unpacks to about 4 times it). A multiple of the upload limit, never a figure
+    of the profiles' table: it follows a provider's own upload limit."""
+    print_section("B-35: the restore limit")
+    found = (getattr(backup_config, "MAX_RESTORE_VARIABLE", None), getattr(backup_config, "RESTORE_TO_UPLOAD_RATIO", None))
+    assert found == (RESTORE_VARIABLE, RATIO), f"[new] config.backup.MAX_RESTORE_VARIABLE and RESTORE_TO_UPLOAD_RATIO (lot B-35, contract §1): {found}"
+    in_tables = [profile for profile, values in config.ENVIRONMENT_PROFILE_DEFAULTS.items() if RESTORE_VARIABLE in values]
+    assert in_tables == [], f"the restore limit is no entry of ENVIRONMENT_PROFILE_DEFAULTS: {in_tables}"
+    print_success(f"{RESTORE_VARIABLE}, {RATIO} × the upload limit")
+
+
+#: (profile, the restore limit, the upload limit, H's managed entry for the upload limit, what the reader gives).
+RESTORE_LIMITS = [
+    pytest.param("selfhosted", None, None, AS_SHIPPED, 0, id="self-hosted-unset"),
+    pytest.param("selfhosted", "   ", None, AS_SHIPPED, 0, id="self-hosted-blank"),
+    pytest.param("selfhosted", "0", None, AS_SHIPPED, 0, id="self-hosted-0"),
+    pytest.param("selfhosted", "250", None, AS_SHIPPED, 250, id="self-hosted-250"),
+    pytest.param("selfhosted", None, "100", AS_SHIPPED, 0, id="self-hosted-unset-whatever-the-upload-limit"),
+    pytest.param("selfhosted", None, None, REMOVED, 0, id="self-hosted-reads-no-entry"),
+    pytest.param("managed", None, None, AS_SHIPPED, 4000, id="managed-unset-8-times-the-table-s-500"),
+    pytest.param("managed", "   ", None, AS_SHIPPED, 4000, id="managed-blank-8-times-the-table-s-500"),
+    pytest.param("managed", None, "100", AS_SHIPPED, 800, id="managed-unset-8-times-a-set-upload-limit"),
+    pytest.param("managed", None, "0", AS_SHIPPED, 0, id="managed-unset-no-upload-limit-none"),
+    pytest.param("managed", "0", None, AS_SHIPPED, 0, id="managed-an-explicit-0-wins"),
+    pytest.param("managed", "250", "100", AS_SHIPPED, 250, id="managed-an-explicit-value-wins"),
+    pytest.param("managed", "250", None, REMOVED, 250, id="managed-an-explicit-value-wins-over-a-broken-table"),
+]
+
+
+@pytest.mark.parametrize(("profile", "restore", "upload", "table", "expected"), RESTORE_LIMITS)
+def test_the_restore_limit_reader_in_each_state(monkeypatch, profile, restore, upload, table, expected):
+    """(h) §1 ``backup_max_restore_mb()``, in megabytes, ``0`` for no limit. Set, a whole number wins, ``0`` included,
+    whatever the profile and its table. Unset or blank: none in the self-hosted profile; in any other, 8 times the upload
+    limit (checked first: so the case is the one it names), none where that is none."""
+    reader = restore_reader()
+    configure_limits(monkeypatch, profile, restore, upload, table)
+    if profile != "selfhosted" and not (restore or "").strip():
+        assert RATIO * backup_max_upload_mb() == expected, f"precondition: {RATIO} × the upload limit, {backup_max_upload_mb()} MB"
+    found = reader()
+    assert found == expected, f"{profile}, restore {restore!r}, upload {upload!r}: {expected}, not {found}"
+    print_success(f"{profile}: {expected} MB")
+
+
+#: (profile, a value that is not a whole number of ASCII digits).
+INVALID_RESTORE_LIMITS = [
+    pytest.param("selfhosted", "1.5", id="decimal"),
+    pytest.param("selfhosted", "-1", id="negative"),
+    pytest.param("selfhosted", "\N{VULGAR FRACTION ONE HALF}", id="a-fraction-sign"),
+    pytest.param("selfhosted", " 9 9 ", id="a-space-inside"),
+    pytest.param("managed", "1.5", id="managed-decimal-never-the-multiple"),
+]
+
+
+@pytest.mark.parametrize(("profile", "value"), INVALID_RESTORE_LIMITS)
+def test_a_restore_limit_that_is_not_a_whole_number_is_refused_naming_the_variable_never_the_value(monkeypatch, profile, value):
+    """(h) §1 Anything but a whole number of ASCII digits: ``BackupConfigError`` ``BACKUP_MAX_RESTORE_MB_INVALID``, its
+    message the variable and the rule, never the value; in any profile (the multiple is for an unset variable only)."""
+    reader = restore_reader()
+    configure_limits(monkeypatch, profile, value, None, AS_SHIPPED)
+    with pytest.raises(BackupConfigError) as raised:
+        reader()
+    error = raised.value
+    assert (error.variable, error.code) == (RESTORE_VARIABLE, "BACKUP_MAX_RESTORE_MB_INVALID"), f"{error.variable}, {error.code}"
+    assert str(error) == f"{RESTORE_VARIABLE}: expected a whole number of megabytes, 0 for no limit", f"the variable and the rule: {error}"
+    assert value.strip() not in str(error), f"never the value: {error}"
+    print_success(f"{value!r}: BACKUP_MAX_RESTORE_MB_INVALID")
+
+
+#: (the upload limit, H's managed entry for it, what the upload limit's reader raises), the restore limit unset.
+UPLOAD_LIMIT_FAILURES = [
+    pytest.param(None, REMOVED, ProfileDefaultError, id="the-managed-upload-entry-removed"),
+    pytest.param(None, "500", ProfileDefaultError, id="the-managed-upload-entry-text"),
+    pytest.param("abc", AS_SHIPPED, BackupConfigError, id="the-upload-limit-invalid"),
+]
+
+
+@pytest.mark.parametrize(("upload", "table", "error"), UPLOAD_LIMIT_FAILURES)
+def test_unset_in_the_managed_profile_the_restore_limit_fails_closed_with_the_upload_limit(monkeypatch, upload, table, error):
+    """(h) §1 Unset in the managed profile, the restore limit is a multiple of the upload limit, so it raises what the
+    upload limit's reader raises — its profile entry missing or of another type (``ProfileDefaultError``), the upload
+    limit invalid (``BackupConfigError``): fail closed, never the self-hosted «no limit»."""
+    reader = restore_reader()
+    configure_limits(monkeypatch, "managed", None, upload, table)
+    said = reader_failure(backup_max_upload_mb, error)
+    with pytest.raises(error) as raised:
+        reader()
+    assert str(raised.value) == said, f"what the upload limit's reader raises: {raised.value}"
+    print_success(f"{error.__name__}: {said}")
+
+
+#: (profile, the restore limit, the upload limit, H's managed entry for it, severity, i18n key, detail): the states of
+#: ``backup.restore_limit`` (§1b). An invalid value names its variable: the restore limit's, or, unset in the managed
+#: profile, the upload limit's it derives from.
+RESTORE_CHECK_CASES = [
+    pytest.param("selfhosted", None, None, AS_SHIPPED, "ok", RESTORE_UNLIMITED, {}, id="self-hosted-unset"),
+    pytest.param("selfhosted", "0", None, AS_SHIPPED, "ok", RESTORE_UNLIMITED, {}, id="0"),
+    pytest.param("selfhosted", "250", None, AS_SHIPPED, "ok", RESTORE_LIMITED, {"limit_mb": 250}, id="250"),
+    pytest.param("managed", None, None, AS_SHIPPED, "ok", RESTORE_LIMITED, {"limit_mb": 4000}, id="managed-unset-4000"),
+    pytest.param("managed", None, "0", AS_SHIPPED, "ok", RESTORE_UNLIMITED, {}, id="managed-unset-no-upload-limit"),
+    pytest.param("selfhosted", "abc", None, AS_SHIPPED, "error", RESTORE_INVALID, {"variable": RESTORE_VARIABLE}, id="invalid"),
+    pytest.param("managed", None, "abc", AS_SHIPPED, "error", RESTORE_INVALID, {"variable": LIMIT_VARIABLE}, id="managed-unset-the-upload-limit-invalid"),
+    pytest.param("managed", None, None, REMOVED, "error", RESTORE_PROFILE_TABLE, {}, id="the-managed-upload-entry-removed"),
+    pytest.param("managed", None, None, "500", "error", RESTORE_PROFILE_TABLE, {}, id="the-managed-upload-entry-text"),
+]
+
+
+@pytest.mark.parametrize(("profile", "restore", "upload", "table", "severity", "key", "detail"), RESTORE_CHECK_CASES)
+def test_the_restore_limit_check_in_each_state(checks, monkeypatch, profile, restore, upload, table, severity, key, detail):
+    """(h) §1b The state of ``backup.restore_limit`` follows ``backup_max_restore_mb()``, as ``backup.upload_limit``
+    follows its reader: limited ``{limit_mb}``, unlimited, invalid ``{variable}`` (the variable the reader's
+    ``BackupConfigError`` names), profileTable. The reader is checked to raise in the error states, so the case is the one
+    it names. The summary of an error names its variable: the one of the detail, else the restore limit's."""
+    check = restore_check(checks)
+    configure_limits(monkeypatch, profile, restore, upload, table)
+    if severity == "error":
+        reader_failure(restore_reader(), ProfileDefaultError if key == RESTORE_PROFILE_TABLE else BackupConfigError)
+
+    result = check()
+
+    assert_state(result, RESTORE_LIMIT_ID, severity, key, detail, str(detail.get("variable", RESTORE_VARIABLE)))
+    print_success(f"{severity} {result.i18n_key} {result.detail}")
+
+
+# =============================================================================
 # (c) Never raises
 # =============================================================================
 
@@ -403,6 +585,9 @@ READER_ERRORS = [
     ),
     pytest.param("check_upload_limit", "backup_max_upload_mb", lambda: BackupConfigError(LIMIT_VARIABLE, "BACKUP_MAX_UPLOAD_MB_INVALID", "expected a whole number of megabytes"), INVALID, {}, id="limit-invalid"),
     pytest.param("check_upload_limit", "backup_max_upload_mb", lambda: ProfileDefaultError(f"{LIMIT_VARIABLE}: the managed profile gives '500', a str"), PROFILE_TABLE, {}, id="profile-table-wrong"),
+    pytest.param("check_restore_limit", "backup_max_restore_mb", lambda: BackupConfigError(RESTORE_VARIABLE, "BACKUP_MAX_RESTORE_MB_INVALID", "expected a whole number of megabytes"), RESTORE_INVALID, {"variable": RESTORE_VARIABLE}, id="restore-limit-invalid"),
+    pytest.param("check_restore_limit", "backup_max_restore_mb", lambda: BackupConfigError(LIMIT_VARIABLE, "BACKUP_MAX_UPLOAD_MB_INVALID", "expected a whole number of megabytes"), RESTORE_INVALID, {"variable": LIMIT_VARIABLE}, id="restore-limit-from-an-invalid-upload-limit"),
+    pytest.param("check_restore_limit", "backup_max_restore_mb", lambda: ProfileDefaultError(f"{LIMIT_VARIABLE}: the managed profile gives it no value"), RESTORE_PROFILE_TABLE, {}, id="restore-limit-profile-table"),
 ]
 
 
@@ -417,6 +602,7 @@ def test_a_check_never_raises_on_a_documented_error_of_its_reader(checks, monkey
         calls.append(reader_name)
         raise error()
 
+    assert hasattr(checks, check_name) and hasattr(backup_config, reader_name), f"[new] checks.{check_name}() or config.backup.{reader_name}() does not exist yet: lot B-35 adds the restore limit's (contract §1, §1b)"
     monkeypatch.setattr(backup_config, reader_name, failing_reader)
     monkeypatch.setattr(checks, reader_name, failing_reader, raising=False)
     try:
@@ -473,12 +659,14 @@ def test_no_token_reaches_a_result_or_the_startup_audit(checks, platform, logged
 # =============================================================================
 
 
-def test_backup_config_checks_is_the_two_checks_in_order(checks):
-    """(e) The panel's token, then the upload limit: the tuple the platform's ``CONFIG_CHECKS`` takes."""
+def test_backup_config_checks_is_the_three_checks_in_order(checks):
+    """(e) The panel's token, the upload limit, then the restore limit (lot B-35, §1b): the tuple the platform's
+    ``CONFIG_CHECKS`` takes."""
     print_section("BACKUP_CONFIG_CHECKS")
 
-    assert checks.BACKUP_CONFIG_CHECKS == (checks.check_panel_token, checks.check_upload_limit), f"BACKUP_CONFIG_CHECKS: {checks.BACKUP_CONFIG_CHECKS!r}"
-    print_success("check_panel_token, check_upload_limit")
+    expected = (checks.check_panel_token, checks.check_upload_limit, getattr(checks, "check_restore_limit", None))
+    assert checks.BACKUP_CONFIG_CHECKS == expected, f"BACKUP_CONFIG_CHECKS ([new] check_restore_limit last, lot B-35 §1b): {checks.BACKUP_CONFIG_CHECKS!r}"
+    print_success("check_panel_token, check_upload_limit, check_restore_limit")
 
 
 def test_config_checks_runs_the_backup_checks_together_before_the_email_checks(checks, platform):
@@ -509,8 +697,8 @@ def test_config_checks_runs_the_backup_checks_together_before_the_email_checks(c
 def test_either_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path, order):
     """(e) §1: ``config_audit`` imports ``checks``, so ``checks`` imports ``ConfigCheck`` only when a check runs. A fresh
     interpreter (no backup variable, test mode, its data directory in ``tmp_path``) imports ``order`` and exits 0, finds
-    the two checks in ``CONFIG_CHECKS`` and runs them: ``.off`` and ``.unlimited``, both ok. Barrier first: no watched
-    module was loaded before the first import, so the order is the one the case names."""
+    the three checks in ``CONFIG_CHECKS`` and runs them: ``.off`` and the two ``.unlimited``, all ok. Barrier first: no
+    watched module was loaded before the first import, so the order is the one the case names."""
     completed = subprocess.run([sys.executable, "-c", FRESH_IMPORT, *order], cwd=PROJECT_ROOT, env=fresh_environment(tmp_path), capture_output=True, text=True, timeout=FRESH_INTERPRETER_TIMEOUT_SECONDS, check=False)
 
     assert completed.returncode == 0, f"importing {' then '.join(order)} in a fresh interpreter failed with {completed.returncode}:\n{completed.stderr[-4000:]}"
@@ -518,7 +706,11 @@ def test_either_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path, or
     assert len(reports) == 1, f"the fresh interpreter must report once: {completed.stdout[-4000:]}"
     report = json.loads(reports[0])
     assert report["preloaded"] == [], f"barrier: a fresh interpreter loads no watched module before the first import: {report['preloaded']}"
-    expected = {"preloaded": [], "registered": ["check_panel_token", "check_upload_limit"], "ran": [[PANEL_TOKEN_ID, "ok", PANEL_OFF], [UPLOAD_LIMIT_ID, "ok", UNLIMITED]]}
+    expected = {
+        "preloaded": [],
+        "registered": ["check_panel_token", "check_upload_limit", "check_restore_limit"],
+        "ran": [[PANEL_TOKEN_ID, "ok", PANEL_OFF], [UPLOAD_LIMIT_ID, "ok", UNLIMITED], [RESTORE_LIMIT_ID, "ok", RESTORE_UNLIMITED]],
+    }
     assert report == expected, f"{' then '.join(order)}: {report}"
     print_success(f"{' then '.join(order)}: {report['registered']}")
 
@@ -528,30 +720,37 @@ def test_either_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path, or
 # =============================================================================
 
 
-#: (variables, the token's ``_FILE``, H's managed entry for the limit, the check that speaks, its key): unusable
-#: configurations of each check, the other left at its default (ok).
+#: (variables, the token's ``_FILE``, H's managed entry for the upload limit, the checks that speak with their keys, in
+#: the order the audit runs them): unusable configurations, every other check left at its default (ok). Unset in the
+#: managed profile, the restore limit derives from the upload limit (lot B-35): a broken upload limit there is two errors.
 UNUSABLE = [
-    pytest.param({TOKEN_VARIABLE: "k" * (MINIMUM - 1)}, None, AS_SHIPPED, "check_panel_token", TOO_SHORT, id="token-too-short"),
-    pytest.param({TOKEN_VARIABLE: GOOD_TOKEN + " "}, None, AS_SHIPPED, "check_panel_token", NOT_VISIBLE_ASCII, id="token-not-visible-ascii"),
-    pytest.param({}, MISSING_FILE, AS_SHIPPED, "check_panel_token", UNREADABLE, id="token-file-missing"),
-    pytest.param({}, b"\n", AS_SHIPPED, "check_panel_token", UNREADABLE, id="token-file-blank"),
-    pytest.param({LIMIT_VARIABLE: "abc"}, None, AS_SHIPPED, "check_upload_limit", INVALID, id="limit-invalid"),
-    pytest.param({PROFILE_VARIABLE: "managed"}, None, "500", "check_upload_limit", PROFILE_TABLE, id="profile-table-wrong"),
-    pytest.param({PROFILE_VARIABLE: "managed"}, None, REMOVED, "check_upload_limit", PROFILE_TABLE, id="profile-table-entry-removed"),
+    pytest.param({TOKEN_VARIABLE: "k" * (MINIMUM - 1)}, None, AS_SHIPPED, [("check_panel_token", TOO_SHORT)], id="token-too-short"),
+    pytest.param({TOKEN_VARIABLE: GOOD_TOKEN + " "}, None, AS_SHIPPED, [("check_panel_token", NOT_VISIBLE_ASCII)], id="token-not-visible-ascii"),
+    pytest.param({}, MISSING_FILE, AS_SHIPPED, [("check_panel_token", UNREADABLE)], id="token-file-missing"),
+    pytest.param({}, b"\n", AS_SHIPPED, [("check_panel_token", UNREADABLE)], id="token-file-blank"),
+    pytest.param({LIMIT_VARIABLE: "abc"}, None, AS_SHIPPED, [("check_upload_limit", INVALID)], id="limit-invalid"),
+    pytest.param({PROFILE_VARIABLE: "managed"}, None, "500", [("check_upload_limit", PROFILE_TABLE), ("check_restore_limit", RESTORE_PROFILE_TABLE)], id="profile-table-wrong"),
+    pytest.param({PROFILE_VARIABLE: "managed"}, None, REMOVED, [("check_upload_limit", PROFILE_TABLE), ("check_restore_limit", RESTORE_PROFILE_TABLE)], id="profile-table-entry-removed"),
+    pytest.param({RESTORE_VARIABLE: "abc"}, None, AS_SHIPPED, [("check_restore_limit", RESTORE_INVALID)], id="restore-limit-invalid"),
+    pytest.param({PROFILE_VARIABLE: "managed", LIMIT_VARIABLE: "abc"}, None, AS_SHIPPED, [("check_upload_limit", INVALID), ("check_restore_limit", RESTORE_INVALID)], id="managed-upload-limit-invalid"),
 ]
 
 
-@pytest.mark.parametrize(("variables", "file", "table", "check_name", "key"), UNUSABLE)
-def test_the_startup_audit_logs_an_unusable_backup_configuration_as_an_error_and_goes_on(checks, platform, logged, monkeypatch, tmp_path, variables, file, table, check_name, key):
-    """(f) ``log_configuration_audit()`` returns, the start goes on, after one backup record: the ERROR of the check that
-    cannot use its configuration, with its summary, id and detail; nothing about the other backup check, ok."""
-    print_section(f"The startup audit: {key}")
+@pytest.mark.parametrize(("variables", "file", "table", "speaking"), UNUSABLE)
+def test_the_startup_audit_logs_an_unusable_backup_configuration_as_an_error_and_goes_on(checks, platform, logged, monkeypatch, tmp_path, variables, file, table, speaking):
+    """(f) ``log_configuration_audit()`` returns, the start goes on, after the backup records of the checks that cannot
+    use their configuration, each the ERROR of its check with its summary, id and detail, in the audit's order; nothing
+    about the backup checks that are ok."""
+    print_section(f"The startup audit: {', '.join(key for _name, key in speaking)}")
     for name, value in variables.items():
         monkeypatch.setenv(name, value)
     configure_token(monkeypatch, tmp_path, None, file)
     set_managed_entry(monkeypatch, table)
-    expected = getattr(checks, check_name)()
-    assert (expected.severity, expected.i18n_key) == ("error", key), f"precondition: {check_name}() is an error {key}: {expected.severity} {expected.i18n_key}"
+    missing = [name for name, _key in speaking if not hasattr(checks, name)]
+    assert missing == [], f"[new] {', '.join(missing)} does not exist yet: lot B-35 adds the restore limit's check (contract §1b)"
+    expected = [getattr(checks, name)() for name, _key in speaking]
+    states = [(result.severity, result.i18n_key) for result in expected]
+    assert states == [("error", key) for _name, key in speaking], f"precondition: each check named is an error with its key: {states}"
 
     try:
         returned = config_audit.log_configuration_audit()
@@ -559,8 +758,8 @@ def test_the_startup_audit_logs_an_unusable_backup_configuration_as_an_error_and
         pytest.fail(f"the startup audit raised {type(exc).__name__}: an unusable backup configuration never stops the start")
 
     assert returned is None
-    assert backup_records(logged) == [as_logged(expected)], f"one ERROR record of {expected.check_id}, with its summary, id and detail: {backup_records(logged)}"
-    print_success(f"error: {expected.summary}")
+    assert backup_records(logged) == [as_logged(result) for result in expected], f"one ERROR record per check in error, with its summary, id and detail: {backup_records(logged)}"
+    print_success(f"error: {'; '.join(result.summary for result in expected)}")
 
 
 def test_a_default_start_logs_nothing_about_the_backup_checks(checks, platform, logged):
@@ -587,9 +786,9 @@ def test_a_default_start_logs_nothing_about_the_backup_checks(checks, platform, 
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_message_of_the_checks_is_in_the_catalogue_with_its_placeholders(language):
-    """(g) §3: each key of the two tables is a message of ``frontend/src/lib/i18n/backup/<language>.json``, naming exactly
-    the placeholders its detail gives (``{minimum}``, ``{reason}``, ``{limit_mb}``) and, for a result without a detail,
-    none: the Security tab (A8b) renders them with the detail as it comes."""
+    """(g) §3: each key of the three tables is a message of ``frontend/src/lib/i18n/backup/<language>.json``, naming
+    exactly the placeholders its detail gives (``{minimum}``, ``{reason}``, ``{limit_mb}``, ``{variable}``) and, for a
+    result without a detail, none: the Security tab (A8b) renders them with the detail as it comes."""
     path = CATALOGUES / f"{language}.json"
     messages = flattened(json.loads(path.read_text(encoding="utf-8")))
     problems = []
