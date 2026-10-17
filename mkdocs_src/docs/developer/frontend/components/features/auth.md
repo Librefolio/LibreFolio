@@ -358,6 +358,12 @@ A visual indicator of password strength using `zxcvbn-ts`, with the checklist of
   which names the test id and the label, `auth.passwordStrength.rules.<key>`; the length's label is an
   ICU message that receives the rule's `{value}`. A code the app does not know is neither drawn nor
   checked: the server decides it.
+- **`rules`** (optional, lot B4): the rules a server published for another password than an
+  account's, such as a secure backup's (`GET /backup/instance/options`: the accounts' rules with a
+  longer minimum, see [Password Rules](../../../architecture/security.md#password-rules)). Given and
+  not empty, they replace the instance configuration's list for the checklist and for `valid`;
+  `null`, empty or absent, the meter works as above. `BackupDownloadCard` (`lib/features/backup/`)
+  passes them.
 - **`valid`** (`$bindable`): true while every rule drawn holds, each checked by `ruleMet()`. A form
   that needs a valid password binds to it (`bind:valid`) instead of keeping its own copy of the
   rules: `RegisterCard`, [`ResetPasswordCard`](#resetpasswordcard) and `PasswordChangeModal` all
@@ -366,7 +372,7 @@ A visual indicator of password strength using `zxcvbn-ts`, with the checklist of
 
 Tests: `PasswordStrength.test.ts` (`./dev.py test front-utility component-unit`): the checklist from
 the defaults and from the server's list, unknown codes, an answer that lands under a mounted meter,
-the Unicode classes, the length passed to the label.
+the Unicode classes, the length passed to the label, and the rules given through `rules`.
 
 ### 💻 Usage
 
