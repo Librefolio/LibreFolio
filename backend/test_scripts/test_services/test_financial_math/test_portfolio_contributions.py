@@ -42,6 +42,18 @@ Red on HEAD: ``TestTransferTractsMovedIn`` and ``TestMovedInExamples`` (Attribut
 and after: ``TestClosedPositionBaseWithoutMovedInUnchanged`` (HEAD's function, verbatim, on the MF-A5 corpus) and every
 MF-A5 class above, which never pass ``moved_in``.
 
+MF-A9 (the same mirror, for a position still open). A row opened in the period by counted tracts, still holding every
+unit they brought, has no start value: ``annualized_period_return`` falls back on its end cost — their historical cost —
+while its result counts them from their value on arrival. The A8 chain A → B → C: C holds the 5 units, worth
+V₂ = 645 on arrival (C₂ = 500), 650 at the end: P&L 5, on 645 now, on 500 on HEAD (770928213). Product (HEAD +
+uncommitted): ``annualized_period_return(..., moved_in=None)`` — with ``moved_in`` the fallback base is
+``end_cost + moved_in``, None unless positive; without it HEAD's rule exactly (``end_cost`` ≠ 0, a negative one
+included). A usable start value wins either way. The service passes it only to a row with no exit in the period (the
+declared limitation, ``test_positions_contribution_engine.py``).
+
+Red on HEAD: ``TestAnnualizedPeriodReturnMovedIn`` (TypeError: no ``moved_in`` parameter). Green on HEAD and after:
+``TestAnnualizedPeriodReturnWithoutMovedInUnchanged`` (HEAD's function, verbatim, on its own corpus).
+
 The window (``holding_window.exits_in``) is tested in ``test_holding_window.py``; the whole chain through
 ``PortfolioService.get_positions_contribution`` in ``test_financial/test_positions_contribution_engine.py``
 (``TestClosedPositionBase``).
@@ -614,3 +626,158 @@ class TestMovedInExamples:
         assert b_base == Decimal("600")
         assert self._closed_return(b_pnl, b_base) == self._expected("0.0750")
         assert self._closed_return(b_pnl, Decimal("500")) == self._expected("0.0900") != self._expected("0.0750"), "HEAD's base, the cost moved out"
+
+
+# =============================================================================
+# MF-A9 — annualized_period_return: an open position's fallback base with what moved in
+# =============================================================================
+
+# C's window in the A8 chain: from the units reaching it (MI_ONWARD_ARRIVAL) to an end 44 days later. On TO it is 28
+# days, too short to annualize (None whatever the base): the service test reads the chain to the same A9_TO.
+A9_TO = date(2025, 5, 16)
+A9_DAYS = (A9_TO - MI_ONWARD_ARRIVAL).days
+
+
+def _head_annualized_period_return(period_pnl: Decimal | None, start_value: Decimal | None, end_cost: Decimal | None, *, window_from: date | None, end: date) -> Decimal | None:
+    """HEAD's annualized_period_return (contributions.py @ 770928213), verbatim but for its name, its quantum's and its
+    helper's module (``period_return_on_start``, unchanged)."""
+    ratio = contributions.period_return_on_start(period_pnl, start_value)
+    if ratio is None and period_pnl is not None and end_cost is not None and end_cost != 0:
+        ratio = (period_pnl / end_cost).quantize(Decimal("0.0001"))
+    if ratio is None or window_from is None:
+        return None
+    return cumulative_to_annualized(ratio, (end - window_from).days)
+
+
+def _a9_expected(ratio: str) -> Decimal:
+    annualized = cumulative_to_annualized(Decimal(ratio), A9_DAYS)
+    assert A9_DAYS == 44 and annualized is not None, "precondition: an annualizable window"
+    return annualized
+
+
+def _d(value: str | None) -> Decimal | None:
+    return None if value is None else Decimal(value)
+
+
+# HEAD's corpus: name -> (period_pnl, start_value, end_cost, window_from, end)
+A9_CORPUS: dict[str, tuple[str | None, str | None, str | None, date | None, date]] = {
+    "on-the-start-value": ("25", "1100", "500", FROM, TO),
+    "on-a-negative-start-value": ("25", "-1100", "500", FROM, TO),
+    "opened-in-the-period-on-the-end-cost": ("5", "0", "500", MI_ONWARD_ARRIVAL, A9_TO),
+    "no-start-value-on-the-end-cost": ("5", None, "500", MI_ONWARD_ARRIVAL, A9_TO),
+    "a-negative-end-cost-is-a-base": ("10", "0", "-200", MI_ONWARD_ARRIVAL, A9_TO),
+    "an-end-cost-of-zero": ("10", "0", "0", MI_ONWARD_ARRIVAL, A9_TO),
+    "end-cost-unknown": ("10", "0", None, MI_ONWARD_ARRIVAL, A9_TO),
+    "no-pnl": (None, "0", "500", MI_ONWARD_ARRIVAL, A9_TO),
+    "no-window": ("5", "0", "500", None, A9_TO),
+    "a-window-too-short": ("5", "0", "500", MI_ONWARD_ARRIVAL, TO),
+    "a-total-loss": ("-500", "0", "500", MI_ONWARD_ARRIVAL, A9_TO),
+}
+
+
+def _a9_call(case: tuple[str | None, str | None, str | None, date | None, date], **moved_in: Decimal | None) -> Decimal | None:
+    pnl, start, end_cost, window_from, end = case
+    return contributions.annualized_period_return(_d(pnl), _d(start), _d(end_cost), window_from=window_from, end=end, **moved_in)
+
+
+class TestAnnualizedPeriodReturnWithoutMovedInUnchanged:
+    @pytest.mark.parametrize("case", list(A9_CORPUS.values()), ids=list(A9_CORPUS))
+    def test_the_return_is_heads(self, case):
+        """Guard. Called as before MF-A9, the return is HEAD's: on the start value, else on the end cost, else None."""
+        pnl, start, end_cost, window_from, end = case
+
+        assert _a9_call(case) == _head_annualized_period_return(_d(pnl), _d(start), _d(end_cost), window_from=window_from, end=end)
+
+    def test_a_negative_end_cost_is_still_a_base(self):
+        """Guard. Without ``moved_in`` an end cost other than 0 is the base whatever its sign, as on HEAD: 10 / −200."""
+        assert _a9_call(A9_CORPUS["a-negative-end-cost-is-a-base"]) == _a9_expected("-0.0500")
+
+
+class TestAnnualizedPeriodReturnMovedIn:
+    """With ``moved_in`` and no usable start value, the base is the end cost plus what the units gained before arriving;
+    None unless positive. Over MI_ONWARD_ARRIVAL → A9_TO, 44 days."""
+
+    @pytest.mark.parametrize("start", [None, "0"], ids=["no-start-value", "a-start-of-zero"])
+    @pytest.mark.parametrize(
+        ("pnl", "end_cost", "moved_in", "ratio", "head_ratio"),
+        [
+            # C in the A8 chain: 5 units cost 500, worth 645 on reaching C, 650 at the end: 5 on 645, HEAD on 500.
+            pytest.param("5", "500", "145", "0.0078", "0.0100", id="cs-example"),
+            # Cost 500, worth 400 on arrival, 450 at the end: 50 on 400, HEAD on 500.
+            pytest.param("50", "500", "-100", "0.1250", "0.1000", id="arrived-at-a-loss"),
+            # Worth their cost on arrival: nothing gained before, the base is the end cost.
+            pytest.param("5", "500", "0", "0.0100", "0.0100", id="received-at-cost"),
+        ],
+    )
+    def test_the_fallback_base_adds_what_the_units_gained_before_arriving(self, start, pnl, end_cost, moved_in, ratio, head_ratio):
+        case = (pnl, start, end_cost, MI_ONWARD_ARRIVAL, A9_TO)
+        head = _head_annualized_period_return(_d(pnl), _d(start), _d(end_cost), window_from=MI_ONWARD_ARRIVAL, end=A9_TO)
+        assert head == _a9_expected(head_ratio), "precondition: HEAD's base, the end cost"
+
+        assert _a9_call(case, moved_in=Decimal(moved_in)) == _a9_expected(ratio)
+
+    @pytest.mark.parametrize(
+        ("end_cost", "moved_in"),
+        [
+            # Worthless on arrival (V 0, C 500): 500 − 500.
+            pytest.param("500", "-500", id="worthless-on-arrival"),
+            # Below zero: not a ledger the engine gives (V ≥ 0), the sign's guard.
+            pytest.param("100", "-300", id="below-zero"),
+            # A negative end cost the tract does not lift above zero.
+            pytest.param("-200", "100", id="a-negative-end-cost-not-lifted"),
+            # With ``moved_in`` the base must be positive: a negative end cost is no base, even received at cost.
+            pytest.param("-200", "0", id="a-negative-end-cost-received-at-cost"),
+        ],
+    )
+    def test_a_base_that_is_not_positive_is_no_base(self, end_cost, moved_in):
+        case = ("10", "0", end_cost, MI_ONWARD_ARRIVAL, A9_TO)
+        assert _a9_call(case) is not None, "precondition: HEAD's rule, the end cost, gives a figure"
+
+        assert _a9_call(case, moved_in=Decimal(moved_in)) is None
+
+    @pytest.mark.parametrize("start", ["1100", "-1100"], ids=["positive", "negative"])
+    @pytest.mark.parametrize("moved_in", ["145", "-500", "0"], ids=["a-gain", "a-base-of-zero", "at-cost"])
+    def test_a_usable_start_value_ignores_moved_in(self, start, moved_in):
+        """The base is the size of the start value: what moved in changes nothing, not even a fallback base of 0."""
+        case = ("25", start, "500", FROM, TO)
+        on_start = cumulative_to_annualized(Decimal("0.0227"), (TO - FROM).days)
+        assert on_start is not None and _a9_call(case) == on_start, "precondition: 25 / 1100 over the period"
+
+        assert _a9_call(case, moved_in=Decimal(moved_in)) == on_start
+
+    @pytest.mark.parametrize(
+        "case",
+        [
+            # The end cost unknown (incomplete): what moved in is no base on its own.
+            pytest.param(("5", "0", None, MI_ONWARD_ARRIVAL, A9_TO), id="end-cost-unknown"),
+            pytest.param((None, "0", "500", MI_ONWARD_ARRIVAL, A9_TO), id="no-pnl"),
+            pytest.param(("5", "0", "500", None, A9_TO), id="no-window"),
+            # 28 days.
+            pytest.param(("5", "0", "500", MI_ONWARD_ARRIVAL, TO), id="a-window-too-short"),
+        ],
+    )
+    def test_without_a_figure_no_return(self, case):
+        assert _a9_call(case, moved_in=Decimal("145")) is None
+
+    @pytest.mark.parametrize("case", list(A9_CORPUS.values()), ids=list(A9_CORPUS))
+    def test_nothing_moved_in_is_no_moved_in(self, case):
+        """``moved_in=None``: HEAD's rule exactly, on its whole corpus — a negative end cost included."""
+        assert _a9_call(case, moved_in=None) == _a9_call(case)
+
+    def test_cs_example_from_the_transfers(self):
+        """A → B worth V₁ = 600, B → C worth V₂ = 645 (C₁ = C₂ = 500); C holds the 5, worth 650 at the end. C's P&L:
+        (650 − 500) − (V₂ − C₂) = 5; what moved in: V₂ − C₂ = 145; the base 500 + 145 = V₂: 0.0078. HEAD on the end cost
+        500: 0.0100."""
+        transfers = [
+            _transfer(departure=MI_DEPARTURE, arrival=MI_ARRIVAL, value="600", cost="500"),
+            _transfer(departure=MI_ONWARD, arrival=MI_ONWARD_ARRIVAL, sender=B, receiver=C, value="645", cost="500"),
+        ]
+        c_pnl = Decimal("650") - Decimal("500") + contributions.transfer_tract_adjustments(transfers, FROM, A9_TO)[(C, X)]
+        assert c_pnl == Decimal("5"), "precondition: C's P&L, from its value on arrival"
+        c_moved_in = contributions.transfer_tracts_moved_in(transfers, FROM, A9_TO)[(C, X)]
+        assert c_moved_in == Decimal("145"), "precondition: what the units gained before reaching C"
+
+        annualized = contributions.annualized_period_return(c_pnl, ZERO, Decimal("500"), window_from=MI_ONWARD_ARRIVAL, end=A9_TO, moved_in=c_moved_in)
+
+        assert annualized == _a9_expected("0.0078")
+        assert _head_annualized_period_return(c_pnl, ZERO, Decimal("500"), window_from=MI_ONWARD_ARRIVAL, end=A9_TO) == _a9_expected("0.0100") != annualized, "HEAD's base, the end cost"

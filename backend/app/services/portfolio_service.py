@@ -1714,7 +1714,17 @@ class PortfolioService:
             # the position's window, on the end cost for a position opened inside the period; for a position closed in
             # it, the annualized return on the cost it sold over its flight time.
             period_pnl_pct = period_return_on_start(period_pnl, start_value)
-            period_annualized = annualized_period_return(period_pnl, start_value, cb_end, window_from=window_start(date_from, oldest_open_lot_dates.get(pos_key)), end=effective_end)
+            # MF-A9: a position opened in the period that still holds every unit it received by a counted tract counts
+            # them, in its fallback base, from their value on arrival, as its result does
+            row_exits = exits_in(lot_moves.get(pos_key, []), date_from, effective_end)
+            period_annualized = annualized_period_return(
+                period_pnl,
+                start_value,
+                cb_end,
+                window_from=window_start(date_from, oldest_open_lot_dates.get(pos_key)),
+                end=effective_end,
+                moved_in=moved_in.get(pos_key) if row_exits == 0 else None,
+            )
             if is_fully_sold:
                 opened, closed = closed_position_window(lot_moves.get(pos_key, []))
                 # MF-A5: the base is the cost of every unit that left, sold or moved by a counted tract; a unit that left
@@ -1724,7 +1734,7 @@ class PortfolioService:
                     per_cost_sold.get(pos_key, Decimal("0")),
                     per_sales.get(pos_key, 0),
                     moved_out.get(pos_key),
-                    exits_in(lot_moves.get(pos_key, []), date_from, effective_end),
+                    row_exits,
                     moved_in.get(pos_key),
                 )
                 closed_annualized = closed_position_annualized(period_pnl, base, opened, closed, date_from)

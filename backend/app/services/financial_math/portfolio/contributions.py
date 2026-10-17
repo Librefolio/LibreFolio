@@ -112,15 +112,28 @@ def annualized_period_return(
     *,
     window_from: date_type | None,
     end: date_type,
+    moved_in: Decimal | None = None,
 ) -> Decimal | None:
     """The period's return annualized over the position's window (``window_from`` → ``end``).
 
     The base is the size of the start value; a position opened inside the period (no start value) falls back to its
     cost at the end. None without a base, a window, or the days :func:`returns.cumulative_to_annualized` needs.
+
+    ``moved_in`` (MF-A9), for a position opened inside the period that received units by counted tracts and still holds
+    them all: what they gained before arriving (:func:`transfer_tracts_moved_in`). Its result counts them from their value
+    on arrival, its end cost at their historical cost; the fallback base adds the same amount, as a closed position's does
+    (MF-A8), and must then be positive. Not passed when units left the position in the period: a transfer carries no
+    quantity, so the part of the tract that left with them cannot be told apart, and the end cost stays the base.
     """
     ratio = period_return_on_start(period_pnl, start_value)
-    if ratio is None and period_pnl is not None and end_cost is not None and end_cost != 0:
-        ratio = (period_pnl / end_cost).quantize(_RATIO_QUANTUM)
+    if ratio is None and period_pnl is not None and end_cost is not None:
+        if moved_in is None:
+            base = end_cost if end_cost != 0 else None
+        else:
+            base = end_cost + moved_in
+            base = base if base > 0 else None
+        if base is not None:
+            ratio = (period_pnl / base).quantize(_RATIO_QUANTUM)
     if ratio is None or window_from is None:
         return None
     return cumulative_to_annualized(ratio, (end - window_from).days)
