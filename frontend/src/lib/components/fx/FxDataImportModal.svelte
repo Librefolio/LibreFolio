@@ -203,6 +203,7 @@
                        transition-colors text-base font-bold shrink-0"
                 onclick={handleSwap}
                 title={$t('common.swapDirection')}
+                data-testid="fx-import-swap"
                 >⇄
             </button>
             <div class="flex-1">
