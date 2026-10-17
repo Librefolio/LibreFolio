@@ -34,6 +34,12 @@ YOC(asset, broker, T) =  Σ gross income per eligible unit, over [T − 364, T]
   ([[decisions/financial-math-single-average-cost]]).
 - **Grain**: per `(asset, broker)`. The FIFO replay runs over the group of brokers linked by transfers of the asset,
   so a transferred lot keeps its history; income stays with the broker that received it.
+  *Since 2026-10-17 (J-51):* an arrival from a broker the user cannot see (a co-owner of the receiving broker) is read
+  at the scope's edge (`scope_boundary.read_arrivals_at_scope_boundary`, as J-10 reads it for the lots): the units
+  arrive on the leg's date and the sender's broker is not replayed. Before, its partner joined a broker with no history
+  to the group and the replay failed (`replay_inconsistent`). A departure keeps its partner: units in transit still count
+  for the source broker. The denominator is unchanged — the position's average cost, which counts the arriving leg's
+  cost basis (without one, `missing_wac`).
 - **Status contract** (`YieldOnCostResult`): `available` (value ≥ 0, at least one income transaction),
   `no_income` (value 0, none received; a recorded zero income is `available` with `net_zero`) and `unavailable`
   with a reason — `insufficient_history`, `income_without_eligible_quantity`, `replay_inconsistent`,

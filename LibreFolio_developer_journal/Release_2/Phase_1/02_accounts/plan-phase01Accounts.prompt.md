@@ -6678,3 +6678,73 @@ la docstring di SC-LANE-01 dopo E-15.
   descrivono lo stesso comportamento senza nominare i helper.
 - **H-nit + A-50 + SC-LANE-01: definizione di fatto ✅** (revisioni dopo l'ingresso: H la posizione del helper, X la riga
   di `AssetSearchAutocomplete` e la frase di `search_link_finder`, E A-50).
+
+## H-nit + A-50 — Entrato; A-46 + A-47 (17/10, 14:02–; base `d9ee72df1`)
+- **Entrato**: `9db6cb0be`…`a2e428f35` → dev `d7641f368`, CHANGELOG 🔄 `d9ee72df1`; sulla punta di dev nessun confronto a
+  mano del profilo fuori da `profile.ts`. Revisioni di H, X, E dopo l'ingresso. Due messaggi del coordinatore in coda da
+  prima (FPM-08, la nota di J) sono arrivati tardi: FPM-08 era già entrato (`d04ffde90`), detto al coordinatore.
+- **Nota di J** (A9, AI Export: OK): le 5 etichette «A9 (legal_notice)» di `promptRenderer.test.ts` non dicevano la regola.
+  Fatto (solo commenti): tre tolte (il nome del test o il commento seguente dice già la regola), due riscritte («the
+  legal notice comes right before response_language, which stays last: the app's trusted instruction»; «Data only: the
+  legal notice comes last»). Prettier pulito; Vitest del file **13/13**.
+
+**A-46 + A-47 — contratto** (coordinatore: «Go: A-46 + A-47»; dettagli mandati, nessuna decisione aperta)
+- Stato reale: `create_user`/`update_profile` restituiscono `(None, messaggio)`; `auth.py:445` (profilo) e
+  `registration_service.py:261` scelgono `USERNAME_INVALID` confrontando il testo con `USERNAME_RESERVED_MESSAGE` (A-47).
+  `cmd_create_user` rifiuta la `@` (A-21a) ma non 2 o 60 caratteri (A-46): registrazione e profilo li fermano con lo
+  schema (422), `LIBREFOLIO_ADMIN_USERNAME` all'avvio. 58 chiamate nei test confrontano i messaggi come stringhe.
+- Cura: `AccountError`, una sottoclasse di `str` con `.code` (il messaggio non cambia, quindi ogni `error == "…"` e
+  `(None, "…")` dei test resta valido): `USERNAME_INVALID`, `USERNAME_TAKEN`, `EMAIL_TAKEN`, `USER_NOT_FOUND`;
+  `_new_username_refusal()` (prima la `@`, poi 3–50: la regola di A-21a resta identica) in `create_user` e in
+  `update_profile` (solo un nome cambiato). La lunghezza ha lo stesso codice `USERNAME_INVALID`: via HTTP lo schema
+  risponde 422 prima, e la UI traduce `USERNAME_INVALID` con «niente @» (`registrationErrors.ts:25`). I chiamanti
+  guardano `.code`. `ADMIN_USERNAME_MIN/MAX_LENGTH` (usate solo in `config/accounts.py`) → `USERNAME_MIN/MAX_LENGTH`,
+  più `USERNAME_LENGTH_MESSAGE`; i letterali degli schemi restano (gli schemi non importano la configurazione).
+- Rossi (`test-author`, in corso): `test_username_rules.py` (CLI e servizio: 2/51 caratteri rifiutati, 3/50 passano; i
+  codici su ogni rifiuto, e i messaggi di prima) e `test_username_rules_api.py` (il messaggio riformulato nel solo
+  `user_service`: profilo e registrazione dicono ancora `USERNAME_INVALID`).
+- Codice pronto: `work/a46/apply_a46.py` (4 file, dry-run pulito).
+
+### A46.1 — Rossi ✅ (14:04–14:22, `test-author`)
+- `test_username_rules.py`: **UNAME-020** (CLI, 2/51 caratteri × admin/utente, barriera a 3/50), **021** (`create_user`),
+  **022** (`update_profile`), guardia **023** (un nome vecchio di 2 o 51 caratteri, scritto come riga, resta), **030**
+  (9 casi: ogni rifiuto porta il suo codice e il messaggio di prima; i casi della regola 2 sotto `EMAIL_TAKEN`), **031**
+  (`register_user` con il messaggio riformulato nel solo `user_service` → `USERNAME_INVALID`). Osservati: **18 rossi**
+  (es. «red until A-46: user create '52', 2 characters, must be refused: the command answered True…»), 2 guardie verdi,
+  i 32 di prima verdi.
+- `test_username_rules_api.py`: **UNAME-API-12** (profilo e registrazione col messaggio riformulato → `USERNAME_INVALID`;
+  oggi «400 {"detail":"Reworded…"}» e `ACCOUNT_EXISTS`), guardie **13** (la `@` → `USERNAME_INVALID`) e **14** (2/51
+  caratteri: ancora il 422 dello schema, sulle due rotte). Osservati: **2 rossi**, 6 guardie verdi, i 39 di prima verdi.
+  > **Scelte del test-author, approvate**: UNAME-021/022 vogliono A-46 e A-47 insieme (guardano anche il codice); i test
+  > della riformulazione controllano prima che il testo riformulato torni davvero (il messaggio va letto a ogni chiamata,
+  > non costruito all'import: `_new_username_refusal()` lo legge a ogni chiamata).
+
+### A46.2 — Codice ✅ e verdi (14:24–14:28)
+- `work/a46/apply_a46.py`: `config/accounts.py` (`USERNAME_MIN/MAX_LENGTH`, `USERNAME_LENGTH_MESSAGE`; il controllo di
+  `LIBREFOLIO_ADMIN_USERNAME` sulle costanti nuove); `user_service.py` (`AccountError`, `_new_username_refusal()`, i 7
+  rifiuti di `create_user`/`update_profile` col codice, i tipi di ritorno, le docstring); `auth.py` (il profilo guarda
+  `error.code`, `detail=str(error)`; tolto l'import di `USERNAME_RESERVED_MESSAGE`); `registration_service.py` (lo stesso).
+- In processo: `test_username_rules.py` **52/52**, `test_username_rules_api.py` **47/47**. Corsia, servizi:
+  `username-rules` 52, `username-lookup` 17, `user-profile` 52, `email-case` 67, `registration` 151, `session-version`
+  56, `settings` 23, `admin-bootstrap` 216 → **634/634**; porta libera. ruff, black puliti.
+- Slot approvato (API `auth`, `registration`, `account-deletion`), dopo il quarto giro del `docs-writer`.
+
+### A46.3 — Doc ✅ (14:29–14:33, `docs-writer`, quarto giro)
+- `admin/cli_tools.en.md` («Create and List Users», il punto 🔤: la regola 3–50 dopo la `@`, il messaggio, uscita `1`);
+  `developer/architecture/security.md` («Which Account an Identifier Names»: la regola 1 con `_new_username_refusal()`,
+  i paragrafi nuovi «The length of a new username» e «Refusals with a code» `#username-refusal-codes`, i test; la
+  tabella delle risposte di «Changing the Email»); `access_control.md` («Superusers», la tabella degli esiti della
+  registrazione, la riga di `LIBREFOLIO_ADMIN_USERNAME` con le costanti nuove); `database/users_access.md` (`USER`: la
+  regola 3–50 su ogni via, un controllo del servizio e non della tabella: SQLite non impone `VARCHAR(50)`).
+- Build strict e `check-links` (97 validi) puliti. Nessuna pagina timbrata; debito nuovo: la frase 3–50 di
+  `admin/cli_tools`.
+- Rilievi: (1) `admin_bootstrap_config()` controlla prima la lunghezza e poi la `@` (il servizio il contrario): un nome
+  di 51 caratteri con una `@` ha due messaggi diversi dalla variabile e da `user create`; innocuo, lasciato (la
+  configurazione non può importare il servizio). (2) Il commento di `_REGISTRATION_REFUSALS["USERNAME_INVALID"]` in
+  `auth.py` diceva solo «holding an @» → riscritto (solo commento, prima dello slot). (3) La doc del frontend dice
+  `USERNAME_INVALID` = «niente @»: resta vero finché il 422 dello schema arriva prima (UNAME-API-14).
+
+### A46.4 — Slot ✅ (14:34–14:40; `d9ee72df1` + A-46/A-47 non committato, impronta `8717c06456bc9df2`)
+- API `auth`, `registration`, `account-deletion` (`work/slot_a46/slot.sh`): **95**, **102**, **9** → **206/206** (REG-002 e
+  PROF-008, i 400 semplici, compresi). Impronta invariata; porta 6182 libera.
+- **A-46 + A-47 (+ la nota di J): definizione di fatto ✅** (revisione di E dopo l'ingresso; J per i commenti).

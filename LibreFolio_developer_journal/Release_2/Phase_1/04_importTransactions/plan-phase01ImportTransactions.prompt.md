@@ -5907,9 +5907,11 @@ nuova.
 
 Nessun backend, nessuna API.
 
-### W-B66 — cura (2026-10-17, in corso)
+### W-B66 — cura ✅ (2026-10-17) — 🧊 FROZEN
 
-**Base**: HEAD `f078b766c` = dev con W-B67 (`279b3d5bd` + `581757965` → `ac92e6fae`, CHANGELOG `f078b766c`).
+**Base**: HEAD `f078b766c` = dev con W-B67 (`279b3d5bd` + `581757965` → `ac92e6fae`, CHANGELOG `f078b766c`). Poi, alle 14:14,
+HEAD `5603a23a7` = dev con la cura del cancello dell'HTML (`21b8aa975` + `cc86dee84`): avanzamento veloce del coordinatore, a
+worktree pulito. Il dry run della cura di W-B66 resta pulito.
 
 1. ✅ **Decisioni del coordinatore** (17/10, 14:00):
    - **scrittore** di `utils/core/parseDecimalInput.ts` e `utils/core/formatDecimal.ts` (nessun worktree li ha aperti), oltre al
@@ -5923,7 +5925,9 @@ Nessun backend, nessuna API.
    oltre il budget non cambia nulla per i genitori. I test esistono già e sono registrati:
    `src/lib/utils/__tests__/parseDecimalInput.test.ts` e `src/lib/utils/core/__tests__/formatDecimal.test.ts` (`core-unit`),
    `src/lib/components/ui/input/ExactDecimalInput.test.ts` (`component-unit`).
-2. ⏳ **Rossi** (test-author `539999df`, Vitest).
+2. ✅ **Rossi** (test-author `539999df`, Vitest; due giri, sotto). La cura era pronta nel frattempo (`files/scripts/wb66_cure.py`,
+   dry run pulito su 3 file), con l'i18n in `files/scripts/wb66_i18n.sh`: `{max}` semplice, niente plurale né formato
+   numerico, spagnolo col tu come la maggior parte di `base`.
 
    > **⚠️ Fuori pista**, cose trovate mentre scrivevo la cura.
    > - **Una terza regex quadratica**: `formatDecimalForDisplay` toglie gli zeri finali con `frac.replace(/0+$/, '')`, quadratica su
@@ -5945,6 +5949,133 @@ Nessun backend, nessuna API.
    > - **Le frecce**: su un `1e-200` tenuto, `normalizeDecimalInput` leggeva 1200, e una freccia lo faceva 1201. Né un valore
    >   fuori budget né un esponente rifiutato si spostano con le frecce.
    > - `ExactDecimalInput` accetta un esponente in portata anche dal `value` del genitore (un `Number` che stampa `1e-8`).
-3. ⏳ **Cura** pronta (`files/scripts/wb66_cure.py`, dry run pulito su 3 file) e i18n (`files/scripts/wb66_i18n.sh`: `{max}`
-   semplice, niente plurale, niente formato numerico; spagnolo col tu, come la maggior parte di `base`). Poi verdi (`core-unit`,
-   `component-unit`), doc, handoff.
+
+   ✅ **Primo giro dei rossi** (test-author `539999df`, 17/10): 64 rossi e 138 verdi sui tre file. Ogni rosso mostra il
+   risultato di oggi: `1e-8` → `18`, `3E+150` → `3150`, il prop `1e-8` invalido, 4 `BigInt` della lunghezza dell'incolla, le frecce
+   a `1.1234567890133`. Tempi di oggi:
+
+   | Caso | Tempo |
+   |---|---|
+   | regex di visualizzazione | 2,5–2,8 s |
+   | `/0+$/` | 2,8–3,9 s |
+   | componente | pochi ms, quindi i suoi rossi sono di comportamento |
+
+   Il rosso di tempo di `normalizeDecimalInput` non può esistere: `CANONICAL` vede solo testi già filtrati e corti. Diventa una
+   guardia, e il cambio di `CANONICAL` resta difensivo.
+
+   > **⚠️ Fuori pista**: le note 3–6 del test-author mostrano un buco del mio contratto. «Il filtro di sempre appena il testo non
+   > è più scientifico» rimetteva il difetto con un tasto: `1e-200` più un carattere dà `1e-200x`, cioè `1200`; un `1e5x` incollato
+   > dava `15`, `1.234,5e2` dava `1234.52`; una freccia su un `1e-200` tenuto lo sostituiva con un numero. **Regola rifinita**
+   > (dentro D-W66-1: un numero non cambia mai in silenzio):
+   > - un **marcatore d'esponente** è una cifra, un segno decimale facoltativo, `e`/`E`, un segno facoltativo e una cifra
+   >   (`/\d[.,]?[eE][+-]?\d/`, lineare);
+   > - un testo con un marcatore che non si legge esatto (fuori portata, o non interamente un numero) resta com'è, rosso, col
+   >   messaggio (`exponentNotReadable`, che prende il posto di `isScientificOutOfRange`);
+   > - senza marcatore il filtro resta quello di sempre: una `e` digitata da sola sparisce, `EUR 12,34` dà `12,34`;
+   > - il testo tenuto vince sulla regola del segno (`-1e-200` resta tale);
+   > - le frecce non spostano un testo tenuto.
+   >
+   > Il messaggio ora copre i due casi: «Write the number out in full: scientific notation is read only on its own, with an
+   > exponent up to ±{max}». Verificato con node (`--experimental-strip-types`) sulle funzioni curate in uno specchio: 24 casi
+   > come da contratto; `1e100` dà 101 caratteri, `1e-100` 102.
+
+   ✅ **Secondo giro dei rossi** (test-author `539999df`): 231 test, 88 rossi e 143 verdi, i conti previsti prima di girare.
+   - Oggi: `1e5x` → `15`, `1e-200x` → `1200`, `1e5e3` → `153`, `1.234,5e2` → `1234.52`, `-1e-200` → `1200`, `.5e1` → `.51`;
+     le frecce su un `1e-200` tenuto danno `1200.000000000001`.
+   - Il test-author ha aggiunto anche: `-1e5x` tenuto col segno; `12EUR` → `12` (una cura che prendesse ogni `e` dopo una cifra
+     come marcatore la romperebbe); una riga di 40 000 caratteri `…9e5x`, che coglie una cura quadratica (una regex lasca vi
+     impiega 2,5 s).
+3. ✅ **Cura applicata** (17/10, 14:30 circa): `files/scripts/wb66_cure.py --apply` su 3 file, e
+   `files/scripts/wb66_i18n.sh` (la chiave in `base/{en,it,fr,es}.json`: «Write the number out in full: scientific notation is read
+   only on its own, with an exponent up to ±{max}»).
+4. ✅ **Verdi** (carico < 50; log `files/logs/wb66_*.log`):
+
+   | Prova | Esito |
+   |---|---|
+   | Vitest, i tre file | 231 verdi |
+   | `prettier --check` sui sorgenti e i cataloghi cambiati | pulito |
+   | `dev.py i18n check` | stretto, 5 051 chiavi |
+   | `front-utility core-unit` (cancello dell'HTML e test del planner inclusi) | 209 file, 8 589 verdi |
+   | `front-utility component-unit` | 179 file, 4 821 verdi |
+   | `dev.py front check` | svelte-check 0 errori, 0 avvisi |
+5. ✅ **Doc**: `developer/frontend/components/core-ui/atoms.md` «ExactDecimalInput», tre aggiunte: l'esponente incollato e il
+   messaggio, `min`/`max` solo nel budget, le frecce e la linearità. La pagina non ha traduzioni.
+6. ✅ **Simulazione** (17/10, 14:46–14:50): `sim_cherry_pick.sh dev_release2 --docs` sui 13 file, dev `f8e1f6aed` (HEAD
+   `5603a23a7` antenato; dev non ha toccato i miei file, solo altre sezioni del backlog). 0 conflitti, i 4 cataloghi si caricano,
+   `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito. `git diff --check` pulito; porta 6184 libera (nessun
+   server: solo Vitest e i runner `front-utility`). Handoff FROZEN.
+
+### W-B68 — i valori degli eventi dei provider troncati alla colonna: analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
+
+**Base**: HEAD `731140500` = dev con W-B66 (`b8e180ff8` + `32282ffac` → `e820279e1`, CHANGELOG `731140500`). Via del coordinatore
+(14:49): «W-B68: GO, failing tests first». W-B75 è passata a H (la rivedo al suo checkpoint).
+
+**Stato verificato** (sola lettura):
+- **Il difetto.** `EventStoreOperations._storable_events` (`backend/app/services/assets/event_store.py:97-127`) controlla di un
+  evento del provider solo le cifre intere (`integer_digits_issue`): non lo **tronca** a ciò che la colonna tiene. I prezzi dei
+  provider sì (`storable_price` → `truncate_to_db_precision`, `db/precision.py`).
+- **L'effetto.** `AssetEvent.value` è `RealDecimal(18, 6)` (`db/models.py:1055`, W-B60). Un valore con più di 6 decimali, o più
+  di 15 cifre significative, si scrive com'è e si rilegge arrotondato: letto ≠ scritto. `784.0774475` si rilegge `…448`, prima
+  `…447`.
+- **I percorsi.** Solo il refresh dei provider passa da `_storable_events` (`refresh.py:602` → `_upsert_asset_events`). Gli
+  eventi manuali sono rifiutati prima da `_reject_too_many_digits` (C-97) e scritti direttamente con `_write_asset_events`
+  (`:289-296`): la cura non li tocca.
+- **Il piano d'investimento programmato** (`FAScheduledInvestmentSchedule.asset_events`, parametri dell'utente) è un provider:
+  i suoi eventi passano di qui. Un valore con più di 6 decimali, oggi arrotondato in silenzio dalla lettura, sarà troncato in
+  silenzio. Rifiutarlo all'ingresso dei parametri è del provider (X): residuo da segnalare, non mio.
+- **Lo split.** Il controllo del rapporto (`is_valid_split_ratio`, X-R47) va fatto sul valore **troncato**: un rapporto `1E-7`
+  passa oggi, si salva e si rilegge 0, cioè proprio lo split che X-R47 scarta.
+
+**Cura** (prossima, dopo i rossi): in `_storable_events`, `storable_value(evt.value.amount, AssetEvent, "value")` al posto di
+`integer_digits_issue`:
+- None → scartato e registrato nel log come oggi;
+- altrimenti l'evento prende il valore troncato (`model_copy` sul `Currency`), solo se cambia: un valore che già entra resta
+  com'è, forma compresa (`1.5`, non `1.500000`);
+- il rapporto dello split si controlla sul valore troncato.
+
+Doc: dove `developer/` descrive la scrittura degli eventi dei provider (W-B58, W-B60).
+
+**Test**: `services asset-digit-limits` (`test_asset_digit_limits.py`, accanto ai test sugli eventi dei provider), più
+`asset-event-store`, `event-split-ratio` e la guardia degli upsert, come prove di non regressione.
+
+**Passi:**
+1. ✅ **Rossi** (test-author `c5b03fa0`, solo `test_asset_digit_limits.py`, test col marcatore `wb68`): 12 rossi e 8 guardie. Oggi:
+
+   | Caso | Si rilegge oggi | Contratto |
+   |---|---|---|
+   | `784.0774475` | `784.077448` | `784.077447` |
+   | `0.1234567` | `0.123457` (mezzo pari) | `0.123456` |
+   | `123456789012.123999` | `…124000` | `123456789012.123` |
+   | SPLIT `0.0000001` | salvato, si rilegge `0` | scartato, un avviso col nome dell'asset |
+   | letto = scritto, 4 valori, riga nuova e aggiornata | sessione ≠ rilettura | uguali |
+
+   Le guardie: i valori che entrano si rileggono uguali, e nella sessione tengono la forma (`1.5`, `0.123456`,
+   `123456789012.123`, uno SPLIT di 2). Prove: `asset-digit-limits WB68` 12 rossi / 8 verdi (due volte); l'azione intera 12 / 87;
+   `event-split-ratio` 78, `asset-event-store` 71.
+
+   > **⚠️ Fuori pista**, le note del test-author:
+   > - (1) «tiene la forma» non vale con `storable_value` da solo (`1.5` → `1.500000`). La mia cura assegna il valore troncato
+   >   solo quando cambia il numero, quindi la guardia della forma passa.
+   > - (2) `123456789012.123456` non è un rosso: la rilettura col mezzo pari cade già sul troncato. Usato `…123999`.
+   > - (3) Il controllo «nomina l'asset» di X-R47 in `test_event_split_ratio.py` (file di X) è lasco: accetta qualunque numero,
+   >   e con l'asset 1 basta il `count=1` dell'avviso. Lo segnalo al coordinatore, non lo tocco.
+2. ✅ **Cura** (`files/scripts/wb68_cure.py --apply`): in `_storable_events`, `storable_value` al posto di `integer_digits_issue`
+   (anche nell'import). Il valore troncato con `model_copy` solo quando cambia; il rapporto dello split giudicato sul valore
+   troncato; docstring di `_upsert_asset_events` e `_storable_events`. `ruff` e `black` puliti.
+3. ✅ **Verdi** (17/10, 15:07–15:08, `files/scripts/wb68_light.sh`, carico < 50):
+
+   | Prova | Esito |
+   |---|---|
+   | `asset-digit-limits` | 99 verdi (i 12 rossi inclusi) |
+   | `event-split-ratio` | 78 verdi |
+   | `asset-event-store` | 71 verdi |
+   | `asset-source-guards` | 29 verdi |
+   | `asset-source-refresh` | 18 verdi |
+   | `asset-source` | 61 verdi |
+4. ✅ **Doc**, entrambe senza traduzioni:
+   - `developer/backend/assets/events.md`: il paragrafo sugli eventi dei provider, con il troncamento, la forma, lo split
+     giudicato troncato e l'esempio di prima;
+   - `developer/architecture/database/index.md`: anche gli eventi dei provider sono troncati (`storable_value`).
+5. ✅ **Simulazione** (17/10, 15:09–15:11): `sim_cherry_pick.sh dev_release2 --docs` sui 6 file, dev `79d4ca239` (HEAD
+   `731140500` antenato; dev ha cambiato dei miei file solo il backlog, in altre sezioni). 0 conflitti; ruff e black puliti;
+   `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito. `git diff --check` pulito; porta 6184 libera. Handoff FROZEN.
