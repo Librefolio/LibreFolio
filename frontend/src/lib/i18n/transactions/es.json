@@ -248,7 +248,9 @@
       "integerDigitsExceeded": "Como máximo {max} cifras en la parte entera",
       "dateOutOfRange": "Entre {min} y {max}",
       "autoCostUnreadable": "Coste automático no disponible: {count, plural, one {# transacción usada} other {# transacciones usadas}} para el coste medio de este activo {count, plural, one {contiene} other {contienen}} un valor que no es un número. Introduce el coste a mano.",
-      "ledgerUnreadable": "No se pueden comprobar los saldos de {brokerName}: {count, plural, one {# de sus transacciones contiene} other {# de sus transacciones contienen}} un valor que no es un número. Pide al administrador que repare los datos."
+      "ledgerUnreadable": "No se pueden comprobar los saldos de {brokerName}: {count, plural, one {# de sus transacciones contiene} other {# de sus transacciones contienen}} un valor que no es un número. Pide al administrador que repare los datos.",
+      "costBasisNotAllowed": "❌ <b>{type}</b> no lleva coste base aquí: quítelo. Solo lo llevan las unidades que entran con un <b>Ajuste</b> o una <b>Transferencia de Activos</b>.",
+      "costBasisModeIncompatible": "❌ <b>{type}</b> no lleva coste base aquí, así que ningún modo <b>Auto</b> o <b>Manual</b>: quítelo."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",
