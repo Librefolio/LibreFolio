@@ -6382,3 +6382,73 @@ Simulazione della fusione con dev: pulita. Rilievi:
 - **Nessuna riga nel CHANGELOG**: i tetti (X-R59, R13-SEC9-1) e i lotti arrivano nella stessa versione 1.3, e
   period-changes non è ancora rilasciato: per chi aggiorna dalla 1.2 nulla di visibile cambia.
 - ✅ **X-R64 chiuso il 17/10 (14:45)**, in attesa del commit del coordinatore.
+
+### Revisioni sparse (17/10 14:40–15:00)
+
+- **X-R65 di Z** (`30e19b9d9`): OK. Rilievi: gli editor dei dati mostrano solo il testo generico di axios (→ X-R46
+  allargata); le righe fuori intervallo salvate prima restano; «1 do not»; una quarta forma di 422.
+- **X-R62 di H** (`9fcbbe523`, in dev `907fb3b97`): OK sui punti 2 e 3 di J. Il punto 1 è risolto solo in parte: il
+  generico `except Exception` risponde ancora `detail=str(e)` (→ **X-R74** nella mia sezione; prima registrata per
+  errore come «H-51» nella sezione di H, ID già preso). Le liste `IN` di id di evento oltre 32.766 → **X-R67**.
+- **B-39** (`c8fc32bfa`, `EventDataImportModal.svelte`): OK. Escape ed unescape sono una coppia esatta.
+- **A** (`9db6cb0be` + `6700a04b4`, `selfHostedConfirmed()`): OK, identico.
+- **Backlog** di questo checkpoint: X-R62 ✅; X-R65 assegnata a Z, con i suoi dettagli; X-R46 allargata; X-R49b (E);
+  X-R67…X-R74 (note mie, di Z e di H).
+
+### X-R58 ✅ — le liste dicono un rifiuto «troppo grande» invece di tacere (15:00–15:50)
+
+- **Disegno**:
+  - un modulo puro `lib/api/bulkRefusal.ts`: `bulkRefusalMessage(error, t)` rende i due codici di Z-25 in una frase
+    tradotta;
+    - per `bulk_too_many_items`: il massimo e il numero di voci;
+    - per `bulk_too_many_days`: il solo massimo, perché per le conversioni `item_days` è un limite inferiore;
+    - per ogni altro errore: `null`;
+  - un toast d'errore nei tre punti in cui oggi tace: `fetchPriceSeries` (quando `outcome.failed`), e le due `catch`
+    della pagina FX (`fetchAllPairSeries`, `fetchPairSeries`);
+  - il commento «Exactly one bulk call» della pagina FX corretto;
+  - le chiavi `common.bulkRefusal.tooManyItems` e `tooManyDays` in 4 lingue (nel sorgente `base`);
+  - la registrazione del test di unità in `front-utility core-unit`.
+- **Decisione sulla nota di Z** (un fallimento parziale di `loadFxRatesAndSignalsBulk` tiene i tassi e perde i segnali,
+  perché rilancia): resta così.
+  - Dopo Z-27 un rifiuto per dimensione arriva solo da una discrepanza fra i tetti del frontend e del backend; ogni altro
+    errore lascia comunque i tassi delle risposte già nel registro, e la pagina segna i segnali come falliti, con il suo
+    «riprova».
+  - Restituire «risultato parziale + errore» cambierebbe il contratto del caricatore e i suoi due chiamanti per un
+    percorso quasi irraggiungibile.
+- **Codice pronto**: `xr58_code.py`, a secco pulito, prettier pulito.
+- **Rossi** affidati a un test-author (15:02): unità (`bulkRefusal.test.ts`, nuovo) ed E2E (un describe per lista).
+- **Rossi** (test-author, 15:08):
+  - `bulkRefusal.test.ts`, nuovo: 59 casi, compresi 48 «quasi» (altri stati, altri codici, campi mancanti o non finiti,
+    tetto ≤ 0, `detail` non oggetto) e i nomi del prototipo;
+  - E2E Assets (1): un rifiuto `bulk_too_many_items` (10.000/12.345: cinque cifre, raggruppate in tutte e quattro le
+    lingue);
+  - E2E FX (3): un rifiuto `bulk_too_many_days` che si divide fino a una parte singola; il refresh di una coppia; una
+    guardia (un 500 normale non mostra nessun toast);
+  - prima del codice: unità rossa all'import, i 4 E2E rossi sul toast assente (slot 15:11–15:17).
+- **Codice applicato** (15:17): `xr58_code.py` (modulo nuovo, 6 sostituzioni in 3 file, registrazione del test, 2 chiavi
+  in 4 lingue in `base`).
+- **Verdi**:
+  - unità 59; `front check` 0/0; `i18n check` 5.052 chiavi; i due cancelli i18n; colori; `check-orphans`;
+  - `front-utility core-unit` **8.515 passed** (il rosso di N78 è stato corretto a monte);
+  - slot 15:21–15:35: `front-asset asset-list` **35 passed**, `front-fx fx-list` **21 passed**; porta libera.
+  > **⚠️ Fuori pista (15:31)** — il coordinatore ferma gli E2E lanciati senza una finestra: il carico era 104. Lo slot
+  > era partito col mio cancello (carico a 5 minuti 26), ma la regola è la finestra assegnata. Da ora gli E2E solo nelle
+  > finestre del coordinatore. Lo spec FX è partito alle 15:33:47, dopo l'attesa del cancello interno (carico 84).
+- **Documentazione** (docs-writer, 15:36, con il cancello del carico sulle build):
+  - X-R58 in `registries.md`;
+  - le tre proposte di H per X-R62: il paragrafo «No Provider» in `create-edit.en.md`, una frase in `wac.md`, una in
+    `events.en.md`.
+- **Nessuna riga nel CHANGELOG**: i tetti sono nuovi nella 1.3 e i lotti di Z-27 rendono il rifiuto quasi
+  irraggiungibile.
+- **Documentazione** (15:36–15:47, con il cancello del carico): strict build pulito, `check-links` 97 validi;
+  `translate-validate` sulle due pagine utente: 6 errori nuovi (un link per lingua e pagina), più il debito già presente.
+  Nessuno `translate-stamp`.
+  - `registries.md`: la frase di X-R58 e il rilancio del caricatore FX, per scelta.
+  - `create-edit.en.md`: il paragrafo «No Provider», con **No linked event** nel campo **Linked Event** per staccare il
+    collegamento.
+  - `wac.md`: la frase sulla rimozione (`PROVIDER_REMOVAL_LINKED_TRANSACTIONS`, qualunque costo).
+  - `events.en.md`: una frase.
+  > **Nota** — un percorso raro con due toast: subito dopo la creazione di una coppia, la ricarica rilancia l'errore
+  > (`loadPairSources(true)`). Se proprio lì arriva un rifiuto per dimensione, compare il toast del rifiuto e quello della
+  > sincronizzazione diventa un avviso. Accettabile: il rifiuto è quasi irraggiungibile dopo Z-27.
+- ✅ **X-R58 chiuso il 17/10 (15:50)**, in attesa del commit del coordinatore.
