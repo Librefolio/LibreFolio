@@ -1006,11 +1006,22 @@ def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) 
 def services_probe_rate_limit(verbose: bool = False, test_names: list = None) -> bool:
     """Test the per-user limit of POST /assets/provider/probe (MF-SI2)."""
     print_section("Services: Probe Rate Limit")
-    print_info("Testing: config/plugins.py (probe_rate_limit), api/v1/assets/providers.py (probe_limiter, PROBES_BY_USER, probe_provider_config), dev.py (cmd_server lane env)")
-    print_info("Tests: 30 probes per 60 s per user; past it 429 PROBE_RATE_LIMITED, retry_after = Retry-After = ceil(wait) >= 1, manager not called, refusal not counted; per user; free again after the window; LIBREFOLIO_PROBE_RATE_LIMIT (30, 0 off, unusable → 30), the lanes off")
+    print_info("Testing: config/plugins.py (probe_rate_limit), api/v1/assets/providers.py (probe_limiter, PROBES_BY_LIMIT, probe_provider_config), dev.py (cmd_server lane env)")
+    print_info(
+        "Tests: 30 probes per 60 s per user; past it 429 PROBE_RATE_LIMITED, retry_after = Retry-After = ceil(wait) >= 1, manager not called, refusal not counted; per user; free again after the window; LIBREFOLIO_PROBE_RATE_LIMIT read at each probe (30, 0 off, unusable → 30, logged once per value), the lanes off"
+    )
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_probe_rate_limit.py", test_names)
     return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
+
+
+def services_bulk_writes_chunked(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-SEC9a: bulk writes of rates and prices in chunks SQLite can parse, a 10 000-item cap, no echoed error (private in-memory DB)."""
+    print_section("Services: Bulk Writes Chunked (MF-SEC9a)")
+    print_info("Testing: utils/sql_chunks.py, services/fx/storage.py (upsert_rates_bulk, delete_rates_bulk), services/assets/price_store.py (bulk_delete_prices), services/fx/sync.py (_stored_rates, ensure_rates_multi_source), api/v1/fx/currencies.py and api/v1/assets/prices.py (caps, 500s)")
+    print_info("Tests: 1 500-item upserts/deletions exact, no «Expression tree is too large» (500/501 at the chunk edge); change detection over 1 035 pairs; > 10 000 items 422 bulk_too_many_items before any write, 10 000 pass; no 500 or item error echoes its SQL; barrier: one OR of 1 500 refused")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_writes_chunked.py", test_names)
+    return run_command(cmd, "Bulk writes chunked tests", verbose=verbose)
 
 
 def services_current_prices_bulk(verbose: bool = False, test_names: list = None) -> bool:
@@ -1126,6 +1137,15 @@ def services_provider_wipe_split_guard(verbose: bool = False, test_names: list =
     print_info("Tests: a plan's new params or leaving it refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409), only the caller's adjustments named, nothing written; else the save is as before")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_wipe_split_guard.py", test_names)
     return run_command(cmd, "Provider wipe split guard tests", verbose=verbose)
+
+
+def services_provider_removal_link_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R62: removing a provider refuses while a transaction is linked to an event it generated."""
+    print_section("Services: Provider Removal Link Guard")
+    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/api/v1/assets/providers.py")
+    print_info("Tests: a removal refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (HTTP 409) while a generated event has a linked transaction, only the caller's transactions named, nothing written; a link the check missed is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_removal_link_guard.py", test_names)
+    return run_command(cmd, "Provider removal link guard tests", verbose=verbose)
 
 
 def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
@@ -2342,11 +2362,21 @@ Note: No backend server required.
         "probe-rate-limit",
         services_probe_rate_limit,
         name="Probe Rate Limit",
-        desc="POST /assets/provider/probe: PROBES_BY_USER is probe_limiter() at import, a SlidingWindowLimiter of 30 per 60 s by default; the first hits per user reach AssetSourceManager.probe_provider_config with the request, its operations and the user id; past the limit 429 PROBE_RATE_LIMITED with an int retry_after >= 1 (the wait rounded up) equal to Retry-After and a message, the manager not called and the refusal not counted; another user is not limited; past the window the user probes again. LIBREFOLIO_PROBE_RATE_LIMIT: probe_rate_limit() reads it at each call, unset/blank 30, stripped ASCII whole number 0..10000, anything else a ValueError naming the variable and the value; probe_limiter() is n per 60 s, None for 0 with one warning, 30 with one error for an unusable value (never off by mistake); with the limit off 40 probes of one user all reach the manager; the route applies the configured limit (2: the third is 429; unusable: 30); ./dev.py server --test hands the server LIBREFOLIO_PROBE_RATE_LIMIT=0, a start without --test does not",
-        # PURE: no DB, no server, no network. The route coroutine is called directly; PROBES_BY_USER is replaced by a
-        # private SlidingWindowLimiter on a fake clock and the manager's probe by a recording stub, both with monkeypatch,
-        # so the lane's real limiter is never consumed. The lane switch runs dev.cmd_server in-process with every launch
+        desc="POST /assets/provider/probe: probe_limiter() read at each probe, one SlidingWindowLimiter per value in PROBES_BY_LIMIT (counts kept when the value comes back; a new LIBREFOLIO_PROBE_RATE_LIMIT applies at the next probe), 30 per 60 s by default; the first hits per user reach AssetSourceManager.probe_provider_config with the request, its operations and the user id; past the limit 429 PROBE_RATE_LIMITED with an int retry_after >= 1 (the wait rounded up) equal to Retry-After and a message, the manager not called and the refusal not counted; another user is not limited; past the window the user probes again. LIBREFOLIO_PROBE_RATE_LIMIT: probe_rate_limit() reads it at each call, unset/blank 30, stripped ASCII whole number 0..10000, anything else a ValueError naming the variable and the value; probe_limiter() is n per 60 s, None for 0 with one warning, 30 with one error for an unusable value (never off by mistake); with the limit off 40 probes of one user all reach the manager; the route applies the configured limit (2: the third is 429; unusable: 30); ./dev.py server --test hands the server LIBREFOLIO_PROBE_RATE_LIMIT=0, a start without --test does not",
+        # PURE: no DB, no server, no network. The route coroutine is called directly; probe_limiter() returns a private
+        # SlidingWindowLimiter on a fake clock (or PROBES_BY_LIMIT starts empty per test) and the manager's probe is a
+        # recording stub, all with monkeypatch, so the lane's real limiters are never consumed. The lane switch runs dev.cmd_server in-process with every launch
         # stubbed (test_dev_designer_lab_banner.start_server): nothing starts.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "bulk-writes-chunked",
+        services_bulk_writes_chunked,
+        name="Bulk Writes Chunked (MF-SEC9a)",
+        desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; services, the FX provider lookup
+        # and route loggers replaced by monkeypatch; the cap/failure cases hand the routes stand-in sessions.
         isolation="pure",
     )
     add_test(
@@ -2464,6 +2494,15 @@ Note: No backend server required.
         desc="X-R49: POST /assets/provider refused before any write of the request with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) when an item would wipe the events a parametric provider generated (new params of the plan, or leaving it for another provider) while a SPLIT among them has linked incoming ADJUSTMENTs without a purchase cost; details name the item (asset_id, item_index) and each such SPLIT with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the items before the refused one are not written either. With a cost (0 included), a manual SPLIT, the same params, an online provider's params change or a new assignment the save is as before",
         # WRITE-SCOPED, the category default: four assets, three assignments, two users and two brokers under a unique
         # marker; each test restores the assignments by id and wipes by asset and broker id.
+    )
+    add_test(
+        cat,
+        "provider-removal-link-guard",
+        services_provider_removal_link_guard,
+        name="Provider Removal Link Guard",
+        desc="X-R62: DELETE /assets/provider refused before any write with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (409) while an event the removed assignment generated (deleted with it, CASCADE) has a linked transaction (RESTRICT); details name the asset (asset_id, item_index: its first position) and each such event (event_id, date, type) with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the assets before the blocked one are not removed either. A link the check missed is rolled back and answered PROVIDER_REMOVAL_CONFLICT (409, empty params, no SQL text). No linked transaction, a manual event, an asset without an assignment or an empty request: as before",
+        # WRITE-SCOPED, the category default: three inactive assets (no lane scheduler refreshes them), two users and two
+        # brokers under a unique marker, dated 1984; each test writes its own assignments and wipes by asset and broker id.
     )
     add_test(
         cat,

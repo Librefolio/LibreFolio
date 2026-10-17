@@ -1201,3 +1201,111 @@ async def test_convert_over_the_item_day_budget_is_refused_fast(test_server):
         assert BULK_MAX_ITEM_DAYS < detail["item_days"] <= crossing * CONVERSION_SPAN_DAYS, detail
         assert elapsed < BULK_REJECT_SECONDS, f"{elapsed:.1f} s"
         print_success(f"✓ 422 {detail['code']} at {detail['item_days']:,} item-days, in {elapsed:.2f} s")
+
+
+# ============================================================================
+# MF-SEC9a (E's review of R13-SEC9): an import-sized write of rates, and its cap
+# ============================================================================
+#
+# DELETE /fx/currencies/rate read the rates of every deletion in ONE statement, an OR of one term per deletion, which
+# SQLite refuses from about 1 000 terms: the FX page sends one deletion per run of consecutive days, so deleting more
+# than 1 000 separate days answered 500 (its detail echoing the SQL). Now the statements run in chunks, and a request
+# of more than MAX_BULK_WRITE_ITEMS (10 000) items is refused with 422 bulk_too_many_items before any write. The
+# chunks, the caps of every route and the generic 500s are pinned in-process by services bulk-writes-chunked; this case
+# runs the import size once through the lane's backend.
+
+#: A pair no other test touches: MAD and PKR appear in no other API, E2E or mock-data test (MF-SEC9a, checked by grep
+#: over backend/test_scripts and frontend/e2e when this test was written), so every rate of MAD/PKR on the lane is this
+#: test's; deleted before and after.
+SEC9A_BASE, SEC9A_QUOTE = "MAD", "PKR"
+SEC9A_DAYS = 1_500  # an import: past SQLite's limit of about 1 000 OR terms, past two chunks of 500
+SEC9A_DAY0 = date(2003, 1, 1)
+SEC9A_MAX_WRITE_ITEMS = 10_000  # MAX_BULK_WRITE_ITEMS: the contract's number, written here
+#: 1 500 rates are upserted one at a time, a commit each, on a backend other units share: far longer than one call.
+SEC9A_TIMEOUT = 300
+
+
+def _sec9a_day(offset: int) -> date:
+    return SEC9A_DAY0 + timedelta(days=offset)
+
+
+def _sec9a_rate(offset: int) -> tuple[str, str, Decimal, Decimal]:
+    """The rate posted for a day: (from, to, rate sent, rate stored as MAD/PKR). Every third day is sent as PKR/MAD, its
+    rate the inverse of a power of 2, so the stored value is exact both ways."""
+    if offset % 3 == 2:
+        stored = Decimal(2 ** (offset % 16))
+        return SEC9A_QUOTE, SEC9A_BASE, Decimal(1) / stored, stored
+    stored = Decimal(offset + 1) / 100 + 30
+    return SEC9A_BASE, SEC9A_QUOTE, stored, stored
+
+
+async def _sec9a_delete_all(client: httpx.AsyncClient) -> None:
+    response = await client.request("DELETE", f"{API_BASE}/fx/currencies/rate", json=[{"from": SEC9A_BASE, "to": SEC9A_QUOTE, "delete_all": True}], timeout=SEC9A_TIMEOUT)
+    assert response.status_code == 200, f"deleting every {SEC9A_BASE}/{SEC9A_QUOTE} rate: {response.status_code} {response.text[:300]}"
+
+
+async def _sec9a_stored(client: httpx.AsyncClient) -> dict[date, Decimal]:
+    """Every stored MAD/PKR rate, by day: the pair's export (``GET /backup/fx/{base}/{quote}/rates``)."""
+    response = await client.get(f"{API_BASE}/backup/fx/{SEC9A_BASE}/{SEC9A_QUOTE}/rates", params={"format": "json"}, timeout=SEC9A_TIMEOUT)
+    assert response.status_code == 200, f"export of {SEC9A_BASE}/{SEC9A_QUOTE}: {response.status_code} {response.text[:300]}"
+    return {date.fromisoformat(row["date"]): Decimal(row["rate"]) for row in response.json()["rows"]}
+
+
+@pytest.mark.asyncio
+async def test_rates_of_an_import_written_and_deleted_by_separate_days(test_server):
+    """MF-SEC9a, on a pair this test owns (MAD/PKR):
+
+    1. Guard: ``POST /fx/currencies/rate`` with 1 500 daily rates, every third sent as PKR/MAD: 200, each answered
+       ``inserted`` as MAD/PKR on its day, no error; every rate stored at its value (green before the cure too: the route
+       upserts one rate at a time).
+    2. ``DELETE /fx/currencies/rate`` with 1 500 separate days in one request — every other day of 3 000, the first 750
+       stored, the last 750 past the posted ones; half sent as PKR/MAD —: 200, each deletion MAD/PKR on its day with 1
+       existing and 1 deleted, or 0 and 0 past the posted days; ``total_deleted`` 750, no error; the 750 other days kept
+       at their values.
+    3. ``DELETE /fx/currencies/rate`` with 10 001 deletions: 422 ``bulk_too_many_items``, ``max_items`` 10 000,
+       ``items`` 10 001; nothing deleted, the 750 days still stored.
+
+    Red on HEAD 04955c498: step 2 answers 500 — SQLite refuses the one OR of 1 500 terms («Expression tree is too
+    large»), the detail echoing the SQL.
+    """
+    print_section("MF-SEC9a: 1 500 rates posted, 1 500 separate days deleted, 10 001 deletions refused")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        await _sec9a_delete_all(client)
+        try:
+            rates = [_sec9a_rate(offset) for offset in range(SEC9A_DAYS)]
+            payload = [{"date": _sec9a_day(offset).isoformat(), "base": sent_from, "quote": sent_to, "rate": str(sent), "source": "MANUAL"} for offset, (sent_from, sent_to, sent, _stored) in enumerate(rates)]
+            response = await client.post(f"{API_BASE}/fx/currencies/rate", json=payload, timeout=SEC9A_TIMEOUT)
+            assert response.status_code == 200, f"posting {SEC9A_DAYS} rates: {response.status_code} {response.text[:300]}"
+            upserted = FXBulkUpsertResponse(**response.json())
+            assert (upserted.success_count, upserted.errors) == (SEC9A_DAYS, [])
+            answered = [(result.action, result.date, result.base, result.quote) for result in upserted.results]
+            assert answered == [("inserted", _sec9a_day(offset), SEC9A_BASE, SEC9A_QUOTE) for offset in range(SEC9A_DAYS)], "every rate answered inserted as MAD/PKR on its day, in order"
+            posted = {_sec9a_day(offset): stored for offset, (_from, _to, _sent, stored) in enumerate(rates)}
+            assert await _sec9a_stored(client) == posted
+            print_info(f"posted {SEC9A_DAYS} rates of {SEC9A_BASE}/{SEC9A_QUOTE}")
+
+            offsets = range(0, 2 * SEC9A_DAYS, 2)
+            deletions = [{"from": SEC9A_BASE if index % 2 == 0 else SEC9A_QUOTE, "to": SEC9A_QUOTE if index % 2 == 0 else SEC9A_BASE, "date_range": {"start": _sec9a_day(offset).isoformat()}} for index, offset in enumerate(offsets)]
+            response = await client.request("DELETE", f"{API_BASE}/fx/currencies/rate", json=deletions, timeout=SEC9A_TIMEOUT)
+            assert response.status_code == 200, f"deleting {len(deletions)} separate days: {response.status_code} {response.text[:300]}"
+            deleted = FXBulkDeleteResponse(**response.json())
+            in_posted = [offset < SEC9A_DAYS for offset in offsets]
+            assert (deleted.total_deleted, deleted.success_count, deleted.errors) == (sum(in_posted), len(deletions), [])
+            counts = [(result.success, result.base, result.quote, result.date_range.start, result.existing_count, result.deleted_count) for result in deleted.results]
+            expected_counts = [(True, SEC9A_BASE, SEC9A_QUOTE, _sec9a_day(offset), int(stored), int(stored)) for offset, stored in zip(offsets, in_posted, strict=True)]
+            wrong = [(got, want) for got, want in zip(counts, expected_counts, strict=False) if got != want]
+            assert len(counts) == len(deletions) and not wrong, f"{len(counts)} results for {len(deletions)} deletions; (got, expected): {wrong[:5]}"
+            kept = {day: rate for day, rate in posted.items() if (day - SEC9A_DAY0).days % 2 == 1}
+            assert await _sec9a_stored(client) == kept
+            print_info(f"deleted {deleted.total_deleted} rates in {len(deletions)} separate days, {len(kept)} kept")
+
+            too_many = [{"from": SEC9A_BASE, "to": SEC9A_QUOTE, "date_range": {"start": _sec9a_day(offset).isoformat()}} for offset in range(SEC9A_MAX_WRITE_ITEMS + 1)]
+            response = await client.request("DELETE", f"{API_BASE}/fx/currencies/rate", json=too_many, timeout=SEC9A_TIMEOUT)
+            detail = _coded_refusal(response, "bulk_too_many_items")
+            assert {key: value for key, value in detail.items() if key not in ("code", "message")} == {"max_items": SEC9A_MAX_WRITE_ITEMS, "items": SEC9A_MAX_WRITE_ITEMS + 1}
+            assert await _sec9a_stored(client) == kept, "a refused request deleted rates"
+            print_success(f"✓ 1 500 rates posted, {deleted.total_deleted} deleted by separate days, 10 001 deletions refused with 422")
+        finally:
+            await _sec9a_delete_all(client)
