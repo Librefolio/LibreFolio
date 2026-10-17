@@ -15,7 +15,7 @@ responsibility:
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
 | `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price or volume refused; a provider's truncated, and a provider's date with a value no column can keep skipped and reported), and bounded write chunks. |
-| `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked. |
+| `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked; refused, nothing written, while a `SPLIT` of the asset has linked incoming adjustments without a cost ([Market-Data Wipe](events.md#market-data-wipe)). |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
 | `period_changes.py` | The fixed-period changes of the Assets table: each asset's price on the days the change needs, read in grouped queries and converted at each day's rate ([Fixed-Period Changes](#fixed-period-changes)). |
@@ -544,6 +544,8 @@ cost unknown it stays `MISSING`.
 | `GET /api/v1/assets/all` | GET | All active assets |
 | `GET /api/v1/assets/query` | GET | Filtered list (search, type, currency, active) |
 | `DELETE /api/v1/assets` | DELETE | Bulk delete (cascade provider+prices) |
+| `GET /api/v1/assets/{asset_id}/market-data/summary` | GET | What the market-data wipe would delete and unlink (prices with their date range, manual and provider events, linked transactions), without writing |
+| `POST /api/v1/assets/{asset_id}/market-data/wipe` | POST | First step of a currency change: unlink the transactions from the asset's events, then delete every event and price of the asset. A 409 `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`, nothing written, while a `SPLIT` of the asset has linked incoming adjustments without a cost; `params.splits` names only the transactions the caller can see ([Market-Data Wipe](events.md#market-data-wipe)) |
 | `GET /api/v1/assets/provider` | GET | List providers (with `params_schema`) |
 | `GET /api/v1/assets/provider/search` | GET | Multi-provider parallel search |
 | `GET /api/v1/assets/provider/search/stream` | GET | SSE streaming search results |
