@@ -410,6 +410,14 @@ def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Synthetic yield tests", verbose=verbose)
 
 
+def services_scheduled_investment_cost_bounds(verbose: bool = False, test_names: list = None) -> bool:
+    """R13-SEC7-2: the Scheduled Investment provider's cost."""
+    print_section("Services: Scheduled Investment Cost Bounds (R13-SEC7-2)")
+    print_info("Testing: scheduled_investment/plugin.py (COMPOUND late interest closed form, late history, cache cap, late horizon)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduled_investment_cost_bounds.py", test_names)
+    return run_command(cmd, "Scheduled investment cost bounds tests", verbose=verbose)
+
+
 def services_synthetic_yield_integration(verbose: bool = False, test_names: list = None) -> bool:
     """Test E2E synthetic yield integration scenarios."""
     print_section("Services: Synthetic Yield Integration E2E")
@@ -1714,6 +1722,7 @@ Note: No backend server required.
     )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation; the accrual golden: every number of the accrual walk pinned (regen: LIBREFOLIO_TEST_REGEN_SI_ACCRUAL_GOLDEN=1)")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
+    add_test(cat, "scheduled-investment-cost-bounds", services_scheduled_investment_cost_bounds, name="Scheduled Investment Cost Bounds", desc="R13-SEC7-2 (N73): late interest in one pass, linear day counts, cache cap, horizon")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(
         cat,
