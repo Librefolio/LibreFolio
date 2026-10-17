@@ -337,6 +337,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The data editors of assets and exchange rates no longer report as saved a value the server refused: a warning names each refused date and why, such as a close outside the day's low–high, and a refused save says what was wrong, such as a date before 1900 or after tomorrow, instead of «Request failed with status code 422».
 - Assets: deleting an asset that transactions use opens its confirmation already on the result (how many transactions, with the link to them) instead of asking first; the confirmation also says the asset's events go with it; and the search's failure message, the source title, the «Manual» badge and the count of assets to delete follow your language.
 - API: converting an amount of 0 (`POST /api/v1/fx/currencies/convert`) answers 0 with the day's rate instead of a server error.
+- Exchange rates an older version could save but not use (0, infinite, or more than 14 digits) no longer reach the PAC planner's quotes and costs, where they gave absurd amounts; the scheduler fetches those days again from the provider.
 
 #### 🔒 Security
 
