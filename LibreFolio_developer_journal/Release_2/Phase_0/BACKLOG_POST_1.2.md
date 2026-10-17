@@ -682,11 +682,12 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
   T, 11/10, dal docs-writer di B3b. Ognuna delle due somme prende i lotti aperti in cui quel campo è noto, mentre i
   conteggi della copertura contano i lotti in cui sono noti entrambi; con il costo di un lotto ignoto (B3b) le due
   somme non coprono più gli stessi lotti. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Passo 6».
-- **T-B9 · AI Export: un residuo reale sotto l'unità minima della valuta si stampa `0` accanto a `reconciled` falso** —
+- ✅ **T-B9 · AI Export: un residuo reale sotto l'unità minima della valuta si stampa `0` accanto a `reconciled` falso** —
   minimo; T, 12/10, dal docs-writer di C-53. Il renderer stampa `0` un residuo monetario più piccolo dell'unità minima
   (`monetary_residuals_zeroed`); dopo C-53 `reconciled` tollera solo `CONVERSION_DUST` (1e-9), quindi un residuo fra le
   due soglie si contraddirebbe. Improbabile: il riepilogo chiude la scomposizione per costruzione. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «C-53 — implementazione».
+  ✅ **Chiusa come verificata, senza codice** (J, 17/10; piano 05, «T-B9»): il residuo è solo arrotondamento del contesto `Decimal` a 28 cifre (~1e-27 × gli importi), `other_result` viene dagli stessi `Decimal` del riepilogo; il caso `1E-24` è già fissato da `test_engine_closing_term_reconciles_despite_decimal_rounding`.
 
 **Unificazioni della matematica comune (parte 1)**
 
@@ -6528,7 +6529,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     (`read_arrivals_at_scope_boundary`); una partenza tiene la compagna (le unità in viaggio contano per l'origine). Il
     costo resta il WAC della posizione della Dashboard: con la base della gamba un valore, senza `MISSING_WAC`.
     Dettagli: piano 05, sezione «J-51».
-- **J-53 · Il banner dei lotti mostra un solo fondo orfano per codice** — medio, numeri e chiarezza; J, 17/10 (analisi
+- ✅ **J-53 · Il banner dei lotti mostra un solo fondo orfano per codice** — medio, numeri e chiarezza; J, 17/10 (analisi
   di J-36). **Titolare: Y** (frontend, decisione del coordinatore 17/10), dopo i lotti A/B di X-R59, nella 1.3.
   `lotDataQualityHelpers.buildIssueGroups` raggruppa le issue per codice e mostra il messaggio coi parametri della
   prima; `ASSET_INCOME_NO_ELIGIBLE_LOTS` e `ASSET_COST_NO_ELIGIBLE_LOTS` arrivano una per fondo orfano («…of
@@ -6536,6 +6537,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   fondi il banner mostra l'importo e la data di uno solo e nasconde gli altri. La cura: una riga per issue per i codici
   senza lotto (non un totale del backend, che sommerebbe valute diverse e perderebbe le date). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-36».
+  ✅ **Fatto da Y il 17/10** (`c37c2bb1e`, dev `fb6d58d17`): un blocco per codice, una riga per ogni issue senza lotto con i suoi parametri; si vedono anche le due `MISSING_FX_RATES` (provider e manuali).
 - ✅ **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
   alla revisione di SEC8-1b (17/10), facoltativa. Per una richiesta fuori dai limiti la finestra preparata
   (`requested_range`, che fa da ripiego di `metadata.analyzed_range`) è quella limitata, mentre `output.replay_range` e
@@ -7637,6 +7639,10 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - Resta **E-19b**: `IssueCode.NON_ISO_CURRENCY` al posto di `MISSING_FX_*`, il banner senza bottone, il selettore
     col valore salvato, l'avviso del ripristino (via di B), i18n nelle 4 lingue, `api sync`.
   - Per D1, se si sceglie C: la rietichettatura automatica deve escludere anche `GBp`, non solo GBX/ZAC/ILA.
+  - ✅ Il pezzo di J: la guardia di `Intl` in `riskAnalysisHelpers.ts:168`, entrata in dev `b13ed7944` (CHANGELOG
+    `826f99f17`).
+  - Smistati altrove dal coordinatore: il modale delle rotte FX che cancella prima di ripubblicare (X) e il `GBp` di
+    Yahoo contro il confronto esatto del refresh (Z).
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19».
 
 ## Y · Cruscotto e grafici (fase 01)

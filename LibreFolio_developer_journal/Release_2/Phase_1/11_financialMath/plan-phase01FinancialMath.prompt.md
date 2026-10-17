@@ -2993,3 +2993,38 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
   interni il cui tratto la riga conta (la condizione di `transfer_tract_adjustments`) entra nella base → 12,5 %; (2) se
   un'unità è uscita altrimenti (fuori perimetro, in transito alla fine, valore o costo ignoto, ADJUSTMENT senza costo)
   → la regola generale. CHANGELOG 🐛 con i numeri che cambiano. Dopo il checkpoint di SEC9g, rossi prima.
+
+#### SEC9g entrato (dev `650c02b17`); MF-A5 — il costo spostato nella base delle posizioni chiuse (17/10, 17:0x)
+- Coordinatore: SEC9g **entrato** (dev `650c02b17`, merge `acbbd42ba`); worktree a `203197f5a`; W rivede a posteriori.
+- **MF-A5** ✅ codice (decisione (1) + (2), un predicato condiviso):
+  - `contributions.py`: `counted_tract(transfer, date_from, end)` — partito dopo l'inizio, arrivato entro la fine,
+    valore all'arrivo e costo spostato noti — usato da `transfer_tract_adjustments` e dal nuovo
+    `transfer_costs_moved_out` (per riga mittente: costo spostato e quanti); `closed_position_base(cost_sold, sales,
+    moved_out, exits)`: costo venduto + costo spostato quando ogni uscita è coperta, altrimenti None (la regola generale);
+  - `holding_window.exits_in(moves, date_from, end)`: le uscite di quantità del periodo, gli split a parte;
+  - `portfolio_service.get_positions_contribution`: `per_sales` (le vendite che entrano nel costo venduto), `moved_out`,
+    la base passata a `closed_position_annualized`.
+  - Effetto: l'esempio di J 25 % → 12,5 % (prima dell'annualizzazione); un'uscita non coperta (fuori perimetro, in
+    transito alla fine, valore o costo ignoto, ADJUSTMENT senza costo, **anche una vendita fuori dal Realizzato**) →
+    regola generale. Vendite pure: invariate.
+  - Doc: `net-annualized-return.en.md` (CostOut = C_s + C_m, la nota di J «soglia della polvere», i casi di ricaduta, il
+    secondo esempio), `period-pnl.en.md` (la frase delle chiuse), mappa della casa (`financial-math.instructions.md`,
+    `financial_math.md`: `exits_in`). Suite esistenti col codice: `financial-math` 1224, `roi-fifo-utils` 1398.
+- In corso: test-author `a5-tests`.
+- ✅ **Test A5** (test-author `a5-tests`, valori calcolati a mano): NUOVO `test_financial_math/test_portfolio_contributions.py`
+  (tabella di verità di `counted_tract` a 16 righe e i giorni di confine; `transfer_tract_adjustments` uguale alla copia di
+  HEAD — guardia; `transfer_costs_moved_out`; `closed_position_base`; l'esempio di J 0,1250 contro 0,2500) e
+  `TestExitsIn` in `test_holding_window.py`; in `test_financial/test_positions_contribution_engine.py`
+  `TestClosedPositionBase` (5 casi, percorso report e autonomo): l'esempio di J, perimetro solo A, in transito alla fine,
+  guardia delle vendite pure, uscita solo per trasferimento. ⚠️ **Cambio di comportamento da dichiarare** (caso 5): una
+  posizione uscita **solo** per trasferimento interno, senza vendite, prima annualizzava con la regola generale (nessun
+  costo venduto), ora con la regola delle chiuse sul costo spostato (100/1 000 su 61 giorni invece di 100/1 100 su 105).
+  20 mutanti presi. Nessuna riga di runner (cartelle già registrate).
+- ✅ **Corsia** (17:21; prodotto tolto = `contributions.py`, `holding_window.py`, `portfolio_service.py`, sha
+  `5fe8c58a…` uguale dopo): `financial-math -k "contributions or holding_window"` rosso **78** / 84;
+  `roi-fifo-utils test_positions_contribution_engine` rosso **8** / 70. Verdi: `financial-math` **1309**,
+  `roi-fifo-utils` **1408**, `portfolio-engine` 41 (attese a carico 73–75). Slot chiesto (`files/a5.sh slot`:
+  `api portfolio`).
+- ✅ **Slot** (17:29, GO col carico a 5 minuti < 50; HEAD `203197f5a`): `api portfolio` **52**. Porta libera. Riga 🐛
+  approvata con i tre effetti. **CHECKPOINT READY** inviato, FROZEN. Dopo: J45d (le eccezioni vere ai seguaci,
+  `_LeaderGone` solo per la cancellazione) + la nota di doc di J sull'intervallo esatto.
