@@ -278,7 +278,10 @@ Le copie tra i file che importi insieme sono gestite allo stesso modo, e il pass
 
 Se un broker ha una **data di apertura**, le righe datate prima non possono essere importate; il giorno di apertura
 stesso va bene. Se la data è sbagliata, correggila nel passaggio
-[Revisione](how-to.md#opening-date) e le righe vengono ricontrollate.
+[Revisione](how-to.md#opening-date) e le righe vengono ricontrollate. Qualunque sia la data di apertura,
+le date delle transazioni vanno dal 1° gennaio 1900 a un anno da oggi: una riga con una data fuori da questo
+intervallo è rifiutata quando salvi le righe importate, con un messaggio come *Data: Tra 1900-01-01 e
+2027-10-17*, se oggi è il 17 ottobre 2026.
 
 ---
 

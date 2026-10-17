@@ -315,6 +315,38 @@ class TestBrokerCreate:
             print_success("✓ Created broker without deposit for zero initial balance")
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("amount", ["1E+101", "1E+5000000"])
+    async def test_post_brokers_with_an_initial_balance_past_the_exponent_bound_answers_422_and_creates_nothing(self, test_server, amount):
+        """R13-SEC7-3 (E's R13-SEC7, finding 3): an initial balance is a ``Currency``, whose amount's exponent is bounded
+        at the boundary (``adjusted()`` within [-100, 100]).
+
+        Red today: 200 — the service expands the amount with ``format(amount, "f")`` (5 MB for 1E+5000000), the batch
+        refuses the deposit, and the route rolls the broker back.
+
+        Contract: 422 before any work, its error on ``initial_balances.0.amount``; no broker of that name exists.
+        """
+        print_section(f"Test BR-A-002C: POST /brokers - initial balance of {amount} EUR, past the exponent bound")
+
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            name = unique_name("R13-SEC7-3 Exponent Bound Broker")
+
+            response = await client.post(f"{API_BASE}/brokers", json=[{"name": name, "initial_balances": [{"code": "EUR", "amount": amount}]}], timeout=TIMEOUT)
+
+            listed = await client.get(f"{API_BASE}/brokers", timeout=TIMEOUT)
+            assert listed.status_code == 200, listed.text
+            created = [broker["id"] for broker in listed.json()["items"] if broker["name"] == name]
+            # Whoever writes cleans up, also after a red.
+            leftovers = await remove_owned(client, created, [])
+
+            assert response.status_code == 422, f"R13-SEC7-3: POST /brokers with an initial balance of {amount} EUR must answer 422 at the boundary; it answered {response.status_code}: {response.text[:400]}"
+            locs = [tuple(error["loc"]) for error in response.json()["detail"]]
+            assert any(loc[-3:] == ("initial_balances", 0, "amount") for loc in locs), f"R13-SEC7-3: the 422 must name the balance's amount; its errors sit on {locs}"
+            assert created == [], f"R13-SEC7-3: the request was refused, yet the broker {name!r} exists: {created}"
+            assert leftovers == [], f"Cleanup failed: {leftovers}"
+            print_success(f"✓ Initial balance of {amount} EUR refused with 422, nothing created")
+
+    @pytest.mark.asyncio
     async def test_post_brokers_duplicate(self, test_server):
         """BR-A-003: POST /brokers with existing name fails."""
         print_section("Test BR-A-003: POST /brokers - duplicate name")

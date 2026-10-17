@@ -165,12 +165,14 @@ class BrokerService(BrokerAccessMixin, BrokerSummaryMixin):
                             # execute_batch(creates_raw=...) which does per-row
                             # model_validate() in try/except, collecting ALL
                             # errors in one response instead of failing on the first.
+                            # str, never format(…, "f"): the batch refuses a value past its column's limits (W-B58),
+                            # while the fixed point of 1E+999999999 is a billion digits on the event loop (R13-SEC7-3).
                             deposit_dicts.append(
                                 {
                                     "broker_id": broker.id,
                                     "type": "DEPOSIT",
                                     "date": today_date().isoformat(),
-                                    "cash": {"code": currency_obj.code, "amount": format(currency_obj.amount, "f")},
+                                    "cash": {"code": currency_obj.code, "amount": str(currency_obj.amount)},
                                 }
                             )
 
