@@ -263,6 +263,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### 🔒 Security
 
+- Price and FX queries no longer accept date ranges without a ceiling: the end stops at tomorrow and the FX start at 100 years before it; a range reaching year 9999, which previously exhausted the server and ended in an error, now answers at once.
 - A number that is not finite (`NaN`, `Infinity`) nested in a provider's parameters or in a risk analytic's parameters is refused (422): a provider's was saved and read back as `null`.
 - A password change and an administrator's sign-out-everywhere arriving at the same moment both end the sessions: the cookie the first issued no longer survives the second.
 - The in-memory limits forget the visitor with the fewest attempts first: a flood of new usernames or addresses no longer resets the count of one being guessed.
