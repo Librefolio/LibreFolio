@@ -110,8 +110,8 @@
       },
       "registered": "Cuenta creada. Te hemos enviado un correo con un enlace para activarla: ábrelo en las próximas 24 horas y luego inicia sesión.",
       "signUpUnavailable": "Ahora no es posible registrarse: esta instancia no puede enviar el correo de verificación. Inténtalo más tarde o pregunta a su administrador.",
-      "settingNeedsEmail": "Hace falta que pueda salir un correo con enlace: configura primero SMTP y LIBREFOLIO_PUBLIC_URL (Configuración › Correo).",
-      "settingUnavailable": "La verificación del correo necesita que pueda salir un correo con enlace, y ahora no puede: revisa Configuración › Correo."
+      "settingNeedsEmail": "Hace falta que pueda salir un correo con enlace: configura primero SMTP y LIBREFOLIO_PUBLIC_URL (Configuración › Administración › Correo).",
+      "settingUnavailable": "La verificación del correo necesita que pueda salir un correo con enlace, y ahora no puede: revisa Configuración › Administración › Correo."
     },
     "sendLink": {
       "button": "Enviar por correo",

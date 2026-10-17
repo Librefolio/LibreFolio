@@ -1,5 +1,5 @@
 /**
- * Gallery, Settings › Email (`settings/email`): the administrators' Email tab on an instance whose email works.
+ * Gallery, Settings › Administration › Email (`settings/email`): the administrators' Email tab on an instance whose email works.
  *
  * The gallery's lane runs without an SMTP server, so its own `GET /api/v1/email/status` answers `off`. The shot shows
  * the tab as an administrator sees it where email is set up: ready, 47 of 50 emails left this hour, every configuration
