@@ -364,6 +364,35 @@ def fixed_period_changes(values: Mapping[date, Decimal | None], as_of: date, per
     return tuple(changes)
 
 
+@dataclass(frozen=True)
+class RangeChange:
+    """The change of a price or rate over a whole range, from its reference to its anchor (X-R59).
+
+    The caller values the two ends: the anchor is the value on the range's last day, the reference the value on its
+    first day (backward-filled), or the first value inside the range when there is none on or before it — the first and
+    last points of the series the page draws. ``change_abs`` is ``anchor − reference`` and ``change_ratio``
+    ``anchor / reference − 1``; the inverse fields are the same for the inverted quote (an FX pair read the other way
+    round): ``1/anchor − 1/reference`` and ``reference / anchor − 1``. All None when either value is missing or ≤ 0.
+    """
+
+    change_abs: Decimal | None
+    change_ratio: Decimal | None
+    inverse_change_abs: Decimal | None
+    inverse_change_ratio: Decimal | None
+
+
+def range_change(reference: Decimal | None, anchor: Decimal | None) -> RangeChange:
+    """The whole-range change from ``reference`` to ``anchor`` (see :class:`RangeChange`); unrounded Decimals."""
+    if reference is None or anchor is None or reference <= 0 or anchor <= 0:
+        return RangeChange(change_abs=None, change_ratio=None, inverse_change_abs=None, inverse_change_ratio=None)
+    return RangeChange(
+        change_abs=anchor - reference,
+        change_ratio=price_return(reference, anchor),
+        inverse_change_abs=1 / anchor - 1 / reference,
+        inverse_change_ratio=price_return(anchor, reference),
+    )
+
+
 def required_recovery_return(drawdown: float) -> float | None:
     """The gain that brings a value back to its peak after a peak-relative drawdown: ``-d / (1 + d)``.
 

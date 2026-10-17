@@ -35,20 +35,32 @@ reference read on the wrong day changes the result.
 Red by absence on HEAD (1c37ad0f0): ``returns.py`` there has none of the new names, so the import below fails and the
 file errors at collection with ImportError.
 
+X-R59 (rule 10, developer decision N80) adds ``TestRangeChange`` at the end: the whole-range Δ of the Assets cards and
+the FX Δ Abs / Δ % — today ``computeDerivedPriceState`` (``assetPriceDerived.ts``) and ``displayFxDelta``
+(``fxStoreRegistry.ts``), floats in the browser — get the house function
+``range_change(reference, anchor) -> RangeChange(change_abs, change_ratio, inverse_change_abs, inverse_change_ratio)``.
+It is looked up on the module when a test calls it, so the rest of this file still collects and runs on HEAD a275ec8af,
+where those tests are red with AttributeError.
+
 Pure: no database, no server, no network.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
+
+from backend.app.services.financial_math import returns as returns_module
 from backend.app.services.financial_math.returns import (
     FIXED_PERIODS,
     FixedPeriodChange,
     fixed_period_changes,
     fixed_period_dates,
+    price_return,
 )
 
 D = Decimal
@@ -538,3 +550,124 @@ def test_high_precision_pair_is_exact_decimal() -> None:
     assert change.change_ratio == D("0.013711709598196718737703116")
     assert change.inverse_change_ratio == D("-0.0135262417000506061392250849")
     assert change.change_ratio != Decimal(float(anchor) / float(reference) - 1)
+
+
+# --- X-R59: the whole-range change (rule 10, decision N80) ----------------------------------------------------------
+
+#: The fields of ``RangeChange``, the brief's contract.
+RANGE_CHANGE_FIELDS = {"change_abs", "change_ratio", "inverse_change_abs", "inverse_change_ratio"}
+
+#: Pairs ``(reference, anchor)`` the house refuses to price: a missing value, a value at or below zero, on either side.
+UNUSABLE_PAIRS = [
+    pytest.param(None, D("100"), id="no-reference"),
+    pytest.param(D("100"), None, id="no-anchor"),
+    pytest.param(None, None, id="neither"),
+    pytest.param(D("0"), D("100"), id="zero-reference"),
+    pytest.param(D("100"), D("0"), id="zero-anchor"),
+    pytest.param(D("0"), D("0"), id="both-zero"),
+    pytest.param(D("-5"), D("100"), id="negative-reference"),
+    pytest.param(D("100"), D("-5"), id="negative-anchor"),
+    pytest.param(D("-5"), D("-4"), id="both-negative"),
+]
+
+
+def _range_change(reference: Decimal | None, anchor: Decimal | None):
+    """``returns.range_change(reference, anchor)``, looked up when called: it does not exist on HEAD a275ec8af (an
+    AttributeError there), and an import at the top would take the whole file down with it."""
+    return returns_module.range_change(reference, anchor)
+
+
+def _range_change_type() -> type:
+    return returns_module.RangeChange
+
+
+class TestRangeChange:
+    """``range_change(reference, anchor)``: the change from the range's first value to its last, in both orientations.
+
+    ``change_abs = anchor − reference``, ``change_ratio = anchor / reference − 1`` (``price_return``),
+    ``inverse_change_abs = 1/anchor − 1/reference`` (the pair read the other way round, ``displayFxDelta`` inverted),
+    ``inverse_change_ratio = reference / anchor − 1``: Decimal, unrounded, never ×100. Only when both values exist and
+    are > 0; otherwise all four None. RED on HEAD a275ec8af: AttributeError, the function does not exist.
+    """
+
+    def test_rise(self) -> None:
+        result = _range_change(D("100"), D("125"))
+
+        assert result.change_abs == D("25")
+        assert result.change_ratio == D("0.25") == price_return(D("100"), D("125"))
+        assert result.inverse_change_abs == D("-0.002"), "1/125 − 1/100"
+        assert result.inverse_change_ratio == D("-0.2"), "100/125 − 1"
+
+    def test_fall(self) -> None:
+        result = _range_change(D("160"), D("125"))
+
+        assert result.change_abs == D("-35")
+        assert result.change_ratio == D("-0.21875") == price_return(D("160"), D("125"))
+        assert result.inverse_change_abs == D("0.00175"), "1/125 − 1/160: the inverted quote rose"
+        assert result.inverse_change_ratio == D("0.28"), "160/125 − 1"
+
+    @pytest.mark.parametrize("value", [D("3.21"), D("100"), D("0.000123")], ids=str)
+    def test_equal_values_are_exactly_zero_both_ways(self, value: Decimal) -> None:
+        """No move over the range: all four exactly 0 — not None, not −0."""
+        result = _range_change(value, value)
+
+        for field in sorted(RANGE_CHANGE_FIELDS):
+            change = getattr(result, field)
+            assert isinstance(change, Decimal) and change == 0, f"{field}: {change!r}"
+            assert not change.is_signed(), f"{field} is −0"
+
+    def test_inverse_fields_are_the_inverted_quote_not_the_sign_flipped(self) -> None:
+        """On values whose quotients do not terminate: each field is its own formula; the inverse ratio is not the
+        direct one negated, and ``(1 + change) × (1 + inverse)`` is 1 within the context's precision."""
+        reference, anchor = D("1.0873"), D("1.0912")
+
+        result = _range_change(reference, anchor)
+
+        assert result.change_abs == anchor - reference == D("0.0039")
+        assert result.change_ratio == anchor / reference - 1
+        assert result.inverse_change_abs == 1 / anchor - 1 / reference
+        assert result.inverse_change_ratio == reference / anchor - 1
+        assert result.inverse_change_ratio != -result.change_ratio
+        assert result.inverse_change_abs != -result.change_abs
+        assert abs((1 + result.change_ratio) * (1 + result.inverse_change_ratio) - 1) <= D("1e-25")
+
+    @pytest.mark.parametrize(("reference", "anchor"), UNUSABLE_PAIRS)
+    def test_unusable_values_give_all_none(self, reference: Decimal | None, anchor: Decimal | None) -> None:
+        result = _range_change(reference, anchor)
+
+        assert {field: getattr(result, field) for field in RANGE_CHANGE_FIELDS} == dict.fromkeys(RANGE_CHANGE_FIELDS)
+
+    def test_decimal_exactness_no_float_in_between(self) -> None:
+        """Reference 3, anchor 3.21: the ratio is exactly 0.07 — a float would give 0.07000000000000006."""
+        reference, anchor = D("3"), D("3.21")
+        assert Decimal(3.21 / 3 - 1) != D("0.07"), "precondition: the float route is not exact here"
+
+        result = _range_change(reference, anchor)
+
+        assert all(isinstance(getattr(result, field), Decimal) for field in RANGE_CHANGE_FIELDS), result
+        assert result.change_abs == D("0.21")
+        assert result.change_ratio == D("0.07")
+        assert result.inverse_change_ratio == reference / anchor - 1
+        assert result.inverse_change_abs == 1 / anchor - 1 / reference
+        assert result.inverse_change_ratio != Decimal(3 / 3.21 - 1)
+
+    @pytest.mark.parametrize(
+        ("reference", "anchor"),
+        [(D("100"), D("125")), (D("160"), D("125")), (D("1.0873"), D("1.0912")), (D("99.99993"), D("101.3711")), (D("3"), D("3")), *UNUSABLE_PAIRS],
+    )
+    def test_ratios_are_the_fixed_periods_ones(self, reference: Decimal | None, anchor: Decimal | None) -> None:
+        """One home: the range's ratios are what ``fixed_period_changes`` gives a period with the same two values."""
+        (period,) = fixed_period_changes({TUESDAY: anchor, _days_before(TUESDAY, 1): reference}, TUESDAY, (("1D", 1),))
+
+        result = _range_change(reference, anchor)
+
+        assert (result.change_ratio, result.inverse_change_ratio) == (period.change_ratio, period.inverse_change_ratio)
+
+    def test_result_is_a_frozen_dataclass_of_four_fields(self) -> None:
+        range_change_type = _range_change_type()
+        result = _range_change(D("100"), D("125"))
+
+        assert isinstance(result, range_change_type) and dataclasses.is_dataclass(result)
+        assert {field.name for field in dataclasses.fields(range_change_type)} == RANGE_CHANGE_FIELDS
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            result.change_abs = D("0")
