@@ -5366,6 +5366,57 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-38 — i file dei segreti letti da root: regolari, mai attraverso un link nella cartella dei dati (2026-10-17, 13:36-13:58) — ✅ 🧊 FROZEN (checkpoint delle 13:58)
+
+> **B-36/B-37 entrati** (coordinatore, 13:39): `2eff9e623` più il merge `05d1dc76a` → dev `d1976bca8`. Un conflitto
+> nella desc del runner `post-migration` (Z-28), risolto dal coordinatore tenendo entrambe le frasi. HEAD portata in
+> avanti.
+>
+> - **⚠️ Fuori pista — Kubernetes (13:36)**: rifiutare ogni link con `O_NOFOLLOW`, come concordato, romperebbe
+>   Kubernetes, che monta ogni segreto attraverso un symlink (`/etc/secret/pw` → `..data/pw`). Proposta di rifinitura,
+>   **approvata dal coordinatore (13:40, opzione a)**:
+>   - ovunque, un file regolare aperto con `O_NONBLOCK`: una FIFO non blocca più il comando, e una cartella o un
+>     dispositivo non vengono letti;
+>   - i link sono rifiutati solo da root e solo dentro la cartella dei dati;
+>   - la guida sposta la chiave fuori dalla cartella dei dati;
+>   - la corsa residua va nella riga H-47 di H.
+> - **Altri due punti miei** (13:42):
+>   - il controllo percorre **ogni componente**, dalla cartella dei dati in giù: un `backups` sostituito da un link verso
+>     `/root` sarebbe sfuggito controllando solo l'ultimo componente;
+>   - la guida usa **`/root`** del container, non `/tmp`: in `/tmp` l'utente del server può creare il nome per primo
+>     come link, e `docker compose cp` ci scriverebbe attraverso.
+> - **Contratto**: `b38-contract.md`. Il codice: `_secret_path(args, path, label)` prima di ogni `read_secret_file`
+>   della CLI, con `_data_dir_setting` (come `_decrypt_as_owner`) e `_link_inside`. Le eccezioni sono
+>   `SecretFileError`, quindi i ❌ restano quelli di oggi (`password_unreadable`, `instance_key_unreadable`).
+> - **Codice pronto** in `b38-wip/apply_b38.py`: 4 operazioni, ruff e black puliti. Prova a mano sulla copia emessa:
+>   - una FIFO e una cartella sono rifiutate subito;
+>   - un file normale passa, e uno mancante è lasciato a `read_secret_file`;
+>   - il link di una cartella madre dentro i dati viene preso, fuori no.
+> - **Rossi in scrittura** (TA-E, sezione (n) di `test_backup_cli_secure.py`); doc (docs-writer): la guida, `cli_tools`
+>   e `security.md`.
+> - ✅ **Rossi scritti** (TA-E, 13:42-13:50): sezione (n), 3 funzioni e 40 casi sui 4 comandi che leggono un segreto
+>   (`decrypt` compreso).
+>   - Una FIFO o una cartella, da root finto e non: 16 casi rossi. Un watchdog di 10 s apre la FIFO, così il run non
+>     resta appeso.
+>   - Un link dentro i dati, su `backups/key` o su `backups/` stesso: 8 rossi. Il bersaglio non viene mai aperto.
+>   - 16 guardie.
+>   - Due vincoli fissati: il controllo dei link viene **prima** di ogni apertura, e lavora sul percorso **come è
+>     dato**, non risolto.
+>   - Trovato da TA-E: oggi `create` e `inspect` rifiutano un `backups/` che è un link solo **dopo** che root ha già
+>     letto il segreto attraverso quel link.
+> - ✅ **Doc scritta** (docs-writer, 13:44):
+>   - `backup_restore.en.md` l.308 e l.320-328: la chiave passa da `/root` del container;
+>   - `cli_tools.en.md` l.363-364, 378, 564, 569: la regola detta una volta sola (debito di traduzione);
+>   - `security.md` l.856-870: il punto «Secret files read as root», con il residuo H-47.
+>   - Da passare ad H: «The Instance Key» in `security.md` l.706-708 dice ancora che B-18 è nel backlog.
+> - ✅ **Rosso** (corsia 6187, 13:50-13:52): `utils backup-cli-secure` **24 falliti** e 82 passati, come previsto.
+> - ✅ **Patch applicata** (13:52:44): 4 operazioni in `scripts/backup_cli.py`; ruff e black puliti.
+> - ✅ **Verdi** (13:52-13:54): `backup-cli-secure` **106** (37 s: nessuna attesa su una FIFO), `backup-cli-restore`
+>   107, `backup-cli` 102.
+> - ✅ **Doc** (13:55-13:57): `mkdocs build` strict (54 s), `check-links`, gate 63. Controlli statici puliti, porta
+>   6187 libera.
+> - **Backlog**: B-38 ✅. Il residuo (due aperture) è nella riga H-47 di H.
+
 ### B-36 + B-37 — nomi quotati e `trusted_schema` spento anche nelle correzioni e nell'upgrade (2026-10-17, 13:09-13:33) — ✅ 🧊 FROZEN (checkpoint delle 13:33)
 
 > **B-39 entrato** (coordinatore, 13:09): `c8fc32bfa` → dev `25d00f192`, CHANGELOG 🔒 `bbfb76e38`; HEAD portata in
