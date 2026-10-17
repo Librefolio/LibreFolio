@@ -37,10 +37,11 @@ from backend.app.schemas.transactions.batch import TXBatchResponse
 from backend.app.schemas.transactions.promotion import TXTransferPromoteRequest
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXUpdateItem
 from backend.app.schemas.transactions.type_metadata import PairFieldConstraint
+from backend.app.services.transactions import balances as balances_module
 from backend.app.services.transactions.transaction_batch_stages import _parse_lenient
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
-from backend.test_scripts.test_services._tx_test_helpers import create_bulk, delete_bulk, update_bulk
+from backend.test_scripts.test_services._tx_test_helpers import create_bulk, delete_bulk, expanded_raw_decimals, raw_decimals, spy_on_execute_batch, update_bulk
 
 # ============================================================================
 # PYTEST FIXTURES
@@ -797,6 +798,130 @@ class TestCreateBulkBalanceValidation:
 
         assert response.success_count == 3
         assert not response.errors
+
+
+# ============================================================================
+# 3.3b R13-SEC7-3 — THE BALANCE REPLAY VISITS THE DAYS THAT MATTER
+# ============================================================================
+#
+# ``_validate_broker_balances`` walks every calendar day, from ``from_date`` (or the broker's first row) to its last
+# row: one row dated 0001-01-01 makes every batch touching that broker walk ~740 000 days. The cure loops only over the
+# days that hold a row, plus ``from_date``: equivalent, since a balance changes only on those days, and the first
+# negative day is always one of them — or ``from_date``, with the balances carried into it.
+#
+# Guards, green today and after: the refusal's date across a gap of three years, for cash and for a quantity, and on a
+# ``from_date`` that holds no row (legacy data already negative before it). Red: the number of day steps the replay
+# takes for two rows ten years apart, counted through the ``timedelta`` the module's loop builds each day (patched on
+# the module, no production hook), next to a count of the replay's calls so that a count of zero means something.
+
+REPLAY_FIRST_DAY = date(2020, 1, 15)
+REPLAY_THREE_YEARS_LATER = date(2023, 1, 16)
+#: A handful: the cure visits two days for two rows; a step per visited day, or a few more, stays well below this.
+REPLAY_MAX_DAY_STEPS = 10
+
+
+async def _replay_batch(session, *, creates: list[dict] | None = None, updates: list[dict] | None = None) -> TXBatchResponse:
+    """The batch as ``/commit`` runs it, without a user (no access check); the session fixture rolls everything back."""
+    return await TransactionService(session).execute_batch(creates_raw=creates or [], updates_raw=updates or [], deletes=[], commit=True)
+
+
+def _cash_row(broker_id: int, tx_type: str, day: date, amount: str) -> dict:
+    """A raw cash create, as the app sends it."""
+    return {"broker_id": broker_id, "type": tx_type, "date": day.isoformat(), "cash": {"code": "EUR", "amount": amount}}
+
+
+async def _insert_legacy_cash(session, broker_id: int, tx_type: TransactionType, day: date, amount: str) -> int:
+    """A cash row written straight into the session, without the batch and its replay: legacy data, which may already
+    hold a negative balance. Its id."""
+    row = Transaction(broker_id=broker_id, asset_id=None, type=tx_type, date=day, quantity=Decimal("0"), amount=Decimal(amount), currency="EUR", created_at=utcnow(), updated_at=utcnow())
+    session.add(row)
+    await session.flush()
+    return row.id
+
+
+def _render_issues(response: TXBatchResponse) -> str:
+    """The issues, for a failure message."""
+    return "; ".join(f"{issue.operation}[{issue.index}] code={issue.code} params={issue.params} error={issue.error!r}" for issue in response.issues) or "none"
+
+
+class TestBalanceReplayDays:
+    """R13-SEC7-3: the replay refuses on the right day, and visits only the days that matter."""
+
+    @pytest.mark.asyncio
+    async def test_guard_a_cash_shortfall_three_years_after_the_deposit_is_refused_on_the_withdrawals_date(self, session, test_broker):
+        """Guard: a broker without overdraft, a DEPOSIT of 100 EUR, then a WITHDRAWAL of 150 EUR three years later: the
+        only issue is ``balanceCashNegative`` on the WITHDRAWAL (create 1), ``params.date`` its date."""
+        broker_id = test_broker.id
+
+        response = await _replay_batch(session, creates=[_cash_row(broker_id, "DEPOSIT", REPLAY_FIRST_DAY, "100"), _cash_row(broker_id, "WITHDRAWAL", REPLAY_THREE_YEARS_LATER, "-150")])
+
+        refusals = [(issue.operation, issue.index, issue.code, (issue.params or {}).get("date"), (issue.params or {}).get("currency"), (issue.params or {}).get("brokerId")) for issue in response.issues]
+        expected = [("create", 1, "balanceCashNegative", REPLAY_THREE_YEARS_LATER.isoformat(), "EUR", broker_id)]
+        assert refusals == expected and response.committed is False, f"R13-SEC7-3: the cash goes negative on the WITHDRAWAL's day, {REPLAY_THREE_YEARS_LATER}: expected {expected}; the batch answered committed={response.committed}, issues: {_render_issues(response)}"
+
+    @pytest.mark.asyncio
+    async def test_guard_a_quantity_shortfall_three_years_later_is_refused_on_its_date(self, session, test_broker, test_asset):
+        """Guard: a broker without shorting, an ADJUSTMENT +5, then an ADJUSTMENT -8 three years later: the only issue
+        is ``balanceAssetNegative`` on the second (create 1), ``params.date`` its date."""
+        broker_id, asset_id = test_broker.id, test_asset.id
+        creates = [
+            {"broker_id": broker_id, "asset_id": asset_id, "type": "ADJUSTMENT", "date": REPLAY_FIRST_DAY.isoformat(), "quantity": "5", "cost_basis_override": {"code": "EUR", "amount": "10"}},
+            {"broker_id": broker_id, "asset_id": asset_id, "type": "ADJUSTMENT", "date": REPLAY_THREE_YEARS_LATER.isoformat(), "quantity": "-8"},
+        ]
+
+        response = await _replay_batch(session, creates=creates)
+
+        refusals = [(issue.operation, issue.index, issue.code, (issue.params or {}).get("date"), (issue.params or {}).get("assetId"), (issue.params or {}).get("brokerId")) for issue in response.issues]
+        expected = [("create", 1, "balanceAssetNegative", REPLAY_THREE_YEARS_LATER.isoformat(), asset_id, broker_id)]
+        assert refusals == expected and response.committed is False, f"R13-SEC7-3: the quantity goes negative on the second ADJUSTMENT's day, {REPLAY_THREE_YEARS_LATER}: expected {expected}; the batch answered committed={response.committed}, issues: {_render_issues(response)}"
+
+    @pytest.mark.asyncio
+    async def test_guard_a_negative_balance_carried_into_from_date_is_refused_on_from_date(self, session, test_broker):
+        """Guard: legacy rows of the test's broker (no overdraft), written without the batch — a WITHDRAWAL of 100 EUR on
+        2020-01-15 with nothing before it, a DEPOSIT of 10 EUR on 2021-06-01. The batch moves the DEPOSIT to 2022-03-01,
+        so it replays from 2021-06-01 (``from_date``, the DEPOSIT's old date), which now holds no row, carrying in
+        -100 EUR: the refusal is ``balanceCashNegative`` dated ``from_date`` — not 2022-03-01, the first day holding a
+        row, where a replay that skipped ``from_date`` would place it."""
+        broker_id = test_broker.id
+        from_date, moved_to = date(2021, 6, 1), date(2022, 3, 1)
+        await _insert_legacy_cash(session, broker_id, TransactionType.WITHDRAWAL, REPLAY_FIRST_DAY, "-100")
+        deposit_id = await _insert_legacy_cash(session, broker_id, TransactionType.DEPOSIT, from_date, "10")
+
+        response = await _replay_batch(session, updates=[{"id": deposit_id, "date": moved_to.isoformat()}])
+
+        refusals = [(issue.code, (issue.params or {}).get("date"), (issue.params or {}).get("currency")) for issue in response.issues]
+        expected = [("balanceCashNegative", from_date.isoformat(), "EUR")]
+        assert refusals == expected and response.committed is False, f"R13-SEC7-3: the balance carried into from_date ({from_date}) is already negative, so the refusal is dated from_date: expected {expected}; the batch answered committed={response.committed}, issues: {_render_issues(response)}"
+
+    @pytest.mark.asyncio
+    async def test_the_replay_of_two_rows_ten_years_apart_steps_through_a_handful_of_days(self, session, test_broker, monkeypatch):
+        """Red today: the replay steps through every calendar day between the two rows, 3 653 of them.
+
+        Contract: a DEPOSIT of 100 EUR on 2014-01-01 and a WITHDRAWAL of 40 EUR on 2024-01-01 commit; the replay runs
+        once, for the broker, and builds at most ``REPLAY_MAX_DAY_STEPS`` day steps (the days with a row, plus
+        ``from_date``: here two).
+        """
+        broker_id = test_broker.id
+        replayed: list[int] = []
+        day_steps: list[tuple] = []
+        replay = TransactionService._validate_broker_balances
+
+        async def counting_replay(self, replayed_broker_id, *args, **kwargs):
+            replayed.append(replayed_broker_id)
+            return await replay(self, replayed_broker_id, *args, **kwargs)
+
+        def counting_timedelta(*args, **kwargs):
+            day_steps.append((args, tuple(sorted(kwargs.items()))))
+            return timedelta(*args, **kwargs)
+
+        monkeypatch.setattr(TransactionService, "_validate_broker_balances", counting_replay)
+        monkeypatch.setattr(balances_module, "timedelta", counting_timedelta, raising=False)
+
+        response = await _replay_batch(session, creates=[_cash_row(broker_id, "DEPOSIT", date(2014, 1, 1), "100"), _cash_row(broker_id, "WITHDRAWAL", date(2024, 1, 1), "-40")])
+
+        assert response.committed is True and response.issues == [], f"scaffold: two valid cash rows were refused: {_render_issues(response)}"
+        assert replayed == [broker_id], f"scaffold: the replay must run once, for broker {broker_id}; it ran for {replayed}"
+        assert len(day_steps) <= REPLAY_MAX_DAY_STEPS, f"R13-SEC7-3: two rows ten years apart, and the replay built {len(day_steps)} day steps: it walks every calendar day; it must visit the days holding a row, plus from_date (at most {REPLAY_MAX_DAY_STEPS})"
 
 
 # ============================================================================
@@ -2002,6 +2127,67 @@ class TestQueryFiltersH3:
 # BLOCK H.4 — TRANSFER PROMOTION (service-level)
 # ============================================================================
 
+#: R13-SEC7-3: a value 5 MB long once ``format(v, "f")`` expands it — fast to fail on, never enough to exhaust memory.
+HUGE_PROMOTE_VALUE = Decimal("1E+5000000")
+
+
+async def _seed_units(session, broker_id: int, asset_id: int) -> None:
+    """50 units of the asset on the giving broker, two days back, so the TRANSFER's giving leg does not go short."""
+    seeded = await create_bulk(
+        TransactionService(session),
+        [TXCreateItem(broker_id=broker_id, asset_id=asset_id, type=TransactionType.ADJUSTMENT, date=date.today() - timedelta(days=2), quantity=Decimal("50"), cost_basis_override=Currency(code="EUR", amount=Decimal("50")))],
+    )
+    assert seeded.rolled_back is False, f"scaffold: the 50 units were not seeded: {seeded.errors}"
+
+
+async def _rows_state(session, ids: list[int]) -> dict[int, tuple]:
+    """What a promotion changes on the rows ``ids``, read from the database by column (never through ORM objects, which a
+    rolled-back savepoint expires): type, broker, amount, currency, partner."""
+    statement = select(Transaction.id, Transaction.type, Transaction.broker_id, Transaction.amount, Transaction.currency, Transaction.related_transaction_id).where(Transaction.id.in_(ids))
+    return {row.id: (row.type, row.broker_id, row.amount, row.currency, row.related_transaction_id) for row in await session.execute(statement)}
+
+
+async def _promote_as_the_route(session, request: TXTransferPromoteRequest, story: str):
+    """``promote_transfer`` as ``POST /transactions/transfers/promote`` runs it: the route commits when the service answers
+    ``rolled_back=False`` and rolls back otherwise. A savepoint stands in for the request's transaction (the rows written
+    before it survive its rollback; the session fixture rolls everything back). An exception fails the test, naming
+    ``story``: the route would answer 500."""
+    savepoint = await session.begin_nested()
+    try:
+        response = await TransactionService(session).promote_transfer(request)
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        await savepoint.rollback()
+        pytest.fail(f"R13-SEC7-3: {story}: promote_transfer raised {exc!r}, so the route answers 500")
+    if response.rolled_back:
+        await savepoint.rollback()
+    else:
+        await savepoint.commit()
+    return response
+
+
+def _assert_short_raw_decimals(calls, expected: dict) -> None:
+    """``execute_batch`` was called once, with every raw decimal in its short form and equal, by value, to ``expected``
+    (``{(create index, path): Decimal}``). An expanded value is reported by its length and head, never printed."""
+    assert len(calls) == 1, f"R13-SEC7-3: the promotion must hand its two legs to execute_batch once; it called it {len(calls)} times"
+    expanded = expanded_raw_decimals(calls[0])
+    assert expanded == [], f"R13-SEC7-3: the promotion's raw rows reached execute_batch expanded (index, path, length, head): {expanded}; they must carry the short form, str(v)"
+    sent = {(index, path): Decimal(raw) for index, path, raw in raw_decimals(calls[0].creates_raw)}
+    assert sent == expected, f"R13-SEC7-3: the raw rows must carry the request's values, the sign from copy_abs()/copy_negate(): expected {expected}, the batch received {sent}"
+
+
+def _issue_tuples(batch: TXBatchResponse) -> list[tuple]:
+    """The batch's issues as ``(operation, index, ref_id, code, field, params)``."""
+    return [(issue.operation, issue.index, issue.ref_id, issue.code, issue.field, issue.params) for issue in batch.issues]
+
+
+async def _assert_promotion_left_nothing(session, response, before: dict, broker_ids: list[int]) -> None:
+    """The promotion answered rolled back, the cash pair reads back as it was, and neither broker holds a TRANSFER."""
+    assert response.rolled_back is True, f"R13-SEC7-3: the batch refused the promotion, yet it answered rolled_back={response.rolled_back}"
+    after = await _rows_state(session, list(before))
+    assert after == before, f"R13-SEC7-3: the promotion was refused, yet the cash pair changed: before {before}, after {after}"
+    transfers = (await session.execute(select(Transaction.id).where(Transaction.broker_id.in_(broker_ids), Transaction.type == TransactionType.TRANSFER))).scalars().all()
+    assert transfers == [], f"R13-SEC7-3: the promotion was refused, yet the brokers hold the TRANSFER rows {transfers}"
+
 
 class TestTransferPromotion:
     """H.4 — promote DEPOSIT/WITHDRAWAL pair to TRANSFER or FX_CONVERSION."""
@@ -2200,6 +2386,77 @@ class TestTransferPromotion:
             )
         )
         assert promote_resp.rolled_back is True
+
+    # ------------------------------------------------------------------
+    # R13-SEC7-3 — the promotion's raw rows carry the short form
+    # ------------------------------------------------------------------
+    #
+    # E's R13-SEC7, finding 3. ``promote_transfer`` builds its two raw rows with ``format(-abs(qty), "f")``,
+    # ``format(abs(qty), "f")`` and ``format(cost_basis_override.amount, "f")``: ``abs()`` of 1E+1000000 raises
+    # ``decimal.Overflow`` (past the context's Emax: a 500), and below it ``format`` expands the value. The cure's
+    # contract (a): the raw rows hand the batch the short form, ``str(v)``, the sign from ``copy_abs()`` /
+    # ``copy_negate()`` (no context). The request is built with ``model_construct()``: past the boundary bound it can no
+    # longer be built normally, and the service must not expand it even if one got through (defence in depth). The
+    # batch then refuses the promotion — a quantity past its 15 integer digits on each leg (``integerDigitsExceeded``,
+    # the quantity is no Currency), a cost basis at the parse (``value_error``: the Currency's bound) — and the route's
+    # rollback leaves the cash pair as it was.
+
+    @pytest.mark.asyncio
+    async def test_promote_hands_the_batch_a_cost_basis_in_its_short_form(self, session, cash_pair_cross_broker, test_asset, test_broker_overdraft, test_broker_shorting, monkeypatch):
+        """(c) Red today: the receiving leg's raw cost basis is ``format(1E+5000000, "f")``, 5 000 001 characters.
+
+        Contract: no exception; ``execute_batch`` called once, every raw decimal short and equal to what was sent (the
+        legs' quantities -10 and 10, the cost basis 1E+5000000); the batch refuses the receiving leg at its parse,
+        ``value_error`` on ``cost_basis_override.amount``, its error naming the exponent; rolled back, the cash pair as
+        it was, no TRANSFER written.
+        """
+        from_id, to_id = cash_pair_cross_broker
+        broker_ids = [test_broker_overdraft.id, test_broker_shorting.id]
+        await _seed_units(session, test_broker_overdraft.id, test_asset.id)
+        before = await _rows_state(session, [from_id, to_id])
+        calls = spy_on_execute_batch(monkeypatch)
+        request = TXTransferPromoteRequest.model_construct(from_tx_id=from_id, to_tx_id=to_id, new_type=TransactionType.TRANSFER, asset_id=test_asset.id, quantity=Decimal("10"), cost_basis_override=Currency.model_construct(code="EUR", amount=HUGE_PROMOTE_VALUE))
+
+        response = await _promote_as_the_route(session, request, "a TRANSFER promotion at a cost basis of 1E+5000000 EUR")
+
+        _assert_short_raw_decimals(calls, {(0, "quantity"): Decimal("-10"), (1, "quantity"): Decimal("10"), (1, "cost_basis_override.amount"): HUGE_PROMOTE_VALUE})
+        batch = calls[0].response
+        subject = [issue for issue in batch.issues if (issue.operation, issue.index, issue.code, issue.field, issue.params) == ("create", 1, "value_error", "cost_basis_override.amount", None)]
+        assert subject and "exponent" in subject[0].error.lower() and batch.committed is False, f"R13-SEC7-3: the batch must refuse the receiving leg at its parse, value_error on cost_basis_override.amount naming the exponent; it answered committed={batch.committed}, issues {_issue_tuples(batch)}"
+        await _assert_promotion_left_nothing(session, response, before, broker_ids)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "quantity",
+        [
+            pytest.param(Decimal("1E+999999"), id="1E+999999-abs-passes-format-expands-a-million-digits"),
+            pytest.param(Decimal("1E+1000000"), id="d-1E+1000000-abs-overflows"),
+            pytest.param(Decimal("1E+5000000"), id="e-1E+5000000"),
+        ],
+    )
+    async def test_promote_hands_the_batch_a_quantity_in_its_short_form_without_raising(self, session, cash_pair_cross_broker, test_asset, test_broker_overdraft, test_broker_shorting, monkeypatch, quantity):
+        """(d), (e) Red today: ``abs()`` of 1E+1000000 and of 1E+5000000 raises ``decimal.Overflow`` (a 500); 1E+999999,
+        the largest ``abs()`` takes, comes out of ``format`` as a million digits.
+
+        Contract: no exception; ``execute_batch`` called once, the raw quantities short — ``-q`` on the giving leg,
+        ``q`` on the receiving one — and the cost basis 50 EUR; the batch refuses both legs with
+        ``integerDigitsExceeded`` ``{"max": 15}`` on ``quantity`` and nothing else; rolled back, the cash pair as it
+        was, no TRANSFER written.
+        """
+        from_id, to_id = cash_pair_cross_broker
+        broker_ids = [test_broker_overdraft.id, test_broker_shorting.id]
+        await _seed_units(session, test_broker_overdraft.id, test_asset.id)
+        before = await _rows_state(session, [from_id, to_id])
+        calls = spy_on_execute_batch(monkeypatch)
+        request = TXTransferPromoteRequest.model_construct(from_tx_id=from_id, to_tx_id=to_id, new_type=TransactionType.TRANSFER, asset_id=test_asset.id, quantity=quantity, cost_basis_override=Currency(code="EUR", amount=Decimal("50")))
+
+        response = await _promote_as_the_route(session, request, f"a TRANSFER promotion of {quantity} units")
+
+        _assert_short_raw_decimals(calls, {(0, "quantity"): quantity.copy_negate(), (1, "quantity"): quantity, (1, "cost_basis_override.amount"): Decimal("50")})
+        batch = calls[0].response
+        expected = [("create", index, None, "integerDigitsExceeded", "quantity", {"max": 15}) for index in (0, 1)]
+        assert _issue_tuples(batch) == expected and batch.committed is False, f"R13-SEC7-3: the batch must refuse both legs of {quantity} units with {expected}; it answered committed={batch.committed}, issues {_issue_tuples(batch)}"
+        await _assert_promotion_left_nothing(session, response, before, broker_ids)
 
 
 # ============================================================================

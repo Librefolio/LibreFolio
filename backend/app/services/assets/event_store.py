@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Optional
 
 import structlog
+from pydantic import ValidationError
 from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -96,12 +97,18 @@ class EventStoreOperations:
     def _storable_events(asset_id: int, events: list[dict | FAAssetEventPoint]) -> list[FAAssetEventPoint]:
         """The events of ``events`` whose value ``AssetEvent.value`` can keep, parsed; the others are logged (W-B58).
         A SPLIT whose ratio is not a number above 0 is dropped and logged too (X-R47): linked to a transaction, it made
-        the portfolio engine raise."""
+        the portfolio engine raise. A raw event the schema itself refuses — a value that is no number, or whose exponent
+        is past ±100 (``schemas/common.check_decimal_exponent``, R13-SEC7-3) — is dropped the same way: parsed in one
+        go, it made the whole refresh lose its events. Its value is never logged: it can be of any length."""
         storable: list[FAAssetEventPoint] = []
         dropped: list[str] = []
         invalid_splits: list[str] = []
         for raw in events or []:
-            evt = raw if isinstance(raw, FAAssetEventPoint) else FAAssetEventPoint(**raw)
+            try:
+                evt = raw if isinstance(raw, FAAssetEventPoint) else FAAssetEventPoint(**raw)
+            except ValidationError:
+                dropped.append(f"{str(raw.get('date'))[:10]} {str(raw.get('type'))[:24]}=(refused by the schema)")
+                continue
             if integer_digits_issue(evt.value.amount, AssetEvent, "value") is not None:
                 dropped.append(f"{evt.date.isoformat()} {evt.type!s}={evt.value.amount}")
             elif is_split_event_type(evt.type) and not is_valid_split_ratio(evt.value.amount):

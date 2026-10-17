@@ -45,7 +45,11 @@ field: currencies appear only in the initial balance rows.
 On the server, `BrokerService.create_bulk()` turns each remaining balance row into a `DEPOSIT`
 dated **today** (`today_date()`, not `opened_at`), written through
 `execute_batch(creates_raw=…)`; a deposit refused by validation adds its issue to the broker's
-create errors.
+create errors. The raw row carries the amount in its short form, `str(v)`, never expanded with
+`format(v, "f")`: the batch refuses a value past its column's limits (R13-SEC7-3). An amount
+whose exponent is outside ±100 never gets that far: the `Currency` of `initial_balances` refuses
+it, and `POST /brokers` answers 422 on `initial_balances.<n>.amount` and creates nothing (see
+[Decimal Columns](../../../../architecture/database/index.md#decimal-columns)).
 
 #### Duplicate names {: #duplicate-broker-names }
 

@@ -19,7 +19,8 @@ from backend.app.services.transactions.transaction_batch_context import BalanceV
 
 
 class TransactionBalancesMixin:
-    """Balances: the day-by-day replay that refuses a negative cash or quantity, and the balances at a date.
+    """Balances: the replay, transaction day by transaction day, that refuses a negative cash or quantity, and the
+    balances at a date.
 
     Mixed into ``TransactionService`` (``transaction_service.py``), which provides ``session``.
     """
@@ -30,13 +31,15 @@ class TransactionBalancesMixin:
     # BALANCE VALIDATION
     # =========================================================================
 
-    async def _validate_broker_balances(  # noqa: C901 — day-by-day balance replay, per-tx accumulate + raises
+    async def _validate_broker_balances(  # noqa: C901 — balance replay over the transaction days, per-tx accumulate + raises
         self,
         broker_id: int,
         from_date: Optional[date_type] = None,
         batch_tx_ids: Optional[Dict[int, tuple]] = None,
     ) -> None:
         """Validate cash and asset balances for a broker from a given date.
+
+        Walks the days with transactions, and ``from_date``: the balances change on no other day (R13-SEC7-3).
 
         Args:
             batch_tx_ids: mapping of tx.id → (operation, batch_index) for batch transactions.
@@ -69,10 +72,13 @@ class TransactionBalancesMixin:
         for tx in txs:
             txs_by_date[tx.date].append(tx)
 
-        current_date = min(txs_by_date.keys()) if from_date is None else from_date
-        end_date = max(txs_by_date.keys())
+        # R13-SEC7-3: the days with transactions, and from_date (the balances before it may already be negative), not
+        # every day of the calendar: between two of them no balance changes, so the first negative day is one of them.
+        # Day by day, on the event loop: a row dated 9999-12-31 made every later replay of the broker walk ~2.9 million
+        # days (then fail on the date's overflow), and a replay starting at a row of the year 1 ~740 000.
+        days = sorted(set(txs_by_date) | ({from_date} if from_date is not None else set()))
 
-        while current_date <= end_date:
+        for current_date in days:
             # Track last batch tx that reduced each balance on this day
             last_cash_reducer: Dict[str, tuple] = {}
             last_asset_reducer: Dict[int, tuple] = {}
@@ -120,8 +126,6 @@ class TransactionBalancesMixin:
                             batch_index=b_idx,
                             batch_operation=b_op,
                         )
-
-            current_date += timedelta(days=1)
 
     async def _get_balances_before_date(self, broker_id: int, before_date: date_type, exclude_tx_ids: Collection[int] = ()) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
         """Get cash and asset balances at end of day before the given date.

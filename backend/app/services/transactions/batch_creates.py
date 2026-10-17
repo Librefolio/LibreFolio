@@ -5,17 +5,17 @@ between the legs of the pairs created together.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
 from backend.app.db.models import Asset, AssetType, Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions.batch import TXBatchResultItem, TXPromoteBatchItem, TXValidationCode, TXValidationIssue
+from backend.app.schemas.transactions.batch import TXBatchResultItem, TXPromoteBatchItem, TXPromoteResolvedFields, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.transactions import tags_to_csv, validate_transaction_business_rules
 from backend.app.schemas.transactions.type_metadata import cost_basis_allowed
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
-from backend.app.utils.datetime_utils import parse_ISO_date, utcnow
+from backend.app.utils.datetime_utils import utcnow
 
 if TYPE_CHECKING:
     from backend.app.services.transactions.transaction_service import TransactionService
@@ -256,44 +256,40 @@ def _resolve_promote_pair(
 def _apply_promote_resolved_fields(
     transaction_a: Transaction,
     transaction_b: Transaction,
-    resolved_fields: dict[str, Any] | None,
+    resolved_fields: TXPromoteResolvedFields | None,
 ) -> None:
-    """Apply the user-resolved fields symmetrically where required."""
-    if not resolved_fields:
+    """Apply the user-resolved fields symmetrically where required: each field the request names
+    (``model_fields_set``), an explicit null included where the field takes one (H-41: typed at the batch's parse)."""
+    if resolved_fields is None:
         return
-    if "description" in resolved_fields:
-        description = resolved_fields["description"]
+    chosen = resolved_fields.model_fields_set
+    if "description" in chosen:
+        description = resolved_fields.description
         transaction_a.description = description
         transaction_b.description = description
-    if "cost_basis_override" in resolved_fields:
+    if "cost_basis_override" in chosen:
         _apply_promote_cost_basis(
             transaction_a,
             transaction_b,
-            resolved_fields["cost_basis_override"],
+            resolved_fields.cost_basis_override,
         )
-    if "tags" in resolved_fields:
-        csv_tags = tags_to_csv(resolved_fields["tags"])
+    if "tags" in chosen:
+        csv_tags = tags_to_csv(resolved_fields.tags)
         transaction_a.tags = csv_tags
         transaction_b.tags = csv_tags
-    if "date" in resolved_fields:
-        resolved_date = parse_ISO_date(resolved_fields["date"])
-        transaction_a.date = resolved_date
-        transaction_b.date = resolved_date
+    if resolved_fields.date is not None:
+        transaction_a.date = resolved_fields.date
+        transaction_b.date = resolved_fields.date
 
 
 def _apply_promote_cost_basis(
     transaction_a: Transaction,
     transaction_b: Transaction,
-    raw_cost_basis: Any,
+    cost_basis: Currency | None,
 ) -> None:
     """Apply resolved cost basis with receiver-only TRANSFER semantics."""
-    if raw_cost_basis is not None:
-        cost_basis = Currency.model_validate(raw_cost_basis)
-        amount = cost_basis.amount
-        currency_code = cost_basis.code
-    else:
-        amount = None
-        currency_code = None
+    amount = cost_basis.amount if cost_basis is not None else None
+    currency_code = cost_basis.code if cost_basis is not None else None
 
     if transaction_a.quantity and transaction_a.quantity > 0:
         transaction_a.cost_basis_override = amount
