@@ -1,5 +1,6 @@
 """Strict schema tests for canonical risk series and metadata."""
 
+import ast
 import json
 import re
 from datetime import UTC, date, datetime
@@ -1801,8 +1802,9 @@ def test_resource_limit_remedies_agree_between_backend_and_frontend():
     """Every remedy the backend can name is one the frontend words, and the reverse.
 
     D379 splits one contract across the two stacks: the backend names the cure of a size
-    limit in ``details.remedy`` (``_REMEDY_BY_METRIC``), and the frontend words the remedies
-    it knows (``RESOURCE_LIMIT_DISPLAY_CODES``), keeping the generic sentence for any other.
+    limit in ``details.remedy`` (``REMEDY_BY_METRIC`` in ``risk/base.py``, written by
+    ``resource_limit_error``), and the frontend words the remedies it knows
+    (``RESOURCE_LIMIT_DISPLAY_CODES``), keeping the generic sentence for any other.
     Each half is pinned by its own tests, and nothing else compares them. So a remedy the
     backend starts emitting that the frontend does not know renders "This calculation is
     too large to run." — no crash, no log, the cure dropped in silence: the failure the
@@ -1811,11 +1813,62 @@ def test_resource_limit_remedies_agree_between_backend_and_frontend():
     """
     # Imported here, not at the top: this file's top-level imports stay schema-only, and a
     # renamed table fails this test alone rather than the collection of the whole file.
-    from backend.app.services.risk_plugins.simulation.plugin import _REMEDY_BY_METRIC  # noqa: PLC0415
+    from backend.app.services.risk.base import REMEDY_BY_METRIC  # noqa: PLC0415
 
-    emitted = set(_REMEDY_BY_METRIC.values())
+    emitted = set(REMEDY_BY_METRIC.values())
     worded = set(_resource_limit_display_codes())
     assert emitted == worded, f"details.remedy and RESOURCE_LIMIT_DISPLAY_CODES disagree: emitted-but-unworded={sorted(emitted - worded)} (shown as the generic resource_limit sentence), worded-but-never-emitted={sorted(worded - emitted)} (a sentence no refusal reaches)"
+
+
+#: Where the backend's risk code lives, scanned whole, and the one module allowed to write a remedy (D379).
+_RISK_PACKAGES = ("backend/app/services/risk", "backend/app/services/risk_plugins")
+_REMEDY_HOME = "backend/app/services/risk/base.py"
+
+
+def _remedy_writes(source: str, filename: str) -> list[int]:
+    """The lines of ``source`` that write a remedy by hand: a ``"remedy"`` string constant, or a ``remedy=`` keyword.
+
+    Read from the syntax tree, never from the text: a docstring or a comment that speaks of a remedy writes none, and a
+    variable named ``remedy`` holds no key — the key is the constant.
+    """
+    lines = []
+    for node in ast.walk(ast.parse(source, filename=filename)):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value == "remedy":
+            lines.append(node.lineno)
+        elif isinstance(node, ast.keyword) and node.arg == "remedy":
+            lines.append(node.lineno)
+    return sorted(lines)
+
+
+def test_the_backend_writes_a_remedy_only_through_resource_limit_error():
+    """A remedy is written in one place, ``resource_limit_error`` in ``risk/base.py``, from the table the guard above
+    reads (``REMEDY_BY_METRIC``). J-50 wrote ``"remedy": "period_or_assets"`` as a literal in ``risk/scope.py``, outside
+    the table, so the table-based guard never saw it emitted: dev went red on 17/10 only because the frontend already
+    worded that remedy (worded-but-never-emitted) — a literal the frontend did not word would have stayed green, and its
+    cure would have reached the user as the generic sentence. This test makes any hand-written remedy under
+    ``services/risk/`` and ``services/risk_plugins/`` a red that names its ``path:line``, whatever the table holds.
+    """
+    root = Path(__file__).resolve().parents[3]
+    modules = sorted(path for package in _RISK_PACKAGES for path in (root / package).rglob("*.py"))
+    assert modules, f"no module found under {_RISK_PACKAGES}: the scan would pass on nothing"
+    home = root / _REMEDY_HOME
+    assert home in modules, f"{_REMEDY_HOME} not found: has resource_limit_error moved?"
+    # Presence barrier: the scan sees the one write that must exist, so a scan blind to every write cannot pass.
+    assert _remedy_writes(home.read_text(encoding="utf-8"), str(home)), f"{_REMEDY_HOME} writes no remedy: has resource_limit_error moved?"
+
+    hand_written = [f"{path.relative_to(root)}:{line}" for path in modules if path != home for line in _remedy_writes(path.read_text(encoding="utf-8"), str(path))]
+
+    assert not hand_written, f"a remedy written by hand, not through resource_limit_error ({_REMEDY_HOME}): {hand_written}"
+
+
+def test_the_remedy_detector_names_every_hand_written_remedy():
+    """``_remedy_writes`` names a dict key, a subscript and a keyword — the three ways a literal remedy is written — and
+    neither a docstring nor a variable named ``remedy``. The scan above passes by finding nothing, so a detector blind to
+    all three would pass too: this is the one place it is proved to see them.
+    """
+    source = '"""A docstring that speaks of a remedy is prose."""\ndetails = {"remedy": "x"}\ndetails["remedy"] = "x"\nother = dict(remedy="x")\nremedy = "x"\n'
+
+    assert _remedy_writes(source, "fake.py") == [2, 3, 4]
 
 
 @pytest.mark.parametrize(

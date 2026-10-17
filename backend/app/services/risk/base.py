@@ -69,6 +69,34 @@ class RiskUnavailableError(ValueError):
         self.details = details or {}
 
 
+# D379: every size limit is RESOURCE_LIMIT, and `remedy` names the setting that brings that limit back within reach.
+# One table for the analytics and the service, because each cure fits only its own limits: "fewer paths or a shorter
+# horizon" cures only the two path budgets, the history needs a shorter period, the Sobol dimension ignores the paths,
+# no setting shrinks the number of positions, and the scope's prices shrink with the period or the assets (J-50). The
+# frontend turns a remedy it knows into a sentence (`RESOURCE_LIMIT_DISPLAY_CODES`); a metric missing here still
+# answers RESOURCE_LIMIT, without a remedy nobody has checked. A refusal is built by `resource_limit_error()` alone, so
+# the remedies the backend can name are exactly the values of this table.
+REMEDY_BY_METRIC: dict[str, str] = {
+    "portfolio_cells": "paths_or_horizon",
+    "stochastic_cells": "paths_or_horizon",
+    "history_cells": "period",
+    "observations": "period",
+    "assets": "positions",
+    "sobol_dimension": "horizon_or_sampling",
+    "price_item_days": "period_or_assets",
+}
+
+
+def resource_limit_error(message: str, *, metric: str, actual: int, limit: int, **context: int) -> RiskUnavailableError:
+    """A RESOURCE_LIMIT refusal: ``metric``, ``actual``, ``limit`` and any ``context`` in its details, with the metric's
+    ``remedy`` from ``REMEDY_BY_METRIC`` when it has one (D379)."""
+    details: dict[str, int | str] = {**context, "metric": metric, "actual": actual, "limit": limit}
+    remedy = REMEDY_BY_METRIC.get(metric)
+    if remedy is not None:
+        details["remedy"] = remedy
+    return RiskUnavailableError(message, code=RiskErrorCode.RESOURCE_LIMIT, details=details)
+
+
 @dataclass(frozen=True, slots=True)
 class RiskHistoricalReplayContext:
     """Prepared replay-only series and original-to-source identity."""
@@ -279,6 +307,7 @@ class RiskAnalytic(ABC):
 
 
 __all__ = [
+    "REMEDY_BY_METRIC",
     "RiskAnalytic",
     "RiskAssetClassification",
     "RiskComputation",
@@ -286,4 +315,5 @@ __all__ = [
     "RiskHistoricalReplayContext",
     "RiskSeriesInputs",
     "RiskUnavailableError",
+    "resource_limit_error",
 ]
