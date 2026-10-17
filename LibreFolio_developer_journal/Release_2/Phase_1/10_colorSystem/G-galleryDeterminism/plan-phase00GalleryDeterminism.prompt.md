@@ -1223,9 +1223,36 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
       alla scelta «chiaro».
     - La fixture `galleryBackup.ts` risponde ora `encrypted: false`, quindi la nota della copia cifrata non compare.
     - La card si allunga ancora, e su mobile la card del ripristino scende più in basso (G-20).
-  - **Y, lotto R17/W8**, non ancora entrato alle 03:33 del 17/10. Quando entra, la Dashboard della galleria perde la
-    riga del giorno sotto il P&L totale, e mostra «—» per l'effetto timing e per il G/L dei gruppi del treemap, finché
-    il developer non rigenera `dashboard-report.json`. Il prodotto è corretto.
+  - **Y, lotto R17/W8/P4**, entrato in `1565b6bbb` (17/10 05:27). La Dashboard legge dal backend la variazione del
+    giorno, l'effetto timing e il G/L dei gruppi. `dashboard-report.json` non ha quei campi (`pnl_change_1d` e le sue
+    due percentuali, `timing_effect_percent`, `holding_groups`), e resta così finché il developer non la ricattura (sua
+    decisione (c)). Il prodotto è corretto. Verificato nel codice e sulle immagini del 16 e 17/10:
+    - nella card del P&L sparisce la riga del giorno sotto il totale («−253,50 € (−4,04 %)» nella fixture);
+    - nella card dei rendimenti l'effetto timing mostra «—», senza la scritta «Favorable timing», e sparisce la
+      variazione del giorno sul NAV («−0,50 %»);
+    - si vede in `dashboard/kpi-top`, `privacy-masked`, `data-quality-banner`, `data-quality-sync-rates` e
+      `security/connection-indicator`, nei due schermi, e in `dashboard/menu-open` su mobile, al bordo destro oltre il
+      menu;
+    - su desktop le tre card restano alte uguali (quella del patrimonio non cambia); su mobile sono una sotto l'altra, e
+      quello che sta sotto le prime due sale di due righe. Gli scatti inquadrati su un grafico non cambiano;
+    - il G/L dei gruppi del treemap sta solo nel tooltip, che nessuno scatto apre: nella galleria non si vede;
+    - P4, le percentuali della vista Performance prese dal backend: nella fixture la percentuale accanto a ogni barra è
+      identica alla vecchia (14 righe su 14), e quelle delle componenti stanno nel tooltip. Nessun cambio visibile;
+    - il dettaglio del broker usa le stesse card ma legge il backend, che ha quei campi: le righe restano.
+  - **J-43**, entrato in `09cb9231a` (17/10 07:07): il DB popolato dà agli utenti demo, admin compreso (IB al 40 %), una
+    riga INFO nel banner della qualità dei dati, per un trasferimento fra broker posseduti a quote diverse. **Nella
+    galleria non si vede**, finché il report vero dell'admin tiene il suo avviso:
+    - il banner del report vero è chiuso in ogni scatto. Con un avviso, l'intestazione conta solo errori e avvisi
+      («1 warning», visto il 16/10), e le righe INFO compaiono solo aprendolo (`DataQualityBanner.svelte`,
+      `getHeaderText`);
+    - leggono il report vero dell'admin:
+      - `settings/changelog-modal` e `-search`, `support/donation-popup`: il banner è dietro la modale, chiuso;
+      - `dashboard/fifo-lots-*`, `dashboard/risk-hurt`, `-diversification`, `-paid`, `-whatif` e
+        `risk/whatif-simulation`: il banner sta sopra l'inquadratura;
+    - i due scatti col banner aperto, `dashboard/data-quality-banner` e `-sync-rates`, leggono la fixture, con le issue
+      che vi scrive il test;
+    - se l'avviso dell'admin sparisse, il banner chiuso direbbe la frase delle sole note (`dataQuality.headerInfoOnly`),
+      nel tono informativo.
 - **`settings/backup-ready` per la 1.3 ✅, 16/10 22:54–23:11.** Commit `b89985a8b`: la punta, con B (`0cd910a7e`: B3
   ripristino, B5b, B5c). Due run identiche, `g-backup-a` e `g-backup-b`, sullo stesso build, 2 worker. Il filtro
   `-f "Settings backup ready \(admin\) - all languages and themes"` seleziona solo `gallery.spec.ts:2126`.
@@ -1317,3 +1344,12 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   > - La nota di MF-A citava `5c9ad06d7`, che porta solo il diario di MF: il codice è in `536501541`.
   > - Leggendo la spec ho trovato che la Dashboard della galleria viene dalla fixture: corrette la nota di J-24 e la
   >   classificazione di MF-A, qui sopra.
+- **Commento di `gallery.spec.ts` corretto ✅, 17/10 mattina** (coordinatore, dopo J-43). Il commento del test
+  `dashboard data-quality banner (mocked issues)` diceva «The populated DB produces no data-quality issues
+  deterministically». Con J-43 non è più vero, e non lo era già prima: il 16/10 il report vero dell'admin aveva un
+  avviso.
+  - Ora dice come funziona lo scatto: il banner viene dalla fixture servita da `setupDashboardMockReport`, che non ha
+    issue, e il test vi scrive le due che fotografa. Le issue del DB non arrivano allo scatto.
+  - Allineato anche il commento del test dopo, `missing exchange rates`, che partiva dallo stesso presupposto sul DB.
+  - Solo commenti: nessuna riga di codice cambia, nessuna run.
+  - Note di Y R17/W8/P4 e J-43 qui sopra, nella «Nota per la prossima galleria completa».
