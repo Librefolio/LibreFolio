@@ -958,6 +958,16 @@ def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Lone transfer legs tests", verbose=verbose)
 
 
+def services_auto_cost_unreadable_pool(verbose: bool = False, test_names: list = None) -> bool:
+    """Test W-B69: an Auto cost is never computed over a pool holding a row it cannot read."""
+    print_section("Services: Auto Cost over an Unreadable Pool (W-B69)")
+    print_info("Testing: backend/app/services/transactions/auto_cost.py (_auto_cost, UnreadablePoolError) and BrokerService.delete_bulk with force")
+    print_info("Tests: the raise and its count (quantity, amount, stored cost basis), readable pool and rows outside the pool as guards, a broker deletion over such a pool failing whole")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_auto_cost_unreadable_pool.py", test_names)
+    return run_command(cmd, "Auto cost unreadable pool tests", verbose=verbose)
+
+
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
@@ -2161,6 +2171,14 @@ Note: No backend server required.
         # The category default (write-scoped), although every database is a private file under tmp_path built by the
         # real migrations: the startup wrapper's cases make such a file's engine the configured one, and a wrapper that
         # reached the lane's engine all the same would open a session there — through a double that writes nothing.
+    )
+    add_test(
+        cat,
+        "auto-cost-unreadable-pool",
+        services_auto_cost_unreadable_pool,
+        name="Auto Cost over an Unreadable Pool",
+        desc="W-B69: _auto_cost raises UnreadablePoolError(count) over a pool with a row whose quantity, amount or stored cost basis reads None; rows outside the pool and a readable pool as guards; a broker deletion over such a pool fails whole",
+        # Write-scoped: every test works in its own session on the lane's database, under a unique marker, rolled back.
     )
     add_test(
         cat,
