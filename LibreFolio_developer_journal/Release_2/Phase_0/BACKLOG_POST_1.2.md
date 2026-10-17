@@ -5011,6 +5011,12 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     che la modale mostra come errore generico.
   - Da decidere: scollegare prima, come il wipe di X-R48 (con la regola degli SPLIT senza costo), o rifiutare con un
     codice e i collegamenti. Prima un rosso che lo riproduca.
+- **X-R66 · Il limite delle sonde dei provider detto nella lingua dell'utente** — basso, **dopo X-R58** (il
+  coordinatore, 17/10); X, 17/10 (dalla revisione di MF-SI2).
+  - `POST /assets/provider/probe` risponde 429 `{error_code: PROBE_RATE_LIMITED, retry_after, message}` oltre 30
+    sonde al minuto per utente. «Test Configuration» mostra il `message` inglese del backend (`extractErrorMessage`),
+    «Ask Provider» un generico «si è verificato un errore».
+  - Cura: una frase tradotta con l'ora locale di fine attesa, come per il `RATE_LIMITED` dei provider.
 - **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** — decisione notturna N83; X, 17/10
   (il coordinatore; numerata X-R65 per lo scontro con X-R64).
   - Le letture si fermano al 1900-01-01 (`EARLIEST_RANGE_START`), le scritture manuali di prezzi e di tassi di cambio
@@ -5021,7 +5027,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Il filtro di X-R44 sta nella base dei registri (`_withheld()`), ma segnali e rischio (`list_definitions`), BRIM
     (rilevamento ed elenco) e tools (la sua istantanea) leggono il proprio archivio senza chiederlo: un `test_only` lì
     sarebbe servito in produzione. Un test di guardia lo vieta fuori da asset e cambi.
-- **X-R64 · La richiesta di period-changes divisa in lotti da 1.000** — piccolo, **dopo l'ingresso di Z-27**, con il suo
+- ✅ **X-R64 · La richiesta di period-changes divisa in lotti da 1.000** (chiusa il 17/10, in attesa del commit del coordinatore; con il sondaggio dal vivo di `/prices/current`, tetto di R13-SEC9-1: sì del coordinatore, 17/10) — piccolo, **dopo l'ingresso di Z-27**, con il suo
   aiuto e la sua costante; X, 17/10 (dalla revisione di X-R59: il limite scende da 10.000 a 1.000).
   - Dentro `fetchAssetPeriodChanges`/`fetchFxPeriodChanges` (il registro di X-R60 vede una sola risposta unita); poi
     aggiornare i due passi della documentazione di MF (`assets/architecture.md` ~374, `fx/architecture.md` ~238), che
