@@ -62,8 +62,8 @@ def _collect_leg_rates(
     leg_unusable: dict[tuple[str, str, str], list[date]],
 ) -> None:
     """A provider's observations into ``leg_rates``, normalized (alphabetical pair, the rate inverted when needed). One
-    that is not a finite rate above 0, or whose inverse overflows, goes into ``leg_unusable`` instead: skipped, and said
-    by the pairs whose route uses the leg (X-R38)."""
+    that is not a finite rate above 0, or whose inverse overflows or underflows to 0 (X-R50), goes into ``leg_unusable``
+    instead: skipped, and said by the pairs whose route uses the leg (X-R38)."""
     for _currency, observations in rates_by_currency.items():
         for obs_date, obs_base, obs_quote, rate in observations:
             normalized = normalize_storable_rate(obs_base, obs_quote, rate)

@@ -187,10 +187,15 @@ close of a date already stored raised from `1E+48` up, or on a close not finite,
 fallback then announced every fetched point. The current value a refresh adds as today's
 point, when the range reaches today, goes through the check of the
 [live price](#current-quotes-and-todays-ohlc), `storable_current_value()`, in FETCH, before the
-shared current-value cache: a value no price column can keep is neither cached nor added, so
-the sync neither counts nor announces it (only the log has it, once), and a provider without
-history, such as the CSS Scraper, is left with nothing: the item fails with *No price data
-available from provider*. A kept value is cached as stored, so the live price then comes from
+shared current-value cache: a value no price column can keep is neither cached nor added as a
+point, so the sync neither counts nor announces it, but the result names it, as the upsert names
+a date it skips (`unstorable_quote_reason()`, X-R51): *Current price 1E+60 not saved: a price
+keeps at most 12 digits before the decimal point, and is never 0 once cut to 12 decimal places*,
+the value cut as in the log. With other points the item is `partial`, that reason in its
+`errors` after a currency-mismatch error, if any, and the first of them its `message`; with no
+other point, as for a provider without history such as the CSS Scraper, the item is `failed`,
+that reason its one error instead of *No price data available from provider*. The refusal is
+still logged once. A kept value is cached as stored, so the live price then comes from
 the cache already truncated. An open, high, low or
 volume the F.4 merge keeps from the stored row, written by an older release past its
 column's digits, is written as NULL (`_kept_price()`, `_kept_volume()`) instead of raising

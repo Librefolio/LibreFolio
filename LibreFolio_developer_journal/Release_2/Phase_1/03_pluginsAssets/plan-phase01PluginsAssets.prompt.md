@@ -5565,3 +5565,47 @@ proposti:
 - `fix(assets): serve only storable live quotes` (X-R40/W-B62: codice, test, runner, docs degli asset, CHANGELOG);
 - `fix(fx): double limit, underflow, parser skips` (X-R50: codice, test, docs dei cambi, frase nel CHANGELOG);
 - `docs(journal): X-R40/W-B62, X-R50, backlog X-R47–X-R52`.
+
+**Entrati** (coordinatore, 05:00): X-R24/25, X-R38, X-R40/W-B62 e X-R50 in dev `fd6886bb0` (commit `a7b572ce2`,
+`243ab6150`, `03a79bce8`). Il CHANGELOG è andato in conflitto in coda a «Fixed» con la riga di B4b, e il coordinatore le ha
+tenute entrambe. HEAD avanzato a `fd6886bb0`, pulito, verificato. Nel backlog ho chiuso X-R24, X-R25, X-R34, X-R38,
+X-R40 e X-R50, coi loro SHA.
+
+### X-R51 — il refresh dice perché scarta un valore corrente ✅ (2026-10-17, 05:02–05:15; consegnato)
+
+Seguito di X-R40/W-B62 (vedi sopra, «Fuori pista»):
+- **Cura**: `files/checks/xr51_code.py`, 12 sostituzioni in 4 file, provata a secco sul nuovo HEAD:
+  - `price_store.unstorable_quote_reason(value)`: il valore accorciato e i limiti, letti dal modello;
+  - `_FetchedRefreshData.notes`;
+  - in `_fetch_refresh_item`, `refused_note` quando il valore corrente è rifiutato. Senza altri punti diventa l'errore
+    del fetch, quindi FAILED col motivo; altrimenti è una nota che `_persist_refresh_item` aggiunge agli `errors`, dopo
+    lo scarto per valuta, quindi PARTIAL col motivo, come faceva l'upsert prima di X-R40;
+  - nella docstring di `storable_current_value`, «above 0» diventa «not 0», come fa `storable_price`.
+- Due ritocchi dal docs-writer di X-R50:
+  - `fx_rate_limits_text()` nomina anche il limite sotto `100000000000000`;
+  - la docstring di `_collect_leg_rates()` nomina l'underflow.
+- **Rossi**: (e) e (f) dal test-author di X-R40, dal file di bozze a `test_current_price_storable.py`; il testo dei limiti
+  dal test-author di X-R50, in `test_fx_core.py`.
+- Rossi alle 05:00, prima del codice, tutti per la ragione giusta:
+  - `current-price-storable` 2/27: (e) OK senza messaggio; (f) «No price data available from provider»;
+  - `fx-core` 1/42: il rifiuto non nomina `100000000000000`.
+- Codice (05:01): `xr51_code.py` applicato, 12 sostituzioni in 4 file; ruff, black e import puliti.
+- Verdi (05:01–05:03, carico < 50): `current-price-storable` 27, `fx-core` 42, `asset-source-refresh` 18,
+  `asset-digit-limits` 76, `fx-sync-service` 35, `asset-sync-counts` 1, `scheduler-jobs` 73, `db fx-rates` 6,
+  `utils real-decimal` 235.
+- Non girati, perché la categoria `api` vuole uno slot. Per costruzione non cambiano: `api fx-unit` cerca solo i numeri 14
+  e 10 nel rifiuto, e il nuovo testo li tiene; `prices-sync-delta` e `current-price-persistence` non hanno valori
+  assurdi.
+- Documentazione: il docs-writer sul paragrafo del refresh (`backend/assets/architecture.md`) e sulla frase citata del
+  rifiuto (`backend/fx/configuration.md`).
+- CHANGELOG: nessuna riga. La regressione non è mai uscita, e la riga di X-R40 dice già cosa vede l'utente.
+- Documentazione (docs-writer, 05:04–05:14):
+  - `backend/assets/architecture.md`, paragrafo del refresh (190–198): PARTIAL col motivo; FAILED col motivo come unico
+    errore. Nel caso FAILED `message` resta `None`, come per ogni errore di fetch;
+  - `backend/fx/configuration.md` (263–269): la frase del rifiuto citata col nuovo testo.
+  - `mkdocs build` stretto ✅, `check-links` ✅ (97).
+  - Non toccata: la pagina utente `user/fx/detail/data-editor.en.md`, che non nomina il limite sotto `1E+14`. È un caso
+    limite, e la modifica andrebbe fatta in 4 lingue.
+- **Consegna** (05:15, FROZEN): HEAD `fd6886bb0`; 10 file tracciati, nessun file nuovo; ruff e black puliti sui 6 file
+  Python; `git diff --check` pulito; porta 6183 libera. Commit proposti: `fix(assets): refresh names a refused live quote`
+  (codice, test, documentazione) e `docs(journal): X-R51, backlog closures`.
