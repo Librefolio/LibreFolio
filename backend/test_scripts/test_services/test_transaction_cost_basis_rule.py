@@ -156,13 +156,58 @@ gives the giving leg a split leaves, an ADJUSTMENT −4, a cost of its own throu
 N78 refused — is resolved by the coordinator's (a), 17/10: decisions 4 and 47 are the developer's and win, so rule 12b
 leaves an ADJUSTMENT below 0 alone, and that guard stays as it is.
 
+W-B67 (release 1.3) — an Auto cost written on the wrong row of a batch, the ``TestWB67…`` classes: RED until its cure but
+for the guards. ``_compute_wac_for_auto_items`` (``auto_cost.py``) finds the row of an Auto create (``cost_basis_mode``
+``auto``/``auto-detail``) through ``_find_created_tx_for_wac``: by its ``link_uuid`` and index when it has one — a TRANSFER
+pair's legs are found —, otherwise as the NEWEST row with the same broker, asset, date and type. Two creates on that key are
+one row to it: the Auto cost lands on the later one, a Manual row's cost overwritten with an average; the Auto row commits
+without one — the batch's cost check skips Auto creates (``batch_costs.py``) — and enters every later pool as an
+acquisition of unknown cost, at zero (``ADD_UNKNOWN_COST``, ``financial_math/average_cost.py``); and ``wac_results``
+answers on the Auto row's index the value computed for the other row.
+
+The contract, night decision N84 (D-W67-1 = P1, 17/10): each Auto row gets the cost that saving the rows one at a time in
+date order gives it. (a) Each create costs its own row; (b) the batch's Auto rows are costed in the order of their pool
+date — the ``as_of`` of ``_auto_cost_source``: the row's date, its partner's for a receiving TRANSFER leg —, then by
+index; (c) the Auto rows not yet costed, but the split-linked ones, stay out of each other's pools. Each ``wac_results``
+item, on its own index, carries the cost its row stores, and ``wac_results`` keeps its order: the creates by index, then
+the updates.
+
+Reds — on ``source`` and the ``world``'s 10 units at 100 EUR; each batch is valid and commits, as ``POST
+/transactions/commit`` runs it, and its rows are read back by id; an average is the quotient rounded as
+``compute_wac_iterative`` rounds it (``round_computed_value``):
+
+- an ADJUSTMENT +5 in ``auto`` (create 0), then one at a manual 50 EUR, no mode (create 1), on one key: the Manual row keeps
+  50, the Auto row holds (1 000 + 5 × 50) / 15, and ``wac_results`` is that one item, on index 0. Today the Manual row
+  holds 1 000 / 15, the Auto row none, and index 0 answers 1 000 / 15;
+- two ADJUSTMENTs +5 in ``auto`` on one key: both hold 100 — the first costed without the second, (c), the second with the
+  first at 100 — and index 0 and index 1 answer 100. Today the first holds none, the second 1 000 / 15, costed twice;
+- an ADJUSTMENT +10 in ``auto`` linked to a 2:1 SPLIT of the asset (create 0) and a plain one +5 in ``auto`` (create 1), on
+  one key: the split row holds no cost and index 0 answers none; the plain row holds the post-split 1 000 / 20 = 50,
+  answered on index 1. Today index 0 answers the plain row's 50;
+- Auto rows sent against date order, a purchase between them: an ADJUSTMENT +5 on D+2 (create 0), one on D (create 1), a
+  BUY +5 on D+1 paying 2 000 EUR (create 2): the D row holds 100, the D+2 row (1 000 + 5 × 100 + 2 000) / 20 = 175, the D
+  row in its pool at its own cost, (b); ``wac_results`` answers each on its index, in index order. Today the D+2 row holds
+  150, the D row in its pool at zero; 200 would be (c) without (b).
+
+Guards, green today and after the cure, where today's search finds the row: a lone ADJUSTMENT +5 in ``auto`` holds 100,
+answered on index 0; a Manual row (create 0, 50 EUR) then an Auto one (create 1) on one key — the Auto row is the newest —
+hold 50 and (1 000 + 250) / 15; and (c)'s exception: the Auto receiving leg of a TRANSFER pair source → dest (create 1),
+costed before the ADJUSTMENT +10 in ``auto`` that realizes a 2:1 SPLIT on ``source`` the same day (create 2), holds the
+post-split 50 EUR, the split row still to be costed staying in its pool. The third red costs its split row first, so a cure
+without the exception fails it only if it leaves out the Auto rows without a cost, not if it leaves out those still to be
+handled; the guard costs the split row last, and such a cure fails it either way. A TRANSFER pair's Auto receiving leg,
+which its ``link_uuid`` finds, is guarded already: ``TestAutoCost`` (100, stored) and
+``TestWB69GuardsReadablePoolsAndRowsOutsideThePool::test_auto_row_over_a_readable_pool_takes_its_average`` (its
+``wac_results`` item on index 1, and its stored cost).
+
 Ownership. Every test builds its own asset and brokers under a unique marker, in a session rolled back at the end:
 ``execute_batch`` never commits (its caller does), so nothing reaches the lane's database. The two scaffolds that
 change module state — an entry of ``TX_TYPE_METADATA``, ``SWAP_GROUPS`` — go through ``monkeypatch``, which puts
 them back. W-B69's plants are raw SQL in the same session, rolled back with it.
 
 Run: ``./dev.py test services transaction-cost-basis-rule`` (the action ``services_transaction_cost_basis_rule``); W-B69's
-cases alone: ``./dev.py test services transaction-cost-basis-rule WB69``; N78's: ``… transaction-cost-basis-rule N78``.
+cases alone: ``./dev.py test services transaction-cost-basis-rule WB69``; N78's: ``… transaction-cost-basis-rule N78``;
+W-B67's: ``… transaction-cost-basis-rule WB67``.
 """
 
 import ast
@@ -192,6 +237,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import backend.app.schemas.transactions.transactions as transaction_schemas
 import backend.app.schemas.transactions.type_metadata as type_metadata
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, FxConversionRoute, FxRate, Transaction, TransactionType
+from backend.app.db.precision import round_computed_value
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode, TXValidationIssue
@@ -2273,3 +2319,271 @@ class TestN78TheMessages:
         missing = [code for code in codes if not _error_text(messages, code)]
 
         assert missing == [], f"N78 (W-B72): every business-rule code of {BUSINESS_RULES_SOURCE.name} needs transactions.errors.<code> in {language}; none for {missing} (of {len(codes)} codes)"
+
+
+# ============================================================================
+# RED AND GUARDS — W-B67: AN AUTO COST WRITTEN ON THE WRONG ROW OF A BATCH
+# ============================================================================
+
+# The manual cost basis, per unit, of W-B67's Manual row: neither the world's average (100) nor any Auto cost below.
+WB67_MANUAL_COST = Currency(code=EUR, amount=Decimal("50"))
+# What the world's BUY paid for its 10 units: the start of every pool below.
+WORLD_PAID = BUY_QUANTITY * UNIT_COST
+# The date-order case: three days after the world's BUY, D < D+1 < D+2, and the BUY of D+1, 5 units for 2 000 EUR (400 a unit).
+WB67_D = MOVE_DAY
+WB67_D_PLUS_1 = MOVE_DAY + timedelta(days=1)
+WB67_D_PLUS_2 = MOVE_DAY + timedelta(days=2)
+WB67_BUY_PAID = Decimal("-2000")
+
+
+def _average(paid: Decimal, quantity: Decimal) -> Decimal:
+    """An average cost as the batch stores it: the quotient, rounded to what ``cost_basis_override`` keeps
+    (``round_computed_value``, as ``compute_wac_iterative`` rounds the average it answers)."""
+    return round_computed_value(paid / quantity, Transaction, "cost_basis_override")
+
+
+def _wb67_cost(cost: tuple | None) -> str:
+    """A stored cost basis or an answered Auto cost, ``(amount, code)``, for a message: ``100 EUR``, or ``none``."""
+    if cost is None or cost == (None, None):
+        return "none"
+    amount, code = cost
+    return f"{amount.normalize():f} {code}"
+
+
+def _wb67_answers(response: TXBatchResponse) -> list[tuple]:
+    """``wac_results`` in its order, each item as ``(operation, index, (amount, code))`` — ``(operation, index, None)`` for
+    an item without a cost, a split-linked Auto row's."""
+    return [(item.operation, item.index, None if item.wac is None else (item.wac.amount, item.wac.code)) for item in response.wac_results or []]
+
+
+@dataclass
+class WB67Outcome:
+    """What a W-B67 batch left once the request is over (``_wb67_outcome``)."""
+
+    #: The cost basis each create named stores, by its index, read back by id: ``(amount, code)``, ``(None, None)`` without one.
+    costs: dict[int, tuple]
+    #: ``wac_results`` in its order (``_wb67_answers``).
+    answers: list[tuple]
+    #: Both as a sentence, for a failure message: which row holds what, and what ``wac_results`` said.
+    today: str
+
+
+async def _wb67_commit(world: World, creates: list[dict]) -> TXBatchResponse:
+    """The batch as ``POST /transactions/commit`` runs it, its transaction included (``_n78_as_the_endpoint``). Every W-B67
+    batch is valid, today and after the cure, so it must commit: a refusal is not the defect these tests name."""
+    response = await _n78_as_the_endpoint(world, creates=creates)
+    assert response.committed is True and response.issues == [], f"W-B67: every row of this batch is valid, so the batch must commit; it was refused: {_render(response.issues)}"
+    return response
+
+
+async def _wb67_outcome(world: World, response: TXBatchResponse, names: dict[int, str]) -> WB67Outcome:
+    """The cost basis the creates of ``names`` (index → what the row is) store, read back by id, and ``wac_results``."""
+    ids = {index: _created_id(response, index) for index in names}
+    costs = {index: await _stored_cost(world, tx_id) for index, tx_id in ids.items()}
+    answers = _wb67_answers(response)
+    held = "; ".join(f"create {index} ({names[index]}, id={ids[index]}) holds {_wb67_cost(cost)}" for index, cost in costs.items())
+    said = ", ".join(f"{operation} {index}: {_wb67_cost(wac)}" for operation, index, wac in answers) or "no item"
+    return WB67Outcome(costs=costs, answers=answers, today=f"{held}; wac_results said [{said}]")
+
+
+def _same_key(creates: list[dict]) -> None:
+    """Scaffold: the creates share broker, asset, date and type and carry no ``link_uuid`` — the key on which
+    ``_find_created_tx_for_wac`` takes the newest row for each of them."""
+    keys = {(create["broker_id"], create["asset_id"], create["date"], create["type"]) for create in creates}
+    links = [create.get("link_uuid") for create in creates]
+    assert len(keys) == 1 and links == [None] * len(creates), f"scaffold: the creates must share one (broker, asset, date, type) and carry no link_uuid; keys {keys}, link_uuids {links}"
+
+
+def _split_linked_create(world: World, split: AssetEvent) -> dict:
+    """The ADJUSTMENT +10 in ``auto`` that realizes ``split`` on ``source``, as ``_split_linked_adjustment`` sends it — here
+    in the batch under test, beside the Auto row whose pool it rescales."""
+    return {**_created_adjustment(world, broker=world.source, quantity=SPLIT_QUANTITY, cost_basis_mode="auto"), "asset_event_id": split.id}
+
+
+async def _assert_split_linked(world: World, tx_id: int, link: tuple[int, AssetEventType, int]) -> None:
+    """Scaffold: row ``tx_id`` is stored linked to the event ``link`` names — ``(event id, SPLIT, the test's asset id)``,
+    taken before the batch —, read from the database: what makes it split-linked."""
+    statement = select(Transaction.asset_event_id, AssetEvent.type, AssetEvent.asset_id).outerjoin(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id == tx_id)
+    stored = tuple((await world.session.execute(statement)).one())
+    assert stored == link, f"scaffold: the ADJUSTMENT +{SPLIT_QUANTITY} id={tx_id} must be stored linked to the SPLIT of the test's asset (event id, type, asset id) = {link}; it holds {stored}"
+
+
+class TestWB67EachAutoCreateCostsItsOwnRow:
+    """W-B67 — RED until its cure: two creates on one key (broker, asset, date, type, no ``link_uuid``) are one row to
+    ``_find_created_tx_for_wac``, the newest. Each Auto create must cost its own row, and its ``wac_results`` item, on its own
+    index, carry what that row stores (N84 (a)).
+
+    The rows are ADJUSTMENTs +q on ``source``, whose pool is ``source`` up to their date without themselves
+    (``_auto_cost_source``): the ``world``'s 10 units at 100 EUR, and what the batch adds on the day. Each batch is valid and
+    commits, today and after the cure (``_wb67_commit``); its rows are read back by id (``_wb67_outcome``).
+    """
+
+    @pytest.mark.asyncio
+    async def test_auto_then_manual_on_one_key_each_row_keeps_its_own_cost(self, world):
+        """RED until W-B67's cure: an ADJUSTMENT +5 in ``auto`` (create 0), then an ADJUSTMENT +5 at a manual 50 EUR, no mode
+        (create 1), on one key. The Manual row keeps its 50 EUR; the Auto row holds the average of its pool without itself —
+        the BUY's 10 at 100 and the Manual 5 at 50: (1 000 + 250) / 15 —; ``wac_results`` is one item, on index 0, that cost.
+
+        Today the Auto item finds the Manual row, the newest of the key, and overwrites its 50 with the average of a pool
+        holding the Auto row at zero cost, 1 000 / 15; the Auto row commits without a cost, and index 0 answers 1 000 / 15."""
+        auto = _created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")
+        manual = {**_created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY), "cost_basis_override": _cost_sent(WB67_MANUAL_COST)}
+        _same_key([auto, manual])
+        auto_cost = (_average(WORLD_PAID + ADJUSTMENT_QUANTITY * WB67_MANUAL_COST.amount, BUY_QUANTITY + ADJUSTMENT_QUANTITY), EUR)
+        manual_cost = (WB67_MANUAL_COST.amount, WB67_MANUAL_COST.code)
+
+        response = await _wb67_commit(world, [auto, manual])
+
+        outcome = await _wb67_outcome(world, response, {0: "the Auto row", 1: "the Manual row"})
+        assert (outcome.costs, outcome.answers) == (
+            {0: auto_cost, 1: manual_cost},
+            [("create", 0, auto_cost)],
+        ), f"W-B67: the Auto create (create 0) must cost its own row, at {_wb67_cost(auto_cost)} — the BUY and the Manual row, (1 000 + 250) / 15 —, and leave the Manual row (create 1) its {_wb67_cost(manual_cost)}; wac_results one item, create 0: {_wb67_cost(auto_cost)}. Today {outcome.today}"
+
+    @pytest.mark.asyncio
+    async def test_two_auto_rows_on_one_key_each_hold_the_average_before_the_other(self, world):
+        """RED until W-B67's cure: two ADJUSTMENTs +5 in ``auto`` on one key (create 0, create 1). N84: the first is costed
+        without the second, still to be costed (c), at the BUY's 100; the second with the first at its 100, 1 500 / 15 = 100.
+        Both rows hold 100 EUR, and ``wac_results`` answers 100 on index 0 and on index 1.
+
+        Today both items find the second row, the newest of the key: it is costed twice, at 1 000 / 15 — the first row in its
+        pool at zero cost —, and the first row commits without a cost. Each item costing its own row without (c) would give
+        1 000 / 15 and (1 000 + 5 × 1 000 / 15) / 15."""
+        first = _created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")
+        second = _created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")
+        _same_key([first, second])
+        expected = (UNIT_COST, EUR)
+        at_zero = _average(WORLD_PAID, BUY_QUANTITY + ADJUSTMENT_QUANTITY)
+        without_c = (at_zero, _average(WORLD_PAID + ADJUSTMENT_QUANTITY * at_zero, BUY_QUANTITY + ADJUSTMENT_QUANTITY))
+
+        response = await _wb67_commit(world, [first, second])
+
+        outcome = await _wb67_outcome(world, response, {0: "the first Auto row", 1: "the second Auto row"})
+        assert (outcome.costs, outcome.answers) == ({0: expected, 1: expected}, [("create", 0, expected), ("create", 1, expected)]), (
+            f"W-B67, N84: each Auto create must cost its own row — the first without the second, still to be costed, the second with the first at its cost —, so both rows hold {_wb67_cost(expected)} "
+            f"and wac_results answers {_wb67_cost(expected)} on create 0 and on create 1. Today {outcome.today}. "
+            f"(none and {_wb67_cost((at_zero, EUR))}: today's search, the newest row costed twice; {_wb67_cost((without_c[0], EUR))} and {_wb67_cost((without_c[1], EUR))}: each its own row, the other counted at zero, (a) without (c).)"
+        )
+
+    @pytest.mark.asyncio
+    async def test_split_linked_and_plain_auto_rows_on_one_key_answer_on_their_own_index(self, world):
+        """RED until W-B67's cure: an ADJUSTMENT +10 in ``auto`` linked to a 2:1 SPLIT of the asset (create 0) and a plain
+        ADJUSTMENT +5 in ``auto`` (create 1), on one key. The split row gets no cost — its units are the split's rescale
+        (``_compute_wac_for_auto_items``) — and ``wac_results`` answers none on index 0; the plain row holds the post-split
+        average, 1 000 / 20 = 50 EUR, answered on index 1.
+
+        Today the split row's item finds the plain row, the newest of the key, and answers the plain row's 50 on index 0; the
+        rows hold what they should only because the plain row is costed by both items, and the split row by none."""
+        split = await _event(world, AssetEventType.SPLIT, SPLIT_RATIO)
+        link = (split.id, AssetEventType.SPLIT, world.asset.id)
+        split_row = _split_linked_create(world, split)
+        plain = _created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")
+        _same_key([split_row, plain])
+        post_split = (_average(WORLD_PAID, BUY_QUANTITY + SPLIT_QUANTITY), EUR)
+
+        response = await _wb67_commit(world, [split_row, plain])
+
+        await _assert_split_linked(world, _created_id(response, 0), link)
+        outcome = await _wb67_outcome(world, response, {0: "the split-linked Auto row", 1: "the plain Auto row"})
+        assert (outcome.costs, outcome.answers) == (
+            {0: (None, None), 1: post_split},
+            [("create", 0, None), ("create", 1, post_split)],
+        ), f"W-B67: each Auto create must answer on its own index — create 0, split-linked, holds no cost and answers none; create 1 holds the post-split {_wb67_cost(post_split)}, answered on create 1. Today {outcome.today}"
+
+
+class TestWB67AutoRowsAreCostedInDateOrder:
+    """W-B67, N84 (b) — RED until its cure: the batch's Auto rows are costed in the order of their pool date, then by index,
+    each entering the pools after it at its own cost; ``wac_results`` keeps its order, the creates by index."""
+
+    @pytest.mark.asyncio
+    async def test_auto_rows_sent_against_date_order_are_costed_in_date_order(self, world):
+        """RED until W-B67's cure: on ``source``, an ADJUSTMENT +5 in ``auto`` on D+2 (create 0), one on D (create 1), and a
+        BUY +5 on D+1 paying 2 000 EUR (create 2), every day after the ``world``'s BUY. The D row holds the BUY's 100; the D+2
+        row (1 000 + 5 × 100 + 2 000) / 20 = 175, the D row in its pool at its own cost; ``wac_results`` answers 175 on
+        create 0 and 100 on create 1, in index order. ``source`` allows a cash overdraft, which the ``world``'s BUY already
+        relies on: no DEPOSIT is needed for the replay.
+
+        Today each item finds its own row — they lie on different days — but they are costed by index: the D+2 row first,
+        with the D row in its pool at zero cost, (1 000 + 0 + 2 000) / 20 = 150. Costing by index with the D row left out of
+        the pool — (c) without (b) — gives (1 000 + 2 000) / 15 = 200. Three different values: the test proves the order."""
+        late = {**_created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto"), "date": WB67_D_PLUS_2.isoformat()}
+        early = {**_created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto"), "date": WB67_D.isoformat()}
+        buy = {"broker_id": world.source.id, "asset_id": world.asset.id, "type": "BUY", "date": WB67_D_PLUS_1.isoformat(), "quantity": str(ADJUSTMENT_QUANTITY), "cash": {"code": EUR, "amount": str(WB67_BUY_PAID)}}
+        early_cost = (UNIT_COST, EUR)
+        late_cost = (_average(WORLD_PAID + ADJUSTMENT_QUANTITY * UNIT_COST - WB67_BUY_PAID, BUY_QUANTITY + 2 * ADJUSTMENT_QUANTITY), EUR)
+        readings = {
+            _average(WORLD_PAID - WB67_BUY_PAID, BUY_QUANTITY + 2 * ADJUSTMENT_QUANTITY): "today's behaviour — costed first, by index, with the D row in its pool at zero cost (ADD_UNKNOWN_COST)",
+            _average(WORLD_PAID - WB67_BUY_PAID, BUY_QUANTITY + ADJUSTMENT_QUANTITY): "no date order — costed first, by index, with the D row, still to be costed, left out of its pool: (c) without (b)",
+        }
+
+        response = await _wb67_commit(world, [late, early, buy])
+
+        outcome = await _wb67_outcome(world, response, {0: "the Auto row of D+2", 1: "the Auto row of D"})
+        answered = {(operation, index): wac for operation, index, wac in outcome.answers}
+        got = outcome.costs[0][0]
+        reading = "no cost at all" if got is None else readings.get(got, "neither today's 150 nor the 200 of (c) without (b)")
+        assert (outcome.costs, answered) == ({0: late_cost, 1: early_cost}, {("create", 0): late_cost, ("create", 1): early_cost}), (
+            f"W-B67, N84 (b): the Auto rows are costed in date order — the D row first, at {_wb67_cost(early_cost)}, then the D+2 row with it in its pool at that cost, (1 000 + 5 × 100 + 2 000) / 20 = {_wb67_cost(late_cost)} —, "
+            f"each answered on its own index. The D+2 row holds {_wb67_cost(outcome.costs[0])}: {reading}. Today {outcome.today}"
+        )
+        assert [(operation, index) for operation, index, _wac in outcome.answers] == [("create", 0), ("create", 1)], f"W-B67, N84: wac_results keeps its order — the creates by index, then the updates —, not the order the rows are costed in; it answers {outcome.answers}"
+
+
+class TestWB67GuardsWhereTodaysSearchFindsTheRow:
+    """W-B67 — guards, green today and after the cure: the batches whose Auto row today's search finds — the only row of its
+    key, the newest, or a leg its ``link_uuid`` names — keep that row's cost, answered on its own index. A TRANSFER pair's
+    Auto receiving leg alone is guarded already (``TestAutoCost``, and the W-B69 guard
+    ``test_auto_row_over_a_readable_pool_takes_its_average``, which reads its ``wac_results`` item on index 1)."""
+
+    @pytest.mark.asyncio
+    async def test_a_lone_auto_adjustment_holds_the_average(self, world):
+        """Guard: an ADJUSTMENT +5 in ``auto`` on ``source``, alone, holds the BUY's 100 EUR, answered on index 0."""
+        response = await _wb67_commit(world, [_created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")])
+
+        outcome = await _wb67_outcome(world, response, {0: "the Auto row"})
+        expected = (UNIT_COST, EUR)
+        assert (outcome.costs, outcome.answers) == ({0: expected}, [("create", 0, expected)]), f"A lone Auto ADJUSTMENT +{ADJUSTMENT_QUANTITY} must hold {_wb67_cost(expected)}, answered on create 0: {outcome.today}"
+
+    @pytest.mark.asyncio
+    async def test_manual_then_auto_on_one_key_each_row_keeps_its_own_cost(self, world):
+        """Guard: an ADJUSTMENT +5 at a manual 50 EUR, no mode (create 0), then an ADJUSTMENT +5 in ``auto`` (create 1), on one
+        key: the Manual row keeps its 50, the Auto row holds (1 000 + 250) / 15, and ``wac_results`` is that one item, on
+        index 1. Right today because the Auto row is the newest of the key, the row today's search takes."""
+        manual = {**_created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY), "cost_basis_override": _cost_sent(WB67_MANUAL_COST)}
+        auto = _created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")
+        _same_key([manual, auto])
+        manual_cost = (WB67_MANUAL_COST.amount, WB67_MANUAL_COST.code)
+        auto_cost = (_average(WORLD_PAID + ADJUSTMENT_QUANTITY * WB67_MANUAL_COST.amount, BUY_QUANTITY + ADJUSTMENT_QUANTITY), EUR)
+
+        response = await _wb67_commit(world, [manual, auto])
+
+        outcome = await _wb67_outcome(world, response, {0: "the Manual row", 1: "the Auto row"})
+        assert (outcome.costs, outcome.answers) == ({0: manual_cost, 1: auto_cost}, [("create", 1, auto_cost)]), f"Manual then Auto on one key: the Manual row keeps {_wb67_cost(manual_cost)}, the Auto row holds {_wb67_cost(auto_cost)}, answered on create 1: {outcome.today}"
+
+    @pytest.mark.asyncio
+    async def test_a_split_linked_auto_row_stays_in_the_pool_of_an_auto_row_costed_before_it(self, world):
+        """Guard, N84 (c)'s exception: a split-linked Auto row stays in the other Auto rows' pools, costed or not.
+
+        A TRANSFER pair source → dest whose receiving leg is in ``auto`` (create 1; its ``link_uuid`` finds it, today too),
+        and the ADJUSTMENT +10 in ``auto`` that realizes a 2:1 SPLIT on ``source`` the same day (create 2). The leg's pool
+        date is its partner's, the split row's day: by index the leg is costed first, the split row still to be costed, and
+        only the exception keeps the rescale in the leg's pool — ``source`` without the two legs. The leg holds the
+        post-split 1 000 / 20 = 50 EUR, answered on create 1; the split row none, answered none on create 2. A cure that
+        leaves the split row out gives the leg 100. Green today, which leaves no row out of a pool.
+
+        The red ``test_split_linked_and_plain_auto_rows_on_one_key_answer_on_their_own_index`` costs its split row first: a
+        cure without the exception fails it only if it leaves out the Auto rows without a cost, not those still to be
+        handled. This guard fails such a cure either way."""
+        split = await _event(world, AssetEventType.SPLIT, SPLIT_RATIO)
+        link = (split.id, AssetEventType.SPLIT, world.asset.id)
+        creates = [*_created_pair(world, cost_basis_mode="auto"), _split_linked_create(world, split)]
+        post_split = (_average(WORLD_PAID, BUY_QUANTITY + SPLIT_QUANTITY), EUR)
+
+        response = await _wb67_commit(world, creates)
+
+        await _assert_split_linked(world, _created_id(response, 2), link)
+        outcome = await _wb67_outcome(world, response, {1: "the Auto receiving leg", 2: "the split-linked Auto row"})
+        assert (outcome.costs, outcome.answers) == (
+            {1: post_split, 2: (None, None)},
+            [("create", 1, post_split), ("create", 2, None)],
+        ), f"N84 (c): the split-linked Auto row stays in the pool of the receiving leg, costed before it, so the leg holds the post-split {_wb67_cost(post_split)}, answered on create 1, and the split row none (100 EUR on the leg: the split row left out of its pool): {outcome.today}"

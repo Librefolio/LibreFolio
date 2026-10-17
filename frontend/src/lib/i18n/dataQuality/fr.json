@@ -24,8 +24,8 @@
       "sync_fx_pair": "Synchroniser les taux",
       "sync_asset_prices": "Synchroniser les prix"
     },
-    "referencePriceFallback": "Prix d'ouverture du lot indisponible à la date exacte — utilisation du dernier prix connu {reference_price} comme référence pour le rendement relatif",
-    "referencePriceUnavailable": "Aucun prix de référence disponible pour l'ouverture d'un lot — rendement relatif impossible à calculer",
+    "referencePriceFallback": "Lots ouverts par un ajustement un jour sans cotation de marché : leur rendement ouvert part du dernier prix connu à cette date, une cotation antérieure ou le prix d'un achat ou d'une vente",
+    "referencePriceUnavailable": "Lots ouverts par un ajustement avant tout prix : leur rendement ouvert part de leur propre coût d'achat unitaire, et n'est pas disponible sans coût d'achat",
     "shortTransferNotSupported": "Le transfert d'une position short n'est pas encore pris en charge",
     "shortAdjustmentNotSupported": "Un ajustement ne peut pas encore ouvrir ou fermer une position short",
     "fifoSourceQuantityMissing": "Retire {missing_quantity} de plus que ce que le courtier détenait ce jour-là",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 
@@ -25,7 +26,9 @@ from backend.app.schemas import (
     FAUpsert,
 )
 from backend.app.schemas.prices import FACurrentValue
+from backend.app.utils.date_range_limits import DateOutOfRangeError, stored_date_bounds
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.sql_chunks import chunks
 
 logger = structlog.get_logger(__name__)
 
@@ -67,6 +70,26 @@ def _reject_prices_over_the_limit(data: List[FAUpsert]) -> None:
                 f"Too many digits in the prices of asset {item.asset_id}: at most {max_integer_digits(PriceHistory, 'close')} digits before the decimal point, {scale} decimal places and {REAL_SIGNIFICANT_DIGITS} significant digits "
                 f"(a volume, {max_integer_digits(PriceHistory, 'volume')} digits before the decimal point); {len(offending)} value(s): {shown}"
             )
+
+
+def _reject_dates_out_of_range(data: List[FAUpsert], earliest: date, latest: date) -> None:
+    """Refuse a manual upsert holding a date outside ``stored_date_bounds()``, before anything is written (X-R65, N83).
+
+    One entry per asset with such dates, in the request's order, with at most 10 of them; ``count`` is every one. A
+    provider's points are not refused: ``bulk_upsert_prices`` skips them, as it skips the unstorable ones.
+
+    Raises:
+        DateOutOfRangeError: the router turns it into HTTP 422 ``date_out_of_range``.
+    """
+    items: list[dict] = []
+    count = 0
+    for item in data:
+        dates = [price.date.isoformat() for price in item.prices if not earliest <= price.date <= latest]
+        if dates:
+            items.append({"asset_id": item.asset_id, "dates": dates[:10]})
+            count += len(dates)
+    if items:
+        raise DateOutOfRangeError(items=items, count=count, earliest=earliest, latest=latest)
 
 
 def _unstorable_provider_point(price: FAPricePoint) -> Optional[str]:
@@ -187,8 +210,10 @@ class PriceStoreOperations:
         """
         if not data:
             return {"inserted_count": 0, "updated_count": 0, "results": []}
+        earliest, latest = stored_date_bounds()
         if source_plugin_key == "MANUAL":
             _reject_prices_over_the_limit(data)
+            _reject_dates_out_of_range(data, earliest, latest)
 
         total_inserted = 0
         results = []
@@ -256,7 +281,15 @@ class PriceStoreOperations:
             # that failed in the truncation of a later slice left the earlier ones committed. A manual upsert never
             # gets here with one (``_reject_prices_over_the_limit`` refused it).
             unstorable_dates: list[str] = []
+            out_of_range_dates: list[str] = []
             if source_plugin_key != "MANUAL":
+                # X-R65 (N83): a provider's date outside stored_date_bounds() is skipped, never stored.
+                for date_key in list(valid_inputs):
+                    if not earliest <= date_key <= latest:
+                        del valid_inputs[date_key]
+                        out_of_range_dates.append(date_key.isoformat())
+                if out_of_range_dates:
+                    logger.warning("Provider prices skipped: date out of range", asset_id=asset_id, source=source_plugin_key, dates=out_of_range_dates[:5], count=len(out_of_range_dates), earliest=earliest.isoformat(), latest=latest.isoformat())
                 for date_key, price in list(valid_inputs.items()):
                     reason = _unstorable_provider_point(price)
                     if reason is not None:
@@ -377,6 +410,8 @@ class PriceStoreOperations:
             msg = f"Upserted {upserted_count} prices"
             if rejected_dates:
                 msg += f"; rejected {len(rejected_dates)} date(s) with impossible OHLC (close outside [low, high]): " + ", ".join(rejected_dates[:5]) + (f" (+ {len(rejected_dates) - 5} more)" if len(rejected_dates) > 5 else "")
+            if out_of_range_dates:
+                msg += f"; rejected {len(out_of_range_dates)} date(s) outside {earliest.isoformat()} to {latest.isoformat()}: " + ", ".join(out_of_range_dates[:5]) + (f" (+ {len(out_of_range_dates) - 5} more)" if len(out_of_range_dates) > 5 else "")
             if unstorable_dates:
                 msg += f"; rejected {len(unstorable_dates)} date(s) with a value no price column can keep: " + ", ".join(unstorable_dates[:5]) + (f" (+ {len(unstorable_dates) - 5} more)" if len(unstorable_dates) > 5 else "")
 
@@ -402,7 +437,8 @@ class PriceStoreOperations:
         Returns:
             FABulkDeleteResponse with results and deleted count
 
-        Optimized: 1 SELECT COUNT + 1 DELETE query with complex WHERE
+        One COUNT per range (the per-asset counts), then one DELETE per chunk of ranges (``utils/sql_chunks``; MF-SEC9a),
+        in one transaction. The counts are up to ``MAX_BULK_WRITE_ITEMS`` awaited queries: slow, not a stall (MF-SEC9e).
         Note: Cannot parallelize with gather - DB operations are sequential and interdependent
         """
         if not data:
@@ -457,12 +493,12 @@ class PriceStoreOperations:
         if not conditions:
             return FABulkDeleteResponse(deleted_count=0, results=[])
 
-        # Execute single DELETE with OR of all conditions
-        stmt = delete(PriceHistory).where(or_(*conditions))
-        result = await session.execute(stmt)
+        # One DELETE per chunk of ranges, in one transaction (MF-SEC9a): SQLite refuses an OR of a thousand terms
+        deleted_count = 0
+        for chunk in chunks(conditions):
+            result = await session.execute(delete(PriceHistory).where(or_(*chunk)))
+            deleted_count += result.rowcount
         await session.commit()
-
-        deleted_count = result.rowcount
 
         # Build results per asset with exact counts
         results = [

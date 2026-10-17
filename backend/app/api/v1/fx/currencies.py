@@ -13,6 +13,7 @@ from sqlmodel import select
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import FxRate, User
 from backend.app.db.session import get_session_generator
+from backend.app.logging_config import get_logger
 from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel, period_changes_request_refusal
 from backend.app.schemas.fx import (
     FXBulkDeleteResponse,
@@ -38,8 +39,10 @@ from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
-from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, MAX_BULK_ITEMS, bulk_too_many_days_detail, bulk_too_many_items_detail, range_span_floor
+from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, MAX_BULK_ITEMS, MAX_BULK_WRITE_ITEMS, bulk_too_many_days_detail, bulk_too_many_items_detail, date_out_of_range_detail, range_span_floor, stored_date_bounds
 from backend.app.utils.datetime_utils import latest_range_end
+
+logger = get_logger(__name__)
 
 router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
 
@@ -114,7 +117,20 @@ async def upsert_rates_endpoint(
 
     Returns:
         Operation results with action taken (inserted/updated) for each rate
+
+    Limit (MF-SEC9a): at most ``MAX_BULK_WRITE_ITEMS`` rates (422 ``bulk_too_many_items``, before any write): the FX
+    page saves a CSV import in one request.
+
+    A date outside ``stored_date_bounds()`` (1900-01-01 to tomorrow) refuses the whole request with 422
+    ``date_out_of_range``, before anything is written (X-R65, N83).
     """
+    if len(rates) > MAX_BULK_WRITE_ITEMS:
+        raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(rates), MAX_BULK_WRITE_ITEMS))
+    earliest, latest = stored_date_bounds()
+    out_of_range = [{"index": idx, "date": item.rate_date.isoformat()} for idx, item in enumerate(rates) if not earliest <= item.rate_date <= latest]
+    if out_of_range:
+        raise HTTPException(status_code=422, detail=date_out_of_range_detail(out_of_range, len(out_of_range), earliest, latest))
+
     results = []
     errors = []
 
@@ -155,9 +171,10 @@ async def upsert_rates_endpoint(
         except ValueError as e:
             error_msg = f"Rate {idx}: Validation error: {e!s}"
             errors.append(error_msg)
-        except Exception as e:
-            error_msg = f"Rate {idx}: Failed: {e!s}"
-            errors.append(error_msg)
+        except Exception:
+            # MF-SEC9a: the log keeps the error; the answer never echoes it
+            logger.exception("FX rate upsert failed", item=idx)
+            errors.append(f"Rate {idx}: Failed: internal error")
 
     # If all rates failed, return 400
     if errors and not results:
@@ -206,6 +223,8 @@ async def delete_rates_endpoint(  # noqa: C901 — flat bulk loop, per-item vali
             ]
         }
     """
+    if len(deletions) > MAX_BULK_WRITE_ITEMS:
+        raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(deletions), MAX_BULK_WRITE_ITEMS))
     results = []
     errors = []
     total_deleted = 0
@@ -258,8 +277,10 @@ async def delete_rates_endpoint(  # noqa: C901 — flat bulk loop, per-item vali
                     )
                 )
                 total_deleted += deleted_count
-            except Exception as e:
-                errors.append(f"Delete all for {base}/{quote} failed: {e!s}")
+            except Exception:
+                # MF-SEC9a: the log keeps the error; the answer never echoes it
+                logger.exception("FX delete-all failed", pair=f"{base}/{quote}")
+                errors.append(f"Delete all for {base}/{quote} failed: internal error")
         else:
             # Date-range deletion — collect for bulk service call
             start_date = delete_req.date_range.start
@@ -313,10 +334,9 @@ async def delete_rates_endpoint(  # noqa: C901 — flat bulk loop, per-item vali
                 total_deleted += deleted_count
 
         except Exception as e:
-            error_msg = f"Bulk deletion failed: {e!s}"
-            errors.append(error_msg)
-            # If entire bulk operation failed, return 500
-            raise HTTPException(status_code=500, detail=error_msg) from e
+            # If entire bulk operation failed, return 500; MF-SEC9a: the log keeps the error, the answer never echoes it
+            logger.exception("FX bulk deletion failed")
+            raise HTTPException(status_code=500, detail="Internal error while deleting rates") from e
 
     # If all deletions failed validation, return 400
     if errors and not results:

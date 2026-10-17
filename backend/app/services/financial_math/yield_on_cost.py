@@ -26,7 +26,8 @@ from backend.app.schemas.portfolio import (
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FragmentInterval
+from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoInputTransaction, FragmentInterval
+from backend.app.services.financial_math.lots.scope_boundary import TransferPartner, read_arrivals_at_scope_boundary
 from backend.app.services.financial_math.splits import SplitLink, is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.utils.datetime_utils import day_before, shift_date
@@ -70,7 +71,8 @@ class _ConversionSpec:
 
 @dataclass(frozen=True, slots=True)
 class _TransactionContext:
-    replay_transactions: list[Transaction]
+    # The rows the replay reads, an arrival from a broker the user cannot see read at the scope's edge (J-51).
+    replay_transactions: list[Transaction | FifoInputTransaction]
     first_pair_date: dict[PositionKey, date_type]
     income_by_key: dict[PositionKey, list[Transaction]]
 
@@ -220,7 +222,7 @@ async def _load_transaction_context(
     visible_broker_ids = set((await db.execute(visible_stmt)).scalars().all()) | selected_broker_ids
     tx_stmt = select(Transaction).where(Transaction.asset_id.in_(asset_ids)).where(Transaction.broker_id.in_(visible_broker_ids)).where(Transaction.date <= as_of_date).order_by(Transaction.date, Transaction.id)
     historical_transactions = list((await db.execute(tx_stmt)).scalars().all())
-    replay_transactions = await _include_external_transfer_legs(db, historical_transactions, asset_ids)
+    ledger_transactions = await _include_external_transfer_legs(db, historical_transactions, asset_ids)
 
     first_pair_date: dict[PositionKey, date_type] = {}
     income_by_key: dict[PositionKey, list[Transaction]] = defaultdict(list)
@@ -234,7 +236,7 @@ async def _load_transaction_context(
         if transaction.type in _INCOME_TYPES and window_start <= transaction.date <= as_of_date:
             income_by_key[key].append(transaction)
     return _TransactionContext(
-        replay_transactions=replay_transactions,
+        replay_transactions=_read_unseen_arrivals(ledger_transactions, visible_broker_ids),
         first_pair_date=first_pair_date,
         income_by_key=dict(income_by_key),
     )
@@ -252,6 +254,23 @@ async def _include_external_transfer_legs(
         paired_stmt = select(Transaction).where(Transaction.id.in_(external_pair_ids)).where(Transaction.asset_id.in_(asset_ids))
         replay_transactions.extend((await db.execute(paired_stmt)).scalars().all())
     return sorted(replay_transactions, key=lambda transaction: (transaction.date, transaction.id or 0))
+
+
+def _read_unseen_arrivals(ledger: Sequence[Transaction], visible_broker_ids: set[int]) -> list[Transaction | FifoInputTransaction]:
+    """The ledger to replay, each arriving TRANSFER leg whose partner pairs back from a broker the user cannot see read at
+    the scope's edge (J-51, ``scope_boundary.read_arrivals_at_scope_boundary``).
+
+    Replayed with its partner, such an arrival joins the sender's broker to a component where that broker has no history,
+    so the replay fails and the yield on cost is unavailable. Read at the edge, the units arrive on the leg's own date and
+    the partner leaves the replay. A departure keeps its partner: units in transit count for the broker they left.
+    """
+    seen = [row for row in ledger if row.broker_id in visible_broker_ids]
+    unseen = {row.id: row for row in ledger if row.broker_id not in visible_broker_ids and row.id is not None}
+    partners = {row_id: TransferPartner(id=row_id, broker_id=row.broker_id, asset_id=row.asset_id, type=str(getattr(row.type, "value", row.type)), quantity=row.quantity, related_transaction_id=row.related_transaction_id) for row_id, row in unseen.items()}
+    reading = read_arrivals_at_scope_boundary(seen, partners=partners, scope_broker_ids=visible_broker_ids)
+    read_partner_ids = {row.related_transaction_id for row in seen if row.id in reading.legs}
+    kept_partners = [row for row_id, row in unseen.items() if row_id not in read_partner_ids]
+    return sorted([*reading.transactions, *kept_partners], key=lambda row: (row.date, row.id or 0))
 
 
 async def _build_replay_context(
@@ -774,6 +793,8 @@ def _unavailable(
 
 async def _load_split_records(
     db: AsyncSession,
-    transactions: Sequence[Transaction],
+    transactions: Sequence[Transaction | FifoInputTransaction],
 ) -> list[SplitLink]:
-    return [link for link in await load_split_links(db, transactions) if link.transaction_asset_id is not None]
+    # A copy read at the scope's edge (J-51) stands for a TRANSFER leg, which no SPLIT links: only stored rows are asked.
+    stored = [transaction for transaction in transactions if isinstance(transaction, Transaction)]
+    return [link for link in await load_split_links(db, stored) if link.transaction_asset_id is not None]

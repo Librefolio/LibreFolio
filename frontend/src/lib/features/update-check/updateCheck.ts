@@ -21,6 +21,7 @@
 
 import {zodiosApi} from '$lib/api';
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+import {selfHostedConfirmed} from '$lib/features/instance/profile';
 import {debug} from '$lib/debug';
 
 export interface NewerRelease {
@@ -239,7 +240,7 @@ export async function checkForUpdates(currentVersion: string, options: {force?: 
  */
 export async function checkForNewerRelease(currentVersion: string, fetchFn?: typeof fetch, imageProbe?: ImageProbe): Promise<NewerRelease | null> {
     await instanceConfig.load();
-    if (!instanceConfig.loaded || instanceConfig.config.profile !== 'selfhosted') return null;
+    if (!selfHostedConfirmed()) return null;
     const result = await checkForUpdates(currentVersion, {}, fetchFn, imageProbe);
     return result.status === 'update-available' ? result.latest : null;
 }

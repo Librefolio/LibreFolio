@@ -34,7 +34,7 @@ from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.period_changes import get_period_changes_bulk, live_range_changes
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
-from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, BulkTooManyDaysError, bulk_too_many_days_detail, bulk_too_many_items_detail
+from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, MAX_BULK_WRITE_ITEMS, BulkTooManyDaysError, DateOutOfRangeError, bulk_too_many_days_detail, bulk_too_many_items_detail, date_out_of_range_detail
 from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
 
 logger = get_logger(__name__)
@@ -66,7 +66,11 @@ async def upsert_prices_bulk(
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
-    """Bulk upsert prices manually (PRIMARY bulk endpoint)."""
+    """Bulk upsert prices manually (PRIMARY bulk endpoint).
+
+    A date outside ``stored_date_bounds()`` (1900-01-01 to tomorrow) refuses the whole request with 422
+    ``date_out_of_range``, before anything is written (X-R65, N83).
+    """
     try:
         # Pass FAUpsert objects directly to service
         result = await AssetSourceManager.bulk_upsert_prices(assets, session)
@@ -80,14 +84,17 @@ async def upsert_prices_bulk(
             results=results_list,
             success_count=success_count,
         )
+    except DateOutOfRangeError as e:
+        raise HTTPException(status_code=422, detail=date_out_of_range_detail(e.items, e.count, e.earliest, e.latest)) from e
     except ValueError as e:
         # I.2 — currency mismatch (or other domain validation errors from the service)
         # surface as 400 Bad Request, with the structured message the service produced.
         logger.warning("Upsert prices validation error: %s", e)
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        # MF-SEC9a: the log keeps the error; the answer never echoes it
         logger.exception(f"Error in bulk upsert prices: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while saving prices") from e
 
 
 @price_router.delete("", response_model=FABulkDeleteResponse)
@@ -96,12 +103,20 @@ async def delete_prices_bulk(
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
-    """Bulk delete price ranges (PRIMARY bulk endpoint)."""
+    """Bulk delete price ranges (PRIMARY bulk endpoint).
+
+    Limit (MF-SEC9a): at most ``MAX_BULK_WRITE_ITEMS`` date ranges, all assets together (422 ``bulk_too_many_items``,
+    before any read). The deletion runs in chunks of ranges, in one transaction.
+    """
+    ranges = sum(len(item.date_ranges) for item in assets)
+    if ranges > MAX_BULK_WRITE_ITEMS:
+        raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(ranges, MAX_BULK_WRITE_ITEMS))
     try:
         return await AssetSourceManager.bulk_delete_prices(assets, session)
     except Exception as e:
+        # MF-SEC9a: the log keeps the error; the answer never echoes it
         logger.exception(f"Error in bulk delete prices: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while deleting prices") from e
 
 
 # ============================================================================
@@ -243,8 +258,9 @@ async def sync_prices_bulk(
     try:
         return await AssetSourceManager.bulk_refresh_prices(requests, session)
     except Exception as e:
+        # MF-SEC9a: the log keeps the error; the answer never echoes it
         logger.exception(f"Error in bulk refresh prices: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while syncing prices") from e
 
 
 # ============================================================================

@@ -5982,3 +5982,164 @@ prossimo checkpoint.
   è anche una patch, `/tmp/libreFolio_j50_remedy_fix.patch`: solo i pezzi della cura, costruita da HEAD, controllata
   (`git apply --cached --check` ok; ruff, black e la scansione dei rimedi sulle versioni della sola cura). Ciò che resta
   dopo la patch è esattamente SEC8-1b.
+- ✅ **J-50b entrato da solo** (`d9da0ff54` → dev `ef74ff9fc`, porta rossa chiusa); **SEC8-1b entrato** dopo l'OK di E
+  (`949825b8b`, diario `9df95b5b6`; dev `a565e06d0`, CHANGELOG 🔒 `291a84646`); worktree in fast-forward a `291a84646`.
+  Nota cosmetica di E, facoltativa → **J-52** nell'indice (due convenzioni d'eco della finestra fuori dai limiti).
+- **Revisione di X-R49, regola (d)** (richiesta del coordinatore): regge; `split_guard.py`, `provider_management.py` e
+  `currency_change.py` non nominano mai `AssetEventType`, `"SPLIT"` né un confronto `.type ==`; la domanda dello SPLIT
+  passa solo da `financial_math/splits.py::costless_incoming_split_adjustments`, una delle case della regola (d);
+  `layer-boundaries` 52 sull'albero che contiene `589f15607`.
+- **Prossimo (coordinatore, 14:0x)**: la prossima voce senza decisioni della sezione J → **J-33** (lo storico della
+  performance dei lotti senza i giorni al costo), poi J-51, poi J-36.
+
+#### J-33 — la performance dei lotti nei giorni al costo (analisi 17/10 ~14:10, sola lettura; base `291a84646`)
+
+- **Stato reale.** `build_performance_history()` (`financial_math/lots/histories.py`) fa la NAV solo nei giorni con un
+  segno di prezzo e non riceve `at_cost_until`. La pagina lo dice («No at-cost day reaches `build_performance_history()`»).
+  - I flussi prima del primo giorno di NAV finiscono su quel giorno. Il TWRR prende il primo giorno come base e ne ignora
+    i flussi (`calculate_twrr_period_series`), quindi **il salto dal costo al primo prezzo resta fuori dalla catena**,
+    mentre il ROI lo vede: TWRR e ROI non coincidono nemmeno con un solo apporto.
+  - Una gamba letta al confine (J-10) o un trasferimento che attraversa il perimetro (rigioco sui broker accessibili, con
+    un filtro) in un giorno senza segno → `invalid_external_flow_from`: ROI e TWRR vuoti da quel giorno.
+  - `collect_performance_fx_needs()` non registra il cambio d'apertura dei lotti, che il valore al costo legge.
+- **Regola (la decisione (a) di J-17, già nelle storie del valore e del rendimento)**:
+  - P1, NAV: in un giorno ≤ `at_cost_until` (nessuna osservazione su o prima), la NAV è la somma, sui frammenti nel
+    perimetro attivi quel giorno, di `residual_cost(costo del lotto al cambio d'apertura, quantità, quantità originale)`;
+    se uno di quei frammenti è di un lotto SHORT o il costo non si converte, quel giorno resta senza punto (come oggi).
+    Dopo `at_cost_until` un segno `None` (cambio mancante) resta senza punto.
+  - P2, gamba al confine in un giorno al costo: in entrata, come ogni ADJUSTMENT-in, il suo costo convertito alla sua
+    data (senza costo: nessun flusso, il lotto conta 0 come nella storia del valore, J-35 aperta); in uscita
+    (`hands_over_at_own_cost`), il costo dei pezzi che escono, cioè la somma, sulle chiusure di quella riga, del loro
+    costo al cambio d'apertura: esattamente quanto perde la NAV al costo.
+  - P3, trasferimento che attraversa il perimetro nel rigioco in un giorno al costo: il costo dei pezzi spostati, letti
+    dai frammenti della coppia (`lot:{id}/transfer:{pair}/…`, il primo intervallo per lotto), al cambio d'apertura.
+  - P4: `collect_performance_fx_needs()` registra il cambio d'apertura di ogni lotto LONG quando `at_cost_until` c'è.
+- **Valori che cambiano (dichiarati prima del codice)**:
+  - V1, un asset il cui primo possesso precede la prima osservazione (una posizione iniziale inserita con una
+    rettifica): punti nei giorni al costo (ROI 0, TWRR 0), e il TWRR comprende il salto dal costo al primo prezzo.
+    Esempio: rettifica di 10 unità a costo 1 000 il giorno 0, prima quotazione 110 il giorno 5, 121 il giorno 10.
+    Oggi: ROI g5 +10 %, TWRR g5 assente, g10 ROI +21 %, TWRR +10 %. Dopo: g0–g4 ROI 0, TWRR 0 (dal g1); g5 +10 % e
+    +10 %; g10 +21 % e +21 %. Il ROI dei giorni osservati non cambia (dipende solo da NAV e flussi del giorno).
+  - V2, un asset senza nessuna osservazione: oggi nessun punto; dopo ROI 0 e TWRR 0 ogni giorno, la posizione al costo
+    come sulla Dashboard (con l'avviso `CURRENT_PRICE_ASSUMED_AT_COST` che già c'è).
+  - V3, un trasferimento che attraversa il perimetro in un giorno al costo (gamba al confine o rigioco con filtro):
+    oggi ROI e TWRR vuoti da quel giorno; dopo il trasferimento sposta il suo costo e la serie continua. Anche una gamba
+    datata prima del pavimento del 1900 (giorno al costo) non ferma più la serie.
+  - Non cambiano: le storie del valore, del rendimento e del prezzo, il riepilogo, la Dashboard, l'AI Export (i suoi
+    componenti dei lotti chiedono solo `LOT_SUMMARY`); i giorni con un lotto SHORT aperto; un cambio mancante dopo la
+    prima osservazione.
+- **Superfici**: `financial_math/lots/histories.py`, `financial_math/lots/conversions.py`, `lots_analysis_service.py`
+  (passa `at_cost_until`); doc `lots_analysis_service.md` (tabella di `at_cost_until`, il paragrafo «No at-cost day…»,
+  il pavimento, la gamba al confine), devWiki `entities/lots-analysis-service.md`; riga 🐛 del CHANGELOG. Il pannello
+  (Y) riceve solo più punti, stessi campi: nessun contratto cambia.
+- **Rossi (test-author)**: puri in `test_lots_analysis_pure.py` (V1 esatto, V2, SHORT e costo ignoto senza punto, cambio
+  mancante dopo la prima osservazione senza punto, P2 entrata/uscita, P3, P4); uno di servizio su un libro vero (una
+  rettifica prima della prima quotazione). Selettori: `services lots-analysis-pure`, `services roi-fifo-utils`.
+- **Coordinatore (14:0x)**: via al codice; V1–V3 come dichiarati, J-35 resta aperta; riga 🐛 del CHANGELOG nel
+  checkpoint; prima del checkpoint `schemas risk`, `roi-fifo-utils`, `lots-analysis-pure` e, nello slot,
+  `front-broker detail`.
+- ✅ **Rossi (test-author, corsa sul codice vecchio)**: puri `TestPerformanceHistoryAtCost` **11 rossi** (9 sulla chiamata
+  di `build_performance_history`, 2 su `collect_performance_fx_needs`; i valori di oggi scritti in ogni docstring, letti
+  chiamando il costruttore di oggi senza la parola chiave, fuori dalla corsia); servizio
+  `test_financial/test_lots_performance_history_at_cost.py` **1 rosso** (oggi il primo punto è la prima quotazione, e
+  l'ultimo giorno ROI 21 % ma TWRR 10 %). Le guardie hanno una barriera di presenza (g0–g1 al costo). Scelta lasciata a
+  me: un giorno al costo senza nulla di aperto nel perimetro dà NAV 0, come un giorno con un segno.
+- ✅ **Codice (14:13)**: `histories.py` — `build_performance_history(..., at_cost_until)` (parola chiave obbligatoria),
+  `_cost_at_opening()`, `_nav_at_cost()`, `_boundary_leg_cost()` (entrata: il suo costo; uscita: il costo dei pezzi che
+  chiude), `_moved_cost()` (i pezzi della coppia dai frammenti); `conversions.py` — `_need_cost_rates()` chiamato da
+  `collect_performance_fx_needs(..., at_cost_until=None)`; il servizio passa `at_cost_until` alle due chiamate.
+  > **⚠️ Fuori pista**: (1) C901 su `collect_performance_fx_needs` (era al limite, 10): la registrazione dei cambi in un
+  > aiuto che controlla `at_cost_until` da sé. (2) 22 test puri esistenti (`TestBuildPerformanceHistory`,
+  > `TestHandoverAtCostPerformanceHistory`, `TestTheCashFlowOfASale`) chiamavano il costruttore senza la parola chiave:
+  > il test-author ha passato `at_cost_until=None` nei 3 punti, con la premessa nella docstring di ogni classe.
+- ✅ **Verdi (14:14–14:19)**: mirati 11 + 1; `lots-analysis-pure` **192**, `roi-fifo-utils` **1367**, `financial-math`
+  **1211**, `schemas risk` **93**, check-orphans ✓, `mkdocs build` stretto ✓, check-links ✓; ruff e black puliti. Doc:
+  `lots_analysis_service.md` (tabella di `at_cost_until`, il paragrafo della performance, il pavimento, la gamba al
+  confine, i cambi); devWiki `entities/lots-analysis-service.md`. In attesa: lo slot `front-broker detail`.
+- ✅ **Slot (14:20–14:26, via del coordinatore, carico sotto 50)**: `front-broker detail` **40 passati** (2,7 min). Porta 6185
+  libera.
+- ⏳ **Checkpoint J-33** (FROZEN, in attesa del commit del coordinatore). Riga 🐛 proposta per il CHANGELOG.
+- ✅ **Checkpoint J-33** (2026-10-17): committato dal coordinatore (`b13ee97be` diario e codice), entrato (dev `104333567`),
+  CHANGELOG 🐛 `b077dfd81`; worktree in fast-forward. Revisione A-42/A-43 `00b1b2e67`: OK (5 commenti, nessuna asserzione).
+
+#### J-51 — lo YoC di un co-proprietario sulle unità ricevute da un broker che non vede (analisi 17/10 ~14:35; base `b077dfd81`)
+
+- **Stato reale** (`financial_math/yield_on_cost.py`). `_load_transaction_context()` carica le righe dell'asset sui broker
+  visibili (accessi dell'utente ∪ broker delle posizioni); `_include_external_transfer_legs()` aggiunge al rigioco la
+  riga compagna di ogni TRANSFER il cui partner non è caricato, cioè sta su un broker che l'utente non vede.
+  `_broker_components()` unisce allora i due broker in un componente. Per il **destinatario** visibile (B) il
+  componente {A, B} rigioca un A che ha solo la gamba in uscita → `FIFO_SOURCE_QUANTITY_MISSING` → `FAILED` → YoC
+  «non disponibile» per la posizione in B. Per il **mittente** visibile funziona: A ha la sua storia, B ha l'arrivo.
+- **Perché non la lettura al confine intera di J-10**: lo YoC conta le unità in viaggio per il broker d'origine
+  (`test_transfer_in_transit_counts_for_source_not_destination`). Leggere al confine anche la partenza la toglierebbe dal
+  mittente alla data di partenza: un provento con stacco durante il viaggio cambierebbe, o diventerebbe orfano e
+  invaliderebbe la posizione. Il mittente oggi funziona: non si tocca.
+- **Disegno**:
+  - `financial_math/lots/scope_boundary.py`: `read_arrivals_at_scope_boundary(transactions, *, partners,
+    scope_broker_ids)`, pura, legge solo le gambe in arrivo (quantità > 0) il cui partner torna da un broker fuori dal
+    perimetro (gli stessi controlli, `_pairs_across`), come le legge J-10: un ADJUSTMENT-in delle sue unità alla sua data,
+    al suo costo; le partenze e ogni altra riga restano come sono. Nessun prezzo serve.
+  - `yield_on_cost.py`: il rigioco usa le righe con gli arrivi letti al confine; la riga compagna di un arrivo letto
+    esce dal rigioco, quella di una partenza resta (il viaggio come oggi). Il registro come salvato (le righe visibili più
+    le compagne) resta la fonte dell'impronta della cache e dei legami degli SPLIT (le copie non hanno
+    `asset_event_id`): l'impronta non cambia.
+- **Valori che cambiano (dichiarati prima del codice)**:
+  - V1: una posizione in un broker visibile le cui unità sono arrivate con un TRANSFER da un broker che l'utente non vede
+    (co-proprietario; la coppia torna): oggi YoC «non disponibile» (rigioco `FAILED`); dopo calcolato, con le unità
+    arrivate idonee dalla data d'arrivo, come la destinazione d'un viaggio oggi.
+  - Non cambiano: il mittente (la partenza tiene la compagna e il viaggio); una coppia che non torna (resta non
+    disponibile); l'impronta della cache; ogni posizione senza un trasferimento con un broker invisibile.
+  - Dove si vede: la colonna YoC delle posizioni della Dashboard (`PortfolioHolding.yield_on_cost` e la sua API), solo
+    dove oggi manca; nessuna forma cambia.
+    > **⚠️ Fuori pista (correzione)**: nell'analisi avevo scritto «e i campi YoC dell'AI Export»: falso, nessun file di
+    > `services/ai_export` legge `yield_on_cost`. Corretto anche col coordinatore.
+- **Rossi (test-author)**: servizio in `test_financial/test_yield_on_cost.py` (V1 col co-proprietario; guardie: il mittente
+  invariato, la coppia che non torna, l'impronta invariata); puro per `read_arrivals_at_scope_boundary`. Selettori:
+  `services roi-fifo-utils test_yield_on_cost`, e il file puro dei lotti di J-10.
+- **Coordinatore (14:4x)**: design e V1 OK; da fissare nei rossi: il costo delle unità arrivate è la base di costo della
+  gamba (come al confine di J-10), e una gamba senza base lascia lo YoC «non disponibile», mai un denominatore nullo o
+  zero. Risposta (fatti del codice): il denominatore dello YoC è il WAC della posizione della Dashboard
+  (`wac_per_unit = position.wac`); il rigioco dà solo le quantità. Nel perimetro del co-proprietario la Dashboard mette
+  nel costo medio la base della gamba in arrivo (lotto 41, D2); senza base il costo medio ha una parte ignota → `wac`
+  None → `MISSING_WAC` prima del rigioco (`_base_failure_reason`); un WAC ≤ 0 → `NON_POSITIVE_WAC`. Due prove in più,
+  sul percorso vero di `PortfolioService`: (a) rosso, WAC = la base per unità della gamba e YoC esatto; (b) guardia,
+  senza base (anche con un BUY proprio di B) `wac` None, `MISSING_WAC`, nessun valore.
+- ✅ **Rossi (test-author, codice vecchio)**: servizio 2 rossi (V1 `REPLAY_INCONSISTENT` → 0,125; Dashboard (a): WAC 16 già
+  oggi, YoC `REPLAY_INCONSISTENT` → 0,125), puri 13 rossi (`ImportError`); guardie verdi: il mittente (0,5: il dividendo
+  durante il viaggio conta per A), la coppia che non torna (`TRANSFER_PAIR_MISSING`), l'impronta (anche la quantità
+  della compagna), la Dashboard (b) (`wac` None, `MISSING_WAC`, anche col BUY proprio di B). Nessuna scoperta.
+- ✅ **Codice (14:45)**: `scope_boundary.py` — `read_arrivals_at_scope_boundary()` e `_read_arrival()` (usato anche dal
+  lettore intero di J-10); `yield_on_cost.py` — `_read_unseen_arrivals()` costruisce le righe del rigioco; la compagna di
+  un arrivo letto esce, quella di una partenza resta; l'impronta legge ancora il registro come salvato.
+  > **⚠️ Fuori pista**: un campo nuovo di `_TransactionContext` rompeva 7 test di MF
+  > (`test_yield_on_cost_date_min.py`, che costruiscono il dataclass privato): tolto il campo; i legami degli SPLIT si
+  > leggono dalle righe del rigioco saltando le copie (una copia sta per una gamba TRANSFER, che nessuno SPLIT lega).
+- ✅ **Verdi (14:46–14:52)**: mirati 78 + 34; `roi-fifo-utils` **1375**, `financial-math` **1224**, `lots-analysis-pure`
+  **192**, `portfolio-engine` **41**, check-orphans ✓, `mkdocs build` stretto ✓, check-links ✓; ruff e black puliti.
+  Doc: la pagina teorica dello YoC (un punto, solo EN: la cache di traduzione era già indietro, nessun timbro) e
+  `lots_analysis_service.md` («Yield on cost»); devWiki `decisions/yield-on-cost-definition.md`.
+- ⏳ **Checkpoint J-51** (FROZEN).
+- ✅ **Checkpoint J-51** (2026-10-17): entrato (dev `1becf502f`), CHANGELOG 🐛 `85b067b1b`; worktree in fast-forward.
+  Nessuno slot `api portfolio` (forma invariata; lo copre il prossimo cancello).
+
+#### J-36 — i due messaggi del prezzo di riferimento dei lotti (17/10, dalle 14:55; base `85b067b1b`)
+
+- **Analisi (sola lettura)**: `referencePriceUnavailable` diceva il rendimento relativo non calcolabile, mentre ripiega sul
+  costo unitario del lotto (`opening_reference_price`, sorgente `exact`) e manca solo senza costo d'acquisto;
+  `referencePriceFallback` diceva «ultimo prezzo noto {reference_price}», mentre il riferimento può essere anche il prezzo
+  degli scambi dello stesso giorno, e il parametro è un numero nativo senza valuta. **Scoperta**: il banner dei lotti
+  (`lotDataQualityHelpers.buildIssueGroups`) raggruppa per codice, un messaggio coi parametri della prima issue e un chip
+  per lotto: `{reference_price}` nominava il prezzo di un lotto davanti a più lotti. Deviazione dalla nota dell'indice
+  (prezzo convertito con la valuta): il prezzo esce dal testo.
+- **Coordinatore (15:0x)**: OK; **J-53** (lo stesso raggruppamento nasconde i fondi orfani dopo il primo) al frontend, una
+  riga per issue per i codici senza lotto, titolare Y, dopo X-R59 A/B, nella 1.3: scritta nella sezione J con Y titolare.
+- ✅ **Testi (15:0x)** con `dev.py i18n update`, 4 lingue, termini dell'interfaccia (Open Return / rendimento aperto /
+  rendement ouvert / rendimiento abierto; rettifica; costo d'acquisto). EN: «Lots opened by an adjustment on a day without
+  a market quote: their Open Return starts from the last price on or before that day, an earlier quote or the price of a
+  purchase or sale»; «Lots opened by an adjustment before any price: their Open Return starts from their own purchase
+  cost per unit, and is not available without one». Nessun cambio del backend (`reference_price` resta, non letto). Doc:
+  una frase in `lots_analysis_service.md` («Reference Price»). Nessun rosso: un test non asserisce testi.
+- ✅ **Verdi (14:57–15:00)**: `i18n check` stretto (5 051 chiavi), `gate-i18n-catalog` **176**, `gate-i18n-usage` **195**,
+  `front check` 0/0 (comprende il formato dei JSON), `mkdocs build` stretto ✓, check-links ✓; nessun test né E2E cita i
+  testi vecchi. Porta 6185 libera.
+- ⏳ **Checkpoint J-36** (FROZEN).

@@ -98,6 +98,13 @@ T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financi
   transfer, the giving leg (`raw_transaction_ids[0]` in the engine, no longer the pair's id). The AI Export reads the
   codes back with `analysis_failure_codes()` and declares the asset (`failed_lot_reconstructions`) instead of exporting
   its lots. The panel half (Y) and the decision record: [[decisions/fifo-v4-gross-net-status-model]], revision 17/10.
+- **The performance history values the days at cost too (2026-10-17, J-33).** Since CP-7b (J-17 decision (a)) the value
+  and return histories valued a day with no observation on or before it at cost, but `build_performance_history()`
+  read a NAV only on a day with a mark: its first NAV was the first mark, the TWRR's base, so the move from cost to the
+  first price fell outside the TWRR chain while the ROI counted it, and a transfer on such a day emptied ROI and TWRR.
+  Now the NAV of those days is the open LONG fragments at cost (opening rate), and a transfer moves the cost of its
+  units (an edge leg: its cost basis in, the cost of the pieces it closes out; a re-run transfer: its pair's pieces).
+  A costless adjustment still counts 0 there, as in the value history: J-35 is the developer's open question.
 - **A transfer crossing the scope no longer fails the asset (2026-10-16/17).** J-10 (N76) reads a leg whose partner
   sits outside the broker scope at the scope's edge ([[problems/lots-failed-when-a-transfer-crossed-the-broker-scope]]);
   J-47 hands the engine the arriving leg dated after `date_to` (`_load_late_transfer_legs()`, `replay_until`), so a
