@@ -3,7 +3,8 @@
 
   The backend emits ONE issue per lot for lot-scoped codes (e.g. REFERENCE_PRICE_UNAVAILABLE),
   which the old flat banner rendered as N identical rows. This component instead:
-   - groups issues by code (dedup → one message per category);
+   - groups issues by code (dedup → one message per category for the issues on a lot; an issue
+     without a lot keeps a line of its own, with its own amount, day or pair — J-53);
    - folds behind a "N warning(s)" header, collapsed by default (like the dashboard banner);
    - lists the affected lots per category as clickable chips (lot label + opening date, plus a
      #index when several lots share the same opening day);
@@ -91,16 +92,18 @@
             {/if}
         </button>
 
-        <!-- One row per category (revealed on expand): message + affected-lot chips. -->
+        <!-- One row per category (revealed on expand): its message lines + affected-lot chips. -->
         {#if expanded}
             <div class="flex flex-col gap-3 px-4 pb-4 ml-6">
                 {#each groups as group (group.code)}
                     {@const Icon = severityIcon(group.severity)}
                     <div class="flex flex-col gap-1.5 text-xs" data-testid="lot-data-quality-issue-{group.code}">
-                        <div class="flex items-center gap-2 flex-wrap min-w-0">
-                            <Icon size={13} class="shrink-0" />
-                            <span>{$_(group.messageKey, {values: group.messageParams})}</span>
-                        </div>
+                        {#each group.messages as message (message.key)}
+                            <div class="flex items-center gap-2 flex-wrap min-w-0" data-testid="lot-data-quality-message">
+                                <Icon size={13} class="shrink-0" />
+                                <span>{$_(message.messageKey, {values: message.params})}</span>
+                            </div>
+                        {/each}
                         {#if group.lots.length > 0}
                             <div class="flex flex-wrap items-center gap-1.5 mt-0.5">
                                 <span class="opacity-70 text-[11px]">{$_('dataQuality.affectedLots')}</span>
