@@ -3,8 +3,11 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import DonationPopupModal from './DonationPopupModal.svelte';
 import {donationPopup} from '$lib/stores/app/donationPopupStore.svelte';
+import {instanceConfig, type InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 
 const DONATION_URL = 'https://www.buymeacoffee.com/librefolio';
+/** A self-hosted instance's answer to `GET /system/instance`: the only answer that shows the coffee (F05, lot A9). */
+const SELFHOSTED: InstanceConfig = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}};
 
 function popup(): HTMLElement | null {
     return screen.queryByTestId('donation-popup-modal');
@@ -23,6 +26,15 @@ async function openPopup(): Promise<HTMLElement> {
 
 beforeAll(async () => {
     await setupI18n();
+});
+
+// F05 (lot A9): the popup's coffee is drawn only once the server has answered self-hosted. These cases pin the popup as
+// a self-hosted instance draws it — before the answer and on a managed instance it is SupportActions.managed.test.ts —,
+// so each starts from that answer: the real store, answered through its own `load`, with no request and no module mock.
+beforeEach(async () => {
+    await instanceConfig.load({force: true, fetchConfig: () => Promise.resolve(SELFHOSTED)});
+    expect(instanceConfig.loaded, 'precondition: the instance configuration has loaded').toBe(true);
+    expect(instanceConfig.config.profile, 'precondition: a self-hosted instance').toBe('selfhosted');
 });
 
 beforeEach(() => {

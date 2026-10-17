@@ -2,6 +2,7 @@
     import ImagePickerWrapper from '$lib/components/ui/media/ImagePickerWrapper.svelte';
     import type {WelcomeCopy, WelcomeDraft} from '$lib/features/onboarding/welcome';
     import WelcomeForm from './WelcomeForm.svelte';
+    import LegalNotice from '$lib/features/legal/LegalNotice.svelte';
 
     interface Props {
         copy: WelcomeCopy;
@@ -90,6 +91,11 @@
                 </div>
             {/if}
         </section>
+
+        <!-- The legal notice of the instance (F09): under the card, before and after the welcome -->
+        <div class="mt-4 px-1">
+            <LegalNotice />
+        </div>
     </div>
 </div>
 

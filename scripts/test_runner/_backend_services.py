@@ -1509,6 +1509,22 @@ def services_donation_popup(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Donation popup service tests", verbose=verbose)
 
 
+def services_donation_managed(verbose: bool = False, test_names: list = None) -> bool:
+    """Test F05 (A9): no donation popup on a managed instance, the counters still kept."""
+    print_section("Services: Donation Popup on a Managed Instance (A9)")
+    print_info("Testing: donation_popup_service.is_donation_popup_disabled/record_login_and_maybe_show_popup under LIBREFOLIO_PROFILE")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_donation_managed_profile.py", test_names)
+    return run_command(cmd, "Donation popup on a managed instance tests", verbose=verbose)
+
+
+def services_legal_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test F09 (A9): LIBREFOLIO_TOS_URL and LIBREFOLIO_PRIVACY_URL, read and published."""
+    print_section("Services: Legal Links (A9)")
+    print_info("Testing: config/platform.py tos_url/privacy_url, services/platform/instance_links.py terms_link/privacy_link")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_legal_links.py", test_names)
+    return run_command(cmd, "Legal links tests", verbose=verbose)
+
+
 def services_date_sentinel(verbose: bool = False, test_names: list = None) -> bool:
     """Test date sentinel resolution (min/max/passthrough, broker filter)."""
     print_section("Services: Date Sentinel Resolution")
@@ -2690,6 +2706,10 @@ Note: No backend server required.
         isolation="pure",
     )
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
+    # PURE: in-memory users, never persisted; the profile and the hidden variable set with monkeypatch. No DB, no server.
+    add_test(cat, "donation-managed", services_donation_managed, name="Donation Popup on a Managed Instance (A9)", desc="Managed: never shown, whatever the hidden variable, the counters still grow; self-hosted: unchanged", isolation="pure")
+    # PURE: the variables set with monkeypatch, the once-per-process log cache emptied around each case. No DB, no server.
+    add_test(cat, "legal-links", services_legal_links, name="Legal Links (A9)", desc="LIBREFOLIO_TOS_URL/PRIVACY_URL by the rule of env_url, published never raising, an invalid one logged once without its secret", isolation="pure")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")
     add_test(

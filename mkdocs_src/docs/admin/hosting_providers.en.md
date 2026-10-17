@@ -10,7 +10,9 @@ them are the **hosting provider**. A few settings exist for them:
 - the **instance block** closes the app but keeps the data, for example when a subscription is not
   paid;
 - the **panel token** lets your hosting panel take backups of the instance;
-- the **upload limit** caps the size of the archives uploaded for a restore.
+- the **upload limit** caps the size of the archives uploaded for a restore;
+- the **legal pages** are your terms of service and privacy policy, linked by the legal notice
+  every user sees.
 
 All of them are set with plain environment variables, the same in every LibreFolio and documented
 here: they are not tied to any particular provider or cloud.
@@ -39,13 +41,16 @@ LIBREFOLIO_PROFILE=managed
 
 Case and spaces around the value do not matter; any other value stops the server at startup.
 
-Today the profile changes seven things:
+Today the profile changes ten things:
 
 | | `selfhosted` | `managed` |
 | --- | --- | --- |
 | `GET /api/v1/system/instance` answers | `{"profile": "selfhosted"}` | `{"profile": "managed"}` |
 | A `JWT_SECRET` shorter than 32 characters | A warning in the startup log | The server does not start |
 | A plugin setting set by an environment variable | Shown read-only in **Settings › Plugins**, *Set by the server*, and listed by `GET /api/v1/settings/plugins` | Not shown in **Settings › Plugins** nor listed, and a save to it is refused as if it did not exist |
+| Invitations to donate: the **Buy Me a Coffee** link in the page header, on the sign-in pages, in the **Help & Support** menu and in Settings › About, and the donation popup after a sign-in | Shown | None: Settings › About keeps its share buttons |
+| The check for a newer LibreFolio release: at an administrator's sign-in, and **Check for updates** in the changelog | On | Off: you update the instance |
+| **Forgot Password?** on the sign-in page | The command that resets a password on the server, under the email form in a closed panel when emails with a link can go out | No command, but *Ask your administrator for a password-reset link: they can create one for your account.* The email form stays when emails with a link can go out |
 | The largest archive uploaded for a restore, while `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not set | No limit | 500 MB: see [The Upload Limit of a Restore](#restore-upload-limit) |
 | Idle risk workers (simulations and optimizations) stop after | 600 seconds | 60 seconds |
 | Frame protection: only the app's own pages may show it in a frame | Off | On |
@@ -53,8 +58,12 @@ Today the profile changes seven things:
 
 - The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`,
   without signing in. The web app reads it when it starts.
-- The interface is the same in both profiles: only what the server sends it differs, as in the
-  table.
+- The web app is the same in both profiles: it follows the profile the server sends it, as in the
+  table. Until the server has answered, the places of the table show no coffee link,
+  **Forgot Password?** no server command and the changelog no **Check for updates**, and the check
+  at an administrator's sign-in waits for the answer: a managed instance never shows them, not even
+  for a moment, and never runs that check. On a managed instance, no variable brings back what
+  those three rows take away.
 - Plugin settings and their variables: see «Plugin Settings» in
   [Environment Variables](configuration.md).
 - Like the upload limit, the last three rows are defaults, each set on its own by its variables, in
@@ -128,6 +137,9 @@ your users sign in again after each restart. See
   instance falls back to would publish the instance's profile, its provider codes and your
   customer's asset identifiers. Other help links in the app may still point to LibreFolio's
   GitHub. See «Main Options» in [Environment Variables](configuration.md).
+- Your own terms of service and privacy policy, `LIBREFOLIO_TOS_URL` and `LIBREFOLIO_PRIVACY_URL`
+  (`https://…`): the legal notice links them for every user. See
+  [Your Legal Pages](#legal-pages).
 - A restart policy that starts LibreFolio again when it stops by itself: `restart: unless-stopped`
   in Docker Compose (the compose files LibreFolio ships use it) or `always`, `Restart=always` with
   systemd, the `always` policy on a Fly.io Machine. An administrator who confirmed a restore can stop
@@ -578,6 +590,51 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
 
 ---
 
+## ⚖️ Your Legal Pages {: #legal-pages }
+
+Every LibreFolio shows its users a **legal notice**, in both profiles:
+
+- in Settings › About, as the **Legal notice** card ([About](../user/settings/about.md));
+- on the Welcome page, under its card;
+- under the card of every sign-in page: the login, the registration and **Forgot Password?**, and
+  the pages that open the link of an invitation, a password reset, a setup or an email
+  verification;
+- at the foot of the sidebar, under the version number, while the sidebar is expanded;
+- in every text copied with [AI Export](../user/ai-export/index.md), near its end: the notice
+  under its title, without the links.
+
+In Settings › About, on the Welcome page and in AI Export, the notice is a disclaimer, which each
+user reads in the language of the app; in English:
+
+> LibreFolio helps you keep track of your investments; it does not give financial, tax or legal
+> advice. The figures may contain errors: check them before you act on them.
+
+Under the card of the sign-in pages and at the foot of the sidebar, a shorter version fits on one
+line.
+
+The notice also links your own pages, when you set them, everywhere but in AI Export:
+**Terms of service** for `LIBREFOLIO_TOS_URL`, **Privacy policy** for `LIBREFOLIO_PRIVACY_URL`,
+each opened in a new tab. LibreFolio ships no terms and no policy of its own: without the
+variables, the notice shows alone.
+
+```bash
+LIBREFOLIO_TOS_URL=https://hosting.example.com/terms
+LIBREFOLIO_PRIVACY_URL=https://hosting.example.com/privacy
+```
+
+- Set them in the container's environment or in `.env`, then restart LibreFolio, as for the other
+  variables of this page.
+- Each takes a page with `http://` or `https://` and a host name; one trailing slash is removed.
+  Not a `mailto:` address, unlike `LIBREFOLIO_SUPPORT_URL`.
+- They are public: anyone who can reach the server reads them in the `legal` part of
+  `/api/v1/system/instance`, without signing in, as the sign-in pages do.
+- A value LibreFolio cannot use, an address with a user name or a password included, does not stop
+  the server: that link stays hidden, the notice shows without it, and the log has an error,
+  `Invalid instance link`, the first time each server process answers `/api/v1/system/instance`.
+  See «Main Options» in [Environment Variables](configuration.md).
+
+---
+
 ## 🔗 Related
 
 - 📝 **[Environment Variables](configuration.md)** — Every variable, those of this page included
@@ -593,3 +650,5 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
 - 👑 For developers: **[The Initial Administrator](../developer/architecture/access_control.md#initial-admin)** —
   The startup step, the setup link and its route; the setup page is in
   **[Account Link Pages](../developer/frontend/components/features/auth.md#link-pages)**
+- ⚖️ For developers: **[Public Instance Configuration](../developer/architecture/settings.md#public-instance-configuration)** —
+  `GET /api/v1/system/instance`, the profile and the `legal` part included

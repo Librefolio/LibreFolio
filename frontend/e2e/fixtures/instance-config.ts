@@ -13,10 +13,13 @@
  * The one hand-built body, `plainInstanceConfig()`, is for specs whose data is entirely synthetic: they let no request
  * reach the shared backend, so there is no real response to change, and nothing they assert depends on this read.
  *
+ * `serveInstanceConfig()` (lot A9) is the same stub for the profile (F05) and the legal links (F09): the real response
+ * with `profile` replaced and `legal` merged link by link, or observed untouched.
+ *
  * Users: auth.spec.ts («Register link and the registration setting», whose A6d case also sets
  * `accounts.first_account_open` with `firstAccountOpen`) and auth-links.spec.ts (valid invitations on an instance by
  * invitation only, and on one whose registration is disabled); `plainInstanceConfig()`: files-uploader.spec.ts and
- * layout/header-scroll.spec.ts.
+ * layout/header-scroll.spec.ts; `serveInstanceConfig()`: layout/legal-and-managed.spec.ts.
  */
 import type {APIResponse} from '@playwright/test';
 import {schemas} from '../../src/lib/api/generated';
@@ -185,4 +188,115 @@ export function plainInstanceConfig() {
     const body = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}} as const;
     schemas.InstanceConfigResponse.parse(body);
     return body;
+}
+
+/** What `serveInstanceConfig()` may change in the real answer (lot A9 of workstream A): the profile (F05), the legal links (F09). */
+export type InstanceConfigPatch = {
+    /** Replaces `profile`. */
+    profile?: 'selfhosted' | 'managed';
+    /** Merged into the real `legal`, link by link: a link given replaces the real one, a link left out keeps it. */
+    legal?: {terms_url?: string | null; privacy_url?: string | null};
+};
+
+/** Of one answer `serveInstanceConfig()` served, the parts a patch may change: `profile` and `legal`, as served. */
+export type ServedInstanceConfig = {profile: unknown; legal: unknown};
+
+/** What `serveInstanceConfig()` saw. Every counter is written by the route handler itself, as in `RegistrationModeStub`. */
+export type InstanceConfigStub = {
+    /** Reads that reached the stub: the page asked. */
+    readonly requested: number;
+    /** Reads the stub has finished with, answered or not: compare `problems`. */
+    readonly answered: number;
+    /** The `profile` and `legal` each answer carried, in order. */
+    readonly served: readonly ServedInstanceConfig[];
+    /** Why a read was not answered as asked: a broken precondition, reported by name. */
+    readonly problems: readonly string[];
+    /** Remove the route. Call it in `finally`. */
+    dispose(): Promise<void>;
+};
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** The entries of `record` whose value is not `undefined`: a key left undefined in a patch changes nothing. */
+const definedEntries = (record: Record<string, unknown>): Record<string, unknown> => Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
+
+/**
+ * Answer this page's `GET /api/v1/system/instance` — that path only — with the real response and `patch` applied (lot A9
+ * of workstream A): `profile` replaced, `legal` merged link by link. An empty patch passes the real answer through as it
+ * came and records what it carried: the lane's own answer, observed. Install it before the page loads: the app reads the
+ * configuration once per page load (`instanceConfig.svelte.ts`), and a client-side navigation reads it no more.
+ *
+ * A field is changed in the real answer, never added to one that lacks it: a real answer without a string `profile` when
+ * `profile` is patched, or without a `legal` object when `legal` is (the backend of lot A9 missing), is passed through as
+ * it came, with the reason in `problems`. The patched answer is checked against the generated schema before it is
+ * served, as the client checks it on arrival: a body its Zod refuses leaves the page on its defaults — self-hosted, no
+ * legal link —, which read exactly like some of what a test asks for. The check failing is recorded in `problems` too, so
+ * a test asserts `problems` empty. Any other method falls through: nothing here writes.
+ */
+export async function serveInstanceConfig(page: Page, patch: InstanceConfigPatch): Promise<InstanceConfigStub> {
+    let requested = 0;
+    let answered = 0;
+    const served: ServedInstanceConfig[] = [];
+    const problems: string[] = [];
+    const asked = JSON.stringify(patch);
+    const patchesProfile = patch.profile !== undefined;
+    const patchesLegal = patch.legal !== undefined;
+
+    const handler: Parameters<Page['route']>[1] = async (route, request) => {
+        if (request.method() !== 'GET') {
+            await route.fallback();
+            return;
+        }
+        requested += 1;
+        try {
+            const response = await route.fetch();
+            const asItCame = async () => route.fulfill({status: response.status(), headers: servableHeaders(response), body: await response.body()});
+            if (!response.ok()) {
+                problems.push(`the real GET ${INSTANCE_CONFIG_PATH} answered ${response.status()}`);
+                await asItCame();
+                return;
+            }
+            const real = (await response.json()) as Record<string, unknown>;
+            const lacking: string[] = [];
+            if (patchesProfile && typeof real.profile !== 'string') lacking.push('string profile');
+            if (patchesLegal && !isPlainObject(real.legal)) lacking.push('legal object (the backend of lot A9 is missing)');
+            if (lacking.length > 0) {
+                problems.push(`the real GET ${INSTANCE_CONFIG_PATH} has no ${lacking.join(' and no ')} to patch with ${asked} (keys: ${Object.keys(real).join(', ') || 'none'})`);
+                await asItCame();
+                return;
+            }
+            const body: Record<string, unknown> = {...real};
+            if (patch.profile !== undefined) body.profile = patch.profile;
+            if (patch.legal !== undefined && isPlainObject(real.legal)) body.legal = {...real.legal, ...definedEntries(patch.legal)};
+            const checked = schemas.InstanceConfigResponse.safeParse(body);
+            if (!checked.success) problems.push(`the answer ${patchesProfile || patchesLegal ? `patched with ${asked}` : 'as it came'} fails the generated schema: ${checked.error.message}`);
+            if (patchesProfile || patchesLegal) await route.fulfill({status: response.status(), headers: servableHeaders(response), json: body});
+            else await asItCame();
+            served.push({profile: body.profile, legal: body.legal});
+        } catch (error) {
+            // Nobody awaits a route callback: recorded instead, and asserted by the test that needed the read.
+            problems.push(`the stub failed: ${String(error)}`);
+        } finally {
+            answered += 1;
+        }
+    };
+    await page.route(isInstanceConfig, handler);
+
+    return {
+        get requested() {
+            return requested;
+        },
+        get answered() {
+            return answered;
+        },
+        get served() {
+            return served;
+        },
+        get problems() {
+            return problems;
+        },
+        dispose: async () => {
+            await page.unroute(isInstanceConfig, handler);
+        },
+    };
 }

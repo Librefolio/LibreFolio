@@ -21,6 +21,7 @@
     import {notify} from '$lib/stores/app/notify.svelte';
     import {zodiosApi} from '$lib/api';
     import {checkForUpdates, type UpdateCheckResult} from '$lib/features/update-check/updateCheck';
+    import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
     import {updateAvailable} from '$lib/features/update-check/updateCheckStore.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
@@ -334,18 +335,22 @@
                 />
             </div>
             <div class="flex items-center gap-1 shrink-0 order-4 sm:order-4 ml-auto sm:ml-0">
-                <!-- Update check (F14): force a fresh result, retaining the login flow's gates. -->
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-lg border border-lf-subtle text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
-                    onclick={handleCheckNow}
-                    disabled={checkState === 'checking'}
-                    title={$_('changelog.checkNow')}
-                    data-testid="changelog-check-update"
-                >
-                    <RefreshCw size={13} class={checkState === 'checking' ? 'animate-spin' : ''} />
-                    <span class="hidden sm:inline">{$_('changelog.checkNow')}</span>
-                </button>
+                <!-- Update check (F14): force a fresh result, retaining the login flow's gates. Only once the server said
+                     self-hosted: a managed instance is updated by its operator (F05, workstream A), and nothing shows
+                     before the answer or after a failed request. -->
+                {#if instanceConfig.loaded && instanceConfig.config.profile === 'selfhosted'}
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-lg border border-lf-subtle text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
+                        onclick={handleCheckNow}
+                        disabled={checkState === 'checking'}
+                        title={$_('changelog.checkNow')}
+                        data-testid="changelog-check-update"
+                    >
+                        <RefreshCw size={13} class={checkState === 'checking' ? 'animate-spin' : ''} />
+                        <span class="hidden sm:inline">{$_('changelog.checkNow')}</span>
+                    </button>
+                {/if}
             </div>
         </div>
 

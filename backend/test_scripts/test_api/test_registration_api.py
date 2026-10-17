@@ -881,7 +881,7 @@ class TestInstanceAccounts:
 
     @pytest.mark.asyncio
     async def test_the_public_configuration_says_nothing_about_users(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-        """INSTANCE-002: with accounts, a live invitation, a limit and a billing link configured, the body is exactly ``profile``, ``accounts``, ``email`` and ``support_url`` (CP13), ``accounts`` exactly its four fields — the mode, the lock, whether the first account is still open (a yes or no, false here, never a count: lot A6d), and the password rules, the same on every instance (lot A6c) —, and the link nowhere."""
+        """INSTANCE-002: with accounts, a live invitation, a limit and a billing link configured, the body is exactly ``profile``, ``accounts``, ``email``, ``support_url`` (CP13) and ``legal`` (F09), ``accounts`` exactly its four fields — the mode, the lock, whether the first account is still open (a yes or no, false here, never a count: lot A6d), and the password rules, the same on every instance (lot A6c) —, and the link nowhere."""
         owner = await _add_user(private.engine, "alice", admin=True)
         await _issue(private.engine, created_by_user_id=owner)
         monkeypatch.setenv(MAX_USERS_VARIABLE, "5")
@@ -892,7 +892,7 @@ class TestInstanceAccounts:
 
         assert response.status_code == 200, f"{response.status_code} {response.text}"
         body = response.json()
-        assert set(body) == {"profile", "accounts", "email", "support_url"}, f"the public configuration holds nothing undeclared: {body}"
+        assert set(body) == {"profile", "accounts", "email", "support_url", "legal"}, f"the public configuration holds nothing undeclared: {body}"
         assert set(body["accounts"]) == {"registration_mode", "registration_locked", "first_account_open", "password_rules"}, f"accounts says nothing about users but whether the first account is still open, beside the mode, its lock and the password rules: {body['accounts']}"
         assert body["accounts"]["first_account_open"] is False, f"first_account_open is a yes or no, false once an account exists — never a count: {body['accounts']}"
         assert _comparable_accounts(body["accounts"])["password_rules"] == PASSWORD_RULES, f"the password rules are the backend's, the same on every instance: expected {PASSWORD_RULES} as (code, value), got {body['accounts']['password_rules']}"

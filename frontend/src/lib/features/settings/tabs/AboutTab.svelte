@@ -7,6 +7,7 @@
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SupportActions from '$lib/features/support/SupportActions.svelte';
+    import LegalNotice from '$lib/features/legal/LegalNotice.svelte';
     import SocialShareModal from '$lib/features/support/SocialShareModal.svelte';
     import type {SocialPlatform} from '$lib/features/support/supportLinks';
     import ToolAboutPanel from '$lib/features/tools/ToolAboutPanel.svelte';
@@ -320,6 +321,12 @@ Generated: ${new Date().toISOString()}
             <p class="text-sm leading-relaxed text-lf-secondary">{$_('support.description')}</p>
         </div>
         <SupportActions onShare={openSocialShare} />
+    </div>
+
+    <!-- The legal notice of the instance (F09): not the diagnostics', so it shows when they fail -->
+    <div class="rounded-xl border border-lf-subtle bg-lf-panel p-4 shadow-sm shadow-lf-shadow-card" data-testid="about-legal-card">
+        <h4 class="mb-2 text-md font-semibold text-lf-primary">{$_('legal.title')}</h4>
+        <LegalNotice />
     </div>
 
     <!-- System Info with Copy Button -->
