@@ -53,7 +53,8 @@ SEC8-1b: one price dated 0001-01-01 makes a backward fill or a risk replay walk 
    — the name ``frozen_stored_ceiling`` replaces. ``DateOutOfRangeError`` (an ``Exception``, not a ``ValueError``)
    carries ``items``, ``count``, ``earliest`` and ``latest``; ``date_out_of_range_detail(items, count, earliest,
    latest)`` is the 422's detail: ``{"code": "date_out_of_range", "message", "params": {"min", "max"} in ISO,
-   "items": items[:10], "count"}``.
+   "items": items[:10], "count"}``, the message ending with the count and a verb that agrees with it, ``": 1 does
+   not"``, ``": 2 do not"`` (RC-W08), its wording otherwise free.
 7. ``POST /assets/prices`` (the handler, called directly here on a session that reads nothing) answers that 422 to
    ``bulk_upsert_prices``'s ``DateOutOfRangeError``, raised before any statement; the asset side of it (items per
    asset, nothing written, a provider's points dropped) is services asset-source-guards'. ``POST /fx/currencies/rate``
@@ -63,6 +64,7 @@ SEC8-1b: one price dated 0001-01-01 makes a backward fill or a risk replay walk 
 Red before X-R65 (HEAD f1786a883), each for the reason its docstring gives ("Red before X-R65"): RC-W01…W06. Green then
 too — behaviour the change has to keep: RC-W07. RC-000 now accepts the name ``latest_range_end`` in
 ``date_range_limits`` when it is ``datetime_utils``' own (X-R65 imports it there): green before X-R65 and after.
+RC-W08 (X's review of X-R65): red before the Z-30 lot's plural fix, for one date only — the message read «…: 1 do not».
 """
 
 from __future__ import annotations
@@ -1132,6 +1134,30 @@ def test_rcw02_date_out_of_range_detail_is_the_422s_detail():
         assert detail["params"] == {"min": "1900-01-01", "max": CEILING.isoformat()}
         assert detail["items"] == items[:10]
         assert detail["count"] == count
+
+
+_W08_ENDINGS = [
+    # (the items, as RC-W02 builds them; the count; how the message ends)
+    pytest.param([{"index": 1, "date": "1899-12-31"}], 1, ": 1 does not", id="one-date"),
+    pytest.param([{"index": 1, "date": "1899-12-31"}, {"index": 4, "date": DAY_AFTER_CEILING.isoformat()}], 2, ": 2 do not", id="two-dates"),
+    pytest.param([{"asset_id": 100 + n, "dates": [(STORED_FLOOR - timedelta(days=n + 1)).isoformat()]} for n in range(12)], 17, ": 17 do not", id="seventeen-dates"),
+]
+
+
+@pytest.mark.parametrize(("items", "count", "ending"), _W08_ENDINGS)
+def test_rcw08_the_message_agrees_with_its_count(items, count, ending):
+    """RC-W08 (X's review of X-R65): the message of ``date_out_of_range_detail`` ends with the count and a verb that
+    agrees with it — ``": 1 does not"`` for one date, ``": 2 do not"`` and ``": 17 do not"`` for more — whatever the
+    items (RC-W02's: one rate's index, two, seventeen dates shown as twelve assets). Only the ending is pinned: RC-W02
+    leaves the wording free.
+
+    Red before the Z-30 lot's plural fix, for one date: the message read «…: 1 do not».
+    """
+    detail_of = _contract_part("date_out_of_range_detail")
+
+    message = detail_of(items=items, count=count, earliest=STORED_FLOOR, latest=CEILING)["message"]
+
+    assert message.endswith(ending), f"the message for {count} date(s) does not end with {ending!r}: {message!r}"
 
 
 def test_rcw03_date_out_of_range_error_carries_its_numbers_and_is_no_value_error():
