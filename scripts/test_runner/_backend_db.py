@@ -298,6 +298,15 @@ def db_migration_009(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Migration 009 tests", verbose=verbose)
 
 
+def db_session_pragmas(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the pragmas every SQLAlchemy engine's connection gets (set_sqlite_pragma, H-51): trusted_schema off first, the schema reset last."""
+    print_section("DB Test: Session Pragmas (trusted_schema off)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: trusted_schema 0 on sync and async connections, an archive's DEFAULT calling SQLAlchemy's Python regexp or floor refused at the insert and a CHECK calling regexp at the first statement, built-ins and top-level SQL unchanged, the other pragmas as before")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_session_pragmas.py", test_names)
+    return run_command(cmd, "Session pragma tests", verbose=verbose)
+
+
 def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
     """Test Numeric column truncation behavior."""
     print_section("DB Test: Numeric Column Truncation")
@@ -341,6 +350,7 @@ def db_all(verbose: bool = False) -> bool:
 
     db_order = [
         "post-migration-event-types",  # temporary databases only: needs none of the steps below
+        "session-pragmas",  # temporary databases only too
         "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
         "post-migration-orphan-pairs",
         "migration-005", "migration-006", "migration-007", "migration-008", "migration-009", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
@@ -438,6 +448,9 @@ Note: No backend server required. Tests operate directly on test DB.
     # PURE, as migration-005 to 008: private files under tmp_path only; the set-email remedy runs in-process on them.
     add_test(cat, "migration-009", db_migration_009, name="Migration 009 Email Unique Regardless of Case",
              desc="009_email_unique_ignoring_case: ux_users_email_lower on lower(email); stops naming accounts by id and username, never an address, and writes nothing; set-email clears it; downgrade drops the index; idempotent",
+             prereq="None (temporary databases)", isolation="pure")
+    add_test(cat, "session-pragmas", db_session_pragmas, name="Session Pragmas",
+             desc="H-51: set_sqlite_pragma (db/session.py, every SQLAlchemy engine of the process) turns trusted_schema off first and resets the schema last (writable_schema=RESET, read again once SQLAlchemy has registered its Python regexp and floor): an archive's DEFAULT calling regexp or floor refused at the insert, a CHECK calling regexp at the first statement, instead of running them; built-ins in the schema (lower() of ux_users_email_lower), a database at the head and top-level SQL unchanged; foreign_keys, WAL and busy_timeout as before; sync and async engines",
              prereq="None (temporary databases)", isolation="pure")
     add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge",
              desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created",

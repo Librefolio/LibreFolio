@@ -22,6 +22,12 @@ def set_sqlite_pragma(dbapi_conn, _connection_record):
     """
     Enable essential SQLite PRAGMAs for proper operation.
 
+    - trusted_schema=OFF, first (H-51): the SQL a database's schema keeps (a CHECK, a DEFAULT, a generated
+      column, an index's expression) may call only the functions SQLite marks innocuous. SQLAlchemy's SQLite
+      dialects register ``regexp`` and ``floor`` in Python on every connection; a restored archive's schema,
+      which the restore check reads by kind only (B-28), could otherwise make every write call them with its own
+      pattern. LibreFolio's own schema calls only the built-in ``lower()`` (``ux_users_email_lower``); top-level
+      SQL is not restricted. ``writable_schema=RESET`` comes last, see below.
     - foreign_keys=ON: Required for referential integrity
     - journal_mode=WAL: Write-Ahead Logging — allows concurrent readers and
       one writer without blocking. Essential for the FX sync pipeline that
@@ -49,9 +55,14 @@ def set_sqlite_pragma(dbapi_conn, _connection_record):
     Note: This event listener applies to ALL sync engines (including the one backing async).
     """
     cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA trusted_schema=OFF")
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA busy_timeout=30000")
+    # Last (H-51): journal_mode read the schema while regexp and floor did not exist yet — this listener runs before the
+    # dialect registers them — so a CHECK or an index's expression calling them was read as an unknown function and never
+    # marked as the schema's own. Reloaded at the next statement, with them registered, the schema is refused there.
+    cursor.execute("PRAGMA writable_schema=RESET")
     cursor.close()
 
 

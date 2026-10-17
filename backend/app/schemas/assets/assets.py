@@ -35,6 +35,7 @@ from backend.app.schemas.common import (
     Currency,
     OldNew,
     StrictModel,
+    iso_currency_code,
 )
 from backend.app.utils.asset.identifier import normalize_other_identifiers
 
@@ -90,7 +91,8 @@ class FAAssetCreateItem(StrictModel):
     @field_validator("currency")
     @classmethod
     def currency_uppercase(cls, v: str) -> str:
-        return Currency.validate_code(v)
+        """An ISO 4217 alphabetic code, upper-case: never a name or a number (E-18)."""
+        return iso_currency_code(v)
 
     @field_validator("quote_base_quantity", mode="before")
     @classmethod
@@ -307,8 +309,8 @@ class FAAssetPatchItem(StrictModel):
     @field_validator("currency")
     @classmethod
     def currency_uppercase(cls, v: Optional[str]) -> Optional[str]:
-        """Normalize currency to uppercase."""
-        return Currency.validate_code(v) if v else None
+        """An ISO 4217 alphabetic code, upper-case: never a name or a number (E-18)."""
+        return iso_currency_code(v) if v else None
 
     @field_validator("quote_base_quantity", mode="before")
     @classmethod

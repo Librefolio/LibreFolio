@@ -6,9 +6,15 @@ tomorrow by the server's calendar (the one helper, shared with R13-SEC7-1): no m
 value stored by hand with a later date is not returned), and the extra day covers a user whose today is already the
 server's tomorrow. A per-day walk with no data of its own to stop at goes back at most ``RANGE_SPAN_LIMIT_DAYS`` from
 its end (``range_span_floor``).
+
+A stored price or rate carries a date inside ``stored_date_bounds()`` (X-R65, night decision N83): a manual write with
+a date outside is refused, a provider's point outside is skipped. A price at 0001-01-01 made a backward fill or a risk
+replay walk about 740,000 days (J's SEC8-1b).
 """
 
 from datetime import date, timedelta
+
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
 
 #: How far back a per-day walk may go from the end of its range: 100 years.
 RANGE_SPAN_LIMIT_DAYS = 36_525
@@ -63,3 +69,32 @@ def range_span_floor(end: date) -> date:
     if (end - date.min).days <= RANGE_SPAN_LIMIT_DAYS:
         return date.min
     return end - timedelta(days=RANGE_SPAN_LIMIT_DAYS)
+
+
+def stored_date_bounds() -> tuple[date, date]:
+    """The first and the last date a stored price or rate may carry (X-R65, N83): ``EARLIEST_RANGE_START`` (1900-01-01,
+    the floor of every replay and history walk) and ``latest_range_end()`` (tomorrow, by the server's calendar)."""
+    return EARLIEST_RANGE_START, latest_range_end()
+
+
+class DateOutOfRangeError(Exception):
+    """A manual write holds dates outside ``stored_date_bounds()``: refused before anything is written (X-R65, N83)."""
+
+    def __init__(self, items: list[dict], count: int, earliest: date, latest: date):
+        super().__init__(f"{count} date(s) outside {earliest.isoformat()} to {latest.isoformat()}")
+        self.items = items
+        self.count = count
+        self.earliest = earliest
+        self.latest = latest
+
+
+def date_out_of_range_detail(items: list[dict], count: int, earliest: date, latest: date) -> dict:
+    """The ``detail`` of the 422 for a write with dates outside ``stored_date_bounds()``: at most 10 ``items``, and
+    ``count`` the dates refused in all."""
+    return {
+        "code": "date_out_of_range",
+        "message": f"Dates must lie between {earliest.isoformat()} and {latest.isoformat()}: {count} do not",
+        "params": {"min": earliest.isoformat(), "max": latest.isoformat()},
+        "items": items[:10],
+        "count": count,
+    }

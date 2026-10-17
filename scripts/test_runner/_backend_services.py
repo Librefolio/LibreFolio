@@ -219,6 +219,8 @@ def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: get_prices_bulk + _build_backward_filled_series, the POST /fx/currencies/convert handler, refresh._fetch_refresh_item")
     print_info("Extreme ranges (0001-01-01 … 9999-12-31) bounded by the wall clock and by fuses inside the per-day loops")
     print_info("Bulk caps: 1 000 items per request, 1 M item-days (R13-SEC9-2) (the fill's span, warm-up and comparisons included), lowered per case")
+    print_info("X-R65 (N83): stored date bounds, 1900-01-01 … tomorrow: the helpers, and the 422 date_out_of_range of POST /assets/prices and POST /fx/currencies/rate")
+    print_info("Z-30: a full-history price load starts at the earlier of 1900-01-01 and the finite warm-up's start; an older row only seeds the fill")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *RANGE_CEILING_TEST_PATHS, "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
@@ -1015,6 +1017,17 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Probe rate-limit tests", verbose=verbose)
 
 
+def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
+    print_section("Services: Bulk Reads Chunked (MF-SEC9a)")
+    print_info("Testing: services/brim/brim_provider.py (search_asset_candidates_bulk vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows)")
+    print_info(
+        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_reads_chunked.py", test_names)
+    return run_command(cmd, "Bulk reads chunked tests", verbose=verbose)
+
+
 def services_bulk_writes_chunked(verbose: bool = False, test_names: list = None) -> bool:
     """MF-SEC9a: bulk writes of rates and prices in chunks SQLite can parse, a 10 000-item cap, no echoed error (private in-memory DB)."""
     print_section("Services: Bulk Writes Chunked (MF-SEC9a)")
@@ -1080,7 +1093,7 @@ def services_asset_source_guards(verbose: bool = False, test_names: list = None)
     """Run the AssetSourceManager integrity guards and event FX conversion tests."""
     print_section("Services: Asset Source Guards")
     print_info("Testing: backend/app/services/assets/ (bulk_upsert_prices, get_prices_bulk, list_assets)")
-    print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass")
+    print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass, X-R65 stored date bounds")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
     return run_command(cmd, "Asset Source guard tests", verbose=verbose)
 
@@ -1616,7 +1629,7 @@ def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX pair-sync orchestration branches in services/fx/sync.py."""
     print_section("Services: FX Sync Orchestration")
     print_info("Testing: backend/app/services/fx/sync.py")
-    print_info("Tests: _is_date_within_sync_range, sync_pairs_bulk._process_route/._compute_multi_step")
+    print_info("Tests: _is_date_within_sync_range (X-R65 floor 1900-01-01), sync_pairs_bulk._process_route/._compute_multi_step")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_sync_service.py", test_names)
     return run_command(cmd, "FX sync service tests", verbose=verbose)
 
@@ -1903,11 +1916,12 @@ Note: No backend server required.
         "range-ceiling",
         services_range_ceiling,
         name="Date Range Ceiling",
-        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built",
+        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built; X-R65 (N83): stored_date_bounds (1900-01-01 … the ceiling, read at the call), DateOutOfRangeError and the 422 date_out_of_range detail; POST /assets/prices and POST /fx/currencies/rate refuse a date outside before any statement or write. Z-30: a full-history price item loads from the earlier of 1900-01-01 and the start of its finite warm-up; a row stored before 1900 only seeds that fill, and the count follows",
         # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
         # with create_all (or on a stand-in session that reads nothing); the FX handler is called directly with
         # convert_bulk replaced by an in-process converter; the sync step runs with an in-process provider double and
         # stand-ins for the two core caches, all by monkeypatch.
+        # X-R65's handlers run the same way: the price route on a stand-in session that reads nothing, the rate route with upsert_rates_bulk replaced by an in-process writer.
         isolation="pure",
     )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
@@ -2371,10 +2385,19 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "bulk-reads-chunked",
+        services_bulk_reads_chunked,
+        name="Bulk Reads Chunked (MF-SEC9a)",
+        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no service replaced.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "bulk-writes-chunked",
         services_bulk_writes_chunked,
         name="Bulk Writes Chunked (MF-SEC9a)",
-        desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused",
+        desc="chunks(); upsert_rates_bulk / delete_rates_bulk / bulk_delete_prices at 500, 501 and ~1 500 OR terms with exact values and counts; fx/sync._stored_rates and change detection over 1 035 pairs; FX DELETE of 1 500 separate days 200; POST/DELETE /fx/currencies/rate and DELETE /assets/prices (ranges over every asset) > 10 000 → 422 bulk_too_many_items before any write, 10 000 pass; 500s and per-item errors never echo the SQL; barrier: one OR of 1 500 refused; delete_rates_bulk matches by bisection (≤ 4⌈log₂(D+1)⌉ counted comparisons per deletion, 2 000 × 2 000) and equals a brute-force scan on random requests (overlaps, end < start, missing pair, single days); MF-SEC9e bulk_delete_prices: a row in two ranges counted once, an asset in two items answers its total over both in each result, per-asset counts sum to total_deleted; empty request → empty response, DELETE /assets/prices 200; 2 000 ranges send ≤ ⌈intervals/500⌉+2 SELECTs and DELETEs (engine statement count, not 1 per range); brute-force reference on random overlapping requests; guards: inclusive bounds, end=start, adjacent and disjoint random ranges",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; services, the FX provider lookup
         # and route loggers replaced by monkeypatch; the cap/failure cases hand the routes stand-in sessions.
         isolation="pure",
@@ -2384,7 +2407,7 @@ Note: No backend server required.
         "current-prices-bulk",
         services_current_prices_bulk,
         name="Current Prices Bulk (R13-SEC9)",
-        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (1900…tomorrow) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error",
+        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (1900…tomorrow) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error; MF-SEC9c: the DB fallbacks read after the live quotes, one grouped read (an unreadable latest close looked up alone), never two statements in flight on the session",
         # PURE: the service on a private in-memory SQLite (create_all), the provider a double behind core.configured_provider,
         # a private current-value cache, the route called directly or through a fresh in-process app (httpx.ASGITransport),
         # its service and live_range_changes replaced by recorders, all by monkeypatch.
@@ -2426,11 +2449,12 @@ Note: No backend server required.
         "asset-source-guards",
         services_asset_source_guards,
         name="Asset Source Guards",
-        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion",
+        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion; X-R65 (N83): a manual price outside [1900-01-01, tomorrow] refuses the whole upsert before any statement (DateOutOfRangeError: items per asset, count), a provider's is dropped, named and logged, the others stored",
         # WRITE_GLOBAL: Asset, PriceHistory and AssetEvent carry no user_id, so the
-        # asset this unit creates and every price/event row written against it are
-        # visible to all concurrent tests. Rows are uniquely named and dropped in
-        # teardown, but the tables themselves are shared surfaces.
+        # assets this unit creates (one for the module, a second for one X-R65 test)
+        # and every price/event row written against them are visible to all
+        # concurrent tests. Rows are uniquely named and dropped in teardown, but the
+        # tables themselves are shared surfaces.
         isolation="write-global",
     )
     add_test(
@@ -2761,7 +2785,7 @@ Note: No backend server required.
         "backup-outcome",
         services_backup_outcome,
         name="Instance Backup Restore Outcome",
-        desc="The outcome of a restart's restore read with a one-time ticket, without a session (lot B5c): .restore/outcome-ticket.json (OUTCOME_TICKET_FILE, outcome_ticket_path), OUTCOME_TICKET_TTL one hour, OutcomeTicket frozen with its five fields only, RestoreOutcome state/reason/waiting only; issue_ticket: 43 URL-safe characters, a new one at each call, its file holding its SHA-256 and never the ticket, the stage, issued_at, expires_at an hour later, 0600, written beside then renamed, a link in its place replaced and never written through, .restore a link or a file BackupPathError, a stage id only, a second ticket replacing the first; read_outcome: the outcome of the restore of its stage (applying, applied, rolling_back in_progress; reason and waiting as recorded) until expires_at excluded, None alike for every other case (no, empty or malformed ticket, no file, a file unreadable or not a ticket, an extra key, a folder, a link never followed, another ticket compared in constant time, expired and its file removed, no restore, another stage), a wrong ticket never removing it, an expired one removed only by its own ticket; N53, one restore one ticket: every outcome, committed and rolled_back included, read again with the same answer and its file kept until expires_at; drop_ticket removes it, does nothing without one, never raises (logged), never through a link; neither a ticket nor its hash ever logged (structlog and stdlib); data_dir and now default to the configured data directory and the clock",
+        desc="The outcome of a restart's restore read with a one-time ticket, without a session (lot B5c): .restore/outcome-ticket.json (OUTCOME_TICKET_FILE, outcome_ticket_path), OUTCOME_TICKET_TTL one hour, OutcomeTicket frozen with its five fields only, RestoreOutcome state/reason/waiting only; issue_ticket: 43 URL-safe characters, a new one at each call, its file holding its SHA-256 and never the ticket, the stage, issued_at, expires_at an hour later, 0600, written beside then renamed, a link in its place replaced and never written through, .restore a link or a file BackupPathError, a stage id only, a second ticket replacing the first; read_outcome: the outcome of the restore of its stage (applying, applied, rolling_back in_progress; reason and waiting as recorded) until expires_at excluded, None alike for every other case (no, empty or malformed ticket, no file, a file unreadable or not a ticket, an extra key, a folder, a link never followed, another ticket compared in constant time, expired and its file removed, no restore, another stage), a wrong ticket never removing it, an expired one removed only by its own ticket; N53, one restore one ticket: every outcome, committed and rolled_back included, read again with the same answer and its file kept until expires_at; drop_ticket removes it, does nothing without one, never raises (logged), never through a link; neither a ticket nor its hash ever logged (structlog and stdlib); data_dir and now default to the configured data directory and the clock; B-41: the state may be a reader, called once and only for the ticket that opens, never for any other; B-42: a broken ticket file logged as an error once while the same failure lasts, again after it is written, removed or read, or fails otherwise, per data directory",
         # PURE: every data directory under tmp_path, with a production data directory of the test configured (which must
         # stay absent) but in the one case that configures the test's own instance; the restore's state is a model built
         # in the test. No lane DB, no server, no network.
@@ -2858,7 +2882,7 @@ Note: No backend server required.
         "fx-sync-service",
         services_fx_sync,
         name="FX Sync Orchestration",
-        desc="_is_date_within_sync_range, _process_route/_compute_multi_step",
+        desc="_is_date_within_sync_range (X-R65: no day before 1900-01-01, whatever the start), _process_route/_compute_multi_step",
         exclusive_because="an autouse fixture truncates fx_rates and fx_conversion_routes before every test, so any concurrent unit reading rates or routes loses them mid-test",
     )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
