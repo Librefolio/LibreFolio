@@ -22,6 +22,7 @@ pattern of exercising the builder/runtime layer without a live DB.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -62,6 +63,7 @@ from backend.app.services.ai_export.dependencies import (
     build_bucket_plan_for_scope,
 )
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
+from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 
@@ -883,6 +885,150 @@ class TestEngineReconciliation:
         envelope = await _resolve_reconciliation(monkeypatch, domain, summary)
 
         assert (envelope.payload["reconciled"], Decimal(envelope.payload["residual"]["amount"])) == (True, Decimal("1E-24"))
+
+
+# J-14: the residual and the tolerance the two reconciliation components wrote in line at `e6d3e61e0`
+# (portfolio_financial.py:491-495, broker_financial.py:432-436), as written, and the module each domain's builder lives in.
+_RECONCILIATION_MODULES = {"portfolio": portfolio_financial, "broker": broker_financial}
+
+
+def _head_inline_residual(summary: PortfolioSummary) -> Decimal:
+    return summary.period_pnl.amount - (summary.period_unrealized_gain_loss_delta.amount + summary.period_realized_gain_loss.amount + summary.period_income.amount - summary.period_fees_taxes.amount + summary.period_other_result.amount)
+
+
+def _head_inline_reconciled(residual_amount: Decimal) -> bool:
+    return abs(residual_amount) < CONVERSION_DUST
+
+
+_IDENTITY_ARGUMENTS = ("pnl", "ugl_delta", "realized", "income", "fees_taxes", "other_result")
+
+
+def _identity_summary(figures: tuple[Decimal, ...]) -> PortfolioSummary:
+    """A summary whose six period figures are `figures`, in `period_identity_residual`'s order."""
+    pnl, ugl_delta, realized, income, fees_taxes, other_result = figures
+    return _summary(
+        period_pnl=_money(pnl),
+        period_unrealized_gain_loss_delta=_money(ugl_delta),
+        period_realized_gain_loss=_money(realized),
+        period_income=_money(income),
+        period_fees_taxes=_money(fees_taxes),
+        period_other_result=_money(other_result),
+    )
+
+
+def _identity_figures(summary: PortfolioSummary) -> tuple[Decimal, ...]:
+    """The six period figures of `summary`, in `period_identity_residual`'s order."""
+    return (
+        summary.period_pnl.amount,
+        summary.period_unrealized_gain_loss_delta.amount,
+        summary.period_realized_gain_loss.amount,
+        summary.period_income.amount,
+        summary.period_fees_taxes.amount,
+        summary.period_other_result.amount,
+    )
+
+
+def _closed_by_the_engine() -> tuple[Decimal, ...]:
+    """Five figures in one currency converted at 1.19533 (28 significant digits each), closed by PortfolioService's own
+    term (pnl - unrealized delta - realized - income + fees/taxes): the identity leaves 6E-23 of rounding, a figure
+    every other association of the sum misses (test_period_and_unit_costs, the-last-digit)."""
+    pnl, ugl_delta, realized, income, fees_taxes = (Decimal(amount) / Decimal("1.19533") for amount in ("92967.16", "42957.89", "31465", "58674.48", "8109.5"))
+    return pnl, ugl_delta, realized, income, fees_taxes, pnl - ugl_delta - realized - income + fees_taxes
+
+
+def _missing_a_converted_amount() -> tuple[Decimal, ...]:
+    """Amounts times 10-digit rates (23 and 22 significant digits) and amounts converted by division and across two
+    rates (28): a closing term that misses 12.5 / 1.0876543219, a real gap stated to its last digit."""
+    ugl_delta = Decimal("1234567.891234") * Decimal("1.0876543219")
+    realized = Decimal("-987654.321987") * Decimal("0.9123456789")
+    income = Decimal("8109.5") / Decimal("1.19533") * Decimal("1.0876543219")
+    fees_taxes = Decimal("2500") / Decimal("1.09")
+    pnl = Decimal("-31465") / Decimal("1.19533")
+    return pnl, ugl_delta, realized, income, fees_taxes, pnl - ugl_delta - realized - income + fees_taxes - Decimal("12.5") / Decimal("1.0876543219")
+
+
+def _off_by(offset: Decimal) -> tuple[Decimal, ...]:
+    """Amounts times 10-digit rates (20 to 23 significant digits, exact), under a P&L that exceeds their sum by
+    `offset`: the identity leaves `offset` exactly."""
+    ugl_delta = Decimal("1234567.891234") * Decimal("1.0876543219")
+    realized = Decimal("-987654.321987") * Decimal("0.9123456789")
+    income = Decimal("4321.123456") * Decimal("1.0876543219")
+    fees_taxes = Decimal("9876.543219") * Decimal("0.9123456789")
+    other_result = Decimal("-1234.567891") * Decimal("1.0876543219")
+    return ugl_delta + realized + income - fees_taxes + other_result + offset, ugl_delta, realized, income, fees_taxes, other_result
+
+
+class TestReconciliationFromTheHouse:
+    """J-14: each reconciliation component takes its residual from `financial_math.portfolio.period.
+    period_identity_residual` and its flag from `is_reconciled`, which replace the expression and the tolerance both
+    wrote in line, with no value change. On long-digit figures, where the association of the sum shows, the stated
+    residual is the house's and the old inline's to the last digit and exponent, and so is the flag, on either side
+    of CONVERSION_DUST."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    @pytest.mark.parametrize(
+        ("figures", "residual_text", "reconciled"),
+        [
+            pytest.param(_closed_by_the_engine(), "6E-23", True, id="closed-by-the-engine"),
+            pytest.param(_missing_a_converted_amount(), "11.49262201079109232011977", False, id="a-converted-gap"),
+            pytest.param(_off_by(CONVERSION_DUST - Decimal("1E-18")), "9.99999999E-10", True, id="just-under-conversion-dust"),
+            pytest.param(_off_by(CONVERSION_DUST), "1.0000000E-9", False, id="at-conversion-dust"),
+        ],
+    )
+    async def test_long_digit_residual_and_flag_are_the_house_s_and_today_s(self, monkeypatch, domain, figures, residual_text, reconciled):
+        """The payload states the residual in fixed point (SafeDecimal): the very text of the house's figure, which
+        reads back to it with its exponent."""
+        summary = _identity_summary(figures)
+        assert all(len(figure.as_tuple().digits) >= 20 for figure in figures)
+        today = _head_inline_residual(summary)
+        assert (str(today), _head_inline_reconciled(today)) == (residual_text, reconciled)
+
+        house = period_math.period_identity_residual(*_identity_figures(summary))
+        envelope = await _resolve_reconciliation(monkeypatch, domain, summary)
+
+        stated = envelope.payload["residual"]["amount"]
+        assert str(house) == str(today)
+        assert stated == format(house, "f")
+        assert str(Decimal(stated)) == str(today)
+        assert period_math.is_reconciled(house) is reconciled
+        assert envelope.payload["reconciled"] is reconciled
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("domain", ["portfolio", "broker"])
+    async def test_the_component_asks_the_house_once_per_build(self, monkeypatch, domain):
+        """A structural guard, not a value test: it keeps the identity from being written in line again. Recorders
+        that delegate to the real functions replace them in the component's own module; one build calls each exactly
+        once, the residual with the summary's six figures in order, the flag with that residual, and the payload states
+        what they returned. An inline copy, whatever it computed, would never call them."""
+        module = _RECONCILIATION_MODULES[domain]
+        real_residual, real_reconciled = period_math.period_identity_residual, period_math.is_reconciled
+        residual_calls: list[tuple[dict[str, object], Decimal]] = []
+        reconciled_calls: list[tuple[dict[str, object], bool]] = []
+
+        def residual_recorder(*args, **kwargs):
+            result = real_residual(*args, **kwargs)
+            residual_calls.append((dict(inspect.signature(real_residual).bind(*args, **kwargs).arguments), result))
+            return result
+
+        def reconciled_recorder(*args, **kwargs):
+            result = real_reconciled(*args, **kwargs)
+            reconciled_calls.append((dict(inspect.signature(real_reconciled).bind(*args, **kwargs).arguments), result))
+            return result
+
+        monkeypatch.setattr(module, "period_identity_residual", residual_recorder)
+        monkeypatch.setattr(module, "is_reconciled", reconciled_recorder)
+        summary = _identity_summary(_closed_by_the_engine())
+
+        envelope = await _resolve_reconciliation(monkeypatch, domain, summary)
+
+        assert (len(residual_calls), len(reconciled_calls)) == (1, 1)
+        ((residual_arguments, residual),) = residual_calls
+        ((reconciled_arguments, reconciled),) = reconciled_calls
+        assert {name: str(value) for name, value in residual_arguments.items()} == {name: str(figure) for name, figure in zip(_IDENTITY_ARGUMENTS, _identity_figures(summary), strict=True)}
+        assert reconciled_arguments == {"residual": residual} and reconciled_arguments["residual"] is residual
+        assert (envelope.payload["residual"]["amount"], envelope.payload["reconciled"]) == (format(residual, "f"), reconciled)
+        assert (str(residual), reconciled) == ("6E-23", True)
 
 
 class TestReconciliationComponentVersion:
