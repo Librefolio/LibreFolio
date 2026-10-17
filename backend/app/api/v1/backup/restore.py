@@ -51,6 +51,7 @@ from backend.app.schemas.backup import (
 from backend.app.services.platform.instance_backup import outcome, restart, restore_jobs
 from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreState, RestoreStateError, cancel_restore, prepare_restart, read_restore
 from backend.app.services.platform.instance_backup.envelope import EnvelopeError
+from backend.app.services.platform.instance_backup.jobs import out_of_space
 from backend.app.services.platform.instance_backup.paths import BackupPathError
 from backend.app.services.platform.instance_backup.staging import StagingBusyError, StagingReport, read_report
 
@@ -65,6 +66,7 @@ _MEGABYTE = 1024 * 1024
 
 _FOLDER_UNUSABLE = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`)"}
 _UPLOAD_FAILED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the archive could not be written (code `backup_upload_failed`)"}
+_STAGE_NOT_STARTED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the check could not start: its folders or its state could not be written (code `stage_failed`)"}
 _STAGE_NOT_FOUND = {"description": "No check has this id (code `restore_stage_not_found`)"}
 _OUTCOME_NOT_FOUND = {"description": "No restore outcome for this ticket: none, malformed, unknown, expired, replaced or removed, or of another restore, all alike (code `restore_outcome_not_found`)"}
 _RESTART_NOT_PREPARED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the ticket of the outcome could not be written (code `restore_restart_failed`): no restart"}
@@ -211,13 +213,16 @@ def _stage_view(check: restore_jobs.RestoreCheck) -> RestoreStage:
         400: {"description": "A secure backup without its password (code `password_required`), with a wrong one (code `wrong_password`), or not a whole envelope (code `envelope_damaged`): the upload stays, for another try"},
         404: {"description": "No uploaded archive has this id: never received, replaced, or already checked (code `backup_upload_not_found`)"},
         409: {"description": "Another archive is being checked (code `restore_busy`), or a secure backup this LibreFolio cannot read: update it first (code `envelope_unsupported`)"},
-        500: _FOLDER_UNUSABLE,
+        500: _STAGE_NOT_STARTED,
+        507: {"description": "Not enough free space to start the check (code `no_space`, the code of a check that runs out of space)"},
     },
 )
 def start_restore_check(body: RestoreStageRequest, _admin: User = Depends(require_admin)) -> RestoreStage:
     """Check an uploaded archive on a copy, in the background, and return the check to poll. The instance is not touched.
 
-    A secure backup's password is checked first, in this request; it is never kept, logged or sent back.
+    A secure backup's password is checked first, in this request; it is never kept, logged or sent back. A full disk
+    before the check starts answers 507 ``no_space``; any other failure to write its folders or its state, 500
+    ``stage_failed``, the cause in the log (B-30).
     """
     password = body.password.get_secret_value() if body.password is not None else None
     try:
@@ -233,6 +238,12 @@ def start_restore_check(body: RestoreStageRequest, _admin: User = Depends(requir
         raise backup_error(code, exc.code, str(exc)) from None
     except BackupPathError:
         raise _folder_unusable() from None
+    except OSError as exc:
+        if out_of_space(exc):
+            logger.warning("A check of a backup archive could not start: not enough free space")
+            raise backup_error(status.HTTP_507_INSUFFICIENT_STORAGE, "no_space", "Not enough free space to check the archive") from None
+        logger.error("A check of a backup archive could not start", error=f"{type(exc).__name__}: {exc.strerror or exc}")
+        raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "stage_failed", "The check could not start: the server's log has the cause") from None
 
 
 @restore_router.get("/restore/stage/{stage_id}", response_model=RestoreStage, responses={404: _STAGE_NOT_FOUND})
