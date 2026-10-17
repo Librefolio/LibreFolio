@@ -3,7 +3,8 @@
 The archive is a zip with the shape of the data directory (``paths``): the database copied with ``VACUUM INTO``, the
 archived folders file by file, and ``manifest.json`` last, listing every entry with its size and SHA-256. It is written
 as ``<name>.part`` in a work folder and renamed into place only when complete, so a partial archive never carries the
-final name. Files are streamed: nothing is held in memory whole.
+final name. Files are streamed: nothing is held in memory whole. A secure backup (lot B4) adds the instance key as an
+entry of its own, outside the manifest's files, and ``jobs`` then encrypts the whole archive (``envelope``).
 """
 
 from __future__ import annotations
@@ -24,8 +25,8 @@ from typing import Literal
 
 from backend.app.config import get_version
 from backend.app.logging_config import get_logger
-from backend.app.services.platform.instance_backup.manifest import MANIFEST_MAX_BYTES, BackupManifest, BackupOrigin, ManifestDatabase, ManifestError, ManifestFile
-from backend.app.services.platform.instance_backup.paths import ARCHIVED_FOLDERS, DATABASE_ENTRY, MANIFEST_ENTRY, database_path
+from backend.app.services.platform.instance_backup.manifest import MANIFEST_MAX_BYTES, BackupManifest, BackupOrigin, ManifestDatabase, ManifestError, ManifestFile, ManifestInstanceKey
+from backend.app.services.platform.instance_backup.paths import ARCHIVED_FOLDERS, DATABASE_ENTRY, INSTANCE_KEY_ENTRY, MANIFEST_ENTRY, database_path
 from backend.app.services.platform.instance_backup.snapshot import file_digest, snapshot_database
 from backend.app.services.platform.instance_backup.totals import ledger_totals_of
 
@@ -39,6 +40,8 @@ _ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
 _ZIP_LAST = (2107, 12, 31, 23, 59, 58)
 #: What a damaged entry raises while it is read: a bad CRC, a broken deflate stream, a truncated member.
 _ENTRY_READ_ERRORS = (zipfile.BadZipFile, zlib.error, EOFError, OSError)
+#: An instance key entry larger than this is not one LibreFolio wrote.
+INSTANCE_KEY_MAX_BYTES = 4096
 
 Phase = Literal["preparing", "database", "files", "finalizing"]
 Progress = Callable[[Phase, int, int], None]
@@ -146,11 +149,12 @@ def required_space(data_dir: Path, files: list[SourceFile]) -> int:
     return 2 * database_bytes + sum(file.size for file in files) + _SPACE_MARGIN
 
 
-def build_archive(data_dir: Path, work_dir: Path, target: Path, *, origin: BackupOrigin, progress: Progress | None = None) -> BuiltArchive:
+def build_archive(data_dir: Path, work_dir: Path, target: Path, *, origin: BackupOrigin, progress: Progress | None = None, instance_key: str | None = None) -> BuiltArchive:
     """Build the archive of ``data_dir`` at ``target``, working in ``work_dir`` (same file system as ``target``).
 
-    Raises ``BackupNoSpaceError`` before writing anything when the space is short. The work files left in ``work_dir``
-    on an error are the caller's to remove.
+    ``instance_key``: the key a secure backup carries (decision 39), as the entry ``secrets/instance.key``; the caller
+    encrypts the archive. Raises ``BackupNoSpaceError`` before writing anything when the space is short. The work files
+    left in ``work_dir`` on an error are the caller's to remove.
     """
     report = progress or (lambda phase, done, total: None)
     report("preparing", 0, 0)
@@ -193,6 +197,7 @@ def build_archive(data_dir: Path, work_dir: Path, target: Path, *, origin: Backu
                 logger.warning("Backup left out a file it could not read", entry=file.entry, error=type(exc).__name__)
                 skipped.append(file.entry)
         report("finalizing", done, total)
+        key_entry = _add_instance_key(archive, instance_key)
         manifest = BackupManifest(
             created_at=created_at,
             origin=origin,
@@ -205,6 +210,7 @@ def build_archive(data_dir: Path, work_dir: Path, target: Path, *, origin: Backu
                 control_totals=control_totals,
             ),
             files=entries,
+            instance_key=key_entry,
         )
         archive.writestr(_entry_info(MANIFEST_ENTRY, time.time()), manifest.to_bytes())
         archive.close()
@@ -250,6 +256,31 @@ def _add_file(archive: zipfile.ZipFile, path: Path, entry: str, on_bytes: Callab
             logger.error("Backup stopped: a file failed while it was being archived", entry=entry, error=f"{type(exc).__name__}: {exc.strerror or exc}")
             raise PartialEntryError(entry) from exc
     return ManifestFile(path=entry, size=size, sha256=digest.hexdigest())
+
+
+def _add_instance_key(archive: zipfile.ZipFile, key: str | None) -> ManifestInstanceKey:
+    """The instance key as an entry of its own, outside the manifest's files; what the manifest says of it."""
+    if key is None:
+        return ManifestInstanceKey()
+    data = key.encode("utf-8")
+    archive.writestr(_entry_info(INSTANCE_KEY_ENTRY, time.time()), data)
+    return ManifestInstanceKey(included=True, sha256=hashlib.sha256(data).hexdigest())
+
+
+def read_instance_key(archive: zipfile.ZipFile, sha256: str | None) -> str | None:
+    """The text of the archive's instance key entry when it has the manifest's SHA-256; ``None`` when it is missing,
+    differs, is larger than ``INSTANCE_KEY_MAX_BYTES``, is not UTF-8 or cannot be read."""
+    try:
+        with archive.open(INSTANCE_KEY_ENTRY) as handle:
+            raw = handle.read(INSTANCE_KEY_MAX_BYTES + 1)
+    except (KeyError, *_ENTRY_READ_ERRORS):
+        return None
+    if len(raw) > INSTANCE_KEY_MAX_BYTES or hashlib.sha256(raw).hexdigest() != sha256:
+        return None
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
 
 
 def _entry_info(entry: str, mtime: float) -> zipfile.ZipInfo:
@@ -316,8 +347,9 @@ def read_manifest(archive: zipfile.ZipFile) -> BackupManifest:
 def check_archive(path: Path, *, verify: bool = True) -> ArchiveCheck:
     """Check the archive at ``path`` against its manifest; with ``verify``, read every entry and compare size and SHA-256.
 
-    An entry is never read beyond the size its manifest gives it, so a crafted entry cannot inflate without bound.
-    Raises ``ArchiveError`` when the file is not a zip, ``ManifestError`` when its manifest cannot be read.
+    An entry is never read beyond the size its manifest gives it, so a crafted entry cannot inflate without bound. The
+    instance key entry is expected when the manifest announces it (a secure backup's archive, lot B4), unexpected
+    otherwise. Raises ``ArchiveError`` when the file is not a zip, ``ManifestError`` when its manifest cannot be read.
     """
     try:
         archive = zipfile.ZipFile(path)
@@ -327,16 +359,20 @@ def check_archive(path: Path, *, verify: bool = True) -> ArchiveCheck:
         manifest = read_manifest(archive)
         names = archive.namelist()
         expected = {entry.path: entry for entry in manifest.files}
+        key_expected = manifest.instance_key.included
+        allowed = {MANIFEST_ENTRY, INSTANCE_KEY_ENTRY} if key_expected else {MANIFEST_ENTRY}
         check = ArchiveCheck(manifest=manifest, verified=verify)
         repeated = {name for name, count in Counter(names).items() if count > 1}
-        check.unexpected = sorted({name for name in names if name not in expected and name != MANIFEST_ENTRY} | repeated)
-        check.missing = sorted(set(expected) - set(names))
+        check.unexpected = sorted({name for name in names if name not in expected and name not in allowed} | repeated)
+        check.missing = sorted((set(expected) | (allowed - {MANIFEST_ENTRY})) - set(names))
         if verify:
             for entry in manifest.files:
                 if entry.path in check.missing:
                     continue
                 if not _entry_matches(archive, entry):
                     check.mismatched.append(entry.path)
+            if key_expected and INSTANCE_KEY_ENTRY in names and read_instance_key(archive, manifest.instance_key.sha256) is None:
+                check.mismatched.append(INSTANCE_KEY_ENTRY)
         return check
 
 

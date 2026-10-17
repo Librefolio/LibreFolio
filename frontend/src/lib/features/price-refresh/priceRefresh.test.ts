@@ -57,6 +57,19 @@
  * Lot Z-13 (rule 6's default refresh): the app-instance cases of the default refresh stay red until `priceRefresh.ts`
  * calls `notifyPricesCaughtUp()` instead of `requestPortfolioRefresh()`. The mock of the bus provides both functions, so
  * the file loads whatever the bus exports today, and the red is the call counts, not an import.
+ *
+ * Lot Z-20 (rule 6's default `notices`, N-Z20-1): `instanceNotices.svelte` holds module-level `$state`, and the API
+ * client imports this module, so the AI Export probe — which loads the client with Vite and no Svelte compiler — would
+ * evaluate it and die on `rune_outside_svelte`. This module imports only its type statically (`import type
+ * {InstanceNotice}`), and the default `notices` loads it with `import()` on the first `show` or `hide`, through one
+ * shared promise: the calls reach it in their order — a `hide` never ahead of its `show` — even when both are issued
+ * before the module has loaded. The notice therefore reaches `instanceNotices` a few microtasks after the call: the
+ * app-instance cases wait for it (`vi.waitFor`) instead of reading the list in the same tick. The cases of the lazy load
+ * build a tracker with every dependency injected but `notices`, in a freshly imported graph where
+ * `instanceNotices.svelte` is a `vi.doMock` fake that records each evaluation of it and, when a case holds it, waits — a
+ * module still on its way. Red until the static import goes: importing this module evaluates the fake (and the held
+ * case stops at its premise). The case of the delivery guards what stays: shown, then hidden, once each, with the
+ * contract notice and its id.
  */
 import {AxiosError, AxiosHeaders} from 'axios';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -776,9 +789,10 @@ describe('the app instance', () => {
 
         expect(polling.start).toHaveBeenCalledTimes(1);
         expect(polling.latest().options).toEqual({run: expect.any(Function), intervalMs: POLL_MS});
-        expect(instanceNotices.list.filter((notice) => notice.id === NOTICE.id)).toEqual([NOTICE]);
+        // The default notices reach instanceNotices through import() (Z-20): a few microtasks after the call.
+        await vi.waitFor(() => expect(instanceNotices.list.filter((notice) => notice.id === NOTICE.id)).toEqual([NOTICE]));
         module.priceRefresh.stop();
-        expect(instanceNotices.list.filter((notice) => notice.id === NOTICE.id)).toEqual([]);
+        await vi.waitFor(() => expect(instanceNotices.list.filter((notice) => notice.id === NOTICE.id)).toEqual([]));
     });
 
     it('a tracker without refreshPortfolio refreshes through notifyPricesCaughtUp, never through requestPortfolioRefresh (Z-13)', async () => {
@@ -799,18 +813,22 @@ describe('the app instance', () => {
         const fetchMock = vi.fn(async () => jsonResponse(200, status('idle', {last_finished_at: '2026-10-16T06:01:00+00:00', last_refreshed: true})));
         vi.stubGlobal('fetch', fetchMock);
         module.priceRefresh.observe(runningHeader);
-        expect(
-            instanceNotices.list.filter((notice) => notice.id === NOTICE.id),
-            'premise: the notice is on',
-        ).toEqual([NOTICE]);
+        await vi.waitFor(() => {
+            expect(
+                instanceNotices.list.filter((notice) => notice.id === NOTICE.id),
+                'premise: the notice is on',
+            ).toEqual([NOTICE]);
+        });
 
         await polling.run();
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
-        expect(
-            instanceNotices.list.filter((notice) => notice.id === NOTICE.id),
-            'the idle answer hides the notice',
-        ).toEqual([]);
+        await vi.waitFor(() => {
+            expect(
+                instanceNotices.list.filter((notice) => notice.id === NOTICE.id),
+                'the idle answer hides the notice',
+            ).toEqual([]);
+        });
         expect(notifyPricesCaughtUp, 'the app’s tracker did not send the price signal at the end of the catch-up').toHaveBeenCalledTimes(1);
         expect(requestPortfolioRefresh, 'the app’s tracker still sends «Aggiorna»’s signal').not.toHaveBeenCalled();
         expect(module.priceRefresh.tracking).toBe(false);
@@ -871,5 +889,109 @@ describe('the app instance', () => {
         expect(polling.start, 'the sign-in lifted the suspension').toHaveBeenCalledTimes(2);
         expect(module.priceRefresh.tracking).toBe(true);
         module.priceRefresh.stop();
+    });
+});
+
+describe('the default notices, loaded by the first notice (Z-20, N-Z20-1)', () => {
+    const NOTICES_MODULE = '$lib/features/instance/instanceNotices.svelte';
+
+    /**
+     * A freshly imported `priceRefresh` whose `instanceNotices.svelte` is a fake: `evaluated` records each evaluation of
+     * it, and while `load.held` is set an evaluation waits for it — the module still on its way.
+     */
+    async function lazyNoticesGraph() {
+        vi.resetModules();
+        const evaluated = vi.fn<() => void>().mockName('instanceNotices.svelte evaluated');
+        const show = vi.fn<(notice: InstanceNotice) => void>().mockName('instanceNotices.show');
+        const hide = vi.fn<(id: string) => void>().mockName('instanceNotices.hide');
+        const load: {held: Promise<void> | null} = {held: null};
+        vi.doMock(NOTICES_MODULE, async () => {
+            evaluated();
+            if (load.held) await load.held;
+            return {instanceNotices: {show, hide}};
+        });
+        const module = await import('./priceRefresh');
+        return {module, evaluated, show, hide, load};
+    }
+
+    /** A tracker of that graph with every dependency faked but `notices`: the default is the subject. */
+    function defaultNoticesTracker(create: typeof createPriceRefresh) {
+        const polling = fakePolling();
+        const answers: PriceRefreshStatus[] = [];
+        const fetchStatus = vi.fn(async (): Promise<PriceRefreshStatus> => {
+            const next = answers.shift();
+            if (next === undefined) throw new Error('test: fetchStatus called with no answer scripted');
+            return next;
+        });
+        const tracker = create({fetchStatus, refreshPortfolio: vi.fn<() => void>(), startPolling: polling.start});
+        return {tracker, polling, answers};
+    }
+
+    afterEach(async () => {
+        await vi.dynamicImportSettled();
+        vi.doUnmock(NOTICES_MODULE);
+        vi.resetModules();
+    });
+
+    it('importing priceRefresh — which builds the app’s tracker — evaluates no instanceNotices.svelte, nor does a tracker built without notices', async () => {
+        const {module, evaluated} = await lazyNoticesGraph();
+        defaultNoticesTracker(module.createPriceRefresh);
+
+        // An import() started at load or at creation would have reached the fake by now.
+        await vi.dynamicImportSettled();
+
+        expect(
+            evaluated,
+            'instanceNotices.svelte holds module-level $state: priceRefresh must import only its type statically and load it with import() on the first show or hide — the API client imports priceRefresh, and the AI Export probe loads the client without the Svelte compiler, where a rune throws rune_outside_svelte',
+        ).not.toHaveBeenCalled();
+    });
+
+    it('a tracker without notices shows its notice in instanceNotices, loaded by that first show, and hides it there: once each, the show first', async () => {
+        const {module, evaluated, show, hide} = await lazyNoticesGraph();
+        const {tracker, polling, answers} = defaultNoticesTracker(module.createPriceRefresh);
+
+        tracker.observe(runningHeader);
+        await vi.waitFor(() => expect(show, 'the running header’s notice never reached instanceNotices').toHaveBeenCalledTimes(1));
+        expect(hide).not.toHaveBeenCalled();
+        answers.push(status('idle', {last_finished_at: '2026-10-16T06:01:00+00:00', last_refreshed: false}));
+        await polling.run();
+        await vi.waitFor(() => expect(hide, 'the idle answer’s hide never reached instanceNotices').toHaveBeenCalledTimes(1));
+
+        expect(show).toHaveBeenCalledTimes(1);
+        expect(show.mock.calls[0][0]).toStrictEqual(NOTICE);
+        expect(hide).toHaveBeenCalledWith(NOTICE.id);
+        expect(show.mock.invocationCallOrder[0], 'shown, then hidden').toBeLessThan(hide.mock.invocationCallOrder[0]);
+        expect(evaluated, 'instanceNotices.svelte is loaded once').toHaveBeenCalledTimes(1);
+        expect(tracker.tracking).toBe(false);
+        expect(tracker.noticeShown).toBe(false);
+    });
+
+    it('a show and a hide issued while instanceNotices.svelte is still loading reach it in their order, through one load', async () => {
+        const {module, evaluated, show, hide, load} = await lazyNoticesGraph();
+        expect(evaluated, 'premise: importing priceRefresh loaded no instanceNotices.svelte (see the first case)').not.toHaveBeenCalled();
+        const loading = held<void>();
+        load.held = loading.promise;
+        try {
+            const {tracker, polling, answers} = defaultNoticesTracker(module.createPriceRefresh);
+
+            tracker.observe(runningHeader);
+            await vi.waitFor(() => expect(evaluated, 'premise: the first show starts loading instanceNotices.svelte').toHaveBeenCalledTimes(1));
+            answers.push(status('idle', {last_refreshed: false}));
+            await polling.run();
+            expect(tracker.noticeShown, 'premise: the idle answer hid the notice').toBe(false);
+            expect(show, 'premise: the module is held, so nothing has reached it yet').not.toHaveBeenCalled();
+            expect(hide).not.toHaveBeenCalled();
+
+            loading.resolve();
+            await vi.waitFor(() => expect(hide, 'the hide never reached instanceNotices').toHaveBeenCalledTimes(1));
+
+            expect(show).toHaveBeenCalledTimes(1);
+            expect(show.mock.calls[0][0]).toStrictEqual(NOTICE);
+            expect(hide).toHaveBeenCalledWith(NOTICE.id);
+            expect(show.mock.invocationCallOrder[0], 'a hide that overtakes its show leaves the notice on screen for good').toBeLessThan(hide.mock.invocationCallOrder[0]);
+            expect(evaluated, 'one load, shared by every call: two import() racing each other settle in no promised order').toHaveBeenCalledTimes(1);
+        } finally {
+            loading.resolve();
+        }
     });
 });

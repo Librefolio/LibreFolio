@@ -122,6 +122,8 @@ vi.mock('./backupApi', async () => {
         requestRestart: vi.fn(),
         probeServer: vi.fn(),
         restoreOutcome: vi.fn(),
+        // B4: the download card beside this one in BackupTab may read the options of a secure backup as it mounts.
+        getInstanceBackupOptions: vi.fn(() => Promise.resolve({password_rules: [{code: 'min_length', value: 12}, {code: 'uppercase'}, {code: 'lowercase'}, {code: 'digit'}, {code: 'special'}]})),
     };
 });
 
@@ -225,7 +227,12 @@ const TICKET = 'kq8Z3vR-wT0yN5mB_xH2cL7pJ4sF9dG1eA6uK0iO3rY';
 /** What an accepted restart answers (B5c): the restore still pending, and the ticket that reads its outcome. */
 const accepted = (ticket: string = TICKET): RestoreRestartAccepted => ({...pending(), outcome_ticket: ticket});
 
-function report(overrides: Partial<RestoreStageReport> = {}): RestoreStageReport {
+/** B4 (§5): what a report says of the archive's encryption and of the plugin secrets. Written out until the client is generated again. */
+type ReportB4Fields = {encrypted: boolean; secrets_unreadable: {system: number; user: number}; secrets_rekeyed: number};
+/** B4 (§5): an upload says what was stored, a zip or an envelope. Written out until the client is generated again. */
+type Upload = RestoreUpload & {kind: 'zip' | 'envelope'};
+
+function report(overrides: Partial<RestoreStageReport & ReportB4Fields> = {}): RestoreStageReport & ReportB4Fields {
     return {
         backup_created_at: '2026-10-15T12:00:00Z',
         backup_app_version: '0.9.0',
@@ -251,6 +258,9 @@ function report(overrides: Partial<RestoreStageReport> = {}): RestoreStageReport
         control_totals_differences_count: 0,
         restorable: true,
         expires_at: '2026-10-16T12:00:00Z',
+        encrypted: false,
+        secrets_unreadable: {system: 0, user: 0},
+        secrets_rekeyed: 0,
         ...overrides,
     };
 }
@@ -261,7 +271,7 @@ function stage(overrides: Partial<RestoreStage> = {}): RestoreStage {
 
 const runningStage = (overrides: Partial<RestoreStage> = {}) => stage({status: 'running', ...overrides});
 const doneStage = (answer: RestoreStageReport = report()) => stage({status: 'done', phase: null, done_bytes: 4096, total_bytes: 4096, finished_at: '2026-10-16T09:01:00Z', report: answer});
-const uploaded = (overrides: Partial<RestoreUpload> = {}): RestoreUpload => ({upload_id: UPLOAD_ID, size: 4096, ...overrides});
+const uploaded = (overrides: Partial<Upload> = {}): Upload => ({upload_id: UPLOAD_ID, size: 4096, kind: 'zip', ...overrides});
 
 /** An archive of `size` bytes: the size is set on the File, so a large one costs no memory. */
 function archive(size = 4096, name = 'librefolio-backup-20261015-120000.zip'): File {
@@ -1051,5 +1061,163 @@ describe('BackupTab', () => {
         const restoreCard = within(tab).getByTestId('restore-card');
         expect(download.compareDocumentPosition(restoreCard) & Node.DOCUMENT_POSITION_FOLLOWING, 'the restore card is not under the download card').toBeTruthy();
         expect(restoreCard).toHaveAttribute('data-state', 'idle');
+    });
+});
+
+// =====================================================================================================================
+// B4 — an envelope (.lfbk): its password asked on the card before anything is sent (written red first)
+// =====================================================================================================================
+
+/*
+ * The contract (B4 brief §5, §7):
+ *   - the picker suggests `.lfbk` as well as `.zip`;
+ *   - an envelope chosen (its first bytes `LFBK`): `data-state="password"`, not busy, nothing sent; the card shows
+ *     `restore-password-form` with `restore-password` (a password field), `restore-password-submit` and
+ *     `restore-password-cancel`;
+ *   - submitted: the archive sent once, then its check started with the upload id and the password
+ *     (`startRestoreCheck(uploadId, password)`); `wrong_password` brings the form back with `restore-password-error`
+ *     (`data-error-code`, worded by `backup.restore.errors.<code>`), and the next password checks the same upload — the
+ *     archive is not sent again; cancel goes back to `idle` with the picker, nothing sent;
+ *   - an envelope refused as damaged or unsupported fails as any check that cannot start, with its own sentence
+ *     (`backup.restore.errors.envelope_damaged`, `…envelope_unsupported`); the check's first phase is `decrypting`, with
+ *     its label (`backup.restore.phase.decrypting`).
+ *
+ * The envelope is told apart by the real `isEnvelopeFile` of ./backupApi (the mock above keeps the module's own
+ * helpers): the File's bytes decide. Every fixture carries B4's fields: `kind` on an upload, `encrypted`,
+ * `secrets_unreadable` and `secrets_rekeyed` on a report.
+ *
+ * Red today: the picker suggests `.zip` alone; an envelope is sent at once like a zip, so no password is ever asked;
+ * the card has no phase `decrypting` and no sentence for the four codes of an envelope.
+ */
+
+/** An envelope as the server writes it (B4 §1): `LFBK`, then the rest of its header — version 1, scrypt, log2(n) 15, r 8, p 1. */
+function envelope(name = 'librefolio-backup-20261016-230000.lfbk'): File {
+    return new File(['LFBK\u0001\u0001\u000f\u0008\u0001'], name, {type: 'application/octet-stream'});
+}
+
+const PASSWORD = 'Correct-Horse-Battery-9';
+const OTHER_PASSWORD = 'Staple-Battery-Horse-7';
+/** B4's first phase of the check of an envelope: the generated client does not know it yet. */
+const DECRYPTING = 'decrypting' as string as NonNullable<RestoreStage['phase']>;
+
+/** Type `password` in the form and submit it. */
+async function submitPassword(password: string): Promise<void> {
+    await fireEvent.input(screen.getByTestId('restore-password'), {target: {value: password}});
+    await fireEvent.click(screen.getByTestId('restore-password-submit'));
+    await settle();
+}
+
+/** The card mounted, an envelope chosen: the form asks for its password. */
+async function passwordCard(file: File = envelope()) {
+    const view = await mount();
+    await choose(file);
+    expect(card(), 'precondition: the password of the envelope is asked').toHaveAttribute('data-state', 'password');
+    return view;
+}
+
+describe('B4 — RestoreCard: an envelope and its password', () => {
+    it('the picker suggests .lfbk as well as .zip', async () => {
+        await mount();
+
+        const suggested = (screen.getByTestId('restore-file-input').getAttribute('accept') ?? '').split(',').map((token) => token.trim());
+        expect(suggested, 'an envelope cannot be chosen from the picker').toContain('.lfbk');
+        expect(suggested).toContain('.zip');
+    });
+
+    it('an envelope chosen: data-state password, not busy, the password form — nothing sent yet', async () => {
+        await mount();
+
+        await choose(envelope());
+
+        expect(card()).toHaveAttribute('data-state', 'password');
+        expect(card()).toHaveAttribute('data-busy', 'false');
+        expect(card()).toHaveAttribute('data-error-code', '');
+        const form = screen.getByTestId('restore-password-form');
+        expect(within(form).getByTestId('restore-password')).toHaveAttribute('type', 'password');
+        expect(within(form).getByTestId('restore-password-submit')).toBeInTheDocument();
+        expect(within(form).getByTestId('restore-password-cancel')).toBeInTheDocument();
+        expect(screen.queryByTestId('restore-password-error'), 'no error before a password was tried').toBeNull();
+        expect(api.uploadRestoreArchive, 'the envelope was sent before its password was asked').not.toHaveBeenCalled();
+        expect(api.startRestoreCheck).not.toHaveBeenCalled();
+    });
+
+    it('submitted: the archive sent once, then checked with the password; wrong_password brings the form back with restore-password-error, and the next password checks the same upload without sending the archive again', async () => {
+        const file = envelope();
+        await passwordCard(file);
+        api.uploadRestoreArchive.mockResolvedValueOnce(uploaded({kind: 'envelope', size: file.size}));
+        api.startRestoreCheck.mockRejectedValueOnce(refusal(400, 'wrong_password'));
+
+        await submitPassword(PASSWORD);
+
+        expect(api.uploadRestoreArchive).toHaveBeenCalledTimes(1);
+        expect(api.uploadRestoreArchive.mock.calls[0][0], 'the File chosen is sent').toBe(file);
+        expect(api.startRestoreCheck.mock.calls).toEqual([[UPLOAD_ID, PASSWORD]]);
+        expect(card()).toHaveAttribute('data-state', 'password');
+        expect(card()).toHaveAttribute('data-error-code', 'wrong_password');
+        const error = screen.getByTestId('restore-password-error');
+        expect(error).toHaveAttribute('data-error-code', 'wrong_password');
+        expect(error).toHaveTextContent('backup.restore.errors.wrong_password');
+        expect(screen.getByTestId('restore-password-form')).toBeInTheDocument();
+
+        api.startRestoreCheck.mockResolvedValueOnce(runningStage({phase: DECRYPTING}));
+        await submitPassword(OTHER_PASSWORD);
+
+        expect(api.uploadRestoreArchive, 'the archive was sent again: the upload was not kept').toHaveBeenCalledTimes(1);
+        expect(api.startRestoreCheck.mock.calls).toEqual([
+            [UPLOAD_ID, PASSWORD],
+            [UPLOAD_ID, OTHER_PASSWORD],
+        ]);
+        expect(card()).toHaveAttribute('data-state', 'checking');
+        expect(screen.queryByTestId('restore-password-form')).toBeNull();
+        expect(
+            vi.mocked(notify).mock.calls.filter(([options]) => [PASSWORD, OTHER_PASSWORD].some((password) => JSON.stringify(options).includes(password))),
+            'a notification told the password',
+        ).toEqual([]);
+    });
+
+    it('restore-password-cancel: back to idle with the picker, nothing sent', async () => {
+        await passwordCard();
+
+        await fireEvent.click(screen.getByTestId('restore-password-cancel'));
+        await settle();
+
+        expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(card()).toHaveAttribute('data-error-code', '');
+        expect(screen.queryByTestId('restore-password-form')).toBeNull();
+        expect(screen.getByTestId('restore-choose')).toBeInTheDocument();
+        expect(api.uploadRestoreArchive).not.toHaveBeenCalled();
+        expect(api.startRestoreCheck).not.toHaveBeenCalled();
+    });
+
+    it.each<[string, number]>([
+        ['envelope_damaged', 400],
+        ['envelope_unsupported', 409],
+    ])('an envelope refused as %s: failed, restore-error with the code and its own sentence', async (code, status) => {
+        const file = envelope();
+        await passwordCard(file);
+        api.uploadRestoreArchive.mockResolvedValueOnce(uploaded({kind: 'envelope', size: file.size}));
+        api.startRestoreCheck.mockRejectedValueOnce(refusal(status, code));
+
+        await submitPassword(PASSWORD);
+
+        expect(card()).toHaveAttribute('data-state', 'failed');
+        const error = screen.getByTestId('restore-error');
+        expect(error).toHaveAttribute('data-error-code', code);
+        expect(error).toHaveTextContent(`backup.restore.errors.${code}`);
+        expect(error, 'the code fell back on the unexpected sentence').not.toHaveTextContent('backup.restore.errors.unexpected');
+    });
+
+    it('the check of an envelope: the phase decrypting, with its label and its share', async () => {
+        const file = envelope();
+        await passwordCard(file);
+        api.uploadRestoreArchive.mockResolvedValueOnce(uploaded({kind: 'envelope', size: file.size}));
+        api.startRestoreCheck.mockResolvedValueOnce(runningStage({phase: DECRYPTING, done_bytes: 1024, total_bytes: 4096}));
+
+        await submitPassword(PASSWORD);
+
+        const progress = screen.getByTestId('restore-check-progress');
+        expect(progress).toHaveAttribute('data-phase', 'decrypting');
+        expect(progress).toHaveTextContent('backup.restore.phase.decrypting');
+        expect(progressbar(progress)).toHaveAttribute('aria-valuenow', '25');
     });
 });

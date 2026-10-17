@@ -333,6 +333,22 @@ def api_backup_restore_apply(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Backup API restore confirmation tests", verbose=verbose)
 
 
+def api_backup_secure(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the secure backup through the API (lot B4): a password at the creation, the options, and the check of an envelope."""
+    print_section("Backup API: the secure backup")
+    print_info("Testing: POST /backup/instance with a password, GET /backup/instance/options, PUT /backup/restore/upload (kind), POST /backup/restore/stage with a password; no echo of a password")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_secure_api.py", test_names)
+    return run_command(cmd, "Backup API secure backup tests", verbose=verbose)
+
+
+def api_no_echo_route(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the route class whose 422 never repeats the body, shared by the routes that receive a secret."""
+    print_section("API: 422 without echo")
+    print_info("Testing: backend/app/api/no_echo.py (NoInputEchoRoute), on an app of the test; the routers that use it")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_no_echo_route.py", test_names)
+    return run_command(cmd, "422 without echo tests", verbose=verbose)
+
+
 def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Run Transactions API endpoint tests."""
     print_section("Transactions API Endpoint Tests")
@@ -1017,6 +1033,25 @@ Tests for REST API endpoints (server auto-started):
         # must stay absent; the checks run in fake threads, on real archives built under tmp_path (two alembic upgrades
         # of new databases, in processes of their own, as test_backup_staging.py makes them): no lane data directory,
         # DB, server or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-secure",
+        api_backup_secure,
+        name="Backup API Secure Backup",
+        desc="The secure backup through the API (lot B4): GET /backup/instance/options (the archive rules, admins only); POST /backup/instance with a password (password_too_weak 400 with its rules and no job; an .lfbk, encrypted; no body, {} or null a zip; a 422 never echoing the password); the panel never encrypting; PUT /backup/restore/upload kind; POST /backup/restore/stage with a password (password_required, wrong_password 400 keeping the upload, envelope_damaged 400, envelope_unsupported 409, a zip ignoring it); the report's encrypted and secret counts",
+        # Write-scoped (the category default): SECURE-001 to 005 start real backups on the lane's server, as an
+        # administrator the module registers and deletes; the others run in an app of the test under tmp_path.
+        exclusive_because="starts real backups on the lane's server, which hold its one backup run lock: api backup, run beside it, would meet 409 backup_busy",
+    )
+    add_test(
+        api,
+        "no-echo-route",
+        api_no_echo_route,
+        name="422 Without Echo",
+        desc="NoInputEchoRoute (api/no_echo.py): a 422 keeps type, loc, msg and ctx and never repeats the body (a missing field, an extra field, a value too long, beside a password); a valid body and an HTTPException pass unchanged; the plugin settings' router and the backup routers that receive a password use the one shared class",
+        # PURE: an app of the test, in this process; the routers are only imported. No DB, no server reached.
         isolation="pure",
     )
     add_test(
