@@ -421,7 +421,8 @@
       "inUse": "Non è stato salvato nulla: l'evento {type} del {date} è collegato a {n, plural, one {# transazione} other {# transazioni}} e non si può cancellare. Togli prima il collegamento dalle transazioni{more, plural, =0 {} one { (e un altro evento)} other { (e altri # eventi)}}.",
       "notDeletable": "Non è stato salvato nulla: uno degli eventi da cancellare non esiste più o non si può cancellare da qui. Ricarica i dati e riprova.",
       "tooManyDigits": "Non è stato salvato nulla: il valore dell'evento {type} del {date}{more, plural, =0 {} one { (e # altro)} other { (e altri #)}} ha troppe cifre. Il valore di un evento ha al massimo {max} decimali, {significant} cifre significative e {integer} cifre prima della virgola.",
-      "invalidSplitRatio": "Non è stato salvato nulla: l'evento {type} del {date}{more, plural, =0 {} one { (e # altro)} other { (e altri #)}} ha un rapporto di {ratio}. Il rapporto di un frazionamento deve essere un numero maggiore di 0: 2 per un frazionamento 2 a 1, 0,5 per un raggruppamento 1 a 2."
+      "invalidSplitRatio": "Non è stato salvato nulla: l'evento {type} del {date}{more, plural, =0 {} one { (e # altro)} other { (e altri #)}} ha un rapporto di {ratio}. Il rapporto di un frazionamento deve essere un numero maggiore di 0: 2 per un frazionamento 2 a 1, 0,5 per un raggruppamento 1 a 2.",
+      "splitAdjustmentsWithoutCost": "Non è stato salvato nulla: l'evento {type} del {date} ha {n, plural, one {# rettifica collegata} other {# rettifiche collegate}} senza costo d'acquisto{hidden, plural, =0 {} one { (# in un broker che non puoi vedere)} other { (# in broker che non puoi vedere)}}. Senza lo split quelle unità conterebbero come comprate a un prezzo sconosciuto: dai prima un costo d'acquisto alle rettifiche, poi cambia il tipo dell'evento."
     }
   },
   "providerErrors": {

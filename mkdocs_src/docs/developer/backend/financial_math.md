@@ -401,7 +401,9 @@ flowchart LR
    `frontend/src/lib/charts/signals/` — and each exception must be declared where it lives.
    The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in
    `MeasureSignal.ts` is held to `_MIN_ANNUALIZATION_DAYS` of `returns.py` by a parity test in
-   `measureSignal.test.ts`, so changing one without the other fails that test.
+   `measureSignal.test.ts`, so changing one without the other fails that test. Its `changePct` (null on a zero
+   start, N65) is also the one Δ% rule of the chart tooltip (`priceChartHelpers.ts::buildDeltaHtml`, J-44), which
+   imports it rather than keeping a copy.
    The declaration is the tag `@financial-math-exception` in the file's leading JSDoc block,
    followed by what the exception computes and why it stays in the browser. The [gate](#frontend-exceptions-gate)
    (`frontend/src/financialMathExceptions.gate.test.ts`) holds the list of declared files and
