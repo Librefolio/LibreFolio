@@ -205,7 +205,7 @@ subclasses (`FIXES`: a new fix is appended, never inserted before an older one).
 the `database` step, the `post-migration-fixes` step of the lifespan runs
 `run_post_migration_fixes_at_startup()` (`backend/app/services/platform/database_bootstrap.py`) in a
 worker thread; it never lets an error stop the startup. `run_post_migration_fixes()` works on a
-direct `sqlite3` connection:
+direct `sqlite3` connection, with `trusted_schema` off before anything else (lot B-37):
 
 1. It holds an exclusive `fcntl.flock` on `<db file>.post-migration.lock`, beside the database,
    from the integrity check to the cleanup, dry runs included: the workers of a multi-worker server
