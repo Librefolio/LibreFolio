@@ -28,6 +28,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import backend.app.schemas.portfolio as portfolio_module
 import backend.app.services.financial_math.lots.conversions as conversions_module
 import backend.app.services.financial_math.lots.histories as histories_module
 import backend.app.services.financial_math.lots.prices as prices_module
@@ -3046,12 +3047,20 @@ _SEC8_END = date(1900, 1, 10)  # the reading day: near the floor, so the cured r
 _SEC8_HISTORIES = (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY)
 
 
-async def _sec8_analysis(monkeypatch, *, date_from: date | None, currency: str = "EUR") -> tuple[LotsAnalysisResponse, list[dict]]:
+async def _sec8_analysis(
+    monkeypatch,
+    *,
+    date_from: date | None,
+    currency: str = "EUR",
+    opening: Transaction | None = None,
+    analyses: list[LotAnalysisType | str] | None = None,
+) -> tuple[LotsAnalysisResponse, list[dict]]:
     """get_lots_analysis up to 10 Jan 1900 of asset 7 (in ``currency``, quoted per unit) for broker 1 alone: the summary,
-    the four histories and the income markers. Returns the response and the arguments of every price load.
+    the four histories and the income markers, or ``analyses`` when given (Y-30's market price line). Returns the
+    response and the arguments of every price load.
 
-    The rows: 10 units bought for 1200 on 1890-01-01, a DIVIDEND of 50 on 1890-06-01, a close of 150 on 5 Jan 1900 —
-    all in ``currency``. No split, no cost transaction.
+    The rows: 10 units bought for 1200 on 1890-01-01 (or ``opening`` in their place, Y-30), a DIVIDEND of 50 on
+    1890-06-01, a close of 150 on 5 Jan 1900 — all in ``currency``. No split, no cost transaction.
     """
     service = LotsAnalysisService(db=_SessionWithTheAsset(SimpleNamespace(id=7, display_name="X", currency=currency, quote_base_quantity=1)))
     price_loads: list[dict] = []
@@ -3062,7 +3071,7 @@ async def _sec8_analysis(monkeypatch, *, date_from: date | None, currency: str =
 
     loaded = {
         "_get_scope_broker_ids": [1],
-        "_load_transactions": [_tx(1, tx_date=_SEC8_OPENED, quantity=D("10"), amount=D("-1200"), currency=currency)],
+        "_load_transactions": [opening if opening is not None else _tx(1, tx_date=_SEC8_OPENED, quantity=D("10"), amount=D("-1200"), currency=currency)],
         "_load_split_ratios": {},
         "_load_broker_shorting": {1: False},
         "_load_income_transactions": [_tx(2, tx_type=TransactionType.DIVIDEND, tx_date=_SEC8_DIVIDEND_DAY, quantity=D("0"), amount=D("50"), currency=currency)],
@@ -3079,7 +3088,7 @@ async def _sec8_analysis(monkeypatch, *, date_from: date | None, currency: str =
         date_to=_SEC8_END,
         target_currency="EUR",
         selected_lot_ids=None,
-        requested_analyses=[LotAnalysisType.LOT_SUMMARY, *_SEC8_HISTORIES, LotAnalysisType.INCOME_EVENTS],
+        requested_analyses=[LotAnalysisType.LOT_SUMMARY, *_SEC8_HISTORIES, LotAnalysisType.INCOME_EVENTS] if analyses is None else list(analyses),
     )
     return response, price_loads
 
@@ -3141,3 +3150,110 @@ class TestALotOpenedBeforeTheFloor:
         before_the_floor = sorted(day for _currency, day in requested if day < _SEC8_FLOOR)
         assert before_the_floor == [_SEC8_OPENED, _SEC8_DIVIDEND_DAY], f"{len(before_the_floor)} days asked before the floor, from {before_the_floor[:1]}"
         assert ("USD", _SEC8_FLOOR) in requested, "the price line's daily rates start on the floor"
+
+
+# =========================================================================== #
+# Y-30 — the market price line, independent of the lots
+# =========================================================================== #
+#
+# The price/WAC chart drew its price line from PRICE_HISTORY, which is per lot: with a FAILED replay (J-12) every lot
+# section is None, so the chart lost the line, and on a day with no lot open it had a hole. Y-30 (N89) adds
+# MARKET_PRICE_HISTORY: one point per day of the analysis' window that has a mark convertible to the target currency
+# (build_market_price_history, beside build_price_history in financial_math/lots/histories.py), whatever lot is open.
+# The new names are read through their modules while a test runs (histories_module, portfolio_module) and the analysis
+# is asked for by its string: before Y-30 only these tests fail — AttributeError, ValueError ('MARKET_PRICE_HISTORY' is
+# not a valid LotAnalysisType) — and the rest of the file still collects. Each docstring says what it reads today. The
+# service-level contract is in test_financial/test_lots_market_price_history.py.
+
+_MARKET_PRICE_HISTORY = "MARKET_PRICE_HISTORY"
+
+
+class TestTheMarketPriceLineBuilder:
+    """build_market_price_history(estimated_market_prices, history_dates, target_currency) and the point it builds."""
+
+    def test_build_market_price_history_one_point_per_history_date_with_a_mark(self):
+        """Five history days, 10–14 Jan 2024; marks on 13, 10 and 11 Jan (given in that order) and on 20 Jan, outside the
+        history. One point per history day with a mark, in the history's order: 10 Jan (10, estimated), 11 Jan (11,
+        estimated), 13 Jan (12.5, not estimated). 12 and 14 Jan have no mark, so no point; 20 Jan is no history day, so no
+        point either. Every point is in the target currency given — USD here, never the response's default —, its
+        ``estimated`` the mark's.
+
+        Today: AttributeError — lots/histories.py has no build_market_price_history.
+        """
+        points = histories_module.build_market_price_history(
+            estimated_market_prices={
+                date(2024, 1, 13): (D("12.5"), False),
+                date(2024, 1, 10): (D("10"), True),
+                date(2024, 1, 20): (D("99"), False),
+                date(2024, 1, 11): (D("11"), True),
+            },
+            history_dates=_days(date(2024, 1, 10), 5),
+            target_currency="USD",
+        )
+
+        assert [(point.date, point.market_price, point.currency, point.estimated) for point in points] == [
+            (date(2024, 1, 10), D("10"), "USD", True),
+            (date(2024, 1, 11), D("11"), "USD", True),
+            (date(2024, 1, 13), D("12.5"), "USD", False),
+        ]
+
+    def test_build_market_price_history_without_a_mark_has_no_point(self):
+        """No mark on any history day: an empty line, not an error.
+
+        Today: AttributeError — lots/histories.py has no build_market_price_history.
+        """
+        points = histories_module.build_market_price_history(estimated_market_prices={}, history_dates=_days(date(2024, 1, 10), 3), target_currency="EUR")
+
+        assert points == []
+
+    def test_market_price_history_point_is_the_lot_point_without_lot_id(self):
+        """MarketPriceHistoryPoint is LotPriceHistoryPoint without ``lot_id``: ``date``, ``market_price``, ``currency``,
+        ``estimated`` — False unless said —, a strict model (an extra field, ``lot_id`` included, is refused) whose
+        ``currency`` must be an ISO code.
+
+        Today: AttributeError — schemas/portfolio.py has no MarketPriceHistoryPoint.
+        """
+        point_type = portfolio_module.MarketPriceHistoryPoint
+
+        assert set(point_type.model_fields) == {"date", "market_price", "currency", "estimated"}
+        point = point_type(date=date(2024, 1, 10), market_price=D("10"), currency="USD")
+        assert (point.date, point.market_price, point.currency, point.estimated) == (date(2024, 1, 10), D("10"), "USD", False)
+        with pytest.raises(ValueError):
+            point_type(date=date(2024, 1, 10), market_price=D("10"), currency="USD", lot_id=1)
+        with pytest.raises(ValueError):
+            point_type(date=date(2024, 1, 10), market_price=D("10"), currency="NOT-A-CODE")
+
+
+class TestTheMarketPriceLineAtTheFloor:
+    """get_lots_analysis on the rows of R13-SEC8-2 (``_sec8_analysis``: a lot opened on 1890-01-01, a close of 150 on
+    5 Jan 1900, read on 10 Jan 1900), the market price line alone: in EUR no rate is asked, nothing reaches a database."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("date_from", [pytest.param(None, id="no-date_from"), pytest.param(date(1, 1, 1), id="date_from-day-one")])
+    async def test_the_market_price_history_starts_at_the_floor(self, monkeypatch, date_from):
+        """No point before 1900-01-01, and one on every day from it to 10 Jan 1900: on 1–4 Jan the 1890 BUY's 120 a unit,
+        carried (a trade's mark: estimated); from 5 Jan the close, 150 (not estimated). The window starts at the floor, the
+        price series does not: the BUY of 1890 still marks the floor.
+
+        Today: ValueError — 'MARKET_PRICE_HISTORY' is not a valid LotAnalysisType.
+        """
+        response, _ = await _sec8_analysis(monkeypatch, date_from=date_from, analyses=[_MARKET_PRICE_HISTORY])
+
+        line = [(point.date, point.market_price, point.estimated) for point in response.market_price_history]
+        assert [day for day, _price, _estimated in line if day < _SEC8_FLOOR] == []
+        assert line == [(day, D("120"), True) for day in _days(_SEC8_FLOOR, 4)] + [(day, D("150"), False) for day in _days(_SEC8_QUOTED, 6)]
+
+    @pytest.mark.asyncio
+    async def test_the_market_price_history_starts_on_the_first_mark_after_the_floor(self, monkeypatch):
+        """The same rows, the lot opened by an ADJUSTMENT of 10 at a cost of 120 EUR a unit instead of the BUY — a cost,
+        never a price —, so nothing marks a day before the close of 5 Jan 1900: no point before the floor, none on 1–4 Jan
+        1900, and the first on 5 Jan, 150 (not estimated), then one a day to 10 Jan.
+
+        Today: ValueError — 'MARKET_PRICE_HISTORY' is not a valid LotAnalysisType.
+        """
+        adjustment = _tx(1, tx_type=TransactionType.ADJUSTMENT, tx_date=_SEC8_OPENED, quantity=D("10"), amount=D("0"), currency=None, cost_basis_override=D("120"), cost_basis_currency="EUR")
+
+        response, _ = await _sec8_analysis(monkeypatch, date_from=None, opening=adjustment, analyses=[_MARKET_PRICE_HISTORY])
+
+        line = [(point.date, point.market_price, point.estimated) for point in response.market_price_history]
+        assert line == [(day, D("150"), False) for day in _days(_SEC8_QUOTED, 6)]
