@@ -130,10 +130,16 @@ Migration `005_accounts_invites` added three columns:
   decision, 15/10/2026).
   An email change sets it back to `NULL`, in the commit of the new address (`user_service.update_profile()`): the
   verification was of the old address ([Changing the Email](../security.md#email-change)).
-- 📰 **`last_seen_version`** (`VARCHAR(40)`, nullable): the release whose changelog the user last saw.
+- 📰 **`last_seen_version`** (`VARCHAR(40)`, nullable): the release whose changelog the user last saw, as a base
+  release `X.Y.Z` (`whats_new_service.release_of()`; lot C-54, «What's new since your last version»). Written by
+  `user_service.create_user()` with the running release, so a new account has nothing to catch up on, and by
+  `POST /api/v1/auth/whats-new/seen` when the user closes the «What's new» window: the server writes its own running
+  release, never a value from the client. `NULL` is an account from before the feature, or one created while the
+  running version named no release (`unknown`, or a checkout with no tag): it sees the running release's chapter once
+  ([What's new](../../frontend/onboarding.md#whats-new)).
 
-Only `confirm_email()` gives `email_verified_at` a date; nothing sets `last_seen_version`, which every account holds
-`NULL`. The
+Only `confirm_email()` gives `email_verified_at` a date. The accounts that existed before lot C-54 hold
+`last_seen_version` `NULL`, and keep it until their user closes the window once. The
 migration adds the three columns with plain `ALTER TABLE users ADD COLUMN`, never with a
 batch: a batch rebuilds `users` — copy, drop the original, rename — and with `foreign_keys=ON` dropping the
 original fires the `ON DELETE` actions of every table that references it (the same trap as in
