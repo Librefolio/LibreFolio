@@ -444,6 +444,9 @@
     "RATE_LIMITED_NO_TIME": "Demasiadas peticiones: inténtalo más tarde",
     "RATE_LIMITED_DAY": "Pausa por exceso de peticiones hasta el {time}",
     "NOT_CONFIGURED": "Este proveedor debe configurarse antes de usarlo",
-    "PROVIDER_ERROR": "El proveedor falló: {detail}"
+    "PROVIDER_ERROR": "El proveedor falló: {detail}",
+    "PROBE_RATE_LIMITED": "Demasiadas comprobaciones: inténtalo a las {time}",
+    "PROBE_RATE_LIMITED_DAY": "Demasiadas comprobaciones: inténtalo el {time}",
+    "PROBE_RATE_LIMITED_NO_TIME": "Demasiadas comprobaciones: inténtalo en un minuto"
   }
 }
