@@ -41,9 +41,38 @@ from backend.app.services.assets.base import (
     AssetSourceProvider,
 )
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.assets.split_guard import adjustments_count, splits_with_costless_adjustments
 from backend.app.utils.runtime.cooldown import RateLimitedError
 
 logger = structlog.get_logger(__name__)
+
+_PROVIDER_WIPE_REFUSAL = "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST"
+
+
+def _params_to_store(raw_params: object) -> object:
+    """An item's ``provider_params`` as the assignment stores them: a dict as JSON text, anything else as it is."""
+    return json.dumps(raw_params) if isinstance(raw_params, dict) else raw_params
+
+
+def _is_parametric(code: str) -> bool:
+    """Whether the provider ``code`` invents its series from the assignment's params (PARAMETRIC_GENERATION)."""
+    inst = AssetProviderRegistry.get_provider_instance(code)
+    return inst is not None and inst.provider_kind == FAProviderKind.PARAMETRIC_GENERATION
+
+
+def _wipe_reason(stored_code: str, stored_params: object, code: str, params: object) -> str:
+    """Why saving ``code`` with ``params`` over the stored assignment wipes the asset's prices and the events it generated
+    (#R3-4), or "" when it keeps them: new params of a parametric provider, or leaving one. One answer for the write loop
+    of ``bulk_assign_providers`` and for its check before it (X-R49)."""
+    if stored_code == code:
+        return "params changed" if (stored_params or "") != (params or "") and _is_parametric(code) else ""
+    # Leaving a parametric provider is at least as invalidating as
+    # changing its params: the whole series was *invented* from
+    # provider_params, so under a market provider it is not history,
+    # it is fiction. Keeping it also poisons the next sync, which
+    # resumes from the day after the last stored price and therefore
+    # never backfills the real past.
+    return "provider changed" if _is_parametric(stored_code) else ""
 
 
 def _probe_failure_fields(error: Exception) -> dict:
@@ -68,9 +97,11 @@ class ProviderManagementOperations:
     """Provider assignment and probe operations."""
 
     @staticmethod
-    async def bulk_assign_providers(  # noqa: C901 — per-item upsert loop; parametric-wipe gate is linear
+    async def bulk_assign_providers(
         assignments: List[FAProviderAssignmentItem],
         session: AsyncSession,
+        *,
+        current_user_id: Optional[int] = None,
     ) -> list[FAProviderAssignmentResult]:
         """
         Bulk assign/update providers to assets (PRIMARY bulk method).
@@ -78,9 +109,17 @@ class ProviderManagementOperations:
         Args:
             assignments: List of FAProviderAssignmentItem
             session: AsyncSession
+            current_user_id: the user the request answers (the route passes the caller): a refusal names only the
+                transactions that user can see; without one it names none (X-R47b).
 
         Returns:
             List of FAProviderAssignmentResult
+
+        Raises:
+            AssetSourceError(code="PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST"): X-R49 — an item would wipe a parametric
+                provider's events while a SPLIT among them has incoming adjustments without a purchase cost (the rule of
+                P-10: they would become acquisitions of unknown cost). ``details`` = ``asset_id``, ``item_index`` and
+                ``splits`` as ``split_guard`` names them. Checked before the request's first write: nothing is written.
 
         Optimized: 1 delete + 1 insert query
         """
@@ -97,12 +136,11 @@ class ProviderManagementOperations:
         existing_result = await session.execute(existing_stmt)
         existing_map: Dict[int, AssetProviderAssignment] = {row.asset_id: row for row in existing_result.scalars().all()}
 
+        # X-R49: the whole request is checked before its first write, so a refusal leaves nothing behind.
+        await ProviderManagementOperations._reject_wipes_of_costless_split_adjustments(assignments, existing_map, session, current_user_id)
+
         for a in assignments:
-            raw_params = a.provider_params
-            if isinstance(raw_params, dict):
-                params_to_store = json.dumps(raw_params)
-            else:
-                params_to_store = raw_params
+            params_to_store = _params_to_store(a.provider_params)
 
             # Map identifier_type to valid ProviderInputType before storing
             # Handles both ProviderInputType values ("TICKER","URL","AUTO_GENERATED")
@@ -134,23 +172,7 @@ class ProviderManagementOperations:
                 # (e.g. renaming a secondary ticker) doesn't invalidate the past candles.
                 # The gating is via ``provider_kind`` on the base class — no hardcoded
                 # provider_code check.
-                params_changed = (existing.provider_params or "") != (params_to_store or "")
-                provider_code_unchanged = existing.provider_code == a.provider_code
-
-                def _is_parametric(code: str) -> bool:
-                    inst = AssetProviderRegistry.get_provider_instance(code)
-                    return inst is not None and inst.provider_kind == FAProviderKind.PARAMETRIC_GENERATION
-
-                if provider_code_unchanged:
-                    wipe_reason = "params changed" if (params_changed and _is_parametric(a.provider_code)) else ""
-                else:
-                    # Leaving a parametric provider is at least as invalidating as
-                    # changing its params: the whole series was *invented* from
-                    # provider_params, so under a market provider it is not history,
-                    # it is fiction. Keeping it also poisons the next sync, which
-                    # resumes from the day after the last stored price and therefore
-                    # never backfills the real past.
-                    wipe_reason = "provider changed" if _is_parametric(existing.provider_code) else ""
+                wipe_reason = _wipe_reason(existing.provider_code, existing.provider_params, a.provider_code, params_to_store)
 
                 if wipe_reason:
                     # 1. Delete ALL prices for this asset (full wipe).
@@ -272,6 +294,43 @@ class ProviderManagementOperations:
             results.append(result)
 
         return results
+
+    @staticmethod
+    async def _reject_wipes_of_costless_split_adjustments(
+        assignments: List[FAProviderAssignmentItem],
+        existing_map: Dict[int, AssetProviderAssignment],
+        session: AsyncSession,
+        current_user_id: Optional[int],
+    ) -> None:
+        """X-R49: refuse the request when an item would wipe the events a parametric provider generated
+        (``_wipe_reason``) while a SPLIT among them has linked incoming adjustments without a purchase cost: with the
+        SPLIT gone they would be acquisitions of unknown cost (the rule of P-10). Manual events survive the wipe, so
+        they are not read.
+
+        Run before the request's first write, so a refusal leaves nothing behind, the items before it included. The
+        items are followed in order, as the write loop does: an asset named twice is compared with its previous item.
+
+        Raises:
+            AssetSourceError(code="PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST"): ``details`` = ``asset_id``,
+                ``item_index`` (the item's position in the request) and ``splits`` as ``split_guard`` names them for
+                ``current_user_id``; the message gives the totals only.
+        """
+        stored = {asset_id: (row.provider_code, row.provider_params) for asset_id, row in existing_map.items()}
+        for item_index, item in enumerate(assignments):
+            if item.asset_id not in stored:
+                continue
+            params = _params_to_store(item.provider_params)
+            if _wipe_reason(*stored[item.asset_id], item.provider_code, params):
+                assignment_id = existing_map[item.asset_id].id
+                rows = (await session.execute(select(AssetEvent.id, AssetEvent.date).where(AssetEvent.asset_id == item.asset_id, AssetEvent.provider_assignment_id == assignment_id))).all()
+                splits = await splits_with_costless_adjustments(session, [(int(event_id), event_date) for event_id, event_date in rows], current_user_id)
+                if splits:
+                    raise AssetSourceError(
+                        f"{_PROVIDER_WIPE_REFUSAL}: this change would delete {len(splits)} split(s) the provider generated, with {adjustments_count(splits)} linked adjustment(s) without a purchase cost; give them a cost first",
+                        _PROVIDER_WIPE_REFUSAL,
+                        {"asset_id": item.asset_id, "item_index": item_index, "splits": splits},
+                    )
+            stored[item.asset_id] = (item.provider_code, params)
 
     @staticmethod
     async def bulk_remove_providers(asset_ids: list[int], session: AsyncSession) -> FABulkRemoveResponse:

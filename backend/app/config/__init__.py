@@ -19,7 +19,8 @@ Data Directory Structure:
 Environment Variables (see .env):
     LIBREFOLIO_DATA_DIR: Override production data directory (default: ./backend/data/prod)
     LIBREFOLIO_TEST_DATA_DIR: Override test data directory (default: ./backend/data/test)
-    LIBREFOLIO_TEST_MODE: When "1", use the test data directory
+    LIBREFOLIO_TEST_MODE: When "1", use the test data directory; for a test lane only (H-46: outside one, an error of the
+        configuration checks, and the managed profile does not start)
     PORT: Production server port (default: 6040)
     TEST_PORT: Test server port (default: 6041)
     LOG_LEVEL: Logging level (default: INFO)
@@ -32,7 +33,7 @@ Environment Variables (see .env):
     LIBREFOLIO_PROFILE: Instance profile: selfhosted | managed (default: selfhosted); a profile's defaults: PROFILE_DEFAULTS
         for Settings fields, ENVIRONMENT_PROFILE_DEFAULTS (profile_default()) for the variables of the section modules
     LIBREFOLIO_FRAME_PROTECTION: X-Frame-Options and frame-ancestors on every response, plus object-src, base-uri and
-        form-action on the HTML pages (default: off; managed: on)
+        form-action on documents: HTML, XHTML, SVG, XML (default: off; managed: on)
     LIBREFOLIO_CSP_REPORT_ONLY: Report-only Content-Security-Policy on the web app's pages (default: off; managed: on)
     LIBREFOLIO_CLIENT_IP_HEADER: The header a trusted reverse proxy passes the visitor's address in, such as Fly-Client-IP
         (default: unset, the connection's address; no profile sets it)
@@ -299,8 +300,9 @@ class Settings(BaseSettings):
         return value.strip().lower() if isinstance(value, str) else value
 
     # Frame protection (D5): X-Frame-Options: SAMEORIGIN and Content-Security-Policy: frame-ancestors 'self' on every
-    # response, and on the HTML pages object-src 'none', base-uri 'self' and form-action 'self' too (H-42). Off by
-    # default: a self-hosted install may be embedded by its owner's dashboards (Home Assistant panels)
+    # response, and on documents (HTML, XHTML, SVG, XML) object-src 'none', base-uri 'self' and form-action 'self' too
+    # (H-42, H-45). Off by default: a self-hosted install may be embedded by its owner's dashboards (Home Assistant
+    # panels)
     LIBREFOLIO_FRAME_PROTECTION: bool = False
     # Report-only Content-Security-Policy on the web app's pages (D5): violations show in the browser console, nothing
     # is blocked. Off by default

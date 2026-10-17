@@ -12,6 +12,7 @@ Transaction batch execution is split across these source modules, in `backend/ap
 | `backend/app/services/transactions/event_suggestions.py` | `TransactionEventSuggestionsMixin`: asset events a transaction can link to |
 | `backend/app/services/transactions/promotion.py` | `TransactionPromotionMixin`: transfer promotion, the split and promote type maps, promote suggestions |
 | `backend/app/services/transactions/auto_cost.py` | `TransactionAutoCostMixin`: WAC dispatch for the Auto cost basis |
+| `backend/app/services/transactions/unreadable_rows.py` | `count_unreadable_rows()` and `UnreadableLedgerError`: the transactions whose stored value cannot be read, counted before the Auto cost's pool (W-B69) and a broker's balances (W-B74) |
 | `backend/app/services/transactions/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
 | `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, the decimal-limit and date checks, preload/access, balance replay, response |
 | `backend/app/services/transactions/batch_edits.py` | Deletes, splits, updates, and the check of updated linked pairs |
@@ -527,7 +528,8 @@ Both count the broker's rows dated up to `as_of`, inclusive, and every row when
 Both sums run in Python, exactly, over the rows the query returns; the query keeps
 only the filters. `get_balances_at_end_of()` sums the same way, through
 `_get_balances_before_date(..., through=True)` — the rows dated up to `as_of` included, never
-the eve of `as_of` + 1 day, which the calendar's last day does not have (W-B71) — the starting
+the eve of `as_of` + 1 day, which the calendar's last day does not have (W-B71); first it counts
+those whose quantity or amount cannot be read and raises `UnreadableLedgerError` for any (W-B74) — the starting
 balances of the
 [end-of-day replay](balance_validation.md), and LibreFolio's side of the BRIM gap-fix,
 without its excluded ids — and so does the asset list's set of held assets

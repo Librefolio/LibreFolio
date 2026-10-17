@@ -6399,3 +6399,17 @@ riga delle verifiche email in `update_user_status` resta com'è (accanto). Le pa
 - **Totale**: API **338/338**; E2E **93 verdi** e 2 rossi non di A9 (sopra); Vitest **13.286/13.286**. Impronta
   dell'albero invariata (`37bb0f493c0fe652`), porta 6182 libera.
 - **A9: definizione di fatto ✅** (salvo la sonda di prova di J dopo l'ingresso e la galleria di G).
+
+## A9 — Entrato; correzione in avanti FPM-08 (17/10, 11:14–)
+- **A9 entrato**: `3c9303cf2`, `b1b647edc`, `2811d5756`, `f6489c75e`, `bda45901c` → dev `ba8f3b06e`, senza conflitti;
+  CHANGELOG ✨ + 🔄 `4f46144d4` (il mio ramo portato in avanti). Sulla revisione combinata il coordinatore ha fatto
+  `api sync`, `front check` 0/0, `i18n check` stretto. Revisioni dei proprietari dopo l'ingresso (H, J, E; WelcomePage
+  OK dal coordinatore). La sonda di prova va sulla lista del developer (servono i suoi account). G rigenera la galleria;
+  il rosso di `theme-roles.spec.ts:613` passato alla squadra dei colori.
+- **FPM-08** (dal coordinatore, prima del codice di A-42/A-43): una richiesta della configurazione **fallita prima di
+  ogni risposta** lasciava la «password dimenticata» senza nulla (solo «torna all'accesso»). Contratto: in quello
+  stato «chiedi all'amministratore» (vale per i due profili). Rosso FPM-08 (`test-author`, più le guardie FPM-09/10:
+  una risposta dopo il fallimento, gestita o self-hosted, e FPM-11: un fallimento dopo una risposta tiene i comandi).
+  Codice `work/a9fix/apply_fpm08.py`: `(loaded && managed) || (!loaded && failed)` → `askAdmin`. Verdi: Vitest
+  `features/auth` **660/660**; `front check` 0/0; colori puliti. Doc: una riga in `features/auth.md` (`docs-writer`).
+- I rossi di A-42/A-43 (nei file di test dell'area, in corso) restano **fuori** da questo checkpoint.

@@ -117,6 +117,21 @@ The two stable validation codes are:
 | `balanceCashNegative` | A currency closes a day below zero |
 | `balanceAssetNegative` | An asset quantity closes a day below zero |
 
+Before either, the replay counts the broker's transactions whose quantity or amount
+cannot be read — a stored value that is no number reads `None` since W-B58 — with
+`count_unreadable_rows()` (`unreadable_rows.py`), every date included: the starting
+balances skipped such a row (a wrong balance, the batch checked against it) and the
+walk failed on it (a codeless error). Any such row stops the replay with a third
+code, at index −1 since it is the broker's and not a row's (W-B74):
+
+| Code | Condition |
+|------|-----------|
+| `ledgerUnreadable` | `params {brokerId, count}`: that many transactions of the broker hold a value that is not a number, so its balances cannot be checked |
+
+The broker's list cannot show such rows either; the way out is a data repair
+(W-B63). A broker that allows both overdraft and shorting is not replayed, so it
+is not refused either.
+
 The frontend turns each code into `transactions.errors.<code>`
 (`resolveIssueMessage()` in `lib/features/transactions/resolveValidationMessage.ts`):
 *Saving would cause … to go negative … on {date} at {brokerName}*. The bulk

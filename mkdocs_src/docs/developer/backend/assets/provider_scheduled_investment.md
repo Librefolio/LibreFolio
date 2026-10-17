@@ -19,7 +19,7 @@ The asset's value is determined entirely by `provider_params`, which follow the 
 | `late_interest` | `FALateInterestConfig` | — | Optional penalty rate after maturity |
 | `asset_events` | `FAAssetEventPoint[]` | — | Manually defined asset events |
 
-The `ScheduledInvestmentEditor` shows these as **Initial Value** / **Currency**, **Interest Type** and **Day Count**; each period row as **Period**, **Rate %** (= `annual_rate` × 100), **Frequency** (`maturation_frequency`) and **Generate Coupon** (`generate_interest`). The **⚡ Late Interest** switch adds the late row — grace days are set from its Period cell — with a Simple/Compound select next to the switch. Asset events are added with **Add Event** (types **Interest**, **Price Adjustment**).
+The `ScheduledInvestmentEditor` shows these as **Initial Value** / **Currency**, **Interest Type** and **Day Count**; each period row as **Period**, **Rate %** (= `annual_rate` × 100), **Frequency** (`maturation_frequency`) and **Generate Coupon** (`generate_interest`). The **⚡ Late Interest** switch adds the late row — grace days are set from its Period cell — with a Simple/Compound select next to the switch. Asset events are added with **Add Event** (types **Interest**, **Price Adjustment**, **Maturity Settlement**).
 
 ---
 
@@ -162,6 +162,7 @@ The engine caches the full schedule computation as a `tuple[dict, list[FAAssetEv
 
 - **Key**: MD5 of the canonical JSON of the validated schedule (`_cache_key`).
 - **Invalidation**: Cache is invalidated when `provider_params` changes (i.e., the user reconfigures the schedule via the frontend `ScheduledInvestmentEditor`).
+- **Stored data**: saving new `provider_params`, or another provider, deletes the asset's prices and the events the plan generated (`bulk_assign_providers()` in `provider_management.py`); with new parameters, the next sync regenerates them, and the asset form starts one after the save. The change is refused, nothing written, while a `SPLIT` the plan generated (listed in `asset_events`: the editor offers no split, so it comes through the API) has linked incoming adjustments without a purchase cost: see [Parametric Provider Change](events.md#parametric-provider-change).
 - **Hit behavior**: On cache hit, `get_history_value()` slices the pre-computed dict to the requested date range — O(1) per point.
 - **Miss behavior**: Full schedule recomputation from `initial_value` through all periods. This is deterministic (no I/O); see the measured times below.
 - **Size cap**: a result with more than 3 660 points (`_CACHE_MAX_POINTS`, ten years of DAILY points, about 1 MB) is never stored: it is computed again on every call. The 256 entries stay bounded by about 256 MB (R13-SEC7-2; see [Bounds](#bounds)).

@@ -130,6 +130,9 @@ class TXValidationCode(StrEnum):
     DATE_OUT_OF_RANGE = "dateOutOfRange"
     # W-B69: an Auto cost over a pool holding rows that cannot be read, params {count}.
     AUTO_COST_UNREADABLE = "autoCostUnreadable"
+    # W-B74: a broker whose transactions hold a value that is no number: its balances cannot be checked, params
+    # {brokerId, count}, at index -1 (the broker, not a row).
+    LEDGER_UNREADABLE = "ledgerUnreadable"
 
 
 class TXValidationCodeInfo(StrictModel):

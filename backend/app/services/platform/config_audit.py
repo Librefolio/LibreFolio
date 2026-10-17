@@ -18,9 +18,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
-from backend.app.config import SecretFileError, get_settings, secrets_set_twice
+from backend.app.config import SecretFileError, get_data_dir, get_settings, is_test_mode, secrets_set_twice
 from backend.app.config.accounts import admin_bootstrap_config, login_limit_enabled
-from backend.app.config.platform import configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date
+from backend.app.config.platform import configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date, owning_test_lane_id
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
@@ -37,6 +37,10 @@ JWT_SECRET_MIN_LENGTH = 32
 
 class WeakSecretError(ValueError):
     """A configured secret too short for the profile: in the managed profile, a short ``JWT_SECRET`` stops the start."""
+
+
+class ManagedTestModeError(RuntimeError):
+    """``LIBREFOLIO_TEST_MODE`` on outside a test lane, in the managed profile: it stops the start (H-46)."""
 
 
 @dataclass(frozen=True)
@@ -205,6 +209,34 @@ def check_log_level() -> ConfigCheck:
     return ConfigCheck(check_id, "ok", "instance.checks.logLevel.ok")
 
 
+#: The summary of ``platform.test_mode`` outside a test lane (H-46): ``{data_dir}`` is the test data directory in use.
+TEST_MODE_OUTSIDE_LANE_SUMMARY = "LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory {data_dir} and .env is not read; unset it on a production instance"
+
+
+def _test_mode_outside_a_lane() -> bool:
+    """Test mode is on and no test lane owns this process: ``LIBREFOLIO_TEST_LANE_ID`` is unset or blank (H-46)."""
+    return is_test_mode() and not (owning_test_lane_id() or "").strip()
+
+
+def check_test_mode() -> ConfigCheck:
+    """``LIBREFOLIO_TEST_MODE`` on outside a test lane (H-46): an error in every profile.
+
+    A test lane owns ``LIBREFOLIO_TEST_LANE_ID``: ``configure_test_runtime`` sets it for the runner, ``dev.py server
+    --test`` and the gallery, and ``dev.py server`` removes it along with test mode. A server started otherwise with the
+    variable on (``uvicorn`` directly, a service unit) serves the test-only providers (X-R44), keeps what is entered in
+    the test data directory and reads no ``.env``. In the managed profile ``log_configuration_audit()`` stops the start
+    on it. ``get_data_dir()`` is not guarded: a test data directory that cannot be used stops the start earlier, when
+    ``backend.app.main`` is imported (``configure_logging()`` creates its ``logs`` folder).
+    """
+    check_id = "platform.test_mode"
+    if not is_test_mode():
+        return ConfigCheck(check_id, "ok", "instance.checks.testMode.off")
+    if not _test_mode_outside_a_lane():
+        return ConfigCheck(check_id, "ok", "instance.checks.testMode.testLane")
+    data_dir = str(get_data_dir())
+    return ConfigCheck(check_id, "error", "instance.checks.testMode.outsideTestLane", {"data_dir": data_dir}, TEST_MODE_OUTSIDE_LANE_SUMMARY.format(data_dir=data_dir))
+
+
 CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (
     check_jwt_secret,
     check_secrets_set_twice,
@@ -214,6 +246,7 @@ CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (
     check_frame_protection,
     check_csp_report_only,
     check_log_level,
+    check_test_mode,
     # Workstream B: the hosting panel's backup token and the restore's upload limit (instance_backup/checks.py, B-9)
     *BACKUP_CONFIG_CHECKS,
     # Workstream A: the limit on failed sign-ins (services/accounts/checks.py)
@@ -233,7 +266,8 @@ def log_configuration_audit() -> None:
 
     A ``JWT_SECRET_FILE`` that cannot be read raises ``SecretFileError``, a configured instance key that cannot be
     used raises ``InstanceKeyError``: the admin asked for that source, so the server must not start without it. In the
-    managed profile, a ``JWT_SECRET`` shorter than ``JWT_SECRET_MIN_LENGTH`` raises ``WeakSecretError``. A
+    managed profile, a ``JWT_SECRET`` shorter than ``JWT_SECRET_MIN_LENGTH`` raises ``WeakSecretError``, and test mode
+    on outside a test lane raises ``ManagedTestModeError`` (H-46): elsewhere it is an error of the checks. A
     ``LIBREFOLIO_BLOCKED`` or ``LIBREFOLIO_DELETION_DATE`` that cannot be read raises ``ValueError``, and so do a
     ``LIBREFOLIO_ADMIN_*`` variable of the initial administrator that cannot be used (``AdminBootstrapConfigError``,
     F02, workstream A) and a ``LIBREFOLIO_LOGIN_LIMIT`` other than ``on`` or ``off`` (F15, workstream A), each naming
@@ -244,6 +278,8 @@ def log_configuration_audit() -> None:
     if secret is not None and len(secret) < JWT_SECRET_MIN_LENGTH and get_settings().LIBREFOLIO_PROFILE == "managed":
         origin = configured_jwt_secret_origin() or "JWT_SECRET"
         raise WeakSecretError(f"In the managed profile the session signing key from {origin} must be at least {JWT_SECRET_MIN_LENGTH} characters long; it is {len(secret)}")
+    if _test_mode_outside_a_lane() and get_settings().LIBREFOLIO_PROFILE == MANAGED_PROFILE:
+        raise ManagedTestModeError(f"In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): test-only providers would be served and the data kept in the test data directory {get_data_dir()}; unset LIBREFOLIO_TEST_MODE")
     if instance_blocked():
         deletion_date = instance_deletion_date()
         logger.warning("Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): only a few API routes answer", deletion_date=deletion_date.isoformat() if deletion_date else None)

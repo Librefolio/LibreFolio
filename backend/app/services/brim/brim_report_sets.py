@@ -88,6 +88,14 @@ class BRIMSetExcludeUnknown(BRIMSetError):
     code = "exclude_unknown"
 
 
+class BRIMLedgerUnreadable(BRIMSetError):
+    """LibreFolio's side of a gap-fix cannot be computed: transactions of the broker hold a value that is no number
+    (W-B74, ``unreadable_rows.UnreadableLedgerError``)."""
+
+    status_code = 409
+    code = "ledger_unreadable"
+
+
 class BRIMSetIncomplete(BRIMSetError):
     status_code = 422
     code = "set_incomplete"

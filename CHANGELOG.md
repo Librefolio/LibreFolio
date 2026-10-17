@@ -275,8 +275,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dev.py backup decrypt` run through `docker compose exec` writes a zip owned by the server's user, like the other backup commands; an archive it cannot read now says so.
 - A portfolio report over a long range or many assets no longer freezes the server for other users while it is computed.
 - An Auto cost basis is no longer computed over transactions whose stored numbers cannot be read: the broker deletion and the repair of old transfer legs refuse instead of saving a wrong cost, and saving an Automatic cost in the transaction editor says so instead of failing with a server error.
+- A broker whose history holds a transaction with a value that is not a number is no longer checked against wrong balances: saving or comparing with the bank now says so.
 - **The Δ columns of the Assets and FX lists (1D … 5Y) are computed by the server.** The browser counted the days in local time, so across a daylight-saving change a period could start one day early (a 1M change on 15 November compared with 15 October instead of 16 October). The server counts calendar days, so the figures no longer depend on the time zone; a one-day range now shows its 1D change too.
 - **Changing an asset's currency no longer turns split adjustments into purchases of unknown cost.** The change deletes the asset's events, splits included; when a split has linked adjustments without a purchase cost, the change is now refused and names the split: give those adjustments a cost first.
+- **Changing a Scheduled Investment plan no longer turns split adjustments into purchases of unknown cost.** New plan parameters, or another provider, delete the events the plan generated; when one of its splits has linked adjustments without a purchase cost, the change of plan or provider is now refused, the asset window says which split, and the plan stays as it was: give those adjustments a cost first.
 
 #### 🔒 Security
 
@@ -287,6 +289,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A number that is not finite (`NaN`, `Infinity`) nested in a provider's parameters or in a risk analytic's parameters is refused (422): a provider's was saved and read back as `null`.
 - The test doubles shipped in the image (`mockprov` for prices, `MOCKFX` and `MOCKFX_FAIL` for exchange rates) are no longer reachable outside test mode. Before, any signed-in user could assign `mockprov` to an asset, which is shared, and give everyone a made-up price series, or route a currency pair through `MOCKFX` and give every conversion a made-up rate. To check an existing instance, look for an asset whose price source is `mockprov` and for an exchange-rate route that names `MOCKFX`.
 - Frame protection (`LIBREFOLIO_FRAME_PROTECTION`, on in the managed profile) now also enforces `object-src 'none'`, `base-uri 'self'` and `form-action 'self'` on HTML pages.
+- Frame protection's page policy now also covers SVG and XML documents, and a 304 Not Modified response carries no policy that could replace the cached page's.
+- A configuration check reports `LIBREFOLIO_TEST_MODE` turned on outside LibreFolio's own test runs as an error, in the startup log and in Settings › Administration › Security; with the managed profile the server does not start.
 - The post-migration and broker-report lock files no longer follow a symbolic link planted in their place, and are created readable by the server's user only.
 - A password change and an administrator's sign-out-everywhere arriving at the same moment both end the sessions: the cookie the first issued no longer survives the second.
 - The in-memory limits forget the visitor with the fewest attempts first: a flood of new usernames or addresses no longer resets the count of one being guessed.

@@ -3857,12 +3857,66 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   H-42 per E, via coordinatore, 17/10. E lo giudica nella revisione di H-42.
   - Con la protezione dai frame accesa, `PAGE_POLICY` va solo sulle risposte `text/html`. Un SVG o un XHTML, documenti
     anche loro quando si aprono direttamente, tengono il solo `frame-ancestors 'self'`.
-  - Oggi gli SVG serviti sono quelli della build e dei documenti. Un SVG dell'utente arriva come `attachment`, dagli
-    upload e dai broker (`INLINE_SAFE_MEDIA_TYPES` di `api/v1/brokers.py` non ha `image/svg+xml`).
-  - Strada possibile: allargare `_is_html` di `security_headers.py` ai due tipi, con i casi per tipo di
-    `test_managed_headers.py`, (g).
+  - Oggi la build, i documenti e i plugin non hanno SVG (verificato il 17/10: lo dicevo a torto). Un SVG dell'utente
+    arriva come `attachment`, dagli upload e dai broker (`INLINE_SAFE_MEDIA_TYPES` di `api/v1/brokers.py` non ha
+    `image/svg+xml`).
+  - Cura fatta il 17/10 da H (lotto «H-45», piano H §14), con la specifica di E; E rivede.
+    - Con la protezione dai frame accesa, `PAGE_POLICY` va su ogni documento: `text/html`, `application/xhtml+xml`,
+      `image/svg+xml`, `application/xml`, `text/xml` e i tipi `+xml`. I PDF restano fuori, e il report-only resta su
+      `text/html` esatto.
+    - Un 304 non riceve nessuna CSP. Una sonda in Chromium 149 mostra che la CSP di un 304 sostituisce quella della
+      pagina in cache; oggi è latente, perché solo `StaticFiles` (`/_app`) risponde 304 e non ha documenti.
+    - Test: `services managed-headers`, 355.
 
-  Dettagli: piano H, §14, lotto «H-42», passo 7.
+  Dettagli: piano H, §14, lotti «H-42», passo 7, e «H-45».
+- **H-46 · `LIBREFOLIO_TEST_MODE` acceso fuori da una corsia di test non si vede** — basso, sicurezza; E (review di
+  X-R44), via coordinatore, 17/10.
+  - `dev.py server` lo spegne sempre. Un server avviato in altro modo (`uvicorn` a mano, un'unità di servizio) lo
+    prende dal suo ambiente, e nessun controllo lo dice. Effetti:
+    - `mockprov` e `mockfx` (X-R44) tornano visibili;
+    - i dati vanno nella cartella di test;
+    - `.env` non si legge più.
+  - Nell'immagine così com'è il server invece si ferma all'import su un `PermissionError`: l'utente del server non può
+    creare la cartella di test. È dedotto dai file e riprodotto fuori da un container; la prova in un container va con
+    CP7a.
+  - Cura fatta il 17/10 da H (lotto «H-46», piano H §14); E rivede. Il controllo `platform.test_mode` è `error` quando
+    test mode è acceso senza `LIBREFOLIO_TEST_LANE_ID` (che ogni corsia ha e che `dev.py server` toglie), nel log
+    d'avvio e nella scheda Sicurezza. Nel profilo managed **ferma l'avvio**, come un `JWT_SECRET` corto (decisione del
+    coordinatore, 17/10). Test: `services config-audit`, 204.
+  - Residuo per CP7a: provare in un container che l'immagine si fermi all'import, e valutare un messaggio chiaro al
+    posto del traceback di `PermissionError`.
+
+  Dettagli: piano H, §14, lotto «H-46».
+- **H-47 · `read_secret_file`: un'opzione per rifiutare link e file non regolari, per chi legge da root** — basso,
+  sicurezza; B-38 della review BZ di B, via coordinatore, 17/10. Dopo la 1.3, salvo che costi poco.
+  - La CLI del backup gira da root e legge la password e la chiave d'istanza vecchia (`--password-file`,
+    `--instance-key-file`, B-18) con `read_secret_file` (`config/__init__.py`). Quella segue i link e apre le FIFO.
+    Il file può stare in una cartella che l'utente del server controlla: `backups/`, come suggeriva la guida di B-18.
+  - B mette ora la guardia dal lato della CLI: `O_NOFOLLOW|O_NONBLOCK` e `fstat` su un file regolare, prima di
+    chiamare la mia funzione.
+  - L'opzione di H, `regular_only=False` per default: `os.open` con `O_NOFOLLOW` (dove esiste) e `O_NONBLOCK`, poi
+    `fstat`. Un link, una FIFO, una cartella o un dispositivo danno `SecretFileError` («is not a regular file»), con il
+    nome e il percorso come oggi.
+  - **Mai di default**: i segreti di Kubernetes sono link (`..data/`). I segreti di Docker invece sono file regolari
+    montati, quindi i lettori dell'avvio (`env_secret`, la chiave generata) restano come sono.
+  - Costo stimato: piccolo, una ventina di righe e i test (link, FIFO senza blocco, cartella, file regolare, opzione
+    spenta come oggi). Si fa dopo B-38, così la CLI può passare all'opzione e togliere la sua copia.
+
+  Dettagli: questa riga; la guardia di B in B-38.
+- **H-48 · `env_url` toglie la barra finale anche ai link di una pagina** — basso; H (review di A9), via coordinatore,
+  17/10. Da fare con H-47 (stesso file, `config/__init__.py`), altrimenti dopo la 1.3.
+  - `env_url` toglie una barra finale perché a `LIBREFOLIO_PUBLIC_URL` si attacca un percorso. Gli altri suoi
+    lettori sono link a una pagina, dove `…/terms/` diventa `…/terms`:
+    - `LIBREFOLIO_SUPPORT_URL` (H, `config/platform.py`);
+    - `LIBREFOLIO_TOS_URL` e `LIBREFOLIO_PRIVACY_URL` (A9, stesso file);
+    - `LIBREFOLIO_BILLING_URL` (A, `config/accounts.py`).
+    Quasi ovunque il server risponde con un redirect, quindi il danno è raro.
+  - Cura: i link tengono il percorso com'è scritto, per esempio con un parametro di `env_url` o con una funzione
+    sorella; `PUBLIC_URL` tiene il taglio. Gli stessi controlli (`http(s)`, nome dell'host, niente credenziali).
+  - Tocca lettori e test di A (`test_legal_links.py` confronta con quello che dà `env_url`): serve l'OK di A sui suoi
+    file.
+
+  Dettagli: piano H, §14, «Review di A9».
 
 ## A · Account e accessi (fase 01)
 
@@ -4798,7 +4852,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Il riepilogo (dry run) non rifiuta mai, quindi il pannello di conferma non può avvisare: l'utente incontra il 409
     solo dopo aver confermato.
   - Cura facoltativa: il riepilogo porta il numero degli SPLIT che bloccano, e la modale avvisa prima della conferma.
-- **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** — basso; X, 17/10 (J, F2,
+- ✅ **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** (chiusa il 17/10, in attesa del commit del coordinatore: rifiuto 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` prima di ogni scrittura, frase tradotta nella modale dell'asset; dettagli nel piano 03, «X-R49») — basso; X, 17/10 (J, F2,
   girato dal coordinatore).
   - `provider_management.py:212-221`: vale solo se un utente ha scritto uno SPLIT fra gli eventi del piano.
   - Ordine deciso dal coordinatore dopo X-R40/W-B62: X-R47 → X-R48 → X-R44 → X-R49.
@@ -4891,12 +4945,26 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   2. Il nuovo tentativo dei segnali e il cambio delle impostazioni richiedono anche i periodi, che non ne dipendono.
   3. Un errore cancella le Δ ancora valide per lo stesso `dateEnd`.
 - **X-R61 · Il Sync di una sola card o riga sovrascrive i prezzi salvati senza l'avviso di C-66** — basso, domanda di
-  prodotto per il developer; X, 17/10 (il test-author di Y-28).
+  prodotto per il developer (nel file delle domande del coordinatore, 17/10); X, 17/10 (il test-author di Y-28).
   - `handleSyncAsset` (la card o la riga della lista) parte subito, senza la finestra: nessun avviso prima di
     sostituire i prezzi salvati del periodo, modifiche manuali comprese. L'avviso c'è solo nella finestra (Sync all, il
     Sync della selezione, la pagina dell'asset).
   - Da decidere: aprire la finestra anche lì, o un avviso leggero, o lasciare com'è.
-- **X-R57 · Il commento C-66 di `asset-detail.spec.ts` dà una ragione superata** — minimo; X, 17/10 (Z, dopo Z-3).
+- **X-R62 · «Nessun provider» fallisce quando un evento del provider è collegato a una transazione** — basso (fallisce
+  chiuso, nessun costo corrotto), **dopo la 1.3** salvo che costi poco; X, 17/10 (trovato leggendo X-R49, non
+  riprodotto).
+  - `bulk_remove_providers` cancella l'assegnazione; `AssetEvent.provider_assignment_id` è `ON DELETE CASCADE`,
+    `Transaction.asset_event_id` è `ON DELETE RESTRICT` e SQLite applica le chiavi (`PRAGMA foreign_keys=ON`): con un
+    dividendo Yahoo o uno SPLIT del piano collegato a una transazione, la rimozione fallisce con un errore d'integrità,
+    che la modale mostra come errore generico.
+  - Da decidere: scollegare prima, come il wipe di X-R48 (con la regola degli SPLIT senza costo), o rifiutare con un
+    codice e i collegamenti. Prima un rosso che lo riproduca.
+- **X-R63 · Due vuoti vecchi nella documentazione degli asset** — minimo, al prossimo tocco di quelle pagine; X, 17/10
+  (il docs-writer di X-R49).
+  - `developer/backend/assets/architecture.md`: la tabella dei moduli non elenca `provider_policy.py`.
+  - `user/assets/providers/scheduled-investment.en.md`, tabella degli eventi del piano: manca **Maturity Settlement**,
+    che l'editor offre (la pagina ha traduzioni: debito da tradurre).
+- ✅ **X-R57 · Il commento C-66 di `asset-detail.spec.ts` dà una ragione superata** (chiusa il 17/10 con Y-28: `c18517e31`, entrata in dev `8aafffad8`) — minimo; X, 17/10 (Z, dopo Z-3).
   - Verso la riga 8672 di `e2e/assets/asset-detail.spec.ts` il commento dice «by its UTC reckoning…»; dopo Z-3 (dev
     `0f55265a1`) le pagine degli asset leggono il giorno dell'utente (`todayIso()`). Lo stub resta giusto: cambia solo
     la ragione scritta. Da fare al prossimo tocco di quel file.
@@ -5455,6 +5523,10 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   passare. Cura: il conteggio delle righe illeggibili del broker all'inizio del giro e in `get_balances_at_end_of`, rifiuto
   `ledgerUnreadable {brokerId, count}` (4 lingue, il messaggio manda all'amministratore: la lista non le mostra). Primo dei tre, dopo la
   metà del batch di W-B69, con l'aiuto di query condiviso con quello di MF. Dettagli: piano 04, «W-B71, W-B72, W-B74 — analisi».
+  ✅ 17/10: `count_unreadable_rows()` (nuovo `unreadable_rows.py`, condiviso col conteggio dell'insieme di W-B69); il giro di un broker
+  con righe illeggibili rifiutato con `ledgerUnreadable {brokerId, count}` (indice −1, 4 lingue), il gap-fix con 409
+  `ledger_unreadable`; 17 rossi verdi, i 24 contratti di W-B69 aggiornati (due issue). Resta la via d'uscita dei dati: W-B63. Dettagli:
+  piano 04, sezione «W-B74».
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
@@ -6945,6 +7017,13 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
       un processo: 1 453 verdi.
     - Commit al checkpoint di E-15.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-15».
+- ✅ **E-16 · Le due frasi di E sulla «password dimenticata» non dicono la richiesta della configurazione fallita** —
+  minimo (doc, solo inglese); E, 17/10 (seguito della revisione di A9 e di FPM-08 di A, `d04ffde90`).
+  - `admin/email.en.md` e `developer/backend/email.md` descrivono self-hosted e managed, non il caso in cui
+    `GET /system/instance` fallisce: lì la scheda mostra solo «Ask your administrator…», in tutti e due i profili.
+  - Una frase per pagina. Nessuna decisione.
+  - 17/10, E: fatta (via del coordinatore, 12:22). Build stretta e `check-links` puliti. Commit al checkpoint di E-16.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-16».
 
 ## Y · Cruscotto e grafici (fase 01)
 

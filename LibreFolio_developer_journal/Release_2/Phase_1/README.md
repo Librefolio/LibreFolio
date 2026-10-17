@@ -301,4 +301,64 @@ Sono tutti locali: la push la fa il developer.
 | 209 | 17/10 06:08 | Y: Y-2 (linea settimanale), Y-16 (test delle candele); B: B-29 (totali illeggibili della copia) | `14072c03d`, `006773c99`, `abf8391fb` |
 | 210 | 17/10 06:16 | H: H-36 (proxy locale non fidato, N70) | `d107b6f26` |
 | 211 | 17/10 06:31 | Z: Z-11 (lock dei job fra i worker, N71); B: B-16 (il riavvio che non avviene lo dice) | `c5e3c199d`, `3896cb6b3`, `47405701f` |
+| 212 | 17/10 06:38 | Z-11 runner descriptions | `3d13fbcdc` |
+| 213 | 17/10 06:40 | W-B60 amounts and event values read exactly | `484c71afb` |
+| 214 | 17/10 06:47 | H-37 missing profile entry fails closed | `b37e926af` |
+| 215 | 17/10 06:48 | MF R13-SEC7-2 SI bounds, closed-form late interest | `7198d8028` |
+| 216 | 17/10 06:56 | X-R47 split ratio at write, X-R47b P-10 fails closed | `952c68cd5` |
+| 217 | 17/10 07:07 | H Z-24 scheduler lock guard, H-39 review rule | `36a487e84` |
+| 218 | 17/10 07:07 | J-43 share mismatch notice, R13-SEC7-1 bounded ranges | `09cb9231a` |
+| 219 | 17/10 07:10 | MF-SI1 first sync from min, aligned late interest | `16f8c74ed` |
+| 220 | 17/10 07:21 | A8a login limit + security checks, N70 untrusted proxy, E-13 | `440616c61` |
+| 221 | 17/10 07:23 | G banner comments | `fd536787f` |
+| 222 | 17/10 07:30 | E journal, N70 review, E-14 | `e985a4f8a` |
+| 223 | 17/10 07:31 | X-R43 plugin settings integers past 2^53 | `3e7948446` |
+| 224 | 17/10 07:37 | B-9 backup startup checks | `997dc7ecf` |
+| 225 | 17/10 07:39 | Y-8 arrows re-aimed on zoom settle | `823a2f6bc` |
+| 226 | 17/10 07:42 | J F5 P-10 message, J-44 tooltip delta | `b6b615c3d` |
+| 227 | 17/10 07:43 | H-34 non-finite numbers in free JSON | `75bfac237` |
+| 228 | 17/10 07:46 | MF-D4 invalid split ratio counts as missing | `c2feaf3e4` |
+| 229 | 17/10 07:57 | E-14 limiter evicts fewest live hits | `70dccc16f` |
+| 230 | 17/10 08:01 | B-30 full disk at short starts | `af9b7f482` |
+| 231 | 17/10 08:15 | H-39 managed frame/CSP checks, docs | `0403b5eb7` |
+| 232 | 17/10 08:29 | J-45 engine off the event loop | `15d414a69` |
+| 233 | 17/10 08:30 | X-R55 query date range ceiling | `ab7711f04` |
+| 234 | 17/10 08:39 | X-R53 delta columns from the server | `78708660f` |
+| 235 | 17/10 08:46 | W-B69 auto cost refuses unreadable pool | `c61a2db4d` |
+| 236 | 17/10 08:46 | B-31 coded confirm/cancel/restart failures | `997c358f5` |
+| 237 | 17/10 08:54 | Y-25 arrow re-aim costs, Y-3, Y-4 | `73443c6db` |
+| 238 | 17/10 09:10 | A8b Administration group + Security tab, A-21a usernames | `6e2b2c8b7` |
+| 239 | 17/10 09:24 | B-19 decrypt as data dir owner | `e96158e9b` |
+| 240 | 17/10 09:25 | H-35 config audit after A8a and B-9 | `d28a6d7df` |
+| 241 | 17/10 09:43 | X-R48 wipe refuses costless split adjustments | `2ea54ff76` |
+| 242 | 17/10 09:53 | G point-33 run | `8a9e8c6d6` |
+| 243 | 17/10 09:56 | E-8 invitation language, Administration paths | `2aab994b8` |
+| 244 | 17/10 10:02 | W SEC7-3 input bounds, H-41, event-store fix | `e609082ab` |
+| 245 | 17/10 10:02 | H-19 address probe 503 | `9b23bdbfe` |
+| 246 | 17/10 10:04 | J-10 scope-edge transfer reading, E2 params | `ba612882a` |
+| 247 | 17/10 10:05 | MF-SEC8-2 replay floor 1900 | `e119c71bc` |
+| 248 | 17/10 10:20 | Y-27 DataTable keeps absent column prefs | `542c0e8b5` |
+| 249 | 17/10 10:28 | B-32 refused cancel, unreadable restore state | `7af21a5c1` |
+| 250 | 17/10 10:28 | Z-25 bulk caps on price and FX queries | `d0bc7a547` |
+| 251 | 17/10 10:29 | MF-P2b period-changes bounds | `c9b1162d4` |
+| 252 | 17/10 10:41 | E-8.5 email Vitest cure | `b49a2a716` |
+| 253 | 17/10 10:43 | J-47 transfers in transit at date_to, P-10 docs | `647efcc28` |
+| 254 | 17/10 10:45 | X-R44 test-only providers withheld outside test mode | `5a8c64c5c` |
+| 255 | 17/10 10:59 | Y V11 + P5 lots values and declared aggregates | `d4ecfb692` |
+| 256 | 17/10 11:00 | B-18 restore --instance-key-file, B-20 | `5c4d7456a` |
+| 257 | 17/10 11:03 | X Y-28 C-66 test past period, X-R57 | `8aafffad8` |
+| 258 | 17/10 11:05 | Z-26 scheduler lock wait bound, FX at-least | `8c362c1f3` |
+| 259 | 17/10 11:10 | A9 legal notice and managed profile | `ba8f3b06e` |
+| 260 | 17/10 11:14 | W-B71 date windows at the calendar edge | `1431e20df` |
+| 261 | 17/10 11:18 | Y-29 gate annualizing flag | `ce2452615` |
+| 262 | 17/10 11:22 | W-B69 batch half, N74 shared floor | `eee5dad17` |
+| 263 | 17/10 11:28 | E-15 login limit restored per test | `da02ed816` |
+| 264 | 17/10 11:36 | H-42 page policy on HTML responses | `3b0af4094` |
+| 265 | 17/10 11:45 | J-50 oversized price loads refused with a code | `5bfdbe0af` |
+| 266 | 17/10 11:47 | Z-28 lock files refuse symlinks | `2b9786ae5` |
+| 267 | 17/10 11:51 | T theme-roles (c) | `c1578a8bf` |
+| 268 | 17/10 11:52 | B-18 repair, BZ part 1 records | `279c1bc1c` |
+| 269 | 17/10 11:54 | H-46 test mode outside test lanes | `b7dcd3a25` |
+| 270 | 17/10 12:02 | A9 fix-forward forgot-password on failed config | `cd52e25fc` |
+| 271 | 17/10 12:04 | W-B74 balances refuse unreadable rows | `80cee9c2d` |
 | — | 17/10 00:05–00:45 | Colori: AF file, media e menu `9d3607eb6`; T `CompactCashCell` `b58108665` | — |
