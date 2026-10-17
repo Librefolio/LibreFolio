@@ -5635,7 +5635,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - EVA-017 fissa `confirm` e `resend` fuori da `ALLOWED_WHEN_BLOCKED`.
     - Dettagli: piano 08, «E-11.0» e seguenti.
     - Commit `18d945d2e` (codice), `f2b459ebe` (docs), `fdd4acc6d` (journal); in `dev_release2` col merge `bca4bd6d3`.
-- **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
+- ✅ **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
   `mailbox_budget_key()` unisce gli alias `+tag` e i punti di Gmail. Restano due casi:
   - un dominio catch-all, dove ogni parte locale arriva alla stessa casella;
   - gli indirizzi a sottodominio di Fastmail (`qualsiasi@utente.fastmail.com`).
@@ -5643,6 +5643,18 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   In questi casi ogni parte locale è una chiave nuova, e li limita solo il budget orario dell'istanza. Un limite per
   dominio colpirebbe i grandi provider condivisi, quindi servirebbe un elenco di domini o un'altra idea. Dettagli:
   [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-9.0», «Resti fuori da E-9».
+  - 17/10, coordinatore: chiusa, il limite è accettato. Nessun codice.
+    - Una regola Fastmail nella chiave non può essere completa: l'indirizzamento a sottodominio vale su tutti i domini
+      di Fastmail, che sono decine, e sui domini personali dei clienti. Il catch-all resterebbe comunque.
+    - Un limite per dominio destinatario vorrebbe un elenco di provider esenti, mai completo, oppure una variabile
+      nuova: una scelta di prodotto per poco guadagno.
+    - Dopo N62 queste email non portano testo dell'attaccante, e il budget orario dell'istanza le limita. La doc lo
+      dice da E-9.
+    - La leva vera è la registrazione aperta: la domanda anti-abuso **D-E9-1** (captcha o proof-of-work, limiti alla
+      registrazione) è al developer.
+    - Se il codice servirà, la strada è `LIBREFOLIO_SMTP_MAX_PER_DOMAIN`, spenta di default, con un default per il
+      profilo `managed`, in un lotto suo.
+    - Dettagli: piano 08, «E-12.0» ed «E-12.1».
 
 ## Y · Cruscotto e grafici (fase 01)
 
