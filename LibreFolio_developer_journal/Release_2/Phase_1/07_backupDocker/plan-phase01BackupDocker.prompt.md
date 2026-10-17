@@ -5366,6 +5366,60 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-36 + B-37 — nomi quotati e `trusted_schema` spento anche nelle correzioni e nell'upgrade (2026-10-17, 13:09-13:33) — ✅ 🧊 FROZEN (checkpoint delle 13:33)
+
+> **B-39 entrato** (coordinatore, 13:09): `c8fc32bfa` → dev `25d00f192`, CHANGELOG 🔒 `bbfb76e38`; HEAD portata in
+> avanti. Via a B-36 + B-37; rivede H.
+> - Permesso di scrittura (11:59) su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette e
+>   per `trusted_schema=OFF`.
+>
+> **Stato reale** (13:00-13:10):
+> - Solo `_row_counts` costruisce SQL con nomi che vengono dall'archivio. `autoincrement.py` usa la tupla costante
+>   `AUTOINCREMENT_TABLES`; la connessione di `_backup` scrive un file `.bak` nuovo.
+> - Il test di B-28 «every connection … trusted_schema off first» lascia fuori apposta le correzioni e l'upgrade (§2):
+>   «not recorded».
+> - `security.md` l.1821-1827 lo dice.
+>
+> **Contratto** (`b36-37-contract.md`):
+> 1. **B-36**: un `_quoted()` locale, che raddoppia `"`, in `_row_counts`.
+> 2. **B-37**: `PRAGMA trusted_schema=OFF` subito dopo la connessione di `run_post_migration_fixes`, dentro il `try`,
+>    anche sul database vivo: lo schema di LibreFolio contiene solo tabelle e indici, e le funzioni predefinite di
+>    SQLite sono innocue.
+> 3. **B-37**: un listener `connect` (`_schema_untrusted`) in `env.py`, registrato prima di `connectable.connect()`, per
+>    ogni URL.
+>
+> - **Codice pronto** in `b36-wip/apply_b36.py`: 5 operazioni in 2 file; ruff e black puliti sulla copia emessa.
+> - **Rossi in scrittura** (TA-S):
+>   - `test_post_migration.py` (`db post-migration`);
+>   - il registratore di (l) esteso a `post_migration` (`services backup-staging`);
+>   - un controllo statico di `env.py` (`utils dev-cli-db-path`).
+>   Doc: `security.md` l.1821-1827 (docs-writer).
+> - ✅ **Rossi scritti** (TA-S, 13:10-13:15):
+>   - `test_post_migration.py` §17: un 1.1 portato all'ultima migrazione (correzione autoincrement pendente), più le
+>     tabelle `x"y` e `a" WHERE 1 --`, che oggi diventa `FROM "a" WHERE 1 --"` («no such table: a»). Una spia su
+>     `_row_counts`;
+>   - il registratore (l) di `test_backup_staging.py` registra anche `post_migration`; la copia `.bak` resta fuori per il
+>     filtro del percorso;
+>   - DBP-j in `test_dev_cli_db_path.py`: un controllo AST di `env.py`. Un'esecuzione vera di Alembic non può mostrare
+>     il pragma: è uno stato della connessione, dentro un processo che finisce.
+> - ✅ **Rossi** (corsia 6187, 13:15-13:19): `db post-migration` **1 fallito** (44 passati), `services backup-staging`
+>   **1 fallito** (167), `utils dev-cli-db-path` **2 falliti** (15). Sono esattamente i 4 attesi.
+> - ✅ **Patch applicata** (13:19:19): 5 operazioni in 2 file; ruff e black puliti.
+> - ✅ **Verdi** (13:19-13:23):
+>   - `db`: `post-migration` 45, `post-migration-event-types` 36, `post-migration-orphan-pairs` 47,
+>     `autoincrement-schema` 4, `migration-008` 23, `migration-009` 11;
+>   - `services backup-staging` 168, che comprende l'upgrade vero in un processo a parte;
+>   - utils: `dev-cli-db-path` 17, `backup-cli-restore` 107.
+>   Porta libera.
+> - ✅ **Doc** (13:30-13:32): `security.md` l.1821-1832 e il paragrafo dei test l.1838-1841 (docs-writer); `mkdocs
+>   build` strict (61 s), `check-links`, gate 63.
+> - ✅ **Controlli statici**: ruff e black sui 7 file Python, tranne `_backend_db.py`, che era già sporco prima di B (tre
+>   `PLC0415`, e black che lo riformatterebbe), con una sola riga di desc aggiunta. `git diff --check` pulito.
+> - **Per H**:
+>   - le due modifiche nei suoi file (`post_migration/__init__.py`, `env.py`);
+>   - `database/index.md` l.203-204, che potrebbe dire «with `trusted_schema` off first» (nota del docs-writer).
+> - **Backlog**: B-36 ✅, B-37 ✅.
+
 ### B-39 — formule nei CSV esportati, con un ritorno esatto (2026-10-17, 12:43-13:09) — ✅ 🧊 FROZEN (checkpoint delle 13:09)
 
 > **B-35 entrato** (coordinatore, 12:43): merge `d7efb5805` → dev `9fafc79b5`, CHANGELOG 🔒; HEAD portata in avanti

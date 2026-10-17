@@ -6819,7 +6819,7 @@ sulla base `23f6578f3`.
   - Il controllo dello staging viene prima dello spazio (`unpacked_too_large`). L'avvio della verifica risponde 503
     `backup_restore_unavailable`, e la CLI segue la stessa regola.
   - Controllo della configurazione `backup.restore_limit`. Dettagli: piano 07, «B-35».
-- **B-36 · Nomi di tabella non quotati nei conteggi delle correzioni post-migrazione** — ⚪ basso; BZ parte 1, F1.
+- ✅ **B-36 · Nomi di tabella non quotati nei conteggi delle correzioni post-migrazione** — ⚪ basso; BZ parte 1, F1.
   - `post_migration._row_counts` (`backend/app/db/post_migration/__init__.py:70-72`) costruisce
     `f'SELECT count(*) FROM "{name}"'` senza raddoppiare `"`. B-28 lascia passare tabelle con qualsiasi nome.
   - Con una correzione da applicare, il nome di un archivio ostile rompe la verifica (`stage_failed`). Su un database
@@ -6827,11 +6827,15 @@ sulla base `23f6578f3`.
   - sqlite3 esegue un solo statement e non carica estensioni: nessuna fuga dalla copia.
   - Cura: quotare come `snapshot._quoted`. Test: una tabella `x"y` con una correzione pendente.
   - **Il modulo non è di B**: passa dal coordinatore.
-- **B-37 · `trusted_schema` resta acceso su due connessioni alla copia** — ⚪ basso, difesa in profondità; BZ parte 1, F2.
+- ✅ **B-37 · `trusted_schema` resta acceso su due connessioni alla copia** — ⚪ basso, difesa in profondità; BZ parte 1, F2.
   - Le connessioni sono quella delle correzioni post-migrazione (`PM:211`) e il motore di Alembic su `-x sqlalchemy.url`.
     Sono le uniche alla copia senza `PRAGMA trusted_schema=OFF`.
   - Dopo B-28 restano solo tabelle e indici, e nessuna funzione dell'app è registrata lì: nessun exploit noto.
   - Cura: spegnerlo in entrambe. **Proprietari fuori da B** (post_migration, `env.py`).
+  ✅ **Fatto il 17/10** (B-36 + B-37, checkpoint delle 13:33), con il permesso del coordinatore sui due file.
+  - `_row_counts` quota i nomi raddoppiando `"`.
+  - `run_post_migration_fixes` spegne `trusted_schema` per primo; `env.py` lo fa con un listener `connect`, per ogni URL.
+  Dettagli: piano 07, «B-36 + B-37».
 - **B-38 · La CLI da root legge i file della password e della chiave attraverso link e FIFO** — ⚪ basso, rafforzamento;
   BZ parte 1, F4.
   - `read_secret_file` apre con `path.open("rb")`.
