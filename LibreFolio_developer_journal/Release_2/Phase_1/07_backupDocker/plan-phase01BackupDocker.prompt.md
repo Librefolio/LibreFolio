@@ -5366,6 +5366,137 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### W-B64 + W-B65 (per W) — il budget delle cifre contato come il backend; e un «Applica» senza modifiche nel Bulk (2026-10-17, 18:31-19:56) — ✅ 🧊 FROZEN (checkpoint delle 19:56)
+
+> **Assegnazione** (coordinatore, 18:31): «W-B64 + W-B65 as one small lot», dalla sezione di W (BACKLOG l.5660 e
+> l.5668; piano 04, «C-97b — i decimali in input: la cura»). Prima l'analisi; W rivede. Corsia 6187.
+>
+> **Analisi** (18:31-18:47, sola lettura, base `870d519bd`; `files/wb64-65-analysis.md`):
+> - **W-B64**:
+>   - le tre quantità del Form (`TxFormSingleSection.svelte` ×2, `TxFormPairSection.svelte`) hanno
+>     `maxIntegerDigits={12}`, mentre il backend ne prende 15 (N63, `db/precision.py`);
+>   - `ExactDecimalInput` (il budget e il messaggio) ed `ExactQuantityInput` (`withinDigitBudget`) contano i caratteri.
+>     Il backend (`_digit_counts`) non conta gli zeri iniziali dell'intero né quelli finali dei decimali. Così il Form
+>     rifiuta `0.10000000000` a 10 decimali, e i campi priorità del PAC rifiutano `5.0` con «Whole numbers only».
+> - **W-B65**: il Form, su «Applica», manda il payload col segno (`buildCreatePayload`), e `applyFormPayload` del Bulk lo
+>   copia com'è. Il Bulk invece tiene in grandezza i valori che il tipo vuole negativi (`fieldsFromTx`, e l'import). La
+>   guardia della chiusura confronta `serializeOps` così com'è. Due cause:
+>   - **C1, il segno** (come scritta): la quantità di una SELL mostra `-0.00000001`; la cassa di BUY, WITHDRAWAL, FEE e
+>     TAX torna col segno. La cella la ri-segna, quindi non si vede, ma la chiave cambia. E le SELL nuove create dal Form
+>     si vedono col segno;
+>   - **C2, trovata leggendo**: ogni «Applica» scrive `wacCurrencyHint = null` (l.777-778, e il partner l.2476) su una
+>     riga che quella chiave non l'aveva. `JSON.stringify` tiene una chiave `null` e ne butta una assente: qualunque
+>     tipo, anche un DEPOSIT, chiederebbe di scartare.
+> - Fuori dal lotto, per W: la cassa dell'import passa ancora da `Number`, e `isDraftReadyForValidation` legge
+>   `=== '0'`; un blur su una cassa positiva riscrive `0.010000` come `0.01`.
+>
+> **Decisioni** (coordinatore, 18:5x):
+> - **D1 = (a)+(b)**: N63 è una decisione notturna registrata, valida finché il developer non la rivede: 15 cifre intere;
+> - **D2 = sì**: non si contano neanche gli zeri iniziali dell'intero;
+> - **D3 = sì**, C2 dentro il lotto se il rosso del DEPOSIT la prova; se è verde prima della cura, non si cambia nulla.
+> - **Scrittura**: tutti i file elencati, solo script e logica, **tranne `TransactionBulkModal.svelte`**, che W sta
+>   cambiando per W-B70 (D-W70-4): la sua modifica (`fieldsFromTx`, `applyFormPayload`, il suggerimento WAC) va **per
+>   ultima**, quando il coordinatore dice che W-B70 è entrato. CHANGELOG 🐛 ×2. Slot E2E a richiesta.
+>
+> **Contratto** (`files/wb64-65-contract.md`):
+> - `decimalDigitCounts(value)` in `parseDecimalInput.ts`: le cifre intere senza gli zeri iniziali, i decimali senza
+>   quelli finali, e il numero senza quegli zeri (`stripped`); `null` per un testo non canonico. Lineare, due cicli
+>   (W-B66).
+> - `ExactDecimalInput`: budget e messaggio sui conteggi; `min`/`max` confrontati con `stripped`; una freccia su un
+>   valore il cui testo supera il budget, ma valido senza i suoi zeri, parte da `stripped` (`5.` e 40 000 zeri → `6`);
+>   ogni altro valore dal suo testo (`1.50` → `2.50`). `ExactQuantityInput`: `withinDigitBudget` sui conteggi.
+> - Il Form: `maxIntegerDigits={15}` sulle tre quantità.
+> - `magnitudeForRule(value, rule)` in `txPayloadHelpers.ts`: per la regola `negative`, un valore negativo diventa la
+>   sua grandezza esatta; tutto il resto torna com'è. Idempotente.
+> - Il Bulk, per ultimo: `fieldsFromTx` e `applyFormPayload` (per ultima cosa) passano quantità e cassa da
+>   `magnitudeForRule`; con D3, un suggerimento WAC `null` toglie la chiave invece di scriverla.
+>
+> - **Patch pronte** (`files/wb64-65-wip/`, tutte `--check` OK su `870d519bd`; le copie emesse passano prettier):
+>   - `apply_wb64.py`: 9 operazioni in 5 file (l'aiuto, i due campi, le tre quantità del Form);
+>   - `apply_wb65_helper.py`: 2 operazioni in `txPayloadHelpers.ts`;
+>   - `apply_wb65_bulk.py`: 3 operazioni in `TransactionBulkModal.svelte`, 5 con `--with-d3`. Da applicare dopo W-B70,
+>     con un `--check` nuovo.
+> - **Rossi in scrittura** (18:58): TA-WB64 (Vitest: `parseDecimalInput.test.ts`, `ExactDecimalInput.test.ts`,
+>   `ExactQuantityInput.test.ts`, `TransactionFormModal.test.ts`) e TA-WB65 (Vitest `txPayloadHelpers.test.ts`; E2E
+>   `tx-bulk-operations.spec.ts`: SELL, BUY e DEPOSIT, ognuno coi suoi dati).
+> - ✅ **Rossi scritti** (18:58-19:16):
+>   - **TA-WB64**:
+>     - `decimalDigitCounts`: 22 casi (7 `null`, 12 terne esatte, 3 lineari sotto 1 000 ms);
+>     - `ExactDecimalInput`: 5 rossi (`0.10000000000` a 10, `5.0` a 0, `0000000000001.5` a 12, la portata di `5.` e
+>       40 000 zeri, la freccia da quel valore a `6`) più 3 guardie;
+>     - `ExactQuantityInput`: 1 rosso e 1 guardia (`0.10000000001` resta intero, rifiutato);
+>     - il Form: 3 rossi, 15 cifre intere in BUY, ADJUSTMENT e TRANSFER; la guardia spostata a `1000000000000000.1`.
+>   - **TA-WB65**:
+>     - `magnitudeForRule`: 44 casi, compreso il giro del Form per SELL, BUY e FEE;
+>     - l'E2E: 3 test (SELL, BUY, DEPOSIT), con `seedSatoshiLedger` e `applyFormUntouched`. Il seme della guardia C-97b
+>       ora passa dallo stesso aiuto, con le stesse righe; la sua docstring rimanda ai test W-B65.
+>     - **C2 vera dal codice**: per TA-WB65, oggi il DEPOSIT è rosso solo per il `null` di `wacCurrencyHint`.
+>   - Note dei test-author, fuori dal lotto:
+>     - il Form a 15 + 10 accetta `999999999999999.5`, che il backend rifiuta per le 15 cifre significative (come già
+>       oggi a 12 + 10);
+>     - un commento vecchio in `e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` («12 integer digits, 6 decimals»).
+> - ✅ **Rosso Vitest** (corsia 6187, 19:17-19:18, carico 14): i 5 file, **75 falliti** e 444 passati
+>   (`files/logs/b_vitest_wb64_65_red.log`). Sono esattamente i casi nuovi, 22 + 5 + 1 + 3 + 44, ognuno all'asserzione
+>   attesa: `aria-invalid` `true` per il budget, `{digitsValid: false, rangeValid: true}` per la portata, il valore
+>   lasciato com'è dalla freccia; i due aiuti per assenza dell'export.
+> - ✅ **Patch W-B64 e aiuto W-B65 applicate** (19:19): `apply_wb64.py` (9 operazioni) e `apply_wb65_helper.py` (2).
+>   La patch del Bulk aspetta W-B70.
+> - ✅ **Verdi Vitest** (19:19-19:20, carico 21): i 5 file **519/519** (`files/logs/b_vitest_wb64_65_green.log`).
+>   `front check` **0/0** (`wb64_front_check.log`); `tsc -p tsconfig.e2e.json` **0 errori** (`wb65_tsc_e2e.log`).
+> - ⏳ **Rosso E2E**: slot chiesto (19:2x), `files/scripts/wb65_slot.sh red`: i 3 W-B65 e la guardia C-97b, col Bulk
+>   ancora senza patch. Atteso: 3 falliti e 1 passato.
+> - **W-B70 entrato, base aggiornata** (coordinatore, 19:23): avanzamento rapido `870d519bd` → `c9ebc1102`; i miei 13 file
+>   sporchi intatti, nessuna sovrapposizione. W-B70 cambia il Bulk solo in `mergeAllSuggestions` e negli import: lontano
+>   dalle mie righe. `api sync` (exit 0, nessun file tracciato cambiato); `apply_wb65_bulk.py --with-d3 --check` OK sulla
+>   base nuova. **GO** del coordinatore per il rosso E2E, dietro il cancello del carico a 5 minuti (19:2x).
+> - **Doc W-B64** (docs-writer, in corso): `core-ui/atoms.md` (`ExactDecimalInput`, `ExactQuantityInput`) e
+>   `features/transaction-form.md` (la quantità). La doc di W-B65 (`transaction-form.md` l.55,
+>   `state/transaction-draft.md`) solo dopo la patch del Bulk.
+> - ✅ **Rosso E2E** (slot del coordinatore, 19:24-19:37, carico a 5 minuti 34; ricostruzione del frontend di debug
+>   compresa, 12 minuti sotto il carico di J e Y): **3 falliti e 1 passato** (`files/logs/wb65_red_tx_bulk.log`):
+>   - SELL: la cella mostra `-0.00000001` (asserzione morbida) e, dopo «Annulla», l'editor resta aperto;
+>   - BUY: l'editor resta aperto;
+>   - DEPOSIT: l'editor resta aperto. **C2 provata**: i suoi valori non cambiano segno, quindi la causa è solo il `null`
+>     di `wacCurrencyHint`. D3 entra;
+>   - la guardia C-97b, col seme ora condiviso: passata.
+> - ✅ **Patch del Bulk applicata** (19:38): `apply_wb65_bulk.py --with-d3`, 5 operazioni; prettier pulito su tutti i 14
+>   file del lotto.
+> - ✅ **Verdi**:
+>   - `front check` **0/0** (19:39-19:41, dopo l'attesa del carico; `wb65_front_check.log`);
+>   - `vitest related` sui 7 moduli cambiati: **83 file, 3127 passati** (19:41-19:43; `b_vitest_wb64_65_related.log`):
+>     i test di ogni componente che importa i campi esatti o gli aiuti, PAC compreso;
+>   - E2E (19:46-19:49): `tx-bulk-operations`, i 3 W-B65, la guardia C-97b e «B1 regression»: **5 passati**, sulla build
+>     ricostruita con la patch (`wb65_green_tx_bulk.log`). Porta 6187 libera.
+> - **CHANGELOG** 🐛 ×2, dopo la voce di #43 (le cifre della quantità e gli zeri; l'«Applica» senza modifiche nel Bulk).
+> - **Backlog**, sezione B: **B-47** (un focus e un blur sulla cassa del Form riscrivono `0.010000` come `0.01`: la
+>   guardia chiede ancora di scartare; con la cassa dell'import da `Number`) e **B-48** (il Form a 15 + 10 contro le 15
+>   cifre significative del backend; il commento vecchio in `tx-bulk-promote-cost-basis.spec.ts`). Le righe W-B64 e
+>   W-B65 sono nella sezione di W: le chiude il coordinatore o W.
+> - **⚠️ Fuori pista — B-47 verificata sul codice** (19:5x): `READ_MIN_SCALE = 6` (`db/real_decimal.py`) rende le somme
+>   con almeno 6 decimali, `CompactCashCell.handleBlur` emette sempre, `setCash` non confronta.
+> - ✅ **Doc** (docs-writer, 19:05-19:53; solo inglesi, nessuna traduzione):
+>   - `core-ui/atoms.md`: `ExactDecimalInput` conta le cifre come il backend (`decimalDigitCounts`, gli esempi), `min`/`max`
+>     sul valore senza zeri, il messaggio, la regola delle frecce, la riga di W-B66; `ExactQuantityInput`: il valore del
+>     genitore mostrato canonico, «Used by» a 15 + 10;
+>   - `features/transaction-form.md`: il punto **Quantity** (15 + 10, gli zeri non contati), la riga `quantity` della
+>     tabella (l.91, ancora a 12, trovata dal grep), lo «Staging state» (il payload col segno, `magnitudeForRule`);
+>   - `state/transaction-draft.md`: la convenzione dei segni di `DraftFields`, l'«Applica» del Form, la guardia della
+>     chiusura (`serializeOps`, la chiave, il `null` contro l'assente). La tabella dello stato resta vera: lo stato non
+>     è mai stato sbagliato, solo la cella e la chiave.
+>   - **⚠️ Fuori pista**: il docs-writer ha trovato nella docstring di `magnitudeForRule` «a `free` ADJUSTMENT»: la regola
+>     della quantità di ADJUSTMENT è `nonzero`. Corretta (solo commento; prettier pulito).
+> - ✅ **Prove della doc** (19:54-19:55, carico 28): build stretta OK, `check-links` OK, `utils gate-docs-links` **63
+>   passati** (`b_docs.sh`). `git diff --check` pulito; porta 6187 libera.
+> - 🧊 **CHECKPOINT READY** (19:56): 19 file tracciati, nessun file nuovo; FROZEN.
+> - **E-19b1, a margine** (coordinatore, 18:48: dove mettere in `_stage` il controllo delle valute salvate di E). Risposta
+>   delle 18:5x:
+>   - dopo gli `except` del mio involucro B-43 e prima di `_write_report`;
+>   - la connessione aperta in `staging.py`, perché il registratore di B-37 guarda solo `staging`, `snapshot`,
+>     `post_migration` e `totals`;
+>   - un BLOB in un posto di valuta fa lanciare a `_as_text` un `TypeError`, non un `sqlite3.Error` (provato,
+>     `files/e19b-wip/probe_audit.py`): il controllo finirebbe;
+>   - nel log, la classe e `sqlite_errorname`, mai il testo (un UTF-8 non valido lo cita).
+
 ### X-R75 (per X) — il modale delle rotte di cambio cancella prima di salvare; e togliere ogni rotta cancella la coppia (2026-10-17, 16:42-18:33) — ✅ 🧊 FROZEN (checkpoint delle 18:33)
 
 > **Assegnazione** (coordinatore, 16:42; trovata da E): «the FX route modal deletes before it posts
