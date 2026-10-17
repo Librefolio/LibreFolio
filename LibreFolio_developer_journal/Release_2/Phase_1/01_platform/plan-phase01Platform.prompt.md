@@ -5263,3 +5263,150 @@ controllo del catalogo i18n.
      conflitti** su tutti i 10 file condivisi o vicini.
    - Non eseguito: `api system` (contiene i test di `classify_ip`; è un passo pesante con il server, la sonda in
      processo lo sostituisce); la prova combinata con A8a, che spetta al cancello del coordinatore.
+6. ✅ **Prova sulla revisione combinata** (17/10, 06:11–06:16), chiesta dal coordinatore prima dell'ingresso. Base
+   aggiornata da lui: merge `3c1444e0c` = H-36 (`36cc0119d`, `b3e9f9c8a`, `b36e22454`) + dev `abf8391fb`, pulita.
+   - `files/runs/h36-combined.sh`, un comando alla volta: `services client-address` 360, `config-audit` 101,
+     `config-env-example` 38, `email-checks` 87, `config-package` 856 (+3 da dev), `i18n check` strict (4973 chiavi),
+     `mkdocs build` rigoroso con 0 avvisi, `check-links` 97.
+   - Pulita prima e dopo, porta 6181 libera.
+   - Il merge di `security.md` è controllato: il pezzo di dev (riga 1388, backup) è lontano dai miei, e non ci sono
+     marcatori.
+   - La riga della CHANGELOG la scrive il coordinatore all'ingresso di A8a + E-13, quando il salto per indirizzo ha
+     effetto.
+
+### Lotto «H-37: `profile_default` fallisce chiuso per una variabile che il profilo non elenca» (R13-SEC7 di E, 2026-10-17, mattina) — in corso
+
+> Chiesto dal coordinatore, dopo H-36: «`profile_default` (`config/__init__.py:584`): una voce `managed` mancante dà 0,
+> cioè nessun limite; deve fallire chiuso (rifiutare l'avvio, o un default sicuro dichiarato per campo). Prima i rossi;
+> E rivede.» È la nota 5 di R13-SEC7 nel piano di E (`08_email`, «Esito di R13-SEC7»).
+
+**Analisi** (sola lettura, HEAD `3c1444e0c`):
+
+1. `profile_default(name, fallback)` dà il `fallback` quando il profilo attivo non elenca `name`, e questo vale in
+   qualunque profilo. Per l'unico lettore, `backup_max_upload_mb()` di B (`config/backup.py:78`, fallback `0`), togliere
+   la voce `managed` vuol dire «nessun limite» in managed: un fail-open.
+2. **Nessun altro lettore.** Ho cercato `profile_default(` negli alberi di tutti i 31 rami locali: c'è solo quello di B,
+   ed è elencato (500). La cura non cambia il comportamento di oggi.
+3. **Il test di B fissa apposta il fail-open**: `test_backup_restore.py:1400`,
+   `test_the_managed_limit_is_the_entry_of_the_profile_table_read_at_each_call`, controlla che senza la voce il limite
+   sia 0. Va riscritto: è un file di B (`api backup-restore`, passo pesante).
+4. `test_profile_defaults.py` (mio) fissa la stessa regola: il paragrafo (f) («e in managed per un nome che non
+   elenca») e `test_managed_gives_back_the_fallback_itself_for_a_variable_it_does_not_list`.
+5. **I documenti**: `developer/architecture/settings.md` (il paragrafo di `ENVIRONMENT_PROFILE_DEFAULTS`, la guardia e
+   il «come aggiungere una variabile») e `security.md:1461-1463` (quando il limite «non si può leggere»). La pagina admin
+   `hosting_providers#managed-profile` non dice nulla sulle variabili non elencate.
+6. Per H-27 `settings.md` dice già: «il controllo gira alla chiamata del lettore, mai all'avvio: solo il lettore sa che
+   tipo si aspetta; la tabella è codice, protetta prima del rilascio dai test». Vale lo stesso per una voce mancante:
+   solo il lettore sa quale variabile legge.
+
+**Progetto** (la scelta fra le due forme proposte):
+
+- **Fallire chiuso alla chiamata.** Sotto ogni profilo tranne `selfhosted`, un nome che il profilo non elenca solleva
+  `ProfileDefaultError`. Il messaggio nomina la variabile, il profilo e `ENVIRONMENT_PROFILE_DEFAULTS`, e dice che ogni
+  profilo tranne `selfhosted` deve dare un valore a ogni variabile letta da `profile_default`.
+  - Il lettore si ferma: le rotte di B prendono già `ProfileDefaultError` (B-21), quindi l'upload dà 503
+    `backup_upload_unavailable` e lo stato `upload_limit_mb: null`, con un errore nel log che nomina la variabile.
+  - `selfhosted` resta com'è: il fallback, senza controlli.
+- **La stessa regola sul sorgente**, nella guardia (h): ogni chiamata `profile_default(<nome>, …)` di un modulo di
+  sezione deve avere il suo nome elencato da ogni profilo tranne `selfhosted`. Un autotest toglie la voce `managed` e
+  verifica che la guardia la segnali.
+- **Non rifiuto l'avvio.**
+  - Per saperlo all'avvio servirebbe un terzo elenco, le variabili lette, oltre alla tabella e ai lettori. Oggi lo
+    tiene la guardia (h), sul sorgente.
+  - E il raggio d'azione: una voce mancante fermerebbe ogni istanza managed all'aggiornamento, mentre così si chiude
+    solo la funzione che legge quel valore.
+  - È la stessa scelta che H-27 ha documentato per il tipo.
+- **`ProfileDefaultError` resta un `TypeError`** (H-27; B la prende per nome). Cambia la docstring: «manca, oppure è di
+  un altro tipo».
+- **Fuori perimetro**: `PROFILE_DEFAULTS` (i campi di `Settings`) ha la stessa forma, e senza la voce
+  `LIBREFOLIO_FRAME_PROTECTION` un'istanza managed tornerebbe al default del codice (spento). Il test (a) lo fissa
+  intero contro `MANAGED_DEFAULTS`. Lo segnalo a E e non propongo nulla.
+
+**Rossi** (test-author): `test_profile_defaults.py`, paragrafi (f), (g) e (h), più il test del lettore vero di B con la
+voce tolta. Con l'OK del coordinatore, anche la riga di `test_backup_restore.py:1400` e il caso «missing» nei test
+503/null di B-21.
+
+**Selettori**: `services profile-defaults`, `services config-package`, `services config-env-example`; `api
+backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check-links`.
+
+> **Approvazione** (coordinatore, 17/10 mattina): la scelta va bene, cioè fallire chiuso alla chiamata
+> (`ProfileDefaultError` fuori da `selfhosted`), la guardia (h) sul sorgente con il suo autotest e nessun rifiuto
+> all'avvio, coerente con H-27. In più:
+> - OK di scrittura su `test_api/test_backup_restore.py` di B: si riscrive il test del fail-open e si aggiunge il caso
+>   «missing» in `WRONG_TABLE_LIMITS`, con `wrong_table_entry` che impara `delitem`. Lo fa il test-author; B rivede al
+>   checkpoint, perché è su B-16, solo frontend.
+> - Uno slot per i 3 test di `api backup-restore` per nome: lo chiedo quando la cura è pronta.
+>
+> **Nota per E** (chiesta dal coordinatore): `PROFILE_DEFAULTS`, i campi di `Settings`, ha la stessa forma. Senza la voce
+> managed di `LIBREFOLIO_FRAME_PROTECTION` (o di `LIBREFOLIO_CSP_REPORT_ONLY`, o dei due tempi di riposo), un'istanza
+> managed torna in silenzio al default del codice: la protezione dei frame spenta. Oggi lo ferma solo il test (a)
+> (`MANAGED_DEFAULTS`, uguaglianza intera), prima del rilascio. Una chiusura a runtime richiederebbe un elenco
+> dichiarato dei campi per profilo: non è in H-37, lo decide E.
+
+1. ✅ **Cura in prova** (17/10, mattina): `files/h37/apply.py` scrive `dry/config_init.py`.
+   - Cambiano tre pezzi di `config/__init__.py`: il commento sopra `ENVIRONMENT_PROFILE_DEFAULTS`, la docstring di
+     `ProfileDefaultError` e `profile_default()`.
+   - In `profile_default()`, per un nome non elencato, `selfhosted` dà ancora il fallback; ogni altro profilo solleva
+     `ProfileDefaultError`. Il messaggio nomina la variabile, il profilo e `ENVIRONMENT_PROFILE_DEFAULTS`.
+   - Il ramo di un nome elencato non cambia: il controllo di tipo di H-27.
+   - Ruff e black sono puliti sulla copia di prova, come su HEAD.
+2. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina).
+   - `test_profile_defaults.py`, 25 casi nuovi e 1 tolto:
+     - `test_managed_refuses_a_variable_it_does_not_list`, al posto del vecchio test del fallback in managed; 6
+       fallback (`object`, `0`, `0.0`, `""`, `False`, `None`);
+     - la variante con il profilo scritto in altro modo (2 casi);
+     - il lettore vero di B con la voce tolta (rosso) e lo stesso in self-hosted (verde, 2 casi);
+     - la guardia (h) nella direzione nuova, con il suo autotest;
+     - `fallback_like`, che ora regge una voce uguale al valore vuoto del suo tipo (dalla review dei documenti: H-37
+       rende obbligatoria anche una voce uguale al fallback), con il suo test (8 casi);
+     - un caso (g) con la voce uguale al default del lettore (4 casi).
+   - Docstring: (f), (g), (h) e «How».
+   - `test_backup_restore.py` di B, solo il blocco (e) e il suo paragrafo, con l'OK del coordinatore:
+     - il test della guardia B4: con la voce tolta deve dare `ProfileDefaultError`, mai 0;
+     - `MISSING` (con `repr` «no entry») in `WRONG_TABLE_LIMITS`;
+     - `wrong_table_entry` impara `delitem`.
+   - Comando: `files/runs/h37-red-1.sh` (`services profile-defaults`). Esito: **9 failed, 103 passed**, esattamente i 9
+     previsti: `test_managed_refuses_…[×6]`, `…another_case_refuses_…[×2]` e
+     `test_a_missing_managed_upload_limit_stops_its_reader`. In ognuno il fallback, o lo 0, torna indietro.
+   - Ruff pulito. Black voleva andare a capo in tre `pytest.fail` lunghi: applicato al mio file di test, solo
+     formattazione.
+   - I rossi di B (3 test, 11 casi) aspettano lo slot `api`.
+   > **⚠️ Fuori pista** (dal test-author, non corretto): la `desc` del catalogo di `services profile-defaults`
+   > (`_backend_services.py`) non nomina né H-27 né H-37. Le etichette «B-21, RED until the routes catch it» nel file di
+   > B sono vecchie: lo dico a B.
+3. ✅ **Slot 1** (concesso dal coordinatore, 06:38–06:43, corsia 6181), `files/runs/h37-slot.sh`:
+   - **Rosso**, prima della cura: `api backup-restore` sui 3 test per nome, **3 failed / 8 passed**.
+     - La guardia B4: «backup_max_upload_mb() returns 0, where H's profile_default raises ProfileDefaultError».
+     - I due `[missing]` di B-21: «precondition: H's table giving no entry … not 0».
+   - **Cura applicata**: `files/h37/apply.py --apply`, identica alla copia di prova (`cmp`).
+   - **Verde**: gli stessi 3 test, **11 passed**. Porta libera alla fine.
+4. ✅ **Documenti** (docs-writer, solo inglese, pagine per sviluppatori senza traduzioni):
+   - `settings.md`, il punto di `ENVIRONMENT_PROFILE_DEFAULTS`: la regola nuova, il perché (anche il raggio d'azione), la
+     guardia nelle due direzioni con i due autotest, e «la voce managed è obbligatoria anche al valore del fallback»;
+   - `security.md:1461-1463`: «nessun valore (ogni profilo tranne `selfhosted`, H-37) o un valore del tipo sbagliato».
+   > **⚠️ Fuori pista** (dal docs-writer): `fallback_like()` non reggeva una voce uguale al valore vuoto del suo tipo,
+   > che H-37 rende legittima. Lo ha corretto il test-author, con un test dell'aiuto.
+5. ✅ **La riga `desc`** di `services profile-defaults` in `_backend_services.py`, con l'OK del coordinatore, solo
+   aggiunta: H-27 e H-37 accodati. `git merge-file` contro dev `0dc58c70b`, che ha già le righe di Z: 0 conflitti.
+   Il modulo del runner si carica e la `desc` contiene i due lotti. `services profile-defaults --list` elenca i test
+   nuovi.
+6. ✅ **Controlli leggeri** dopo la cura (`files/runs/h37-green-light.sh`):
+
+   | Comando | Esito |
+   |---------|-------|
+   | `services profile-defaults` | 112 passed |
+   | `services config-package` | 856 passed |
+   | `services config-misc` | 12 passed |
+   | `services config-env-example` | 38 passed |
+   | ruff, black (4 file) | puliti |
+   | `mkdocs build` | rc 0, 0 avvisi |
+   | `check-links` | 97 |
+   | `git diff --check` | pulito |
+
+   - `git merge-file` di tutti gli 8 file cambiati contro dev `0dc58c70b` (base comune `d107b6f26`): 0 conflitti.
+   - Non eseguito: `api backup-restore` intero (bastano i 3 test per nome, come deciso dal coordinatore) e
+     `all-backend`, che spettano al cancello.
+   > **Note per B**, alla review del suo file:
+   > - le etichette «B-21, RED until the routes catch it» nel blocco (e) sono vecchie;
+   > - la docstring di `backup_max_upload_mb()` (`config/backup.py:73-74`), «else `0`, the self-hosted default», ora vale
+   >   solo per `selfhosted`. Non l'ho toccata: è codice di produzione di B, e non ho l'OK.
