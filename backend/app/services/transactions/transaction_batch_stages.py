@@ -40,12 +40,33 @@ def _loc_to_field(loc: tuple | list) -> Optional[str]:
     return ".".join(parts) if parts else None
 
 
+# What a lone error's context may hold to become its params: a business rule's ``{type, qty, …}``. pydantic's
+# ``value_error`` holds the exception itself, which no response can carry.
+_PLAIN_PARAM_TYPES = (str, int, float, bool, type(None))
+
+
+def _lone_error_params(error: dict) -> Optional[dict]:
+    """The ``params`` of an error the parse meets alone: the context of a model-level error, when it is plain data.
+
+    ``TXCreateItem`` raises a single business-rule error as it is and packs several (``multipleBusinessRuleErrors``),
+    whose sub-errors keep their context; a lone one kept none, so its message lost its ``{type}`` (W-B72). A field's
+    error — pydantic's own, ``string_too_long``, ``value_error`` — keeps ``None``: its field names it.
+    """
+    context = error.get("ctx")
+    if error.get("loc") or not context or not all(isinstance(value, _PLAIN_PARAM_TYPES) for value in context.values()):
+        return None
+    return dict(context)
+
+
 def _parse_lenient(
     raw_list: list[dict],
     model_class: type,
     operation: str,
 ) -> Tuple[list[tuple[int, Any]], list[TXValidationIssue]]:
-    """Validate each raw row independently and retain every row-level issue."""
+    """Validate each raw row independently and retain every row-level issue.
+
+    A business-rule error keeps its context as ``params``, packed (``multipleBusinessRuleErrors``) or alone
+    (``_lone_error_params``, W-B72)."""
     parsed: list[tuple[int, Any]] = []
     issues: list[TXValidationIssue] = []
     for idx, raw in enumerate(raw_list):
@@ -73,7 +94,7 @@ def _parse_lenient(
                         index=idx,
                         error=error.get("msg", str(error)),
                         code=error.get("type"),
-                        params=None,
+                        params=_lone_error_params(error),
                         field=_loc_to_field(error.get("loc", ())),
                     )
                 )

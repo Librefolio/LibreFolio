@@ -1,17 +1,18 @@
 """Asset price endpoints (``/assets/prices``): manual upsert and delete, signal catalog, bulk and current queries, provider sync."""
 
-from typing import Annotated, List
+from datetime import date as date_type
+from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import AfterValidator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import PERIOD_CHANGES_MAX_AS_OF_DAYS
+from backend.app.schemas.common import Currency, period_changes_request_refusal
 from backend.app.schemas.prices import (
-    PERIOD_CHANGES_MAX_ASSETS,
     FAAssetDelete,
     FABulkDeleteResponse,
     FABulkUpsertResponse,
@@ -20,6 +21,7 @@ from backend.app.schemas.prices import (
     FAPeriodChangesResponse,
     FAPriceQueryItem,
     FAPriceQueryResponse,
+    FARangeChange,
     FAUpsert,
     FAUpsertResult,
 )
@@ -29,14 +31,28 @@ from backend.app.schemas.signals import (
     SignalDomain,
 )
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.assets.period_changes import get_period_changes_bulk
+from backend.app.services.assets.period_changes import get_period_changes_bulk, live_range_changes
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, BulkTooManyDaysError, bulk_too_many_days_detail, bulk_too_many_items_detail
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
 
 logger = get_logger(__name__)
 
 price_router = APIRouter(prefix="/prices", tags=["FA Prices"])
+
+
+def _range_start_in_bounds(value: date_type | None) -> date_type | None:
+    """``range_start`` of ``POST /prices/current`` (R13-SEC9-4): from ``EARLIEST_RANGE_START`` to ``latest_range_end()``, as
+    the period changes bound their days; refused by the parameter itself, so the 422 has the standard shape."""
+    if value is not None and not EARLIEST_RANGE_START <= value <= latest_range_end():
+        raise ValueError(f"range_start ({value}) must be between {EARLIEST_RANGE_START} and {latest_range_end()}")
+    return value
+
+
+def _currency_code(value: str | None) -> str | None:
+    """``target_currency`` of ``POST /prices/current``: an ISO 4217 code, normalized as every other ``target_currency``."""
+    return Currency.validate_code(value) if value is not None else None
 
 
 # ============================================================================
@@ -120,12 +136,10 @@ async def query_prices_bulk(
     for all assets, then applies backward-fill per asset.
     Analogous to POST /fx/currencies/convert for FX rates.
 
-    Limits (Z-25): at most ``MAX_BULK_ITEMS`` items (422 ``bulk_too_many_items``, before any read) and at most
-    ``MAX_BULK_ITEM_DAYS`` per-day points over all the fills (422 ``bulk_too_many_days``, counted once the prices are
-    read, before the fills). The web app's asset list sends one item per asset in a single request: an instance with
-    more than 1,000 assets gets ``bulk_too_many_items``, and today the page then shows its cards without prices, the error
-    reaching only the console (the ``catch`` of ``fetchAllPriceData``). An explicit message, and splitting the request,
-    are a follow-up of the web app.
+    Limits (Z-25; the day budget lowered by R13-SEC9-2): at most ``MAX_BULK_ITEMS`` items (422
+    ``bulk_too_many_items``, before any read) and at most ``MAX_BULK_ITEM_DAYS`` per-day points over all the fills (422
+    ``bulk_too_many_days``, counted once the prices are read, before the fills). The web app's asset list splits its
+    request into batches under both, and splits again a batch refused for its days (Z-27).
     """
     if len(requests) > MAX_BULK_ITEMS:
         raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(requests), MAX_BULK_ITEMS))
@@ -137,13 +151,24 @@ async def query_prices_bulk(
     except BulkTooManyDaysError as e:
         raise HTTPException(status_code=422, detail=bulk_too_many_days_detail(e.item_days, e.max_item_days)) from e
     except Exception as e:
+        # R13-SEC9-3: the log keeps the error; the answer never echoes it (an SQL error names the schema)
         logger.exception(f"Error querying prices bulk: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while querying prices") from e
 
 
 @price_router.post("/current", response_model=FACurrentPriceResponse)
 async def get_current_prices_bulk(
     asset_ids: List[int],
+    range_start: Annotated[
+        Optional[date_type],
+        Query(description="First day of the range the page shows: each result also carries its whole-range change to the current price (X-R59); from 1900-01-01 to tomorrow"),
+        AfterValidator(_range_start_in_bounds),
+    ] = None,
+    target_currency: Annotated[
+        Optional[str],
+        Query(description="With range_start: the currency of range_change (Y's D1, the page's converted view): the reference converted at its own day's rate, the price at today's; null changes without a rate. The quotes stay in their own currency"),
+        AfterValidator(_currency_code),
+    ] = None,
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
@@ -153,6 +178,12 @@ async def get_current_prices_bulk(
     For each asset:
     1. If a provider is assigned → calls provider.get_current_value() (parallel)
     2. Fallback → returns the latest price from DB (PriceHistory)
+
+    With ``range_start`` each result also carries ``range_change``: the change from the range's reference (the stored
+    price on ``range_start``, or the first one inside the range) to this price, by the house's ``range_change`` — the Δ
+    the asset page shows next to a live quote, which may not be stored (X-R59).
+    With ``target_currency`` too, that change is in that currency: the reference converted at its own day's rate, the
+    price at today's; a missing rate leaves it null (Y's D1).
 
     **Side effect**: For successful provider fetches with as_of_date == today,
     the OHLC row for today is created or extended (F.2/F.3 intra-day upsert).
@@ -176,13 +207,25 @@ async def get_current_prices_bulk(
     }
     ```
     """
+    # R13-SEC9-1: refused before any read, the cap of the other bulk requests (range_start is bounded by its parameter)
+    if len(asset_ids) > MAX_BULK_ITEMS:
+        raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(asset_ids), MAX_BULK_ITEMS))
     try:
         results = await AssetSourceManager.get_current_prices_bulk(asset_ids, session)
+        if range_start is not None:
+            try:
+                # One change per distinct id (R13-SEC9-1): a repeated id reads the same item
+                changes = await live_range_changes(session, list({result.asset_id: result for result in results}.values()), range_start, target_currency)
+            except Exception:  # noqa: BLE001 — the quotes stand without their change, which stays unavailable (null)
+                logger.exception("Range change of the current prices failed", range_start=str(range_start))
+                changes = {}
+            results = [result.model_copy(update={"range_change": changes.get(result.asset_id, FARangeChange())}) for result in results]
         success_count = sum(1 for r in results if r.value is not None)
         return FACurrentPriceResponse(results=results, success_count=success_count)
     except Exception as e:
+        # R13-SEC9-3: the log keeps the error; the answer never echoes it
         logger.exception(f"Error fetching current prices: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail="Internal error while fetching current prices") from e
 
 
 # ============================================================================
@@ -211,17 +254,20 @@ async def sync_prices_bulk(
 
 @price_router.post("/period-changes", response_model=FAPeriodChangesResponse)
 async def query_period_changes_bulk(
-    requests: Annotated[List[FAPeriodChangesQueryItem], Body(max_length=PERIOD_CHANGES_MAX_ASSETS)],
+    requests: List[FAPeriodChangesQueryItem],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
-    """The Assets table's fixed-period changes (1D … 5Y) of several assets, up to each one's ``as_of``.
+    """The Assets table's fixed-period changes (1D … 5Y) of several assets, up to each one's ``as_of``, and the change over
+    the whole range the page shows when ``range_start`` is given (X-R59).
 
     Reads the stored price history only: the price on a day is the last stored one on or before it, converted at that
     day's rate when ``target_currency`` is given. Each change is a fraction, null without a usable price on either day.
-    At most ``PERIOD_CHANGES_MAX_ASSETS`` items and ``PERIOD_CHANGES_MAX_AS_OF_DAYS`` distinct ``as_of`` days, each from
-    1900-01-01 (MF-P2b): 422 otherwise.
+    Limits (``period_changes_request_refusal``): at most ``MAX_BULK_ITEMS`` items (422 ``bulk_too_many_items``, as the
+    price query) and ``PERIOD_CHANGES_MAX_AS_OF_DAYS`` distinct ``as_of`` and ``range_start`` days (422
+    ``period_changes_too_many_days``), each from 1900-01-01.
     """
-    if len({item.as_of for item in requests}) > PERIOD_CHANGES_MAX_AS_OF_DAYS:
-        raise HTTPException(status_code=422, detail=f"At most {PERIOD_CHANGES_MAX_AS_OF_DAYS} distinct as_of days per request")
+    refusal = period_changes_request_refusal(requests)
+    if refusal is not None:
+        raise HTTPException(status_code=422, detail=refusal)
     return FAPeriodChangesResponse(items=await get_period_changes_bulk(requests, session))

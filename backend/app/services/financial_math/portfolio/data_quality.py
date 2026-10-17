@@ -16,7 +16,7 @@ from backend.app.schemas.portfolio import (
     IssueDomain,
     IssueSeverity,
 )
-from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, ShareMismatch
+from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, RowsBeforeFloor, ShareMismatch
 
 
 def normalize_fx_pair_slug(pair: str) -> str:
@@ -77,6 +77,7 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     transaction_implied_assets_dto: list | None = None,
     missing_cost_basis_assets: list[tuple[int, str]] | None = None,
     invalid_split_assets: list[tuple[int, str]] | None = None,
+    rows_before_floor: RowsBeforeFloor | None = None,
     valued_at_cost_assets_dto: list | None = None,
     classifier_warnings: list[str] | None = None,
     share_mismatches: Sequence[ShareMismatch] | None = None,
@@ -98,6 +99,9 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     invalid_split_assets (MF-D4): (asset_id, name) of the assets with a SPLIT event whose stored ratio is unusable: it
     counts as missing (no ratio restates a trade price observed before it), so a valuation that rests on such a price may
     be wrong until the ratio is fixed on the asset's events.
+    rows_before_floor (MF-SEC8-2a): the scope's transactions dated before 1 January 1900 (``EARLIEST_RANGE_START``), which
+    an older version or a hand edit stored: they are replayed, but the histories start on the floor; one warning names
+    their number and the earliest date, so the user corrects them.
     If None, the report still populates date-level fields.
 
     share_mismatches (J-43): the engine's linked internal pairs between brokers owned at
@@ -241,6 +245,20 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
                 cta_action="navigate_asset",
                 cta_target=str(invalid_split_assets[0][0]),
                 group_key="invalid_split_ratio",
+            )
+        )
+
+    # TRANSACTIONS_BEFORE_FLOOR — warning (MF-SEC8-2a): rows dated before 1900, replayed, but the histories start on 1900
+    if rows_before_floor is not None and rows_before_floor.count > 0:
+        issues.append(
+            DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.TRANSACTIONS_BEFORE_FLOOR,
+                severity=IssueSeverity.WARNING,
+                message_i18n_key="dataQuality.transactionsBeforeFloor",
+                message_params={"count": rows_before_floor.count, "earliest": rows_before_floor.earliest.isoformat()},
+                count=rows_before_floor.count,
+                group_key="transactions_before_floor",
             )
         )
 

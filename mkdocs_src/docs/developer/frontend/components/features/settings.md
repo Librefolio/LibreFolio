@@ -450,15 +450,24 @@ no props. The accounts of the instance, the open invitations and the places take
 - **Invitations** (`users-invites`): `InvitationsList`, see
   [Invitations and reset links](#invite-dialogs).
 - **Confirmations**: one `ConfirmModal`, `testId="users-confirm"` (on its header; its buttons are
-  `confirm-modal-confirm` and `confirm-modal-cancel`), for deactivate, promote, demote, sign out
-  everywhere, restart the guides and revoke an invitation; `danger` for deactivate, demote and
-  revoke. Title and message come from `settings.usersTab.confirm.<kind>.*`, with `{username}`, or
-  `{email}` for an invitation (`settings.usersTab.invites.noEmail` when it has none). Reactivate
-  runs at once; the reset link and the deletion open their own dialogs.
+  `confirm-modal-confirm` and `confirm-modal-cancel`), for deactivate, cancel the setup link,
+  promote, demote, sign out everywhere, restart the guides and revoke an invitation; `danger` for
+  deactivate, cancel the setup link, demote and revoke. Title and message come from
+  `settings.usersTab.confirm.<kind>.*`, the kind in camelCase (`cancelSetup`, `signOut`…), with
+  `{username}`, or `{email}` for an invitation (`settings.usersTab.invites.noEmail` when it has
+  none). Reactivate runs at once; the reset link and the deletion open their own dialogs.
+- **Cancel the setup link** (`cancel-setup`, lot A-43), for the
+  [initial administrator](../../../architecture/access_control.md#initial-admin) waiting for its
+  setup: once confirmed, `PATCH /users/{id}` `{is_active: false}`, which revokes its setup links
+  ([Cancelling the setup link](../../../architecture/access_control.md#setup-cancel)).
+  The row still reads *Waiting for setup* afterwards, so a success toast
+  (`settings.usersTab.toasts.setupCancelled`, *The setup link of {username} no longer works.*) tells
+  what changed.
 
 | Action | Call | Event on success | Toast |
 |---|---|---|---|
 | deactivate | `PATCH /users/{id}` `{is_active: false}` | `accounts.user.deactivated` | — |
+| cancel the setup link | `PATCH /users/{id}` `{is_active: false}` | `accounts.user.setup-cancelled` | success |
 | reactivate | `PATCH /users/{id}` `{is_active: true}` | `accounts.user.reactivated` | — |
 | promote | `PATCH /users/{id}` `{is_superuser: true}` | `accounts.user.promoted` | — |
 | demote | `PATCH /users/{id}` `{is_superuser: false}` | `accounts.user.demoted` | — |
@@ -475,14 +484,14 @@ toast, when there is one, is a field of the same call.
 
 | Event | `detail` |
 |---|---|
-| `accounts.user.deactivated`, `reactivated`, `promoted`, `demoted`, `sessions-revoked`, `onboarding-reset` | `{user_id}` |
+| `accounts.user.deactivated`, `setup-cancelled`, `reactivated`, `promoted`, `demoted`, `sessions-revoked`, `onboarding-reset` | `{user_id}` |
 | `accounts.invite.revoked` | `{invite_id}` |
 | `accounts.invite.created` | `{invite_id, grants_admin}` |
 | `accounts.reset-link.created` | `{user_id}` |
 | `accounts.user.deleted` | `{user_id, brokers_deleted, mode}` |
 | `accounts.address.checked` | `{state, purpose}`, without a toast ([LinkShare](#linkshare)) |
 | `accounts.link.copied` | `{purpose}`, with a success toast ([LinkShare](#linkshare)) |
-| `accounts.action.failed` | `{action, code}`, plus `user_id` or `invite_id` when there is one, always with an error toast. `action` is `load`, `deactivate`, `reactivate`, `promote`, `demote`, `sign-out`, `restart-guides`, `revoke-invite`, `invite`, `reset-link` or `delete`; `code` comes from [`accountErrors.ts`](#account-errors) |
+| `accounts.action.failed` | `{action, code}`, plus `user_id` or `invite_id` when there is one, always with an error toast. `action` is `load`, `deactivate`, `cancel-setup`, `reactivate`, `promote`, `demote`, `sign-out`, `restart-guides`, `revoke-invite`, `invite`, `reset-link` or `delete`; `code` comes from [`accountErrors.ts`](#account-errors) |
 
 #### UserRow {: #userrow }
 
@@ -498,7 +507,8 @@ item, with `holds_place` and `pending_setup` when they are sent: both optional i
   `settings.usersTab.createdOn`, and opens or closes the panel of actions under the row.
 - The own row (`isSelf`) has no action: `users-self-hint`, with a link to `/settings?tab=profile`.
 - The buttons: `users-action-deactivate` for an active account or `users-action-reactivate` for an
-  inactive one; `users-action-demote` for an administrator or `users-action-promote` for a regular
+  inactive one, `users-action-cancel-setup` in its place for an account with `pending_setup`;
+  `users-action-demote` for an administrator or `users-action-promote` for a regular
   account; then `users-action-reset-link`, `users-action-sign-out`, `users-action-restart-guides`
   and `users-action-delete`.
 - **An account waiting for its setup** (`pending_setup`, the
@@ -508,8 +518,21 @@ item, with `holds_place` and `pending_setup` when they are sent: both optional i
   `users-action-reactivate`, and so no `limit` reason on a full instance; under the buttons,
   `users-pending-setup-hint` (`settings.usersTab.pendingSetupHint`): the account activates through
   its setup link, and a lost link is replaced with `dev.py user setup-link` or by the hosting
-  provider. Its other buttons are those of any inactive account. The backend refuses its
-  reactivation anyway, with `409` `PENDING_SETUP` ([Account Errors](#account-errors)).
+  provider. The backend refuses its reactivation anyway, with `409` `PENDING_SETUP`
+  ([Account Errors](#account-errors)). Since lot A-43:
+    - `users-action-cancel-setup` (`settings.usersTab.actions.cancelSetup`, *Cancel setup link*, the
+      `Link2Off` icon, the style of the row's other actions) stands where **Reactivate** would, and
+      hands the account to `onAction('cancel-setup', account)`: the tab confirms, then cancels
+      ([UsersTab](#userstab)). On a protected account it is turned off with the reason `protected`
+      (`cancelReason`), shown under the buttons as for **Deactivate**: the backend refuses the
+      cancellation with `409` `ACCOUNT_PROTECTED`;
+    - `users-action-demote` is turned off with the reason `pending-setup`
+      (`settings.usersTab.reasons.pendingSetup`): the account keeps its role until its setup, and the
+      backend refuses its demotion with `409` `PENDING_SETUP` too;
+    - `users-action-delete` stays enabled, without the `demote-first` reason: the backend deletes the
+      waiting administrator directly ([Deleting an Account](../../../architecture/access_control.md#admin-account-deletion)).
+
+    Its other buttons are those of any inactive account.
 
 A button the backend would certainly refuse is `disabled`, with `data-disabled-reason`; the first
 condition that holds gives the reason:
@@ -518,8 +541,9 @@ condition that holds gives the reason:
 |---|---|
 | `users-action-deactivate` | `protected` when `account.protected`; `last-admin` when the account is an administrator and `isOnlyActiveAdmin` |
 | `users-action-reactivate` | `limit` when `full`, unless `account.holds_place`: an account waiting for its email verification with a live link already holds its place ([Email Verification](../../../backend/email.md#verification)). Never drawn for an account with `pending_setup` |
-| `users-action-demote` | `protected` when `account.protected`; `last-admin` when the account is active and `isOnlyActiveAdmin` |
-| `users-action-delete` | `protected` when `account.protected`; `demote-first` when the account is an administrator, active or not |
+| `users-action-cancel-setup` | `protected` when `account.protected`: the backend refuses the cancellation of a protected account (`409` `ACCOUNT_PROTECTED`). Drawn only for an account with `pending_setup` |
+| `users-action-demote` | `protected` when `account.protected`; `pending-setup` when the account has `pending_setup`; `last-admin` when the account is active and `isOnlyActiveAdmin` |
+| `users-action-delete` | `protected` when `account.protected`; `demote-first` when the account is an administrator, active or not, unless it has `pending_setup` |
 
 Promote, the reset link, sign out everywhere and restart the guides are never disabled. Under the
 buttons, one line per distinct reason (`settings.usersTab.reasons.*`). The backend stays the
@@ -622,7 +646,7 @@ the translated `key` otherwise.
 
 | Answer | `code` | Shown |
 |---|---|---|
-| `detail.error_code` among `LAST_ADMIN`, `USER_LIMIT_REACHED`, `REGISTRATION_DISABLED`, `ACCOUNT_PROTECTED`, `SELF_DELETION`, `DEMOTE_FIRST`, `PENDING_SETUP` (`ACCOUNT_ERROR_CODES`) | that code | `settings.usersTab.errors.<code>`; a `detail.billing_url` is passed as `params.billingUrl`. `PENDING_SETUP` is the `409` of a reactivation of the initial administrator waiting for its setup: a list loaded earlier may still offer it |
+| `detail.error_code` among `LAST_ADMIN`, `USER_LIMIT_REACHED`, `REGISTRATION_DISABLED`, `ACCOUNT_PROTECTED`, `SELF_DELETION`, `DEMOTE_FIRST`, `PENDING_SETUP` (`ACCOUNT_ERROR_CODES`) | that code | `settings.usersTab.errors.<code>`; a `detail.billing_url` is passed as `params.billingUrl`. `PENDING_SETUP` is the `409` of a reactivation or, since lot A-43, a demotion of the initial administrator waiting for its setup: a list loaded earlier may still offer either |
 | `404` | `NOT_FOUND` | `settings.usersTab.errors.NOT_FOUND` |
 | `422` | `INVALID_INPUT` | `settings.usersTab.errors.INVALID_INPUT` |
 | `500` of a deletion (`action` is `'delete'`) | `DELETION_FAILED` | `settings.usersTab.errors.DELETION_FAILED`: nothing was deleted |
@@ -682,11 +706,17 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
   the answers read from the status, and each key a sentence in the four catalogues),
   and the `users` row of `settingsTabs.test.ts`.
 - `./dev.py test front-utility component-unit`: `tabs/UsersTab.test.ts` (the tab against a mocked
-  server that changes as the backend would), `users/LinkShare.component.test.ts` (not
+  server that changes as the backend would; UTAB-55 to UTAB-60, lot A-43: the cancellation of a
+  setup link confirmed as danger, its one `PATCH`, event and toast, a dismissed confirmation that
+  sends nothing, a stale demotion's `PENDING_SETUP`, and the keys in the four catalogues),
+  `users/LinkShare.component.test.ts` (not
   `LinkShare.test.ts`: `linkShare.test.ts` is in the same folder, and macOS volumes ignore case),
   `users/InviteDialog.test.ts`, `users/ResetLinkDialog.test.ts`, `users/UserRow.pendingSetup.test.ts`
   (the row of an account waiting for its setup: the badge, `data-pending-setup`, no
-  **Reactivate** and no `limit` reason, the hint; every other row unchanged),
+  **Reactivate** and no `limit` reason, the hint; since lot A-43, UPS-12 to UPS-23:
+  `users-action-cancel-setup` in its place, turned off with `protected` on a protected account
+  (UPS-23), `users-action-demote` off with `pending-setup`, `users-action-delete` enabled; every
+  other row unchanged),
   `AccountDeletionDialog.test.ts` (both modes) and `tabs/ProfileTab.test.ts`.
 - `./dev.py test front-utility admin-users` (`frontend/e2e/settings/admin-users.spec.ts`): the tab
   on the lane's real backend, `e2e_test_admin` acting on disposable accounts only. Only an

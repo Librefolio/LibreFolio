@@ -350,6 +350,14 @@ class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
 # ============================================================================
 
 
+class FARangeChange(StrictModel):
+    """The change of an asset's price over the whole range the page shows (X-R59): the first and last point of its series."""
+
+    reference_date: Optional[date_type] = Field(None, description="The day of the reference price: range_start, or the first price inside the range when none is on or before it; null without any")
+    change_abs: Optional[SafeDecimal] = Field(None, description="Price on as_of (or the live price) − reference price, in the result's currency; null without a usable price (a reference ≤ 0, a negative price)")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="((Price on as_of or the live price) ÷ reference price) − 1; −1 for a price of 0; null without a usable price")
+
+
 class FACurrentPriceItem(StrictModel):
     """Current price result for a single asset."""
 
@@ -361,6 +369,7 @@ class FACurrentPriceItem(StrictModel):
     error: Optional[str] = Field(None, description="Error message if price could not be fetched")
     error_code: Optional[str] = Field(None, description="'RATE_LIMITED' when the provider refused for too many requests or is paused: the price is then the last one stored, if any")
     retry_after: Optional[float] = Field(None, ge=0, description="With RATE_LIMITED: seconds until the provider may be called again")
+    range_change: Optional[FARangeChange] = Field(None, description="With range_start: the change from the reference of the range to this price (X-R59), the one the page shows with a live quote")
 
 
 class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
@@ -378,16 +387,13 @@ class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
 # ============================================================================
 
 
-#: The most assets one fixed-period changes request may list (MF-P2b): the Assets table sends every asset it lists.
-PERIOD_CHANGES_MAX_ASSETS = 10_000
-
-
 class FAPeriodChangesQueryItem(StrictModel):
     """One asset of a fixed-period changes request: the Assets table's Δ columns (1D … 5Y), up to ``as_of``."""
 
     asset_id: int = Field(..., description="Asset ID")
     as_of: PeriodChangesAsOf = Field(..., description="Anchor day: the end of the range the table shows (1900-01-01 or later)")
     target_currency: Optional[str] = Field(None, description="Value the prices in this currency, each day's at that day's rate (None = native currency)")
+    range_start: Optional[PeriodChangesAsOf] = Field(None, description="First day of the range the page shows: asks its whole-range change (X-R59); on or before as_of")
 
     @field_validator("target_currency")
     @classmethod
@@ -396,13 +402,19 @@ class FAPeriodChangesQueryItem(StrictModel):
             return Currency.validate_code(v)
         return v
 
+    @model_validator(mode="after")
+    def validate_range_start(self) -> FAPeriodChangesQueryItem:
+        if self.range_start is not None and self.range_start > self.as_of:
+            raise ValueError(f"range_start ({self.range_start}) must be on or before as_of ({self.as_of})")
+        return self
+
 
 class FAPeriodChange(StrictModel):
     """The change of an asset's price over one fixed period, as a fraction (0.05 = +5 %)."""
 
     key: str = Field(..., description="Period key: 1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y")
     days: int = Field(..., ge=1, description="Calendar days of the period")
-    change_ratio: Optional[SafeDecimal] = Field(None, description="(Price on as_of ÷ price on as_of − days) − 1; null without a usable price on either day")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="(Price on as_of ÷ price on as_of − days) − 1; −1 for a price of 0 on as_of; null without a usable price on either day")
 
 
 class FAPeriodChangesResult(StrictModel):
@@ -416,6 +428,7 @@ class FAPeriodChangesResult(StrictModel):
     as_of: date_type = Field(..., description="Anchor day")
     currency: Optional[str] = Field(None, description="Currency of the compared prices: target_currency when given, else the asset's own on as_of (null with no price up to as_of)")
     periods: List[FAPeriodChange] = Field(default_factory=list, description="One entry per fixed period, in display order")
+    range_change: Optional[FARangeChange] = Field(None, description="The whole-range change, when range_start was asked")
     errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. a missing FX rate)")
 
 

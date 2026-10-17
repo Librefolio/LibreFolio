@@ -68,9 +68,15 @@ def _integrity_ok(conn: sqlite3.Connection) -> bool:
     return conn.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
 
 
+def _quoted(name: str) -> str:
+    """``name`` as an SQL identifier, in double quotes with its own doubled (B-36): a restore's check runs these fixes on
+    an archive's database, whose tables may be named anything."""
+    return '"' + name.replace('"', '""') + '"'
+
+
 def _row_counts(conn: sqlite3.Connection) -> dict[str, int]:
     names = [name for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
-    return {name: conn.execute(f'SELECT count(*) FROM "{name}"').fetchone()[0] for name in names}
+    return {name: conn.execute(f"SELECT count(*) FROM {_quoted(name)}").fetchone()[0] for name in names}
 
 
 def _fk_violations(conn: sqlite3.Connection) -> set[tuple]:
@@ -213,6 +219,9 @@ def run_post_migration_fixes(db_path: Path, data_dir: Optional[Path] = None, *, 
         ctx = FixContext(db_path=db_path, data_dir=Path(data_dir) if data_dir is not None else None, timestamp=datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"), report=report)
         conn = sqlite3.connect(str(db_path), isolation_level=None, timeout=_BUSY_TIMEOUT)
         try:
+            # Before anything else, as every connection to a restore's copy (B-28, B-37): the schema of an archive's
+            # database reaches no function that is not harmless. LibreFolio's own holds only tables and indexes.
+            conn.execute("PRAGMA trusted_schema=OFF")
             if not _integrity_ok(conn):
                 report.integrity_ok = False
                 report.errors.append("integrity_check did not answer ok: no fix applied")

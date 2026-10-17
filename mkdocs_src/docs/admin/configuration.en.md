@@ -55,6 +55,7 @@ the same sample as `.env`.
 | `LIBREFOLIO_IDLE_SUSPEND_MINUTES` | `5` | Read only with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly`: the minutes without a user's request before the machine is suspended, a whole number from `1` to `1440`. A value that cannot be used does not stop the server either: the log has an error at startup, and 5 minutes apply. See [Idle Suspension](sleep_wake.md#idle-suspend). |
 | `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` | `60` | The first pause of a price provider that answers «too many requests» (HTTP 429): no request reaches it until the pause ends, and each refusal in a row doubles the next one. A whole number of seconds from `0` to `86400`; `0` turns the pauses off, as before release 1.3. On by default, by developer decision 34: an exception to the rule that a new option leaves an install as it was. A value that cannot be used does not stop the server either: the log has an error, and both defaults apply. See [Provider Pauses](sleep_wake.md#provider-pauses). |
 | `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS` | `3600` | The longest pause the doubling reaches: a whole number of seconds from `1` to `86400`, not below the first pause while the pauses are on. A provider's `Retry-After` may still ask for more, up to one day. A value that cannot be used does not stop the server either: the log has an error, and both defaults apply. See [Provider Pauses](sleep_wake.md#provider-pauses). |
+| `LIBREFOLIO_PROBE_RATE_LIMIT` | `30` | How many times a minute one user may test a price provider's settings (**Test Configuration** in the asset form), which may call the provider. A whole number from `0` to `10000`; `0` turns the limit off, for a test instance only (`./dev.py server --test` does it), and the log has a warning at every start. Read when the server starts. A value that cannot be used does not stop the server: the log has an error, and `30` applies. |
 | `LIBREFOLIO_BRIM_PREWARM` | `false` (`true` in test mode) | Optional. `true` makes the broker-import workers ready at startup, with the import plugins loaded: the first broker import after a start is then about 4 seconds faster, for about 80 MB of memory held from the start and about 1.4 seconds of CPU at every start. Off by default, by decision N56: on a small cloud machine, that memory and CPU cost more than the seconds they save. `true` or `false`; `1`/`0`, `yes`/`no` and `on`/`off` work too, in any case. Any other value does not stop the server, unlike the main options: the log has a warning at startup, and it stays off. See [BRIM Architecture → Preload and warm-up](../developer/backend/brim/architecture.md#parse-pool-warm-up). |
 | `LIBREFOLIO_SMTP_HOST` | _not set_: email off | Optional. The SMTP server that sends LibreFolio's emails, such as `smtp.example.com`. See [Email](email.md#variables). |
 | `LIBREFOLIO_SMTP_TLS` | `starttls` | How the connection to the SMTP server is encrypted: `starttls`, `tls` or `none`. See [Encryption Modes](email.md#encryption-modes). |
@@ -330,7 +331,10 @@ reports them as unreadable, and never uses a wrong value. The tab says so under 
 one: *Saved, but this instance's key cannot read it. If an administrator can put the old key back,
 that comes first; otherwise enter it again.* If you still have the old
 key, put it back before anyone enters them again: a secret entered under the new key would become
-unreadable once the old one is back. From the first start after the change, and at every start
+unreadable once the old one is back. To bring them into another installation, which keeps its own
+key, restore a backup there with the old key: `backup restore` with `--instance-key-file`
+re-encrypts them with that installation's key ([The Instance Key of Another
+Installation](cli_tools.md#backup-restore-instance-key)). From the first start after the change, and at every start
 until they are entered again or the old key is back, the log has an error that counts the
 instance-wide ones, if there are any: see [Startup Checks](#startup-checks).
 
@@ -407,7 +411,7 @@ is one, never the secret. Fix it, then start
 again.
 
 In the `managed` profile, `LIBREFOLIO_TEST_MODE` on outside LibreFolio's own test runs stops the start as well, with
-`In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID): …; unset LIBREFOLIO_TEST_MODE`
+`In the managed profile LIBREFOLIO_TEST_MODE must not be on outside a test lane (no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters): …; unset LIBREFOLIO_TEST_MODE`
 in the console output: remove the variable, then start again (see
 [Hosting for Others](hosting_providers.md#managed-profile)).
 

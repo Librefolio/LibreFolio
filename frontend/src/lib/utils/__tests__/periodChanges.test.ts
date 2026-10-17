@@ -17,19 +17,21 @@
  *   - `fetchAssetPeriodChanges`, `fetchFxPeriodChanges`: one call each through `zodiosApi.post`, every asset (pair) in
  *     the order given, up to `as_of`, and none for an empty list; the periods of the first item that has any; each
  *     item's changes in percent, a pair's in both orientations (`direct`, `inverse`) under `BASE/QUOTE`; a failed call
- *     rejects, for the page to handle.
+ *     rejects, for the page to handle;
+ *   - `PeriodChangesLedger` (lot X-R60): which answer of those calls a list keeps when several are in flight and land in
+ *     any order, whether the list is busy, and what a failed call leaves on screen.
  *
  * `$lib/api` is mocked: `post` answers what each case gives it, shaped as the generated client declares the answers
  * (`FAPeriodChangesResponse`, `FXPeriodChangesResponse`).
  *
- * Red today: the module does not exist, so the file fails to load.
+ * Red today (X-R60): the module exports no `PeriodChangesLedger`, so its describe fails; every other case stays green.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 const post = vi.hoisted(() => vi.fn<(path: string, body: unknown) => Promise<unknown>>());
 vi.mock('$lib/api', () => ({zodiosApi: {post}, ApiError: class ApiError extends Error {}, axiosInstance: {}}));
 
-import {fetchAssetPeriodChanges, fetchFxPeriodChanges, ratioToPercent, visiblePeriodColumns, type PeriodSpec} from '../periodChanges';
+import {fetchAssetPeriodChanges, fetchFxPeriodChanges, PeriodChangesLedger, ratioToPercent, visiblePeriodColumns, type PeriodChangesTicket, type PeriodDeltas, type PeriodSpec} from '../periodChanges';
 
 const ASSET_PATH = '/api/v1/assets/prices/period-changes';
 const FX_PATH = '/api/v1/fx/currencies/period-changes';
@@ -316,5 +318,501 @@ describe('fetchFxPeriodChanges — the FX list’s Δ columns, in both orientati
         post.mockRejectedValueOnce(failure);
 
         await expect(fetchFxPeriodChanges([{base: 'EUR', quote: 'USD'}], AS_OF)).rejects.toBe(failure);
+    });
+});
+
+/**
+ * PeriodChangesLedger — which answer of the period changes a list keeps (workstream X, lot X-R60).
+ *
+ * A list asks its period changes in two shapes: every key it lists at once (`full`: the load, a reload, a new range) and,
+ * on the FX list, one pair alone after its refresh or sync. Several can be in flight together and land in any order. The
+ * pages tell the ledger when each request begins (`begin`) and when it is over (`end`, in a `finally`, answered or not),
+ * and the ledger says what an answer (`settle`) or a failure (`fail`) leaves on screen — a new map, or null when nothing
+ * is to change:
+ *   1. a full request replaces every request begun before it;
+ *   2. a one-key request begun after a full one is fresher for its keys than that full one, whichever lands first;
+ *   3. a one-key request begun before a newer full one is moot;
+ *   4. of two one-key requests for one key, the later-begun wins, whatever the landing order;
+ *   5. a full answer drops the keys it lacks, unless a one-key answer begun after it wrote them;
+ *   6. the list is busy while a request still kept is in flight, a one-key request alone included, a moot one not;
+ *   7. a failed full request still kept keeps the values asked up to its own day and drops the others; a failed one-key
+ *      request, or a failed full one already replaced, changes nothing;
+ *   8. the map on screen is never written to: every map handed in here throws on a write;
+ *   9. keys are asset ids on the Assets list (numbers), `BASE/QUOTE` on the FX list (strings).
+ *
+ * Every answer lands as the pages land it: `settle` or `fail`, then `end`. The values are labels naming the request
+ * that gave them, so a failure reads which one was kept.
+ *
+ * Red today: `periodChanges.ts` exports no `PeriodChangesLedger` — every case fails at its first `new`.
+ */
+describe('PeriodChangesLedger — the answer a list keeps, whatever order its requests land in (X-R60)', () => {
+    /** The end of the range on screen: what each request asks up to, unless a case moves it. */
+    const DAY = '2026-10-16';
+    /** The end of the range the list showed before the user moved it. */
+    const EARLIER_DAY = '2026-09-30';
+
+    /** A map as a list shows it, handed to the ledger: any write to it throws, where it is made. */
+    function onScreen<K, V>(entries: Iterable<readonly [K, V]> = []): ReadonlyMap<K, V> {
+        const shown = new Map<K, V>(entries);
+        for (const write of ['set', 'delete', 'clear'] as const) {
+            Object.defineProperty(shown, write, {
+                value: () => {
+                    throw new Error(`the ledger wrote to the map on screen (${write}): it must return a new one`);
+                },
+            });
+        }
+        return shown;
+    }
+
+    /** An answer of the backend: each key's values. */
+    function answer<K, V>(...entries: Array<[K, V]>): ReadonlyMap<K, V> {
+        return new Map(entries);
+    }
+
+    /**
+     * A request's answer landing as the pages land it — `settle`, then `end` in a `finally` — and what the list shows
+     * after: the map the ledger returned, or what it showed already when the answer is not kept.
+     */
+    function land<K, V>(ledger: PeriodChangesLedger<K>, ticket: PeriodChangesTicket, shown: ReadonlyMap<K, V>, values: ReadonlyMap<K, V>): {kept: boolean; shown: ReadonlyMap<K, V>} {
+        try {
+            const next = ledger.settle(ticket, shown, values);
+            return {kept: next !== null, shown: next === null ? shown : onScreen(next)};
+        } finally {
+            ledger.end(ticket);
+        }
+    }
+
+    /** A request failing as the pages fail it — `fail`, then `end` in a `finally` — and what the list shows after. */
+    function failed<K, V>(ledger: PeriodChangesLedger<K>, ticket: PeriodChangesTicket, shown: ReadonlyMap<K, V>): {changed: boolean; shown: ReadonlyMap<K, V>} {
+        try {
+            const next = ledger.fail(ticket, shown);
+            return {changed: next !== null, shown: next === null ? shown : onScreen(next)};
+        } finally {
+            ledger.end(ticket);
+        }
+    }
+
+    /** The list once it has loaded: one full request up to `asOf`, answered with `entries`. */
+    function loaded<K, V>(ledger: PeriodChangesLedger<K>, asOf: string, ...entries: Array<[K, V]>): ReadonlyMap<K, V> {
+        const step = land(ledger, ledger.begin(asOf, true), onScreen<K, V>(), answer(...entries));
+        expect(step.kept, 'premise: the answer of a lone full request is kept').toBe(true);
+        return step.shown;
+    }
+
+    it('shows the answer of a lone full request, whole', () => {
+        const ledger = new PeriodChangesLedger<string>();
+
+        const step = land(ledger, ledger.begin(DAY, true), onScreen<string, string>(), answer(['EUR/USD', 'load'], ['CHF/EUR', 'load']));
+
+        expect(step.kept).toBe(true);
+        expect(step.shown).toEqual(
+            new Map([
+                ['EUR/USD', 'load'],
+                ['CHF/EUR', 'load'],
+            ]),
+        );
+    });
+
+    it('1 · a full request replaces the full ones begun before it: an older answer landing first is not kept', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load']);
+        const older = ledger.begin(DAY, true);
+        const newer = ledger.begin(DAY, true);
+
+        // Landing order: the older reload, then the newer one.
+        const first = land(ledger, older, shown, answer(['EUR/USD', 'older']));
+        expect(first.kept, 'a newer full request began after it: the older answer is not kept').toBe(false);
+        expect(first.shown).toEqual(new Map([['EUR/USD', 'load']]));
+        const second = land(ledger, newer, first.shown, answer(['EUR/USD', 'newer']));
+
+        expect(second.shown).toEqual(new Map([['EUR/USD', 'newer']]));
+    });
+
+    it('1 · … nor, landing after the newer answer, does it undo it', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load']);
+        const older = ledger.begin(DAY, true);
+        const newer = ledger.begin(DAY, true);
+
+        // Landing order: the newer reload, then the older one.
+        const first = land(ledger, newer, shown, answer(['EUR/USD', 'newer']));
+        const second = land(ledger, older, first.shown, answer(['EUR/USD', 'older']));
+
+        expect(second.kept, 'the older answer lands last, and is still not kept').toBe(false);
+        expect(second.shown).toEqual(new Map([['EUR/USD', 'newer']]));
+    });
+
+    it('1 · a full request also replaces what a one-key request wrote before it began', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load']);
+        const refreshed = land(ledger, ledger.begin(DAY, false), shown, answer(['EUR/USD', 'refresh']));
+        expect(refreshed.shown, 'premise: the refresh, begun after the load, is shown').toEqual(
+            new Map([
+                ['EUR/USD', 'refresh'],
+                ['CHF/EUR', 'load'],
+            ]),
+        );
+
+        const step = land(ledger, ledger.begin(DAY, true), refreshed.shown, answer(['EUR/USD', 'reload'], ['CHF/EUR', 'reload']));
+
+        expect(step.shown, 'the reload began after the refresh: it is the fresher for every pair').toEqual(
+            new Map([
+                ['EUR/USD', 'reload'],
+                ['CHF/EUR', 'reload'],
+            ]),
+        );
+    });
+
+    it('2 · a one-key request begun after a full one is fresher for its key: the full answer, landing last, keeps it and applies the other keys', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load']);
+        const reload = ledger.begin(DAY, true);
+        const refresh = ledger.begin(DAY, false);
+
+        // Landing order: the pair's own refresh, then the reload of every pair.
+        const first = land(ledger, refresh, shown, answer(['EUR/USD', 'refresh']));
+        expect(first.shown, 'the refresh is shown as it lands').toEqual(
+            new Map([
+                ['EUR/USD', 'refresh'],
+                ['CHF/EUR', 'load'],
+            ]),
+        );
+        const second = land(ledger, reload, first.shown, answer(['EUR/USD', 'reload'], ['CHF/EUR', 'reload']));
+
+        expect(second.shown, 'EUR/USD keeps its refresh, CHF/EUR takes the reload').toEqual(
+            new Map([
+                ['EUR/USD', 'refresh'],
+                ['CHF/EUR', 'reload'],
+            ]),
+        );
+    });
+
+    it('2 · … and with the full answer landing first, the one-key answer landing after it is applied over it', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load']);
+        const reload = ledger.begin(DAY, true);
+        const refresh = ledger.begin(DAY, false);
+
+        // Landing order: the reload of every pair, then the pair's own refresh.
+        const first = land(ledger, reload, shown, answer(['EUR/USD', 'reload'], ['CHF/EUR', 'reload']));
+        expect(first.shown).toEqual(
+            new Map([
+                ['EUR/USD', 'reload'],
+                ['CHF/EUR', 'reload'],
+            ]),
+        );
+        const second = land(ledger, refresh, first.shown, answer(['EUR/USD', 'refresh']));
+
+        expect(second.kept, 'the refresh began after the reload: it is kept, though it lands last').toBe(true);
+        expect(second.shown).toEqual(
+            new Map([
+                ['EUR/USD', 'refresh'],
+                ['CHF/EUR', 'reload'],
+            ]),
+        );
+    });
+
+    it('3 · a one-key request begun before a newer full one is moot: its answer, landing first, is not kept', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load']);
+        const refresh = ledger.begin(DAY, false);
+        const reload = ledger.begin(DAY, true);
+
+        // Landing order: the refresh, then the reload begun after it.
+        const first = land(ledger, refresh, shown, answer(['EUR/USD', 'refresh']));
+        expect(first.kept, 'a reload of every pair began after the refresh: the refresh is moot').toBe(false);
+        expect(first.shown).toEqual(
+            new Map([
+                ['EUR/USD', 'load'],
+                ['CHF/EUR', 'load'],
+            ]),
+        );
+        const second = land(ledger, reload, first.shown, answer(['EUR/USD', 'reload'], ['CHF/EUR', 'reload']));
+
+        expect(second.shown).toEqual(
+            new Map([
+                ['EUR/USD', 'reload'],
+                ['CHF/EUR', 'reload'],
+            ]),
+        );
+    });
+
+    it('3 · … nor landing last', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load']);
+        const refresh = ledger.begin(DAY, false);
+        const reload = ledger.begin(DAY, true);
+
+        // Landing order: the reload, then the refresh begun before it.
+        const first = land(ledger, reload, shown, answer(['EUR/USD', 'reload'], ['CHF/EUR', 'reload']));
+        const second = land(ledger, refresh, first.shown, answer(['EUR/USD', 'refresh']));
+
+        expect(second.kept, 'the refresh lands last, and is still moot').toBe(false);
+        expect(second.shown).toEqual(
+            new Map([
+                ['EUR/USD', 'reload'],
+                ['CHF/EUR', 'reload'],
+            ]),
+        );
+    });
+
+    it('4 · of two one-key requests for one key, the later-begun wins, landing last', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load']);
+        const earlier = ledger.begin(DAY, false);
+        const later = ledger.begin(DAY, false);
+
+        // Landing order: the earlier refresh, then the later one.
+        const first = land(ledger, earlier, shown, answer(['EUR/USD', 'earlier']));
+        const second = land(ledger, later, first.shown, answer(['EUR/USD', 'later']));
+
+        expect(second.shown).toEqual(
+            new Map([
+                ['EUR/USD', 'later'],
+                ['CHF/EUR', 'load'],
+            ]),
+        );
+    });
+
+    it('4 · … and landing first', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load']);
+        const earlier = ledger.begin(DAY, false);
+        const later = ledger.begin(DAY, false);
+
+        // Landing order: the later refresh, then the earlier one.
+        const first = land(ledger, later, shown, answer(['EUR/USD', 'later']));
+        const second = land(ledger, earlier, first.shown, answer(['EUR/USD', 'earlier']));
+
+        expect(second.shown, 'the earlier refresh lands last: it must not replace the later one').toEqual(
+            new Map([
+                ['EUR/USD', 'later'],
+                ['CHF/EUR', 'load'],
+            ]),
+        );
+    });
+
+    it('4 · one-key requests for different keys are each kept, whatever their order', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load']);
+        const usd = ledger.begin(DAY, false);
+        const chf = ledger.begin(DAY, false);
+
+        // Landing order: the later-begun first.
+        const first = land(ledger, chf, shown, answer(['CHF/EUR', 'refresh']));
+        const second = land(ledger, usd, first.shown, answer(['EUR/USD', 'refresh']));
+
+        expect(second.shown, 'each refresh is the fresher for its own pair').toEqual(
+            new Map([
+                ['EUR/USD', 'refresh'],
+                ['CHF/EUR', 'refresh'],
+            ]),
+        );
+    });
+
+    it('5 · a full answer drops the keys it lacks', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load'], ['GBP/JPY', 'load']);
+
+        const step = land(ledger, ledger.begin(DAY, true), shown, answer(['EUR/USD', 'reload'], ['CHF/EUR', 'reload']));
+
+        expect(step.shown, 'GBP/JPY is not in the reload: its figures go').toEqual(
+            new Map([
+                ['EUR/USD', 'reload'],
+                ['CHF/EUR', 'reload'],
+            ]),
+        );
+    });
+
+    it('5 · … unless a one-key request begun after it wrote them', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load'], ['GBP/JPY', 'load']);
+        const reload = ledger.begin(DAY, true);
+        const refresh = ledger.begin(DAY, false);
+
+        // Landing order: GBP/JPY's own refresh, then the reload that lacks it.
+        const first = land(ledger, refresh, shown, answer(['GBP/JPY', 'refresh']));
+        const second = land(ledger, reload, first.shown, answer(['EUR/USD', 'reload'], ['CHF/EUR', 'reload']));
+
+        expect(second.shown).toEqual(
+            new Map([
+                ['EUR/USD', 'reload'],
+                ['CHF/EUR', 'reload'],
+                ['GBP/JPY', 'refresh'],
+            ]),
+        );
+    });
+
+    it('5 · … while a key a one-key request wrote before the full one began goes as well', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['GBP/JPY', 'load']);
+        const refreshed = land(ledger, ledger.begin(DAY, false), shown, answer(['GBP/JPY', 'refresh']));
+
+        const step = land(ledger, ledger.begin(DAY, true), refreshed.shown, answer(['EUR/USD', 'reload']));
+
+        expect(step.shown, 'the refresh is older than the reload, which no longer lists GBP/JPY').toEqual(new Map([['EUR/USD', 'reload']]));
+    });
+
+    it('6 · busy while a request still kept is in flight — a one-key request alone included — and no longer once each has ended', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        expect(ledger.busy, 'nothing asked yet').toBe(false);
+
+        const refresh = ledger.begin(DAY, false);
+        expect(ledger.busy, 'a pair’s own request alone holds the list busy').toBe(true);
+        ledger.end(refresh);
+        expect(ledger.busy).toBe(false);
+
+        const reload = ledger.begin(DAY, true);
+        expect(ledger.busy).toBe(true);
+        const later = ledger.begin(DAY, false);
+        ledger.end(reload);
+        expect(ledger.busy, 'the reload is over; the refresh begun after it is still in flight').toBe(true);
+        ledger.end(later);
+        expect(ledger.busy, 'every request has ended').toBe(false);
+    });
+
+    it('6 · a moot request does not hold the list busy', () => {
+        const ledger = new PeriodChangesLedger<string>();
+
+        const refresh = ledger.begin(DAY, false);
+        const reload = ledger.begin(DAY, true);
+        ledger.end(reload);
+        expect(ledger.busy, 'only the refresh is in flight, and a reload began after it: its answer would not be kept').toBe(false);
+        ledger.end(refresh);
+        expect(ledger.busy).toBe(false);
+
+        const older = ledger.begin(DAY, true);
+        const newer = ledger.begin(DAY, true);
+        ledger.end(newer);
+        expect(ledger.busy, 'only the replaced reload is in flight').toBe(false);
+        ledger.end(older);
+        expect(ledger.busy).toBe(false);
+    });
+
+    it('7 · a failed full request keeps the values asked up to its own day', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load']);
+
+        const step = failed(ledger, ledger.begin(DAY, true), shown);
+
+        expect(step.shown, 'a refresh of the same range failed: the figures of that day stay').toEqual(
+            new Map([
+                ['EUR/USD', 'load'],
+                ['CHF/EUR', 'load'],
+            ]),
+        );
+    });
+
+    it('7 · … and drops those asked up to another day', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, EARLIER_DAY, ['EUR/USD', 'earlier'], ['CHF/EUR', 'earlier']);
+
+        const step = failed(ledger, ledger.begin(DAY, true), shown);
+
+        expect(step.changed, 'the range moved and its request failed: the figures of the earlier range must go').toBe(true);
+        expect(step.shown).toEqual(new Map());
+    });
+
+    it('7 · … keeping a value a one-key request asked up to the new day', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, EARLIER_DAY, ['EUR/USD', 'earlier'], ['CHF/EUR', 'earlier']);
+        const moved = ledger.begin(DAY, true);
+        const refreshed = land(ledger, ledger.begin(DAY, false), shown, answer(['EUR/USD', 'refresh']));
+        expect(refreshed.shown, 'premise: the refresh, begun after the move, is shown').toEqual(
+            new Map([
+                ['EUR/USD', 'refresh'],
+                ['CHF/EUR', 'earlier'],
+            ]),
+        );
+
+        const step = failed(ledger, moved, refreshed.shown);
+
+        expect(step.shown, 'EUR/USD was asked up to the new day, CHF/EUR up to the earlier one').toEqual(new Map([['EUR/USD', 'refresh']]));
+    });
+
+    it('7 · a failed one-key request changes nothing', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, DAY, ['EUR/USD', 'load'], ['CHF/EUR', 'load']);
+        const refresh = ledger.begin(DAY, false);
+
+        try {
+            expect(ledger.fail(refresh, shown), 'the pair keeps the figures it shows').toBeNull();
+        } finally {
+            ledger.end(refresh);
+        }
+    });
+
+    it('7 · a failed full request a newer one replaced changes nothing', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded(ledger, EARLIER_DAY, ['EUR/USD', 'earlier']);
+        const older = ledger.begin(EARLIER_DAY, true);
+        ledger.begin(DAY, true);
+
+        try {
+            expect(ledger.fail(older, shown), 'the older request is moot: nothing to keep, nothing to drop').toBeNull();
+        } finally {
+            ledger.end(older);
+        }
+    });
+
+    it('8 · settle and fail never write to the map on screen, nor to the values in it', () => {
+        const ledger = new PeriodChangesLedger<string>();
+        const shown = loaded<string, PeriodDeltas>(ledger, DAY, ['EUR/USD', {'1D': 1.25, '1W': -25}], ['CHF/EUR', {'1D': -6.25, '1W': null}]);
+        const before = structuredClone([...shown]);
+        const reload = ledger.begin(DAY, true);
+        const refresh = ledger.begin(DAY, false);
+
+        // Every call is handed the same map, one that throws on a write (`onScreen`).
+        ledger.settle(refresh, shown, answer<string, PeriodDeltas>(['EUR/USD', {'1D': 2.5, '1W': 0}]));
+        ledger.settle(reload, shown, answer<string, PeriodDeltas>(['EUR/USD', {'1D': 0, '1W': 0}], ['GBP/JPY', {'1D': 1, '1W': 1}]));
+        ledger.fail(ledger.begin(DAY, true), shown);
+        ledger.fail(ledger.begin(EARLIER_DAY, true), shown);
+        ledger.fail(ledger.begin(DAY, false), shown);
+
+        expect([...shown], 'the map on screen and its values are as they were').toEqual(before);
+    });
+
+    it('9 · keys may be asset ids: the Assets list', () => {
+        const ledger = new PeriodChangesLedger<number>();
+        const shown = loaded<number, PeriodDeltas>(ledger, DAY, [7, {'1D': 1.25}], [3, {'1D': -6.25}]);
+
+        // The page's refresh over the same range fails: the figures of that day stay.
+        const refreshed = failed(ledger, ledger.begin(DAY, true), shown);
+        expect(refreshed.shown).toEqual(
+            new Map([
+                [7, {'1D': 1.25}],
+                [3, {'1D': -6.25}],
+            ]),
+        );
+
+        // Two reloads; the older one lands last.
+        const older = ledger.begin(DAY, true);
+        const newer = ledger.begin(DAY, true);
+        const first = land(ledger, newer, refreshed.shown, answer<number, PeriodDeltas>([7, {'1D': 2.5}]));
+        const second = land(ledger, older, first.shown, answer<number, PeriodDeltas>([7, {'1D': 0}], [3, {'1D': 0}]));
+
+        expect(second.shown, 'asset 3 is not in the newer answer, and the older one, landing last, is not kept').toEqual(new Map([[7, {'1D': 2.5}]]));
+    });
+
+    it('9 · keys may be BASE/QUOTE: the FX list, each value both ways', () => {
+        type BothWays = {direct: PeriodDeltas; inverse: PeriodDeltas};
+        const ledger = new PeriodChangesLedger<string>();
+        const fresh: BothWays = {direct: {'1D': 1.25}, inverse: {'1D': -4}};
+        const stale: BothWays = {direct: {'1D': -50}, inverse: {'1D': 100}};
+        const chf: BothWays = {direct: {'1D': 0.5}, inverse: {'1D': -0.5}};
+        const shown = loaded<string, BothWays>(ledger, DAY, ['EUR/USD', {direct: {'1D': 0}, inverse: {'1D': 0}}], ['CHF/EUR', {direct: {'1D': 0}, inverse: {'1D': 0}}]);
+        const reload = ledger.begin(DAY, true);
+        const refresh = ledger.begin(DAY, false);
+
+        // Landing order: EUR/USD's own refresh, then the reload of every pair.
+        const first = land(ledger, refresh, shown, answer(['EUR/USD', fresh]));
+        const second = land(ledger, reload, first.shown, answer(['EUR/USD', stale], ['CHF/EUR', chf]));
+
+        expect(second.shown).toEqual(
+            new Map([
+                ['EUR/USD', fresh],
+                ['CHF/EUR', chf],
+            ]),
+        );
     });
 });

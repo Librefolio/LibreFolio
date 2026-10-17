@@ -61,6 +61,11 @@ anomaly and rebuilds the census tables with AUTOINCREMENT. The contract pinned h
     A lock file the run creates gives its owner read and write and group and others nothing (0o600, which the umask
     can only narrow: never pinned exactly). RED until the cure: today ``open(…, "a+")`` follows the link — creating a
     dangling one's target — and runs the fixes, and creates the file 0o666 less the umask (0o644 under the usual 0o022).
+17. Table names a database brings are quoted (B-36: the fixes run on a restored archive's copy too, whose names are
+    user data). A 1.1 database at head, ``autoincrement`` pending, also holding a table named ``x"y`` and one named
+    ``a" WHERE 1 --``: the run applies the fix with no exception and no error, every count of rows it takes
+    (``_row_counts``) holds both tables with their rows, they keep them, no backup left. RED until the cure: today
+    ``_row_counts`` puts the name between double quotes as it is, and the run raises ``OperationalError``.
 
 The 1.1 database is real: ``fixtures/db/schema_v1_1_0.sql`` (the v1.1.0 schema at revision
 5b1333fa6b07), populated here with foreign keys on — every table, rows of non-census tables pointing
@@ -1746,3 +1751,68 @@ def test_the_lock_file_a_run_creates_is_its_owners_alone(tmp_path: Path) -> None
     assert report.outcomes.get(FIX) == "clean", f"barrier: the run went through its detection, under its lock: {report.outcomes}"
     filemode, owner, others = _mode_bits(lock)
     assert (filemode[0], owner, others) == ("-", oct(OWNER_RW), oct(0)), f"{lock.name} was created {filemode}: a regular file its owner reads and writes, group and others nothing (0o600, which the umask can only narrow)"
+
+
+# =============================================================================
+# 17. TABLE NAMES A DATABASE BRINGS, QUOTED (B-36)
+# =============================================================================
+#
+# The fixes run on a restored archive's copy too (``staging``), whose tables the archive names: a name is user data. A
+# name holding a double quote broke the count of every table's rows (``_row_counts``), and one built as ``a" WHERE 1
+# --`` turned that count into another statement. The file's own readers (``_rows``) quote as the code did, so this
+# section reads its odd tables with ``_quoted``.
+
+#: Tables an archive may bring (B-36), with their rows: a name holding a double quote, and one that, unquoted, ends the
+#: name and comments the rest out.
+ODD_TABLES: dict[str, list[tuple[int]]] = {'x"y': [(1,), (2,), (3,)], 'a" WHERE 1 --': [(7,), (8,)]}
+
+
+def _quoted(name: str) -> str:
+    """A name as SQL quotes it: between double quotes, each double quote it holds doubled."""
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _add_odd_tables(db: Path) -> None:
+    """``ODD_TABLES``, created in ``db`` with their rows."""
+    with _connect(db) as conn, conn:
+        for name, rows in ODD_TABLES.items():
+            conn.execute(f"CREATE TABLE {_quoted(name)} (v INTEGER)")
+            conn.executemany(f"INSERT INTO {_quoted(name)} (v) VALUES (?)", rows)
+
+
+def _odd_rows(db: Path) -> dict[str, list[tuple[Any, ...]]]:
+    """The rows of each of ``ODD_TABLES`` in ``db``."""
+    with _connect(db) as conn:
+        return {name: sorted(conn.execute(f"SELECT v FROM {_quoted(name)}").fetchall()) for name in ODD_TABLES}
+
+
+def test_a_table_name_holding_a_double_quote_is_counted_and_the_pending_fix_applied(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Contract 17 (B-36, RED): a 1.1 database at head — ``autoincrement`` pending — that also holds a table named
+    ``x"y`` and one named ``a" WHERE 1 --``. The run applies the fix without an exception and reports no error; every
+    count of rows it takes (``_row_counts``, before and after the fix) holds the two tables with their rows; they keep
+    their rows; the census converted, no backup left. Today ``_row_counts`` writes ``FROM "x"y"`` (a syntax error) and
+    ``FROM "a" WHERE 1 --"`` (a table ``a`` that does not exist): ``OperationalError``, out of the run."""
+    db = _build_v110_db(tmp_path / "sqlite" / "app.db")
+    _add_odd_tables(db)
+    rows_before = _odd_rows(db)
+    counted: list[dict[str, int]] = []
+    real_row_counts = post_migration._row_counts
+
+    def row_counts(conn: sqlite3.Connection) -> dict[str, int]:
+        counts = real_row_counts(conn)
+        counted.append(counts)
+        return counts
+
+    monkeypatch.setattr(post_migration, "_row_counts", row_counts)
+    try:
+        report = post_migration.run_post_migration_fixes(db, None)
+    except sqlite3.Error as exc:
+        pytest.fail(f"the run raised {type(exc).__name__} on a table whose name holds a double quote: {exc}")
+
+    assert (report.outcomes.get(FIX), report.errors, report.integrity_ok) == ("applied", [], True), f"the pending fix applied, no error: {report.outcomes}, {report.errors}"
+    assert counted, "barrier: the run counts the rows of every table (_row_counts) around the fix it applies"
+    expected = {name: len(rows) for name, rows in ODD_TABLES.items()}
+    odd_counts = [{name: counts.get(name) for name in ODD_TABLES} for counts in counted]
+    assert all(found == expected for found in odd_counts), f"every count of the run holds the odd tables with their rows, {expected}: {odd_counts}"
+    assert _odd_rows(db) == rows_before, "the odd tables keep their rows"
+    assert (_autoincrement_tables(_master(db)), _backups(db)) == (CENSUS, []), "the census converted, no backup left"

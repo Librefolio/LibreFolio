@@ -45,3 +45,17 @@ def last_on_or_before(values: Mapping[date, Decimal], day: date) -> Decimal | No
     """The value of the last day on or before ``day``: the backward fill both services and pages rely on."""
     candidates = [stored for stored in values if stored <= day]
     return values[max(candidates)] if candidates else None
+
+
+def first_carried_day(values: Mapping[date, Decimal], after: date, before: date) -> date:
+    """The first day after ``after`` and before ``before`` with nothing stored on it, a value carried from an earlier
+    day, and that value other than the one on ``before``: a range start whose reference is backward-filled, over a range
+    ending on ``before`` whose change is not 0 (X-R59). AssertionError when the data has no such day."""
+    anchor = last_on_or_before(values, before)
+    day = after + timedelta(days=1)
+    while day < before:
+        carried = last_on_or_before(values, day)
+        if day not in values and carried is not None and carried != anchor:
+            return day
+        day += timedelta(days=1)
+    raise AssertionError(f"no carried day with a value other than {anchor} between {after} and {before}")

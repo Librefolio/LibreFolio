@@ -29,4 +29,4 @@ export interface AccountsUsage {
     billing_url?: string | null;
 }
 
-export type UserAction = 'deactivate' | 'reactivate' | 'promote' | 'demote' | 'reset-link' | 'sign-out' | 'restart-guides' | 'delete';
+export type UserAction = 'deactivate' | 'reactivate' | 'cancel-setup' | 'promote' | 'demote' | 'reset-link' | 'sign-out' | 'restart-guides' | 'delete';
