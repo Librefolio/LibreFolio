@@ -16,7 +16,7 @@ from backend.app.schemas.portfolio import (
     IssueDomain,
     IssueSeverity,
 )
-from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
+from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, ShareMismatch
 
 
 def normalize_fx_pair_slug(pair: str) -> str:
@@ -78,6 +78,7 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     missing_cost_basis_assets: list[tuple[int, str]] | None = None,
     valued_at_cost_assets_dto: list | None = None,
     classifier_warnings: list[str] | None = None,
+    share_mismatches: Sequence[ShareMismatch] | None = None,
     mwrr_available: bool = True,
     configured_fx_pairs: set[str] | None = None,
     real_provider_fx_pairs: set[str] | None = None,
@@ -94,6 +95,12 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     is not known (a TRANSFER or ADJUSTMENT adding quantity without cost_basis_override): it
     counts at zero cost, so their purchase cost and P&L are incomplete.
     If None, the report still populates date-level fields.
+
+    share_mismatches (J-43): the engine's linked internal pairs between brokers owned at
+    different shares. Each leg counts at its own broker's share, so the gap between them is a
+    result (D-MF4 = a); one INFO issue counts the pairs complete by ``period_to`` (a pair before
+    ``period_from`` too: its result is in the cumulative figures), and
+    ``share_mismatch_warnings`` names them. Neither changes ``data_quality_status``.
 
     period_from / period_to bound the window the caller is actually showing.
     ``daily_states`` always starts at the first transaction — ``get_summary``
@@ -321,11 +328,33 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
             )
         )
 
+    # TRANSFER_SHARE_MISMATCH — info (J-43): the transfers between brokers owned at different shares, complete by period_to
+    reported_mismatches = [mismatch for mismatch in share_mismatches or () if period_to is None or mismatch.date <= period_to]
+    if reported_mismatches:
+        issues.append(
+            DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.TRANSFER_SHARE_MISMATCH,
+                severity=IssueSeverity.INFO,
+                message_i18n_key="dataQuality.transferShareMismatch",
+                message_params={"count": len(reported_mismatches)},
+                count=len(reported_mismatches),
+                group_key="transfer_share_mismatch",
+            )
+        )
+
     return DataQualityReport(
         issues=issues,
         missing_price_assets=missing_price_assets_dto or [],
         missing_fx_pairs=missing_fx_pairs_dto or [],
         stale_prices=stale_prices_dto or [],
         incomplete_nav_dates=incomplete_nav,
+        share_mismatch_warnings=[_share_mismatch_text(mismatch) for mismatch in reported_mismatches],
         warnings=classifier_warnings or [],
     )
+
+
+def _share_mismatch_text(mismatch: ShareMismatch) -> str:
+    """One pair at different shares, in the shape of the classifier's warning (``Linked internal pair (id, id): …``)."""
+    (low_id, high_id), (low_broker, high_broker), (low_share, high_share) = mismatch.tx_ids, mismatch.broker_ids, mismatch.shares
+    return f"Linked internal pair ({low_id}, {high_id}): share mismatch broker {low_broker}={low_share} vs broker {high_broker}={high_share}, complete on {mismatch.date.isoformat()}"
