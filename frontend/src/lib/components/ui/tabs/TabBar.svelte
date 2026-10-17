@@ -25,7 +25,7 @@
         /** When true, tabs always stretch to fill 100% of the available width (equal share each),
          *  at every breakpoint — not just below `sm:`. Default false preserves today's behavior
          *  (natural content width above `sm:`), needed e.g. by settings/+page.svelte which relies
-         *  on tabs NOT filling full width to push its "admin" tab to the right via `sm:ml-auto`. */
+         *  on tabs NOT filling full width to push its «Administration» group to the right via `sm:ml-auto`. */
         fillWidth?: boolean;
         /** Opt-in (default false — settings/files stay untouched): when a Tab's label would
          *  otherwise wrap onto a second line (e.g. FR "Vue d'ensemble"), shrink ALL labels in
@@ -34,9 +34,10 @@
          *  the only things that ever make a label disappear entirely — this only ever resizes. */
         shrinkLabelsToFit?: boolean;
         /** Opt-in (default false — the other bars keep their markup): when the tabs do not fit, the row scrolls
-         *  sideways instead of being clipped by the card around it (settings, seven tabs for an administrator), and
-         *  the active tab is kept whole in view — on a change of tab, a resize, or a language switch. The row still
-         *  fills the bar when there is room, so a tab's `ml-auto` keeps pushing it to the right. */
+         *  sideways instead of being clipped by the card around it (the settings bars, in French or Spanish on a
+         *  narrow screen), and the active tab is kept whole in view — on a change of tab, a resize, or a language
+         *  switch. The sides that hide tabs fade out (`data-fade`: none, start, end or both; a mask, no colour). The
+         *  row still fills the bar when there is room, so a tab's `ml-auto` keeps pushing it to the right. */
         scrollable?: boolean;
     }
 
@@ -94,6 +95,26 @@
     // scrollable: the box that scrolls the row sideways, and the active tab kept whole inside it.
     let scrollerRef = $state<HTMLDivElement | null>(null);
 
+    // scrollable: the sides where more tabs are hidden, faded by a mask (P13 a). No colour: the mask only takes alpha,
+    // so the fade follows the bar's own roles in both themes. Whole literals, so Tailwind generates each class.
+    type Fade = 'none' | 'start' | 'end' | 'both';
+    const FADE_CLASSES: Record<Fade, string> = {
+        none: '',
+        start: 'mask-l-from-[calc(100%-1.5rem)]',
+        end: 'mask-r-from-[calc(100%-1.5rem)]',
+        both: 'mask-l-from-[calc(100%-1.5rem)] mask-r-from-[calc(100%-1.5rem)]',
+    };
+    let fade = $state<Fade>('none');
+
+    /** Which sides hide tabs now: more on the left once scrolled, more on the right while the row is wider. */
+    function updateFade() {
+        const scroller = scrollerRef;
+        if (!scroller) return;
+        const start = scroller.scrollLeft > 1;
+        const end = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
+        fade = start && end ? 'both' : start ? 'start' : end ? 'end' : 'none';
+    }
+
     /** Scrolls the bar — never the page — just enough to show the active tab whole. */
     function revealActiveTab() {
         const scroller = scrollerRef;
@@ -109,10 +130,14 @@
         const el = scrollerRef;
         const row = containerRef;
         if (!el) return;
-        const ro = new ResizeObserver(() => revealActiveTab());
+        const ro = new ResizeObserver(() => {
+            revealActiveTab();
+            updateFade();
+        });
         ro.observe(el);
         // The row too: it can grow while the bar keeps its size (a web font arriving late).
         if (row) ro.observe(row);
+        updateFade();
         return () => ro.disconnect();
     });
 
@@ -121,7 +146,10 @@
         if (!scrollable) return;
         void activeTab;
         void tabs.map((t) => t.label).join('|');
-        requestAnimationFrame(() => revealActiveTab());
+        requestAnimationFrame(() => {
+            revealActiveTab();
+            updateFade();
+        });
     });
 </script>
 
@@ -160,7 +188,7 @@
 {#if scrollable}
     <!-- Sideways scroll instead of clipping: the row is at least as wide as the bar, so ml-auto still pushes the
          right-hand group while the tabs fit, and wider than the bar when they do not. -->
-    <div bind:this={scrollerRef} class="overflow-x-auto [scrollbar-width:thin]" data-testid="tab-bar-scroller">
+    <div bind:this={scrollerRef} class={['overflow-x-auto [scrollbar-width:thin]', FADE_CLASSES[fade]].filter(Boolean).join(' ')} data-fade={fade} data-testid="tab-bar-scroller" onscroll={updateFade}>
         {@render tabRow()}
     </div>
 {:else}

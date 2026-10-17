@@ -51,7 +51,7 @@ pipenv run ./dev.py server --force
 
 These commands write straight to the database, so they also work while the server is running.
 
-In the app, administrators manage the other accounts and the invitations from the **Users** tab of **Settings**: see [Users & Invitations](users.md). The commands below need no browser: use them on a headless server, or to go past the [user limit](configuration.md#user-limit).
+In the app, administrators manage the other accounts and the invitations from the **Users** tab of **Settings › Administration**: see [Users & Invitations](users.md). The commands below need no browser: use them on a headless server, or to go past the [user limit](configuration.md#user-limit).
 
 ### ➕ Create and List Users
 
