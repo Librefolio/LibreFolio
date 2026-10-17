@@ -344,3 +344,55 @@ export function formatCellDate(value: Date | string, format?: string, labels: Re
     }
     return date.toLocaleDateString(uiLocale(), {year: 'numeric', month: 'short', day: 'numeric'});
 }
+
+/**
+ * The column order with every column never seen before added at its natural place: right after the last id of the
+ * result that precedes it in `columnIds`, at the start when none does. An id of `order` absent from `columnIds` stays
+ * where it is, so a column that comes and goes — the Δ period columns, listed by the backend once it answers, and
+ * narrowed by the date range — keeps the place the user gave it (Y-27). Nothing new: the same ids, in the same order.
+ */
+export function withNewColumns(order: readonly string[], columnIds: readonly string[]): string[] {
+    const result = [...order];
+    const known = new Set(order);
+    const rank = new Map(columnIds.map((id, index) => [id, index]));
+    for (const id of columnIds) {
+        if (known.has(id)) continue;
+        const own = rank.get(id) ?? -1;
+        let insertAfter = -1;
+        for (let i = 0; i < result.length; i++) {
+            const other = rank.get(result[i]);
+            if (other !== undefined && other < own) insertAfter = i;
+        }
+        result.splice(insertAfter + 1, 0, id);
+        known.add(id);
+    }
+    return result;
+}
+
+/**
+ * A new order of the columns on screen — the column chooser lists only those — with every id of `previousOrder` that
+ * is absent from `columnIds` put back right after the id it followed there (the nearest earlier one already in the
+ * result), or at the start when none precedes it, so reordering never forgets a column that is away (Y-27). An id
+ * present in `columnIds` but missing from `newOrder` (an unlabelled selection column) is not added: the sync effect
+ * places it.
+ */
+export function reorderKeepingAbsent(previousOrder: readonly string[], newOrder: readonly string[], columnIds: readonly string[]): string[] {
+    const result = [...newOrder];
+    const drawn = new Set(columnIds);
+    const placed = new Set(newOrder);
+    for (let i = 0; i < previousOrder.length; i++) {
+        const id = previousOrder[i];
+        if (placed.has(id) || drawn.has(id)) continue;
+        let at = 0;
+        for (let j = i - 1; j >= 0; j--) {
+            const index = result.indexOf(previousOrder[j]);
+            if (index !== -1) {
+                at = index + 1;
+                break;
+            }
+        }
+        result.splice(at, 0, id);
+        placed.add(id);
+    }
+    return result;
+}
