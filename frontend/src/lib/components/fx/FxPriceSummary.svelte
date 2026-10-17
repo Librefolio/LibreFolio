@@ -42,9 +42,9 @@
             {formatFixed(lastRate, 4)}
         </span>
 
-        <!-- Right half: delta % -->
+        <!-- Right half: the backend's Δ over the range (X-R59) -->
         {#if deltaPercent !== null}
-            <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
+            <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="fx-price-summary-range-delta">
                 {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
                 {formatPercent(deltaPercent)}
             </span>

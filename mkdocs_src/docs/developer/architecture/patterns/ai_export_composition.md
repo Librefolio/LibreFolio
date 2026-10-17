@@ -457,17 +457,60 @@ prints a `null` leaf as the literal `null`, which the format preamble declares a
 removed, and the renderer diagnostics count it in `empty_columns_removed`, and also in
 `empty_parent_columns_removed` when it is the parent of nested columns: an amount
 object that is `null` in some rows sits next to the `.code` / `.amount` columns of
-the rows that have it, and those columns read `null` in the other rows. A `null` is
-therefore visible only when another row of the same table has a value. SUMMARY rows —
-the payload's scalar fields outside its tables, in a `field|value` table — are never
-removed, so a fact that must survive a table whose values are all `null` belongs in a
+the rows that have it, and those columns read `null` in the other rows.
+
+A removed column does not vanish silently (T-B7). The line right after the table's last
+row, `omitted_null_columns=a,b`, names the removed columns that held an explicit `null`
+— the backend's "unavailable" — as their header cells would have been written; the
+preamble states the rule and the diagnostics count the names in `null_columns_declared`.
+Three kinds of removed column are not named:
+
+- a parent column, whose values live on in its `parent.child` columns;
+- a column that is empty only because the renderer has nothing for that scope
+  (`undefined`, such as `portfolio_weight_percent` in the price series of one Asset):
+  that column is "not applicable", not "unavailable";
+- a column whose `null` means "none for this row" (J-54). The backend writes every
+  `None` as `null` (`model_dump(mode="json")`), also where nothing of that kind exists,
+  so the renderer reads these columns from one list, `NULL_MEANS_NONE_COLUMNS` in
+  `snapshotDataRenderer.ts`. A name that could carry a real value elsewhere is bound
+  to its table, its component, or both:
+
+| Column | Table | Component | Its `null` means |
+|--------|-------|-----------|------------------|
+| `closing_date` | any | any | an open lot: it has not closed |
+| `reason_code` | any | any | a row with nothing to report |
+| `conversion_reason` | any | any | an amount converted at a known rate |
+| `component` | `OUTPUT DEFINITIONS` | any | a scalar output, not one component of a band |
+| `minimum`, `maximum` | `OUTPUT DEFINITIONS` | any | an output without that bound |
+| `asset_ref` | any | `portfolio.income_timeline` | income not tied to an asset, such as interest on cash |
+| `portfolio_weight_percent`, `technical_normalized_weight_percent` | `PERIOD SUMMARY` | `asset.indicators`, `fx.indicators` | one Asset or FX pair: there is no portfolio to weigh it in |
+
+`partial_reason_code` is not on the list: ENTITY STATUS shows only partial results, so
+a `null` there is a reason nobody knows, and it is named.
+
+A column on that list with a value in some rows keeps printing `null` in the others,
+as every column does: only the declaration of an all-`null` column changes. A new
+entry needs the backend's evidence that the field is `None` only when nothing of that
+kind exists, and a test of its own in `snapshotDataRenderer.test.ts`.
+
+The line follows the table, never its title, so every reader that takes the rows right
+after a title — the probe's table audit and scope checks, the test helpers — keeps
+reading the same table. When a fixed-header table falls back from one payload field to
+another (the price series' `latest_close`, then `latest_rate`), the first field the
+payload carries wins, `null` included, so an unavailable value is never read as an
+absent one. The preamble labels these tables `compact_pipe_tables_v2` and
+`generic_pipe_tables_v2` since this rule (1.3).
+
+SUMMARY rows — the payload's scalar fields outside its tables, in a `field|value` table
+— are never removed, so a fact that has to be counted rather than named belongs in a
 scalar field.
 
 That is the role of `unavailable_amount_lot_count` in `asset.lot_detail`,
 `portfolio.fifo_lots` and `broker.fifo_lots`: always present, 0 included, it counts
 the lots with at least one amount that cannot be valued in the target currency (a
 missing FX rate). Those amounts are `null` — never 0, never the native amount. When
-every lot's amount is unknown, its column is removed and the count is the trace.
+every lot's amount is unknown, its column is removed and named on the
+`omitted_null_columns` line, and the count says how many lots.
 
 The FIFO summaries (`portfolio.fifo_summary`, `broker.fifo_summary`) are strict too:
 an Asset's original cost, residual cost basis, proceeds, realized P&L, income, fees,

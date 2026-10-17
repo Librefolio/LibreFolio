@@ -103,9 +103,10 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
 - **C-52 · La CLI della sonda dell'AI Export non sa scegliere l'Asset né l'utente sintetico** — minimo. Dettagli: 38, C-52.
 - ✅ **C-53 · L'AI Export dice «non riconciliato» per un residuo di rumore** — chiusa nella 1.2 da T, treno 47
   (`876d2b430`). Dettagli: 38, C-53.
-- **C-54 · «Novità dalla tua ultima versione» al login** — medio; **dopo la 1.2**, per decisione del developer (12/10).
+- ✅ **C-54 · «Novità dalla tua ultima versione» al login** — medio; **dopo la 1.2**, per decisione del developer (12/10).
   Al login, una versione più nuova dell'ultima vista apre il modale del changelog sui capitoli non visti, nella
   lingua dell'utente. Dettagli: 38, C-54.
+  ✅ **Fatto da A il 17/10 (A11)** (`737268864`, dev `630c478cd`): `AuthUserResponse.whats_new` e `POST /auth/whats-new/seen`, modale `WhatsNewModal` fra i popup differiti; account `NULL` vedono il capitolo corrente, i nuovi mai.
 - ✅ **C-55 · L'AI Export di un broker senza posizioni non passa i controlli pubblici «invalid HHI points»** — chiusa
   nella 1.2 da T, nel treno 56 (developer, 12/10). Il payload era corretto; sbagliava la sonda, che contava ogni HHI
   nullo come violazione. Dettagli: 38, C-55.
@@ -673,19 +674,21 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 - ✅ **T-B6 · Lotti: la fonte del prezzo di riferimento dice «exact» anche quando il prezzo convertito manca** (chiusa 16/10 dal coordinatore: CP-7a di J, treno 107) — minimo;
   T, 11/10, dalla sonda di B3b. Senza cambio `reference_unit_price` è `None`, ma `reference_price_source` resta
   `exact`, e l'AI Export lo copia. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Sonda».
-- **T-B7 · AI Export: segnalare le colonne tolte perché nulle in ogni riga, in tutti i componenti** — medio-basso;
+- ✅ **T-B7 · AI Export: segnalare le colonne tolte perché nulle in ogni riga, in tutti i componenti** — medio-basso;
   coordinatore, 11/10. Il renderer compatto toglie una colonna nulla in ogni riga; solo i lotti ne hanno la traccia
   (`unavailable_amount_lot_count`, B3b). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Scoperte sul renderer dell'AI Export».
+  ✅ **Fatto da J il 17/10** (`7184cb123`, dev `36d24e7d2`): le colonne con un `null` esplicito in ogni riga sono nominate dopo la tabella (`omitted_null_columns=…`), le etichette passano a `_v2`. Seguito: J-54 (i campi in cui `null` vuol dire «nessuno»).
 
 - **T-B8 · Sintesi FIFO dell'AI Export: valore aperto e P&L non realizzato sommano insiemi di lotti diversi** — basso;
   T, 11/10, dal docs-writer di B3b. Ognuna delle due somme prende i lotti aperti in cui quel campo è noto, mentre i
   conteggi della copertura contano i lotti in cui sono noti entrambi; con il costo di un lotto ignoto (B3b) le due
   somme non coprono più gli stessi lotti. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Passo 6».
-- **T-B9 · AI Export: un residuo reale sotto l'unità minima della valuta si stampa `0` accanto a `reconciled` falso** —
+- ✅ **T-B9 · AI Export: un residuo reale sotto l'unità minima della valuta si stampa `0` accanto a `reconciled` falso** —
   minimo; T, 12/10, dal docs-writer di C-53. Il renderer stampa `0` un residuo monetario più piccolo dell'unità minima
   (`monetary_residuals_zeroed`); dopo C-53 `reconciled` tollera solo `CONVERSION_DUST` (1e-9), quindi un residuo fra le
   due soglie si contraddirebbe. Improbabile: il riepilogo chiude la scomposizione per costruzione. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md),
   sezione «C-53 — implementazione».
+  ✅ **Chiusa come verificata, senza codice** (J, 17/10; piano 05, «T-B9»): il residuo è solo arrotondamento del contesto `Decimal` a 28 cifre (~1e-27 × gli importi), `other_result` viene dagli stessi `Decimal` del riepilogo; il caso `1E-24` è già fissato da `test_engine_closing_term_reconciles_despite_decimal_rounding`.
 
 **Unificazioni della matematica comune (parte 1)**
 
@@ -4048,7 +4051,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), sezione «A1.8».
 - **A-2 · `GET /settings/global` si legge senza login** — basso; A (14/10). Espone tutte le impostazioni globali:
   scheduler, durata della sessione, registrazione. Dettagli: idem, §2 «Da sapere».
-- **A-3 · `reset_password` calcola bcrypt sul loop degli eventi** — basso; A (14/10).
+- ✅ **A-3 · `reset_password` calcola bcrypt sul loop degli eventi** — basso; A (14/10); chiusa il 15/10 con A4
+  (`3ac4114d5`: `await asyncio.to_thread(hash_password, new_password)`), registrata il 17/10 (X-R66).
   `services/accounts/user_service.py:205` chiama `hash_password` senza `asyncio.to_thread` (regola Async I/O). Si
   chiude con A4, che tocca il reset per la versione della sessione. Dettagli: idem, §1 «Reset della password».
 - **A-4 · devWiki: prosa con i vecchi percorsi dei servizi account, e due pagine di dominio non allineate** — minimo;
@@ -4324,8 +4328,10 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Cura possibile: dopo un salvataggio riuscito l'input prende la forma che il server ha conservato; sul 400
     `CURRENT_PASSWORD_REQUIRED` la scheda rilegge l'indirizzo salvato. Da decidere con A7b/A8, che toccano la stessa
     scheda.
-- **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
+- ✅ **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
+  Fatta il 17/10 con A8 (`66873b0c9`: i due endpoint rispondono 429 oltre il limite, prima di controllare la password, e
+  contano errori e successi in `login_throttle` sotto lo username dell'account), registrata il 17/10 (X-R66).
 - **A-29 · Sotto `vite dev` le pagine dei link portano al login** — minimo; da H, revisione di A7b (16/10).
   `frontend/src/hooks.server.ts` ha `PUBLIC_ROUTES` = `/` e `/api`: con il server di sviluppo (5173) chi apre un link
   senza sessione viene mandato a `/?redirect=…` e il token nel frammento si perde. In produzione e nelle corsie di test
@@ -4959,6 +4965,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     - (b) lo stesso filtro, `usable_fx_rate_bounds()`, in ogni lettore: molti file di J e dell'AI Export.
 - **X-R46 · Editor dei cambi (e degli asset): i rifiuti del server non si vedono** — basso-medio, **subito dopo X-R38**; X, 17/10
   (trovato dal docs-writer di X-R38).
+  - Gemello trovato da B (17/10): `AssetDataEditorSection.svelte` (~316) conta come salvata ogni riga inviata e non legge
+    `results[].message`, così una data scartata dal controllo OHLC è annunciata come salvata.
   - Allargata il 17/10 (revisione di X-R65 e nota di Z): anche `AssetDataEditorSection.svelte`, e il nuovo 422
     `date_out_of_range` (`items`, `count`, `params.min`/`max`): oggi entrambi gli editor mostrano solo «Request failed with
     status code 422» (`e.message`), senza la data né i limiti. Un refuso come 2062 per 2026 basta a farlo comparire.
@@ -4972,6 +4980,34 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Cura: mostrare il `detail` del 400 e gli `errors` del 200 (per data), contarli a parte. Prove: Vitest e
     `front-fx fx-editor`. Poi la frase della pagina utente (`user/fx/detail/data-editor.en.md`) può dire «con un messaggio
     che nomina la data».
+- **X-R75 · La modale delle rotte di un cambio cancella prima di salvare** — piccolo-medio, perdita di dati a ogni
+  salvataggio fallito, **nella 1.3, insieme a X-R46** (stesso editor dei cambi, stessa finestra E2E); X, 17/10 (E, E-19,
+  girata dal coordinatore).
+  - `FxPairAddModal.svelte` (~321-339), `handleSave()` in modifica: prima `DELETE /fx/providers/routes` con
+    `[{base, quote}]` (tutte le priorità della coppia), poi `POST /fx/providers/routes` con le rotte nuove. Due richieste,
+    due transazioni.
+  - Se il POST fallisce, le rotte vecchie sono già cancellate e la coppia resta senza rotte. Può fallire per un 422
+    (un lato non ISO), un 400 (un provider sconosciuto, con il rollback del solo POST), un 409 (una scrittura
+    concorrente) o la rete.
+  - **Gemello, da provare con un rosso**: togliendo tutti i provider in modifica, la modale salta il POST, convinta
+    che il backend rimetta la sentinella MANUAL. Ma `delete_routes_bulk` la rimette solo dopo una cancellazione con
+    priorità: `fully_deleted_pairs` esclude quelle senza. La coppia resta senza nessuna rotta, nemmeno MANUAL, mentre
+    la creazione nello stesso caso salva MANUAL (priorità 999).
+  - **Cura proposta, nel backend**: le rotte di una coppia si sostituiscono in una sola transazione.
+    - Tutto convalidato prima di scrivere; cancellazione e inserimento insieme; la sentinella MANUAL quando non resta
+      un provider vero.
+    - La modale in modifica fa una sola chiamata.
+    - Forma da decidere nell'analisi: un `PUT /fx/providers/routes` o un parametro `replace` del POST.
+    - Le coppie intermedie (le gambe delle catene) restano un'aggiunta, mai una sostituzione.
+  - **Alternativa solo frontend**, più piccola ma non atomica: prima il POST (un upsert per priorità), poi la
+    cancellazione mirata delle sole priorità in più. Un secondo passo fallito lascia rotte in più, non ne perde.
+  - **Prove**:
+    - rossi API: un rifiuto lascia intatte le rotte; un insieme vuoto dà MANUAL; il riordino delle priorità;
+    - Vitest della modale: in modifica una sola chiamata, nessun DELETE prima;
+    - E2E `front-fx fx-add-pair`: una modifica che fallisce lascia le rotte com'erano.
+    Doc: le rotte nella pagina dev dei cambi; `api sync`.
+  - **Peso**: come X-R58: una rotta del backend, la modale, tre livelli di test, una finestra E2E (`fx-add-pair`).
+    L'alternativa solo frontend è piccola.
 - ✅ **X-R47 · Il rapporto di uno SPLIT non è mai validato** (chiusa il 17/10: `5f68a8db0`, la regola (d) con `1b6d65da7`; entrata in dev `952c68cd5`; gli SPLIT già salvati sono MF-D4) — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
   V-4 di CP-14a, F4, girato dal coordinatore).
   - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
@@ -5105,12 +5141,13 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     che la modale mostra come errore generico.
   - Da decidere: scollegare prima, come il wipe di X-R48 (con la regola degli SPLIT senza costo), o rifiutare con un
     codice e i collegamenti. Prima un rosso che lo riproduca.
-- **X-R66 · Il limite delle sonde dei provider detto nella lingua dell'utente** — basso, **dopo X-R58** (il
+- ✅ **X-R66 · Il limite delle sonde dei provider detto nella lingua dell'utente** — basso, **dopo X-R58** (il
   coordinatore, 17/10); X, 17/10 (dalla revisione di MF-SI2).
   - `POST /assets/provider/probe` risponde 429 `{error_code: PROBE_RATE_LIMITED, retry_after, message}` oltre 30
     sonde al minuto per utente. «Test Configuration» mostra il `message` inglese del backend (`extractErrorMessage`),
     «Ask Provider» un generico «si è verificato un errore».
   - Cura: una frase tradotta con l'ora locale di fine attesa, come per il `RATE_LIMITED` dei provider.
+  ✅ **Fatto da A il 17/10** (`ed5ad328a`, dev `e50c23919`): `probeRateLimitMessage()` in `resolveProviderError.ts`, chiavi `providerErrors.PROBE_RATE_LIMITED*` ×4; Test Configuration e Ask Provider dicono quando riprovare.
 - **X-R49b · I controlli degli SPLIT senza costo leggono prima del BEGIN differito** — basso, dopo la 1.3 salvo che costi
   poco; X, 17/10 (E, revisione di X-R49, via coordinatore). Vale anche per X-R48.
   - Il controllo legge prima della prima scrittura, fuori dal lock di scrittura di SQLite: una rettifica senza costo
@@ -5133,10 +5170,12 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-R70 · Il refresh conta le date rifiutate dal controllo OHLC** — basso; X, 17/10 (Z, nota di X-R65).
   - `_persist_refresh_item` toglie dal conteggio le date che nessuna colonna tiene e quelle fuori intervallo, ma non
     quelle che `bulk_upsert_prices` rifiuta per OHLC impossibile (chiusura fuori da [minimo, massimo]).
-- **X-R71 · Il caricamento manuale dei prezzi non è tutto o niente sulla valuta** — basso-medio; X, 17/10 (Z, nota di
-  X-R65).
+- **X-R71 · Il caricamento manuale dei prezzi non è tutto o niente sulla valuta** — basso-medio, **nella 1.3, fatta da B**
+  (il coordinatore, 17/10; X rivede); X, 17/10 (Z, nota di X-R65).
   - Una valuta diversa da quella dell'asset è rifiutata asset per asset, dopo che gli asset precedenti sono stati
     scritti. Il controllo va prima della prima scrittura, come X-R65 fa ora per le date.
+  - Il disegno di B: il caricamento manuale controlla la valuta di ogni asset prima della prima scrittura, 422
+    `price_currency_mismatch` con `items`; B tocca una riga di descrizione in `schemas/prices.py`.
 - **X-R72 · Le date degli eventi degli asset senza pavimento al 1900** — basso, prima da verificare; X, 17/10 (Z, nota di
   X-R65).
   - I periodi di un piano Scheduled Investment sono già limitati a 1900-2200 (`SCHEDULE_MIN_DATE`). La data aperta è
@@ -5145,7 +5184,9 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-R73 · `_range_start_in_bounds` ripete `stored_date_bounds()`** — minimo; X, 17/10 (Z, nota di X-R65).
   - `api/v1/assets/prices.py` (di MF, R13-SEC9-4) confronta a mano [`EARLIEST_RANGE_START`, `latest_range_end()`]:
     deve chiamare l'aiuto unico di `utils/date_range_limits.py`.
-- **X-R74 · Le rotte di asset e cambi rispondono 500 con il testo dell'errore** — basso, sicurezza (fuga di testo SQL),
+- ✅ **X-R74 · Le rotte di asset e cambi rispondono 500 con il testo dell'errore** (chiusa il 17/10, in attesa del commit
+  del coordinatore: 26 siti in 6 file rispondono «Internal error while …» e registrano l'errore; in più il 400
+  `MERGE_FAILED` della fusione, «Merge failed: internal error»; `services routes-generic-500` 34 passed, 8 suite API e DB 165 passed) — basso, sicurezza (fuga di testo SQL),
   **nella 1.3, primo lotto dopo X-R58**; X, 17/10 (revisione di X-R62, punto 1 di J; decisione del coordinatore).
   - X-R62 ha tolto l'`IntegrityError` dal 500 (ora `PROVIDER_REMOVAL_CONFLICT`, senza SQL). Il `except Exception` di
     `remove_providers_bulk`, e il ripiego per gli altri `AssetSourceError`, rispondono ancora `detail=str(e)`: un altro
@@ -5589,13 +5630,14 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   118 il 16/10, verdetto ambiente. Cura: il runner rifà il seed quando un'azione `api` singola trova il DB senza gli utenti
   di fixture, o lo dice prima di partire. Registro del runner: superficie condivisa, decide il coordinatore. Dettagli: piano 04,
   sezione C-97a.
-- **W-B55 · La 47 in un'altra valuta non ha una prova da capo a fondo** — minimo, test; W, 16/10 (decisione 47 con J-24).
+- ✅ **W-B55 · La 47 in un'altra valuta non ha una prova da capo a fondo** — minimo, test; W, 16/10 (decisione 47 con J-24).
   La gamba che cede prende il costo Auto del suo broker nella valuta dell'ultimo acquisto (`_handover_cost`,
   `compute_wac_iterative`), e con J-24 la Dashboard ne realizza la differenza di cambio nel giorno della consegna. Oggi è
   coperto in due metà: i test di W scrivono la riga in EUR (più i casi di cambio mancante), il «foreign book» di J
   (`test_adjustment_out_with_cost_numbers.py`) la legge in USD. Cura: un caso in `test_orphan_transfer_after_broker_delete.py`
   con un titolo comprato in USD e il rapporto in EUR, dalla cancellazione del broker che riceve ai numeri di lotti e
   Dashboard. Dettagli: piano 04, sezione «Decisione 47 in dev: la prova con J-24».
+  ✅ **Fatto da J il 17/10**: `TestOrphanOutgoingTransferInAnotherCurrency` (controllo a mano e orfana vera, in USD con report in EUR); riga, Dashboard, lotti e parità tornano ai valori derivati a mano. Nessun difetto.
 - **W-B56 · Il costo medio dell'anteprima esce senza arrotondamento** — minimo, numeri; W, 16/10 (C-97a, E2E di FE8b).
   `compute_wac_iterative` (`backend/app/services/portfolio_service.py`, casa di MF) rende la media con tutte le cifre del
   quoziente (100 / 3 = 33.333…): l'anteprima la mostra, il commit in Auto la scrive, e se un utente la «congela» in un
@@ -5785,6 +5827,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   modifica a una sola delle due fa divergere i `params` di una riga rifiutata dal parse e dal batch. Cura: un modulo condiviso (per
   esempio in `schemas/` o `utils/`), con i test delle due parti; con l'occasione, la docstring di BRIM che dice «made the parse answer
   500» (era un 400, la correzione stessa di H). Dopo W-B70, che cambia la regola. Dettagli: questa voce.
+- **W-B78 · Le 10 cifre decimali di una quantità sono scritte a mano in 9 file del frontend** — minimo, pulizia; W, 17/10 (C-97c-3).
+  I decimali che una quantità tiene (C-97a) sono un `10` letterale in dieci punti: `TxFormSingleSection.svelte` (2), `TxFormPairSection.svelte`,
+  `txDisplayHelpers.ts`, `resolveValidationMessage.ts`, `WacPreviewSection.svelte`, `import/GapFixStep.svelte`,
+  `brokers/lots/LotAnalysisFailedNotice.svelte`, `dashboard/ExposureTable.svelte`, e la costante dei lotti
+  `LOT_QUANTITY_FRACTION_DIGITS` (`lotChartShared.ts`, C-97c-2). Se la colonna cambia scala, ognuno va trovato a mano. Cura: una costante
+  in `frontend/src/lib/utils/core/` accanto a `formatPrice`, letta da tutti (i lotti la importano). Dopo la 1.3: tocca le aree TR, IW, BK
+  e DV. Dettagli: piano 04, sezione «C-97c-3».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
@@ -6493,7 +6542,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     (`read_arrivals_at_scope_boundary`); una partenza tiene la compagna (le unità in viaggio contano per l'origine). Il
     costo resta il WAC della posizione della Dashboard: con la base della gamba un valore, senza `MISSING_WAC`.
     Dettagli: piano 05, sezione «J-51».
-- **J-53 · Il banner dei lotti mostra un solo fondo orfano per codice** — medio, numeri e chiarezza; J, 17/10 (analisi
+- ✅ **J-53 · Il banner dei lotti mostra un solo fondo orfano per codice** — medio, numeri e chiarezza; J, 17/10 (analisi
   di J-36). **Titolare: Y** (frontend, decisione del coordinatore 17/10), dopo i lotti A/B di X-R59, nella 1.3.
   `lotDataQualityHelpers.buildIssueGroups` raggruppa le issue per codice e mostra il messaggio coi parametri della
   prima; `ASSET_INCOME_NO_ELIGIBLE_LOTS` e `ASSET_COST_NO_ELIGIBLE_LOTS` arrivano una per fondo orfano («…of
@@ -6501,12 +6550,53 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   fondi il banner mostra l'importo e la data di uno solo e nasconde gli altri. La cura: una riga per issue per i codici
   senza lotto (non un totale del backend, che sommerebbe valute diverse e perderebbe le date). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-36».
-- **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
+  ✅ **Fatto da Y il 17/10** (`c37c2bb1e`, dev `fb6d58d17`): un blocco per codice, una riga per ogni issue senza lotto con i suoi parametri; si vedono anche le due `MISSING_FX_RATES` (provider e manuali).
+- ✅ **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
   alla revisione di SEC8-1b (17/10), facoltativa. Per una richiesta fuori dai limiti la finestra preparata
   (`requested_range`, che fa da ripiego di `metadata.analyzed_range`) è quella limitata, mentre `output.replay_range` e
   `metadata.params` ripetono la richiesta. Visibile solo fuori dai limiti. Da scegliere una convenzione sola, o da dire
   nella pagina. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione
   «SEC8-1b».
+  - ✅ 17/10: fatta da J (checkpoint J-52). `metadata.params` ripete la richiesta; l'output (`replay_range`) e
+    `metadata.analyzed_range` dicono la finestra rigiocata, quella limitata. Lo stress passa a `algorithm_version` 3.0.1,
+    un salto solo per SEC8-1b e J-52. Dettagli: piano 05, sezione «J-52».
+- **J-54 · Nell'AI Export `null` vuol dire anche «nessuno», e T-B7 lo nomina come «non disponibile»** — minimo,
+  chiarezza; J, 17/10 (rossi di T-B7, letto nel codice).
+  - Il backend scrive ogni `None` come `null` (`model_dump(mode="json")`, senza `exclude_none`), anche dove vuol dire
+    «nessuno» invece che «ignoto»:
+    - il `closing_date` di un lotto aperto;
+    - il `reason_code` di una riga senza problemi;
+    - il `component` di un'uscita scalare;
+    - `minimum`/`maximum` di un'uscita senza limiti (`IndicatorOutputColumn`).
+  - Il preambolo dice `null=explicitly unavailable`. Era già così in una tabella mista; da T-B7 una colonna così, nulla
+    in ogni riga, si nomina anche su `omitted_null_columns=`. Per esempio ogni OUTPUT DEFINITIONS di un segnale senza
+    limiti nomina `component,minimum,maximum`.
+  - Cure possibili (da decidere):
+    - (a) il preambolo allarga `null` a «non disponibile, o nessuno per quella riga»;
+    - (b) il renderer tratta come «non si applica» i metadati delle definizioni;
+    - (c) il backend omette quei campi, con un salto di versione dei componenti.
+  - Da guardare nella sonda mirata di T-B7. Dettagli:
+    [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «T-B7».
+  - **Deciso dal coordinatore (17/10, ~16:15): opzione (b), prima del rilascio.** Una costante sola,
+    `NULL_MEANS_NONE_COLUMNS`, con 11 voci (erano 8; poi i rossi hanno corretto l'insieme):
+    - ovunque: `closing_date`, `reason_code`, `conversion_reason`;
+    - solo in OUTPUT DEFINITIONS: `component`, `minimum`, `maximum`;
+    - in ogni tabella del calendario dei redditi: `asset_ref`;
+    - nel PERIOD SUMMARY di `asset.indicators` e `fx.indicators`: `portfolio_weight_percent` e
+      `technical_normalized_weight_percent`.
+
+    `partial_reason_code` è uscito: in ENTITY STATUS un null vuol dire «motivo ignoto». Nulla in ogni riga, una colonna
+    dell'insieme si toglie in silenzio. Le celle delle tabelle miste restano `null` (J-55). Dettagli: piano 05, sezione
+    «J-54».
+- **J-55 · Le celle «nessuno» delle tabelle miste dell'AI Export si stampano `null` («explicitly unavailable»)** —
+  minimo, chiarezza; J, 17/10 (J-54). **Dopo la 1.3** (coordinatore, 17/10).
+  - Esempio: in una tabella di lotti con lotti aperti e chiusi, la cella `closing_date` di un lotto aperto dice
+    `null`, che il preambolo definisce «explicitly unavailable». È così dalla 1.1; J-54 toglie solo il nome di una
+    colonna nulla in ogni riga.
+  - Per stampare quelle celle vuote serve, nel preambolo, una definizione della cella vuota («non si applica a quella
+    riga»). Quella definizione coprirebbe anche le altre celle vuote, e non tutte vogliono dire «nessuno»: per esempio
+    un `bucket_count` `undefined` delle INSTANCES.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-54».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -6787,15 +6877,29 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   prima del 1900: lavoro», passo 4.
 - **Z-32 · Le linee Yahoo in pence (`GBp`) salvate come sterline** — medio, dati; Z, 17/10 (verifica chiesta dal
   coordinatore, da una nota di E in MF-SEC9b). Da assegnare a chi possiede i provider.
+  - **(c) chiusa il 17/10** (decisioni D1–D5 del coordinatore; il commit è suo; revisori X, MF, H): la valuta come la
+    dice il provider (`FAHistoricalData.currency`, non normalizzata) salvata sull'assegnazione (`reported_currency`,
+    migrazione 010), l'avviso `QUOTE_IN_MINOR_UNIT` nel report di qualità del portafoglio. Restano (a) e (b), per
+    lo sviluppatore, dopo la 1.3; la strada 3 (chiusure contro operazioni) va nella sezione di MF (il coordinatore).
   - Yahoo dà `GBp` per le linee LSE in pence; gli schemi lo normalizzano a `GBP` senza scala: prezzi e dividendi
     restano in pence ma salvati come sterline. Nessuno imposta `quote_base_quantity`: con la base di default (1) la
     linea vale 100 volte il dovuto; con la base 100 messa a mano i valori tornano, ma i dividendi mostrati (dettaglio
-    dell'asset, suggerimenti di eventi) restano in pence. `ZAc`, `ILA` e `GBX` sono invece rifiutati.
+    dell'asset, evento collegato di una transazione) restano in pence. `ZAc`, `ILA` e `GBX` sono invece rifiutati.
   - Strade: (a) Yahoo divide per 100 (dati puliti, ma le righe salvate vanno ricalcolate e la base messa a mano si
     rompe); (b) la base 100 impostata quando Yahoo dà `GBp` e divisa dove un evento diventa un importo; (c) un avviso
     di qualità dei dati. Parere: (c) nella 1.3 se serve, (b) dopo.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «GBp — i dividendi Yahoo e
   `quote_base_quantity`: verifica».
+- **Z-33 · I prezzi Yahoo delle borse a est di UTC salvati un giorno prima** — **alto**, dati; Z, 17/10 (trovato da
+  test-author scrivendo la guardia di Z-32, confermato da Z e dal coordinatore). Proprietario Z; X rivede il plugin.
+  Nella 1.3, subito dopo il checkpoint di Z-32 (c).
+  - yfinance 1.7.0 (`scrapers/history.py:494–501`) data le barre giornaliere, i dividendi e gli split a mezzanotte
+    nel fuso della borsa; `_normalize_yahoo_date` (`yahoo_finance/plugin.py:146–150`) le porta in UTC: a est di UTC
+    è il giorno prima. Milano tutto l'anno, Londra con l'ora legale, Tokyo; New York è giusta.
+  - Il prezzo salvato al giorno D è la chiusura vera di D+1; righe di domenica; dividendi e split un giorno prima.
+  - La correzione del codice è semplice (la data locale); la riparazione dei dati già salvati è da decidere
+    (sviluppatore): righe in più nei giorni senza borsa, eventi forse doppi a una risincronizzazione.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-33».
 
 ## B · Backup e Docker (fase 01)
 
@@ -7276,6 +7380,57 @@ sulla base `23f6578f3`.
   ✅ **Fatto il 17/10** (checkpoint delle 14:56).
   - `outcome._report`: un errore la prima volta per cartella dati e processo, poi `debug` finché dura lo stesso errore.
   - `_forget` lo dimentica quando il file viene scritto, tolto, trovato mancante o letto.
+- ✅ **B-43 · Una funzione che il lettore non ha, nello schema dell'archivio, ferma la verifica con un errore grezzo** —
+  basso; H, 17/10 (H-51, revisione; misurato da B su SQLite 3.54.0).
+  - B-28 rifiuta trigger, viste e tabelle virtuali per tipo, ma non legge le espressioni. Un'espressione di un indice o
+    una colonna generata che chiama una funzione sconosciuta fanno fallire `integrity_check` anche in sola lettura: la
+    verifica si ferma in `describe_database()`.
+  - Un `CHECK` così passa invece la descrizione, perché in sola lettura SQLite salta i vincoli `CHECK`. Fallisce al primo
+    `integrity_check` in lettura e scrittura, quello delle correzioni post-migrazione.
+  - In tutti e due i casi esce un `sqlite3.OperationalError` grezzo: la verifica dell'app dice `stage_failed`, e
+    `dev.py backup restore` finisce con un traceback.
+  - Cura: in `_stage`, ogni errore `sqlite3` (non un `ProgrammingError`) mentre si legge o si controlla il database della
+    copia diventa `database_damaged`. Nel log vanno solo la classe e il nome dell'errore di SQLite, mai la funzione, che
+    è testo dell'archivio. Rossi prima.
+  - **Parte 1, dentro B-43** (coordinatore, 16:25; trovata da DW-B43, misurata da B): da H-51 le connessioni del server
+    registrano `regexp` e `floor` di SQLAlchemy e rileggono lo schema con `trusted_schema` spento. Uno schema che li
+    chiama in un indice o in una colonna generata passa tutta la verifica, poi ogni connessione del server fallisce
+    («unsafe use of …»), e il primo avvio dopo il ripristino cade. Cura: `_refuse_foreign_objects()` legge lo schema con
+    i due nomi registrati come segnaposto, mai eseguiti.
+  Dettagli: piano 07, «B-43 + B-44».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 16:45).
+  - Ogni errore `sqlite3` della fase del database diventa `database_damaged`, con un solo avviso (classe e
+    `sqlite_errorname`).
+  - Lo schema si legge con i segnaposto di `regexp` e `floor`.
+  - Il resto in B-45 (CHECK e DEFAULT) e B-46 (stderr dell'upgrade).
+- ✅ **B-44 · I testi su `trusted_schema` dell'upgrade dopo H-51** — minimo, testo; H, 17/10 (H-51).
+  - La docstring di `_schema_untrusted` in `env.py` dice «before anything else». Il listener di classe di
+    `db/session.py`, che i suoi import caricano, gira però prima, e il dialetto registra `regexp` e `floor` dopo di lui.
+  - Da H-51 il listener di classe spegne `trusted_schema` per primo e chiude con `writable_schema=RESET`.
+  - Da allineare a `security.md#trusted-schema-server`: la docstring e il punto «`trusted_schema` off on every connection
+    to the copy». Nello stesso checkpoint di B-43 (coordinatore).
+  Dettagli: piano 07, «B-43 + B-44».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 16:45): la docstring di `_schema_untrusted` e il punto di `security.md`
+  dicono l'ordine vero (listener di classe, dialetto, `_schema_untrusted`).
+- **B-45 · Un `CHECK` o un `DEFAULT` dell'archivio che chiama `regexp` o `floor` passa la verifica, poi rompe le
+  scritture su quella tabella** — basso, dopo la 1.3; B, 17/10 (parte 2 della scoperta di DW-B43; H e il developer
+  decidono).
+  - SQLite risolve le funzioni di un `CHECK` o di un `DEFAULT` solo quando servono. Così la lettura dello schema con i
+    segnaposto di B-43 non li vede. Su SQLite 3.54 `floor()` esiste anche senza SQLAlchemy, quindi un `CHECK` su `floor`
+    passa anche il controllo d'integrità in lettura e scrittura.
+  - Dopo il ripristino, da H-51, le scritture che li usano falliscono («unsafe use of …»): niente codice dell'archivio
+    viene eseguito, ma quella tabella resta in parte inutilizzabile.
+  - Cura possibile, più grande: confrontare l'SQL di ogni tabella e indice con lo schema di LibreFolio alla sua
+    revisione (un elenco di ciò che è ammesso, invece del solo tipo di oggetto di B-28).
+  Dettagli: piano 07, «B-43 + B-44».
+- **B-46 · Il log dell'upgrade di una verifica contiene testo dell'archivio** — basso, dopo la 1.3; B, 17/10 (DW-B43).
+  - `_upgrade()` registra `stderr=result.stderr[-4000:]` di Alembic. Il traceback porta il messaggio di SQLite, con nomi
+    di oggetti e di funzioni dell'archivio. B-28 e B-43 tengono invece fuori dal log ogni testo dell'archivio.
+  - È precedente a B-43. Da decidere: tenerlo, perché serve a capire un upgrade fallito di un archivio vero, o ridurlo
+    alla classe dell'ultima eccezione.
+  Dettagli: piano 07, «B-43 + B-44».
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
@@ -7821,6 +7976,27 @@ da Y il 15/10.
     lascia un segno durevole sulla riga di `?highlight=` (il test guarda la navigazione e la modale). Un `data-state` o un
     `data-highlighted` li renderebbe espliciti.
   - Dettagli: piano di Y, «J-12, la metà del pannello».
+- **Y-32 · Le card della lista degli asset: prezzo live, Δ della serie** — basso, coerenza, domanda di prodotto per il
+  developer; Y, 17/10 (X-R59, D2: il coordinatore ha scelto la parità per il lotto A).
+  - La card mostra il prezzo live (`livePriceMap`, dal poll di `/prices/current`), ma la sua Δ sull'intervallo è quella della
+    serie, fino al prezzo salvato su `as_of`: dopo X-R59, il `range_change` di `period-changes`. Finché il prossimo
+    caricamento non la rilegge, la Δ non segue il prezzo mostrato. Succedeva già prima, con la Δ calcolata nel browser.
+  - Rimedio possibile: quando l'intervallo finisce oggi, il poll della lista chiede `/prices/current?range_start=` e la card
+    usa quel `range_change`, come la pagina dell'asset (lotto B di X-R59).
+  - Attenzione, se si fa: le glob esatte `'**/api/v1/assets/prices/current'` delle spec che restano sulla lista (per esempio
+    `asset-list.spec.ts`) non vedono più la richiesta con la query, perché in Playwright la glob è ancorata alla fine. Vanno
+    allargate con un `*` finale, come il lotto B ha fatto per le spec che aprono la pagina dell'asset.
+  - Dettagli: piano di Y, «X-R59».
+- ✅ **Y-33 · `asset-detail.spec.ts`: 10 s per una navigazione a freddo sotto carico** — minimo, stabilità dei test; Y, 17/10
+  (slot E2E di X-R59, 16:05). `goToSeededAssetDetail()` (`frontend/e2e/assets/asset-detail.spec.ts:107-114`) clicca la card
+  di Apple e dà 10 s alla radice `asset-detail-page`. Al picco di carico dopo la build (carico a 1 minuto 93 alle 15:24) un
+  contesto nuovo importa a freddo il bundle grosso della pagina, e «edit button opens asset modal» (`:240`) è caduto lì,
+  ancora sulla lista; da solo, a carico normale, passa in 4,1 s, e gli altri test con lo stesso aiuto sono passati. La cura,
+  come Y-22: più tempo alla navigazione, oppure aspettare prima l'URL e poi la radice. Spec dell'area degli asset: a chi
+  la tocca. Dettagli: piano di Y, «X-R59».
+  - ✅ 17/10: dopo il clic, prima l'URL (tetto 30 s), poi la radice (10 s), nell'aiuto e nella copia in riga del test della
+    cache degli eventi; commento di `:332` senza totali (`test-author`). E2E `front-asset asset-detail` 39/39. Review di X.
+    Dettagli: piano di Y, «Y-33».
 
 ## MF · Matematica finanziaria (fase 01)
 
@@ -7927,7 +8103,8 @@ punto di partenza, l'audit dello stesso giorno:
   `period_annualized` ricade sulla regola generale, |StartValue| su t₀→t₁: una posizione tenuta a t₀ e venduta dopo 10
   giorni d'un periodo d'un anno è annualizzata sull'anno. Documentato com'è (`net-annualized-return` «Positions Closed
   in the Period»). Scelte: (a) com'è; (b) «—» quando la regola chiusa non vale. Dettagli: piano MF, «MF-A2».
-- **MF-A4 · Doc: il «non realizzato» della card punta alla pagina sbagliata** — minimo, doc; docs-writer di MF, 17/10.
+- ✅ **MF-A4 · Doc: il «non realizzato» della card punta alla pagina sbagliata** — minimo, doc; docs-writer di MF, 17/10.
+  **Chiusa il 17/10**: il collegamento a `period-pnl` nelle quattro lingue e le descrizioni API, dev `a228b9d30`.
   `book-value.en.md` definisce il non realizzato come NAV − Book; `user/dashboard/kpi-cards.en.md:31` collega la card
   **Unrealized change** (che mostra la cifra di periodo, valore di mercato − costo aperto) a quella pagina; le
   descrizioni API di `period_unrealized_gain_loss_*` non dicono MV − OCB. Cura: il collegamento a
@@ -7974,7 +8151,8 @@ punto di partenza, l'audit dello stesso giorno:
   `_ENGINE_EXECUTOR` (`financial_math/portfolio/engine.py`) non è nella sequenza di spegnimento dell'app: una
   ricostruzione in corso tiene il processo fino alla fine, come l'esecutore predefinito di `asyncio.to_thread`.
   Proposta, se serve: `shutdown(wait=False, cancel_futures=True)` nel lifespan. Dettagli: piano MF, sezione «J-45».
-- **MF-J45b · Nessun single-flight sulla cache del motore** — basso, carico; J, 17/10 (revisione di J-45). Tra la
+- ✅ **MF-J45b · Nessun single-flight sulla cache del motore** — basso, carico; J, 17/10 (revisione di J-45). **Chiusa il
+  17/10**: `_IN_FLIGHT` per chiave e intervallo in `calculate`, dev `a228b9d30`. Tra la
   lettura della cache `portfolio_blob` (`portfolio/engine.py` ~:316) e la sua scrittura (~:457) nessun lucchetto: due
   richieste identiche concorrenti ricostruiscono entrambe (con J-45 occupano i due worker). Nessuna azione ora; cura
   possibile: un `asyncio.Future` per chiave in volo. Dettagli: piano MF, sezione «J-45».
@@ -8002,6 +8180,12 @@ punto di partenza, l'audit dello stesso giorno:
   `fx/sync.py:234` in blocchi (`utils/sql_chunks.OR_TERMS_PER_QUERY`), un tetto di scrittura `MAX_BULK_WRITE_ITEMS`
   (10 000) su `POST`/`DELETE /fx/currencies/rate` e `DELETE /prices`, la sonda letta a ogni chiamata. Restano da
   verificare `brim_provider.py:2030` e `pac_allocator/source/wac.py:44`. Dettagli: piano MF, sezione «MF-SEC9a».
+- **MF-J45c · Il report in cache `portfolio_layer2` è un oggetto condiviso fra le richieste** — minimo, robustezza;
+  test-author di MF, 17/10 (MF-J45b). Come il risultato del motore (ora condiviso anche dal single-flight, con una
+  guardia che i consumatori non lo modificano), il report Pydantic di `_portfolio_l2_cache` (`portfolio_service.py`,
+  30 minuti) è restituito tale e quale a ogni richiesta: un consumatore che lo modificasse in luogo cambierebbe le
+  risposte degli altri. Nessun caso visto; una guardia simile (istantanea profonda prima e dopo) lo fisserebbe.
+  Dettagli: piano MF, «MF-J45b».
 - **MF-SEC9d · Nessun tetto globale alle chiamate concorrenti per fornitore** — basso, carico; E, 17/10 (revisione di
   R13-SEC9). Il semaforo di `get_current_prices_bulk` limita una richiesta, non il processo: 1 000 id distinti con un
   fornitore lento sono ~33 minuti di chiamate in uscita per richiesta, e più richieste si sommano. Proposta: un
@@ -8015,6 +8199,40 @@ punto di partenza, l'audit dello stesso giorno:
   query al tetto `MAX_BULK_WRITE_ITEMS`. Lento, non blocca il ciclo degli eventi. Cura possibile: contare dalle righe
   lette a blocchi (id per asset), che rende esatti anche gli intervalli sovrapposti (oggi contati due volte).
   Dettagli: piano MF, sezione «MF-SEC9a».
+- **MF-SEC9g · La classificazione dei candidati BRIM ferma il ciclo degli eventi** — medio, carico; E, 17/10 (revisione
+  del resto di MF-SEC9a). In `search_asset_candidates_bulk` (`brim_provider.py` ~2073) la catena di priorità in memoria
+  scorre l'universo più volte per titolo, con 8 `_contains` per nome: O(titoli × universo) in Python sul ciclo. Misure di
+  E con 5 000 asset: dati realistici 1 000 titoli 0,5 s, 3 000 4,5 s; nomi generici 90 titoli 7,9 s, 1 000 104 s. Prima
+  dei blocchi il parse falliva oltre 91; ora gira, e il fermo arriva più in là. Cura: la classificazione in
+  `asyncio.to_thread` (gli oggetti ORM sono già caricati) più indici per ISIN e ticker esatti; i test di parità
+  guardano la riscrittura. Revisore W. Sonde in `files/mfsec9a_rest/probe/` di E. Dettagli: piano MF, «MF-SEC9g».
+- ✅ **MF-A5 · Un trasferimento in uscita parziale falsa la regola delle posizioni chiuse** — basso-medio, numeri, nella
+  **chiusa il 17/10**: il costo spostato nella base, la ricaduta per ogni altra uscita, dev `aa52a43f7`; la nota di
+  doc di J inclusa. Seguito MF-A8 (il lato ricevente).
+  1.3; J, 17/10 (revisione di MF-A2). La base è il costo delle unità vendute, ma il numeratore porta anche il P&L delle
+  unità uscite per trasferimento (ΔUGL e il ritocco del tratto). Esempio: 10 unità, costo 1 000, valore iniziale 1 100;
+  vendute 5 a 625, 5 trasferite a un broker del perimetro che valgono 600 all'arrivo: P&L di riga +125, la regola dà
+  25 %, il giusto ~12,5 %. Cura: la regola chiusa solo se ogni unità è uscita con una cessione che il Realizzato conta,
+  altrimenti la ricaduta (o il costo uscito nella base). Rossi prima. Con la nota di doc di `net-annualized-return`
+  («scesa alla soglia della polvere o sotto»). Dettagli: piano MF, «MF-A5».
+- ✅ **MF-A8 · Il lato ricevente della base delle posizioni chiuse** — medio-basso, numeri, nella 1.3; J, 17/10 (revisione
+  **chiusa il 17/10**: Σ(V_arrivo − C_spostato) dei tratti ricevuti nella base, dev `bc466d969`.
+  di MF-A5). Una riga che riceve unità da un tratto contato misura il suo P&L dal loro valore all'arrivo (−tratto), ma
+  la sua base (il costo delle vendite) resta il costo storico. Esempio: comprato a 500 da A, spostato a B quando vale
+  600, venduto da B a 660: +60 su 500 = 12 %, il giusto 60/600 = 10 %. **In corso (17/10)**: Σ(V_arrivo − C_spostato)
+  dei tratti ricevuti nella base (la scelta preferita da J). Dettagli: piano MF, «MF-A8».
+- **MF-A9 · Una riga ricevente ancora aperta annualizza sul costo storico** — basso, numeri (proposta);
+  **Pronto (17/10, CHECKPOINT READY)**, nella 1.3 (coordinatore): solo righe senza valore iniziale e senza uscite nel periodo.
+  MF, 17/10 (MF-A8). Una posizione aperta nel periodo che ha ricevuto unità da un tratto contato e le tiene alla fine è
+  annualizzata sul costo alla fine (storico), mentre il suo risultato le conta dal valore all'arrivo: nella catena
+  A→B→C la riga di C dà 5/500 invece di 5/645. Cura possibile, il rovescio di MF-A8 sul costo alla fine:
+  `annualized_period_return(..., end_cost + Σ(V_a − C_a))`. Rossi prima. Dettagli: piano MF, «MF-A8».
+- **MF-A6 · La polvere rompe l'identità del §7** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di MF-A2). Lo stato
+  giornaliero valuta ogni quantità > 0, le righe considerano ≤ 1e-5 come non tenuta: la stessa soglia dai due lati, o il
+  §7 dice «polvere a parte». Dettagli: piano MF, «MF-A5».
+- **MF-A7 · `oldest_open_lot_date` senza soglia della polvere** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di
+  MF-A2). Un residuo di polvere può spostare l'inizio della finestra di ricaduta dell'annualizzato. Dettagli: piano MF,
+  «MF-A5».
 - **MF-SEC9f · Altri OR per elemento, censiti da E** — minimo, informazione; E, 17/10 (revisione di MF-SEC9a).
   `scheduler/jobs.py:100` costruisce un termine per coppia configurata: rifiutato solo con ~1 000 coppie, improbabile.
   `portfolio/engine.py:133` è sicuro. Nessuna azione ora. Dettagli: piano 08 di E, «MF-SEC9a».

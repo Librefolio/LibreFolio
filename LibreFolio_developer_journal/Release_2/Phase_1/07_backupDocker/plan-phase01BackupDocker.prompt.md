@@ -5366,6 +5366,209 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### X-R75 (per X) — il modale delle rotte di cambio cancella prima di salvare; e togliere ogni rotta cancella la coppia (2026-10-17, 16:42-18:33) — ✅ 🧊 FROZEN (checkpoint delle 18:33)
+
+> **Assegnazione** (coordinatore, 16:42; trovata da E): «the FX route modal deletes before it posts
+> (`FxPairAddModal.svelte` ~325-339)… If the POST fails (a 422, a network error, a server restart), the routes are
+> lost.» Prima l'analisi; il frontend FX è di X, X rivede. Corsia 6187.
+>
+> **Analisi** (16:42-16:58, sola lettura; `files/xr75-analysis.md`):
+> - In modifica (il pulsante «Providers» della pagina della coppia) il modale fa due chiamate:
+>   1. `DELETE` di tutta la coppia, che si conferma da sola (`:326`);
+>   2. `POST` delle rotte nuove (`:339`).
+> - Un `DELETE` di tutta la coppia **non rimette la sentinella MANUAL** (`providers.py:434-478`, Test 17). Così, se il
+>   `POST` fallisce (400, 422, 409, 500, rete, riavvio), o non parte (sessione cambiata `:327`, scheda chiusa), o fallisce
+>   per una coppia intermedia, la coppia resta senza nessuna rotta.
+> - **Difetto 2**: togliere ogni rotta cancella la coppia. Il modale salta il `POST` credendo che la MANUAL torni da sé
+>   (`:333`), come dice `configuration.md:201`; il codice e il Test 17 dicono il contrario. La guida utente
+>   (`provider.en.md:44`) promette invece «The pair becomes manual».
+> - **Chi legge le rotte mentre mancano**:
+>   - le conversioni no: leggono i tassi salvati, e il motore usa le rotte solo nell'impronta della cache;
+>   - la sincronizzazione sì: né `sync_pairs_bulk` né il job dello scheduler vedono più la coppia, e i suoi tassi
+>     invecchiano;
+>   - la qualità dei dati segna la coppia come «non configurata»;
+>   - il frontend la toglie dalla lista dei cambi, e il PAC chiede di crearla.
+>
+> **Decisioni** (coordinatore, 16:47): **D1 = A**, il `replace=true` atomico sul server; **D2 = sì**, nello stesso
+> lotto. GO, rossi prima. Permesso di scrittura su `FxPairAddModal.svelte` (solo logica) e su `api/v1/fx/providers.py`,
+> **ma** `providers.py` solo dopo l'ingresso di X-R74, che lo sta cambiando ora. Da correggere `configuration.md:201`. La
+> riga del CHANGELOG nel checkpoint. Slot API ed E2E a richiesta.
+>
+> **Contratto** (`files/xr75-contract.md`):
+> - `POST …/routes?replace=true`: ogni coppia nominata tiene esattamente le priorità mandate, le altre cancellate nella
+>   stessa transazione, dopo la validazione e l'upsert. Le regole della MANUAL restano.
+> - Il modale in modifica fa un solo `POST` con `replace`. Senza rotte manda la voce MANUAL (priorità 999).
+>
+> - **Patch pronte**:
+>   - `xr75-wip/apply_xr75_fe.py`: 1 operazione nel modale; prettier non cambia nulla;
+>   - `apply_xr75_be.py`: 3 operazioni in `providers.py`, ruff e black puliti sulla copia. Da applicare dopo X-R74.
+> - **Doc** (mia):
+>   - `developer/backend/fx/configuration.md`: una nota «Replacing a pair's routes: `?replace=true`», e la frase del
+>     `DELETE` corretta (un `DELETE` di tutta la coppia non rimette la MANUAL; uno con la priorità sì);
+>   - `developer/frontend/fx-chain-algorithm.md:353`: il modo di salvare del modale. Anche questa diceva che la
+>     MANUAL torna sola.
+>   - Tutte e due solo inglesi.
+> - **Rossi in scrittura**: TA-XR75-BE (`api fx`) e TA-XR75-FE (Vitest del modale, E2E `front-fx fx-detail`).
+> - ✅ **Rossi scritti** (16:50-17:19):
+>   - **TA-XR75-BE**, `test_fx_api.py` 18a-18f, su coppie di valuta che nessun altro usa:
+>     - rossi: 18a, il replace tiene esattamente le priorità mandate (anche la coppia scritta al contrario); 18b, la sola
+>       voce MANUAL lascia la coppia manuale (e il ritorno a una rotta vera toglie la MANUAL); 18c, l'OpenAPI documenta
+>       `replace`;
+>     - guardie: 18d, un replace rifiutato (400, 422) non cambia nulla; 18e, senza `replace`, o con `replace=false`,
+>       l'upsert come prima; 18f, una coppia intermedia, e una coppia attraversata dalla catena ma non nominata resta
+>       intatta.
+>   - **TA-XR75-FE**:
+>     - Vitest: 8 rossi. Un solo `POST` con `replace`, mai un `DELETE`; senza rotte, la voce MANUAL; un `POST` rifiutato
+>       (503, 409) lascia l'errore sul modale aperto. Più tre casi riscritti che fissavano il `DELETE` prima del `POST`.
+>       E 3 guardie: la creazione non chiede `replace`.
+>     - E2E (`fx-detail.spec.ts`): un salvataggio fallito tiene la rotta della coppia; togliere ogni rotta la lascia
+>       manuale. La lista dei provider è risposta nel browser con MOCKFX, che quella reale nasconde.
+> - ✅ **Rosso Vitest** (corsia 6187, 17:19-17:20): `FxPairAddModal.test.ts` **8 falliti** e 16 passati, esattamente i
+>   casi nuovi (`files/logs/b_vitest_xr75_red.log`).
+> - **X-R74 entrato** (coordinatore, 17:01): `providers.py` libero. Il merge di dev lo fa il coordinatore: a quel punto
+>   gli mando «FROZEN for base update» (17:03, correzione del coordinatore: i figli non toccano la storia di git).
+> - ⏳ Rossi API ed E2E: slot chiesto alle 17:22.
+> - ✅ **Rosso API** (slot del coordinatore, 17:21-17:29): `api fx -k replace` **3 falliti** (18a, 18b, 18c) e 3 passati
+>   (le guardie), esattamente come previsto (`files/logs/xr75_red_api_fx.log`).
+> - **⚠️ Fuori pista — il rosso E2E per la ragione sbagliata** (17:29-17:31): i due test cadono nel loro aiuto
+>   `openProviderEditor`, prima del difetto. Lo screenshot mostra il modale con «Failed to load conversion routes»: con
+>   la lista dei provider risposta dal test, `FxProviderSelect.computeRoutes()` prende un'eccezione. Slot liberato
+>   alle 17:33. Il test torna a TA-XR75-FE: trovare la causa e mettere nel messaggio gli errori della console del
+>   browser. Poi un breve slot per rifare solo il rosso E2E.
+>   - La patch del frontend aspetta quel rosso: con lei sola, «a failed save keeps the route» passerebbe senza aver mai
+>     mostrato il suo rosso.
+> - ✅ **La causa vera** (TA-XR75-FE, 17:35-17:45): **un difetto latente del prodotto**, non soltanto il test.
+>   - `currencyGraph.ts` fa `import MultiDirectedGraph from 'graphology'`, ma l'export di default è il `Graph` semplice
+>     (`multi: false`, `type: 'mixed'`; misurato in Node).
+>   - Così due provider sulla stessa direzione (MOCKFX e MOCKFX_FAIL, tutti e due EUR→X) fanno lanciare
+>     `addDirectedEdge`, e il selettore delle rotte dice solo «Failed to load conversion routes». Il catalogo reale
+>     oggi lo evita solo perché ECB, FED, BOE e SNB hanno basi diverse.
+>   - Il test ora usa direzioni opposte, e le sue precondizioni riportano gli errori della console del browser.
+> - **Decisione** (coordinatore, 17:48): l'import con nome dentro X-R75, con il suo rosso Vitest; X rivede.
+> - ✅ **Rossi E2E di nuovo** (slot, 17:50-17:54): tutti e due cadono sul difetto. Dopo il salvataggio fallito la coppia
+>   non ha più rotte («what the save sent: DELETE (no query), POST (no query)»); togliere ogni rotta cancella la
+>   coppia (`files/logs/xr75_red_e2e2.log`).
+> - ✅ **Patch del modale applicata** (17:55:08); Vitest `FxPairAddModal.test.ts` **24 passati**.
+> - ✅ **Il grafo**:
+>   - TA-XR75-FE ha scritto il file nuovo `src/lib/utils/currency/currencyGraph.test.ts`: 2 rossi (due provider sulla
+>     stessa direzione) e 6 guardie. È registrato in `front-utility core-unit` (`_frontend_utility.py` l.129, più una
+>     frase nella desc).
+>   - Rosso (18:00): **2 falliti** e 6 passati, su «UsageGraphError … an edge linking "EUR" to "NIO" already exists».
+>   - Patch `apply_xr75_graph.py` applicata (18:00:37): l'import con nome, con un commento. Prettier non cambia nulla.
+>   - Verdi: i due file **32 passati**; i vicini che toccano il grafo (`FxProviderSelect`, `PageSyncModal`,
+>     `FxSyncModal`, `FxMissingRate`, `fxCreationSync`, `sanitizeHtml`) **97 passati**.
+> - ✅ **Controlli** (18:04): ruff e black puliti sui 3 file Python; prettier pulito sui 5 file del frontend;
+>   `git diff --check` pulito; porta libera.
+> - 🧊 **FROZEN for base update** (18:05): il frontend è finito. Il backend (`providers.py`) aspetta il merge di dev con
+>   X-R74, che fa il coordinatore.
+> - **Base aggiornata** (coordinatore, 18:04): il mio checkpoint `5cbc60844` più il diario, fino a `73627df26`; dev
+>   `1eeb297b2` entrato pulito, `087db9be5`. Porta X-R74 (`providers.py`: quattro 500 generici).
+> - ✅ **Patch del backend applicata** (18:05:18): `apply_xr75_be.py`, 3 operazioni in `providers.py`, ricontrollata dopo
+>   X-R74 (che non tocca i punti della patch). ruff e black puliti; `import backend.app.main` riuscito.
+> - ✅ **`api sync`** (18:10, nessun file tracciato cambiato: il client generato è ignorato da git) e **`front check`**
+>   (18:11): 0 errori, 0 avvisi. Il tipo di `{queries: {replace: true}}` ora esiste.
+> - ⏳ I verdi `api fx` ed E2E: slot chiesto alle 18:12.
+> - ✅ **Doc** (18:14-18:17, mentre lo slot era in coda): `mkdocs build` strict, `check-links`, gate 63.
+> - ✅ **Verdi** (slot del coordinatore, via libera alle 18:15 dopo la finestra di X; 18:18-18:31,
+>   `files/scripts/xr75_green_slot.sh`, ogni corsa ad attesa del carico a 5 minuti sotto 50):
+>   - `api fx`, tutto il file: **33 passati** (i 6 di X-R75 e le prove delle rotte 15-17);
+>   - `front-fx fx-detail`, i 2 test di X-R75: **2 passati**;
+>   - `front-fx fx-add-pair`, tutta la spec, per regressione (la chiamata di creazione condivide la riga cambiata):
+>     **11 passati**.
+>   - Porta 6187 libera.
+> - **Backlog**: X-R75 e il fratello dell'editor (che conta come salvate le date scartate) li scrive X nella sua
+>   sezione; il grafo non multiplo è entrato in X-R75 (coordinatore, 17:48). CHANGELOG: la riga 🐛 nell'handoff.
+
+### B-43 + B-44 — una funzione sconosciuta nello schema dell'archivio diventa `database_damaged`; i testi di `trusted_schema` dopo H-51 (2026-10-17, 16:01-16:45) — ✅ 🧊 FROZEN (checkpoint delle 16:45)
+
+> **Assegnazione** (coordinatore, 15:50, dalla revisione H-51 di H): (1) un archivio il cui CHECK o indice chiama una
+> funzione sconosciuta si ferma come `sqlite3.OperationalError` grezzo, non come `StagingError`: l'API dice
+> `stage_failed`, la CLI finisce probabilmente in un traceback. «Translate it into `database_damaged`, as
+> `_refuse_foreign_objects` already does. Reds first; file it with an ID.» (2) Dopo l'ingresso di H-51: allineare la
+> docstring di `env.py` («before anything else») e il punto «`trusted_schema` off on every connection to the copy» a
+> `security.md#trusted-schema-server`.
+>
+> **Analisi** (15:52-16:15, in sola lettura mentre ero FROZEN; `files/b43-contract.md`):
+> - **Misura su SQLite 3.54.0** (`b43-wip/sqlite_probe*.py`, log `b43_sqlite_probe*.log`):
+>   - un'espressione di un indice o una colonna generata che chiama una funzione sconosciuta: `integrity_check` lancia
+>     `OperationalError: unknown function`, anche in sola lettura → `describe_database()` (`mode=ro`) lo lascia uscire;
+>   - un **CHECK**: in sola lettura SQLite **salta i vincoli `CHECK`** («ok», anche per un CHECK violato su una funzione
+>     predefinita). La descrizione passa; fallisce il primo `integrity_check` in lettura e scrittura, quello di
+>     `run_post_migration_fixes()._integrity_ok()`, e così pure una scrittura su quella tabella.
+>   - La frase nuova di H in `#trusted-schema-server` («A `CHECK` or an index's expression … stops the check at the
+>     `PRAGMA integrity_check` of `describe_database()`») è vera per indici e colonne generate, non per i CHECK.
+> - **Cura**: in `_stage`, tutta la fase del database (da `_refuse_foreign_objects` al report) dentro
+>   `except sqlite3.DatabaseError`, tranne `ProgrammingError` (un nostro difetto, che deve restare visibile) →
+>   `StagingError("database_damaged")`. Nel log solo la classe e `sqlite_errorname` (regola di B-28). Gli
+>   `StagingError` interni passano com'erano.
+> - **B-44**: gli import di `env.py` caricano `db/session.py`, quindi sulle connessioni di Alembic l'ordine è il
+>   listener di classe (H-51: `trusted_schema` spento per primo, `writable_schema=RESET` per ultimo), poi il dialetto
+>   (`regexp`, `floor`), poi `_schema_untrusted`. Il suo «before anything else» non è mai stato letterale.
+>
+> **Decisioni** (coordinatore, 15:58): **GO** dopo l'ingresso di X-R71. La frase di H si corregge nella doc di B-43, e H
+> la rivede. B-44 nello stesso checkpoint.
+>
+> **X-R71 entrato** (coordinatore, 16:01): combinato verde su `f0645ff98`, dev `1c7937984`, CHANGELOG 🐛 `e9746b959`;
+> HEAD portata in avanti. Nel merge, il conflitto della desc del runner con MF-SEC9e risolto dal coordinatore: il testo
+> di dev più la mia clausola sulla guardia del `ValueError`.
+>
+> - **Codice pronto**: `b43-wip/apply_b43.py` (2 operazioni in `staging.py`) e `apply_b44.py` (la docstring di `env.py`).
+>   ruff e black puliti sulle copie emesse; si applicano su `e9746b959`.
+> - **Rossi in scrittura** (TA-B43): `services backup-staging` (indice, colonna generata, CHECK; guardie: un CHECK su
+>   `abs`, nessun nome di funzione nei log) e `utils backup-cli-restore` (nessun traceback). Doc (DW-B43): la frase di H,
+>   le cause di `database_damaged`, il punto di B-44.
+> - **Backlog**: B-43 e B-44 registrate nella sezione B.
+> - ✅ **Rossi scritti** (TA-B43, 16:01-16:18), sezione (n) di `test_backup_staging.py` e (j) di
+>   `test_backup_cli_restore.py`:
+>   - **rossi**: indice, colonna generata (tipizzata, VIRTUAL), CHECK → `database_damaged`, senza resti. Il CHECK ha
+>     una barriera: `describe_database()` risponde «ok». Il log ha un solo avviso, con la classe e `sqlite_errorname`,
+>     e nessuna riga nomina la funzione. Più la CLI: `restore --dry-run` → ❌ `(database_damaged)`, uscita 1, nessun
+>     traceback;
+>   - **guardia**: un CHECK su `abs()` verificato come sempre.
+>   - Il costruttore: un backup vero alla head, il database modificato con la funzione registrata e
+>     `trusted_schema=ON`, il manifest aggiornato; precondizioni che non si confondono con il rosso.
+> - ✅ **Doc** (DW-B43, 16:01-16:15, più due ritocchi miei):
+>   - `security.md`: il punto nuovo «What the check cannot read.» (B-43), il punto di B-44 (sulle connessioni
+>     dell'upgrade, prima il listener di classe, poi `_schema_untrusted` dopo il dialetto), la frase di H corretta in
+>     `#trusted-schema-server`, la frase dei test.
+>   - **⚠️ Fuori pista**: DW ha misurato che una colonna generata semplice passa `integrity_check`. Rimisurato
+>     (`b43_sqlite_probe_generated.log`): falliscono solo una colonna VIRTUAL con un tipo dichiarato (INTEGER o TEXT) e
+>     una `NOT NULL`; una non tipizzata o una STORED passano. Le due frasi ora lo dicono così.
+>   - **⚠️ Fuori pista, la scoperta più grande di DW**: da H-51 alcuni schemi passano tutta la verifica e poi rompono il
+>     server. Misurato con segnaposto deterministici (`b43_sqlite_probe_standins.log`):
+>     - una colonna generata che chiama `regexp`, o un indice su `floor`, rendono illeggibile lo schema sulle
+>       connessioni del server, e così tutte le connessioni falliscono;
+>     - un `CHECK` o un `DEFAULT` passano anche la lettura con i segnaposto.
+>   - **Decisione** (coordinatore, 16:25): la parte 1 dentro B-43, con due rossi in più. Il resto in backlog, dopo la
+>     1.3: la parte 2 è **B-45**, il testo dell'archivio nel log dell'upgrade è **B-46**.
+> - **Patch** `apply_b43.py`, ora a 4 operazioni. `_refuse_foreign_objects()` registra i segnaposto
+>   (`_SERVER_FUNCTIONS`, `_register_server_functions`, `_stand_in`) e perde il suo `except`: ogni errore `sqlite3`
+>   della fase passa dall'involucro di B-43, con un solo avviso. ruff e black puliti sulla copia emessa.
+> - ✅ **I due rossi della parte 1** (TA-B43, seguito, 16:25-16:32):
+>   - `regexp` in una colonna generata non tipizzata e `floor` in un indice → `database_damaged`, rifiutati prima che
+>     `describe_database()` apra la copia (`never_described`);
+>   - il test del log esteso ai due casi;
+>   - una guardia: l'indice di LibreFolio su `lower()` si legge con i segnaposto, e il suo backup si verifica come
+>     sempre;
+>   - le precondizioni dicono che un lettore semplice passa i due schemi, e uno con i segnaposto no.
+> - ✅ **Rossi** (corsia 6187, 16:33-16:34): `services backup-staging` **11 falliti** e 170 passati, `utils
+>   backup-cli-restore` **1 fallito** e 108 passati. Esattamente i casi nuovi (`files/logs/b43_red_*.log`).
+> - ✅ **Patch applicate** (16:34:21): `apply_b43.py` (4 operazioni in `staging.py`) e `apply_b44.py` (la docstring di
+>   `env.py`); ruff e black puliti.
+> - ✅ **Verdi** (16:34-16:38):
+>   - `services backup-staging` **181**, `utils backup-cli-restore` **109**;
+>   - le regressioni: `utils dev-cli-db-path` 17 (il controllo AST di `env.py`), `services backup-secure` 77,
+>     `backup-apply` 255, `utils backup-cli` 102.
+>   - Porta 6187 libera.
+> - ✅ **La guardia dei codici**, senza slot: lo stesso confronto AST di `test_every_code_a_check_can_end_with…`, fatto a
+>   mano. Nessun codice prodotto da `staging.py` manca da `RestoreErrorCode`; `database_damaged` c'era già.
+> - ✅ **Doc e controlli** (16:38-16:44):
+>   - la frase dei test di `security.md` estesa alla parte 1;
+>   - `mkdocs build` strict, `check-links`, gate 63;
+>   - ruff e black puliti sui 6 file Python, `git diff --check` pulito;
+>   - una riga mia oltre i 120 caratteri, riavvolta dopo la build (solo a capo); la riga 2017 lunga è di H.
+> - **Backlog**: B-43 ✅, B-44 ✅; B-45 e B-46 aperte, dopo la 1.3. CHANGELOG: una riga 🔒 proposta nell'handoff.
+
 ### X-R71 (per X) — il caricamento manuale dei prezzi, tutto o niente; più le due note di H su B-36/B-37 (2026-10-17, 14:58-15:52) — ✅ 🧊 FROZEN (checkpoint delle 15:52)
 
 > **Assegnazione** (coordinatore, 14:58, dalla sezione di X): «a manual price upload (`POST /assets/prices` →

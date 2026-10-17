@@ -582,7 +582,8 @@ most 200 characters) is public:
 3. Otherwise, in one commit: the bcrypt hash of the new password, computed in a worker thread; the
    account active; its sessions ended (`end_sessions()`: `session_version` + 1); the link's
    `consumed_by_user_id` set to the account; its other setup links revoked.
-4. The answer is the login's: `200` `AuthLoginResponse`, `show_donation_popup` included, and the
+4. The answer is the login's: `200` `AuthLoginResponse`, `show_donation_popup` and `user.whats_new`
+   ([What's new](../frontend/onboarding.md#whats-new)) included, and the
    session cookie of `_issue_session_cookie()`. The administrator is signed in.
 
 The route is not in `ALLOWED_WHEN_BLOCKED` (developer's decision P16: a blocked instance stays blocked until the

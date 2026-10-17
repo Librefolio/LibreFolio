@@ -31,7 +31,7 @@ CP-10a (workstream J, developer's decision 29 — one Rolling Return, in calenda
 return of two prices gets its home here too. ``price_return(start, end)`` is ``end / start - 1``
 exactly, that expression and no rounding, and ``None`` when a price is missing or the start price is
 zero: never a division by zero. Two sites write it in place today and will call it, with identical
-values: the prepared returns of ``series_preparation.py`` (``current.target_close /
+values: the prepared returns of ``market_series.py`` (``current.target_close /
 previous.target_close - Decimal("1")``) and the calendar rolling return
 (``signal_plugins/calendar_rolling_return/plugin.py``, ``(current.close / reference.close - one) *
 hundred``). Both are copied below as they stand (``*_today``) and compared exactly. Red by absence,
@@ -536,7 +536,7 @@ class TestGainLossRatio:
 
 
 def _prepared_return_today(previous_close: Decimal, current_close: Decimal) -> Decimal:
-    """The prepared return of ``series_preparation.py`` (``prepare_asset_series_set``), before its ``float()``, as written."""
+    """The prepared return of ``market_series.py`` (``prepare_asset_series_set``), before its ``float()``, as written."""
     return current_close / previous_close - Decimal("1")
 
 
