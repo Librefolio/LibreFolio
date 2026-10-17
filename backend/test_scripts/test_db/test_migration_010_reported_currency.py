@@ -9,8 +9,10 @@ here (§1 of that contract, with §2 for the model):
 1. The revision: id ``010_provider_reported_currency`` (30 characters; ``alembic_version.version_num`` holds 32), in
    ``010_provider_reported_currency.py``, on top of ``009_email_unique_ignoring_case``; the chain keeps one head, which
    is not named.
-2. A new database at head: ``reported_currency VARCHAR(8)``, nullable, no default, in no key, index or constraint; every
-   other column, key and index of the table as at 009. A row written without it reads NULL; ``GBp`` reads ``GBp``.
+2. A new database at 010 — the revision named, not head: the head moves on (011 adds ``exchange_timezone`` to this very
+   table), and what a later revision adds is that revision's to pin —: ``reported_currency VARCHAR(8)``, nullable, no
+   default, in no key, index or constraint; every other column, key and index of the table as at 009. A row written
+   without it reads NULL; ``GBp`` reads ``GBp``.
 3. The ``AssetProviderAssignment`` model declares the same column (§2): the service suites build their databases with
    ``create_all``, production with the migrations. The column is what is compared: on the rest of this table the two
    already differ before this lot (the migration's ``ON DELETE CASCADE`` on ``asset_id`` and ``identifier_type
@@ -238,6 +240,20 @@ def fresh_head(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture(scope="module")
+def fresh_010(tmp_path_factory: pytest.TempPathFactory) -> Path | str:
+    """A new database taken to 010 by name, not to head: §2 is 010's own contract, and the head moves on (011 adds
+    ``exchange_timezone`` to the same table). Read-only for the tests: ``_copy`` it to write. While Alembic knows no 010,
+    the reason instead: each test fails on it."""
+    missing = _missing_010()
+    if missing is not None:
+        return missing
+    db = tmp_path_factory.mktemp("fresh-010") / "app.db"
+    _migrate(db, "upgrade", REV_010)
+    assert _revision(db) == REV_010, f"setup: the new database is at {_revision(db)}, not at {REV_010}"
+    return db
+
+
+@pytest.fixture(scope="module")
 def fresh_009(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A new database taken to 009: the table as it is before this lot. Read-only."""
     db = tmp_path_factory.mktemp("fresh-009") / "app.db"
@@ -442,27 +458,37 @@ def test_revision_010_sits_on_009_and_the_chain_keeps_one_head() -> None:
 
 
 # =============================================================================
-# 2. A NEW DATABASE AT HEAD
+# 2. A NEW DATABASE AT 010
 # =============================================================================
 
 
-def test_a_new_database_at_head_has_the_column_and_the_rest_of_the_table_as_at_009(fresh_head: Path, fresh_009: Path) -> None:
-    """MIG010-002 — §1, red until Z-32 (c) (the head does not include 010): ``reported_currency`` is ``VARCHAR(8)``, nullable, without a default, not the key; every other column as at 009, and the keys and their ``ON DELETE``, the unique constraint and the index as at 009, so the new column is in none of them."""
-    print_section(f"MIG010-002: {TABLE}.{COLUMN} on a new database at head")
-    _assert_includes_010(fresh_head)
-    columns = _table_info(fresh_head, TABLE)
+def test_a_new_database_at_head_has_the_column_and_the_rest_of_the_table_as_at_009(fresh_010: Path | str, fresh_009: Path) -> None:
+    """MIG010-002 — §1, red until Z-32 (c) (Alembic cannot locate 010): ``reported_currency`` is ``VARCHAR(8)``, nullable, without a default, not the key; every other column as at 009, and the keys and their ``ON DELETE``, the unique constraint and the index as at 009, so the new column is in none of them.
+
+    The database is taken to ``010_provider_reported_currency`` by name, not to head, though the test's name, its id,
+    still says head: «every other column as at 009» is 010's own contract, and the head moves on — at 011 the table also
+    has ``exchange_timezone``, which this comparison would count against 010 (011 pins its own column, MIG011-002).
+    """
+    print_section(f"MIG010-002: {TABLE}.{COLUMN} on a new database at {REV_010}")
+    db = _ran(fresh_010)
+    _assert_includes_010(db)
+    columns = _table_info(db, TABLE)
 
     assert columns.get(COLUMN) == DECLARED, f"{TABLE}.{COLUMN} must be {DECLARED}, is {columns.get(COLUMN)}"
     assert _without_column(columns) == _table_info(fresh_009, TABLE), "every other column must be declared as at 009"
-    shape = _full_shape(fresh_head, TABLE)
+    shape = _full_shape(db, TABLE)
     assert _keys_naming_the_column(shape) == {}, f"{COLUMN} must be in no key, index or constraint: {_keys_naming_the_column(shape)}"
     assert _shape_without_column(shape) == _full_shape(fresh_009, TABLE), "the keys, ON DELETE, unique constraint and index must be as at 009"
     print_success(f"{COLUMN} VARCHAR(8) NULL, nothing else changed")
 
 
-def test_a_row_written_without_the_column_reads_null_and_a_code_reads_as_written(fresh_head: Path, tmp_path: Path) -> None:
-    """MIG010-003 — §1 and §2, red until Z-32 (c) (the head does not include 010): with foreign keys on, an assignment written without the column reads NULL (no default), one written with ``GBp`` reads ``GBp``, its case kept."""
-    db = _copy(fresh_head, tmp_path / "app.db")
+def test_a_row_written_without_the_column_reads_null_and_a_code_reads_as_written(fresh_010: Path | str, tmp_path: Path) -> None:
+    """MIG010-003 — §1 and §2, red until Z-32 (c) (Alembic cannot locate 010): with foreign keys on, an assignment written without the column reads NULL (no default), one written with ``GBp`` reads ``GBp``, its case kept.
+
+    At ``010_provider_reported_currency`` by name, as MIG010-002: the rows are written with the columns of 010's table,
+    and what the head's table becomes is the later revisions' to pin.
+    """
+    db = _copy(_ran(fresh_010), tmp_path / "app.db")
     _assert_includes_010(db)
 
     with _foreign_keys_on(db) as conn:
@@ -479,7 +505,11 @@ def test_a_row_written_without_the_column_reads_null_and_a_code_reads_as_written
 
 
 def test_the_model_declares_the_column_the_migration_adds(fresh_head: Path, created_by_models: Path) -> None:
-    """MIG010-004 — §2, red until Z-32 (c) (the model declares no ``reported_currency``; then the head does not include 010): ``create_all`` and ``alembic upgrade head`` declare ``reported_currency`` alike — ``VARCHAR(8)``, nullable, no default, in no key, index or constraint — and give the table the same columns. The rest of the table is not compared (see the module docstring: a drift older than this lot)."""
+    """MIG010-004 — §2, red until Z-32 (c) (the model declares no ``reported_currency``; then the head does not include 010): ``create_all`` and ``alembic upgrade head`` declare ``reported_currency`` alike — ``VARCHAR(8)``, nullable, no default, in no key, index or constraint — and give the table the same columns. The rest of the table is not compared (see the module docstring: a drift older than this lot).
+
+    At head on purpose, unlike MIG010-002 and 003: the models describe the head, whichever revision it is, so the two
+    column sets are compared there; ``reported_currency`` itself is held to 010's declaration.
+    """
     print_section(f"MIG010-004: {COLUMN}, migration = model")
     modelled = _table_info(created_by_models, TABLE)
     assert COLUMN in modelled, f"red until Z-32 (c): the AssetProviderAssignment model declares no {COLUMN}; create_all builds {sorted(modelled)}"

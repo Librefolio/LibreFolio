@@ -313,6 +313,93 @@ event path reads it. The `test_z32_*` tests of `test_asset_source_refresh.py` an
 `test_assets_provider.py` pin the column, and two guards of `test_yahoo_finance_errors.py` the
 raw code.
 
+### 🕛 The Exchange's Timezone and the One-Time Date Check {: #exchange-timezone }
+
+`FAHistoricalData.exchange_timezone` and `FACurrentValue.exchange_timezone`
+(`backend/app/schemas/prices.py`, optional; neither schema is in the OpenAPI document) name the
+IANA timezone the provider dated its rows in: Yahoo declares its exchange's (`Europe/Rome`), and
+no other shipped provider declares one. FETCH keeps it in `_FetchedRefreshData.exchange_timezone`,
+from the history call or the core history cache (whose entry stores it beside the currency), else
+from the current value. Before PERSIST writes anything, `_settle_exchange_timezone()`
+(`refresh.py`) stores it in `asset_provider_assignments.exchange_timezone` (`VARCHAR(64)`,
+nullable, migration `011_provider_exchange_timezone`) when `zoneinfo` knows it and the stored
+value differs; a refresh that reports none leaves the last one. Unlike `reported_currency`, a
+change of provider or identifier keeps it. No API schema exposes the column; only the refresh
+reads it, for the mark below.
+
+**The mark.** Up to 1.2.1 the Yahoo plugin dated its rows by UTC, the day before the session for
+an exchange east of UTC ([Yahoo Finance Provider](provider_yahoo_finance.md)). A refresh alone
+cannot repair them: it rewrites only the session days of the range it asks, and the event upsert
+would add each dividend or split beside its shifted copy
+([Dedup Strategy](events.md#dedup-strategy)). So migration 011 writes `'legacy-utc'`
+(`LEGACY_UTC_DATES`, `backend/app/utils/exchange_dates.py`) on every `yfinance` assignment
+(`LEGACY_UTC_PROVIDER`) still NULL, those of an older backup a restore upgrades included
+(`backend/app/services/platform/instance_backup/staging.py`). It is no timezone
+(`exchange_zone()` reads it as none) but the mark of rows dated by the old rule. Other
+assignments, and any created later, stay NULL until a fetch reports a timezone, and are never
+re-dated. Outside the check a reported timezone never replaces the mark: an asset moved to
+another provider keeps it, and is checked if it comes back to Yahoo.
+
+**The check.** `_PreparedRefreshItem.legacy_check` is true when the assignment holds the mark and
+its provider is `LEGACY_UTC_PROVIDER`. FETCH then makes one history call, step 0 of
+`_fetch_refresh_item()`: the provider's full history up to today (`start="min"`), past the core
+history cache, which it neither reads nor fills. That answer is the check's calendar (session
+dates; date and type of events) and the source of the range the refresh asked for, cut as step 1
+would cut it: only that range is written, and step 1 does not run. Before anything is written,
+`_settle_exchange_timezone()` moves the stored dates, never the values, and stores the timezone,
+which clears the mark for good, in one transaction:
+
+- **The rule**, `local_date_of_legacy_utc_date(S, zone)`: a stored date S belongs to S + 1 when
+  the zone's UTC offset at local midnight of S + 1 is positive (Milan and Tokyo always, London in
+  summer time), to S otherwise (New York, UTC).
+- **Prices**, `PriceStoreOperations.redate_provider_rows()` (`price_store.py`): a row of the
+  provider (`source_plugin_key`) moves from S to S + 1 when the rule says so, the full history
+  has a session on S + 1, and S ≤ D − 2, D being the server's local date of the assignment's
+  `last_fetch_at` before this refresh (`_server_date()`; never fetched: no price moves). Released
+  versions asked their history up to yesterday, so east of UTC a dated range's last bar landed on
+  D − 2 at the latest: a later row is a current value, not a shifted bar. So is a Friday's or a
+  holiday eve's row, which has no session on S + 1. Latest first; when S + 1 already holds a row,
+  of any source, that row stays and the moved one is dropped. A moved row gets a new
+  `fetched_at`: the portfolio cache keys on COUNT + MAX(`fetched_at`)
+  (`financial_math/portfolio/engine.py`). `MANUAL` rows, the current-quote write-back's
+  `provider:yfinance` rows and every other source never move.
+- **Events**, `EventStoreOperations.redate_provider_events()` (`event_store.py`): an event of the
+  assignment moves when the rule says so and the full history has an event of its type on S + 1
+  and none on S, latest first, merging into one of the same assignment and type it meets there.
+  A `SPLIT` carries along its linked `ADJUSTMENT` rows dated on S; no other transaction moves
+  ([Asset Events](events.md#yahoo-redate)).
+- **Logging**: one INFO line per asset, *Stored dates checked against the exchange calendar*,
+  counts only, with `rows_before_calendar`: the provider's rows dated before the day before the
+  full history's first session, which no session confirms and which stay.
+- **Failure**: without a full history or a timezone `zoneinfo` knows, the mark stays and the
+  refresh writes nothing, `last_fetch_at` included. The item is `failed`, with *Nothing written:
+  the stored dates await their one-time check, …* or the fetch's own error, and `RATE_LIMITED`
+  with `retry_after` after a refusal for too many requests
+  ([Provider Pauses](#provider-pauses)). A check that raises (a database error, for instance)
+  fails its asset alone: its session rolls back and the mark stays, the item is `failed` with
+  *Nothing written: the exchange timezone check failed (…)*, and the other assets of the call
+  go on. The next refresh tries again.
+
+Known limits:
+{: #exchange-timezone-limits }
+
+- **Z-34** (after 1.3): an asset whose `yfinance` assignment was removed before the upgrade, or
+  before its first refresh after it, keeps its shifted rows. When the identifier changed before
+  that refresh to a line on the other side of UTC, the check applies the new line's timezone and
+  calendar to the old line's rows.
+- **Rows older than Yahoo's history** stay, counted in the log line.
+- **Downgrade**: a database taken below 011 after the check, then upgraded again, is marked
+  again, and its next refresh would move prices already on their day: do not downgrade past 011
+  once the server has synced.
+- **Z-35** (after 1.3, a separate and older finding): `ticker.history()` runs without
+  `auto_adjust`, so the stored closes are dividend- and split-adjusted as of each fetch. The
+  check changes no value.
+
+Tests: the `test_z33_*` of `test_yahoo_finance_errors.py` (dates, timezones, the rule over a
+year), of `test_asset_source_refresh.py` (the check; one that raises:
+`test_z33_a_failing_check_fails_its_asset_alone`) and of `test_assets_provider.py` (the column
+across saves); `test_migration_011_exchange_timezone.py` (`./dev.py test db migration-011`).
+
 ---
 
 ## 📊 Data Flow: Price Query
