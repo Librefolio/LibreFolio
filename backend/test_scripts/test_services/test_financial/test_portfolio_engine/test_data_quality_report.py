@@ -7,6 +7,11 @@ from input data. Pure tests — no DB, no async.
 without it only those tests fail, never the module's collection. ``TestTransactionsBeforeFloorIssue`` (MF-SEC8-2a) reads
 ``RowsBeforeFloor`` the same way. ``TestReportSentences`` (MF-SEC8-2a) reads two files and writes none: the builder's
 source and the four UI catalogues (merged in memory by ``scripts.i18n_catalog.load_catalog``).
+
+``TestNonIsoCurrencyIssue`` (E-19b2) passes ``non_iso_currency_assets`` and ``report_currency`` through one helper that
+turns the TypeError of a builder without them into a failure, and ``TestNonIsoCurrencyAssets`` reads
+``PortfolioService._non_iso_currency_assets`` with ``getattr``: before E-19b2 only their tests fail, never the module's
+collection.
 """
 
 import ast
@@ -19,6 +24,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import backend.app.services.financial_math.portfolio.models as portfolio_models
+from backend.app.schemas.common import shown_currency_text, suggested_iso_currency
 from backend.app.schemas.portfolio import (
     DataQualityStatus,
     IssueCode,
@@ -28,8 +34,11 @@ from backend.app.schemas.portfolio import (
     StalePriceAsset,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
+from backend.app.services.portfolio_service import HeldAssetQuoteFacts, PortfolioService
+from backend.app.utils.currency_units import minor_unit_factor
 from scripts.i18n_catalog import load_catalog
 
 # =============================================================================
@@ -944,6 +953,405 @@ class TestQuoteInMinorUnitIssue:
 
 
 # =============================================================================
+# NON_ISO_CURRENCY (E-19b2) — a currency stored as no ISO 4217 code is named, never asked for as an FX pair
+# =============================================================================
+
+NON_ISO_CURRENCY = "NON_ISO_CURRENCY"
+NON_ISO_SUGGESTION = "dataQuality.nonIsoCurrencySuggestion"
+NON_ISO_CANDIDATES = "dataQuality.nonIsoCurrencyCandidates"
+NON_ISO_UNKNOWN = "dataQuality.nonIsoCurrencyUnknown"
+NON_ISO_REPORT = "dataQuality.nonIsoReportCurrency"
+NON_ISO_REPORT_UNKNOWN = "dataQuality.nonIsoReportCurrencyUnknown"
+NON_ISO_KEYS = (NON_ISO_SUGGESTION, NON_ISO_CANDIDATES, NON_ISO_UNKNOWN, NON_ISO_REPORT, NON_ISO_REPORT_UNKNOWN)
+MISSING_FX_CODES = (IssueCode.MISSING_FX_MARKET, IssueCode.MISSING_FX_RATES)
+#: The currency the reports below convert to, unless a test says otherwise.
+REPORT_CURRENCY = "EUR"
+
+
+def _fx(pair: str, *days: str) -> WACMissingPairInfo:
+    """A conversion the engine could not make, as it reports one: ``FROM/TO`` with both codes as stored, and its dates
+    (2025-01-01 when none is given)."""
+    return WACMissingPairInfo(pair=pair, dates=[date.fromisoformat(day) for day in days] or [date(2025, 1, 1)])
+
+
+def _non_iso_report(pairs: list[WACMissingPairInfo] | None = None, *, assets: list[tuple[int, str, str]] | None = None, report_currency: str | None = REPORT_CURRENCY, views: DerivedViewsBuilder | None = None, **other):
+    """The report of one complete day (or of ``views``) given the missing conversions, ``non_iso_currency_assets`` and
+    ``report_currency``: a TypeError (no such parameter) fails the test."""
+    views = views or _make_views([_complete_state("2025-06-30")])
+    try:
+        return views.build_data_quality_report(missing_fx_pairs_dto=pairs, non_iso_currency_assets=assets, report_currency=report_currency, **other)
+    except TypeError as exc:
+        pytest.fail(f"red until E-19b2: build_data_quality_report(…, non_iso_currency_assets=…, report_currency=…) raised {exc!r}: it takes the held assets whose currency is no ISO 4217 code, and the currency the report converts to")
+
+
+def _lots_report(pairs: list[WACMissingPairInfo]):
+    """The gap report as ``LotsAnalysisService`` builds it: no daily state, the missing pairs, the two pair sets (empty
+    here) — and neither ``non_iso_currency_assets`` nor ``report_currency``."""
+    return build_data_quality_report([], missing_fx_pairs_dto=pairs, configured_fx_pairs=set(), real_provider_fx_pairs=set())
+
+
+def _non_iso_issues(report) -> list:
+    """The report's NON_ISO_CURRENCY issues, in its order, matched on the code's value (HEAD has no enum member to name)."""
+    return [i for i in report.issues if i.code == NON_ISO_CURRENCY]
+
+
+def _shape(issue) -> dict:
+    """Every field of an issue but its code."""
+    fields = ("domain", "severity", "message_i18n_key", "message_params", "count", "affected_asset_ids", "affected_asset_names", "affected_fx_pairs", "cta_action", "cta_target", "group_key")
+    return {field: getattr(issue, field) for field in fields}
+
+
+def _non_iso(value: str, key: str, params: dict, assets: tuple[tuple[int, str], ...] = ()) -> dict:
+    """The contract's issue for ``value``: a portfolio WARNING with ``key`` and ``params``, the listed assets stored in that
+    value by id and name in the order given (``count`` their number, None without one), no FX pair, no CTA, and the whole
+    value in the group key."""
+    return {
+        "domain": IssueDomain.PORTFOLIO,
+        "severity": IssueSeverity.WARNING,
+        "message_i18n_key": key,
+        "message_params": params,
+        "count": len(assets) or None,
+        "affected_asset_ids": [asset_id for asset_id, _ in assets],
+        "affected_asset_names": [name for _, name in assets],
+        "affected_fx_pairs": [],
+        "cta_action": None,
+        "cta_target": None,
+        "group_key": f"non_iso_currency:{value}",
+    }
+
+
+def _fx_groups(report) -> dict[str, list[str]]:
+    """The report's MISSING_FX_* issues by group key, each with the slugs it lists."""
+    return {i.group_key: i.affected_fx_pairs for i in report.issues if i.code in MISSING_FX_CODES}
+
+
+def _named_pairs(report) -> list[tuple[str, str]]:
+    """(code, slug) of every pair an issue of the report names: in its list of pairs, or as its CTA's target."""
+    listed = [(str(i.code), slug) for i in report.issues for slug in i.affected_fx_pairs]
+    targeted = [(str(i.code), i.cta_target) for i in report.issues if i.code in MISSING_FX_CODES and i.cta_target]
+    return listed + targeted
+
+
+def _held(asset_id: int, name: str, currency: str, *, reported_currency: str | None = None) -> HeldAssetQuoteFacts:
+    """A held asset as ``PortfolioService._held_asset_quote_facts`` reads it: quote base 1, a provider only when one
+    reported a currency."""
+    return HeldAssetQuoteFacts(asset_id=asset_id, name=name, currency=currency, quote_base_quantity=1, provider_code="mockprov" if reported_currency else None, reported_currency=reported_currency)
+
+
+class TestNonIsoCurrencyIssue:
+    """E-19b2: since E-18 a write takes only ISO 4217 alphabetic codes, but an older version stored a currency as written
+    (``978``, ``EURO``, ``eur``, ``Bolívar Soberano``). Such a code breaks every conversion, and each one missing is
+    reported as ``FROM/TO`` with the codes as stored: the report turned ``978/EUR`` into a MISSING_FX_MARKET ``978-EUR``
+    (whose «Add FX pair» gets a 422) and a stored ``eur`` into the nonsense ``EUR-EUR`` (the slug upper-cases).
+
+    ``build_data_quality_report(non_iso_currency_assets=[(asset_id, name, currency), …], report_currency=…)`` collects
+    every value ``is_canonical_iso_currency`` refuses: each such side of a missing pair (its TO side is ``report_currency``
+    when the pair ends with ``"/" + report_currency``, else the pair splits at its last ``/``: a value holding a ``/``
+    stays whole), the currency of each listed asset, and ``report_currency`` itself. One WARNING ``NON_ISO_CURRENCY`` per
+    value, sorted by value, right after QUOTE_IN_MINOR_UNIT and before TRANSACTIONS_BEFORE_FLOOR: domain ``portfolio``, no
+    CTA, no pair, group ``non_iso_currency:<value>`` (the whole value: the banner keys its rows on code and group), the
+    listed assets stored in that value by id and name (``count`` their number, None without one), and the value as
+    ``shown_currency_text`` quotes it (16 characters, then ``…``) in ``message_params["value"]``. The key: for the report
+    currency ``dataQuality.nonIsoReportCurrency`` with ``suggestion`` when ``suggested_iso_currency`` names one, else
+    ``dataQuality.nonIsoReportCurrencyUnknown``; for any other value ``dataQuality.nonIsoCurrencySuggestion`` with
+    ``suggestion``, else ``dataQuality.nonIsoCurrencyCandidates`` with ``candidates`` («VED, VES») when
+    ``iso_currency_candidates`` gives two or more, else ``dataQuality.nonIsoCurrencyUnknown``. A minor unit
+    ``minor_unit_factor`` recognises (``GBp``) gets neither suggestion nor candidates: GBP would read pence as pounds.
+    MISSING_FX_MARKET and MISSING_FX_RATES (all three groups) keep only the pairs whose two sides are canonical; the raw
+    ``missing_fx_pairs`` keeps every pair. A caller passing neither parameter (the lots gap report) still gets the pair
+    sides, with the generic keys, and the filtering.
+
+    On HEAD 2fbbf4c4c ``IssueCode`` has no ``NON_ISO_CURRENCY`` and the builder takes neither parameter: each test passing
+    one fails on its TypeError alone, the lots form on its assertions; the guards are green.
+    """
+
+    def test_non_iso_currency_is_a_portfolio_issue_code_right_after_quote_in_minor_unit(self):
+        """Red until E-19b2: IssueCode has no NON_ISO_CURRENCY (the frontend keys on the string). It is declared right
+        after QUOTE_IN_MINOR_UNIT, as its issues are placed."""
+        members = [member.value for member in IssueCode]
+
+        assert NON_ISO_CURRENCY in members, "red until E-19b2: schemas.portfolio.IssueCode has no NON_ISO_CURRENCY"
+        assert members[members.index(QUOTE_IN_MINOR_UNIT) + 1] == NON_ISO_CURRENCY, members
+
+    def test_a_numeric_code_alone_gives_one_warning_and_no_fx_issue(self):
+        """Red until E-19b2 (TypeError). ``978/EUR`` into EUR, no pair configured: the code is named — one WARNING with the
+        contract's shape: the suggestion EUR, no asset (count None), no pair, no CTA — and no MISSING_FX_* issue asks for
+        a pair that cannot exist."""
+        report = _non_iso_report([_fx("978/EUR")])
+
+        assert [i.code for i in report.issues] == [NON_ISO_CURRENCY], _named_pairs(report)
+        assert _named_pairs(report) == []
+        assert [_shape(i) for i in _non_iso_issues(report)] == [_non_iso("978", NON_ISO_SUGGESTION, {"value": "978", "suggestion": "EUR"})]
+
+    @pytest.mark.parametrize(
+        ("configured", "real_provider", "group_key", "params", "cta_target"),
+        [
+            pytest.param(set(), set(), "missing_fx", {"count": 1}, None, id="not-configured"),
+            pytest.param({"978-EUR", "EUR-USD"}, {"978-EUR", "EUR-USD"}, "missing_fx_rates", {"count": 1, "date_from": "2025-02-10", "date_to": "2025-02-10", "dates_count": 1}, "EUR-USD", id="configured-real-provider"),
+            pytest.param({"978-EUR", "EUR-USD"}, set(), "missing_fx_rates_manual", {"count": 1}, "EUR-USD", id="configured-manual"),
+        ],
+    )
+    def test_each_fx_group_keeps_only_the_canonical_pairs(self, configured, real_provider, group_key, params, cta_target):
+        """Red until E-19b2 (TypeError). ``978/EUR`` (missing on 2025-01-01 and 2025-03-31) beside ``USD/EUR`` (on
+        2025-02-10), both configured the same way: the group lists ``EUR-USD`` alone and counts 1, its dates are USD's
+        only, its CTA targets ``EUR-USD``; no other MISSING_FX_* group; 978 is named once, as NON_ISO_CURRENCY."""
+        pairs = [_fx("978/EUR", "2025-01-01", "2025-03-31"), _fx("USD/EUR", "2025-02-10")]
+
+        report = _non_iso_report(pairs, configured_fx_pairs=configured, real_provider_fx_pairs=real_provider)
+
+        assert _fx_groups(report) == {group_key: ["EUR-USD"]}, _named_pairs(report)
+        assert [(i.count, i.message_params, i.cta_target) for i in report.issues if i.group_key == group_key] == [(1, params, cta_target)]
+        assert [i.group_key for i in _non_iso_issues(report)] == ["non_iso_currency:978"]
+
+    @pytest.mark.parametrize("configured", [pytest.param(set(), id="not-configured"), pytest.param({"EUR-EUR"}, id="configured-as-the-slug-reads-it")])
+    def test_a_lower_case_code_is_named_and_never_paired_with_itself(self, configured):
+        """Red until E-19b2 (TypeError). A stored ``eur`` into EUR: ``eur`` is named with the suggestion EUR, and no issue
+        names ``EUR-EUR`` (nor any pair) — not configured, nor configured as the upper-casing slug would read it."""
+        report = _non_iso_report([_fx("eur/EUR")], configured_fx_pairs=configured, real_provider_fx_pairs=configured)
+
+        assert _named_pairs(report) == []
+        assert [_shape(i) for i in _non_iso_issues(report)] == [_non_iso("eur", NON_ISO_SUGGESTION, {"value": "eur", "suggestion": "EUR"})]
+
+    @pytest.mark.parametrize(
+        ("value", "key", "extra"),
+        [
+            pytest.param("978", NON_ISO_SUGGESTION, {"suggestion": "EUR"}, id="numeric-code"),
+            pytest.param("EURO", NON_ISO_SUGGESTION, {"suggestion": "EUR"}, id="name"),
+            pytest.param("Bolívar Soberano", NON_ISO_CANDIDATES, {"candidates": "VED, VES"}, id="name-of-two-currencies"),
+            pytest.param("BTC", NON_ISO_UNKNOWN, {}, id="no-iso-code"),
+        ],
+    )
+    def test_the_key_follows_what_the_value_stands_for(self, value, key, extra):
+        """Red until E-19b2 (TypeError). ``<value>/EUR``: a value standing for one code (978, EURO) gives the suggestion
+        EUR; the name ISO 4217 gives two currencies gives both as ``candidates``, «VED, VES»; a value standing for no code
+        (BTC) gives the unknown key, with the value alone. No MISSING_FX_* issue in any case."""
+        report = _non_iso_report([_fx(f"{value}/EUR")])
+
+        assert _fx_groups(report) == {}, _named_pairs(report)
+        assert [_shape(i) for i in _non_iso_issues(report)] == [_non_iso(value, key, {"value": value} | extra)]
+
+    @pytest.mark.parametrize("value", [pytest.param("GBp", id="GBp"), pytest.param(" GBp ", id="padded-GBp")])
+    def test_a_minor_unit_gets_neither_suggestion_nor_candidates(self, value):
+        """Red until E-19b2 (TypeError). ``GBp`` is pence: ``suggested_iso_currency`` gives GBP (the barrier), and
+        relabelling would read pence as pounds, 100 times too much. What ``minor_unit_factor`` recognises — padded too, it
+        strips — gets the unknown key, with the value alone."""
+        assert (suggested_iso_currency(value), minor_unit_factor(value)) == ("GBP", 100), "barrier: the helper suggests GBP, and the value is a known minor unit"
+
+        report = _non_iso_report([_fx(f"{value}/EUR")])
+
+        assert _fx_groups(report) == {}, _named_pairs(report)
+        assert [_shape(i) for i in _non_iso_issues(report)] == [_non_iso(value, NON_ISO_UNKNOWN, {"value": value})]
+
+    def test_one_issue_per_value_sorted_by_value(self):
+        """Red until E-19b2 (TypeError). ``eur/EUR``, ``BTC/EUR``, ``978/EUR`` and ``978/USD`` (a pair into another
+        currency splits at its last ``/``): three values, three issues sorted by value — 978, BTC, eur —, each with its
+        own group key; 978 is named once although two pairs carry it."""
+        report = _non_iso_report([_fx("eur/EUR"), _fx("BTC/EUR"), _fx("978/EUR"), _fx("978/USD")])
+
+        assert [(i.group_key, i.message_params.get("value")) for i in _non_iso_issues(report)] == [("non_iso_currency:978", "978"), ("non_iso_currency:BTC", "BTC"), ("non_iso_currency:eur", "eur")]
+        assert _fx_groups(report) == {}, _named_pairs(report)
+
+    def test_a_value_in_a_pair_and_on_a_listed_asset_is_one_issue_carrying_the_asset(self):
+        """Red until E-19b2 (TypeError). ``978/EUR`` and the held asset 7 stored in 978: one issue, carrying the asset."""
+        report = _non_iso_report([_fx("978/EUR")], assets=[(7, "Old ledger fund", "978")])
+
+        assert [_shape(i) for i in _non_iso_issues(report)] == [_non_iso("978", NON_ISO_SUGGESTION, {"value": "978", "suggestion": "EUR"}, ((7, "Old ledger fund"),))]
+
+    def test_listed_assets_alone_give_their_issues(self):
+        """Red until E-19b2 (TypeError). No missing pair; three held assets — 9 in EURO, then 4 and 12 in 978: two issues,
+        978 first, each with its assets in the order given and their number."""
+        report = _non_iso_report(None, assets=[(9, "Fund B", "EURO"), (4, "Fund A", "978"), (12, "Fund C", "978")])
+
+        assert [_shape(i) for i in _non_iso_issues(report)] == [
+            _non_iso("978", NON_ISO_SUGGESTION, {"value": "978", "suggestion": "EUR"}, ((4, "Fund A"), (12, "Fund C"))),
+            _non_iso("EURO", NON_ISO_SUGGESTION, {"value": "EURO", "suggestion": "EUR"}, ((9, "Fund B"),)),
+        ]
+        assert _fx_groups(report) == {}
+
+    @pytest.mark.parametrize(
+        ("report_currency", "pairs", "key", "params"),
+        [
+            pytest.param("978", ["USD/978"], NON_ISO_REPORT, {"value": "978", "suggestion": "EUR"}, id="numeric-code"),
+            pytest.param("978", [], NON_ISO_REPORT, {"value": "978", "suggestion": "EUR"}, id="numeric-code-no-missing-pair"),
+            pytest.param("Bolívar Soberano", ["USD/Bolívar Soberano"], NON_ISO_REPORT_UNKNOWN, {"value": "Bolívar Soberano"}, id="name-of-two-currencies"),
+            pytest.param("GBp", ["USD/GBp"], NON_ISO_REPORT_UNKNOWN, {"value": "GBp"}, id="minor-unit"),
+            pytest.param("Unidad de Fomento", ["USD/Unidad de Fomento"], NON_ISO_REPORT, {"value": "Unidad de Foment…", "suggestion": "CLF"}, id="long-name"),
+        ],
+    )
+    def test_a_non_iso_report_currency_gets_the_report_keys(self, report_currency, pairs, key, params):
+        """Red until E-19b2 (TypeError). The report converts to a currency stored as no ISO code (a base currency an older
+        version kept): every conversion into it fails, and that is what to say. One issue, with the report's key — the
+        suggestion when ``suggested_iso_currency`` names one, else the unknown key (two candidates, a minor unit) —, even
+        without a missing pair; nothing for USD, no MISSING_FX_* issue. A long value is quoted cut, keyed whole."""
+        report = _non_iso_report([_fx(pair) for pair in pairs] or None, report_currency=report_currency)
+
+        assert [_shape(i) for i in _non_iso_issues(report)] == [_non_iso(report_currency, key, params)]
+        assert _fx_groups(report) == {}, _named_pairs(report)
+
+    def test_a_listed_asset_stored_in_the_report_currency_rides_on_its_issue(self):
+        """Red until E-19b2 (TypeError). Report currency 978, and the held asset 7 stored in 978 too: one issue, the
+        report's key, carrying the asset (count 1)."""
+        report = _non_iso_report([_fx("USD/978")], assets=[(7, "Old ledger fund", "978")], report_currency="978")
+
+        assert [_shape(i) for i in _non_iso_issues(report)] == [_non_iso("978", NON_ISO_REPORT, {"value": "978", "suggestion": "EUR"}, ((7, "Old ledger fund"),))]
+
+    def test_a_report_currency_holding_a_slash_is_one_value(self):
+        """Red until E-19b2 (TypeError). Report currency ``X/Y``, pair ``USD/X/Y``: the pair ends with ``/X/Y``, so its TO
+        side is ``X/Y`` whole — one issue, the report's unknown key — and USD is canonical: nothing for ``USD/X`` nor ``Y``."""
+        report = _non_iso_report([_fx("USD/X/Y")], report_currency="X/Y")
+
+        assert [_shape(i) for i in _non_iso_issues(report)] == [_non_iso("X/Y", NON_ISO_REPORT_UNKNOWN, {"value": "X/Y"})]
+        assert _fx_groups(report) == {}, _named_pairs(report)
+
+    @pytest.mark.parametrize("form", ["with-report-currency", "lots-form"])
+    def test_a_from_value_holding_a_slash_is_one_value(self, form):
+        """Red until E-19b2 (TypeError with a report currency; the lots form on its assertions). ``A/B/EUR``: into EUR its TO
+        side is EUR, and without a report currency the pair splits at its last ``/``: either way the value is ``A/B``,
+        whole, with the unknown key."""
+        pairs = [_fx("A/B/EUR")]
+
+        report = _non_iso_report(pairs) if form == "with-report-currency" else _lots_report(pairs)
+
+        assert [_shape(i) for i in _non_iso_issues(report)] == [_non_iso("A/B", NON_ISO_UNKNOWN, {"value": "A/B"})]
+        assert _fx_groups(report) == {}, _named_pairs(report)
+
+    def test_a_long_value_is_quoted_cut_and_keyed_whole(self):
+        """Red until E-19b2 (TypeError). ``Australian Dollar`` (17 characters, a pair's side) and ``a currency nobody ever
+        wrote`` (28, a held asset's): the params quote each as ``shown_currency_text`` does — 16 characters, then ``…`` —,
+        the suggestion is read on the whole value (AUD), and the group key holds it whole."""
+        assert [shown_currency_text(value) for value in ("Australian Dollar", "a currency nobody ever wrote")] == ["Australian Dolla…", "a currency nobod…"], "barrier: both values are longer than what is quoted"
+
+        report = _non_iso_report([_fx("Australian Dollar/EUR")], assets=[(3, "Ledger fund", "a currency nobody ever wrote")])
+
+        assert [_shape(i) for i in _non_iso_issues(report)] == [
+            _non_iso("Australian Dollar", NON_ISO_SUGGESTION, {"value": "Australian Dolla…", "suggestion": "AUD"}),
+            _non_iso("a currency nobody ever wrote", NON_ISO_UNKNOWN, {"value": "a currency nobod…"}, ((3, "Ledger fund"),)),
+        ]
+
+    def test_the_lots_form_names_the_pair_sides_with_the_generic_keys(self):
+        """Red until E-19b2 (on its assertions: the call is HEAD's). The lots gap report passes neither parameter:
+        ``978/EUR``, ``USD/EUR`` and ``USD/978`` give one issue for 978 — the generic key, also where 978 is a TO side —,
+        and MISSING_FX_MARKET lists ``EUR-USD`` alone; the raw ``missing_fx_pairs`` is the input, whole."""
+        pairs = [_fx("978/EUR"), _fx("USD/EUR"), _fx("USD/978")]
+
+        report = _lots_report(pairs)
+
+        assert [_shape(i) for i in _non_iso_issues(report)] == [_non_iso("978", NON_ISO_SUGGESTION, {"value": "978", "suggestion": "EUR"})]
+        assert _named_pairs(report) == [("MISSING_FX_MARKET", "EUR-USD")]
+        assert [pair.model_dump(mode="json") for pair in report.missing_fx_pairs] == [pair.model_dump(mode="json") for pair in pairs]
+
+    def test_the_raw_missing_pairs_stay_the_full_input(self):
+        """Red until E-19b2 (TypeError). The issues leave out the pairs with a side that is no ISO code; the raw
+        ``missing_fx_pairs`` does not: the three pairs as given, in their order — and the status stays ``partial``: those
+        conversions did fail."""
+        pairs = [_fx("978/EUR", "2025-01-01"), _fx("eur/EUR", "2025-01-02"), _fx("USD/EUR", "2025-01-03")]
+
+        report = _non_iso_report(pairs, assets=[(7, "Old ledger fund", "978")])
+
+        assert [i.group_key for i in _non_iso_issues(report)] == ["non_iso_currency:978", "non_iso_currency:eur"], "barrier: both values are named"
+        assert [pair.model_dump(mode="json") for pair in report.missing_fx_pairs] == [pair.model_dump(mode="json") for pair in pairs]
+        assert report.data_quality_status == DataQualityStatus.PARTIAL
+
+    def test_the_issues_sit_after_quote_in_minor_unit_and_before_the_floor(self):
+        """Red until E-19b2 (TypeError). With the issues around them in the report — INVALID_SPLIT_RATIO,
+        QUOTE_IN_MINOR_UNIT, TRANSACTIONS_BEFORE_FLOOR, both MISSING_FX_* codes, NAV_INCOMPLETE —, the NON_ISO_CURRENCY
+        issues come right after QUOTE_IN_MINOR_UNIT, sorted, and before TRANSACTIONS_BEFORE_FLOOR: before every
+        MISSING_FX_* issue."""
+        report = _non_iso_report(
+            [_fx("978/EUR"), _fx("USD/EUR"), _fx("RON/EUR")],
+            assets=[(5, "Old ledger fund", "eur")],
+            views=_make_views([_incomplete_state("2025-06-30")]),
+            invalid_split_assets=[(6, "Split fund")],
+            quote_in_minor_unit_assets=[(9, "Vodafone Group")],
+            rows_before_floor=portfolio_models.RowsBeforeFloor(count=1, earliest=date(1899, 12, 31)),
+            configured_fx_pairs={"EUR-RON"},
+            real_provider_fx_pairs={"EUR-RON"},
+        )
+
+        assert [(i.code, i.group_key) for i in report.issues] == [
+            (IssueCode.INVALID_SPLIT_RATIO, "invalid_split_ratio"),
+            (IssueCode.QUOTE_IN_MINOR_UNIT, "quote_in_minor_unit"),
+            (NON_ISO_CURRENCY, "non_iso_currency:978"),
+            (NON_ISO_CURRENCY, "non_iso_currency:eur"),
+            (IssueCode.TRANSACTIONS_BEFORE_FLOOR, "transactions_before_floor"),
+            (IssueCode.MISSING_FX_MARKET, "missing_fx"),
+            (IssueCode.MISSING_FX_RATES, "missing_fx_rates"),
+            (IssueCode.NAV_INCOMPLETE, "nav_incomplete"),
+        ]
+
+    def test_guard_canonical_pairs_passed_as_today_are_reported_as_today(self):
+        """Green on HEAD and after: ``USD/EUR``, ``RON/EUR`` (configured, real provider) and ``NOK/EUR`` (configured,
+        manual), passed as every caller passes them today — through ``DerivedViewsBuilder`` and in the lots form: no
+        NON_ISO_CURRENCY issue, the three groups as they were."""
+        kwargs = {"missing_fx_pairs_dto": [_fx("USD/EUR"), _fx("RON/EUR"), _fx("NOK/EUR")], "configured_fx_pairs": {"EUR-RON", "EUR-NOK"}, "real_provider_fx_pairs": {"EUR-RON"}}
+
+        for report in (_make_views([_complete_state("2025-06-30")]).build_data_quality_report(**kwargs), build_data_quality_report([], **kwargs)):
+            assert _non_iso_issues(report) == []
+            assert _fx_groups(report) == {"missing_fx": ["EUR-USD"], "missing_fx_rates": ["EUR-RON"], "missing_fx_rates_manual": ["EUR-NOK"]}
+
+    @pytest.mark.parametrize("assets", [pytest.param(None, id="no-asset-list"), pytest.param([], id="empty-asset-list")])
+    def test_canonical_inputs_are_unchanged_by_the_new_parameters(self, assets):
+        """Red until E-19b2 only by construction (TypeError: no such parameter). After the cure it guards that canonical
+        codes everywhere — the pairs, the report currency EUR, no asset listed — give the very report the call without the
+        new parameters gives: no issue added or dropped, no field moved."""
+        views = _make_views([_incomplete_state("2025-06-29"), _complete_state("2025-06-30")])
+        pairs = [_fx("USD/EUR", "2025-06-29"), _fx("RON/EUR", "2025-06-29"), _fx("NOK/EUR", "2025-06-29")]
+        other = {"configured_fx_pairs": {"EUR-RON", "EUR-NOK"}, "real_provider_fx_pairs": {"EUR-RON"}, "quote_in_minor_unit_assets": [(9, "Vodafone Group")]}
+        plain = views.build_data_quality_report(missing_fx_pairs_dto=pairs, **other)
+        expected_codes = [IssueCode.QUOTE_IN_MINOR_UNIT, IssueCode.MISSING_FX_MARKET, IssueCode.MISSING_FX_RATES, IssueCode.MISSING_FX_RATES, IssueCode.NAV_INCOMPLETE]
+        assert [i.code for i in plain.issues] == expected_codes, "barrier: the comparison holds issues to keep"
+
+        with_parameters = _non_iso_report(pairs, assets=assets, views=views, **other)
+
+        assert with_parameters.model_dump(mode="json") == plain.model_dump(mode="json")
+
+
+class TestNonIsoCurrencyAssets:
+    """E-19b2: ``PortfolioService._non_iso_currency_assets(facts)``, a staticmethod beside ``_quote_in_minor_unit_assets``,
+    lists ``(asset_id, name, currency)`` of the held assets (``HeldAssetQuoteFacts``, read once by
+    ``_held_asset_quote_facts``) whose currency ``is_canonical_iso_currency`` refuses, in the facts' order. Both report call
+    sites pass it as ``non_iso_currency_assets`` (``or None``), with ``report_currency=base_currency``: pinned end to end in
+    ``test_portfolio_api.py::TestNonIsoCurrencyDataQuality``.
+
+    On HEAD 2fbbf4c4c ``PortfolioService`` has no such method: both tests fail on that alone.
+    """
+
+    @staticmethod
+    def _lister():
+        """``PortfolioService._non_iso_currency_assets``; until it exists the test fails here."""
+        lister = getattr(PortfolioService, "_non_iso_currency_assets", None)
+        if lister is None:
+            pytest.fail("red until E-19b2: PortfolioService has no _non_iso_currency_assets: nothing lists the held assets whose currency is no ISO 4217 code", pytrace=False)
+        return lister
+
+    def test_the_held_assets_stored_in_no_iso_code_are_listed_in_the_facts_order(self):
+        """Red until E-19b2. Eight held assets, in an order that is not the ids': EUR, GBP (quoted in GBp by its provider:
+        Z-32's case, not this one) and XXX (an ISO 4217 code) are canonical; 978, eur, `` EUR`` (padded), GBp and
+        Bolívar Soberano are not, and are listed as given — id, name, the currency as stored."""
+        facts = [
+            _held(12, "Fund in euro", "EUR"),
+            _held(3, "Fund in 978", "978"),
+            _held(8, "Lower-case fund", "eur"),
+            _held(17, "London line in pounds", "GBP", reported_currency="GBp"),
+            _held(5, "Padded fund", " EUR"),
+            _held(21, "London line in pence", "GBp"),
+            _held(2, "Test-code fund", "XXX"),
+            _held(9, "Bolívar fund", "Bolívar Soberano"),
+        ]
+
+        listed = self._lister()(facts)
+
+        assert listed == [(3, "Fund in 978", "978"), (8, "Lower-case fund", "eur"), (5, "Padded fund", " EUR"), (21, "London line in pence", "GBp"), (9, "Bolívar fund", "Bolívar Soberano")]
+
+    def test_no_held_asset_or_canonical_ones_only_list_nothing(self):
+        """Red until E-19b2 only by construction (no method). Then: no fact, and canonical currencies only, list nothing."""
+        lister = self._lister()
+
+        assert lister([]) == []
+        assert lister([_held(12, "Fund in euro", "EUR"), _held(17, "London line in pounds", "GBP", reported_currency="GBp")]) == []
+
+
+# =============================================================================
 # THE REPORT'S SENTENCES (MF-SEC8-2a) — every key the builder writes has one in each language
 # =============================================================================
 
@@ -1015,3 +1423,17 @@ class TestReportSentences:
         assert _has_sentence(catalogue, "dataQuality.transactionsBeforeFloor"), f"{language}: no sentence for dataQuality.transactionsBeforeFloor"
         sentence = str(_sentence(catalogue, "dataQuality.transactionsBeforeFloor"))
         assert {"{count}", "{earliest}"} <= set(re.findall(r"\{\w+\}", sentence)), f"{language}: {sentence!r}"
+
+
+class TestNonIsoCurrencySentences:
+    """E-19b2: the five keys of NON_ISO_CURRENCY (``NON_ISO_KEYS``) are written as literals in ``data_quality.py``, the only
+    kind ``TestReportSentences`` reads: so its gate checks a sentence for each in every language. Their placeholders
+    (``{value}``, ``{suggestion}``, ``{candidates}``, the same in the four languages) are pinned by the frontend, in
+    ``DataQualityBanner.nonIso.test.ts``.
+    """
+
+    def test_the_builder_writes_the_five_keys_as_literals(self):
+        """Red until E-19b2: ``data_quality.py`` writes none of them."""
+        keys = {_literal_key(call) for call in _issue_constructions()}
+
+        assert sorted(set(NON_ISO_KEYS) - keys) == [], "red until E-19b2: data_quality.py does not write these NON_ISO_CURRENCY keys as literals"
